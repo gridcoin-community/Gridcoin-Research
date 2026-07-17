@@ -1,22 +1,9 @@
-// Copyright (c) 2014-2025 The Gridcoin developers
+// Copyright (c) 2014-2026 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include <key_io.h>
-#include "chainparams.h"
-#include "main.h"
-#include "gridcoin/beacon.h"
-#include "gridcoin/boinc.h"
-#include "gridcoin/magnitude.h"
-#include "gridcoin/project.h"
-#include "gridcoin/quorum.h"
-#include "gridcoin/researcher.h"
-#include "gridcoin/scraper/scraper.h"
-#include "gridcoin/superblock.h"
-#include "gridcoin/support/xml.h"
-#include "node/ui_interface.h"
-#include "util/strencodings.h"
-#include <util/string.h>
+#include "interfaces/handler.h"
+#include "interfaces/researcher.h"
 
 #include "qt/bitcoinunits.h"
 #include "qt/guiutil.h"
@@ -27,123 +14,27 @@
 #include <QIcon>
 #include <QMessageBox>
 
-extern CWallet* pwalletMain;
-extern ConvergedScraperStats ConvergedScraperStatsCache;
-
-using namespace GRC;
-using LogFlags = BCLog::LogFlags;
-
-namespace {
-constexpr double SECONDS_IN_DAY = 24.0 * 60.0 * 60.0;
-constexpr int64_t BEACON_RENEWAL_WARNING_THRESHOLD = 15 * SECONDS_IN_DAY;
-
-//!
-//! \brief Model callback bound to the \c ResearcherChanged core signal.
-//!
-void ResearcherChanged(ResearcherModel* model)
-{
-    LogPrint(LogFlags::QT, "GUI: received ResearcherChanged() core signal");
-
-    QMetaObject::invokeMethod(
-        model,
-        "resetResearcher",
-        Qt::QueuedConnection,
-        Q_ARG(GRC::ResearcherPtr, Researcher::Get()));
-}
-
-//!
-//! \brief Model callback bound to the \c AccrualChangedFromStakeOrMRC core signal.
-//!
-void AccrualChangedFromStakeOrMRC(ResearcherModel* model)
-{
-    LogPrint(LogFlags::QT, "GUI: received ResearcherChanged() core signal");
-
-    QMetaObject::invokeMethod(model, "accrualChanged", Qt::QueuedConnection);
-}
-
-//!
-//! \brief Model callback bound to the \c BeaconChanged core signal.
-//!
-void BeaconChanged(ResearcherModel* model)
-{
-    LogPrint(LogFlags::QT, "GUI: received BeaconChanged() core signal");
-
-    QMetaObject::invokeMethod(model, "updateBeacon", Qt::QueuedConnection);
-}
-
-//!
-//! \brief Model callback bound to the \c NotifyBlocksChanged core signal.
-//!
-//! Replaces the 30-second wall-clock refresh timer. Per-block events drive
-//! the researcher-state refresh (accrual ticks up, magnitude changes on
-//! superblock activation), so the natural cadence is "every chain tip
-//! advance" rather than "every 30 seconds regardless". The refresh()
-//! slot retains its TRY_LOCK guard for cs_main, so this is safe to fire
-//! during heavy chain catch-up — it bows out cleanly when contended.
-//!
-void NotifyBlocksChangedForResearcher(ResearcherModel* model,
-                                       bool /*syncing*/,
-                                       int /*height*/,
-                                       int64_t /*best_time*/,
-                                       uint32_t /*target_bits*/)
-{
-    QMetaObject::invokeMethod(model, "refresh", Qt::QueuedConnection);
-}
-
-//!
-//! \brief Convert a beacon advertisement error to a beacon status.
-//!
-//! \param error Beacon advertisement error provided the researcher API.
-//!
-//! \return Describes the advertisement error as a beacon status.
-//!
-BeaconStatus MapAdvertiseBeaconError(const BeaconError error)
-{
-    switch (error) {
-        case BeaconError::NONE:               return BeaconStatus::ACTIVE;
-        case BeaconError::INSUFFICIENT_FUNDS: return BeaconStatus::ERROR_INSUFFICIENT_FUNDS;
-        case BeaconError::MISSING_KEY:        return BeaconStatus::ERROR_MISSING_KEY;
-        case BeaconError::NO_CPID:            return BeaconStatus::NO_CPID;
-        case BeaconError::NOT_NEEDED:         return BeaconStatus::ERROR_NOT_NEEDED;
-        case BeaconError::PENDING:            return BeaconStatus::PENDING;
-        case BeaconError::TX_FAILED:          return BeaconStatus::ERROR_TX_FAILED;
-        case BeaconError::V14_NOT_ENABLED:    return BeaconStatus::ERROR_TX_FAILED;
-        case BeaconError::WALLET_LOCKED:      return BeaconStatus::ERROR_WALLET_LOCKED;
-        case BeaconError::ALEADY_IN_MEMPOOL:  return BeaconStatus::ALREADY_IN_MEMPOOL;
-        }
-
-    assert(false); // Suppress warning
-}
-} // anonymous namespace
+#include <cassert>
 
 // -----------------------------------------------------------------------------
 // Class: ResearcherModel
 // -----------------------------------------------------------------------------
 
-ResearcherModel::ResearcherModel()
-    : m_beacon_status(BeaconStatus::UNKNOWN)
-    , m_configured_for_noncruncher_mode(false)
+ResearcherModel::ResearcherModel(interfaces::ResearcherContext& researcher_context)
+    : m_researcher_context(researcher_context)
     , m_wizard_open(false)
-    , m_out_of_sync(true)
-    , m_split_cpid(false)
     , m_privacy_enabled(false)
     , m_theme_suffix("_dark")
 {
-    qRegisterMetaType<ResearcherPtr>("GRC::ResearcherPtr");
-
-    resetResearcher(Researcher::Get());
+    // Prime the cached snapshot before any getter can run, then subscribe.
+    m_snapshot = m_researcher_context.snapshot();
     subscribeToCoreSignals();
 
-    if (GRC::Researcher::ConfiguredForNoncruncherMode()) {
-        m_configured_for_noncruncher_mode = true;
-    }
-
-    // The 30-second polling refresh timer that used to be here is removed in
-    // favour of an event-driven refresh on uiInterface.NotifyBlocksChanged
-    // (subscribed below). Per-block accrual updates now propagate within one
-    // chain-tip-advance event instead of within 30 seconds. Other signals
-    // (ResearcherChanged, AccrualChangedFromStakeOrMRC, BeaconChanged)
-    // continue to drive their own targeted refreshes as before.
+    // The 30-second polling refresh timer that used to live here is gone in
+    // favour of an event-driven refresh on the interface's block-tip
+    // notification (subscribed below). Per-block accrual updates propagate
+    // within one chain-tip-advance event. The researcher/beacon/accrual
+    // notifications drive their own targeted refreshes as before.
 }
 
 ResearcherModel::~ResearcherModel()
@@ -274,168 +165,123 @@ void ResearcherModel::setMaskCpidMagnitudeAccrual(bool privacy)
 
 bool ResearcherModel::configuredForNoncruncherMode() const
 {
-    return m_configured_for_noncruncher_mode;
+    return m_snapshot.configured_for_noncruncher_mode;
 }
 
 bool ResearcherModel::outOfSync() const
 {
-    return m_out_of_sync;
+    return m_snapshot.out_of_sync;
 }
 
 bool ResearcherModel::detectedPoolMode() const
 {
-    return !hasEligibleProjects() && hasPoolProjects();
+    return m_snapshot.detected_pool_mode;
 }
 
 bool ResearcherModel::actionNeeded() const
 {
-    if (outOfSync()) {
-        return false;
-    }
-
-    if (configuredForNoncruncherMode()) {
-        return false;
-    }
-
-    if (hasEligibleProjects()) {
-        return hasSplitCpid() || (!hasActiveBeacon() && !hasPendingBeacon());
-    }
-
-    return !hasPoolProjects();
+    return m_snapshot.action_needed;
 }
 
 bool ResearcherModel::hasEligibleProjects() const
 {
-    return m_researcher->Id().Which() == MiningId::Kind::CPID;
+    return m_snapshot.has_eligible_projects;
 }
 
 bool ResearcherModel::hasPoolProjects() const
 {
-    return m_researcher->Projects().ContainsPool();
+    return m_snapshot.has_pool_projects;
 }
 
 bool ResearcherModel::hasActiveBeacon() const
 {
-    return m_beacon && !m_beacon->Expired(GetAdjustedTime());
+    return m_snapshot.has_active_beacon;
 }
 
 bool ResearcherModel::hasPendingBeacon() const
 {
-    if (!m_pending_beacon.operator bool()) {
-        return false;
-    }
-
-    // If here, a pending beacon is present. Determine if expired
-    // while pending. No need to actually clean the pending entry
-    // up. It will be eventually cleaned by the contract handler via
-    // the ActivatePending call.
-    GRC::PendingBeacon pending_beacon(*m_pending_beacon);
-
-    return !pending_beacon.PendingExpired(GetAdjustedTime());
+    return m_snapshot.has_pending_beacon;
 }
 
 bool ResearcherModel::hasRenewableBeacon() const
 {
-    return m_beacon && m_beacon->Renewable(GetAdjustedTime());
+    return m_snapshot.has_renewable_beacon;
 }
 
 bool ResearcherModel::beaconExpired() const
 {
-    return m_beacon && m_beacon->Expired(GetAdjustedTime());
+    return m_snapshot.beacon_expired;
 }
 
 bool ResearcherModel::hasMagnitude() const
 {
-    return m_researcher->Magnitude() != 0;
+    return m_snapshot.has_magnitude;
 }
 
 bool ResearcherModel::hasRAC() const
 {
-    return m_researcher->HasRAC();
+    return m_snapshot.has_rac;
 }
 
 bool ResearcherModel::hasSplitCpid() const
 {
-    return m_researcher->hasSplitCpid();
+    return m_snapshot.has_split_cpid;
 }
 
 bool ResearcherModel::needsBeaconAuth() const
 {
-    if (!hasPendingBeacon()) {
-        return false;
-    }
-
-    if (!hasActiveBeacon()) {
-        return true;
-    }
-
-    return m_beacon->m_public_key != m_pending_beacon->m_public_key;
+    return m_snapshot.needs_beacon_auth;
 }
 
 std::optional<CAmount> ResearcherModel::accrualNearLimit() const
 {
-    return m_researcher->AccrualNearLimit();
+    return m_snapshot.accrual_near_limit;
 }
 
 CAmount ResearcherModel::getAccrual() const
 {
-    return m_researcher->Accrual();
+    return m_snapshot.accrual;
 }
 
 QString ResearcherModel::email() const
 {
-    return QString::fromStdString(Researcher::Email());
+    return QString::fromStdString(m_snapshot.email);
 }
 
 QString ResearcherModel::formatCpid() const
 {
-    QString text = QString::fromStdString(m_researcher->Id().ToString());
-
     if (m_privacy_enabled) {
-        text = "################################";
+        return "################################";
     }
 
-    return text;
+    return QString::fromStdString(m_snapshot.cpid);
 }
 
 QString ResearcherModel::formatMagnitude() const
 {
-    QString text;
-
     if (outOfSync()) {
-        text = "...";
-    } else if (m_privacy_enabled) {
-        text = "#";
-    } else {
-        text = QString::fromStdString(m_researcher->Magnitude().ToString());
+        return "...";
     }
 
-    return text;
+    if (m_privacy_enabled) {
+        return "#";
+    }
+
+    return QString::fromStdString(m_snapshot.magnitude_text);
 }
 
 QString ResearcherModel::formatAccrual(const int display_unit, bool& near_limit) const
 {
-    QString text;
+    const CAmount accrual = m_snapshot.accrual;
+    const std::optional<CAmount> near_limit_accrual = m_snapshot.accrual_near_limit;
 
-    // We only do the actual accrual calculation once. The AccrualNearLimit() is lighter.
-    CAmount accrual = m_researcher->Accrual();
-    std::optional<CAmount> near_limit_accrual = accrualNearLimit();
-
-    if (near_limit_accrual && accrual >= *near_limit_accrual) {
-        near_limit = true;
-    } else {
-        near_limit = false;
-    }
+    near_limit = near_limit_accrual && accrual >= *near_limit_accrual;
 
     if (outOfSync()) {
-        text = "...";
-    } else {
-        text = BitcoinUnits::formatWithPrivacy(display_unit, accrual, m_privacy_enabled);
+        return "...";
     }
 
-
-
-    return text;
+    return BitcoinUnits::formatWithPrivacy(display_unit, accrual, m_privacy_enabled);
 }
 
 QString ResearcherModel::formatStatus() const
@@ -444,380 +290,211 @@ QString ResearcherModel::formatStatus() const
         return tr("Waiting for sync...");
     }
 
-    // TODO: The getstakinginfo RPC shares this global. Refactor to remove it:
-    std::string status;
-    {
-        LOCK(cs_msMiningErrors);
-        status = msMiningErrors;
-    }
-    return QString::fromStdString(status);
+    return QString::fromStdString(m_snapshot.mining_status);
 }
 
 QString ResearcherModel::formatBoincPath() const
 {
-    return GUIUtil::boostPathToQString(GetBoincDataDir());
+    return QString::fromStdString(m_snapshot.boinc_data_dir);
 }
 
 BeaconStatus ResearcherModel::getBeaconStatus() const
 {
-    return m_beacon_status;
+    return m_snapshot.beacon_status;
 }
 
 QString ResearcherModel::formatBeaconStatus() const
 {
-    return mapBeaconStatus(m_beacon_status);
+    return mapBeaconStatus(m_snapshot.beacon_status);
 }
 
 QIcon ResearcherModel::getBeaconStatusIcon() const
 {
-    return mapBeaconStatusIcon(m_beacon_status);
+    return mapBeaconStatusIcon(m_snapshot.beacon_status);
 }
 
 QString ResearcherModel::formatBeaconAge() const
 {
-    if (!m_beacon) {
+    if (!m_snapshot.beacon_present) {
         return QString();
     }
 
-    return GUIUtil::formatDurationStr(m_beacon->Age(GetAdjustedTime()));
+    return GUIUtil::formatDurationStr(m_snapshot.beacon_age);
 }
 
 QString ResearcherModel::formatTimeToBeaconExpiration() const
 {
-    if (!m_beacon) {
+    if (!m_snapshot.beacon_present) {
         return QString();
     }
 
-    return GUIUtil::formatDurationStr(Beacon::MAX_AGE - m_beacon->Age(GetAdjustedTime()));
+    return GUIUtil::formatDurationStr(m_snapshot.time_to_beacon_expiration);
 }
 
 QString ResearcherModel::formatTimeToPendingBeaconExpiration() const
 {
-    if (!m_pending_beacon) {
+    if (!m_snapshot.pending_beacon_present) {
         return QString();
     }
 
-    return GUIUtil::formatDurationStr(PendingBeacon::RETENTION_AGE - m_pending_beacon->Age(GetAdjustedTime()));
+    return GUIUtil::formatDurationStr(m_snapshot.time_to_pending_beacon_expiration);
 }
 
 QString ResearcherModel::formatBeaconAddress() const
 {
-    if (!m_beacon) {
+    if (!m_snapshot.beacon_present) {
         return QString();
     }
 
-    return QString::fromStdString(EncodeDestination(m_beacon->GetAddress()));
+    return QString::fromStdString(m_snapshot.beacon_address);
 }
 
 QString ResearcherModel::formatBeaconVerificationCode() const
 {
-    if (!m_pending_beacon) {
+    if (!m_snapshot.pending_beacon_present) {
         return QString();
     }
 
-    return QString::fromStdString(m_pending_beacon->GetVerificationCode());
+    return QString::fromStdString(m_snapshot.beacon_verification_code);
+}
+
+ProjectRow ResearcherModel::mapProjectRow(const interfaces::ResearcherProjectRow& src) const
+{
+    using WS = interfaces::ResearcherProjectRow::WhitelistStatus;
+    using EK = interfaces::ResearcherProjectRow::ErrorKind;
+
+    ProjectRow row;
+    // The node sends the display name in original case; lower it here with
+    // QString::toLower() (Unicode-aware), matching the former buildProjectTable.
+    row.m_name = QString::fromStdString(src.name).toLower();
+    row.m_cpid = QString::fromStdString(src.cpid);
+    row.m_magnitude = src.magnitude;
+    row.m_rac = src.rac;
+    row.m_gdpr_controls = src.gdpr_controls;
+
+    switch (src.whitelisted) {
+        case WS::NOT_WHITELISTED:          row.m_whitelisted = ProjectRow::False; break;
+        case WS::EXCLUDED:                 row.m_whitelisted = ProjectRow::Excluded; break;
+        case WS::MANUALLY_GREYLISTED:      row.m_whitelisted = ProjectRow::Manually_Greylisted; break;
+        case WS::AUTOMATICALLY_GREYLISTED: row.m_whitelisted = ProjectRow::Automatically_Greylisted; break;
+        case WS::WHITELISTED:              row.m_whitelisted = ProjectRow::True; break;
+    }
+
+    // The greylisted/excluded labels are derived from the status (single source
+    // of truth); every other label comes from the node-side error kind.
+    switch (src.whitelisted) {
+        case WS::MANUALLY_GREYLISTED:
+            row.m_error = tr("Manually Greylisted");
+            break;
+        case WS::AUTOMATICALLY_GREYLISTED:
+            row.m_error = tr("Automatically Greylisted");
+            break;
+        case WS::EXCLUDED:
+            row.m_error = tr("Excluded");
+            break;
+        default:
+            switch (src.error_kind) {
+                case EK::NONE:
+                    break;
+                case EK::CORE_MESSAGE:
+                    row.m_error = QString::fromStdString(src.error_message);
+                    break;
+                case EK::NOT_WHITELISTED:
+                    row.m_error = tr("Not whitelisted");
+                    break;
+                case EK::NOT_ATTACHED:
+                    row.m_error = tr("Not attached");
+                    break;
+                case EK::USES_EXTERNAL_ADAPTER:
+                    row.m_error = tr("Uses external adapter");
+                    break;
+            }
+            break;
+    }
+
+    return row;
 }
 
 std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
 {
-    // We do a funny dance here to link-up three loosly-related record types:
-    //
-    //   - Local BOINC projects detected from client_state.xml
-    //   - Projects on the Gridcoin whitelist
-    //   - Project magnitude statistics produced by the scrapers
-    //
-    // ...into an overview of all three that shows how a participant's attached
-    // projects behave in the network.
-    //
+    std::vector<ProjectRow> rows;
 
-    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
-    std::vector<std::string> excluded_projects;
-
-    {
-        LOCK(cs_ConvergedScraperStatsCache);
-
-        excluded_projects = ConvergedScraperStatsCache.Convergence.vExcludedProjects;
+    for (const auto& src : m_researcher_context.projects(extended)) {
+        rows.push_back(mapProjectRow(src));
     }
 
-    // This is temporary implementation of the suppression of "not attached" for projects that
-    // are whitelisted that require an external adapter, and so will not be attached as a native
-    // BOINC project. This will be replaced by a field in the Projects class at the next mandatory
-    // (5.5.0.0).
-    std::vector<std::string> external_adapter_projects = GetProjectsExternalAdapterRequired();
-
-    std::vector<ExplainMagnitudeProject> explain_mag;
-    std::map<std::string, ProjectRow> rows;
-
-    if (extended) {
-        if (const CpidOption cpid = m_researcher->Id().TryCpid()) {
-            explain_mag = GRC::Quorum::ExplainMagnitude(*cpid);
-        }
-    }
-
-    for (const auto& project_pair : m_researcher->Projects()) {
-        const MiningProject& project = project_pair.second;
-
-        ProjectRow row;
-
-        if (!project.m_cpid.IsZero()) {
-            row.m_cpid = QString::fromStdString(project.m_cpid.ToString());
-        }
-
-        if (!project.Eligible()) {
-            row.m_error = QString::fromStdString(project.ErrorMessage());
-        }
-
-        // Project whitelist contracts may not contain names that match the
-        // project names in BOINC's client_state.xml file. We use a routine
-        // that also compares the project URL to establish the relationship
-        // between local projects and whitelisted projects:
-        //
-        if (const ProjectEntry* whitelist_project = project.TryWhitelist(whitelist)) {
-            if (whitelist_project->m_status == ProjectEntryStatus::MAN_GREYLISTED) {
-                row.m_whitelisted = ProjectRow::WhiteListStatus::Manually_Greylisted;
-                row.m_error = tr("Manually Greylisted");
-            } else if (whitelist_project->m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
-                row.m_whitelisted = ProjectRow::WhiteListStatus::Automatically_Greylisted;
-                row.m_error = tr("Automatically Greylisted");
-                   // Only mark as excluded if the project is not greylisted. A greylisted project will
-                   // have the same effect on statistics from a CPID perspective whether the project is
-                   // excluded by the scrapers.
-            } else if (std::find(excluded_projects.begin(), excluded_projects.end(), whitelist_project->m_name)
-                       != excluded_projects.end()
-                       && !(whitelist_project->m_status == ProjectEntryStatus::AUTO_GREYLISTED)
-                       && !(whitelist_project->m_status == ProjectEntryStatus::MAN_GREYLISTED)) {
-                row.m_whitelisted = ProjectRow::WhiteListStatus::Excluded;
-                row.m_error = tr("Excluded");
-                   // an unknown status should never happen for a project record on the main chain, but to be
-                   // thorough, handle that here.
-            } else if (whitelist_project->m_status == ProjectEntryStatus::UNKNOWN){
-                row.m_whitelisted = ProjectRow::WhiteListStatus::False;
-            } else {
-                // This covers the remaining REG_ACTIVE and AUTO_GREYLIST_OVERRIDE, which is the same
-                // as the whitelist filter of ACTIVE.
-                row.m_whitelisted = ProjectRow::WhiteListStatus::True;
-            }
-
-            row.m_name = QString::fromStdString(whitelist_project->DisplayName()).toLower();
-
-            for (const auto& explain_mag_project : explain_mag) {
-                if (explain_mag_project.m_name == whitelist_project->m_name) {
-                    row.m_magnitude = explain_mag_project.m_magnitude;
-                    row.m_rac = explain_mag_project.m_rac;
-                    break;
-                }
-            }
-
-            row.m_gdpr_controls = whitelist_project->HasGDPRControls();
-
-            rows.emplace(whitelist_project->m_name, std::move(row));
-        } else {
-            row.m_whitelisted = ProjectRow::WhiteListStatus::False;
-            row.m_name = QString::fromStdString(project.m_name).toLower();
-            row.m_rac = project.m_rac;
-
-            if (project.Eligible()) {
-                row.m_error = tr("Not whitelisted");
-            }
-
-            rows.emplace(project.m_name, std::move(row));
-        }
-    }
-
-    // Add any whitelisted projects not detected from the local BOINC client:
-    //
-    for (const auto& project : GetWhitelist().Snapshot(ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED)) {
-        if (rows.find(project.m_name) != rows.end()) {
-            continue;
-        }
-
-        ProjectRow row;
-        row.m_gdpr_controls = project.HasGDPRControls();
-
-        row.m_name = QString::fromStdString(project.DisplayName()).toLower();
-        row.m_magnitude = 0.0;
-
-        // the external adapter code below only appears here because if the project is in BOINC it does not need
-        // an external adapter.
-
-        bool project_requires_external_adapter = (project.RequiresExtAdapter().has_value() && project.RequiresExtAdapter().value());
-
-        bool legacy_external_adapter_project_found = (std::find(external_adapter_projects.begin(),
-                                                              external_adapter_projects.end(),
-                                                              project.m_name) != external_adapter_projects.end());
-
-        if (project_requires_external_adapter || legacy_external_adapter_project_found) {
-            row.m_error = tr("Uses external adapter");
-        } else {
-            row.m_error = tr("Not attached");
-        }
-
-        if (project.m_status == ProjectEntryStatus::MAN_GREYLISTED) {
-            row.m_whitelisted = ProjectRow::WhiteListStatus::Manually_Greylisted;
-            row.m_error = tr("Manually Greylisted");
-        } else if (project.m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
-            row.m_whitelisted = ProjectRow::WhiteListStatus::Automatically_Greylisted;
-            row.m_error = tr("Automatically Greylisted");
-               // Only mark as excluded if the project is not greylisted. A greylisted project will
-               // have the same effect on statistics from a CPID perspective whether the project is
-               // excluded by the scrapers.
-        } else if (std::find(excluded_projects.begin(), excluded_projects.end(), project.m_name)
-                       != excluded_projects.end()
-                   && !(project.m_status == ProjectEntryStatus::AUTO_GREYLISTED)
-                   && !(project.m_status == ProjectEntryStatus::MAN_GREYLISTED)) {
-            row.m_whitelisted = ProjectRow::WhiteListStatus::Excluded;
-            row.m_error = tr("Excluded");
-               // an unknown status should never happen for a project record on the main chain, but to be
-               // thorough, handle that here.
-        } else if (project.m_status == ProjectEntryStatus::UNKNOWN){
-            row.m_whitelisted = ProjectRow::WhiteListStatus::False;
-        } else {
-            // This covers the remaining REG_ACTIVE and AUTO_GREYLIST_OVERRIDE, which is the same
-            // as the whitelist filter of ACTIVE.
-            row.m_whitelisted = ProjectRow::WhiteListStatus::True;
-        }
-
-        for (const auto& explain_mag_project : explain_mag) {
-            if (explain_mag_project.m_name == project.m_name) {
-                row.m_magnitude = explain_mag_project.m_magnitude;
-                row.m_rac = explain_mag_project.m_rac;
-                break;
-            }
-        }
-
-        rows.emplace(project.m_name, std::move(row));
-    }
-
-    std::vector<ProjectRow> rows_out;
-    rows_out.reserve(rows.size());
-
-    for (auto& row_pair : rows) {
-        rows_out.emplace_back(std::move(row_pair.second));
-    }
-
-    return rows_out;
+    return rows;
 }
 
 void ResearcherModel::reload()
 {
-    {
-        LOCK(cs_main);
-        Researcher::Reload();
-    }
-    resetResearcher(Researcher::Get());
+    m_researcher_context.reload();
+    onResearcherChanged();
 }
 
 void ResearcherModel::refresh()
 {
-    const bool out_of_sync = OutOfSyncByAge();
+    // Cheap, lock-free sync-state check first, mirroring the former refresh():
+    // the "Waiting for sync..." state must update even when cs_main is contended.
+    const bool out_of_sync = m_researcher_context.outOfSync();
 
-    if (out_of_sync != m_out_of_sync) {
-        m_out_of_sync = out_of_sync;
+    if (out_of_sync != m_snapshot.out_of_sync) {
+        m_snapshot.out_of_sync = out_of_sync;
         emit researcherChanged();
     }
 
-    TRY_LOCK(cs_main, lockMain);
-
-    if (!lockMain) {
-        return;
+    // Full refresh via TRY_LOCK: bow out cleanly under cs_main contention rather
+    // than stalling the GUI thread during heavy chain catch-up.
+    if (auto snap = m_researcher_context.trySnapshot()) {
+        m_snapshot = std::move(*snap);
+        emit magnitudeChanged();
+        emit accrualChanged();
+        emit beaconChanged();
     }
+}
 
-    updateBeacon();
+void ResearcherModel::onResearcherChanged()
+{
+    // A researcher-context change is significant and infrequent; take the full
+    // (blocking) snapshot and repaint everything, matching the former
+    // resetResearcher() -> emit researcherChanged() + updateBeacon() sequence.
+    m_snapshot = m_researcher_context.snapshot();
 
+    emit researcherChanged();
+    emit beaconChanged();
     emit magnitudeChanged();
     emit accrualChanged();
 }
 
-void ResearcherModel::resetResearcher(ResearcherPtr researcher)
-{
-    m_researcher = std::move(researcher);
-    m_out_of_sync = OutOfSyncByAge();
-
-    emit researcherChanged();
-
-    updateBeacon();
-}
-
 bool ResearcherModel::switchToSolo(const QString& email)
 {
-    m_configured_for_noncruncher_mode = false;
+    // Optimistically clear the noncruncher flag so the wizard's immediately
+    // following page selection sees the new mode (the former model set the
+    // member directly before calling ChangeMode).
+    m_snapshot.configured_for_noncruncher_mode = false;
 
-    return m_researcher->ChangeMode(ResearcherMode::SOLO, email.toStdString());
+    return m_researcher_context.switchMode(interfaces::ResearcherMode::SOLO, email.toStdString());
 }
 
 bool ResearcherModel::switchToPool()
 {
-    m_configured_for_noncruncher_mode = false;
+    m_snapshot.configured_for_noncruncher_mode = false;
 
-    return m_researcher->ChangeMode(ResearcherMode::POOL, std::string());
+    return m_researcher_context.switchMode(interfaces::ResearcherMode::POOL, std::string());
 }
 
 bool ResearcherModel::switchToNoncruncher()
 {
-    m_configured_for_noncruncher_mode = true;
+    m_snapshot.configured_for_noncruncher_mode = true;
 
-    return m_researcher->ChangeMode(ResearcherMode::NONCRUNCHER, std::string());
+    return m_researcher_context.switchMode(interfaces::ResearcherMode::NONCRUNCHER, std::string());
 }
 
 void ResearcherModel::updateBeacon()
 {
-    const CpidOption cpid = m_researcher->Id().TryCpid();
-
-    if (!cpid) {
-        commitBeacon(BeaconStatus::NO_CPID);
-        emit beaconChanged();
-        emit researcherChanged();
-        return;
-    }
-
-    if (outOfSync()) {
-        commitBeacon(BeaconStatus::UNKNOWN);
-        emit beaconChanged();
-        emit researcherChanged();
-        return;
-    }
-
-    bool beacon_key_present = false;
-    std::unique_ptr<Beacon> beacon = nullptr;
-    std::unique_ptr<Beacon> pending_beacon = nullptr;
-
-    if (auto beacon_option = m_researcher->TryBeacon()) {
-        beacon.reset(new Beacon(std::move(*beacon_option)));
-        beacon_key_present = beacon->WalletHasPrivateKey(pwalletMain);
-    }
-
-    if (auto beacon_option = m_researcher->TryPendingBeacon()) {
-        pending_beacon.reset(new Beacon(std::move(*beacon_option)));
-        beacon_key_present = pending_beacon->WalletHasPrivateKey(pwalletMain);
-    }
-
-    BeaconStatus beacon_status;
-
-    if (beacon_key_present) {
-        beacon_status = MapAdvertiseBeaconError(m_researcher->BeaconError());
-    } else if (!beacon && !pending_beacon) {
-        beacon_status = BeaconStatus::NO_BEACON;
-    } else {
-        beacon_status = BeaconStatus::ERROR_MISSING_KEY;
-    }
-
-    if (beacon_status != BeaconStatus::ACTIVE) {
-        commitBeacon(beacon_status, beacon, pending_beacon);
-    } else if (pending_beacon) {
-        commitBeacon(BeaconStatus::PENDING, beacon, pending_beacon);
-    } else if (beacon) {
-        const int64_t now = GetAdjustedTime();
-
-        if (beacon->Expired(now + BEACON_RENEWAL_WARNING_THRESHOLD)) {
-            commitBeacon(BeaconStatus::RENEWAL_NEEDED, beacon, pending_beacon);
-        } else if (beacon->Renewable(now)) {
-            commitBeacon(BeaconStatus::RENEWAL_POSSIBLE, beacon, pending_beacon);
-        } else if (m_researcher->Magnitude() == 0) {
-            commitBeacon(BeaconStatus::NO_MAGNITUDE, beacon, pending_beacon);
-        } else {
-            commitBeacon(BeaconStatus::ACTIVE, beacon, pending_beacon);
-        }
-    }
+    // Beacon state lives in the snapshot; refetch (blocking — beacon changes are
+    // infrequent) and repaint the beacon display.
+    m_snapshot = m_researcher_context.snapshot();
 
     emit beaconChanged();
     emit researcherChanged();
@@ -825,48 +502,26 @@ void ResearcherModel::updateBeacon()
 
 BeaconStatus ResearcherModel::advertiseBeacon()
 {
-    const AdvertiseBeaconResult result = m_researcher->AdvertiseBeacon();
-
-    return MapAdvertiseBeaconError(result.Error());
+    return m_researcher_context.advertiseBeacon().status;
 }
 
 bool ResearcherModel::isV14Enabled() const
 {
-    LOCK(cs_main);
-    return IsV14Enabled(nBestHeight);
+    return m_snapshot.is_v14_enabled;
 }
 
 bool ResearcherModel::hasV3CapableProjects() const
 {
-    return !GetProjectsWithOwnershipProofSupport().empty();
+    return m_researcher_context.hasV3CapableProjects();
 }
 
 std::vector<std::pair<QString, QString>> ResearcherModel::buildV3ProjectList() const
 {
-    const std::set<std::string> v3_urls = GetProjectsWithOwnershipProofSupport();
-
-    if (v3_urls.empty()) {
-        return {};
-    }
-
-    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(
-        ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
-
     std::vector<std::pair<QString, QString>> result;
 
-    for (const auto& project : whitelist) {
-        std::string base_url = project.BaseUrl();
-
-        // Normalize: ensure trailing slash for comparison.
-        if (!base_url.empty() && base_url.back() != '/') {
-            base_url += '/';
-        }
-
-        if (v3_urls.count(base_url) > 0) {
-            result.emplace_back(
-                QString::fromStdString(project.DisplayName()),
-                QString::fromStdString(project.DisplayUrl()));
-        }
+    for (const auto& project : m_researcher_context.v3CapableProjects()) {
+        result.emplace_back(QString::fromStdString(project.name),
+                            QString::fromStdString(project.url));
     }
 
     return result;
@@ -874,20 +529,12 @@ std::vector<std::pair<QString, QString>> ResearcherModel::buildV3ProjectList() c
 
 QString ResearcherModel::generateBeaconKeyForV3()
 {
-    const CpidOption cpid = m_researcher->Id().TryCpid();
+    const std::string public_key_hex = m_researcher_context.generateBeaconKeyForV3();
 
-    // The wizard flow requires a CPID before reaching the beacon page, so
-    // this is not reachable in practice. Defensive check only.
-    if (!cpid) {
-        return QString();
-    }
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    AdvertiseBeaconResult result = GenerateBeaconKey(*cpid);
-
-    if (auto public_key = result.TryPublicKey()) {
-        m_cached_beacon_pubkey_hex = QString::fromStdString(HexStr(*public_key));
+    // Only cache on success (non-empty), matching the former model: a failed
+    // regeneration must not clear a previously generated key.
+    if (!public_key_hex.empty()) {
+        m_cached_beacon_pubkey_hex = QString::fromStdString(public_key_hex);
         return m_cached_beacon_pubkey_hex;
     }
 
@@ -896,64 +543,7 @@ QString ResearcherModel::generateBeaconKeyForV3()
 
 BeaconStatus ResearcherModel::advertiseBeaconV3(const QString& ownership_proof_xml)
 {
-    const CpidOption cpid = m_researcher->Id().TryCpid();
-
-    if (!cpid) {
-        return BeaconStatus::NO_CPID;
-    }
-
-    const std::string xml = ownership_proof_xml.toStdString();
-
-    const std::string master_url = TrimString(ExtractXML(xml, "<master_url>", "</master_url>"));
-    const std::string msg = TrimString(ExtractXML(xml, "<msg>", "</msg>"));
-    const std::string sig_b64 = TrimString(ExtractXML(xml, "<signature>", "</signature>"));
-
-    if (master_url.empty() || msg.empty() || sig_b64.empty()) {
-        return BeaconStatus::ERROR_INVALID_PROOF_XML;
-    }
-
-    // Parse the msg field: "{account_id} {beacon_public_key_hex}"
-    const size_t space_pos = msg.find(' ');
-
-    if (space_pos == std::string::npos || space_pos + 1 >= msg.size()) {
-        return BeaconStatus::ERROR_INVALID_PROOF_XML;
-    }
-
-    uint32_t account_id = 0;
-    if (!ParseUInt32(msg.substr(0, space_pos), &account_id) || account_id == 0) {
-        return BeaconStatus::ERROR_INVALID_PROOF_XML;
-    }
-
-    const std::string public_key_hex = msg.substr(space_pos + 1);
-    const std::vector<uint8_t> pubkey_bytes = ParseHex(public_key_hex);
-    CPubKey beacon_pubkey(pubkey_bytes);
-
-    if (!beacon_pubkey.IsValid()) {
-        return BeaconStatus::ERROR_INVALID_PROOF_XML;
-    }
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    if (!pwalletMain->HaveKey(beacon_pubkey.GetID())) {
-        return BeaconStatus::ERROR_MISSING_KEY;
-    }
-
-    bool b64_invalid = false;
-    const std::vector<uint8_t> rsa_sig_bytes = DecodeBase64(sig_b64.c_str(), &b64_invalid);
-
-    if (b64_invalid || rsa_sig_bytes.empty()) {
-        return BeaconStatus::ERROR_INVALID_PROOF_XML;
-    }
-
-    Beacon beacon(beacon_pubkey);
-    OwnershipProof proof;
-    proof.m_master_url = master_url;
-    proof.m_account_id = account_id;
-    proof.m_rsa_signature = rsa_sig_bytes;
-
-    AdvertiseBeaconResult result = SendBeaconContractV3(*cpid, beacon, std::move(proof));
-
-    return MapAdvertiseBeaconError(result.Error());
+    return m_researcher_context.advertiseBeaconV3(ownership_proof_xml.toStdString()).status;
 }
 
 QString ResearcherModel::cachedBeaconPubKeyHex() const
@@ -969,51 +559,29 @@ void ResearcherModel::onWizardClose()
 
 void ResearcherModel::subscribeToCoreSignals()
 {
-    // Connect signals to client, retaining each connection so it is severed in
-    // unsubscribeFromCoreSignals() (from ~ResearcherModel). Every callback below
-    // captures `this`; a signal firing after this object is gone would otherwise
-    // invoke a slot on freed memory.
-    m_handlers.emplace_back(uiInterface.ResearcherChanged_connect(std::bind(ResearcherChanged, this)));
-    m_handlers.emplace_back(uiInterface.AccrualChangedFromStakeOrMRC_connect(std::bind(AccrualChangedFromStakeOrMRC, this)));
-    m_handlers.emplace_back(uiInterface.BeaconChanged_connect(std::bind(BeaconChanged, this)));
-    m_handlers.emplace_back(uiInterface.NotifyBlocksChanged_connect(std::bind(NotifyBlocksChangedForResearcher, this,
-                                                     std::placeholders::_1, std::placeholders::_2,
-                                                     std::placeholders::_3, std::placeholders::_4)));
+    // Subscribe to the interface notifications, retaining each handler so it is
+    // severed in unsubscribeFromCoreSignals() (from ~ResearcherModel). The
+    // callbacks fire on a core thread, so each marshals to the GUI thread via a
+    // queued invocation of the matching slot; a signal firing after this object
+    // is gone would otherwise touch freed memory (issue #3129).
+    m_handlers.emplace_back(m_researcher_context.handleResearcherChanged(
+        [this]() { QMetaObject::invokeMethod(this, "onResearcherChanged", Qt::QueuedConnection); }));
+
+    m_handlers.emplace_back(m_researcher_context.handleBeaconChanged(
+        [this]() { QMetaObject::invokeMethod(this, "updateBeacon", Qt::QueuedConnection); }));
+
+    m_handlers.emplace_back(m_researcher_context.handleAccrualChanged(
+        [this]() { QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection); }));
+
+    m_handlers.emplace_back(m_researcher_context.handleBlocksChanged(
+        [this](bool, int, int64_t, uint32_t) {
+            QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
+        }));
 }
 
 void ResearcherModel::unsubscribeFromCoreSignals()
 {
-    // Disconnect signals from client: clearing the retained connections runs
-    // each scoped_connection's destructor, which disconnects it (issue #3129).
+    // Clearing the retained handlers runs each Handler's destructor, which
+    // disconnects it (issue #3129).
     m_handlers.clear();
-}
-
-void ResearcherModel::commitBeacon(const BeaconStatus beacon_status)
-{
-    std::unique_ptr<Beacon> current_beacon;
-    std::unique_ptr<Beacon> pending_beacon;
-    commitBeacon(beacon_status, current_beacon, pending_beacon);
-}
-
-void ResearcherModel::commitBeacon(
-    const BeaconStatus beacon_status,
-    std::unique_ptr<Beacon>& current_beacon,
-    std::unique_ptr<Beacon>& pending_beacon)
-{
-    const auto beacon_changed = [](const Beacon* const a, const Beacon* const b) {
-        return (a && b && a->m_timestamp != b->m_timestamp) || (a && !b) || (!a && b);
-    };
-
-    const bool changed = beacon_status != m_beacon_status
-        || beacon_changed(current_beacon.get(), m_beacon.get())
-        || beacon_changed(pending_beacon.get(), m_pending_beacon.get());
-
-    m_beacon_status = beacon_status;
-    m_beacon = std::move(current_beacon);
-    m_pending_beacon = std::move(pending_beacon);
-
-    if (changed) {
-        emit beaconChanged();
-        emit researcherChanged();
-    }
 }
