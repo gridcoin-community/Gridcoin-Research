@@ -589,12 +589,17 @@ public:
 
     int64_t latestActivePollTime() override
     {
-        // Mirrors the former VotingModel ctor: the newest active poll's timestamp,
-        // read under cs_main (the registry walk and Ref().Time() touch chain state).
+        // The newest active poll's timestamp. cs_main is held for the chain reads,
+        // and the active-poll sequence is built under cs_poll_registry (matching
+        // PollResultCache::BuildPollTable, which WITH_LOCKs cs_poll_registry to
+        // construct its Where() sequence); the per-ref reads then run outside the
+        // registry lock as in that walk. Lock order is cs_main -> cs_poll_registry.
         LOCK(cs_main);
 
+        GRC::PollRegistry& registry = GRC::GetPollRegistry();
+
         int64_t latest = 0;
-        for (const auto& iter : GRC::GetPollRegistry().Polls().OnlyActive()) {
+        for (const auto& iter : WITH_LOCK(registry.cs_poll_registry, return registry.Polls().OnlyActive())) {
             latest = std::max<int64_t>(latest, iter->Ref().Time());
         }
 

@@ -185,6 +185,11 @@ UniValue PollResultToJson(const PollReference& poll_ref)
         pindex_tip = pindexBest;
     }
 
+    if (!pindex_tip) {
+        GetPollRegistry().registry_traversal_in_progress = false;
+        throw JSONRPCError(RPC_IN_WARMUP, "Chain tip not available yet");
+    }
+
     try {
          if (const PollResultOption result = PollResult::BuildFor(poll_ref, pindex_tip)) {
             GetPollRegistry().registry_traversal_in_progress = false;
@@ -243,6 +248,11 @@ UniValue VoteDetailsToJson(const PollReference& poll_ref)
     {
         LOCK(cs_main);
         pindex_tip = pindexBest;
+    }
+
+    if (!pindex_tip) {
+        GetPollRegistry().registry_traversal_in_progress = false;
+        throw JSONRPCError(RPC_IN_WARMUP, "Chain tip not available yet");
     }
 
     try {
