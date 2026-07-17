@@ -5,14 +5,10 @@
 #include "psgtpoolpage.h"
 
 #include "clientmodel.h"
+#include "interfaces/psgt.h"
 #include "multisigndialog.h"
 #include "psgtpooltablemodel.h"
 #include "walletmodel.h"
-
-#include <chainparams.h>
-#include <main.h>
-#include <node/psgt_pool.h>
-#include <sync.h>
 
 #include <QFont>
 #include <QHBoxLayout>
@@ -79,12 +75,29 @@ PSGTPoolPage::PSGTPoolPage(QWidget* parent)
     updateButtons();
 }
 
+void PSGTPoolPage::setPSGTPoolContext(interfaces::PSGTPoolContext* context)
+{
+    m_psgt_context = context;
+
+    // On teardown (context cleared) drop the interface-backed table model before
+    // the owning interface is destroyed, so the reference the model holds to it
+    // never dangles (the page/model outlive the interface's inner scope).
+    if (!context && m_table_model) {
+        m_table->setModel(nullptr);
+        delete m_table_model;
+        m_table_model = nullptr;
+    }
+
+    updateActiveState();
+    updateButtons();
+}
+
 void PSGTPoolPage::setWalletModel(WalletModel* wallet_model)
 {
     m_wallet_model = wallet_model;
-    if (!wallet_model) return;
+    if (!wallet_model || !m_psgt_context) return;
 
-    m_table_model = new PSGTPoolTableModel(wallet_model, this);
+    m_table_model = new PSGTPoolTableModel(*m_psgt_context, wallet_model, this);
     m_table->setModel(m_table_model);
     m_table->horizontalHeader()->setSectionResizeMode(
         PSGTPoolTableModel::Image, QHeaderView::Stretch);
@@ -130,12 +143,13 @@ void PSGTPoolPage::setMultisignDialog(MultisignPSGTDialog* dialog)
 
 void PSGTPoolPage::updateActiveState()
 {
-    // Mirror EnsurePSGTPoolActive() (src/rpc/psgt.cpp): the pool is available
-    // only once v15 has activated AND the node is not out of sync by age.
-    // OutOfSyncByAge() reads chain state, so keep it under cs_main.
-    bool v15_enabled = false;
-    bool out_of_sync = false;
-    WITH_LOCK(cs_main, v15_enabled = IsV15Enabled(nBestHeight); out_of_sync = OutOfSyncByAge(););
+    // The pool is available only once v15 has activated AND the node is not out
+    // of sync by age (mirrors EnsurePSGTPoolActive()); the interface reads that
+    // chain state node-side. Before the interface is wired, present as inactive.
+    const interfaces::PSGTPoolStatus status =
+        m_psgt_context ? m_psgt_context->poolStatus() : interfaces::PSGTPoolStatus{};
+    const bool v15_enabled = status.v15_enabled;
+    const bool out_of_sync = status.out_of_sync;
 
     if (v15_enabled && !out_of_sync) {
         m_banner->setVisible(false);
@@ -161,7 +175,7 @@ bool PSGTPoolPage::selectedImageHex(std::string& image_hex_out) const
     const PSGTPoolTableModel::Row* row = m_table_model->rowAt(selected.first().row());
     if (!row || !row->in_pool) return false;
 
-    image_hex_out = row->image.ToString();
+    image_hex_out = row->image_hex;
     return true;
 }
 
@@ -178,8 +192,7 @@ void PSGTPoolPage::updateButtons()
     // Gate the pool actions on availability, mirroring EnsurePSGTPoolActive()
     // (src/rpc/psgt.cpp): with the pool inactive (pre-v15 or out of sync) the
     // Sign/Remove/Details actions have nothing to act on.
-    const bool pool_active = WITH_LOCK(cs_main,
-        return IsV15Enabled(nBestHeight) && !OutOfSyncByAge());
+    const bool pool_active = m_psgt_context && m_psgt_context->poolStatus().active;
 
     m_sign_button->setEnabled(pool_active && have_pool_selection && row
                               && row->status == PSGTPoolTableModel::RowStatus::AwaitingYourSignature);
@@ -190,54 +203,42 @@ void PSGTPoolPage::updateButtons()
 void PSGTPoolPage::sign()
 {
     std::string image_hex;
-    if (!selectedImageHex(image_hex) || !m_wallet_model) return;
-
-    // Resolve the pooled entry by image before touching the wallet.
-    uint160 image_bits;
-    image_bits.SetHex(image_hex);
-    const CScriptID image(image_bits);
-
-    const auto entry = g_psgt_pool.Get(image);
-    if (!entry) {
-        QMessageBox::warning(this, tr("Sign PSGT"),
-                             tr("This PSGT is no longer in the pool."));
-        return;
-    }
+    if (!selectedImageHex(image_hex) || !m_wallet_model || !m_psgt_context) return;
 
     WalletModel::UnlockContext ctx(m_wallet_model->requestUnlock());
     if (!ctx.isValid()) return; // unlock cancelled
 
     std::string error;
-    uint256 txid;
-    const PSGTSignResult result = SignAndAdvancePSGT(image, error, &txid);
+    std::string txid;
+    const interfaces::PSGTSignStatus result = m_psgt_context->signPoolEntry(image_hex, error, txid);
 
     switch (result) {
-    case PSGTSignResult::COMPLETED_AND_BROADCAST:
+    case interfaces::PSGTSignStatus::COMPLETED_AND_BROADCAST:
         QMessageBox::information(this, tr("Sign PSGT"),
                                  tr("The multisig is complete. The transaction was "
-                                    "broadcast:\n%1").arg(QString::fromStdString(txid.ToString())));
+                                    "broadcast:\n%1").arg(QString::fromStdString(txid)));
         break;
-    case PSGTSignResult::SIGNED_AND_RELAYED:
+    case interfaces::PSGTSignStatus::SIGNED_AND_RELAYED:
         QMessageBox::information(this, tr("Sign PSGT"),
                                  tr("Your signature was added and relayed to the other "
                                     "co-signers."));
         break;
-    case PSGTSignResult::ALREADY_KNOWN:
+    case interfaces::PSGTSignStatus::ALREADY_KNOWN:
         QMessageBox::information(this, tr("Sign PSGT"),
                                  tr("Your signature was added, but this exact revision is "
                                     "already known to the network (a co-signer may have "
                                     "signed it first). Nothing more to do."));
         break;
-    case PSGTSignResult::NO_NEW_SIGNATURES:
+    case interfaces::PSGTSignStatus::NO_NEW_SIGNATURES:
         QMessageBox::warning(this, tr("Sign PSGT"),
                              tr("This wallet holds no key that can add a signature to "
                                 "this PSGT."));
         break;
-    case PSGTSignResult::FAILED:
+    case interfaces::PSGTSignStatus::FAILED:
         QMessageBox::critical(this, tr("Sign PSGT"),
                               tr("Signing failed: %1").arg(QString::fromStdString(error)));
         break;
-    case PSGTSignResult::NOT_FOUND:
+    case interfaces::PSGTSignStatus::NOT_FOUND:
         QMessageBox::warning(this, tr("Sign PSGT"),
                              tr("This PSGT is no longer in the pool (it may have "
                                 "completed or expired)."));
@@ -260,9 +261,7 @@ void PSGTPoolPage::remove()
         return;
     }
 
-    uint160 image_bits;
-    image_bits.SetHex(image_hex);
-    g_psgt_pool.Remove(CScriptID(image_bits), PSGTRemovalReason::LOCAL_REMOVE);
+    if (m_psgt_context) m_psgt_context->removePoolEntry(image_hex);
 
     if (m_table_model) m_table_model->refresh();
 }
@@ -272,18 +271,18 @@ void PSGTPoolPage::details()
     std::string image_hex;
     if (!selectedImageHex(image_hex) || !m_multisign_dialog) return;
 
-    uint160 image_bits;
-    image_bits.SetHex(image_hex);
-    const auto entry = g_psgt_pool.Get(CScriptID(image_bits));
-    if (!entry) {
+    if (!m_psgt_context) return;
+
+    const interfaces::PSGTBytes psgt_bytes = m_psgt_context->poolEntryPsgt(image_hex);
+    if (psgt_bytes.empty()) {
         QMessageBox::warning(this, tr("PSGT details"),
                              tr("This PSGT is no longer in the pool."));
         return;
     }
 
-    // Hand the pooled PSGT to the dialog without a base64 round-trip -- the
-    // seam #3054 built m_working / setWorking for.
-    m_multisign_dialog->setWorking(entry->psgt);
+    // Hand the pooled PSGT (serialized) to the dialog without a base64 text
+    // round-trip -- the seam #3054 built setWorking for.
+    m_multisign_dialog->setWorking(psgt_bytes);
     m_multisign_dialog->show();
     m_multisign_dialog->raise();
     m_multisign_dialog->activateWindow();

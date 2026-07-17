@@ -7,10 +7,16 @@
 
 #include <QWidget>
 
+#include <string>
+
 class ClientModel;
 class MultisignPSGTDialog;
 class PSGTPoolTableModel;
 class WalletModel;
+
+namespace interfaces {
+class PSGTPoolContext;
+} // namespace interfaces
 
 QT_BEGIN_NAMESPACE
 class QLabel;
@@ -31,6 +37,10 @@ class PSGTPoolPage : public QWidget
 public:
     explicit PSGTPoolPage(QWidget* parent = nullptr);
 
+    //! Provide the PSGT pool interface (Phase 1d-v). Must be set before
+    //! setWalletModel(), which constructs the interface-backed table model.
+    void setPSGTPoolContext(interfaces::PSGTPoolContext* context);
+
     void setWalletModel(WalletModel* wallet_model);
     void setClientModel(ClientModel* client_model);
     //! The shared Multisign dialog the Details action opens (owned by BitcoinGUI).
@@ -44,6 +54,7 @@ private Q_SLOTS:
     void updateButtons();
 
 private:
+    interfaces::PSGTPoolContext* m_psgt_context = nullptr;
     WalletModel* m_wallet_model = nullptr;
     ClientModel* m_client_model = nullptr;
     MultisignPSGTDialog* m_multisign_dialog = nullptr;

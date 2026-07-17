@@ -861,6 +861,12 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
     }
 }
 
+void BitcoinGUI::setPSGTPoolContext(interfaces::PSGTPoolContext *context)
+{
+    psgtPoolPage->setPSGTPoolContext(context);
+    multisignDialog->setPSGTPoolContext(context);
+}
+
 void BitcoinGUI::setWalletModel(WalletModel *walletModel)
 {
     this->walletModel = walletModel;

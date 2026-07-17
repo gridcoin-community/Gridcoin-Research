@@ -21,6 +21,7 @@
 #include "interfaces/init.h"
 #include "interfaces/mrc.h"
 #include "interfaces/node.h"
+#include "interfaces/psgt.h"
 #include "interfaces/researcher.h"
 #include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
@@ -705,6 +706,15 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 if (!researcher_context) {
                     throw std::runtime_error("researcher interface unavailable after init");
                 }
+                // The PSGT pool + multisig-workbench interface (Phase 1d-v) over
+                // the node's wallet. Owned here so it outlives the PSGTPoolPage /
+                // PSGTPoolTableModel and MultisignPSGTDialog that use it; cleared
+                // from them on teardown below before this is destroyed.
+                std::unique_ptr<interfaces::PSGTPoolContext> psgt_pool_context =
+                    interface_init->makePSGTPoolContext(pwalletMain);
+                if (!psgt_pool_context) {
+                    throw std::runtime_error("PSGT pool interface unavailable after init");
+                }
 
                 ClientModel clientModel(*node, *staking_status, &optionsModel);
                 WalletModel walletModel(*wallet, *wallet_tx_source, pwalletMain, &optionsModel);
@@ -712,6 +722,9 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 MRCModel mrcModel(*mrc, &walletModel, &clientModel, &researcherModel);
                 VotingModel votingModel(*voting_manager, *researcher_context, clientModel, optionsModel, walletModel);
 
+                // Thread the PSGT pool interface to the page + dialog before
+                // setWalletModel() below builds the page's table model.
+                window.setPSGTPoolContext(psgt_pool_context.get());
                 window.setResearcherModel(&researcherModel);
                 window.setClientModel(&clientModel);
                 window.setWalletModel(&walletModel);
@@ -778,6 +791,10 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // PollTableModel::setModel(nullptr) which drains any in-flight
                 // QtConcurrent refresh worker still dereferencing the model.
                 window.setVotingModel(nullptr);
+                // Clear the PSGT pool interface from the page + dialog BEFORE the
+                // enclosing block destroys psgt_pool_context: the page's table
+                // model holds a reference to it, so it must be torn down first.
+                window.setPSGTPoolContext(nullptr);
                 guiref = nullptr;
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here

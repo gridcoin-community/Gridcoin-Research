@@ -5,14 +5,20 @@
 #ifndef BITCOIN_QT_MULTISIGNDIALOG_H
 #define BITCOIN_QT_MULTISIGNDIALOG_H
 
-#include <psgt.h>
-
 #include <QDialog>
+
+#include <cstdint>
+#include <vector>
 
 namespace Ui {
     class MultisignPSGTDialog;
 }
 class WalletModel;
+
+namespace interfaces {
+class PSGTPoolContext;
+struct PSGTDescription;
+} // namespace interfaces
 
 /**
  * Dialog for working with Partially Signed Gridcoin Transactions (PSGT):
@@ -20,8 +26,9 @@ class WalletModel;
  * inputs this wallet holds keys for, combine co-signers' PSGTs, and finalize a
  * fully-signed PSGT into a broadcast-ready raw transaction.
  *
- * Reuses the PSGT C++ API in src/psgt.h directly (the same functions the
- * psgt RPCs use); does not go through RPC.
+ * All PSGT operations run node-side behind interfaces::PSGTPoolContext (Phase
+ * 1d-v); the dialog holds the working PSGT as serialized bytes and never a core
+ * PartiallySignedTransaction. Base64 text I/O stays here.
  */
 class MultisignPSGTDialog : public QDialog
 {
@@ -33,44 +40,45 @@ public:
 
     void setModel(WalletModel *model);
 
-    //! Adopt psgt as the working PSGT and write its base64 back to the input
-    //! and result boxes. The entry point the PSGT Pool page (#2910) calls to
+    //! Provide the PSGT pool + workbench interface (Phase 1d-v). Every PSGT
+    //! operation routes through it; must be set before the dialog is used.
+    void setPSGTPoolContext(interfaces::PSGTPoolContext* context);
+
+    //! Adopt the serialized PSGT as the working PSGT and write its base64 back to
+    //! the input and result boxes. The entry point the PSGT Pool page calls to
     //! open a pooled PSGT in this dialog without a base64 text round-trip.
-    void setWorking(const PartiallySignedTransaction& psgt);
+    void setWorking(const std::vector<unsigned char>& psgt_bytes);
 
 private:
     Ui::MultisignPSGTDialog *ui;
     WalletModel *model;
+    interfaces::PSGTPoolContext *m_psgt_context;
 
-    //! The PSGT the dialog currently operates on. The base64 text box stays the
-    //! user-editable source of truth: every handler refreshes this from the box
-    //! via syncWorkingFromInput() before acting, and the operations that produce
-    //! a new PSGT (sign/combine) push the result back via setWorking(). Holding
-    //! it as a member is also the seam a future Phase II PSGT-pool source (#2910)
-    //! can populate without a base64 text round-trip.
-    PartiallySignedTransaction m_working;
+    //! The working PSGT as serialized bytes (interfaces::PSGTBytes). The base64
+    //! text box stays the user-editable source of truth: every handler refreshes
+    //! this from the box via syncWorkingFromInput() before acting, and the
+    //! operations that produce a new PSGT (sign/combine) push the result back via
+    //! setWorking().
+    std::vector<unsigned char> m_working;
 
-    //! Decode the input box into m_working. On failure, reports the error to the
-    //! status label and leaves m_working untouched (decodes into a temporary and
-    //! only assigns on success). Returns false on failure.
+    //! Decode the input box into m_working (base64 -> bytes, validated by the
+    //! interface). On failure, reports the error and leaves m_working untouched.
     bool syncWorkingFromInput();
 
-    //! True iff some input carries a cryptographically valid partial signature
-    //! from a key this wallet owns -- verified against the input's sighash, not
-    //! merely present under an owned key id. This is the ">=1 valid signature"
-    //! precondition a future Phase II "submit to pool" action (#2910) will gate on.
-    bool walletHasSignature(const PartiallySignedTransaction& psgt) const;
+    //! True iff this wallet contributed at least one cryptographically valid
+    //! signature to the working PSGT (the pool-submit precondition).
+    bool walletHasSignature() const;
 
-    //! Render psgt into the read-only decoded view (decode plus, when the wallet
-    //! is available, the "wallet's signature present" line).
-    void showDecoded(const PartiallySignedTransaction& psgt);
+    //! Render a described PSGT into the read-only decoded view (plus, when the
+    //! interface is available, the "wallet's signature present" line).
+    void renderDecoded(const interfaces::PSGTDescription& description);
 
     //! Format a satoshi amount with BitcoinUnits in the wallet's selected display
     //! unit (consistent with the rest of the GUI), falling back to GRC.
     QString FormatAmount(int64_t nValue) const;
 
     //! Build the human-readable decoded-PSGT description shown in the decoded view.
-    QString DescribePSGT(const PartiallySignedTransaction& psgt) const;
+    QString DescribePSGT(const interfaces::PSGTDescription& description) const;
 
     void setStatus(const QString& text, bool error);
 
