@@ -41,14 +41,8 @@ src/qt/bitcoin.cpp:policy/fees.h
 src/qt/bitcoin.cpp:txdb.h
 src/qt/bitcoin.cpp:util.h
 src/qt/bitcoin.cpp:validation.h
-src/qt/bitcoingui.cpp:gridcoin/backup.h
-src/qt/bitcoingui.cpp:gridcoin/staking/difficulty.h
 src/qt/bitcoingui.cpp:init.h
-src/qt/bitcoingui.cpp:main.h
-src/qt/bitcoingui.cpp:node/psgt_pool.h
-src/qt/bitcoingui.cpp:script/standard.h
 src/qt/bitcoingui.cpp:util.h
-src/qt/bitcoingui.cpp:wallet/wallet.h
 src/qt/coincontroldialog.cpp:policy/fees.h
 src/qt/coincontroldialog.cpp:policy/policy.h
 src/qt/coincontroldialog.cpp:validation.h

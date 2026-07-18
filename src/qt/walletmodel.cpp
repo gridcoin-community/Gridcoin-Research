@@ -420,6 +420,16 @@ bool WalletModel::changePassphrase(const SecureString &oldPass, const SecureStri
     return m_wallet.changeWalletPassphrase(oldPass, newPass);
 }
 
+bool WalletModel::backupWallet(const std::string& dest)
+{
+    return m_wallet.backupWallet(dest);
+}
+
+bool WalletModel::backupConfigFile(const std::string& dest)
+{
+    return m_wallet.backupConfigFile(dest);
+}
+
 // The tx-table producer-side handlers (NotifyTransactionChanged /
 // NotifyBlocksChangedForWallet) and their subscriptions moved node-side into
 // the WalletTxSource in Phase 1c-ii, so this model no longer touches the raw

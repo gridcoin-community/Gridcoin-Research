@@ -186,6 +186,14 @@ void ClientModel::updateMinerStatus(bool staking, double coin_weight)
     emit minerStatusChanged(staking, getNetWeight(), coin_weight, m_cached_etts_days);
 }
 
+void ClientModel::refreshMinerStatus()
+{
+    // Re-feed the current staking state and coin weight to the overview. Used
+    // when a GUI-side change (e.g. privacy mode) must refresh the staking
+    // fields that are normally pushed from the core via MinerStatusChanged.
+    updateMinerStatus(m_staking_status.isStaking(), m_staking_status.getCoinWeight());
+}
+
 void ClientModel::updateScraper(int scraperEventtype, int status, const QString message)
 {
     if (scraperEventtype == (int)scrapereventtypes::Log)

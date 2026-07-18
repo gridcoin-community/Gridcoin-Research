@@ -63,6 +63,11 @@ public:
     //! Get miner and staking status warnings
     QString getMinerWarnings() const;
 
+    //! Re-feed the current staking state and coin weight to the overview
+    //! (used when a GUI-side change, e.g. privacy mode, must refresh the
+    //! staking fields normally pushed from the core).
+    void refreshMinerStatus();
+
     QString formatFullVersion() const;
     QString clientName() const;
     QString formatClientStartupTime() const;

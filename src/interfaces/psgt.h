@@ -289,6 +289,13 @@ public:
     //! Whether this wallet already contributed at least one valid signature
     //! (PSGTSignedBy) — the pool-submit precondition.
     virtual bool walletHasSignature(const PSGTBytes& psgt) = 0;
+
+    //! Whether the pool entry with this revision hash still needs a signature
+    //! from THIS wallet: the wallet holds one of the multisig arrangement's
+    //! keys and has not yet signed the entry. Gates the "signature requested"
+    //! toast. Returns false for an unknown revision, a non-multisig input, or
+    //! an entry this wallet has already signed.
+    virtual bool walletMustSignRevision(const std::string& revision_hex) = 0;
 };
 
 //! Return an in-process PSGTPoolContext over the global PSGT pool and the node's

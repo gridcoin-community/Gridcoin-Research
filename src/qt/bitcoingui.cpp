@@ -25,8 +25,7 @@
 #include "voting/votingpage.h"
 #include "psgtpoolpage.h"
 
-#include <node/psgt_pool.h>
-#include <script/standard.h>
+#include "interfaces/psgt.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "researcher/researchermodel.h"
@@ -42,9 +41,7 @@
 #include "notificator.h"
 #include "guiutil.h"
 #include "rpcconsole.h"
-#include "wallet/wallet.h"
 #include "init.h"
-#include "main.h"
 #include "clicklabel.h"
 #include "upgradeqt.h"
 #include "voting/votingmodel.h"
@@ -90,13 +87,9 @@
 
 #include <boost/lexical_cast.hpp>
 
-#include "gridcoin/backup.h"
-#include "gridcoin/staking/difficulty.h"
-
 #include <boost/algorithm/string/join.hpp>
 #include "util.h"
 
-extern CWallet* pwalletMain;
 extern std::string FromQString(QString qs);
 
 BitcoinGUI::BitcoinGUI(QWidget* parent)
@@ -863,6 +856,7 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
 
 void BitcoinGUI::setPSGTPoolContext(interfaces::PSGTPoolContext *context)
 {
+    m_psgt_pool_context = context;
     psgtPoolPage->setPSGTPoolContext(context);
     multisignDialog->setPSGTPoolContext(context);
 }
@@ -1229,7 +1223,7 @@ void BitcoinGUI::setMinerStatus(
 #ifdef Q_OS_MAC
     if (staking) {
         m_app_nap_inhibitor->disableAppNap();
-    } else if (!OutOfSyncByAge()) {
+    } else if (!clientModel->node().isOutOfSyncByAge()) {
         m_app_nap_inhibitor->enableAppNap();
     }
 #endif
@@ -1445,10 +1439,10 @@ void BitcoinGUI::setPrivacy()
 
     clientModel->getOptionsModel()->setMaskValues(privacy_mode);
 
-    // Need to call updateMinerStatus from here to feed back in the Coin Weight to the overview screen.
+    // Need to refresh the miner status from here to feed back in the Coin Weight to the overview screen.
     // Not ideal, but the normal trigger to update the Staking fields on the overview screen normally come from
     // the core, not the GUI. Here the privacy state change is coming from the GUI.
-    clientModel->updateMinerStatus(g_miner_status.StakingActive(), g_miner_status.GetSearchReport().CoinWeight());
+    clientModel->refreshMinerStatus();
 }
 
 bool BitcoinGUI::tryQuit()
@@ -1684,35 +1678,11 @@ void BitcoinGUI::handlePSGTPoolChanged(QString revision_hash, quint8 change_type
     Q_UNUSED(reason);
 
     // Toast only for an entry that newly needs THIS wallet's signature.
-    if (change_type == CT_DELETED || !clientModel) {
+    if (change_type == CT_DELETED || !clientModel || !m_psgt_pool_context) {
         return;
     }
 
-    uint256 revision;
-    revision.SetHex(revision_hash.toStdString());
-    const auto entry = g_psgt_pool.GetByRevision(revision);
-    if (!entry || !pwalletMain) {
-        return;
-    }
-
-    const bool needs_me = WITH_LOCK(pwalletMain->cs_wallet,
-                                    return !PSGTSignedBy(*pwalletMain, entry->psgt))
-        && [&] {
-            // Wallet holds a key of the arrangement?
-            txnouttype script_type;
-            std::vector<std::vector<unsigned char>> vSolutions;
-            if (entry->psgt.inputs.empty()
-                || !Solver(entry->psgt.inputs[0].redeem_script, script_type, vSolutions)
-                || script_type != TX_MULTISIG) {
-                return false;
-            }
-            LOCK(pwalletMain->cs_wallet);
-            for (unsigned int i = 1; i + 1 < vSolutions.size(); ++i) {
-                const CPubKey pubkey(vSolutions[i]);
-                if (pubkey.IsValid() && pwalletMain->HaveKey(pubkey.GetID())) return true;
-            }
-            return false;
-        }();
+    const bool needs_me = m_psgt_pool_context->walletMustSignRevision(revision_hash.toStdString());
 
     if (needs_me && notificator) {
         notificator->notify(
@@ -1829,16 +1799,18 @@ void BitcoinGUI::encryptWallet()
 
 void BitcoinGUI::backupWallet()
 {
+    if (!walletModel) return;
+
     QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
     QString walletfilename = QFileDialog::getSaveFileName(this, tr("Backup Wallet"), saveDir, tr("Wallet Data (*.dat)"));
     if(!walletfilename.isEmpty()) {
-        if(!GRC::BackupWallet(*pwalletMain, FromQString(walletfilename))) {
+        if(!walletModel->backupWallet(FromQString(walletfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }
     QString configfilename = QFileDialog::getSaveFileName(this, tr("Backup Config"), saveDir, tr("Wallet Config (*.conf)"));
     if(!configfilename.isEmpty()) {
-        if(!GRC::BackupConfigFile(FromQString(configfilename))) {
+        if(!walletModel->backupConfigFile(FromQString(configfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }

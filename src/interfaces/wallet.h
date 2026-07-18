@@ -211,6 +211,15 @@ public:
                                       const std::optional<WalletCoinControl>& coin_control,
                                       int64_t accepted_fee) = 0;
 
+    //! Back up the wallet .dat file to dest. Returns false on I/O failure.
+    virtual bool backupWallet(const std::string& dest) = 0;
+
+    //! Back up the active config file to dest. Returns false on I/O failure.
+    //! Paired with backupWallet in the GUI backup action; the config file
+    //! belongs to the same node, so it stays behind the wallet boundary
+    //! rather than requiring a separate node reach for one file copy.
+    virtual bool backupConfigFile(const std::string& dest) = 0;
+
     //! Register a handler for encryption/lock status changes.
     using StatusChangedFn = std::function<void()>;
     virtual std::unique_ptr<Handler> handleStatusChanged(StatusChangedFn fn) = 0;

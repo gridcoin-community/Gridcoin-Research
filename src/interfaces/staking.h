@@ -31,6 +31,12 @@ public:
     //! there is nothing to report).
     virtual std::string getErrors() = 0;
 
+    //! Coin weight of the UTXOs searched in the last miner cycle (since block
+    //! version 8, approximately the total GRC value of the staked UTXOs).
+    //! Non-blocking: MinerStatus guards its own state, so this takes no chain
+    //! lock.
+    virtual double getCoinWeight() = 0;
+
     //! Estimated network staking weight. Blocking: takes cs_main.
     virtual double getNetworkWeight() = 0;
 
