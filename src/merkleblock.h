@@ -6,7 +6,7 @@
 #ifndef BITCOIN_MERKLEBLOCK_H
 #define BITCOIN_MERKLEBLOCK_H
 
-#include "main.h"
+#include "primitives/block.h"
 #include "serialize.h"
 #include "uint256.h"
 
