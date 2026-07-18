@@ -39,15 +39,12 @@
 
 using namespace std;
 
-// Chain-state globals defined elsewhere that the chain-management functions
-// reference. Kept where they are to limit churn (issue #3030, A4):
-//   g_chain_trust       -> defined in main.cpp (also extern'd in validation.cpp)
-//   g_seen_stakes / g_v11_timestamp -> defined in main.cpp (same ad-hoc extern
-//                          pattern as node/orphan_blocks.cpp / node/coherence.cpp)
-//   g_previous_block_time / g_nTimeBestReceived -> defined in main.cpp, declared in main.h
-//   pwalletMain         -> defined in init.cpp
-extern GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
-extern GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
+// Globals defined elsewhere that the chain-management functions reference.
+// g_chain_trust and g_seen_stakes now come from their canonical headers
+// (gridcoin/staking/chain_trust.h and spam.h, included above -- issue #3125
+// C9); the remaining ad-hoc externs cover:
+//   g_v11_timestamp -> defined in main.cpp
+//   pwalletMain     -> defined in init.cpp
 extern int64_t g_v11_timestamp;
 extern CWallet* pwalletMain;
 

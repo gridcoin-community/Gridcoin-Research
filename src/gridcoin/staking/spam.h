@@ -235,4 +235,8 @@ private:
 }; // SeenStakes
 } // namespace GRC
 
+//! Proof-of-stake proofs seen near the chain tip. Defined in
+//! gridcoin/staking/chain_trust.cpp (moved from main.cpp, issue #3125 C9).
+extern GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
+
 #endif // GRIDCOIN_STAKING_SPAM_H

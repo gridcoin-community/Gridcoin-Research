@@ -61,19 +61,16 @@ using namespace boost;
 // Global state
 //
 
-CCriticalSection cs_main;
+// cs_main, the block-index pools, and the active-chain globals
+// (mapBlockIndex, pindexGenesisBlock, nBestHeight, hashBestChain, pindexBest,
+// the sync clocks, g_reorg_in_progress) moved to chain.cpp (issue #3125 C9);
+// their declarations remain in chain.h.
+
 CCriticalSection cs_tx_val_commit_to_disk;
 
 ///////////////////////MINOR VERSION////////////////////////////////
 
 extern int64_t GetCoinYearReward(int64_t nTime);
-
-namespace GRC {
-BlockIndexPool::Pool<CBlockIndex> BlockIndexPool::m_block_index_pool;
-BlockIndexPool::Pool<ResearcherContext> BlockIndexPool::m_researcher_context_pool;
-}
-
-BlockMap mapBlockIndex;
 
 //Gridcoin Minimum Stake Age (16 Hours)
 unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
@@ -81,14 +78,6 @@ unsigned int nStakeMaxAge = -1; // unlimited
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
-CBlockIndex* pindexGenesisBlock GUARDED_BY(cs_main) = nullptr;
-int nBestHeight GUARDED_BY(cs_main) = -1;
-
-uint256 hashBestChain GUARDED_BY(cs_main);
-CBlockIndex* pindexBest GUARDED_BY(cs_main) = nullptr;
-std::atomic<int64_t> g_previous_block_time;
-std::atomic<int64_t> g_nTimeBestReceived;
-std::atomic<bool> g_reorg_in_progress = false;
 CMedianFilter<int> cPeerBlockCounts GUARDED_BY(cs_main) {5, 0}; // Amount of blocks that other nodes claim to have
 
 
@@ -130,16 +119,9 @@ int64_t g_v11_timestamp = 0;
 
 // End of Gridcoin Global vars
 
-GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
-GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
-
-//!
-//! \brief Re-exports chain trust values for reporting.
-//!
-arith_uint256 GetChainTrust(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    return g_chain_trust.GetTrust(pindex);
-}
+// g_seen_stakes, g_chain_trust, and GetChainTrust moved to
+// gridcoin/staking/chain_trust.cpp (issue #3125 C9); declarations live in
+// gridcoin/staking/spam.h and gridcoin/staking/chain_trust.h.
 
 // The setpwalletRegistered wallet registry has been fully retired (issues #3030
 // and #3108): wallet notifications flow through CMainSignals, the wallet
@@ -240,20 +222,7 @@ GRC::SuperblockPtr CBlock::GetSuperblock(const CBlockIndex* const pindex) const
     return superblock;
 }
 
-arith_uint256 CBlockIndex::GetBlockTrust() const
-{
-    arith_uint256 bnTarget;
-    bool fNegative;
-    bool fOverflow;
-    bnTarget.SetCompact(nBits, &fNegative, &fOverflow);
-    if (fNegative || fOverflow || bnTarget == 0)
-        return 0;
-    // We need to compute 2**256 / (bnTarget+1), but we can't represent 2**256
-    // as it's too large for an arith_uint256. However, as 2**256 is at least as large
-    // as bnTarget+1, it is equal to ((2**256 - bnTarget - 1) / (bnTarget+1)) + 1,
-    // or ~bnTarget / (bnTarget+1) + 1.
-    return (~bnTarget / (bnTarget + 1)) + 1;
-}
+// CBlockIndex::GetBlockTrust moved to chain.cpp (issue #3125 C9).
 
 void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {

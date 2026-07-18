@@ -38,9 +38,6 @@
 #include <set>
 #include <stdexcept>
 
-extern GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
-extern GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
-
 static constexpr CAmount nGenesisSupply = 340569880;
 bool fColdBoot = true;
 

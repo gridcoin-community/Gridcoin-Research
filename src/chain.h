@@ -24,13 +24,14 @@ typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
 //! The chain-state lock. Guards the active-chain globals below.
 extern CCriticalSection cs_main;
 
-//! Active chain state, extracted from main.h (issue #3030, workstream A6).
-//! These remain defined in main.cpp; only the declarations live here so
-//! consumers can depend on chain state without pulling in all of main.h.
+//! Active chain state, extracted from main.h (issue #3030, workstream A6) and
+//! defined in chain.cpp (issue #3125 C9). Note: a stale extern for a
+//! nBestChainTrust global was removed in the C9 move -- it had no definition
+//! anywhere; the chain-tip trust lives in g_chain_trust
+//! (gridcoin/staking/chain_trust.h).
 extern BlockMap mapBlockIndex GUARDED_BY(cs_main);
 extern CBlockIndex* pindexGenesisBlock GUARDED_BY(cs_main);
 extern int nBestHeight GUARDED_BY(cs_main);
-extern arith_uint256 nBestChainTrust GUARDED_BY(cs_main);
 extern uint256 hashBestChain GUARDED_BY(cs_main);
 extern CBlockIndex* pindexBest GUARDED_BY(cs_main);
 extern std::atomic<bool> g_reorg_in_progress;

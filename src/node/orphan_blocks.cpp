@@ -9,8 +9,6 @@
 #include "gridcoin/staking/spam.h"
 #include "util.h"
 
-extern GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
-
 OrphanBlockManager g_orphan_blocks GUARDED_BY(cs_main);
 
 bool OrphanBlockManager::Add(const uint256& hash, const CBlock& block, int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
