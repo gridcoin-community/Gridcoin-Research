@@ -17,6 +17,8 @@
 #include "sync.h"
 #include "node/ui_interface.h"
 
+#include <boost/signals2/signal.hpp>
+
 #include <memory>
 #include <vector>
 #include <string>

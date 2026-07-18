@@ -7,7 +7,14 @@
 
 #include <policy/policy.h>
 
+#include "chain.h"
+#include "consensus/consensus.h"
 #include "consensus/tx_verify.h"
+
+// Defined in main.cpp; declared in main.h. The ad-hoc extern (the
+// node/chainman.cpp pattern) avoids re-including the main.h umbrella here
+// until the global moves to its policy home (#3125 C9).
+extern bool fEnforceCanonical;
 
 bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType)
 {

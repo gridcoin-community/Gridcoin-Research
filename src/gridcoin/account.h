@@ -6,6 +6,8 @@
 #define GRIDCOIN_ACCOUNT_H
 
 #include "amount.h"
+#include "consensus/consensus.h"
+
 #include <optional>
 #include <unordered_map>
 
