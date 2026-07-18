@@ -26,7 +26,6 @@ from test_framework.test_framework import GridcoinTestFramework
 from test_framework.util import assert_equal
 
 import os
-import time
 from decimal import Decimal
 
 
@@ -74,8 +73,11 @@ class RpcPsgtPoolTest(GridcoinTestFramework):
         # 1 confirmation: the grow_utxo_universe split outputs are ordinary
         # outputs, spendable at 1 confirmation. The testmempoolaccept gate below
         # still guards spendability (and both-nodes agreement) for whatever
-        # listunspent(1) returns.
-        for cand in node0.listunspent(1):
+        # listunspent(1) returns. Smallest candidate first: the staker's kernel
+        # search is weight-driven, so funding from a small split output rather
+        # than a huge premine output keeps the funding input out of
+        # CreateCoinStake's likeliest picks.
+        for cand in sorted(node0.listunspent(1), key=lambda u: u["amount"]):
             amount = cand["amount"] - 1  # ~1 GRC fee (amounts are Decimal from authproxy)
             if amount <= 0:
                 continue  # too small to fund after fee (createrawtransaction rejects <= 0)
@@ -93,11 +95,12 @@ class RpcPsgtPoolTest(GridcoinTestFramework):
         assert signed is not None, "no consensus-unspent mature UTXO to fund the multisig"
         txid = node0.sendrawtransaction(signed["hex"])
 
-        # Wait for the funding tx to reach node1's mempool, then for the next
-        # 16-second STAKE_TIMESTAMP_MASK boundary (the miner excludes
-        # transactions with nTime > block.nTime) before node1 mines it.
+        # Wait for the funding tx to reach node1's mempool, then advance every
+        # node's mock clock to the next 16-second STAKE_TIMESTAMP_MASK slot
+        # (the miner excludes transactions with nTime > block.nTime) before
+        # node1 mines it.
         self.wait_until(lambda: txid in node1.getrawmempool())
-        time.sleep(16 - (int(time.time()) % 16) + 1)
+        self.advance_to_next_stake_slot()
         node1.generatetoaddress(1, node1.getnewaddress())
         self.sync_blocks()
 

@@ -883,12 +883,12 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         split_txid = funder.sendrawtransaction(signed["hex"])
 
         # Confirm in a single block. If confirming on a different node, wait for
-        # the split tx to propagate there first. Wait for the next 16-second
-        # STAKE_TIMESTAMP_MASK boundary either way: the miner excludes txs with
+        # the split tx to propagate there first. Advance to the next 16-second
+        # STAKE_TIMESTAMP_MASK slot either way: the miner excludes txs with
         # nTime > block.nTime, so mining too early would leave the split out.
         if confirm_on is not funder:
             self.wait_until(lambda: split_txid in confirm_on.getrawmempool())
-        time.sleep(16 - (int(time.time()) % 16) + 1)
+        self.advance_to_next_stake_slot()
         confirm_on.generatetoaddress(1, confirm_on.getnewaddress())
         if agree_with is not None:
             self.sync_blocks()
