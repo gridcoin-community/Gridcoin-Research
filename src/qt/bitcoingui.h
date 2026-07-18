@@ -124,6 +124,7 @@ protected:
 private:
     ClientModel *clientModel;
     WalletModel *walletModel;
+    interfaces::PSGTPoolContext *m_psgt_pool_context = nullptr;
     ResearcherModel *researcherModel;
     MRCModel *m_mrc_model;
     VotingModel *votingModel;

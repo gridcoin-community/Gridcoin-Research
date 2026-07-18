@@ -4,6 +4,7 @@
 
 #include "interfaces/wallet.h"
 
+#include "gridcoin/backup.h"
 #include "gridcoin/tx_message.h"
 #include "interfaces/handler.h"
 #include "key_io.h"
@@ -125,6 +126,16 @@ public:
         LOCK(m_wallet->cs_wallet);
         m_wallet->Lock(); // Make sure wallet is locked before attempting pass change
         return m_wallet->ChangeWalletPassphrase(old_passphrase, new_passphrase);
+    }
+
+    bool backupWallet(const std::string& dest) override
+    {
+        return GRC::BackupWallet(*m_wallet, dest);
+    }
+
+    bool backupConfigFile(const std::string& dest) override
+    {
+        return GRC::BackupConfigFile(dest);
     }
 
     bool getPubKey(const CKeyID& address, CPubKey& pub_key_out) override

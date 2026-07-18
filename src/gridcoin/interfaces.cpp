@@ -82,6 +82,8 @@ public:
 
     std::string getErrors() override { return g_miner_status.FormatErrors(); }
 
+    double getCoinWeight() override { return g_miner_status.GetSearchReport().CoinWeight(); }
+
     double getNetworkWeight() override
     {
         LOCK(cs_main);
@@ -1859,6 +1861,46 @@ public:
         }
         LOCK(m_wallet->cs_wallet);
         return PSGTSignedBy(*m_wallet, psgt);
+    }
+
+    bool walletMustSignRevision(const std::string& revision_hex) override
+    {
+        // Validate before SetHex, which silently maps malformed input to 0
+        // (mirrors TryImageFromHex above; a revision hash is a 32-byte uint256).
+        if (revision_hex.size() != 64 || !IsHex(revision_hex)) {
+            return false;
+        }
+        uint256 revision;
+        revision.SetHex(revision_hex);
+
+        const auto entry = g_psgt_pool.GetByRevision(revision);
+        if (!entry) {
+            return false;
+        }
+
+        // Already signed by this wallet? Then there is nothing to prompt for.
+        if (WITH_LOCK(m_wallet->cs_wallet, return PSGTSignedBy(*m_wallet, entry->psgt))) {
+            return false;
+        }
+
+        // Does the wallet hold one of the multisig arrangement's keys?
+        txnouttype script_type;
+        std::vector<std::vector<unsigned char>> solutions;
+        if (entry->psgt.inputs.empty()
+            || !Solver(entry->psgt.inputs[0].redeem_script, script_type, solutions)
+            || script_type != TX_MULTISIG) {
+            return false;
+        }
+
+        LOCK(m_wallet->cs_wallet);
+        for (unsigned int i = 1; i + 1 < solutions.size(); ++i) {
+            const CPubKey pubkey(solutions[i]);
+            if (pubkey.IsValid() && m_wallet->HaveKey(pubkey.GetID())) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
 private:

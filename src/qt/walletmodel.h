@@ -136,6 +136,12 @@ public:
                          bool stakingOnly = false);
     bool changePassphrase(const SecureString& oldPass, const SecureString& newPass);
 
+    // Back up the wallet .dat / config file to dest (pass-throughs to the
+    // wallet interface, used by the GUI backup action). Return false on
+    // I/O failure.
+    bool backupWallet(const std::string& dest);
+    bool backupConfigFile(const std::string& dest);
+
     // RAI object for unlocking wallet, returned by requestUnlock()
     class UnlockContext
     {
