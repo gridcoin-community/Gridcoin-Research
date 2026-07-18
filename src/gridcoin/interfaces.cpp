@@ -1865,6 +1865,11 @@ public:
 
     bool walletMustSignRevision(const std::string& revision_hex) override
     {
+        // Validate before SetHex, which silently maps malformed input to 0
+        // (mirrors TryImageFromHex above; a revision hash is a 32-byte uint256).
+        if (revision_hex.size() != 64 || !IsHex(revision_hex)) {
+            return false;
+        }
         uint256 revision;
         revision.SetHex(revision_hex);
 
