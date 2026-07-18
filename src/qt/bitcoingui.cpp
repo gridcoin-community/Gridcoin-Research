@@ -1440,7 +1440,7 @@ void BitcoinGUI::setPrivacy()
     clientModel->getOptionsModel()->setMaskValues(privacy_mode);
 
     // Need to refresh the miner status from here to feed back in the Coin Weight to the overview screen.
-    // Not ideal, but the normal trigger to update the Staking fields on the overview screen normally come from
+    // Not ideal, but the normal trigger to update the Staking fields on the overview screen normally comes from
     // the core, not the GUI. Here the privacy state change is coming from the GUI.
     clientModel->refreshMinerStatus();
 }
@@ -1811,7 +1811,7 @@ void BitcoinGUI::backupWallet()
     QString configfilename = QFileDialog::getSaveFileName(this, tr("Backup Config"), saveDir, tr("Wallet Config (*.conf)"));
     if(!configfilename.isEmpty()) {
         if(!walletModel->backupConfigFile(FromQString(configfilename))) {
-            QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
+            QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the config file to the new location."));
         }
     }
 }
