@@ -607,15 +607,13 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     // common ancestor for a multi-block reorg -- unlike origBestIndex, which
     // would be wrong for any non-trivial reorg. nullptr only when connecting the
     // genesis block. This resolves the #3080 stopgap so fork-point-dependent
-    // subscribers (e.g. the deferred PeerManager) receive correct semantics
-    // (issue #3104).
-    //
-    // The tip is reported as pindexBest rather than pindexNew: the
-    // trust-regression reorg-back above can leave the final tip at
-    // origBestIndex, and pindexNew would then name the abandoned block (issue
-    // #3145). On the normal path pindexBest == pindexNew after a successful
-    // reorganize, so this is equivalent.
-    GetMainSignals().UpdatedBlockTip(pindexBest, pfork, fIsInitialDownload);
+    // subscribers receive correct semantics (issue #3104). The PeerManager is
+    // now such a subscriber (issue #3125 C8): its UpdatedBlockTip handler
+    // relays the new-tip inventory (moved from AcceptBlock), gated on
+    // pindexNew still being the best chain -- load-bearing because the
+    // trust-regression path above reorganizes back to the previous tip yet
+    // still emits with the losing pindexNew.
+    GetMainSignals().UpdatedBlockTip(pindexNew, pfork, fIsInitialDownload);
 
     return GridcoinServices();
 }

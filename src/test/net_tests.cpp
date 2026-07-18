@@ -9,10 +9,13 @@
 #include "serialize.h"
 #include "streams.h"
 #include "net.h"
+#include "net_processing.h"
 #include "netbase.h"
 #include "addrdb.h"
+#include "chain.h"
 #include "chainparams.h"
 #include "clientversion.h"
+#include "primitives/block.h"
 
 using namespace std;
 
@@ -133,6 +136,29 @@ BOOST_AUTO_TEST_CASE(caddrdb_read_corrupted)
     BOOST_CHECK(addrman2.size() == 0);
     adb.Read(addrman2, ssPeers2);
     BOOST_CHECK(addrman2.size() == 0);
+}
+
+// The PeerManager tip-relay handler (issue #3125 C8) must no-op safely on a
+// quiescent node: a null tip (defensive guard) and a non-best tip -- the
+// best-chain gate that suppresses relay when SetBestChain's trust-regression
+// path reorganizes back to the previous tip yet still emits UpdatedBlockTip
+// with the losing block. The fixture's g_connman has zero nodes, so a passing
+// gate would also no-op; what this exercises is the gate/guard path itself
+// under the handler's cs_main lock annotation.
+BOOST_AUTO_TEST_CASE(peerman_updatedblocktip_relay_gates)
+{
+    BOOST_REQUIRE(g_peerman);
+
+    LOCK(cs_main);
+
+    g_peerman->UpdatedBlockTip(nullptr, nullptr, false);
+
+    const uint256 not_best_hash = uint256S("0xdeadbeef");
+    CBlockIndex index;
+    index.phashBlock = &not_best_hash;
+    BOOST_REQUIRE(index.GetBlockHash() != hashBestChain);
+
+    g_peerman->UpdatedBlockTip(&index, nullptr, false);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
