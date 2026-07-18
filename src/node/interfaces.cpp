@@ -186,7 +186,7 @@ public:
 class InitImpl : public Init
 {
 public:
-    bool isCoreReady() override { return bGridcoinCoreInitComplete; }
+    bool isCoreReady() override { return bGridcoinCoreInitComplete.load(); }
 
     std::unique_ptr<Node> makeNode() override { return MakeNode(); }
 
