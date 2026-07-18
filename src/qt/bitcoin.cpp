@@ -638,11 +638,12 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         }
         else
         {
-            // The monolithic-build interface implementations the models consume
-            // core state through (doc/multiprocess_design.md). Created here, before
-            // the readiness wait, so the GUI polls interface_init->isCoreReady()
-            // rather than the raw bGridcoinCoreInitComplete global; it outlives
-            // every model constructed below.
+            // The monolithic-build interface implementations that the models
+            // consume core state through (doc/multiprocess_design.md). Created
+            // here, before the readiness wait, so the GUI polls
+            // interface_init->isCoreReady() rather than the raw
+            // bGridcoinCoreInitComplete global; it outlives every model
+            // constructed below.
             std::unique_ptr<interfaces::Init> interface_init = interfaces::MakeGridcoinInit();
 
              //10-31-2015
