@@ -120,15 +120,15 @@ void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
     // pre-compute tree structure
-    map<CBlockIndex*, vector<CBlockIndex*> > mapNext;
+    std::map<CBlockIndex*, std::vector<CBlockIndex*> > mapNext;
     for (BlockMap::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
     {
         CBlockIndex* pindex = mi->second;
         mapNext[pindex->pprev].push_back(pindex);
     }
 
-    vector<pair<int, CBlockIndex*> > vStack;
-    vStack.push_back(make_pair(0, pindexGenesisBlock));
+    std::vector<std::pair<int, CBlockIndex*> > vStack;
+    vStack.push_back(std::make_pair(0, pindexGenesisBlock));
 
     int nPrevCol = 0;
     while (!vStack.empty())
@@ -177,19 +177,19 @@ void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                   block.vtx.size());
 
         // put the main time-chain first
-        vector<CBlockIndex*>& vNext = mapNext[pindex];
+        std::vector<CBlockIndex*>& vNext = mapNext[pindex];
         for (unsigned int i = 0; i < vNext.size(); i++)
         {
             if (vNext[i]->pnext)
             {
-                swap(vNext[0], vNext[i]);
+                std::swap(vNext[0], vNext[i]);
                 break;
             }
         }
 
         // iterate children
         for (unsigned int i = 0; i < vNext.size(); i++)
-            vStack.push_back(make_pair(nCol+i, vNext[i]));
+            vStack.push_back(std::make_pair(nCol+i, vNext[i]));
     }
 }
 
