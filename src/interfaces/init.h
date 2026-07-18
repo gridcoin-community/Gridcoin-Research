@@ -35,6 +35,12 @@ class Init
 public:
     virtual ~Init();
 
+    //! Whether core initialization (ThreadAppInit2 / AppInit2) has completed. The
+    //! GUI polls this while pumping its event loop, instead of reading the raw
+    //! bGridcoinCoreInitComplete global; a Stage-2 IPC readiness handshake later
+    //! replaces the poll. The default (no core to wait on) reports ready.
+    virtual bool isCoreReady();
+
     //! The defaults return nullptr and are defined out of line (init.cpp):
     //! inline definitions would require every includer to see the complete
     //! interface types just to instantiate the unique_ptr deleters.

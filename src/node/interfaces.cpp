@@ -34,6 +34,7 @@
 // The converged scraper stats cache has no header declaration; every consumer
 // declares the extern locally (quorum.cpp, scraper_net.cpp, rpc/blockchain.cpp).
 extern ConvergedScraperStats ConvergedScraperStatsCache;
+extern std::atomic<bool> bGridcoinCoreInitComplete;
 
 namespace interfaces {
 namespace {
@@ -185,6 +186,8 @@ public:
 class InitImpl : public Init
 {
 public:
+    bool isCoreReady() override { return bGridcoinCoreInitComplete; }
+
     std::unique_ptr<Node> makeNode() override { return MakeNode(); }
 
     std::unique_ptr<StakingStatus> makeStakingStatus() override { return MakeStakingStatus(); }

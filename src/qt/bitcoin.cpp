@@ -82,7 +82,6 @@ Q_IMPORT_PLUGIN(QSvgIconPlugin);
 #endif
 
 extern bool fQtActive;
-extern std::atomic<bool> bGridcoinCoreInitComplete;
 
 // Need a global reference for the notifications to find the GUI
 static BitcoinGUI *guiref;
@@ -639,8 +638,15 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         }
         else
         {
+            // The monolithic-build interface implementations the models consume
+            // core state through (doc/multiprocess_design.md). Created here, before
+            // the readiness wait, so the GUI polls interface_init->isCoreReady()
+            // rather than the raw bGridcoinCoreInitComplete global; it outlives
+            // every model constructed below.
+            std::unique_ptr<interfaces::Init> interface_init = interfaces::MakeGridcoinInit();
+
              //10-31-2015
-            while (!bGridcoinCoreInitComplete)
+            while (!interface_init->isCoreReady())
             {
                 app.processEvents();
 
@@ -654,13 +660,9 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 splash.finish(&window);
 
             if (!fRequestShutdown) {
-                // Put this in a block, so that the Model objects are cleaned up before
-                // calling Shutdown().
-
-                // The monolithic-build interface implementations the models
-                // consume core state through (doc/multiprocess_design.md).
-                // These must outlive every model constructed below.
-                std::unique_ptr<interfaces::Init> interface_init = interfaces::MakeGridcoinInit();
+                // Put this in a block, so that the Model objects are cleaned up
+                // before calling Shutdown(). interface_init (created above, ahead
+                // of the readiness wait) outlives every model constructed here.
                 std::unique_ptr<interfaces::Node> node = interface_init->makeNode();
                 std::unique_ptr<interfaces::StakingStatus> staking_status = interface_init->makeStakingStatus();
                 // Wallet startup completed above, so pwalletMain is set and
