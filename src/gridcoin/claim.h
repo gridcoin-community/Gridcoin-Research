@@ -10,11 +10,16 @@
 #include "gridcoin/cpid.h"
 #include "gridcoin/superblock.h"
 #include "serialize.h"
+#include "sync.h"
 #include "uint256.h"
 
 #include <optional>
 
 class CPubKey;
+
+//! Declared in chain.h; redeclared for the GetClaimByIndex lock annotation
+//! below (the gridcoin/staking/chain_trust.h idiom).
+extern CCriticalSection cs_main;
 
 namespace GRC {
 //!
@@ -406,6 +411,16 @@ public:
         }
     }
 }; // Claim
+
+//! Identical to the compatibility typedef in main.h (issue #3125 C9).
+typedef std::optional<Claim> ClaimOption;
 }
+
+class CBlockIndex;
+
+//! \brief Read a block from disk and pull its reward claim (issue #2865
+//! coherence helper). Defined in gridcoin/block_claims.cpp (moved from
+//! main.cpp, issue #3125 C9).
+GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 #endif // GRIDCOIN_CLAIM_H

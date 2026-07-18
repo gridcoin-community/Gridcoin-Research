@@ -101,6 +101,9 @@ void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 // AbandonChainTo / PurgeOrphanedBlockIndexEntries live in node/coherence.h
 // with the rest of the #2865 recovery logic (issue #3125, workstream C4).
 
+// -- Compatibility declaration (see the fenced block above): verbatim
+// -- duplicate of the canonical declaration in gridcoin/claim.h, which is
+// -- not part of this header's re-include set.
 GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 // GetNumBlocksOfPeers, IsInitialBlockDownload, and OutOfSyncByAge live in
