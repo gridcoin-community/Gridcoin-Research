@@ -36,7 +36,7 @@
 #include "gridcoin/voting/result.h"
 #include "interfaces/handler.h"
 #include "key_io.h"
-#include "main.h"
+#include "chain.h"
 #include "net_processing.h"
 #include "node/psgt_pool.h"
 #include "node/ui_interface.h"

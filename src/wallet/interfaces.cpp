@@ -9,7 +9,6 @@
 #include "hash.h"
 #include "interfaces/handler.h"
 #include "key_io.h"
-#include "main.h"
 #include "policy/fees.h"
 #include "policy/policy.h"
 #include "streams.h"
