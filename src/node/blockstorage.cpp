@@ -19,11 +19,13 @@
 #include "node/ui_interface.h"
 #include "protocol.h"
 #include "serialize.h"
+#include "util.h"
 #include "util/string.h"
 #include "util/time.h"
 #include "validation.h"
 
 #include <cerrno>
+#include <sstream>
 #include <stdio.h>
 
 bool WriteBlockToDisk(const CBlock& block, unsigned int& nFileRet, unsigned int& nBlockPosRet,
@@ -488,4 +490,81 @@ bool LoadBlockIndex(bool fAllowNew)
     g_seen_stakes.Refill(pindexBest);
 
     return true;
+}
+
+void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    AssertLockHeld(cs_main);
+    // pre-compute tree structure
+    std::map<CBlockIndex*, std::vector<CBlockIndex*> > mapNext;
+    for (BlockMap::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
+    {
+        CBlockIndex* pindex = mi->second;
+        mapNext[pindex->pprev].push_back(pindex);
+    }
+
+    std::vector<std::pair<int, CBlockIndex*> > vStack;
+    vStack.push_back(std::make_pair(0, pindexGenesisBlock));
+
+    int nPrevCol = 0;
+    while (!vStack.empty())
+    {
+        int nCol = vStack.back().first;
+        CBlockIndex* pindex = vStack.back().second;
+        vStack.pop_back();
+
+        std::stringstream output;
+
+        // print split or gap
+        if (nCol > nPrevCol)
+        {
+            for (int i = 0; i < nCol-1; i++) {
+                output << "| \n";
+            }
+
+            output << "|\\\n";
+        }
+        else if (nCol < nPrevCol)
+        {
+            for (int i = 0; i < nCol; i++) {
+                output << "| \n";
+            }
+
+            output << "|\n";
+        }
+        nPrevCol = nCol;
+
+        // print columns
+        for (int i = 0; i < nCol; i++) {
+            output << "| \n";
+        }
+
+        // print item (and also prepend above formatting)
+        CBlock block;
+        ReadBlockFromDisk(block, pindex, Params().GetConsensus());
+        LogPrintf("%s%d (%u,%u) %s  %08x  %s  tx %" PRIszu "",
+                  output.str(),
+                  pindex->nHeight,
+                  pindex->nFile,
+                  pindex->nBlockPos,
+                  block.GetHash(true).ToString().c_str(),
+                  block.nBits,
+                  DateTimeStrFormat("%x %H:%M:%S", block.GetBlockTime()).c_str(),
+                  block.vtx.size());
+
+        // put the main time-chain first
+        std::vector<CBlockIndex*>& vNext = mapNext[pindex];
+        for (unsigned int i = 0; i < vNext.size(); i++)
+        {
+            if (vNext[i]->pnext)
+            {
+                std::swap(vNext[0], vNext[i]);
+                break;
+            }
+        }
+
+        // iterate children
+        for (unsigned int i = 0; i < vNext.size(); i++)
+            vStack.push_back(std::make_pair(nCol+i, vNext[i]));
+    }
 }

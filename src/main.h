@@ -91,9 +91,8 @@ class CTxIndex;
 // node/chainman.h (issue #3125, workstream C1); callers include it directly
 // (a main.h re-include would create a main <-> node/chainman module cycle).
 // Block-file I/O helpers (CheckDiskSpace, OpenBlockFile, AppendBlockFile,
-// LoadExternalBlockFile) and LoadBlockIndex live in node/blockstorage.h,
-// included above (issue #3125, workstream C5).
-void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+// LoadExternalBlockFile), LoadBlockIndex, and PrintBlockTree live in
+// node/blockstorage.h, included above (issue #3125, workstreams C5/C9).
 // CoinToDouble is declared in util.h, included above (issue #3125 C9).
 
 // ProcessMessages / SendMessages moved to net_processing.h (issue #2558 PR 2a).

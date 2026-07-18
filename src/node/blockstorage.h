@@ -7,6 +7,7 @@
 #define BITCOIN_NODE_BLOCKSTORAGE_H
 
 #include "protocol.h"
+#include "sync.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -14,6 +15,10 @@
 
 class CBlock;
 class CBlockIndex;
+
+//! Declared in chain.h; redeclared for the PrintBlockTree lock annotation
+//! below (the gridcoin/staking/chain_trust.h idiom).
+extern CCriticalSection cs_main;
 
 namespace Consensus {
 struct Params;
@@ -45,6 +50,10 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
 //! would deadlock under non-recursive locking; cs_main is currently recursive
 //! but the annotation contract documents the intent).
 bool LoadBlockIndex(bool fAllowNew=true);
+
+//! Debug helper (-printblocktree): dump the whole block-index tree to the
+//! log. Moved from main.{h,cpp} (issue #3125 C9).
+void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 
 #endif // BITCOIN_NODE_BLOCKSTORAGE_H
