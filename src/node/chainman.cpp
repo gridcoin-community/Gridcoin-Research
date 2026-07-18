@@ -40,12 +40,10 @@
 using namespace std;
 
 // Globals defined elsewhere that the chain-management functions reference.
-// g_chain_trust and g_seen_stakes now come from their canonical headers
-// (gridcoin/staking/chain_trust.h and spam.h, included above -- issue #3125
-// C9); the remaining ad-hoc externs cover:
-//   g_v11_timestamp -> defined in main.cpp
-//   pwalletMain     -> defined in init.cpp
-extern int64_t g_v11_timestamp;
+// g_chain_trust, g_seen_stakes, and g_v11_timestamp now come from their
+// canonical headers (gridcoin/staking/chain_trust.h, spam.h, validation.h,
+// included above -- issue #3125 C9); the remaining ad-hoc extern covers:
+//   pwalletMain -> defined in init.cpp
 extern CWallet* pwalletMain;
 
 void UpdateSyncTime(const CBlockIndex* const pindexBest)

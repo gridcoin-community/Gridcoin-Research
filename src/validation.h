@@ -28,6 +28,37 @@ namespace GRC {
 
 typedef std::map<uint256, std::pair<CTxIndex, CTransaction>> MapPrevTx;
 
+//
+// Sync / chain-progress state, moved out of main.{h,cpp} (issue #3125 C9).
+//
+
+//! Serializes the transaction-validation commit-to-disk window (issue #2865).
+extern CCriticalSection cs_tx_val_commit_to_disk;
+
+//! Coinbase/coinstake maturity depth.
+extern int nCoinbaseMaturity;
+
+//! When syncing, block-rejection rules are grandfathered up to this height,
+//! as rules became stricter over time and fields changed.
+extern int nGrandfather;
+
+//! Enforce canonical script pushes for standardness.
+extern bool fEnforceCanonical;
+
+//! Temporary block-version-11 transition helper.
+extern int64_t g_v11_timestamp;
+
+//! Median of the block heights that connected peers claim to have, floored
+//! at the hardened-checkpoint height.
+int GetNumBlocksOfPeers();
+
+//! Heuristic: still syncing the historical chain (peer-height median and
+//! tip-age based).
+bool IsInitialBlockDownload();
+
+//! Heuristic: the tip is older than ten target block spacings.
+bool OutOfSyncByAge();
+
 bool ReadTxFromDisk(CTransaction& tx, CDiskTxPos pos, FILE** pfileRet = nullptr);
 bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout, CTxIndex& txindexRet);
 bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout);

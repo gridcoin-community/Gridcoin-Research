@@ -59,12 +59,14 @@ typedef std::optional<Claim> ClaimOption;
 // chain.h, included above (issue #3030, workstream A6). FutureDrift and
 // GetTargetSpacing live in primitives/block.h (extracted in #3060).
 
+// cs_tx_val_commit_to_disk, nCoinbaseMaturity, nGrandfather, and
+// fEnforceCanonical are declared in validation.h, included above
+// (issue #3125 C9).
+
 extern CScript COINBASE_FLAGS;
-extern CCriticalSection cs_tx_val_commit_to_disk;
 extern unsigned int nStakeMinAge;
 extern unsigned int nStakeMaxAge;
 extern unsigned int nNodeLifespan;
-extern int nCoinbaseMaturity;
 extern const std::string strMessageMagic;
 // Orphan block storage is managed by g_orphan_blocks in node/orphan_blocks.h
 
@@ -76,8 +78,6 @@ extern int64_t nMinimumInputValue;
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
 
-extern bool fEnforceCanonical;
-
 //! \brief Guards \ref msMiningErrors. Written by Researcher::StoreResearcher
 //! on the GUI / timer thread, read by getmininginfo RPC and the Qt researcher
 //! model on their respective threads. std::string assignment / copy is not
@@ -86,8 +86,6 @@ extern bool fEnforceCanonical;
 //! serialization.
 extern CCriticalSection cs_msMiningErrors;
 extern std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
-
-extern int nGrandfather;
 
 class CReserveKey;
 class CTxDB;
@@ -109,12 +107,11 @@ double CoinToDouble(double surrogate);
 
 GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-int GetNumBlocksOfPeers();
-bool IsInitialBlockDownload();
+// GetNumBlocksOfPeers, IsInitialBlockDownload, and OutOfSyncByAge live in
+// validation.h, included above (issue #3125 C9).
 // GetWarnings lives in alert.h (issue #3125, workstream C6). GetTransaction
 // lives in validation.h, included above, and CMerkleTx in wallet/wallet.h --
 // only the wallet derives from it (issue #3125, workstream C3).
-bool OutOfSyncByAge();
 
 // AcceptToMemoryPool lives in validation.h, included above (issue #3125,
 // workstream C2).

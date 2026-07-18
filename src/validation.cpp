@@ -38,6 +38,55 @@
 #include <set>
 #include <stdexcept>
 
+// Sync / chain-progress state moved out of main.cpp (issue #3125 C9);
+// declarations live in validation.h.
+
+CCriticalSection cs_tx_val_commit_to_disk;
+
+int nCoinbaseMaturity = 100;
+
+CMedianFilter<int> cPeerBlockCounts GUARDED_BY(cs_main) {5, 0}; // Amount of blocks that other nodes claim to have
+
+//When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
+int nGrandfather = 1034700;
+
+bool fEnforceCanonical = true;
+
+// Temporary block version 11 transition helpers:
+int64_t g_v11_timestamp = 0;
+
+int GetNumBlocksOfPeers()
+{
+    LOCK(cs_main);
+    return std::max(cPeerBlockCounts.median(), Params().Checkpoints().GetHeight());
+}
+
+bool IsInitialBlockDownload()
+{
+    LOCK(cs_main);
+    if ((pindexBest == nullptr || nBestHeight < GetNumBlocksOfPeers()) && nBestHeight < 1185000)
+        return true;
+    static int64_t nLastUpdate;
+    static CBlockIndex* pindexLastBest;
+    if (pindexBest != pindexLastBest)
+    {
+        pindexLastBest = pindexBest;
+        nLastUpdate =  GetAdjustedTime();
+    }
+    return ( GetAdjustedTime() - nLastUpdate < 15 &&
+            pindexBest->GetBlockTime() <  GetAdjustedTime() - 8 * 60 * 60);
+}
+
+bool OutOfSyncByAge()
+{
+    // Assume we are out of sync if the current block age is 10
+    // times older than the target spacing. This is the same
+    // rules that Bitcoin uses.
+    constexpr int64_t maxAge = 90 * 10;
+
+    return GetAdjustedTime() - g_previous_block_time >= maxAge;
+}
+
 static constexpr CAmount nGenesisSupply = 340569880;
 bool fColdBoot = true;
 

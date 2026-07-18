@@ -65,7 +65,8 @@ using namespace std;
 extern CCriticalSection cs_mapAlerts;
 extern std::map<uint256, CAlert> mapAlerts GUARDED_BY(cs_mapAlerts);
 
-// cPeerBlockCounts stays in main.cpp (read by GetNumBlocksOfPeers); the moved
+// cPeerBlockCounts stays in validation.cpp (read by GetNumBlocksOfPeers --
+// homing it here would mint a validation <-> net_processing cycle); the moved
 // VERSION handler feeds it peer-claimed heights, so declare it here.
 extern CMedianFilter<int> cPeerBlockCounts GUARDED_BY(cs_main);
 
