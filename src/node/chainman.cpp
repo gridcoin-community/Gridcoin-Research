@@ -525,9 +525,12 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     //
     // pfork captures the fork point of this forward reorg to pindexNew, threaded
     // out for the UpdatedBlockTip emission below (issue #3104). The reorg-back
-    // call, if it runs, intentionally leaves pfork untouched: the emission
-    // reports pindexNew, so its matching fork point is this forward common
-    // ancestor.
+    // call, if it runs, overwrites pfork so the emission describes the reorg
+    // that actually produced the final tip (issue #3145). On that path the
+    // externally visible tip is unchanged (the tip itself would be the minimal
+    // fork point); the back-leg common ancestor passed instead is always a
+    // non-null ancestor of the reported tip, so a fork-point-dependent
+    // subscriber at worst revisits blocks already on the main chain.
     const CBlockIndex* pfork = nullptr;
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew, &pfork);
 
@@ -540,7 +543,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
             return error("%s: Fatal Error while reading original best block", __func__);
         }
 
-        success = ReorganizeChain(txdb, cnt_dis, cnt_con, origBlock, origBestIndex);
+        success = ReorganizeChain(txdb, cnt_dis, cnt_con, origBlock, origBestIndex, &pfork);
     }
 
     if (!success) {
@@ -557,7 +560,12 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     bool fIsInitialDownload = IsInitialBlockDownload();
 
     if (!fIsInitialDownload) {
-        const CBlockLocator locator(pindexNew);
+        // Build the locator from pindexBest, not pindexNew: after a
+        // trust-regression reorg-back the final tip is origBestIndex, and a
+        // locator built from the abandoned pindexNew would lead with
+        // off-main-chain hashes (issue #3145). On the normal path
+        // pindexBest == pindexNew, so this is equivalent.
+        const CBlockLocator locator(pindexBest);
         // Persist the wallet best-block locator. Emitted synchronously under
         // cs_main (held by SetBestChain), so the CValidationInterface subscriber
         // (CWallet::ChainStateFlushed) runs in the canonical cs_main -> signals
@@ -601,7 +609,13 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     // genesis block. This resolves the #3080 stopgap so fork-point-dependent
     // subscribers (e.g. the deferred PeerManager) receive correct semantics
     // (issue #3104).
-    GetMainSignals().UpdatedBlockTip(pindexNew, pfork, fIsInitialDownload);
+    //
+    // The tip is reported as pindexBest rather than pindexNew: the
+    // trust-regression reorg-back above can leave the final tip at
+    // origBestIndex, and pindexNew would then name the abandoned block (issue
+    // #3145). On the normal path pindexBest == pindexNew after a successful
+    // reorganize, so this is equivalent.
+    GetMainSignals().UpdatedBlockTip(pindexBest, pfork, fIsInitialDownload);
 
     return GridcoinServices();
 }
