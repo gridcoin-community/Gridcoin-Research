@@ -844,54 +844,104 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         if agree_with is not None:
             self.sync_blocks()
 
-        # Pick a mature source UTXO unspent in every consensus view.
-        src = None
-        for cand in funder.listunspent(11):
-            # Amount math stays in Decimal end to end (authproxy parses amounts
-            # as Decimal), exact at 1e-8 (satoshi) granularity, and is handed
-            # straight to createrawtransaction: a Decimal serializes to a JSON
-            # string, which AmountFromValue now parses exactly to the satoshi
-            # (issue #3148). No float() round-trip, so no double-rounding.
-            amount = cand["amount"] - Decimal("1.0")  # ~1 GRC fee
-            if amount <= 0:
+        # Lockstep removes the clock-skew failure modes but not the supply
+        # one: kernel selection is random per run, so the staker can have
+        # churned every mature output right when we scan (empty scan), and the
+        # confirm block's own coinstake can race the very source the split
+        # spends. Both are absorbed by a bounded retry; final failure keeps
+        # the original diagnostic (plus the last miner error, if any).
+        tried = set()
+        last_error = None
+        for _ in range(3):
+            # Pick a mature source UTXO unspent in every consensus view.
+            src = None
+            for cand in funder.listunspent(11):
+                if (cand["txid"], cand["vout"]) in tried:
+                    continue
+                # Amount math stays in Decimal end to end (authproxy parses
+                # amounts as Decimal), exact at 1e-8 (satoshi) granularity, and
+                # is handed straight to createrawtransaction: a Decimal
+                # serializes to a JSON string, which AmountFromValue now parses
+                # exactly to the satoshi (issue #3148). No float() round-trip,
+                # so no double-rounding.
+                amount = cand["amount"] - Decimal("1.0")  # ~1 GRC fee
+                if amount <= 0:
+                    continue
+                probe = funder.signrawtransactionwithwallet(
+                    funder.createrawtransaction(
+                        [{"txid": cand["txid"], "vout": cand["vout"]}],
+                        {funder.getnewaddress(): amount}))
+                if not probe.get("complete"):
+                    continue
+                if not funder.testmempoolaccept([probe["hex"]])[0]["allowed"]:
+                    continue
+                if agree_with is not None and not agree_with.testmempoolaccept([probe["hex"]])[0]["allowed"]:
+                    continue
+                src = cand
+                break
+
+            if src is None:
+                # Supply starved: mine one block on funder to mature another
+                # coinstake into listunspent(11) range, then rescan. The refill
+                # mine can itself fail while starved ("CreateCoinStake: no
+                # stake found") — treat that as a failed attempt, not a crash.
+                try:
+                    self.advance_to_next_stake_slot()
+                    funder.generatetoaddress(1, funder.getnewaddress())
+                    if agree_with is not None:
+                        self.sync_blocks()
+                except JSONRPCException as e:
+                    last_error = e
                 continue
-            probe = funder.signrawtransactionwithwallet(
+            tried.add((src["txid"], src["vout"]))
+
+            # ROUND_DOWN to the satoshi so count * per_out never exceeds the
+            # input (rounding up could make the outputs sum > the source,
+            # invalidating the tx). Decimal at 1e-8 is the exact int64_t
+            # CAmount in GRC units.
+            per_out = ((src["amount"] - Decimal("1.0")) / count).quantize(
+                Decimal("0.00000001"), rounding=ROUND_DOWN)  # ~1 GRC total fee
+            assert per_out > 0, "source UTXO too small to fan out into `count` outputs"
+            outputs = {funder.getnewaddress(): per_out for _ in range(count)}
+            signed = funder.signrawtransactionwithwallet(
                 funder.createrawtransaction(
-                    [{"txid": cand["txid"], "vout": cand["vout"]}],
-                    {funder.getnewaddress(): amount}))
-            if not probe.get("complete"):
-                continue
-            if not funder.testmempoolaccept([probe["hex"]])[0]["allowed"]:
-                continue
-            if agree_with is not None and not agree_with.testmempoolaccept([probe["hex"]])[0]["allowed"]:
-                continue
-            src = cand
-            break
-        assert src is not None, "no spendable consensus-unspent UTXO to seed the universe"
+                    [{"txid": src["txid"], "vout": src["vout"]}], outputs))
+            assert signed.get("complete"), "failed to sign the universe split transaction"
+            split_txid = funder.sendrawtransaction(signed["hex"])
 
-        # ROUND_DOWN to the satoshi so count * per_out never exceeds the input
-        # (rounding up could make the outputs sum > the source, invalidating the
-        # tx). Decimal at 1e-8 is the exact int64_t CAmount in GRC units.
-        per_out = ((src["amount"] - Decimal("1.0")) / count).quantize(
-            Decimal("0.00000001"), rounding=ROUND_DOWN)  # ~1 GRC total fee
-        assert per_out > 0, "source UTXO too small to fan out into `count` outputs"
-        outputs = {funder.getnewaddress(): per_out for _ in range(count)}
-        signed = funder.signrawtransactionwithwallet(
-            funder.createrawtransaction(
-                [{"txid": src["txid"], "vout": src["vout"]}], outputs))
-        assert signed.get("complete"), "failed to sign the universe split transaction"
-        split_txid = funder.sendrawtransaction(signed["hex"])
+            # Confirm in a single block. If confirming on a different node,
+            # wait for the split tx to propagate there first. Advance to the
+            # next 16-second STAKE_TIMESTAMP_MASK slot either way: the miner
+            # excludes txs with nTime > block.nTime, so mining too early would
+            # leave the split out.
+            if confirm_on is not funder:
+                self.wait_until(lambda: split_txid in confirm_on.getrawmempool())
+            self.advance_to_next_stake_slot()
+            try:
+                confirm_on.generatetoaddress(1, confirm_on.getnewaddress())
+            except JSONRPCException as e:
+                # The confirm block's coinstake can pick the very UTXO the
+                # pending split spends (the wallet does not track raw spends):
+                # the block then double-spends its own transaction and is
+                # rejected — "ConnectInputs(): prev tx already used" — which
+                # surfaces here as an RPC error after the miner's retries.
+                # Retry with a different source.
+                last_error = e
+                continue
+            if agree_with is not None:
+                self.sync_blocks()
 
-        # Confirm in a single block. If confirming on a different node, wait for
-        # the split tx to propagate there first. Advance to the next 16-second
-        # STAKE_TIMESTAMP_MASK slot either way: the miner excludes txs with
-        # nTime > block.nTime, so mining too early would leave the split out.
-        if confirm_on is not funder:
-            self.wait_until(lambda: split_txid in confirm_on.getrawmempool())
-        self.advance_to_next_stake_slot()
-        confirm_on.generatetoaddress(1, confirm_on.getnewaddress())
-        if agree_with is not None:
-            self.sync_blocks()
+            # The coinstake race can also confirm quietly AGAINST the split
+            # (the split simply vanishes as a double-spend loser), so declare
+            # success only once the split itself is buried.
+            try:
+                if funder.getrawtransaction(split_txid, True).get("confirmations", 0) >= 1:
+                    return
+            except JSONRPCException:
+                pass
+        raise AssertionError(
+            "no spendable consensus-unspent UTXO to seed the universe"
+            + (" (last mining error: %s)" % (last_error,) if last_error else ""))
 
     # Private helper methods. These should not be accessed by the subclass test scripts.
 
