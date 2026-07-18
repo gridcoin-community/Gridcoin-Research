@@ -7,7 +7,6 @@
 #include "node/shutdown.h"
 #include "dbwrapper.h"
 #include "net.h"
-#include "main.h"
 #include "node/ui_interface.h"
 #include "util.h"
 
