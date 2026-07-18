@@ -48,6 +48,13 @@ TEST_EXIT_SKIPPED = 77
 
 TMPDIR_PREFIX = "gridcoin_func_test_"
 
+# Mirrors STAKE_TIMESTAMP_MASK in src/gridcoin/staking/kernel.h: proof-of-stake
+# masks coinstake timestamps down to (mask+1)-second slots — 16 seconds — and
+# the miner excludes mempool transactions with nTime > block.nTime, so block
+# times march in 16-second steps and can legitimately run ahead of the wall
+# clock. See advance_to_next_stake_slot() / sync_clocks().
+STAKE_TIMESTAMP_MASK = 15
+
 
 class SkipTest(Exception):
     """This exception is raised to skip a test"""
@@ -671,6 +678,10 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         while time.time() <= stop_time:
             best_hash = [x.getbestblockhash() for x in rpc_connections]
             if best_hash.count(best_hash[0]) == len(rpc_connections):
+                # Everyone agrees on the tip; also bring every node's clock up
+                # to it, so nodes that merely synced the blocks do not stamp
+                # their next transactions behind the chain (issue #3165).
+                self.sync_clocks(rpc_connections)
                 return
             # Check that each peer has at least one connection
             assert (all([len(x.getpeerinfo()) for x in rpc_connections]))
@@ -709,6 +720,93 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
 
     def wait_until(self, test_function, timeout=60):
         return wait_until_helper(test_function, timeout=timeout, timeout_factor=self.options.timeout_factor)
+
+    def sync_clocks(self, nodes=None):
+        """Advance every node's mock clock to its own chain tip's time.
+
+        Forward-only: a no-op for a node whose clock is not behind its tip,
+        and skipped for nodes that opted out via setmocktime(0). PR #3161's
+        generatetoaddress shadow keeps the MINING node's adjusted time in step
+        with the blocks it produces, but a node that merely syncs those blocks
+        over P2P keeps a lagging clock and stamps its next transactions behind
+        the chain, tripping the coinstake input-timestamp consensus rule
+        ("transaction timestamp earlier than input transaction") as an
+        intermittent -22 send failure (issue #3165). Called automatically from
+        sync_blocks once tips agree; also callable standalone — e.g. after
+        restart_node, which resets the daemon's mock clock while the tip may
+        still sit ahead of real time.
+
+        Nodes still at genesis are skipped: the genesis timestamp is in the
+        distant past (nothing to advance to), and getblock crashes the daemon
+        on the genesis block (blockToJSON; pre-existing bug, reported
+        separately)."""
+        for node in (nodes or self.nodes):
+            if node.getblockcount() == 0:
+                continue
+            node.advance_mocktime_to(node.getblock(node.getbestblockhash())['time'])
+
+    def advance_to_next_stake_slot(self, nodes=None):
+        """Advance every node's mock clock to the next 16-second coinstake slot
+        boundary and return that timestamp.
+
+        The miner excludes mempool transactions with nTime > block.nTime and
+        stamps blocks on STAKE_TIMESTAMP_MASK slot boundaries, so a transaction
+        sent mid-slot is only guaranteed into the next mined block once the
+        clock has crossed the next boundary. This replaces the old wall-clock
+        wait (time.sleep(16 - now % 16 + 1)), which stops working the moment
+        mock time engages. Every pending transaction was stamped <= now <
+        target, the target is itself slot-aligned, and the target is ahead of
+        every tip, so the next mined block — at the target slot or a later
+        miner retry slot — includes the pending transactions.
+
+        Lockstep assumption: a node that opted out via setmocktime(0) cannot
+        be advanced and is skipped with a warning; a block stamped more than
+        128 seconds past such a node's real clock would be rejected there."""
+        nodes = nodes or self.nodes
+        slot = STAKE_TIMESTAMP_MASK + 1
+        # Nodes at genesis contribute only their clock: the genesis timestamp
+        # is far in the past, and getblock crashes the daemon on the genesis
+        # block (blockToJSON; pre-existing bug, reported separately).
+        now = max(max(node.mock_now(),
+                      node.getblock(node.getbestblockhash())['time']
+                      if node.getblockcount() else 0)
+                  for node in nodes)
+        target = (now // slot + 1) * slot
+        for node in nodes:
+            if node._mocktime_off:
+                self.log.warning("advance_to_next_stake_slot: node%d opted out "
+                                 "of mock time; not advanced", node.index)
+                continue
+            node.advance_mocktime_to(target)
+        return target
+
+    def add_p2p_connection_spaced(self, node, peer, spacing=6):
+        """add_p2p_connection with the daemon's inbound rate limit respected:
+        at most one inbound connection per 5 seconds per IP (net.cpp
+        AcceptConnection), and every scripted peer is 127.0.0.1. The limit
+        compares integer-second deltas of GetAdjustedTime() — mock-affected —
+        so the spacing is applied to the mock clocks (of ALL nodes, keeping
+        lockstep); spacing must be >= 6 because advancing exactly 5 can land
+        two connects in the same second boundary (delta 4) and get the second
+        one dropped and misbehavior-scored.
+
+        The peer's version handshake is stamped from the node's own clock:
+        the daemon disconnects a peer whose version.nTime is more than 480
+        seconds from its adjusted time, and the mock clock legitimately runs
+        ahead of the real clock the default stamp uses.
+
+        Fallback when the target node opted out via setmocktime(0): sleep on
+        the REAL clock — but long enough for real time to clear the highest
+        mock time ever pinned (the daemon's rate-limit map may hold an accept
+        timestamp from when the clock ran ahead), not just `spacing` seconds."""
+        if node._mocktime_off:
+            time.sleep(max(spacing, node._mocktime_high + spacing - int(time.time())))
+        else:
+            target = max(n.mock_now() for n in self.nodes) + spacing
+            for n in self.nodes:
+                n.advance_mocktime_to(target)
+        peer.version_time = node.mock_now()
+        return node.add_p2p_connection(peer)
 
     def grow_utxo_universe(self, funder, count=48, *, agree_with=None, confirm_on=None):
         """Fan one mature premine UTXO on `funder` into `count` ordinary,
