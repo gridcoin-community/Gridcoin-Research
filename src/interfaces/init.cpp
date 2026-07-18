@@ -18,6 +18,8 @@ namespace interfaces {
 
 Init::~Init() = default;
 
+bool Init::isCoreReady() { return true; }
+
 std::unique_ptr<Node> Init::makeNode() { return nullptr; }
 
 std::unique_ptr<StakingStatus> Init::makeStakingStatus() { return nullptr; }
