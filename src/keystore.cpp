@@ -233,6 +233,30 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
     return true;
 }
 
+bool CCryptoKeyStore::EncryptSecretWithMasterKey(const CKeyingMaterial& plaintext, const uint256& iv,
+                                                 std::vector<unsigned char>& ciphertext_out) const
+{
+    LOCK(cs_KeyStore);
+
+    if (!IsCrypted() || vMasterKey.empty()) {
+        return false;
+    }
+
+    return EncryptSecret(vMasterKey, plaintext, iv, ciphertext_out);
+}
+
+bool CCryptoKeyStore::DecryptSecretWithMasterKey(const std::vector<unsigned char>& ciphertext, const uint256& iv,
+                                                 CKeyingMaterial& plaintext_out) const
+{
+    LOCK(cs_KeyStore);
+
+    if (!IsCrypted() || vMasterKey.empty()) {
+        return false;
+    }
+
+    return DecryptSecret(vMasterKey, ciphertext, iv, plaintext_out);
+}
+
 bool HaveKey(const SigningProvider& store, const CKey& key)
 {
     CKey key2;

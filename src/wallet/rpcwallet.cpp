@@ -15,6 +15,8 @@
 #include "streams.h"
 #include "util.h"
 #include "gridcoin/backup.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/mnemonics.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/tx_message.h"
@@ -3871,7 +3873,7 @@ UniValue sethdseed(const UniValue& params)
 
     // Do not do anything to non-HD wallets
     if (!pwalletMain->IsHDEnabled()) {
-        throw JSONRPCError(RPC_WALLET_ERROR, "Cannot set a HD seed on a non-HD wallet. Start with -upgradewallet in order to upgrade a non-HD wallet to HD");
+        throw JSONRPCError(RPC_WALLET_ERROR, "Cannot set an HD seed on a non-HD wallet. Run the upgradewallet RPC first to upgrade a non-HD wallet to HD");
     }
 
     EnsureWalletIsUnlocked();
@@ -3896,6 +3898,12 @@ UniValue sethdseed(const UniValue& params)
         }
 
         master_pub_key = pwalletMain->DeriveNewMasterHDKey(key);
+    }
+
+    if (pwalletMain->HasSeedPhrase()) {
+        LogPrintf("WARNING: %s: this wallet's HD hierarchy was backed by a seed phrase; the new HD "
+                  "seed is NOT covered by it. New keys will not be recoverable from the phrase. Run "
+                  "restoreseedphrase to re-attach the phrase master.", __func__);
     }
 
     pwalletMain->SetHDMasterKey(master_pub_key);
@@ -3936,4 +3944,668 @@ UniValue upgradewallet(const UniValue& params)
         throw JSONRPCError(RPC_WALLET_ERROR, error);
     }
     return error;
+}
+
+namespace {
+//! Classification of a wallet key against the seed phrase master. A key is
+//! covered by the phrase when it is the phrase-derived master itself or was
+//! HD-derived from it; keys derived from a prior (retired) HD master and
+//! legacy non-HD keys remain usable but cannot be recovered from the phrase.
+enum class SeedPhraseKeyClass { COVERED, PRIOR_HD, LEGACY };
+
+SeedPhraseKeyClass ClassifySeedPhraseKey(const CKeyID& key_id, const CKeyID& phrase_master_id)
+    EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
+{
+    AssertLockHeld(pwalletMain->cs_wallet);
+
+    if (key_id == phrase_master_id) return SeedPhraseKeyClass::COVERED;
+
+    const auto meta_iter = pwalletMain->mapKeyMetadata.find(key_id);
+
+    if (meta_iter == pwalletMain->mapKeyMetadata.end() || meta_iter->second.hdKeypath.empty()) {
+        return SeedPhraseKeyClass::LEGACY;
+    }
+
+    return meta_iter->second.hdMasterKeyID == phrase_master_id
+        ? SeedPhraseKeyClass::COVERED
+        : SeedPhraseKeyClass::PRIOR_HD;
+}
+
+//! True when the wallet holds any key that a restore from the phrase would
+//! not recover.
+bool WalletHasUncoveredKeys(const CKeyID& phrase_master_id)
+    EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
+{
+    AssertLockHeld(pwalletMain->cs_wallet);
+
+    std::set<CKeyID> key_ids;
+    pwalletMain->GetKeys(key_ids);
+
+    for (const CKeyID& key_id : key_ids) {
+        if (ClassifySeedPhraseKey(key_id, phrase_master_id) != SeedPhraseKeyClass::COVERED) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+//! Highest HD child index (the k of m/0'/0'/k') derived from the phrase
+//! master that appears in a wallet transaction output, or -1 if none. Used
+//! to size the keypool look-ahead during a restore rescan.
+int64_t MaxUsedSeedPhraseChildIndex(const CKeyID& phrase_master_id)
+    EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
+{
+    AssertLockHeld(pwalletMain->cs_wallet);
+
+    int64_t max_index = -1;
+
+    for (const auto& tx_pair : pwalletMain->mapWallet) {
+        for (const CTxOut& txout : tx_pair.second.vout) {
+            CTxDestination dest;
+            if (!ExtractDestination(txout.scriptPubKey, dest)) continue;
+
+            const CKeyID* key_id = std::get_if<CKeyID>(&dest);
+            if (!key_id) continue;
+
+            const auto meta_iter = pwalletMain->mapKeyMetadata.find(*key_id);
+
+            if (meta_iter == pwalletMain->mapKeyMetadata.end()
+                || meta_iter->second.hdMasterKeyID != phrase_master_id)
+            {
+                continue;
+            }
+
+            // Parse the k out of "m/0'/0'/k'". The master itself ("m") has no
+            // separator, and any keypath not in the wallet's hardened format
+            // is rejected explicitly rather than mis-parsed.
+            const std::string& keypath = meta_iter->second.hdKeypath;
+            const std::string::size_type last_slash = keypath.rfind('/');
+            if (last_slash == std::string::npos || last_slash + 2 > keypath.size()
+                || keypath.back() != '\'')
+            {
+                continue;
+            }
+
+            uint32_t child_index = 0;
+            if (!ParseUInt32(keypath.substr(last_slash + 1, keypath.size() - last_slash - 2), &child_index)) {
+                continue;
+            }
+
+            max_index = std::max(max_index, (int64_t)child_index);
+        }
+    }
+
+    return max_index;
+}
+
+//! Common gates for attaching a seed phrase to the wallet (create or restore).
+void EnsureSeedPhrasePreconditions() EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
+{
+    AssertLockHeld(pwalletMain->cs_wallet);
+
+    if (!pwalletMain->IsHDEnabled()) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            "Cannot use a seed phrase on a non-HD wallet. Run the upgradewallet RPC first to "
+            "upgrade a non-HD wallet to HD");
+    }
+
+    if (pwalletMain->HasSeedPhrase()) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            "This wallet already has a seed phrase (use dumpseedphrase to view it). A wallet keeps "
+            "a single seed phrase; to use a different one, restore it into a fresh wallet.");
+    }
+
+    EnsureWalletIsUnlocked();
+}
+
+SecureString SecureStringFromParam(const UniValue& param)
+{
+    if (param.isNull()) return SecureString{};
+
+    const std::string& str = param.get_str();
+    return SecureString(str.begin(), str.end());
+}
+} // anonymous namespace
+
+static const RPCHelpMan makeseedphrase_help{
+    "makeseedphrase",
+    "Generate a new 24-word seed phrase and activate the HD master seed it protects as the "
+    "wallet's HD master. New keys -- receiving and change -- derive from the phrase-backed "
+    "master and are recoverable from the phrase (plus its phrase password) alone. Keys that "
+    "already exist in the wallet, including legacy keys and keys derived from a prior HD "
+    "master, remain usable but are NOT covered by the phrase; run getseedphraseinfo for a "
+    "coverage report. The phrase is stored in wallet.dat (encrypted under the wallet "
+    "passphrase once the wallet is encrypted) and can be re-displayed with dumpseedphrase. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"phrasepassword", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "An additional password baked into the phrase itself (default: empty). It is required "
+            "together with the phrase to restore the wallet, and is independent of the wallet "
+            "passphrase. Unlike BIP39, a wrong phrase password fails explicitly on restore instead "
+            "of silently deriving a different wallet."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "seedphrase", "The 24-word seed phrase. Write it down now."},
+            {RPCResult::Type::STR_HEX, "phrase_master_key_id", "Hash160 of the phrase-derived HD master public key."},
+            {RPCResult::Type::NUM_TIME, "birthday", "Wallet birthday encoded in the phrase (unix epoch, day resolution)."},
+            {RPCResult::Type::ARR, "warnings", "Coverage and backup warnings.",
+                {
+                    {RPCResult::Type::STR, "", ""},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("makeseedphrase", "") +
+        HelpExampleCli("makeseedphrase", "\"correct horse\"") +
+        HelpExampleRpc("makeseedphrase", "\"correct horse\"")},
+};
+const RPCHelpMan& makeseedphrase_helpman() { return makeseedphrase_help; }
+
+UniValue makeseedphrase(const UniValue& params)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureSeedPhrasePreconditions();
+
+    const SecureString phrase_password = SecureStringFromParam(params[0]);
+
+    CKey master_key;
+    const SecureString phrase = GRC::Mnemonics::GenerateSeedPhrase(phrase_password, master_key);
+
+    // Recover the blob and birthday from the phrase itself. This doubles as
+    // a round-trip self-check before the wallet commits to the new master.
+    CSeedPhraseData data;
+    data.vchBlob.resize(GRC::Mnemonics::ENCIPHERED_LENGTH);
+
+    CKey check_key;
+    if (!GRC::Mnemonics::DecodeSeedPhrase(phrase, MakeWritableByteSpan(data.vchBlob))
+        || !GRC::Mnemonics::ParseSeedPhrase(phrase, phrase_password, check_key, &data.nBirthday)
+        || !(check_key == master_key))
+    {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+                           "Generated seed phrase failed verification; the wallet was not changed");
+    }
+
+    const CPubKey master_pub_key = pwalletMain->DeriveNewMasterHDKey(master_key);
+    data.masterKeyID = master_pub_key.GetID();
+
+    // Store the phrase record before activating the master: if the write
+    // fails, the wallet keeps its previous master and the new key is inert.
+    if (!pwalletMain->SetSeedPhraseData(data)) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+                           "Failed to write the seed phrase record; the previous HD master remains active");
+    }
+
+    pwalletMain->SetHDMasterKey(master_pub_key);
+
+    UniValue warnings(UniValue::VARR);
+    warnings.push_back("Write the phrase down now. It can be re-displayed with dumpseedphrase while "
+                       "the wallet is unlocked.");
+
+    if (!pwalletMain->NewKeyPool()) {
+        warnings.push_back("Keypool flush failed (wallet re-locked?); run keypoolrefill after "
+                           "unlocking so new addresses derive from the phrase master.");
+    }
+
+    if (WalletHasUncoveredKeys(data.masterKeyID)) {
+        warnings.push_back("This wallet contains pre-existing keys that are NOT covered by the seed "
+                           "phrase. Keep backing up wallet.dat; run getseedphraseinfo for details.");
+    }
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("seedphrase", std::string(phrase.begin(), phrase.end()));
+    result.pushKV("phrase_master_key_id", data.masterKeyID.GetHex());
+    result.pushKV("birthday", data.nBirthday);
+    result.pushKV("warnings", warnings);
+
+    return result;
+}
+
+static const RPCHelpMan restoreseedphrase_help{
+    "restoreseedphrase",
+    "Restore the HD master seed protected by a 24-word seed phrase and activate it as the "
+    "wallet's HD master, then rescan the chain from the wallet birthday encoded in the phrase. "
+    "The rescan extends the keypool automatically while transaction history reaches into the "
+    "derivation look-ahead window, so wallets with deep key usage are fully recovered; the "
+    "look-ahead tracks standard pay-to-public-key-hash usage, and a deep restore may take a "
+    "while. Running it again with the wallet's own phrase is safe: it re-attaches the phrase "
+    "master if something (e.g. sethdseed) moved the active master off it, and resumes an "
+    "interrupted rescan. Keys that already exist in this wallet remain usable but are NOT "
+    "covered by the phrase; for a clean restore, use a fresh wallet. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"seedphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The 24-word seed phrase, words separated by single spaces."},
+        {"phrasepassword", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "The phrase password it was generated with (default: empty). A wrong password fails "
+            "explicitly; it cannot silently restore a different wallet."},
+        {"rescan", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Rescan the chain from the phrase birthday (default: true)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "phrase_master_key_id", "Hash160 of the phrase-derived HD master public key."},
+            {RPCResult::Type::NUM_TIME, "birthday", "Wallet birthday encoded in the phrase (unix epoch, day resolution)."},
+            {RPCResult::Type::NUM, "keys_derived", /*optional=*/true, "Number of HD child keys derived from the phrase master after the rescan."},
+            {RPCResult::Type::NUM, "rescan_rounds", /*optional=*/true, "Number of rescan passes the keypool look-ahead required."},
+            {RPCResult::Type::ARR, "warnings", "Coverage and backup warnings.",
+                {
+                    {RPCResult::Type::STR, "", ""},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("restoreseedphrase", "\"word1 word2 ... word24\"") +
+        HelpExampleCli("restoreseedphrase", "\"word1 word2 ... word24\" \"correct horse\"") +
+        HelpExampleRpc("restoreseedphrase", "\"word1 word2 ... word24\", \"correct horse\"")},
+};
+const RPCHelpMan& restoreseedphrase_helpman() { return restoreseedphrase_help; }
+
+UniValue restoreseedphrase(const UniValue& params)
+{
+    if (IsInitialBlockDownload()) {
+        // The look-ahead rescan can only see history the node already has;
+        // restoring against a partial chain would silently under-derive.
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD,
+                           "Cannot restore a seed phrase while still in Initial Block Download");
+    }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    if (!pwalletMain->IsHDEnabled()) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            "Cannot use a seed phrase on a non-HD wallet. Run the upgradewallet RPC first to "
+            "upgrade a non-HD wallet to HD");
+    }
+
+    EnsureWalletIsUnlocked();
+
+    const SecureString phrase = SecureStringFromParam(params[0]);
+    const SecureString phrase_password = SecureStringFromParam(params[1]);
+    const bool rescan = params[2].isNull() ? true : params[2].get_bool();
+
+    CKey master_key;
+    CSeedPhraseData data;
+    data.vchBlob.resize(GRC::Mnemonics::ENCIPHERED_LENGTH);
+
+    if (!GRC::Mnemonics::ParseSeedPhrase(phrase, phrase_password, master_key, &data.nBirthday)
+        || !GRC::Mnemonics::DecodeSeedPhrase(phrase, MakeWritableByteSpan(data.vchBlob)))
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid seed phrase or wrong phrase password");
+    }
+
+    data.masterKeyID = master_key.GetPubKey().GetID();
+
+    // Re-running the wallet's own phrase is allowed: it re-attaches the
+    // phrase master (e.g. after sethdseed moved the active master off it)
+    // and resumes an interrupted rescan. A different phrase is refused --
+    // the wallet keeps a single phrase record.
+    if (pwalletMain->HasSeedPhrase()
+        && pwalletMain->GetSeedPhraseData().masterKeyID != data.masterKeyID)
+    {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            "This wallet already has a different seed phrase (use dumpseedphrase to view it). "
+            "Restore a different phrase into a fresh wallet.");
+    }
+
+    UniValue warnings(UniValue::VARR);
+
+    const bool have_record = pwalletMain->HasSeedPhrase();
+    CPubKey master_pub_key;
+
+    if (!pwalletMain->GetPubKey(data.masterKeyID, master_pub_key)) {
+        master_pub_key = pwalletMain->DeriveNewMasterHDKey(master_key);
+    }
+
+    if (!have_record && !pwalletMain->SetSeedPhraseData(data)) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+                           "Failed to write the seed phrase record; the previous HD master remains active");
+    }
+
+    bool keypool_ok = true;
+
+    if (pwalletMain->GetHDChain().masterKeyID != data.masterKeyID) {
+        pwalletMain->SetHDMasterKey(master_pub_key);
+
+        if (!pwalletMain->NewKeyPool()) {
+            keypool_ok = false;
+            warnings.push_back("Keypool flush failed (wallet re-locked?); unlock the wallet and run "
+                               "restoreseedphrase again to finish the restore.");
+        }
+    }
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("phrase_master_key_id", data.masterKeyID.GetHex());
+    result.pushKV("birthday", data.nBirthday);
+
+    if (rescan && keypool_ok) {
+        // Find the first block at or after the phrase birthday, with the
+        // same two-hour slack the scanner applies.
+        CBlockIndex* pindex = pindexBest;
+        while (pindex && pindex->pprev && pindex->nTime > data.nBirthday - 7200) {
+            pindex = pindex->pprev;
+        }
+
+        // Restore look-ahead: this wallet only derives child keys when the
+        // keypool is filled, so a single rescan can only discover use of the
+        // initial derivation window. Make sure that window is at least one
+        // look-ahead wide (a small -keypool must not shrink discovery), then
+        // rescan, and while history reaches into the final look-ahead
+        // window, extend the pool and rescan again until a full window of
+        // derived keys shows no use.
+        // Floor at the default so a small -keypool cannot shrink discovery,
+        // and cap so the unsigned keypool interfaces cannot narrow/wrap on
+        // absurd -keypool values.
+        const int64_t lookahead = std::min<int64_t>(
+            std::max<int64_t>(gArgs.GetArg("-keypool", DEFAULT_KEYPOOL_SIZE), DEFAULT_KEYPOOL_SIZE),
+            1000000);
+
+        if (!pwalletMain->TopUpKeyPool(lookahead)) {
+            warnings.push_back("Keypool top-up failed (wallet re-locked?); unlock the wallet and "
+                               "run restoreseedphrase again to finish the restore.");
+        }
+
+        int rounds = 0;
+
+        for (;;) {
+            pwalletMain->ScanForWalletTransactions(pindex, true);
+            ++rounds;
+
+            const int64_t max_used = MaxUsedSeedPhraseChildIndex(data.masterKeyID);
+            const int64_t derived = pwalletMain->GetHDChain().nExternalChainCounter;
+
+            if (max_used < 0 || max_used + lookahead < derived) break;
+
+            if (rounds >= 100) {
+                warnings.push_back("Keypool look-ahead stopped after 100 rounds with recent key use "
+                                   "still near the derivation frontier; run restoreseedphrase again "
+                                   "with a larger -keypool if funds are missing.");
+                break;
+            }
+
+            if (!pwalletMain->TopUpKeyPool(pwalletMain->GetKeyPoolSize() + lookahead)) {
+                warnings.push_back("Keypool top-up failed (wallet re-locked?); unlock the wallet and "
+                                   "run restoreseedphrase again to finish the rescan.");
+                break;
+            }
+        }
+
+        pwalletMain->ReacceptWalletTransactions();
+
+        result.pushKV("keys_derived", (int64_t)pwalletMain->GetHDChain().nExternalChainCounter);
+        result.pushKV("rescan_rounds", rounds);
+    } else if (!rescan) {
+        warnings.push_back("Rescan skipped: historical transactions and used keys beyond the initial "
+                           "keypool window are not recovered until restoreseedphrase is run again "
+                           "with rescan enabled.");
+    }
+
+    if (WalletHasUncoveredKeys(data.masterKeyID)) {
+        warnings.push_back("This wallet contains pre-existing keys that are NOT covered by the seed "
+                           "phrase. Keep backing up wallet.dat; run getseedphraseinfo for details.");
+    }
+
+    result.pushKV("warnings", warnings);
+
+    return result;
+}
+
+static const RPCHelpMan dumpseedphrase_help{
+    "dumpseedphrase",
+    "Re-display the wallet's 24-word seed phrase from the record stored in wallet.dat. The "
+    "phrase encodes its own encryption: viewing it does not require the phrase password, but "
+    "restoring from it does. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "seedphrase", "The 24-word seed phrase."},
+            {RPCResult::Type::STR_HEX, "phrase_master_key_id", "Hash160 of the phrase-derived HD master public key."},
+            {RPCResult::Type::NUM_TIME, "birthday", "Wallet birthday encoded in the phrase (unix epoch, day resolution)."},
+            {RPCResult::Type::BOOL, "phrase_master_is_active", "Whether the phrase-derived master is the wallet's active HD master."},
+        }},
+    RPCExamples{
+        HelpExampleCli("dumpseedphrase", "") +
+        HelpExampleRpc("dumpseedphrase", "")},
+};
+const RPCHelpMan& dumpseedphrase_helpman() { return dumpseedphrase_help; }
+
+UniValue dumpseedphrase(const UniValue& params)
+{
+    LOCK(pwalletMain->cs_wallet);
+
+    if (!pwalletMain->HasSeedPhrase()) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+                           "This wallet does not have a seed phrase. Use makeseedphrase to create one.");
+    }
+
+    EnsureWalletIsUnlocked();
+
+    CKeyingMaterial blob;
+    if (!pwalletMain->GetSeedPhraseBlob(blob)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Failed to decrypt the seed phrase record");
+    }
+
+    const SecureString phrase = GRC::Mnemonics::EncodeSeedPhrase(MakeByteSpan(blob));
+    const CSeedPhraseData& data = pwalletMain->GetSeedPhraseData();
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("seedphrase", std::string(phrase.begin(), phrase.end()));
+    result.pushKV("phrase_master_key_id", data.masterKeyID.GetHex());
+    result.pushKV("birthday", data.nBirthday);
+    result.pushKV("phrase_master_is_active", pwalletMain->GetHDChain().masterKeyID == data.masterKeyID);
+
+    return result;
+}
+
+static const RPCHelpMan getseedphraseinfo_help{
+    "getseedphraseinfo",
+    "Report how much of the wallet the seed phrase covers. Every wallet key is classified as "
+    "covered (the phrase-derived master or HD-derived from it), prior-hd (derived from a "
+    "retired HD master) or legacy (non-HD); unspent balance is attributed the same way. Keys "
+    "outside the covered class -- and everything in the prior-hd and legacy classes, including "
+    "any beacon keys listed -- cannot be recovered from the phrase and still require wallet.dat "
+    "backups. Reveals no secrets and does not require the wallet to be unlocked.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "has_seed_phrase", "Whether the wallet has a seed phrase record."},
+            {RPCResult::Type::STR_HEX, "active_hd_master_key_id", "Hash160 of the wallet's active HD master public key."},
+            {RPCResult::Type::STR, "note", /*optional=*/true, "Guidance when no seed phrase exists."},
+            {RPCResult::Type::STR_HEX, "phrase_master_key_id", /*optional=*/true, "Hash160 of the phrase-derived HD master public key."},
+            {RPCResult::Type::NUM_TIME, "birthday", /*optional=*/true, "Wallet birthday encoded in the phrase."},
+            {RPCResult::Type::BOOL, "phrase_master_is_active", /*optional=*/true, "Whether new keys derive from the phrase master."},
+            {RPCResult::Type::BOOL, "blob_encrypted", /*optional=*/true, "Whether the stored phrase record is encrypted under the wallet passphrase."},
+            {RPCResult::Type::OBJ, "keys", /*optional=*/true, "Wallet key counts by coverage class.",
+                {
+                    {RPCResult::Type::NUM, "covered", "Keys recoverable from the phrase."},
+                    {RPCResult::Type::NUM, "prior_hd", "Keys derived from a retired HD master."},
+                    {RPCResult::Type::NUM, "legacy", "Non-HD keys."},
+                }},
+            {RPCResult::Type::OBJ, "unspent_balance", /*optional=*/true, "Unspent balance by coverage class.",
+                {
+                    {RPCResult::Type::STR_AMOUNT, "covered", "Balance on phrase-covered keys."},
+                    {RPCResult::Type::STR_AMOUNT, "prior_hd", "Balance on prior-HD keys."},
+                    {RPCResult::Type::STR_AMOUNT, "legacy", "Balance on legacy keys."},
+                    {RPCResult::Type::STR_AMOUNT, "other", "Balance on script outputs not attributable to a single key (e.g. P2SH)."},
+                }},
+            {RPCResult::Type::BOOL, "default_key_covered", /*optional=*/true, "Whether the wallet's default key is phrase-covered."},
+            {RPCResult::Type::ARR, "wallet_beacons", /*optional=*/true, "Beacons whose private key is in this wallet.",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "cpid", "The researcher CPID the beacon is advertised for."},
+                            {RPCResult::Type::STR_HEX, "key_id", "Hash160 of the beacon public key."},
+                            {RPCResult::Type::STR, "status", "active, pending, or expired."},
+                            {RPCResult::Type::BOOL, "covered", "Whether the beacon key is phrase-covered."},
+                        }},
+                }},
+            {RPCResult::Type::ARR, "warnings", /*optional=*/true, "Coverage warnings.",
+                {
+                    {RPCResult::Type::STR, "", ""},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("getseedphraseinfo", "") +
+        HelpExampleRpc("getseedphraseinfo", "")},
+};
+const RPCHelpMan& getseedphraseinfo_helpman() { return getseedphraseinfo_help; }
+
+UniValue getseedphraseinfo(const UniValue& params)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    UniValue result(UniValue::VOBJ);
+
+    const bool has_phrase = pwalletMain->HasSeedPhrase();
+    result.pushKV("has_seed_phrase", has_phrase);
+    result.pushKV("active_hd_master_key_id", pwalletMain->GetHDChain().masterKeyID.GetHex());
+
+    if (!has_phrase) {
+        result.pushKV("note", "This wallet has no seed phrase. Use makeseedphrase to create one; "
+                              "keys that already exist will not be covered by it.");
+        return result;
+    }
+
+    const CSeedPhraseData& data = pwalletMain->GetSeedPhraseData();
+    const CKeyID& phrase_master_id = data.masterKeyID;
+
+    result.pushKV("phrase_master_key_id", phrase_master_id.GetHex());
+    result.pushKV("birthday", data.nBirthday);
+    result.pushKV("phrase_master_is_active", pwalletMain->GetHDChain().masterKeyID == phrase_master_id);
+    result.pushKV("blob_encrypted", pwalletMain->SeedPhraseBlobCrypted());
+
+    // Key counts by coverage class.
+    std::set<CKeyID> key_ids;
+    pwalletMain->GetKeys(key_ids);
+
+    int64_t keys_covered = 0;
+    int64_t keys_prior_hd = 0;
+    int64_t keys_legacy = 0;
+
+    for (const CKeyID& key_id : key_ids) {
+        switch (ClassifySeedPhraseKey(key_id, phrase_master_id)) {
+        case SeedPhraseKeyClass::COVERED:  ++keys_covered;  break;
+        case SeedPhraseKeyClass::PRIOR_HD: ++keys_prior_hd; break;
+        case SeedPhraseKeyClass::LEGACY:   ++keys_legacy;   break;
+        }
+    }
+
+    UniValue keys(UniValue::VOBJ);
+    keys.pushKV("covered", keys_covered);
+    keys.pushKV("prior_hd", keys_prior_hd);
+    keys.pushKV("legacy", keys_legacy);
+    result.pushKV("keys", keys);
+
+    // Unspent balance by coverage class, including coins staged for staking.
+    std::vector<COutput> outputs;
+    pwalletMain->AvailableCoins(outputs, false, nullptr, true);
+
+    int64_t bal_covered = 0;
+    int64_t bal_prior_hd = 0;
+    int64_t bal_legacy = 0;
+    int64_t bal_other = 0;
+
+    for (const COutput& out : outputs) {
+        const CTxOut& txout = out.tx->vout[out.i];
+
+        // AvailableCoins with staking coins included pushes every output of
+        // an immature wallet coinstake, including sidestake/MRC payouts to
+        // foreign addresses -- only count outputs this wallet can spend.
+        if (!(pwalletMain->IsMine(txout) & ISMINE_SPENDABLE)) continue;
+
+        CTxDestination dest;
+        const CKeyID* key_id = nullptr;
+
+        if (ExtractDestination(txout.scriptPubKey, dest)) {
+            key_id = std::get_if<CKeyID>(&dest);
+        }
+
+        if (!key_id) {
+            bal_other += txout.nValue;
+            continue;
+        }
+
+        switch (ClassifySeedPhraseKey(*key_id, phrase_master_id)) {
+        case SeedPhraseKeyClass::COVERED:  bal_covered += txout.nValue;  break;
+        case SeedPhraseKeyClass::PRIOR_HD: bal_prior_hd += txout.nValue; break;
+        case SeedPhraseKeyClass::LEGACY:   bal_legacy += txout.nValue;   break;
+        }
+    }
+
+    UniValue balance(UniValue::VOBJ);
+    balance.pushKV("covered", ValueFromAmount(bal_covered));
+    balance.pushKV("prior_hd", ValueFromAmount(bal_prior_hd));
+    balance.pushKV("legacy", ValueFromAmount(bal_legacy));
+    balance.pushKV("other", ValueFromAmount(bal_other));
+    result.pushKV("unspent_balance", balance);
+
+    if (pwalletMain->vchDefaultKey.IsValid()) {
+        result.pushKV("default_key_covered",
+                      ClassifySeedPhraseKey(pwalletMain->vchDefaultKey.GetID(), phrase_master_id)
+                          == SeedPhraseKeyClass::COVERED);
+    }
+
+    // Beacons whose private key lives in this wallet.
+    UniValue beacons(UniValue::VARR);
+    bool uncovered_beacon = false;
+
+    // The coverage classification happens at the call sites rather than in
+    // the lambda: thread-safety analysis does not propagate the held-locks
+    // set into lambda bodies.
+    const auto push_beacon = [&](const GRC::Cpid& cpid, const CKeyID& key_id, const char* status,
+                                 bool covered) {
+        uncovered_beacon |= !covered;
+
+        UniValue entry(UniValue::VOBJ);
+        entry.pushKV("cpid", cpid.ToString());
+        entry.pushKV("key_id", key_id.GetHex());
+        entry.pushKV("status", status);
+        entry.pushKV("covered", covered);
+        beacons.push_back(entry);
+    };
+
+    const int64_t now = GetAdjustedTime();
+
+    for (const auto& beacon_pair : GRC::GetBeaconRegistry().Beacons()) {
+        const CKeyID key_id = beacon_pair.second->m_public_key.GetID();
+
+        if (pwalletMain->HaveKey(key_id)) {
+            push_beacon(beacon_pair.first, key_id,
+                        beacon_pair.second->Expired(now) ? "expired" : "active",
+                        ClassifySeedPhraseKey(key_id, phrase_master_id) == SeedPhraseKeyClass::COVERED);
+        }
+    }
+
+    for (const auto& beacon_pair : GRC::GetBeaconRegistry().PendingBeacons()) {
+        if (pwalletMain->HaveKey(beacon_pair.first)) {
+            push_beacon(beacon_pair.second->m_cpid, beacon_pair.first,
+                        beacon_pair.second->Expired(now) ? "expired" : "pending",
+                        ClassifySeedPhraseKey(beacon_pair.first, phrase_master_id)
+                            == SeedPhraseKeyClass::COVERED);
+        }
+    }
+
+    result.pushKV("wallet_beacons", beacons);
+
+    UniValue warnings(UniValue::VARR);
+
+    if (bal_prior_hd + bal_legacy + bal_other > 0) {
+        warnings.push_back("Some unspent balance is NOT recoverable from the seed phrase; a "
+                           "wallet.dat backup is still required for it.");
+    }
+
+    if (uncovered_beacon) {
+        warnings.push_back("A beacon private key in this wallet is NOT recoverable from the seed "
+                           "phrase; losing wallet.dat would require readvertising the beacon.");
+    }
+
+    if (pwalletMain->GetHDChain().masterKeyID != phrase_master_id) {
+        warnings.push_back("The active HD master is not the phrase master: NEW keys are not covered "
+                           "by the seed phrase.");
+    }
+
+    result.pushKV("warnings", warnings);
+
+    return result;
 }

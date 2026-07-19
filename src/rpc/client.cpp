@@ -185,6 +185,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "refundhtlc"             , 1 },
     { "reservebalance"         , 0 },
     { "reservebalance"         , 1 },
+    { "restoreseedphrase"      , 2 },
     { "scanforunspent"         , 1 },
     { "scanforunspent"         , 2 },
     { "scanforunspent"         , 3 },

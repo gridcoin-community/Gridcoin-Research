@@ -8,11 +8,11 @@ Each RPC's bucket + fingerprint baseline is a **column on its `vRPCCommands[]` r
 - **presence** on every registered RPC (the row's `heritage_<bucket>` parses to a known bucket; classify-at-birth is also compiler-enforced by the required constructor field);
 - **surface-fingerprint drift** on `pure-upstream`, `mixed` & `removed-upstream` -- `fp` = `sha256("ARGS:" + args[in RPCHelpMan declaration order] + "|KEYS:" + sorted(result pushKV keys, gathered by cycle-safe recursive descent through called result-builder helpers))[:12]`. A mismatch means the input/output surface changed; re-confirm the bucket and update the row + this doc. `pure-gridcoin` is not fingerprinted (`heritage_fp` empty), and any fingerprinted RPC whose output isn't literal-key-trackable -- a dynamically-keyed object, or a positional array of scalars -- uses `heritage_fp` `manual` (drift reviewed by hand).
 
-## Tally (208)
+## Tally (212)
 - pure-upstream (backport-safe): **14**
 - mixed (careful porting): **58**
 - removed-upstream (frozen fork, deleted from current upstream): **16**
-- pure-gridcoin (no current upstream analogue): **120**
+- pure-gridcoin (no current upstream analogue): **124**
 
 ## pure-upstream -- backport-safe (fingerprint-tracked)
 | RPC | file | args | result-keys | fp |
@@ -148,6 +148,7 @@ Upstream-derived RPCs that current upstream has **removed** (legacy/BDB-wallet s
 | `debug` | src/rpc/blockchain.cpp |
 | `deletecscrapermanifest` | src/gridcoin/scraper/scraper.cpp |
 | `dumpcontracts` | src/rpc/blockchain.cpp |
+| `dumpseedphrase` | src/wallet/rpcwallet.cpp |
 | `explainmagnitude` | src/rpc/blockchain.cpp |
 | `exportstats1` | src/rpc/dataacq.cpp |
 | `generate` | src/rpc/mining.cpp |
@@ -174,6 +175,7 @@ Upstream-derived RPCs that current upstream has **removed** (legacy/BDB-wallet s
 | `getrawwallettransaction` | src/wallet/rpcwallet.cpp |
 | `getreceivedbyaccount` | src/wallet/rpcwallet.cpp |
 | `getrecentblocks` | src/rpc/dataacq.cpp |
+| `getseedphraseinfo` | src/wallet/rpcwallet.cpp |
 | `getstakinginfo` | src/rpc/mining.cpp |
 | `getvotingclaim` | src/rpc/voting.cpp |
 | `inspectaccrualsnapshot` | src/rpc/mining.cpp |
@@ -196,6 +198,7 @@ Upstream-derived RPCs that current upstream has **removed** (legacy/BDB-wallet s
 | `magnitude` | src/rpc/blockchain.cpp |
 | `maintainbackups` | src/wallet/rpcwallet.cpp |
 | `makekeypair` | src/wallet/rpcwallet.cpp |
+| `makeseedphrase` | src/wallet/rpcwallet.cpp |
 | `migratelabels` | src/wallet/rpcwallet.cpp |
 | `move` | src/wallet/rpcwallet.cpp |
 | `network` | src/rpc/blockchain.cpp |
@@ -214,6 +217,7 @@ Upstream-derived RPCs that current upstream has **removed** (legacy/BDB-wallet s
 | `repairwallet` | src/wallet/rpcwallet.cpp |
 | `reservebalance` | src/wallet/rpcwallet.cpp |
 | `resetcpids` | src/rpc/blockchain.cpp |
+| `restoreseedphrase` | src/wallet/rpcwallet.cpp |
 | `revokebeacon` | src/rpc/blockchain.cpp |
 | `savescraperfilemanifest` | src/gridcoin/scraper/scraper.cpp |
 | `scanforunspent` | src/rpc/rawtransaction.cpp |

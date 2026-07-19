@@ -129,6 +129,15 @@ protected:
 
     bool Unlock(const CKeyingMaterial& vMasterKeyIn);
 
+    //! Encrypt/decrypt an arbitrary non-key wallet secret (e.g. the seed
+    //! phrase blob) under the store's keying material. The store must be
+    //! crypted and unlocked. The IV must be deterministic and unique to the
+    //! secret, mirroring the per-key pubkey-hash IV used for private keys.
+    bool EncryptSecretWithMasterKey(const CKeyingMaterial& plaintext, const uint256& iv,
+                                    std::vector<unsigned char>& ciphertext_out) const;
+    bool DecryptSecretWithMasterKey(const std::vector<unsigned char>& ciphertext, const uint256& iv,
+                                    CKeyingMaterial& plaintext_out) const;
+
 public:
     CCryptoKeyStore()
         : fUseCrypto(false)

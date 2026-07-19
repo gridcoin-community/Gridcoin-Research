@@ -129,6 +129,14 @@ private:
     /* the HD chain data model (external chain counters) */
     CHDChain hdChain;
 
+    /* the seed phrase record for a phrase-backed HD hierarchy */
+    CSeedPhraseData m_seed_phrase_data GUARDED_BY(cs_wallet);
+
+    //! true when m_seed_phrase_data.vchBlob holds the wallet-crypter
+    //! ciphertext (i.e. it came from or goes to a "cseedphrase" record)
+    //! rather than the plaintext enciphered blob
+    bool m_seed_phrase_blob_crypted GUARDED_BY(cs_wallet) = false;
+
 public:
     /// Main wallet lock.
     /// This lock protects all the fields added by CWallet
@@ -556,6 +564,36 @@ public:
     /* Set the HD chain model (chain child index counters) */
     bool SetHDChain(const CHDChain& chain, bool memonly);
     const CHDChain& GetHDChain() { return hdChain; }
+
+    /* Load the seed phrase record during wallet db load (memory only) */
+    bool LoadSeedPhraseData(const CSeedPhraseData& data, bool crypted);
+
+    /* Set and persist the seed phrase record. The blob in `data` must be the
+     * plaintext enciphered blob; when the wallet is encrypted it is stored
+     * under the wallet's master keying material instead (requires unlock). */
+    bool SetSeedPhraseData(const CSeedPhraseData& data);
+
+    /* Retrieve the plaintext enciphered blob for phrase re-display
+     * (requires unlock when the wallet is encrypted) */
+    bool GetSeedPhraseBlob(CKeyingMaterial& blob_out) const;
+
+    /* Returns true if the HD hierarchy is backed by a seed phrase */
+    bool HasSeedPhrase() const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+    {
+        return !m_seed_phrase_data.IsNull();
+    }
+
+    /* Returns true if the stored blob is wallet-crypter-encrypted */
+    bool SeedPhraseBlobCrypted() const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+    {
+        return m_seed_phrase_blob_crypted;
+    }
+
+    /* Non-secret seed phrase record fields (master key id, birthday) */
+    const CSeedPhraseData& GetSeedPhraseData() const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+    {
+        return m_seed_phrase_data;
+    }
 
     /* Returns true if HD is enabled */
     bool IsHDEnabled() const;

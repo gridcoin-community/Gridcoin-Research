@@ -50,6 +50,48 @@ public:
     }
 };
 
+/* Stored record for a wallet whose HD hierarchy is backed by a seed phrase
+ * (GRC::Mnemonics). Holds the enciphered blob -- whose word encoding IS the
+ * phrase, so re-display never needs the phrase password -- the phrase-derived
+ * master key id (the anchor for coverage classification, independent of the
+ * currently active hdchain), and the non-secret wallet birthday.
+ *
+ * Like private keys, the blob is written as a "seedphrase" record while the
+ * wallet is unencrypted and as a "cseedphrase" record (blob encrypted under
+ * the wallet's master keying material) once the wallet is encrypted:
+ * otherwise a phrase protected by an empty or weak password would expose the
+ * HD master seed to anyone holding an encrypted wallet.dat. */
+class CSeedPhraseData
+{
+public:
+    static const int CURRENT_VERSION = 1;
+    int nVersion;
+    //! Enciphered blob (GRC::Mnemonics::ENCIPHERED_LENGTH bytes), or its
+    //! wallet-crypter ciphertext when loaded from a "cseedphrase" record.
+    std::vector<unsigned char> vchBlob;
+    //! Hash160 of the phrase-derived HD master public key.
+    CKeyID masterKeyID;
+    //! Wallet birthday recovered from the phrase (unix time, day resolution).
+    int64_t nBirthday;
+
+    CSeedPhraseData() { SetNull(); }
+
+    SERIALIZE_METHODS(CSeedPhraseData, obj)
+    {
+        READWRITE(obj.nVersion, obj.vchBlob, obj.masterKeyID, obj.nBirthday);
+    }
+
+    void SetNull()
+    {
+        nVersion = CSeedPhraseData::CURRENT_VERSION;
+        vchBlob.clear();
+        masterKeyID.SetNull();
+        nBirthday = 0;
+    }
+
+    bool IsNull() const { return vchBlob.empty(); }
+};
+
 class CKeyMetadata
 {
 public:
@@ -248,6 +290,13 @@ public:
 
     //! write the hdchain model (external chain child index counter)
     bool WriteHDChain(const CHDChain& chain);
+
+    //! write the seed phrase record with a plaintext blob (unencrypted wallet)
+    bool WriteSeedPhrase(const CSeedPhraseData& data);
+
+    //! write the seed phrase record with a wallet-crypter-encrypted blob;
+    //! erases any plaintext "seedphrase" record
+    bool WriteCryptedSeedPhrase(const CSeedPhraseData& data);
 };
 
 #endif // BITCOIN_WALLET_WALLETDB_H

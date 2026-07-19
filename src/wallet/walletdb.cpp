@@ -459,6 +459,16 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
         }
+        else if (strType == "seedphrase" || strType == "cseedphrase")
+        {
+            CSeedPhraseData seed_phrase;
+            ssValue >> seed_phrase;
+            if (!pwallet->LoadSeedPhraseData(seed_phrase, /*crypted=*/strType == "cseedphrase"))
+            {
+                strErr = "Error reading wallet database: LoadSeedPhraseData failed";
+                return false;
+            }
+        }
     } catch (...)
     {
         return false;
@@ -822,4 +832,23 @@ bool CWalletDB::WriteHDChain(const CHDChain& chain)
 {
     nWalletDBUpdated++;
     return Write(std::string("hdchain"), chain);
+}
+
+bool CWalletDB::WriteSeedPhrase(const CSeedPhraseData& data)
+{
+    nWalletDBUpdated++;
+    return Write(std::string("seedphrase"), data);
+}
+
+bool CWalletDB::WriteCryptedSeedPhrase(const CSeedPhraseData& data)
+{
+    nWalletDBUpdated++;
+    if (!Write(std::string("cseedphrase"), data)) {
+        return false;
+    }
+
+    // Erase returns true when the record is simply absent (DB_NOTFOUND); a
+    // false here is a real database error, and the caller must not commit a
+    // conversion that would leave the plaintext record behind.
+    return Erase(std::string("seedphrase"));
 }

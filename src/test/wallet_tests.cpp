@@ -1,8 +1,11 @@
 #include <boost/test/unit_test.hpp>
 
+#include "gridcoin/mnemonics.h"
 #include "gridcoin/sidestake.h"
 #include "main.h"
 #include "wallet/wallet.h"
+
+#include <algorithm>
 
 // Stream operator for uint256 to support Boost Test output.
 // Defined in global namespace (not std) to avoid undefined behavior per [namespace.std].
@@ -2199,6 +2202,82 @@ BOOST_AUTO_TEST_CASE(txstate_variant_index_stability_extended)
     BOOST_CHECK_EQUAL(s1.index(), 1u);
     BOOST_CHECK_EQUAL(s2.index(), 2u);
     BOOST_CHECK_EQUAL(s3.index(), 3u);
+}
+
+BOOST_AUTO_TEST_CASE(seed_phrase_record_roundtrip)
+{
+    CWallet test_wallet; // in-memory, not file-backed
+
+    // Build a record from a freshly generated phrase.
+    CKey master_key;
+    const SecureString password; // empty phrase password
+    const SecureString phrase = GRC::Mnemonics::GenerateSeedPhrase(password, master_key);
+    BOOST_REQUIRE(master_key.IsValid());
+
+    CSeedPhraseData data;
+    data.vchBlob.resize(GRC::Mnemonics::ENCIPHERED_LENGTH);
+    BOOST_REQUIRE(GRC::Mnemonics::DecodeSeedPhrase(phrase, MakeWritableByteSpan(data.vchBlob)));
+
+    CKey parsed_key;
+    BOOST_REQUIRE(GRC::Mnemonics::ParseSeedPhrase(phrase, password, parsed_key, &data.nBirthday));
+    data.masterKeyID = master_key.GetPubKey().GetID();
+
+    // The record's serialization round-trips (wallet.dat record shape).
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << data;
+    CSeedPhraseData data2;
+    ss >> data2;
+    BOOST_CHECK(data2.vchBlob == data.vchBlob);
+    BOOST_CHECK(data2.masterKeyID == data.masterKeyID);
+    BOOST_CHECK_EQUAL(data2.nBirthday, data.nBirthday);
+
+    // Set/get on an unencrypted wallet stores the plaintext blob.
+    LOCK(test_wallet.cs_wallet);
+    BOOST_CHECK(!test_wallet.HasSeedPhrase());
+    BOOST_REQUIRE(test_wallet.SetSeedPhraseData(data));
+    BOOST_CHECK(test_wallet.HasSeedPhrase());
+    BOOST_CHECK(!test_wallet.SeedPhraseBlobCrypted());
+
+    CKeyingMaterial blob;
+    BOOST_REQUIRE(test_wallet.GetSeedPhraseBlob(blob));
+    BOOST_REQUIRE_EQUAL(blob.size(), data.vchBlob.size());
+    BOOST_CHECK(std::equal(blob.begin(), blob.end(), data.vchBlob.begin()));
+
+    // Re-encoding the stored blob reproduces the phrase verbatim.
+    BOOST_CHECK(GRC::Mnemonics::EncodeSeedPhrase(MakeByteSpan(blob)) == phrase);
+
+    // The phrase birthday clamps the scanner's first-key bound.
+    BOOST_CHECK_EQUAL(test_wallet.nTimeFirstKey, data.nBirthday);
+}
+
+BOOST_AUTO_TEST_CASE(seed_phrase_crypted_blob_requires_unlock)
+{
+    CWallet test_wallet;
+
+    CSeedPhraseData data;
+    data.vchBlob.assign(GRC::Mnemonics::ENCIPHERED_LENGTH, 0x42);
+    data.nBirthday = GRC::Mnemonics::BIRTHDAY_EPOCH;
+
+    // A blob loaded from a "cseedphrase" record must be unrecoverable while
+    // the wallet's keying material is unavailable, not returned as raw
+    // ciphertext.
+    LOCK(test_wallet.cs_wallet);
+    BOOST_REQUIRE(test_wallet.LoadSeedPhraseData(data, /*crypted=*/true));
+    BOOST_CHECK(test_wallet.HasSeedPhrase());
+    BOOST_CHECK(test_wallet.SeedPhraseBlobCrypted());
+
+    CKeyingMaterial blob;
+    BOOST_CHECK(!test_wallet.GetSeedPhraseBlob(blob));
+
+    // Defense in depth: a stale plaintext record must not shadow an already
+    // loaded crypted record, whatever order the db cursor yields them in.
+    CSeedPhraseData plaintext_data;
+    plaintext_data.vchBlob.assign(GRC::Mnemonics::ENCIPHERED_LENGTH, 0x24);
+    plaintext_data.nBirthday = GRC::Mnemonics::BIRTHDAY_EPOCH;
+
+    BOOST_REQUIRE(test_wallet.LoadSeedPhraseData(plaintext_data, /*crypted=*/false));
+    BOOST_CHECK(test_wallet.SeedPhraseBlobCrypted());
+    BOOST_CHECK(test_wallet.GetSeedPhraseData().vchBlob == data.vchBlob);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
