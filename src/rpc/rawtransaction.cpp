@@ -1097,6 +1097,286 @@ UniValue consolidateunspent(const UniValue& params)
     return result;
 }
 
+static const RPCHelpMan splitunspent_help{
+    "splitunspent",
+    "Performs a single transaction to split all spendable UTXOs on a given address into uniform pieces\n"
+    "sent back to the same address. Any remainder is returned to the same address as change, so the\n"
+    "entire balance stays on the address. This is the inverse of consolidateunspent.\n"
+    "\n"
+    "Exactly one of piece_size and piece_count must be provided (nonzero); pass 0 for the one not used.\n"
+    "With piece_size, the balance is split into as many pieces of that value as fit after the fee.\n"
+    "With piece_count, the balance less the fee is divided into that many equal pieces. In both modes\n"
+    "a small additional change UTXO may be created holding the remainder.\n"
+    "\n"
+    "The fee is paid once for the whole transaction and taken from the remainder, never from the pieces.\n"
+    "Pieces must be at least 0.01 GRC. The address must hold no more UTXOs than the single-transaction\n"
+    "input limit (see consolidateunspent to reduce the UTXO count first).",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The Gridcoin address whose UTXOs will be split. Pieces and change return to this address."},
+        {"piece_size", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+            "Target value of each piece. 0 (or omitted) means unset; use piece_count instead."},
+        {"piece_count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Number of pieces to create. 0 (or omitted) means unset; use piece_size instead."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "result", "True if a split transaction was created."},
+            {RPCResult::Type::NUM, "utxos_swept", "Number of UTXOs consumed as inputs."},
+            {RPCResult::Type::NUM, "pieces_created", "Number of uniform pieces created."},
+            {RPCResult::Type::STR_AMOUNT, "piece_value", "Value of each piece."},
+            {RPCResult::Type::STR_AMOUNT, "change_value", "Remainder returned to the address as change."},
+            {RPCResult::Type::STR_AMOUNT, "fee", "Fee paid for the whole transaction."},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction id."},
+        }},
+    RPCExamples{
+        HelpExampleCli("splitunspent", "\"<address>\" 100") +
+        HelpExampleCli("splitunspent", "\"<address>\" 0 10") +
+        HelpExampleRpc("splitunspent", "\"<address>\", 0, 10")},
+};
+const RPCHelpMan& splitunspent_helpman() { return splitunspent_help; }
+
+UniValue splitunspent(const UniValue& params)
+{
+    UniValue result(UniValue::VOBJ);
+
+    std::string sAddress = params[0].get_str();
+    CTxDestination SplitAddress = DecodeDestination(sAddress);
+
+    if (!IsValidDestination(SplitAddress))
+    {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ") + sAddress);
+    }
+
+    int64_t nPieceSize = 0;
+    int nPieceCount = 0;
+
+    // 0 is the unset sentinel and must be handled before conversion, because AmountFromValue
+    // throws on any value <= 0.
+    if (params.size() > 1 && !(params[1].isNum() && params[1].get_real() == 0.0))
+    {
+        nPieceSize = AmountFromValue(params[1]);
+    }
+
+    if (params.size() > 2) nPieceCount = params[2].get_int();
+
+    if (nPieceCount < 0)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "piece_count must be positive.");
+    }
+
+    if ((nPieceSize != 0) == (nPieceCount != 0))
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           "Exactly one of piece_size and piece_count must be provided (nonzero).");
+    }
+
+    if (nPieceSize != 0 && nPieceSize < CENT)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           strprintf("piece_size must be at least %s GRC.", FormatMoney(CENT)));
+    }
+
+    CScript scriptDestPubKey;
+    scriptDestPubKey.SetDestination(SplitAddress);
+
+    std::vector<COutput> vecInputs;
+
+    // Have to lock both main and wallet.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // Get the current UTXO's. The defaults exclude immature and currently staking coins.
+    pwalletMain->AvailableCoins(vecInputs, false, nullptr, false);
+
+    CWalletTx wtxNew;
+
+    set<pair<const CWalletTx*,unsigned int>> setCoins;
+
+    unsigned int iInputCount = 0;
+    CAmount nAmount = 0;
+    unsigned int nBytesInputs = 0;
+
+    // Sweep ALL spendable UTXOs whose destination matches the split address.
+    for (auto const& out : vecInputs)
+    {
+        CTxDestination out_address;
+
+        if (!ExtractDestination(out.tx->vout[out.i].scriptPubKey, out_address)) continue;
+
+        if (out_address != SplitAddress) continue;
+
+        nAmount += out.tx->vout[out.i].nValue;
+
+        setCoins.insert(make_pair(out.tx, out.i));
+
+        ++iInputCount;
+
+        // For fee calculation. This is similar to the calculation in coincontroldialog.cpp.
+        CPubKey pubkey;
+        try {
+            if (pwalletMain->GetPubKey(std::get<CKeyID>(out_address), pubkey))
+            {
+                nBytesInputs += (pubkey.IsCompressed() ? 148 : 180);
+            }
+            // in all error cases, simply assume 148 here
+            else
+            {
+                nBytesInputs += 148;
+            }
+        } catch (const std::bad_variant_access&) {
+            nBytesInputs += 148;
+        }
+    }
+
+    // Nothing to split. Note that unlike consolidateunspent, a single input is a valid split source.
+    if (iInputCount == 0)
+    {
+        result.pushKV("result", false);
+        result.pushKV("utxos_swept", (uint64_t) 0);
+
+        return result;
+    }
+
+    if (iInputCount > GetMaxInputsForConsolidationTxn())
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           strprintf("Address has %u spendable UTXOs, which exceeds the maximum of %u inputs for a "
+                                     "single transaction. Run consolidateunspent on the address first.",
+                                     iInputCount, GetMaxInputsForConsolidationTxn()));
+    }
+
+    if (pwalletMain->IsLocked())
+    {
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet locked, unable to create transaction.");
+    }
+
+    if (fWalletUnlockStakingOnly)
+    {
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED,
+                           "Error: Wallet unlocked for staking only, unable to create transaction.");
+    }
+
+    // Base serialized overhead of a Gridcoin v2 transaction: nVersion (4) + nTime (4) + vin count varint
+    // + vout count varint + nLockTime (4) + empty contract vector (1) = 15 bytes minimum, padded to 25
+    // to cover compact-size growth when the output count reaches 253.
+    const int64_t nBaseOverhead = 25;
+    const int64_t nBytesPerOutput = 34;
+
+    // The maximum number of pieces that fit in a standard transaction, holding back a 5000 byte safety
+    // margin and one output slot for the change output.
+    const int64_t nMaxPieces =
+        ((int64_t) MAX_STANDARD_TX_SIZE - 5000 - nBaseOverhead - (int64_t) nBytesInputs) / nBytesPerOutput - 1;
+
+    if (nMaxPieces < 1)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           "The inputs leave no room for outputs in a standard transaction. Run consolidateunspent "
+                           "on the address first.");
+    }
+
+    CTransaction txDummy;
+
+    // Fee for a transaction with the swept inputs, nOutputs pieces, and one change output.
+    const auto FeeForOutputs = [&](int64_t nOutputs) {
+        int64_t nBytes = nBytesInputs + nBytesPerOutput * (nOutputs + 1) + nBaseOverhead;
+
+        int64_t nMinFee = GetMinFee(txDummy, 1000, GMF_SEND, nBytes);
+
+        int64_t nFee = nTransactionFee * (1 + nBytes / 1000);
+
+        return std::max(nMinFee, nFee);
+    };
+
+    // One extra fee tier is deliberately left in the change so that if CreateTransaction internally
+    // raises the fee by a tier, the change absorbs it rather than going negative and aborting.
+    const int64_t nFeeSlack = nTransactionFee;
+
+    int64_t nPieces = 0;
+    int64_t nFeeRequired = 0;
+
+    if (nPieceSize != 0)
+    {
+        // Size mode: as many pieces of nPieceSize as fit after the fee and slack. The nMaxPieces
+        // clamp must be applied in BOTH passes.
+        nPieces = std::min(nAmount / nPieceSize, nMaxPieces);
+
+        nFeeRequired = FeeForOutputs(nPieces);
+
+        nPieces = std::min((nAmount - nFeeRequired - nFeeSlack) / nPieceSize, nMaxPieces);
+
+        if (nPieces < 1)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               strprintf("The spendable balance on the address (%s) is too small to create one piece "
+                                         "of %s after the fee.", FormatMoney(nAmount), FormatMoney(nPieceSize)));
+        }
+
+        // Recompute with the final (equal or smaller) piece count. The fee only shrinks here.
+        nFeeRequired = FeeForOutputs(nPieces);
+    }
+    else
+    {
+        // Count mode: divide the balance less the fee and slack into nPieceCount equal pieces.
+        nPieces = nPieceCount;
+
+        if (nPieces > nMaxPieces)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               strprintf("piece_count %" PRId64 " exceeds the maximum of %" PRId64 " pieces that fit "
+                                         "in a single transaction with these inputs.", nPieces, nMaxPieces));
+        }
+
+        nFeeRequired = FeeForOutputs(nPieces);
+
+        nPieceSize = (nAmount - nFeeRequired - nFeeSlack) / nPieces;
+
+        if (nPieceSize < CENT)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               strprintf("Splitting the spendable balance on the address (%s) into %" PRId64 " pieces "
+                                         "results in pieces below the minimum of %s GRC.",
+                                         FormatMoney(nAmount), nPieces, FormatMoney(CENT)));
+        }
+    }
+
+    CReserveKey reservekey(pwalletMain);
+
+    vector<pair<CScript, int64_t> > vecSend;
+
+    for (int64_t i = 0; i < nPieces; ++i)
+    {
+        vecSend.push_back(std::make_pair(scriptDestPubKey, nPieceSize));
+    }
+
+    CCoinControl coinControl;
+
+    // Send the change (remainder plus fee slack) back to the same address.
+    coinControl.destChange = SplitAddress;
+
+    if (!pwalletMain->CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRequired, &coinControl))
+    {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Error: Transaction creation failed.");
+    }
+
+    if (!pwalletMain->CommitTransaction(wtxNew, reservekey))
+    {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+                           "Error: The transaction was rejected. This might happen if some of the coins in your "
+                           "wallet were already spent, such as if you used a copy of wallet.dat and coins were "
+                           "spent in the copy but not marked as spent here.");
+    }
+
+    result.pushKV("result", true);
+    result.pushKV("utxos_swept", (uint64_t) iInputCount);
+    result.pushKV("pieces_created", (uint64_t) nPieces);
+    result.pushKV("piece_value", FormatMoney(nPieceSize));
+    result.pushKV("change_value", FormatMoney(nAmount - nPieces * nPieceSize - nFeeRequired));
+    result.pushKV("fee", FormatMoney(nFeeRequired));
+    result.pushKV("txid", wtxNew.GetHash().GetHex());
+
+    return result;
+}
+
 /* MultiSig Tool for consolidating multisig transactions
  *
  * In order to do the best possible calculation and prediction of end result you need to understand transaction serialization.

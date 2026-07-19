@@ -683,13 +683,14 @@ BOOST_AUTO_TEST_CASE(tier1_e2_scrapers_help_renders)
     });
 }
 
-// Tier 1 E3 — rawtransaction + htlc (16 commands).
+// Tier 1 E3 — rawtransaction + htlc (17 commands).
 BOOST_AUTO_TEST_CASE(tier1_e3_rawtx_htlc_help_renders)
 {
     check_help_renders({
         {"getrawtransaction",           &getrawtransaction_helpman},
         {"listunspent",                 &listunspent_helpman},
         {"consolidateunspent",          &consolidateunspent_helpman},
+        {"splitunspent",                &splitunspent_helpman},
         {"consolidatemsunspent",        &consolidatemsunspent_helpman},
         {"scanforunspent",              &scanforunspent_helpman},
         {"createrawtransaction",        &createrawtransaction_helpman},
