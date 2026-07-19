@@ -205,9 +205,9 @@ static void DebugMessageHandler(QtMsgType type, const QMessageLogContext& contex
 {
     Q_UNUSED(context);
     if (type == QtDebugMsg) {
-        GUILogPrint(GUILogCategory::QT, "GUI: %s\n", msg.toStdString());
+        GUILogPrint(GUILogCategory::QT, "GUI: %s", msg.toStdString());
     } else {
-        GUILogPrintf("GUI: %s\n", msg.toStdString());
+        GUILogPrintf("GUI: %s", msg.toStdString());
     }
 }
 

@@ -41,20 +41,28 @@ enum class GUILogCategory {
 
 namespace GUILog {
 
+//! Whether logging is enabled at all (mirrors the core logger's Enabled()).
+bool Enabled();
+
 //! Whether the given category is currently enabled (mirrors LogAcceptCategory).
 bool WillLogCategory(GUILogCategory category);
 
 //! Emit one already-formatted line to the active sink (adds the newline and any
-//! timestamp/thread prefixing, matching a core LogPrintf). No-op when logging
-//! is disabled.
+//! timestamp/thread prefixing, matching a core LogPrintf).
 void LogPrintStr(const std::string& line);
 
 //! Format and emit an unconditional GUI log line (mirror of LogPrintf). Kept a
 //! template (not a tfm::format macro) so the format-string lint can parse it,
-//! exactly as the core LogPrintf is.
+//! exactly as the core LogPrintf is. The enabled check comes BEFORE formatting
+//! so disabled logging skips the (possibly expensive, e.g. toStdString())
+//! argument work -- matching the core LogPrintf.
 template <typename... Args>
 void LogPrintf(const char* fmt, const Args&... args)
 {
+    if (!Enabled()) {
+        return;
+    }
+
     LogPrintStr(tfm::format(fmt, args...));
 }
 

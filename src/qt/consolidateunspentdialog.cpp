@@ -82,7 +82,7 @@ void ConsolidateUnspentDialog::addressSelectionChanged()
 
     m_selectedDestinationAddress = std::make_pair(selectedLabel->text(), selectedAddress->text());
 
-    GUILogPrint(GUILogCategory::MISC, "INFO: %s: Label %, Address %s selected.", __func__,
+    GUILogPrint(GUILogCategory::MISC, "INFO: %s: Label %s, Address %s selected.", __func__,
              m_selectedDestinationAddress.first.toStdString(),
              m_selectedDestinationAddress.second.toStdString());
 }
