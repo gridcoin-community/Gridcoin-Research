@@ -1,4 +1,5 @@
 #include <QWidget>
+#include "qt/guilog.h"
 #include <QListView>
 
 #include "overviewpage.h"
@@ -247,7 +248,7 @@ int OverviewPage::getNumTransactionsForView()
     // takes up the space and would cause the calculation to be off.
     const size_t contentsHeight = std::max(ui->recentTransactionsFrame->height() - ui->recentTransLabel->height(), 0);
 
-    LogPrint(BCLog::LogFlags::QT, "INFO: %s: contentsHeight = %u, itemHeight = %u",
+    GUILogPrint(GUILogCategory::QT, "INFO: %s: contentsHeight = %u, itemHeight = %u",
              __func__, contentsHeight, itemHeight);
 
     // take one off so that there is not a "half-visible one" there, ensure not below 0.
@@ -263,7 +264,7 @@ void OverviewPage::updateTransactions()
     {
         int numItems = getNumTransactionsForView();
 
-        LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(): numItems = %d, limit = %d",
+        GUILogPrint(GUILogCategory::QT, "OverviewPage::updateTransactions(): numItems = %d, limit = %d",
                  numItems, m_overviewTxModel->limit());
 
         // "Stairstep" the served-window cap with x3..x6 factors so most window
@@ -274,12 +275,12 @@ void OverviewPage::updateTransactions()
         if (m_overviewTxModel->limit() < numItems)
         {
             m_overviewTxModel->setLimit(numItems * 3);
-            LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
+            GUILogPrint(GUILogCategory::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
         }
         else if (m_overviewTxModel->limit() > numItems * 6)
         {
             m_overviewTxModel->setLimit(numItems * 3);
-            LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
+            GUILogPrint(GUILogCategory::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
         }
 
         for (int i = 0; i <= m_overviewTxModel->limit(); ++i)
@@ -295,7 +296,7 @@ void OverviewPage::updateTransactions()
         ui->recentTransactionsNoResult->setVisible(m_privacy || !transaction_count);
         ui->listTransactions->setVisible(!m_privacy && transaction_count);
 
-        LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), end update");
+        GUILogPrint(GUILogCategory::QT, "OverviewPage::updateTransactions(), end update");
     }
 }
 
@@ -386,7 +387,7 @@ void OverviewPage::setPrivacy(bool privacy)
     ui->listTransactions->setVisible(!m_privacy && transaction_count);
     if (researcherModel) researcherModel->setMaskCpidMagnitudeAccrual(m_privacy);
 
-    LogPrint(BCLog::LogFlags::QT, "INFO: %s: m_privacy = %u", __func__, m_privacy);
+    GUILogPrint(GUILogCategory::QT, "INFO: %s: m_privacy = %u", __func__, m_privacy);
 
     updateTransactions();
     updateResearcherStatus();
@@ -441,7 +442,7 @@ void OverviewPage::setWalletModel(WalletModel *model)
         int num_transactions_for_view = getNumTransactionsForView();
         m_overviewTxModel.reset(new OverviewTxModel(model, num_transactions_for_view));
 
-        LogPrint(BCLog::LogFlags::QT, "INFO: %s: num_transactions_for_view = %i, limit = %i",
+        GUILogPrint(GUILogCategory::QT, "INFO: %s: num_transactions_for_view = %i, limit = %i",
                  __func__, num_transactions_for_view, m_overviewTxModel->limit());
 
         ui->listTransactions->setModel(m_overviewTxModel.get());

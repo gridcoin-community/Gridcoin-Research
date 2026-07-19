@@ -7,6 +7,7 @@
 
 
 #include <QProcess>
+#include "qt/guilog.h"
 #include <QInputDialog>
 
 #include "qt/decoration.h"
@@ -1871,7 +1872,7 @@ void BitcoinGUI::updateStakingIcon(
     double coin_weight,
     double etts_days)
 {
-    LogPrint(BCLog::MISC, "BitcoinGUI::updateStakingIcon()");
+    GUILogPrint(GUILogCategory::MISC, "BitcoinGUI::updateStakingIcon()");
 
     if (staking)
     {
@@ -1899,7 +1900,7 @@ void BitcoinGUI::updateStakingIcon(
 
 void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 {
-    LogPrint(BCLog::MISC, "BitcoinGUI::updateScraperIcon()");
+    GUILogPrint(GUILogCategory::MISC, "BitcoinGUI::updateScraperIcon()");
 
     // Value snapshot through the node interface; the scraper cache lock is
     // taken node-side and never held here.
@@ -2004,7 +2005,7 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
 void BitcoinGUI::updateBeaconIcon()
 {
-    LogPrint(BCLog::MISC, "BitcoinGUI::updateBeaconIcon()");
+    GUILogPrint(GUILogCategory::MISC, "BitcoinGUI::updateBeaconIcon()");
 
     if (researcherModel->configuredForNoncruncherMode()
         || researcherModel->detectedPoolMode())

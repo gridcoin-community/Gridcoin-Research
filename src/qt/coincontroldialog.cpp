@@ -1,4 +1,5 @@
 #include "coincontroldialog.h"
+#include "qt/guilog.h"
 #include "ui_coincontroldialog.h"
 
 #include "bitcoinunits.h"
@@ -330,7 +331,7 @@ bool CoinControlDialog::filterInputsByValue(const bool& less, const CAmount& inp
     {
         if (input_count >= inputSelectionLimit)
         {
-            LogPrint(BCLog::LogFlags::MISC, "INFO: %s: Culled input %u with value %f.",
+            GUILogPrint(GUILogCategory::MISC, "INFO: %s: Culled input %u with value %f.",
                      __func__, input_count, (double) input.first / COIN);
 
             if (coinControl->IsSelected(input.second.second.hash, input.second.second.n))

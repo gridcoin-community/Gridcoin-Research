@@ -4,6 +4,7 @@
 
 
 #include <QApplication>
+#include "qt/guilog.h"
 #include <QTimer>
 
 #include "bitcoingui.h"
@@ -135,7 +136,7 @@ static void ThreadSafeMessageBox(const std::string& message, const std::string& 
     }
     else
     {
-        LogPrintf("%s: %s", caption, message);
+        GUILogPrintf("%s: %s", caption, message);
         tfm::format(std::cerr, "%s: %s\n", caption.c_str(), message.c_str());
     }
 }
@@ -175,7 +176,7 @@ static void UpdateMessageBox(const std::string& version, const int& update_versi
 
     else
     {
-        LogPrintf("\r\n%s:\r\n%s", caption, message);
+        GUILogPrintf("\r\n%s:\r\n%s", caption, message);
         tfm::format(std::cerr, "\r\n%s:\r\n%s\r\n", caption.c_str(), message.c_str());
     }
 }
@@ -204,9 +205,9 @@ static void DebugMessageHandler(QtMsgType type, const QMessageLogContext& contex
 {
     Q_UNUSED(context);
     if (type == QtDebugMsg) {
-        LogPrint(BCLog::LogFlags::QT, "GUI: %s\n", msg.toStdString());
+        GUILogPrint(GUILogCategory::QT, "GUI: %s\n", msg.toStdString());
     } else {
-        LogPrintf("GUI: %s\n", msg.toStdString());
+        GUILogPrintf("GUI: %s\n", msg.toStdString());
     }
 }
 
@@ -478,11 +479,11 @@ int main(int argc, char *argv[])
         GRC::Upgrade resetblockchain;
 
         if (resetblockchain.ResetBlockchainData())
-            LogPrintf("ResetBlockchainData: success");
+            GUILogPrintf("ResetBlockchainData: success");
 
         else
         {
-            LogPrintf("ResetBlockchainData: failed to clean up blockchain data");
+            GUILogPrintf("ResetBlockchainData: failed to clean up blockchain data");
 
             std::string inftext = resetblockchain.ResetBlockchainMessages(resetblockchain.CleanUp);
 
@@ -512,10 +513,10 @@ int main(int argc, char *argv[])
         CTxDB().Close();
 
         if (resetblockchain.ResetBlockchain(app))
-            LogPrintf("ResetBlockchainData: success");
+            GUILogPrintf("ResetBlockchainData: success");
 
         else
-            LogPrintf("ResetBlockchainData: failed");
+            GUILogPrintf("ResetBlockchainData: failed");
     }
 
     return EXIT_SUCCESS;
@@ -557,11 +558,11 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         BitcoinGUI window;
         guiref = &window;
 
-        LogPrintf("Starting Gridcoin");
+        GUILogPrintf("Starting Gridcoin");
 
         if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
         {
-                LogPrintf("Error; NewThread(ThreadAppInit2) failed");
+                GUILogPrintf("Error; NewThread(ThreadAppInit2) failed");
                 return EXIT_FAILURE;
         }
         else
@@ -698,7 +699,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)window.winId());
 #endif
 
-                LogPrintf("GUI loaded.");
+                GUILogPrintf("GUI loaded.");
 
                 // Regenerate startup link, to fix links to old versions
                 GUIUtil::SetStartOnSystemStartup(optionsModel.getStartAtStartup(), optionsModel.getStartMin());
@@ -729,7 +730,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 guiref = nullptr;
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here
-            LogPrintf("Main calling Shutdown...");
+            GUILogPrintf("Main calling Shutdown...");
             Shutdown(nullptr);
         }
 

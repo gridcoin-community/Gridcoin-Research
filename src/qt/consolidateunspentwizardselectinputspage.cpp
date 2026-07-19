@@ -1,4 +1,5 @@
 #include "coincontroldialog.h"
+#include "qt/guilog.h"
 #include "consolidateunspentwizardselectinputspage.h"
 #include "ui_consolidateunspentwizardselectinputspage.h"
 
@@ -240,7 +241,7 @@ bool ConsolidateUnspentWizardSelectInputsPage::filterInputsByValue(const bool& l
     {
         if (input_count >= inputSelectionLimit)
         {
-            LogPrint(BCLog::LogFlags::QT, "INFO: %s: Culled input %u with value %f.",
+            GUILogPrint(GUILogCategory::QT, "INFO: %s: Culled input %u with value %f.",
                      __func__, input_count, (double) input.first / COIN);
 
             if (coinControl->IsSelected(input.second.second.hash, input.second.second.n))

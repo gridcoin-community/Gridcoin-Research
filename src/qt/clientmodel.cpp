@@ -1,4 +1,5 @@
 #include "clientmodel.h"
+#include "qt/guilog.h"
 #include "qt/bantablemodel.h"
 #include "qt/peertablemodel.h"
 #include "guiconstants.h"
@@ -320,14 +321,14 @@ static void NotifyBlocksChanged(
 
 static void NotifyNumConnectionsChanged(ClientModel *clientmodel, int newNumConnections)
 {
-    LogPrint(BCLog::NOISY, "NotifyNumConnectionsChanged %i", newNumConnections);
+    GUILogPrint(GUILogCategory::NOISY, "NotifyNumConnectionsChanged %i", newNumConnections);
     QMetaObject::invokeMethod(clientmodel, "updateNumConnections", Qt::QueuedConnection,
                               Q_ARG(int, newNumConnections));
 }
 
 static void NotifyAlertChanged(ClientModel *clientmodel, const uint256 &hash, ChangeType status)
 {
-    LogPrintf("NotifyAlertChanged %s status=%i", hash.GetHex(), status);
+    GUILogPrintf("NotifyAlertChanged %s status=%i", hash.GetHex(), status);
     QMetaObject::invokeMethod(clientmodel, "updateAlert", Qt::QueuedConnection,
                               Q_ARG(QString, QString::fromStdString(hash.GetHex())),
                               Q_ARG(int, status));

@@ -1,4 +1,5 @@
 #include "consolidateunspentdialog.h"
+#include "qt/guilog.h"
 #include "qt/decoration.h"
 #include <QAbstractButton>
 #include "ui_consolidateunspentdialog.h"
@@ -81,7 +82,7 @@ void ConsolidateUnspentDialog::addressSelectionChanged()
 
     m_selectedDestinationAddress = std::make_pair(selectedLabel->text(), selectedAddress->text());
 
-    LogPrint(BCLog::LogFlags::MISC, "INFO: %s: Label %, Address %s selected.", __func__,
+    GUILogPrint(GUILogCategory::MISC, "INFO: %s: Label %, Address %s selected.", __func__,
              m_selectedDestinationAddress.first.toStdString(),
              m_selectedDestinationAddress.second.toStdString());
 }

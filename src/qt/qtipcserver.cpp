@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "qtipcserver.h"
+#include "qt/guilog.h"
 #include "guiconstants.h"
 #include "node/ui_interface.h"
 #include "util.h"
@@ -80,12 +81,12 @@ static void ipcThread(void* pArg)
     } catch (...) {
         PrintExceptionContinue(nullptr, "ipcThread()");
     }
-    LogPrintf("ipcThread exited");
+    GUILogPrintf("ipcThread exited");
 }
 
 static void ipcThread2(void* pArg)
 {
-    LogPrint(BCLog::LogFlags::VERBOSE, "ipcThread started");
+    GUILogPrint(GUILogCategory::VERBOSE, "ipcThread started");
 
     message_queue* mq = (message_queue*)pArg;
     char buffer[MAX_URI_LENGTH + 1] = "";
@@ -140,7 +141,7 @@ void ipcInit(int argc, char *argv[])
         mq = new message_queue(open_or_create, BITCOINURI_QUEUE_NAME, 2, MAX_URI_LENGTH);
     }
     catch (interprocess_exception &ex) {
-        LogPrintf("ipcInit() - boost interprocess exception #%d: %s", ex.get_error_code(), ex.what());
+        GUILogPrintf("ipcInit() - boost interprocess exception #%d: %s", ex.get_error_code(), ex.what());
         return;
     }
 
