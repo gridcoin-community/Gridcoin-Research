@@ -11,7 +11,6 @@
 #include "askpassphrasedialog.h"
 
 #include "key_io.h"
-#include "wallet/coincontrol.h"
 #include "coincontroldialog.h"
 #include "consolidateunspentdialog.h"
 #include "consolidateunspentwizard.h"
@@ -27,7 +26,7 @@
 SendCoinsDialog::SendCoinsDialog(QWidget* parent)
              : QDialog(parent)
              , ui(new Ui::SendCoinsDialog)
-             , coinControl(new CCoinControl)
+             , coinControl(new interfaces::WalletCoinControl)
              , payAmounts(new QList<qint64>)
              , model(nullptr)
 {
@@ -184,19 +183,14 @@ void SendCoinsDialog::on_sendButton_clicked()
 
     WalletModel::SendCoinsReturn sendstatus;
 
-    // Snapshot the dialog's CCoinControl into the boundary value type when
-    // coin-control features are on; the wallet-side class itself does not
-    // cross the interface.
+    // The dialog's coin-control selection is already the boundary value type,
+    // so pass it straight through when coin-control features are on. dest_change
+    // is only ever set to a valid encoded address (see the change handlers), so
+    // no re-validation is needed here.
     std::optional<interfaces::WalletCoinControl> coin_control;
     if (model->getOptionsModel() && model->getOptionsModel()->getCoinControlFeatures())
     {
-        interfaces::WalletCoinControl ctrl;
-        if (IsValidDestination(coinControl->destChange)) {
-            ctrl.dest_change = EncodeDestination(coinControl->destChange);
-        }
-        ctrl.allow_watch_only = coinControl->fAllowWatchOnly;
-        coinControl->ListSelected(ctrl.selected);
-        coin_control = std::move(ctrl);
+        coin_control = *coinControl;
     }
 
     // Fee-confirmation loop. When the required fee exceeds both the
@@ -598,10 +592,15 @@ void SendCoinsDialog::coinControlChangeChecked(int state)
 {
     if (model)
     {
+        // dest_change carries an encoded address (empty = let the wallet pick).
+        // Store only a valid address so the node never has to re-validate.
         if (state == Qt::Checked)
-            coinControl->destChange = DecodeDestination(ui->coinControlChangeEdit->text().toStdString());
+        {
+            const CTxDestination dest = DecodeDestination(ui->coinControlChangeEdit->text().toStdString());
+            coinControl->dest_change = IsValidDestination(dest) ? EncodeDestination(dest) : std::string();
+        }
         else
-            coinControl->destChange = CNoDestination();
+            coinControl->dest_change.clear();
     }
 
     ui->coinControlChangeEdit->setEnabled((state == Qt::Checked));
@@ -615,7 +614,9 @@ void SendCoinsDialog::coinControlChangeEdited(const QString & text)
 {
     if (model)
     {
-        coinControl->destChange = DecodeDestination(text.toStdString());
+        // dest_change carries an encoded address (empty = let the wallet pick).
+        const CTxDestination dest = DecodeDestination(text.toStdString());
+        coinControl->dest_change = IsValidDestination(dest) ? EncodeDestination(dest) : std::string();
 
         // label for the change address
         ui->coinControlChangeAddressLabel->setStyleSheet(QString());

@@ -16,6 +16,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -52,16 +53,65 @@ struct WalletOutput
     bool immature{false};
 };
 
-//! Value mirror of the coin-control options Wallet::sendCoins consumes —
-//! the wallet-side CCoinControl does not cross the boundary (value types
-//! only); the node reconstructs it from this.
+//! The GUI's coin-selection value: the outpoints coin selection is pinned to,
+//! plus the change-destination override. This IS the selection container the
+//! coin-control dialogs build and mutate directly (replacing the core
+//! CCoinControl, which stays node-side); it crosses the boundary by value, and
+//! Wallet::sendCoins / computeCoinControlSummary reconstruct a node CCoinControl
+//! from it. Selection is keyed by outpoint so IsSelected() stays O(log n)
+//! regardless of how many rows the view realizes.
 struct WalletCoinControl
 {
     //! Encoded destination for change; empty lets the wallet pick.
     std::string dest_change;
     bool allow_watch_only{false};
-    //! Outpoints coin selection is pinned to.
-    std::vector<COutPoint> selected;
+    //! Outpoints coin selection is pinned to (a set: dedups and gives O(log n)
+    //! membership tests during the per-row tree rebuild).
+    std::set<COutPoint> selected;
+
+    void SetNull()
+    {
+        dest_change.clear();
+        allow_watch_only = false;
+        selected.clear();
+    }
+
+    bool HasSelected() const { return !selected.empty(); }
+
+    bool IsSelected(const COutPoint& output) const { return selected.count(output) > 0; }
+
+    bool IsSelected(const uint256& hash, unsigned int n) const
+    {
+        return IsSelected(COutPoint(hash, n));
+    }
+
+    void Select(const COutPoint& output) { selected.insert(output); }
+
+    void UnSelect(const COutPoint& output) { selected.erase(output); }
+
+    void UnSelectAll() { selected.clear(); }
+};
+
+//! Everything the coin-control dialogs need to render their fee/quantity
+//! labels, computed node-side in one call (Wallet::computeCoinControlSummary)
+//! to keep the boundary coarse. All the fee arithmetic (byte sizing via pubkey
+//! compression, nTransactionFee/GetMinFee, sub-CENT change absorption) runs
+//! where the wallet data lives, so the GUI does no fee math and holds no
+//! policy/consensus headers. Each dialog renders only the fields it shows.
+struct CoinControlSummary
+{
+    //! Selected inputs that still exist (vanished/conflicted coins are skipped,
+    //! matching the pre-migration getOutputs() filtering).
+    int quantity{0};
+    int64_t amount{0};      //!< sum of the selected inputs
+    int64_t fee{0};         //!< the pay fee (nPayFee)
+    int64_t after_fee{0};   //!< amount - fee, floored at 0
+    unsigned int bytes{0};  //!< estimated transaction size
+    int64_t change{0};      //!< change returned to the wallet (may be negative)
+    bool low_output{false}; //!< a recipient amount is below CENT
+    //! Mirrors the pre-migration fDust flag, which was declared but never set
+    //! true; retained so the label expression is byte-for-byte preserved.
+    bool dust{false};
 };
 
 //! One send-coins recipient (the Qt-free mirror of SendCoinsRecipient).
@@ -196,6 +246,22 @@ public:
     //! Spendable outputs grouped by address, with change outputs grouped
     //! under the address they derive from (walked node-side).
     virtual std::map<std::string, std::vector<WalletOutput>> listCoins() = 0;
+
+    //! Compute the coin-control fee/quantity summary for the given selection
+    //! and recipient amounts in one call. All fee math runs node-side (see
+    //! CoinControlSummary); recipient_amounts is the full list the GUI shows
+    //! (including any zero entries, which the byte estimate counts) and
+    //! subtract_fee_from_amount mirrors the send dialog's option. Selected
+    //! outpoints that no longer exist are skipped, so the fee reflects live
+    //! wallet state.
+    virtual CoinControlSummary computeCoinControlSummary(
+        const WalletCoinControl& selection,
+        const std::vector<int64_t>& recipient_amounts,
+        bool subtract_fee_from_amount) = 0;
+
+    //! The consensus/policy cap on inputs per consolidation transaction. Behind
+    //! the interface so the consolidate wizard needs no policy header.
+    virtual unsigned int getMaxConsolidationInputs() = 0;
 
     //! Create, fee-converge, and commit a transaction to the given
     //! recipients. Stateless one-shot: when the required fee needs user
