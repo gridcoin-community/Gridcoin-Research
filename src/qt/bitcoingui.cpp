@@ -456,8 +456,6 @@ void BitcoinGUI::createActions()
     openRPCConsoleAction->setToolTip(tr("Open debugging and diagnostic console"));
     // initially disable the debug window menu item
     openRPCConsoleAction->setEnabled(false);
-    snapshotAction = new QAction(tr("&Snapshot Download"), this);
-    snapshotAction->setToolTip(tr("Download and apply latest snapshot"));
     resetblockchainAction = new QAction(tr("&Reset blockchain data"), this);
     resetblockchainAction->setToolTip(tr("Remove blockchain data and start chain from zero"));
 
@@ -485,7 +483,6 @@ void BitcoinGUI::createActions()
     psgtPoolAction->setMenuRole(QAction::NoRole);
     connect(psgtPoolAction, &QAction::triggered, this, &BitcoinGUI::gotoPSGTPoolPage);
     connect(diagnosticsAction, &QAction::triggered, this, &BitcoinGUI::diagnosticsClicked);
-    connect(snapshotAction, &QAction::triggered, this, &BitcoinGUI::snapshotClicked);
     connect(resetblockchainAction, &QAction::triggered, this, &BitcoinGUI::resetblockchainClicked);
 }
 
@@ -562,7 +559,6 @@ void BitcoinGUI::setIcons()
     multisignAction->setIcon(QPixmap(":/icons/edit"));
     exportAction->setIcon(QPixmap(":/icons/export"));
     openRPCConsoleAction->setIcon(QPixmap(":/icons/debugwindow"));
-    snapshotAction->setIcon(QPixmap(":/images/gridcoin"));
     openConfigAction->setIcon(QPixmap(":/icons/edit"));
     resetblockchainAction->setIcon(QPixmap(":/images/gridcoin"));
 }
@@ -599,12 +595,6 @@ void BitcoinGUI::createMenuBar()
     multisigMenu->addAction(multisignAction);
     multisigMenu->addAction(psgtPoolAction);
     file->addSeparator();
-
-    // Snapshot GUI menu action disabled due to snapshot CDN abuse in 202308.
-    if (/* !gArgs.GetBoolArg("-testnet", false) */ false)
-    {
-        file->addAction(snapshotAction);
-    }
 
     file->addAction(resetblockchainAction);
 
@@ -1358,41 +1348,6 @@ void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int 
                                    type,
                                    address),
                               icon);
-    }
-}
-
-void BitcoinGUI::snapshotClicked()
-{
-    QMessageBox Msg;
-
-    Msg.setIcon(QMessageBox::Question);
-    Msg.setText(tr("Do you wish to download and apply the latest snapshot? If yes the wallet will shutdown and perform the task."));
-    Msg.setInformativeText(tr("Warning: Canceling after stage 2 will result in sync from 0 or corrupted blockchain files."));
-    Msg.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    Msg.setDefaultButton(QMessageBox::No);
-
-    int result = Msg.exec();
-    bool fProceed;
-
-    switch (result)
-    {
-        case QMessageBox::Yes    :    fProceed = true;     break;
-        case QMessageBox::No     :    fProceed = false;    break;
-        default                  :    fProceed = false;    break;
-    }
-
-    if (!fProceed)
-    {
-        Msg.close();
-
-        return;
-    }
-
-    else
-    {
-        fSnapshotRequest = true;
-
-        requestQuit();
     }
 }
 

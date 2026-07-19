@@ -197,7 +197,6 @@ private:
     QAction *unlockWalletAction;
     QAction *lockWalletAction;
     QAction *openRPCConsoleAction;
-    QAction *snapshotAction;
     QAction *resetblockchainAction;
     QAction *m_mask_values_action;
     QAction *openWikiAction;
@@ -301,7 +300,6 @@ private slots:
     void chatClicked();
     void diagnosticsClicked();
     void peersClicked();
-    void snapshotClicked();
     void resetblockchainClicked();
     void setPrivacy();
     void openWikiClicked();

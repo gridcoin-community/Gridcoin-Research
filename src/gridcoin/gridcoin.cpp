@@ -664,7 +664,6 @@ void SchedulePollNotifications(CScheduler& scheduler)
 // -----------------------------------------------------------------------------
 
 std::unique_ptr<Upgrade> g_UpdateChecker;
-bool fSnapshotRequest = false;
 bool fResetBlockchainRequest = false;
 
 // fQtActive lives in main.cpp; declared extern here so RebuildBeaconRegistry

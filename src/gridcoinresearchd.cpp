@@ -212,47 +212,7 @@ bool AppInit(int argc, char* argv[])
         // Initialize logging as early as possible.
         InitLogging();
 
-        // Make sure a user does not request snapshotdownload and resetblockchaindata at same time!
-        if (gArgs.IsArgSet("-snapshotdownload") && gArgs.IsArgSet("-resetblockchaindata"))
-        {
-            return InitError("-snapshotdownload and -resetblockchaindata cannot be used in conjunction");
-        }
-
-        // Check to see if the user requested a snapshot and we are not running TestNet!
-        if (gArgs.IsArgSet("-snapshotdownload") && !gArgs.IsArgSet("-testnet"))
-        {
-            GRC::Upgrade snapshot;
-
-            // Let's check make sure Gridcoin is not already running in the data directory.
-            // Use new probe feature
-            if (!LockDirectory(GetDataDir(), ".lock", false))
-            {
-                return InitError(strprintf("Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.",
-                                           GetDataDir().string()));
-            }
-
-            else
-            {
-                try
-                {
-                    snapshot.SnapshotMain();
-                }
-
-                catch (std::runtime_error& e)
-                {
-                    LogPrintf("Snapshot Downloader: Runtime exception occurred in SnapshotMain() (%s)", e.what());
-
-                    snapshot.DeleteSnapshot();
-
-                    return false;
-                }
-            }
-
-            // Delete snapshot file
-            snapshot.DeleteSnapshot();
-        }
-
-        // Check to see if the user requested to reset blockchain data -- We allow reset blockchain data on testnet, but not a snapshot download.
+        // Check to see if the user requested to reset blockchain data -- We allow reset blockchain data on testnet.
         if (gArgs.IsArgSet("-resetblockchaindata"))
         {
             GRC::Upgrade resetblockchain;

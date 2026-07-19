@@ -81,7 +81,7 @@ void AboutDialog::handlePressVersionInfoButton()
     m_version_check_watcher.setFuture(QtConcurrent::run([]() {
         AboutVersionInfo info;
         GRC::Upgrade::UpgradeType upgrade_type = GRC::Upgrade::UpgradeType::Unknown;
-        GRC::Upgrade::CheckForLatestUpdate(info.version, info.details, upgrade_type, false, false);
+        GRC::Upgrade::CheckForLatestUpdate(info.version, info.details, upgrade_type, false);
         info.upgrade_type = static_cast<int>(upgrade_type);
         return info;
     }));

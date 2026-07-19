@@ -279,7 +279,6 @@ target_link_libraries(gridcoin_util PUBLIC
     CURL::libcurl
     OpenSSL::Crypto OpenSSL::SSL
     Threads::Threads
-    libzip::zip
     ZLIB::ZLIB
 )
 
@@ -345,7 +344,6 @@ if(ENABLE_DAEMON)
         CURL::libcurl
         OpenSSL::Crypto OpenSSL::SSL
         Threads::Threads
-        libzip::zip
         ZLIB::ZLIB
     )
 
