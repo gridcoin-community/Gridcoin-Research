@@ -5,7 +5,6 @@
 #include "interfaces/handler.h"
 #include "qt/guilog.h"
 #include "interfaces/mrc.h"
-#include "logging.h"
 #include "mrcmodel.h"
 #include "walletmodel.h"
 #include "clientmodel.h"

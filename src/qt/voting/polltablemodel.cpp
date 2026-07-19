@@ -6,7 +6,6 @@
 #include "qt/guilog.h"
 #include "qt/voting/polltablemodel.h"
 #include "qt/voting/votingmodel.h"
-#include "logging.h"
 #include "util.h"
 #include "util/threadnames.h"
 

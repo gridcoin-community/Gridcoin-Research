@@ -8,7 +8,6 @@
 #include "interfaces/handler.h"
 #include "interfaces/researcher.h"
 #include "interfaces/voting.h"
-#include "logging.h"
 #include "optionsmodel.h"
 #include "qt/clientmodel.h"
 #include "qt/voting/votingmodel.h"
@@ -19,7 +18,6 @@
 #include <optional>
 
 using namespace GRC;
-using LogFlags = BCLog::LogFlags;
 
 namespace {
 //!

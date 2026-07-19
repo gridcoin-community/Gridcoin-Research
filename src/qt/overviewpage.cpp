@@ -19,7 +19,6 @@
 #include "uint256.h"
 #include "guiutil.h"
 #include "guiconstants.h"
-#include "logging.h"
 
 #include <functional>
 

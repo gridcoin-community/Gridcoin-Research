@@ -11,7 +11,6 @@
 #include "miner.h"
 #include "sidestaketablemodel.h"
 #include "editsidestakedialog.h"
-#include "logging.h"
 
 #include <QSortFilterProxyModel>
 #include <QDir>

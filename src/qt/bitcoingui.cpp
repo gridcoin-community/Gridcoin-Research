@@ -1927,7 +1927,7 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     }
 
     // If scraper logging category is turned on then show scrapers in tooltip...
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::SCRAPER))
+    if (GUILog::WillLogCategory(GUILogCategory::SCRAPER))
     {
         bDisplayScrapers = true;
 

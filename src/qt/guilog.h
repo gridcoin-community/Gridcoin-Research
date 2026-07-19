@@ -55,7 +55,8 @@ void LogPrintStr(const std::string& line);
 //! template (not a tfm::format macro) so the format-string lint can parse it,
 //! exactly as the core LogPrintf is. The enabled check comes BEFORE formatting
 //! so disabled logging skips the (possibly expensive, e.g. toStdString())
-//! argument work -- matching the core LogPrintf.
+//! argument work. tfm::format is wrapped so a malformed format string logs an
+//! error rather than aborting the GUI -- both matching the core LogPrintf.
 template <typename... Args>
 void LogPrintf(const char* fmt, const Args&... args)
 {
@@ -63,7 +64,14 @@ void LogPrintf(const char* fmt, const Args&... args)
         return;
     }
 
-    LogPrintStr(tfm::format(fmt, args...));
+    std::string log_msg;
+    try {
+        log_msg = tfm::format(fmt, args...);
+    } catch (tinyformat::format_error& e) {
+        log_msg = "Error \"" + std::string(e.what()) + "\" while formatting GUI log message: " + fmt;
+    }
+
+    LogPrintStr(log_msg);
 }
 
 } // namespace GUILog

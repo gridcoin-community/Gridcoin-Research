@@ -10,7 +10,6 @@
 #include "clientversion.h"
 #include "interfaces/handler.h"
 #include "interfaces/staking.h"
-#include "logging.h"
 #include "util/time.h"
 
 #include <QDateTime>
