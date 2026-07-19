@@ -28,7 +28,7 @@ public:
     };
 
     explicit ConsolidateUnspentWizard(QWidget *parent = nullptr,
-                                      CCoinControl *coinControl = nullptr,
+                                      interfaces::WalletCoinControl *coinControl = nullptr,
                                       QList<qint64> *payAmounts = nullptr);
     ~ConsolidateUnspentWizard();
 
@@ -37,13 +37,13 @@ public:
     void accept() override;
 
 signals:
-    void passCoinControlSignal(CCoinControl*);
+    void passCoinControlSignal(interfaces::WalletCoinControl*);
     void selectedConsolidationRecipientSignal(SendCoinsRecipient);
     void sendConsolidationTransactionSignal();
 
 private:
     Ui::ConsolidateUnspentWizard *ui;
-    CCoinControl *coinControl;
+    interfaces::WalletCoinControl *coinControl;
     QList<qint64> *payAmounts;
     WalletModel *model;
 };

@@ -43,19 +43,9 @@ src/qt/bitcoin.cpp:util.h
 src/qt/bitcoin.cpp:validation.h
 src/qt/bitcoingui.cpp:init.h
 src/qt/bitcoingui.cpp:util.h
-src/qt/coincontroldialog.cpp:policy/fees.h
-src/qt/coincontroldialog.cpp:policy/policy.h
-src/qt/coincontroldialog.cpp:validation.h
-src/qt/coincontroldialog.cpp:wallet/coincontrol.h
-src/qt/coincontroldialog.cpp:wallet/wallet.h
 src/qt/consolidateunspentdialog.cpp:util.h
 src/qt/consolidateunspentwizard.cpp:util.h
 src/qt/consolidateunspentwizardselectdestinationpage.cpp:util.h
-src/qt/consolidateunspentwizardselectinputspage.cpp:policy/fees.h
-src/qt/consolidateunspentwizardselectinputspage.cpp:policy/policy.h
-src/qt/consolidateunspentwizardselectinputspage.cpp:validation.h
-src/qt/consolidateunspentwizardselectinputspage.cpp:wallet/coincontrol.h
-src/qt/consolidateunspentwizardselectinputspage.cpp:wallet/wallet.h
 src/qt/consolidateunspentwizardsendpage.cpp:util.h
 src/qt/detailedtxmodel.cpp:util/system.h
 src/qt/diagnosticsdialog.h:sync.h
@@ -79,7 +69,6 @@ src/qt/rpcconsole.cpp:rpc/client.h
 src/qt/rpcconsole.cpp:rpc/protocol.h
 src/qt/rpcconsole.cpp:rpc/server.h
 src/qt/rpcconsole.h:net.h
-src/qt/sendcoinsdialog.cpp:wallet/coincontrol.h
 src/qt/signverifymessagedialog.cpp:init.h
 src/qt/signverifymessagedialog.cpp:main.h
 src/qt/signverifymessagedialog.cpp:wallet/wallet.h

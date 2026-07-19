@@ -5,6 +5,8 @@
 #include "updatedialog.h"
 #include "util.h"
 
+#include <QtConcurrent>
+
 AboutDialog::AboutDialog(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::AboutDialog)
@@ -29,6 +31,9 @@ AboutDialog::AboutDialog(QWidget *parent) :
     ui->copyrightLabel->setText(copyrightText);
 
     resize(GRC::ScaleSize(this, width(), height()));
+
+    connect(&m_version_check_watcher, &QFutureWatcher<AboutVersionInfo>::finished,
+            this, &AboutDialog::versionCheckFinished);
 
     if (!fTestNet && !gArgs.GetBoolArg("-disableupdatecheck", false)) {
         connect(ui->versionInfoButton, &QAbstractButton::pressed, this, [this]() { handlePressVersionInfoButton(); });
@@ -62,24 +67,43 @@ void AboutDialog::on_buttonBox_accepted()
 
 void AboutDialog::handlePressVersionInfoButton()
 {
-    std::string client_message_out;
-    std::string change_log;
-    GRC::Upgrade::UpgradeType upgrade_type = GRC::Upgrade::UpgradeType::Unknown;
+    // CheckForLatestUpdate does a blocking libcurl GET of the GitHub release
+    // JSON (up to a 10 s connect timeout). Run it off the GUI thread so a click
+    // never freezes the UI. Guard against overlapping checks: a second click
+    // while one is in flight would spawn another worker (this is the read-only
+    // half of GRC::Upgrade; it must not touch the download/reset write side).
+    if (m_version_check_watcher.isRunning()) {
+        return;
+    }
 
+    ui->versionInfoButton->setDisabled(true);
 
-    GRC::Upgrade::CheckForLatestUpdate(client_message_out, change_log, upgrade_type, false, false);
+    m_version_check_watcher.setFuture(QtConcurrent::run([]() {
+        AboutVersionInfo info;
+        GRC::Upgrade::UpgradeType upgrade_type = GRC::Upgrade::UpgradeType::Unknown;
+        GRC::Upgrade::CheckForLatestUpdate(info.version, info.details, upgrade_type, false, false);
+        info.upgrade_type = static_cast<int>(upgrade_type);
+        return info;
+    }));
+}
 
-    if (client_message_out == std::string {}) {
-        client_message_out = "No response from GitHub - check network connectivity.";
-        change_log = " ";
+void AboutDialog::versionCheckFinished()
+{
+    ui->versionInfoButton->setDisabled(false);
+
+    AboutVersionInfo info = m_version_check_watcher.result();
+
+    if (info.version.empty()) {
+        info.version = "No response from GitHub - check network connectivity.";
+        info.details = " ";
     }
 
     UpdateDialog update_dialog;
 
     update_dialog.setWindowTitle("Gridcoin Version Information");
-    update_dialog.setVersion(QString().fromStdString(client_message_out));
-    update_dialog.setUpgradeType(static_cast<GRC::Upgrade::UpgradeType>(upgrade_type));
-    update_dialog.setDetails(QString().fromStdString(change_log));
+    update_dialog.setVersion(QString::fromStdString(info.version));
+    update_dialog.setUpgradeType(static_cast<GRC::Upgrade::UpgradeType>(info.upgrade_type));
+    update_dialog.setDetails(QString::fromStdString(info.details));
     update_dialog.setModal(false);
 
     update_dialog.exec();

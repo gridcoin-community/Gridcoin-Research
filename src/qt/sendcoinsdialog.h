@@ -9,7 +9,6 @@
 namespace Ui {
     class SendCoinsDialog;
 }
-class CCoinControl;
 class SendCoinsEntry;
 
 QT_BEGIN_NAMESPACE
@@ -44,7 +43,7 @@ public slots:
 
 private:
     Ui::SendCoinsDialog *ui;
-    CCoinControl *coinControl;
+    interfaces::WalletCoinControl *coinControl;
     QList<qint64> *payAmounts;
     WalletModel *model;
     bool fNewRecipientAllowed;

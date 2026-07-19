@@ -22,7 +22,7 @@ public:
     ~ConsolidateUnspentWizardSelectInputsPage();
 
     void setModel(WalletModel*);
-    void setCoinControl(CCoinControl* coinControl);
+    void setCoinControl(interfaces::WalletCoinControl* coinControl);
     void setPayAmounts(QList<qint64> *payAmounts);
 
 signals:
@@ -35,12 +35,12 @@ public slots:
 
 private:
     Ui::ConsolidateUnspentWizardSelectInputsPage *ui;
-    CCoinControl *coinControl;
+    interfaces::WalletCoinControl *coinControl;
     QList<qint64> *payAmounts;
     WalletModel *model;
     int sortColumn;
     Qt::SortOrder sortOrder;
-    size_t m_InputSelectionLimit;
+    size_t m_InputSelectionLimit{0};
     Qt::CheckState m_ToState = Qt::Checked;
     bool m_FilterMode = true;
     bool m_FilterValueValid = false;

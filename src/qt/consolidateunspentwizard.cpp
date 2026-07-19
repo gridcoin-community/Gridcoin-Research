@@ -8,7 +8,7 @@
 
 
 ConsolidateUnspentWizard::ConsolidateUnspentWizard(QWidget *parent,
-                                                   CCoinControl *coinControl,
+                                                   interfaces::WalletCoinControl *coinControl,
                                                    QList<qint64> *payAmounts) :
     QWizard(parent),
     ui(new Ui::ConsolidateUnspentWizard),

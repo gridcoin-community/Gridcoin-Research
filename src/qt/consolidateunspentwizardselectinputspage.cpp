@@ -6,12 +6,9 @@
 #include "addresstablemodel.h"
 #include "key_io.h"
 #include "optionsmodel.h"
-#include "wallet/wallet.h"
-#include "policy/policy.h"
-#include "policy/fees.h"
-#include "validation.h"
-#include "wallet/coincontrol.h"
 #include "consolidateunspentdialog.h"
+
+#include <set>
 
 using namespace std;
 
@@ -19,8 +16,6 @@ ConsolidateUnspentWizardSelectInputsPage::ConsolidateUnspentWizardSelectInputsPa
     QWizardPage(parent),
     ui(new Ui::ConsolidateUnspentWizardSelectInputsPage)
 {
-    m_InputSelectionLimit = GetMaxInputsForConsolidationTxn();
-
     ui->setupUi(this);
 
     // toggle tree/list mode
@@ -68,13 +63,8 @@ ConsolidateUnspentWizardSelectInputsPage::ConsolidateUnspentWizardSelectInputsPa
     // default view is sorted by amount desc
     sortView(COLUMN_AMOUNT_INT64, Qt::DescendingOrder);
 
-    ui->outputLimitWarningIconLabel->setToolTip(tr("Note: The number of inputs selected for consolidation has been "
-                                                 "limited to %1 to prevent a transaction failure due to too many "
-                                                 "inputs.").arg(m_InputSelectionLimit));
-    ui->outputLimitStopIconLabel->setToolTip(tr("Note: The number of inputs selected for consolidation is currently more "
-                                                 "than the limit of %1. Please use the filter or manual selection to reduce "
-                                                "the number of inputs to %1 or less to prevent a transaction failure due to "
-                                                "too many inputs.").arg(m_InputSelectionLimit));
+    // The tooltips that show m_InputSelectionLimit are set in setModel(), once
+    // the value is available from the wallet interface (no model at construction).
 
     ui->outputLimitWarningIconLabel->setVisible(false);
     ui->outputLimitStopIconLabel->setVisible(false);
@@ -93,12 +83,24 @@ void ConsolidateUnspentWizardSelectInputsPage::setModel(WalletModel *model)
 
     if (model && model->getOptionsModel() && model->getAddressTableModel() && coinControl != nullptr)
     {
+        // The consolidation input cap is a policy value from the wallet
+        // interface; set it and the tooltips that show it here (no model exists
+        // at construction).
+        m_InputSelectionLimit = model->wallet().getMaxConsolidationInputs();
+        ui->outputLimitWarningIconLabel->setToolTip(tr("Note: The number of inputs selected for consolidation has been "
+                                                     "limited to %1 to prevent a transaction failure due to too many "
+                                                     "inputs.").arg(m_InputSelectionLimit));
+        ui->outputLimitStopIconLabel->setToolTip(tr("Note: The number of inputs selected for consolidation is currently more "
+                                                     "than the limit of %1. Please use the filter or manual selection to reduce "
+                                                    "the number of inputs to %1 or less to prevent a transaction failure due to "
+                                                    "too many inputs.").arg(m_InputSelectionLimit));
+
         updateView();
         updateLabels();
     }
 }
 
-void ConsolidateUnspentWizardSelectInputsPage::setCoinControl(CCoinControl *coinControl)
+void ConsolidateUnspentWizardSelectInputsPage::setCoinControl(interfaces::WalletCoinControl *coinControl)
 {
     this->coinControl = coinControl;
 }
@@ -354,106 +356,30 @@ void ConsolidateUnspentWizardSelectInputsPage::updateLabels()
 {
     if (!model) return;
 
-    // nPayAmount
-    qint64 nPayAmount = 0;
-    CMutableTransaction txDummy;
-    for (const auto& amount: std::as_const(*payAmounts))
+    // Gather the recipient amounts; all fee/quantity math (byte sizing via
+    // pubkey compression, nTransactionFee/GetMinFee, sub-CENT change absorption)
+    // runs node-side in one call, so the wizard does no fee math and holds no
+    // policy/consensus headers.
+    std::vector<int64_t> recipientAmounts;
+    recipientAmounts.reserve(payAmounts->size());
+    for (const auto& amount : std::as_const(*payAmounts))
     {
-        nPayAmount += amount;
-
-        if (amount > 0)
-        {
-            CTxOut txout(amount, (CScript)vector<unsigned char>(24, 0));
-            txDummy.vout.push_back(txout);
-        }
+        recipientAmounts.push_back(amount);
     }
 
-    int64_t nAmount = 0;
-    int64_t nPayFee = 0;
-    int64_t nAfterFee = 0;
-    int64_t nChange = 0;
-    unsigned int nBytes = 0;
-    unsigned int nBytesInputs = 0;
-    unsigned int nQuantity = 0;
+    const interfaces::CoinControlSummary summary =
+        model->wallet().computeCoinControlSummary(*coinControl, recipientAmounts, /*subtract_fee_from_amount=*/false);
 
-    vector<COutPoint> vCoinControl;
-    coinControl->ListSelected(vCoinControl);
-    const std::vector<interfaces::WalletOutput> vOutputs = model->getOutputs(vCoinControl);
-
-    for (const auto& out : vOutputs)
-    {
-        // Quantity
-        nQuantity++;
-
-        // Amount
-        nAmount += out.amount;
-
-        // Bytes
-        if (!out.address.empty())
-        {
-            CTxDestination address = DecodeDestination(out.address);
-            CPubKey pubkey;
-            try {
-                if (model->getPubKey(std::get<CKeyID>(address), pubkey))
-                    nBytesInputs += (pubkey.IsCompressed() ? 148 : 180);
-                else
-                    nBytesInputs += 148; // in all error cases, simply assume 148 here
-            } catch (const std::bad_variant_access&) {
-                nBytesInputs += 148;
-            }
-        }
-        else nBytesInputs += 148;
-    }
-
-    // calculation
-    if (nQuantity > 0)
-    {
-        // Bytes - always assume +1 output for change here
-        nBytes = nBytesInputs + ((payAmounts->size() > 0 ? payAmounts->size() + 1 : 2) * 34) + 10;
-
-        // Fee
-        int64_t nFee = nTransactionFee * (1 + (int64_t)nBytes / 1000);
-
-        // Min Fee
-        int64_t nMinFee = GetMinFee(CTransaction(txDummy), 1000, GMF_SEND, nBytes);
-
-        nPayFee = max(nFee, nMinFee);
-
-        if (nPayAmount > 0)
-        {
-            nChange = nAmount - nPayFee - nPayAmount;
-
-            // if sub-cent change is required, the fee must be raised to at least CTransaction::nMinTxFee
-            if (nPayFee < CENT && nChange > 0 && nChange < CENT)
-            {
-                if (nChange < CENT) // change < 0.01 => simply move all change to fees
-                {
-                    nPayFee = nChange;
-                    nChange = 0;
-                }
-                else
-                {
-                    nChange = nChange + nPayFee - CENT;
-                    nPayFee = CENT;
-                }
-            }
-
-            if (nChange == 0) nBytes -= 34;
-        }
-
-        // after fee
-        nAfterFee = nAmount - nPayFee;
-        if (nAfterFee < 0) nAfterFee = 0;
-    }
+    const unsigned int nQuantity = static_cast<unsigned int>(summary.quantity);
 
     // actually update labels
     int nDisplayUnit = BitcoinUnits::BTC;
     if (model && model->getOptionsModel()) nDisplayUnit = model->getOptionsModel()->getDisplayUnit();
 
     // stats
-    ui->quantityLabel->setText(QString::number(nQuantity));                            // Quantity
-    ui->feeLabel->setText(BitcoinUnits::formatWithUnit(nDisplayUnit, nPayFee));        // Fee
-    ui->afterFeeLabel->setText(BitcoinUnits::formatWithUnit(nDisplayUnit, nAfterFee)); // After Fee
+    ui->quantityLabel->setText(QString::number(summary.quantity));                        // Quantity
+    ui->feeLabel->setText(BitcoinUnits::formatWithUnit(nDisplayUnit, summary.fee));       // Fee
+    ui->afterFeeLabel->setText(BitcoinUnits::formatWithUnit(nDisplayUnit, summary.after_fee)); // After Fee
 
     std::map<QString, QString> addressList;
     QString defaultAddress;
@@ -536,6 +462,24 @@ void ConsolidateUnspentWizardSelectInputsPage::updateView()
     }
 
     const std::map<std::string, std::vector<interfaces::WalletOutput>> mapCoins = model->listCoins();
+
+    // Reconcile the selection against the currently-available coins: prune any
+    // selected outpoint that no longer exists (e.g. a coin the wallet staked
+    // out from under the selection). The send path re-validates node-side.
+    {
+        std::set<COutPoint> available;
+        for (auto const& coins : mapCoins)
+            for (auto const& out : coins.second)
+                available.insert(out.outpoint);
+
+        for (auto it = coinControl->selected.begin(); it != coinControl->selected.end(); )
+        {
+            if (available.count(*it) == 0)
+                it = coinControl->selected.erase(it);
+            else
+                ++it;
+        }
+    }
 
     for (auto const& coins : mapCoins)
     {

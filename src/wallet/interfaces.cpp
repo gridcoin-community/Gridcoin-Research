@@ -10,13 +10,16 @@
 #include "key_io.h"
 #include "main.h"
 #include "policy/fees.h"
+#include "policy/policy.h"
 #include "wallet/coincontrol.h"
 #include "wallet/wallet.h"
 
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace interfaces {
@@ -227,6 +230,106 @@ public:
 
         return coins;
     }
+
+    CoinControlSummary computeCoinControlSummary(const WalletCoinControl& selection,
+                                                 const std::vector<int64_t>& recipient_amounts,
+                                                 bool subtract_fee_from_amount) override
+    {
+        CoinControlSummary summary;
+
+        // Recipient side: pay amount, low-output flag, and the dummy outputs
+        // GetMinFee's dust check inspects. Mirrors the pre-migration
+        // updateLabels() exactly (the dummy script content is irrelevant to
+        // the fee; only the count and nValue matter).
+        CAmount pay_amount = 0;
+        CMutableTransaction tx_dummy;
+        for (const int64_t amount : recipient_amounts) {
+            pay_amount += amount;
+            if (amount > 0) {
+                if (amount < CENT) {
+                    summary.low_output = true;
+                }
+                tx_dummy.vout.push_back(CTxOut(amount, (CScript)std::vector<unsigned char>(24, 0)));
+            }
+        }
+
+        CAmount amount = 0;
+        unsigned int bytes_inputs = 0;
+        unsigned int quantity = 0;
+
+        LOCK2(cs_main, m_wallet->cs_wallet);
+
+        for (const COutPoint& outpoint : selection.selected) {
+            auto it = m_wallet->mapWallet.find(outpoint.hash);
+            if (it == m_wallet->mapWallet.end()) continue;
+            if (outpoint.n >= it->second.vout.size()) continue;
+            if (it->second.GetDepthInMainChain() < 0) continue; // skip vanished/conflicted
+
+            quantity++;
+            amount += it->second.vout[outpoint.n].nValue;
+
+            // Byte estimate per input from pubkey compression (148 compressed
+            // else 180; 148 in every error/non-pubkeyhash case), matching the
+            // former GUI-side getOutputs()+getPubKey() loop.
+            CTxDestination address;
+            if (ExtractDestination(it->second.vout[outpoint.n].scriptPubKey, address)) {
+                const CKeyID* key_id = std::get_if<CKeyID>(&address);
+                CPubKey pubkey;
+                if (key_id && m_wallet->GetPubKey(*key_id, pubkey)) {
+                    bytes_inputs += (pubkey.IsCompressed() ? 148 : 180);
+                } else {
+                    bytes_inputs += 148;
+                }
+            } else {
+                bytes_inputs += 148;
+            }
+        }
+
+        summary.quantity = static_cast<int>(quantity);
+        summary.amount = amount;
+
+        if (quantity > 0) {
+            // Always assume +1 output for change here.
+            summary.bytes = bytes_inputs
+                + ((recipient_amounts.size() > 0 ? recipient_amounts.size() + 1 : 2) * 34) + 10;
+
+            const CAmount fee = nTransactionFee * (1 + (int64_t)summary.bytes / 1000);
+            const CAmount min_fee = GetMinFee(CTransaction(tx_dummy), 1000, GMF_SEND, summary.bytes);
+            summary.fee = std::max(fee, min_fee);
+
+            if (pay_amount > 0) {
+                // When subtracting fee from amount, the fee is absorbed by the
+                // recipients rather than coming from the change output.
+                summary.change = subtract_fee_from_amount
+                    ? amount - pay_amount
+                    : amount - summary.fee - pay_amount;
+
+                // If sub-cent change is required, raise the fee to at least CENT.
+                if (summary.fee < CENT && summary.change > 0 && summary.change < CENT) {
+                    if (summary.change < CENT) { // change < 0.01 => move all change to fees
+                        summary.fee = summary.change;
+                        summary.change = 0;
+                    } else {
+                        summary.change = summary.change + summary.fee - CENT;
+                        summary.fee = CENT;
+                    }
+                }
+
+                if (summary.change == 0) {
+                    summary.bytes -= 34;
+                }
+            }
+
+            summary.after_fee = amount - summary.fee;
+            if (summary.after_fee < 0) {
+                summary.after_fee = 0;
+            }
+        }
+
+        return summary;
+    }
+
+    unsigned int getMaxConsolidationInputs() override { return GetMaxInputsForConsolidationTxn(); }
 
     SendCoinsResult sendCoins(const std::vector<WalletSendRecipient>& recipients,
                               const std::optional<WalletCoinControl>& coin_control,

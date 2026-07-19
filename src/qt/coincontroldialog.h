@@ -17,7 +17,6 @@ namespace Ui {
     class CoinControlDialog;
 }
 class WalletModel;
-class CCoinControl;
 
 class CoinControlDialog : public QDialog
 {
@@ -25,7 +24,7 @@ class CoinControlDialog : public QDialog
 
 public:
     explicit CoinControlDialog(QWidget* parent = nullptr,
-                               CCoinControl* coinControl = nullptr,
+                               interfaces::WalletCoinControl* coinControl = nullptr,
                                QList<qint64>* payAmounts = nullptr,
                                bool fSubtractFeeFromAmount = false);
     ~CoinControlDialog();
@@ -33,11 +32,12 @@ public:
     void setModel(WalletModel *model);
 
     // static because also called from sendcoinsdialog
-    static void updateLabels(WalletModel*, CCoinControl*, QList<qint64>*, QDialog*,
+    static void updateLabels(WalletModel*, interfaces::WalletCoinControl*, QList<qint64>*, QDialog*,
                              bool fSubtractFeeFromAmount = false);
 
-    // This is based on what will guarantee a successful transaction.
-    const size_t m_inputSelectionLimit;
+    // This is based on what will guarantee a successful transaction. Set from
+    // the wallet interface in setModel() (no model exists at construction).
+    size_t m_inputSelectionLimit{0};
 
 signals:
     void selectedConsolidationRecipientSignal(SendCoinsRecipient consolidationRecipient);
@@ -47,7 +47,7 @@ public slots:
 
 private:
     Ui::CoinControlDialog *ui;
-    CCoinControl *coinControl;
+    interfaces::WalletCoinControl *coinControl;
     QList<qint64> *payAmounts;
     WalletModel *model;
     int sortColumn;
