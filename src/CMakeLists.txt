@@ -145,6 +145,7 @@ add_library(gridcoin_util STATIC
     gridcoin/cpid.cpp
     gridcoin/gridcoin.cpp
     gridcoin/interfaces.cpp
+    gridcoin/mnemonics.cpp
     gridcoin/mrc.cpp
     gridcoin/pool.cpp
     gridcoin/project.cpp
