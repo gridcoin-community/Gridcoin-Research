@@ -138,7 +138,6 @@ target_link_libraries(test_gridcoin PRIVATE
     CURL::libcurl
     OpenSSL::Crypto OpenSSL::SSL
     Threads::Threads
-    libzip::zip
     ZLIB::ZLIB
 )
 

@@ -514,14 +514,6 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-blockmaxsize=<n>", strprintf("Set maximum block size in bytes (default: %u)", MAX_BLOCK_SIZE_GEN/2),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-snapshotdownload", "Download and apply latest snapshot",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-snapshoturl=<url>", "Optional: URL for the snapshot.zip file (ex: "
-                                         "https://sub.domain.com/location/snapshot.zip)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-snapshotsha256url=<url>", "Optional: URL for the snapshot.sha256 file (ex: "
-                                               "https://sub.domain.com/location/snapshot.sha256)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-disableupdatecheck", "Optional: Disable update checks by wallet",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-updatecheckinterval=<n>", "Optional: Check for updates every <n> hours (default: 120, minimum: 1)",
