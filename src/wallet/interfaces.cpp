@@ -304,15 +304,14 @@ public:
                     ? amount - pay_amount
                     : amount - summary.fee - pay_amount;
 
-                // If sub-cent change is required, raise the fee to at least CENT.
+                // A sub-cent change output isn't worth creating: absorb it into
+                // the fee. The fee INCREASES by the change removed (fee + change),
+                // matching CreateTransaction's behaviour -- the pre-migration GUI
+                // code set fee = change here, dropping the already-computed
+                // sub-cent base fee and under-reporting the fee by that amount.
                 if (summary.fee < CENT && summary.change > 0 && summary.change < CENT) {
-                    if (summary.change < CENT) { // change < 0.01 => move all change to fees
-                        summary.fee = summary.change;
-                        summary.change = 0;
-                    } else {
-                        summary.change = summary.change + summary.fee - CENT;
-                        summary.fee = CENT;
-                    }
+                    summary.fee += summary.change;
+                    summary.change = 0;
                 }
 
                 if (summary.change == 0) {
