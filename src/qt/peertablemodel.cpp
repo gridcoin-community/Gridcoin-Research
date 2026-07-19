@@ -60,7 +60,9 @@ public:
     {
         cachedNodeStats.clear();
 
-        for (interfaces::PeerInfo& peer : node.getPeers())
+        std::vector<interfaces::PeerInfo> peers = node.getPeers();
+        cachedNodeStats.reserve(peers.size());
+        for (interfaces::PeerInfo& peer : peers)
             cachedNodeStats.append(std::move(peer));
 
         if (sortColumn >= 0)
