@@ -11,17 +11,6 @@ namespace Ui {
 }
 class ClientModel;
 
-//! Result of the off-thread GitHub version check (see
-//! AboutDialog::handlePressVersionInfoButton). upgrade_type is carried as an
-//! int so the header needs no gridcoin/upgrade.h; the .cpp casts it back to
-//! GRC::Upgrade::UpgradeType.
-struct AboutVersionInfo
-{
-    std::string version;
-    std::string details;
-    int upgrade_type{0};
-};
-
 /** "About" dialog box */
 class AboutDialog : public QDialog
 {
@@ -33,6 +22,17 @@ public:
 
     void setModel(ClientModel *model);
 private:
+    //! Result of the off-thread GitHub version check (see
+    //! handlePressVersionInfoButton). upgrade_type is carried as an int so the
+    //! header needs no gridcoin/upgrade.h; the .cpp casts it back to
+    //! GRC::Upgrade::UpgradeType.
+    struct AboutVersionInfo
+    {
+        std::string version;
+        std::string details;
+        int upgrade_type{0};
+    };
+
     Ui::AboutDialog *ui;
     //! Watches the background version-check fetch so the blocking libcurl GET
     //! never runs on the GUI thread.

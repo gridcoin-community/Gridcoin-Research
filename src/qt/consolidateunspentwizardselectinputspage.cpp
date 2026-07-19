@@ -463,22 +463,20 @@ void ConsolidateUnspentWizardSelectInputsPage::updateView()
 
     const std::map<std::string, std::vector<interfaces::WalletOutput>> mapCoins = model->listCoins();
 
-    // Reconcile the selection against the currently-available coins: prune any
-    // selected outpoint that no longer exists (e.g. a coin the wallet staked
-    // out from under the selection). The send path re-validates node-side.
+    // Reconcile the selection against the currently-available coins: keep only
+    // the selected outpoints that still exist (e.g. drop a coin the wallet
+    // staked out from under the selection). Scan the already-fetched coin list
+    // once, testing membership against the usually-small selection, so we never
+    // materialize a set of every outpoint (important on large wallets). The
+    // send path re-validates node-side regardless.
     {
-        std::set<COutPoint> available;
+        std::set<COutPoint> still_selected;
         for (auto const& coins : mapCoins)
             for (auto const& out : coins.second)
-                available.insert(out.outpoint);
+                if (coinControl->selected.count(out.outpoint))
+                    still_selected.insert(out.outpoint);
 
-        for (auto it = coinControl->selected.begin(); it != coinControl->selected.end(); )
-        {
-            if (available.count(*it) == 0)
-                it = coinControl->selected.erase(it);
-            else
-                ++it;
-        }
+        coinControl->selected.swap(still_selected);
     }
 
     for (auto const& coins : mapCoins)
