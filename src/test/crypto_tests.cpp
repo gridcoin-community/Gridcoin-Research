@@ -9,6 +9,7 @@
 #include <crypto/hmac_sha512.h>
 #include <crypto/poly1305.h>
 #include <crypto/ripemd160.h>
+#include <crypto/scrypt.h>
 #include <crypto/sha1.h>
 #include <crypto/sha256.h>
 #include <crypto/sha3.h>
@@ -1104,6 +1105,31 @@ BOOST_AUTO_TEST_CASE(chacha20poly1305_testvectors)
                            "30a6757ff8439b975363f166a0fa0e36722ab35936abd704297948f45083f4d4"
                            "99433137ce931f7fca28a0acd3bc30f57b550acbc21cbd45bbef0739d9caf30c"
                            "14b94829deb27f0b1923a2af704ae5d6");
+}
+
+static void TestScryptRFC7914(const std::string& pass, const std::string& salt,
+                              unsigned int N, unsigned int r, unsigned int p,
+                              const std::string& out_hex)
+{
+    const std::vector<unsigned char> expected = ParseHex(out_hex);
+    std::vector<std::byte> out(expected.size());
+    ScryptRFC7914(MakeByteSpan(pass), MakeByteSpan(salt), N, r, p, MakeWritableByteSpan(out));
+    BOOST_CHECK_EQUAL(HexStr(out), out_hex);
+}
+
+BOOST_AUTO_TEST_CASE(scrypt_rfc7914_testvectors)
+{
+    // RFC 7914 section 12 test vectors (the fourth, N=1048576, needs 1 GiB of
+    // memory and is omitted).
+    TestScryptRFC7914("", "", 16, 1, 1,
+                      "77d6576238657b203b19ca42c18a0497f16b4844e3074ae8dfdffa3fede21442"
+                      "fcd0069ded0948f8326a753a0fc81f17e8d3e0fb2e0d3628cf35e20c38d18906");
+    TestScryptRFC7914("password", "NaCl", 1024, 8, 16,
+                      "fdbabe1c9d3472007856e7190d01e9fe7c6ad7cbc8237830e77376634b373162"
+                      "2eaf30d92e22a3886ff109279d9830dac727afb94a83ee6d8360cbdfa2cc0640");
+    TestScryptRFC7914("pleaseletmein", "SodiumChloride", 16384, 8, 1,
+                      "7023bdcb3afd7348461c06cd81fd38ebfda8fbba904f8e3ea9b543f6545da1f2"
+                      "d5432955613f0fcf62d49705242a9af9e61e85dc0d651e40dfcf017b45575887");
 }
 
 BOOST_AUTO_TEST_CASE(countbits_tests)
