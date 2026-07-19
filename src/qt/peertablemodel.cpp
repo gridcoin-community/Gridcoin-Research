@@ -8,17 +8,16 @@
 #include <qt/guiconstants.h>
 #include <qt/guiutil.h>
 
-#include <net.h>
-#include <sync.h>
+#include <interfaces/node.h>
 
 #include <QDebug>
 #include <QList>
 #include <QTimer>
 
-bool NodeLessThan::operator()(const CNodeCombinedStats &left, const CNodeCombinedStats &right) const
+bool NodeLessThan::operator()(const interfaces::PeerInfo &left, const interfaces::PeerInfo &right) const
 {
-    const CNodeStats *pLeft = &(left.nodeStats);
-    const CNodeStats *pRight = &(right.nodeStats);
+    const interfaces::PeerInfo *pLeft = &left;
+    const interfaces::PeerInfo *pRight = &right;
 
     if (order == Qt::DescendingOrder)
         std::swap(pLeft, pRight);
@@ -27,15 +26,15 @@ bool NodeLessThan::operator()(const CNodeCombinedStats &left, const CNodeCombine
     case PeerTableModel::NetNodeId:
         return pLeft->id < pRight->id;
     case PeerTableModel::Address:
-        return pLeft->addrName.compare(pRight->addrName) < 0;
+        return pLeft->addr_name.compare(pRight->addr_name) < 0;
     case PeerTableModel::Subversion:
-        return pLeft->strSubVer.compare(pRight->strSubVer) < 0;
+        return pLeft->subversion.compare(pRight->subversion) < 0;
     case PeerTableModel::Ping:
-        return pLeft->dPingTime < pRight->dPingTime;
+        return pLeft->ping_time < pRight->ping_time;
     case PeerTableModel::Sent:
-        return pLeft->nSendBytes < pRight->nSendBytes;
+        return pLeft->send_bytes < pRight->send_bytes;
     case PeerTableModel::Received:
-        return pLeft->nRecvBytes < pRight->nRecvBytes;
+        return pLeft->recv_bytes < pRight->recv_bytes;
     } // no default case, so the compiler can warn about missing cases
     assert(false);
 }
@@ -45,38 +44,24 @@ class PeerTablePriv
 {
 public:
     /** Local cache of peer information */
-    QList<CNodeCombinedStats> cachedNodeStats;
+    QList<interfaces::PeerInfo> cachedNodeStats;
     /** Column to sort nodes by (default to unsorted) */
     int sortColumn{-1};
     /** Order (ascending or descending) to sort nodes by */
     Qt::SortOrder sortOrder;
     /** Index of rows by node ID */
-    std::map<NodeId, int> mapNodeRows;
+    std::map<int64_t, int> mapNodeRows;
 
-    /** Pull a full list of peers from the connection manager into our cache */
-    void refreshPeers()
+    /** Pull a full list of peers from the node interface into our cache. Peer
+        stats now cross the boundary as interfaces::PeerInfo value snapshots (the
+        node side reads CNodeStats under the connection manager); the list is
+        empty when the connection manager is not up. */
+    void refreshPeers(interfaces::Node& node)
     {
-        {
-            cachedNodeStats.clear();
+        cachedNodeStats.clear();
 
-            std::vector<CNodeStats> vstats;
-            // Peer stats via the CConnman node-access API (issue #2558 PR 9a);
-            // leaves vstats empty (no peers) when g_connman is not up.
-            if (g_connman) g_connman->GetNodeStats(vstats);
-
-            cachedNodeStats.reserve(vstats.size());
-            for (const auto& node_stats : vstats)
-            {
-                CNodeCombinedStats stats;
-                stats.nodeStats = node_stats;
-                stats.fNodeStateStatsAvailable = false;
-                // For a future Bitcoin backport.
-                // stats.nodeStats = std::get<0>(node_stats);
-                // stats.fNodeStateStatsAvailable = std::get<1>(node_stats);
-                // stats.nodeStateStats = std::get<2>(node_stats);
-                cachedNodeStats.append(stats);
-            }
-        }
+        for (interfaces::PeerInfo& peer : node.getPeers())
+            cachedNodeStats.append(std::move(peer));
 
         if (sortColumn >= 0)
             // sort cacheNodeStats (use stable sort to prevent rows jumping around unnecessarily)
@@ -85,8 +70,8 @@ public:
         // build index map
         mapNodeRows.clear();
         int row = 0;
-        for (const CNodeCombinedStats& stats : std::as_const(cachedNodeStats))
-            mapNodeRows.insert(std::pair<NodeId, int>(stats.nodeStats.id, row++));
+        for (const interfaces::PeerInfo& stats : std::as_const(cachedNodeStats))
+            mapNodeRows.insert(std::pair<int64_t, int>(stats.id, row++));
     }
 
     int size() const
@@ -94,7 +79,7 @@ public:
         return cachedNodeStats.size();
     }
 
-    CNodeCombinedStats *index(int idx)
+    interfaces::PeerInfo *index(int idx)
     {
         if (idx >= 0 && idx < cachedNodeStats.size())
             return &cachedNodeStats[idx];
@@ -156,29 +141,29 @@ QVariant PeerTableModel::data(const QModelIndex &index, int role) const
     if(!index.isValid())
         return QVariant();
 
-    CNodeCombinedStats *rec = static_cast<CNodeCombinedStats*>(index.internalPointer());
+    interfaces::PeerInfo *rec = static_cast<interfaces::PeerInfo*>(index.internalPointer());
 
     const auto column = static_cast<ColumnIndex>(index.column());
     if (role == Qt::DisplayRole) {
         switch (column) {
         case NetNodeId:
-            return (qint64)rec->nodeStats.id;
+            return (qint64)rec->id;
         case Address:
             // prepend to peer address down-arrow symbol for inbound connection and up-arrow for outbound connection
-            return QString(rec->nodeStats.fInbound ? "↓ " : "↑ ") + QString::fromStdString(rec->nodeStats.addrName);
+            return QString(rec->inbound ? "↓ " : "↑ ") + QString::fromStdString(rec->addr_name);
         case Subversion:
-            if (!rec->nodeStats.strSubVer.empty()) {
+            if (!rec->subversion.empty()) {
                 // remove leading and trailing slash
-                return QString::fromStdString(rec->nodeStats.strSubVer.substr(1, rec->nodeStats.strSubVer.length() - 2));
+                return QString::fromStdString(rec->subversion.substr(1, rec->subversion.length() - 2));
             } else {
                 return QString();
             }
         case Ping:
-            return GUIUtil::formatPingTime(rec->nodeStats.dPingTime);
+            return GUIUtil::formatPingTime(rec->ping_time);
         case Sent:
-            return GUIUtil::formatBytes(rec->nodeStats.nSendBytes);
+            return GUIUtil::formatBytes(rec->send_bytes);
         case Received:
-            return GUIUtil::formatBytes(rec->nodeStats.nRecvBytes);
+            return GUIUtil::formatBytes(rec->recv_bytes);
         } // no default case, so the compiler can warn about missing cases
         assert(false);
     } else if (role == Qt::TextAlignmentRole) {
@@ -219,28 +204,30 @@ Qt::ItemFlags PeerTableModel::flags(const QModelIndex &index) const
 QModelIndex PeerTableModel::index(int row, int column, const QModelIndex &parent) const
 {
     Q_UNUSED(parent);
-    CNodeCombinedStats *data = priv->index(row);
+    interfaces::PeerInfo *data = priv->index(row);
 
     if (data)
         return createIndex(row, column, data);
     return QModelIndex();
 }
 
-const CNodeCombinedStats *PeerTableModel::getNodeStats(int idx)
+const interfaces::PeerInfo *PeerTableModel::getNodeStats(int idx)
 {
     return priv->index(idx);
 }
 
 void PeerTableModel::refresh()
 {
+    if (!clientModel) return;
+
     Q_EMIT layoutAboutToBeChanged();
-    priv->refreshPeers();
+    priv->refreshPeers(clientModel->node());
     Q_EMIT layoutChanged();
 }
 
-int PeerTableModel::getRowByNodeId(NodeId nodeid)
+int PeerTableModel::getRowByNodeId(int64_t nodeid)
 {
-    std::map<NodeId, int>::iterator it = priv->mapNodeRows.find(nodeid);
+    std::map<int64_t, int>::iterator it = priv->mapNodeRows.find(nodeid);
     if (it == priv->mapNodeRows.end())
         return -1;
 

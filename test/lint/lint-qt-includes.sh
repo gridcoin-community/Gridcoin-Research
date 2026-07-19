@@ -58,17 +58,12 @@ src/qt/optionsdialog.cpp:miner.h
 src/qt/optionsdialog.cpp:netbase.h
 src/qt/optionsmodel.cpp:init.h
 src/qt/optionsmodel.cpp:miner.h
-src/qt/peertablemodel.cpp:net.h
-src/qt/peertablemodel.cpp:sync.h
-src/qt/peertablemodel.h:net.h
 src/qt/qtipcserver.cpp:node/ui_interface.h
 src/qt/qtipcserver.cpp:util.h
 src/qt/researcher/researcherwizardpoolpage.cpp:key.h
-src/qt/rpcconsole.cpp:banman.h
 src/qt/rpcconsole.cpp:rpc/client.h
 src/qt/rpcconsole.cpp:rpc/protocol.h
 src/qt/rpcconsole.cpp:rpc/server.h
-src/qt/rpcconsole.h:net.h
 src/qt/signverifymessagedialog.cpp:init.h
 src/qt/signverifymessagedialog.cpp:main.h
 src/qt/signverifymessagedialog.cpp:wallet/wallet.h
