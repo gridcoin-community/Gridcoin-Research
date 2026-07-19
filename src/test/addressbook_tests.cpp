@@ -308,6 +308,70 @@ BOOST_AUTO_TEST_CASE(received_by_label_rpcs_work_flag_free)
     BOOST_CHECK(found);
 }
 
+namespace {
+//! Inject an unconfirmed wallet tx: mapWallet entry in the mempool state plus an actual
+//! mempool entry, so GetDepthInMainChain() reports 0 (visible at minconf=0 only).
+void InjectMempoolTx(const CTransaction& tx)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWalletTx wtx(pwalletMain, tx);
+    wtx.SetTxState(TxStateInMempool{});
+    pwalletMain->mapWallet[tx.GetHash()] = wtx;
+    // addUnchecked's contract requires the caller hold mempool.cs (it does no internal
+    // locking, unlike mempool.remove in RemoveMempoolTx below); acquire it after cs_wallet
+    // per the canonical lock order.
+    LOCK(mempool.cs);
+    mempool.addUnchecked(tx.GetHash(), CTxMemPoolEntry(
+        tx, /*fee=*/0, /*time=*/0, /*height=*/0,
+        ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION)));
+}
+
+void RemoveMempoolTx(const CTransaction& tx)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    mempool.remove(tx);
+    pwalletMain->mapWallet.erase(tx.GetHash());
+}
+
+//! One-output tx paying `dest`; with no vins it debits nothing, so IsFromMe() is false --
+//! the shape of a payment arriving from outside the wallet.
+CTransaction ExternalPaymentTx(const CTxDestination& dest, int64_t nValue)
+{
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = nValue;
+    mtx.vout[0].scriptPubKey.SetDestination(dest);
+    return CTransaction(mtx);
+}
+
+size_t CountRowsForAddress(const UniValue& rows, const std::string& addr)
+{
+    size_t count = 0;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (rows[i]["address"].get_str() == addr) ++count;
+    }
+    return count;
+}
+
+//! Amount of the row for `addr` in listreceivedbyaddress output, or -1 if absent.
+double RowAmountForAddress(const UniValue& rows, const std::string& addr)
+{
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (rows[i]["address"].get_str() == addr) return rows[i]["amount"].get_real();
+    }
+    return -1.0;
+}
+
+//! Amount of the row for `label` in listreceivedbylabel output, or 0 if the label has no row.
+double LabelGroupAmount(const UniValue& rows, const std::string& label)
+{
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (rows[i]["label"].get_str() == label) return rows[i]["amount"].get_real();
+    }
+    return 0.0;
+}
+} // namespace
+
 // The label tally counts only outputs the wallet owns (a labeled send-to address that
 // receives coins must NOT be counted), honors minconf, and listreceivedbylabel rows carry
 // the "label" key LAST (Bitcoin's serialized order: amount, confirmations, label).
@@ -333,20 +397,7 @@ BOOST_AUTO_TEST_CASE(received_by_label_tallies_owned_outputs_only)
     mtx.vout[1].nValue = 7 * COIN;
     mtx.vout[1].scriptPubKey.SetDestination(otherDest);
     CTransaction tx(mtx);
-    const uint256 hash = tx.GetHash();
-    {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        CWalletTx wtx(pwalletMain, tx);
-        wtx.SetTxState(TxStateInMempool{});
-        pwalletMain->mapWallet[hash] = wtx;
-        // addUnchecked's contract requires the caller hold mempool.cs (it does no
-        // internal locking, unlike mempool.remove below); acquire it after cs_wallet
-        // per the canonical lock order.
-        LOCK(mempool.cs);
-        mempool.addUnchecked(hash, CTxMemPoolEntry(
-            tx, /*fee=*/0, /*time=*/0, /*height=*/0,
-            ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION)));
-    }
+    InjectMempoolTx(tx);
 
     UniValue grArgs(UniValue::VARR);
     grArgs.push_back("fundedlabel");
@@ -380,11 +431,166 @@ BOOST_AUTO_TEST_CASE(received_by_label_tallies_owned_outputs_only)
     BOOST_CHECK_EQUAL(others, 0.0);
 
     // Remove the injected tx so later cases (and suites) see the wallet they expect.
+    RemoveMempoolTx(tx);
+}
+
+// Regression for the reported bug: a wallet-owned address with NO address book entry that
+// received an external payment must appear in listreceivedbyaddress (with account ""), and
+// its amount must roll into the listreceivedbylabel "" group. Before the fix such an address
+// was invisible until the user set a label on it.
+BOOST_AUTO_TEST_CASE(listreceived_shows_unbooked_address_with_external_receipt)
+{
+    UniValue byAddrArgs(UniValue::VARR);
+    byAddrArgs.push_back(UniValue(0));
+    UniValue byLabelArgs(UniValue::VARR);
+    byLabelArgs.push_back(UniValue(0));
+    byLabelArgs.push_back(UniValue(true));
+
+    const double defaultGroupBefore = LabelGroupAmount(listreceivedbylabel(byLabelArgs), "");
+
+    // Owned key, deliberately NOT added to the address book.
+    CKey key;
+    key.MakeNewKey(false);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));
+    const CTxDestination dest = CTxDestination(key.GetPubKey().GetID());
+    const std::string addr = EncodeDestination(dest);
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        mempool.remove(tx);
-        pwalletMain->mapWallet.erase(hash);
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE_EQUAL(pwalletMain->mapAddressBook.count(dest), 0u);
     }
+
+    CTransaction tx = ExternalPaymentTx(dest, 9 * COIN);
+    InjectMempoolTx(tx);
+
+    UniValue rows = listreceivedbyaddress(byAddrArgs);
+    BOOST_REQUIRE(rows.isArray());
+    BOOST_CHECK_EQUAL(CountRowsForAddress(rows, addr), 1u);
+    BOOST_CHECK_EQUAL(RowAmountForAddress(rows, addr), 9.0);
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (rows[i]["address"].get_str() == addr) {
+            BOOST_CHECK_EQUAL(rows[i]["account"].get_str(), "");
+        }
+    }
+
+    // The listed amount agrees with getreceivedbyaddress (P2PKH receipt).
+    UniValue grArgs(UniValue::VARR);
+    grArgs.push_back(addr);
+    grArgs.push_back(UniValue(0));
+    BOOST_CHECK_EQUAL(getreceivedbyaddress(grArgs).get_real(), 9.0);
+
+    // The grouped variant counts the unbooked receipt under the default "" label.
+    const double defaultGroupAfter = LabelGroupAmount(listreceivedbylabel(byLabelArgs), "");
+    BOOST_CHECK_EQUAL(defaultGroupAfter, defaultGroupBefore + 9.0);
+
+    RemoveMempoolTx(tx);
+}
+
+// An unbooked owned address that only ever received change from the wallet's own spend stays
+// hidden (it is what CWallet::IsChange means by change); one external receipt then surfaces
+// it with its FULL tally, change included. Also pins the booked-address skip of the new
+// emission loop: the booked address A must appear exactly once (no duplicate row from the
+// mapTally pass) and its externally received amount must stay under its own label rather
+// than leak into the "" group.
+BOOST_AUTO_TEST_CASE(listreceived_hides_pure_change_until_external_receipt)
+{
+    UniValue byAddrArgs(UniValue::VARR);
+    byAddrArgs.push_back(UniValue(0));
+    UniValue byLabelArgs(UniValue::VARR);
+    byLabelArgs.push_back(UniValue(0));
+    byLabelArgs.push_back(UniValue(true));
+
+    const double defaultGroupBefore = LabelGroupAmount(listreceivedbylabel(byLabelArgs), "");
+
+    // A: owned AND labeled (booked). Receives externally, so its tally is flagged external --
+    // exactly the shape that would double-emit if the new loop's booked-skip were missing.
+    CKey keyA;
+    keyA.MakeNewKey(false);
+    BOOST_REQUIRE(pwalletMain->AddKey(keyA));
+    const CTxDestination destA = CTxDestination(keyA.GetPubKey().GetID());
+    const std::string addrA = EncodeDestination(destA);
+    setlabel(ArgArray({addrA, "changetest-ext"}));
+
+    // C: owned, unbooked.
+    CKey keyC;
+    keyC.MakeNewKey(false);
+    BOOST_REQUIRE(pwalletMain->AddKey(keyC));
+    const CTxDestination destC = CTxDestination(keyC.GetPubKey().GetID());
+    const std::string addrC = EncodeDestination(destC);
+
+    // tx1: external payment to A.
+    CTransaction tx1 = ExternalPaymentTx(destA, 10 * COIN);
+    InjectMempoolTx(tx1);
+
+    // tx2: the wallet spends tx1's output, paying C -- C's receipt is change. GetDebit only
+    // reads the prevout from mapWallet and IsMine on it, so no signature is needed.
+    CMutableTransaction mtx2;
+    mtx2.vin.resize(1);
+    mtx2.vin[0].prevout = COutPoint(tx1.GetHash(), 0);
+    mtx2.vout.resize(1);
+    mtx2.vout[0].nValue = 4 * COIN;
+    mtx2.vout[0].scriptPubKey.SetDestination(destC);
+    CTransaction tx2(mtx2);
+    InjectMempoolTx(tx2);
+
+    UniValue rows = listreceivedbyaddress(byAddrArgs);
+    BOOST_CHECK_EQUAL(CountRowsForAddress(rows, addrC), 0u);   // pure change: hidden
+    BOOST_CHECK_EQUAL(CountRowsForAddress(rows, addrA), 1u);   // booked: exactly once
+
+    // tx3: external payment to C -- C now qualifies and shows its full tally (change 4 + 6).
+    CTransaction tx3 = ExternalPaymentTx(destC, 6 * COIN);
+    InjectMempoolTx(tx3);
+
+    rows = listreceivedbyaddress(byAddrArgs);
+    BOOST_CHECK_EQUAL(CountRowsForAddress(rows, addrC), 1u);
+    BOOST_CHECK_EQUAL(RowAmountForAddress(rows, addrC), 10.0);
+    BOOST_CHECK_EQUAL(CountRowsForAddress(rows, addrA), 1u);   // still exactly once
+    BOOST_CHECK_EQUAL(RowAmountForAddress(rows, addrA), 10.0);
+
+    // Full tally agrees with getreceivedbyaddress.
+    UniValue grArgs(UniValue::VARR);
+    grArgs.push_back(addrC);
+    grArgs.push_back(UniValue(0));
+    BOOST_CHECK_EQUAL(getreceivedbyaddress(grArgs).get_real(), 10.0);
+
+    // Grouped: only C's tally lands in ""; A's external receipt stays under its own label.
+    UniValue labelRows = listreceivedbylabel(byLabelArgs);
+    BOOST_CHECK_EQUAL(LabelGroupAmount(labelRows, ""), defaultGroupBefore + 10.0);
+    BOOST_CHECK_EQUAL(LabelGroupAmount(labelRows, "changetest-ext"), 10.0);
+
+    RemoveMempoolTx(tx3);
+    RemoveMempoolTx(tx2);
+    RemoveMempoolTx(tx1);
+}
+
+// includeempty must not dump the keypool: an owned, unbooked key with no receipts stays
+// absent even with includeempty=true, while a booked empty address still needs
+// includeempty=true to get a row (unchanged behavior).
+BOOST_AUTO_TEST_CASE(listreceived_includeempty_ignores_unbooked_keys_without_receipts)
+{
+    // Owned, unbooked, no receipts.
+    CKey keyD;
+    keyD.MakeNewKey(false);
+    BOOST_REQUIRE(pwalletMain->AddKey(keyD));
+    const std::string addrD = EncodeDestination(CTxDestination(keyD.GetPubKey().GetID()));
+
+    // Owned, booked, no receipts.
+    CKey keyE;
+    keyE.MakeNewKey(false);
+    BOOST_REQUIRE(pwalletMain->AddKey(keyE));
+    const std::string addrE = EncodeDestination(CTxDestination(keyE.GetPubKey().GetID()));
+    setlabel(ArgArray({addrE, "emptylabel"}));
+
+    UniValue withEmpty(UniValue::VARR);
+    withEmpty.push_back(UniValue(0));
+    withEmpty.push_back(UniValue(true));
+    UniValue rows = listreceivedbyaddress(withEmpty);
+    BOOST_CHECK_EQUAL(CountRowsForAddress(rows, addrD), 0u);
+    BOOST_CHECK_EQUAL(CountRowsForAddress(rows, addrE), 1u);
+
+    UniValue withoutEmpty(UniValue::VARR);
+    withoutEmpty.push_back(UniValue(0));
+    rows = listreceivedbyaddress(withoutEmpty);
+    BOOST_CHECK_EQUAL(CountRowsForAddress(rows, addrE), 0u);
 }
 
 // migratelabels backfills purpose on entries that loaded as "unknown" (owned -> "receive"),

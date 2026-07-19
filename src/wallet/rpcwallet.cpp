@@ -1001,7 +1001,11 @@ static const RPCHelpMan getreceivedbyaccount_help{
     "Use getreceivedbylabel instead.\n"
     "\n"
     "Returns the total amount received by addresses with <account> in transactions with at least\n"
-    "[minconf] confirmations.",
+    "[minconf] confirmations.\n"
+    "\n"
+    "Only addresses carrying <account> in the address book are tallied; payments to wallet\n"
+    "addresses without an address book entry are not included even for the default \"\"\n"
+    "account (listreceivedbyaccount counts those under \"\").",
     {
         {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name."},
         {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
@@ -1063,7 +1067,11 @@ UniValue getreceivedbyaccount(const UniValue& params)
 static const RPCHelpMan getreceivedbylabel_help{
     "getreceivedbylabel",
     "Returns the total amount received by addresses with <label> in transactions with at least\n"
-    "[minconf] confirmations.",
+    "[minconf] confirmations.\n"
+    "\n"
+    "Only addresses carrying <label> in the address book are tallied; payments to wallet\n"
+    "addresses without an address book entry are not included even for the default \"\"\n"
+    "label (listreceivedbylabel counts those under \"\").",
     {
         {"label", RPCArg::Type::STR, RPCArg::Optional::NO, "The selected label, may be the default label using \"\"."},
         {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
@@ -1782,12 +1790,14 @@ struct tallyitem
     int nConf;
     vector<uint256> txids;
     bool fIsWatchonly;
+    bool fIsExternal;
 
     tallyitem()
     {
         nAmount = 0;
         nConf = std::numeric_limits<int>::max();
         fIsWatchonly = false;
+        fIsExternal = false;
     }
 };
 
@@ -1823,6 +1833,11 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts, const string& st
         int nDepth = wtx.GetDepthInMainChain();
         if (nDepth < nMinDepth)
             continue;
+
+        // A tx the wallet did not fund is an external receipt for every owned output it
+        // pays; one the wallet funded only produces change (see CWallet::IsChange).
+        const bool fTxFromMe = wtx.IsFromMe(filter);
+
         for (auto const& txout : wtx.vout)
         {
             CTxDestination address;
@@ -1839,7 +1854,8 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts, const string& st
             item.txids.push_back(wtx.GetHash());
             if (mine & ISMINE_WATCH_ONLY)
               item.fIsWatchonly = true;
-
+            if (!fTxFromMe)
+                item.fIsExternal = true;
         }
     }
 
@@ -1896,6 +1912,47 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts, const string& st
         }
     }
 
+    // Wallet addresses with tallied receipts that have no address book entry. Only list
+    // addresses paid at least once from outside the wallet: an unbooked address whose every
+    // tallied output came from wallet-funded transactions is treated as change (see
+    // CWallet::IsChange; receipts inside wallet-cofunded transactions share this fate) and
+    // stays hidden, matching upstream. Qualifying rows carry the default ("") name.
+    for (auto const& tally : mapTally)
+    {
+        const CTxDestination& address = tally.first;
+        const tallyitem& tallied = tally.second;
+
+        if (!tallied.fIsExternal || pwalletMain->mapAddressBook.count(address))
+            continue;
+
+        if (fByAccounts)
+        {
+            tallyitem& item = mapAccountTally[""];
+            item.nAmount += tallied.nAmount;
+            item.nConf = min(item.nConf, tallied.nConf);
+            if (tallied.fIsWatchonly)
+                item.fIsWatchonly = true;
+        }
+        else
+        {
+            UniValue obj(UniValue::VOBJ);
+            if (tallied.fIsWatchonly) {
+                obj.pushKV("involvesWatchonly", true);
+            }
+            obj.pushKV("address",       EncodeDestination(address));
+            obj.pushKV("account",       "");
+            obj.pushKV("amount",        ValueFromAmount(tallied.nAmount));
+            obj.pushKV("confirmations", (tallied.nConf == std::numeric_limits<int>::max() ? 0 : tallied.nConf));
+
+            UniValue transactions(UniValue::VARR);
+            for (const uint256& txid : tallied.txids) {
+                transactions.push_back(txid.GetHex());
+            }
+            obj.pushKV("txids", transactions);
+            ret.push_back(obj);
+        }
+    }
+
     if (fByAccounts)
     {
         for (const auto& it : mapAccountTally)
@@ -1922,12 +1979,19 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts, const string& st
 
 static const RPCHelpMan listreceivedbyaddress_help{
     "listreceivedbyaddress",
-    "List balances by receiving address.",
+    "List balances by receiving address.\n"
+    "\n"
+    "Wallet addresses with received payments are listed even when they have no address book\n"
+    "entry (shown with account \"\"). An included address reports its full received total,\n"
+    "change included, matching getreceivedbyaddress. Addresses whose payments all arrived in\n"
+    "transactions funded by this wallet (change, or receipts inside wallet-cofunded\n"
+    "transactions) are omitted until given an address book entry; qualification is evaluated\n"
+    "within the same minconf filter.",
     {
         {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
             "The minimum number of confirmations before payments are included (default: 1)."},
         {"includeempty", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-            "Whether to include addresses that haven't received any payments (default: false)."},
+            "Whether to include address book addresses that haven't received any payments (default: false)."},
         {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
             "Whether to include watchonly addresses (see 'importaddress'). Default: false."},
     },
@@ -1962,7 +2026,11 @@ static const RPCHelpMan listreceivedbyaccount_help{
     "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
     "Use listreceivedbylabel instead.\n"
     "\n"
-    "List balances by account.",
+    "List balances by account. Payments to wallet addresses without an address book entry\n"
+    "are counted under the default \"\" account at their full received total (change\n"
+    "included). Addresses whose payments all arrived in transactions funded by this wallet\n"
+    "are not counted. Note that getreceivedbyaccount \"\" reads only the address book, so it\n"
+    "does not include these amounts.",
     {
         {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
             "Minimum confirmations before payments are included. Default: 1."},
@@ -1999,7 +2067,13 @@ UniValue listreceivedbyaccount(const UniValue& params)
 
 static const RPCHelpMan listreceivedbylabel_help{
     "listreceivedbylabel",
-    "List received transactions by label.",
+    "List received transactions by label.\n"
+    "\n"
+    "Payments to wallet addresses without an address book entry are counted under the\n"
+    "default \"\" label at their full received total (change included). Addresses whose\n"
+    "payments all arrived in transactions funded by this wallet are not counted. Note that\n"
+    "getreceivedbylabel \"\" reads only the address book, so it does not include these\n"
+    "amounts.",
     {
         {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
             "Minimum confirmations before payments are included. Default: 1."},
