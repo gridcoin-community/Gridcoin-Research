@@ -1,4 +1,5 @@
 #include "consolidateunspentwizardsendpage.h"
+#include "qt/guilog.h"
 #include "ui_consolidateunspentwizardsendpage.h"
 
 #include "util.h"
@@ -25,7 +26,7 @@ void ConsolidateUnspentWizardSendPage::initializePage()
     ui->destinationAddressLabelLabel->setText(field("selectedAddressLabelField").toString());
     ui->destinationAddressLabel->setText(field("selectedAddressField").toString());
 
-    LogPrint(BCLog::LogFlags::QT, "INFO: %s: destinationAddress = %s",
+    GUILogPrint(GUILogCategory::QT, "INFO: %s: destinationAddress = %s",
              __func__, field("selectedAddressField").toString().toStdString());
 
     qint64 amount = 0;

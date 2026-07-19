@@ -1,4 +1,5 @@
 #include "transactiontablemodel.h"
+#include "qt/guilog.h"
 #include "guiutil.h"
 #include "interfaces/wallet_tx_record.h"
 #include "guiconstants.h"
@@ -78,7 +79,7 @@ public:
      */
     void refreshWallet()
     {
-        LogPrint(BCLog::MISC, "refreshWallet()");
+        GUILogPrint(GUILogCategory::MISC, "refreshWallet()");
 
         parent->beginResetModel();
 
@@ -146,7 +147,7 @@ public:
         // — log and skip — rather than corrupt the heap.
         if (payload.position < 0
                 || static_cast<std::size_t>(payload.position) > cachedWallet.size()) {
-            LogPrintf("ERROR: %s: RowsInserted position %d out of range [0, %u] — skipping",
+            GUILogPrintf("ERROR: %s: RowsInserted position %d out of range [0, %u] — skipping",
                       __func__, payload.position,
                       static_cast<unsigned int>(cachedWallet.size()));
             return;
@@ -175,7 +176,7 @@ public:
         if (payload.position < 0 || payload.count <= 0
                 || static_cast<std::size_t>(payload.position)
                        + static_cast<std::size_t>(payload.count) > cachedWallet.size()) {
-            LogPrintf("ERROR: %s: RowsRemoved range [%d, +%d) out of bounds for %u rows — skipping",
+            GUILogPrintf("ERROR: %s: RowsRemoved range [%d, +%d) out of bounds for %u rows — skipping",
                       __func__, payload.position, payload.count,
                       static_cast<unsigned int>(cachedWallet.size()));
             return;
@@ -238,7 +239,7 @@ TransactionTableModel::~TransactionTableModel()
 
 void TransactionTableModel::applyEventBatch(const std::vector<GRC::WalletEvent>& events)
 {
-    LogPrint(BCLog::LogFlags::VERBOSE, "TransactionTableModel::applyEventBatch(%u events)",
+    GUILogPrint(GUILogCategory::VERBOSE, "TransactionTableModel::applyEventBatch(%u events)",
              static_cast<unsigned int>(events.size()));
 
     priv->applyEventBatch(events);
@@ -251,7 +252,7 @@ void TransactionTableModel::refreshWallet()
 
 void TransactionTableModel::updateConfirmations()
 {
-    LogPrint(BCLog::MISC, "TransactionTableModel::updateConfirmations()");
+    GUILogPrint(GUILogCategory::MISC, "TransactionTableModel::updateConfirmations()");
 
     // Blocks came in since last poll: invalidate the Status (confirmation count)
     // and ToAddress columns for all rows.

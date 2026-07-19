@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "diagnosticsdialog.h"
+#include "qt/guilog.h"
 #include "qt/forms/ui_diagnosticsdialog.h"
 #include "qt/decoration.h"
 #include "qt/researcher/researchermodel.h"
@@ -269,7 +270,7 @@ void DiagnosticsDialog::on_testButton_clicked()
 
     if (GetNumberOfTestsPending())
     {
-        LogPrintf("INFO: DiagnosticsDialog::on_testButton_clicked: Tests still in progress from a prior run: %u",
+        GUILogPrintf("INFO: DiagnosticsDialog::on_testButton_clicked: Tests still in progress from a prior run: %u",
                   GetNumberOfTestsPending());
 
         return;

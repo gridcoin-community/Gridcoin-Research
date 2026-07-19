@@ -1,4 +1,5 @@
 #include "optionsdialog.h"
+#include "qt/guilog.h"
 #include "qevent.h"
 #include "ui_optionsdialog.h"
 
@@ -10,7 +11,6 @@
 #include "miner.h"
 #include "sidestaketablemodel.h"
 #include "editsidestakedialog.h"
-#include "logging.h"
 
 #include <QSortFilterProxyModel>
 #include <QDir>
@@ -711,12 +711,12 @@ void OptionsDialog::resizeSideStakeTableColumns(const bool& neighbor_pair_adjust
             ui->sidestakingTableView->horizontalHeader()->resizeSection(i, m_table_column_sizes[i]);
 
 
-            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: section size = %i",
+            GUILogPrint(GUILogCategory::VERBOSE, "INFO: %s: section size = %i",
                      __func__,
                      ui->sidestakingTableView->horizontalHeader()->sectionSize(i));
         }
 
-        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: header width = %i",
+        GUILogPrint(GUILogCategory::VERBOSE, "INFO: %s: header width = %i",
                  __func__,
                  ui->sidestakingTableView->horizontalHeader()->width()
                  );

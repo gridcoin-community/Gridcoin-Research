@@ -3,8 +3,8 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "interfaces/handler.h"
+#include "qt/guilog.h"
 #include "interfaces/mrc.h"
-#include "logging.h"
 #include "mrcmodel.h"
 #include "walletmodel.h"
 #include "clientmodel.h"
@@ -211,7 +211,7 @@ void MRCModel::subscribeToCoreSignals()
     // notification is marshaled to the GUI thread, so the lambda touches no core
     // state (issue #3129).
     m_mrc_handler = m_mrc.handleMRCChanged([this]() {
-        LogPrint(BCLog::LogFlags::QT, "GUI: received MRCChanged() core signal");
+        GUILogPrint(GUILogCategory::QT, "GUI: received MRCChanged() core signal");
 
         QMetaObject::invokeMethod(this, "mrcChanged", Qt::QueuedConnection);
     });

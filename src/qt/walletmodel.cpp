@@ -1,4 +1,5 @@
 #include "walletmodel.h"
+#include "qt/guilog.h"
 #include "guiconstants.h"
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
@@ -175,7 +176,7 @@ void WalletModel::drainEventQueue()
         return;
     }
 
-    LogPrint(BCLog::LogFlags::VERBOSE,
+    GUILogPrint(GUILogCategory::VERBOSE,
              "WalletModel::drainEventQueue: applying %u events (front seqno=%llu, back seqno=%llu)",
              static_cast<unsigned int>(events.size()),
              static_cast<unsigned long long>(events.front().seqno),
@@ -449,7 +450,7 @@ void WalletModel::subscribeToCoreSignals()
     // and return — same discipline the raw-signal handlers applied.
     m_wallet_handlers.emplace_back(m_wallet.handleStatusChanged(
         [this]() {
-            LogPrintf("NotifyKeyStoreStatusChanged");
+            GUILogPrintf("NotifyKeyStoreStatusChanged");
             QMetaObject::invokeMethod(this, "updateStatus", Qt::QueuedConnection);
         }));
     m_wallet_handlers.emplace_back(m_wallet.handleAddressBookChanged(
@@ -458,7 +459,7 @@ void WalletModel::subscribeToCoreSignals()
             // `purpose` is accepted to match the 6-arg core signal but is not
             // yet surfaced to the GUI; the updateAddressBook slot remains a
             // 4-arg interface (address, label, isMine, status).
-            LogPrintf("NotifyAddressBookChanged %s %s isMine=%i purpose=%s status=%i",
+            GUILogPrintf("NotifyAddressBookChanged %s %s isMine=%i purpose=%s status=%i",
                       address, label, is_mine, purpose, status);
             QMetaObject::invokeMethod(this, "updateAddressBook", Qt::QueuedConnection,
                                       Q_ARG(QString, QString::fromStdString(address)),

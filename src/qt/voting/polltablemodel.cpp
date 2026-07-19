@@ -3,9 +3,9 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "qt/guiutil.h"
+#include "qt/guilog.h"
 #include "qt/voting/polltablemodel.h"
 #include "qt/voting/votingmodel.h"
-#include "logging.h"
 #include "util.h"
 #include "util/threadnames.h"
 
@@ -324,7 +324,7 @@ const PollItem* PollTableModel::rowItem(int row) const
 void PollTableModel::refresh()
 {
     if (!m_voting_model) {
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: no voting model set, skipping refresh",
+        GUILogPrint(GUILogCategory::VOTE, "INFO: %s: no voting model set, skipping refresh",
                  __func__);
 
         return;
@@ -332,13 +332,13 @@ void PollTableModel::refresh()
 
     bool expected = false;
     if (!m_refresh_in_flight.compare_exchange_strong(expected, true)) {
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh already in flight, skipping",
+        GUILogPrint(GUILogCategory::VOTE, "INFO: %s: refresh already in flight, skipping",
                  __func__);
 
         return;
     }
 
-    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh dispatched", __func__);
+    GUILogPrint(GUILogCategory::VOTE, "INFO: %s: refresh dispatched", __func__);
 
     // Capture the enclosing function name as a string literal so log lines
     // emitted from inside the worker lambda print "PollTableModel::refresh"
@@ -387,7 +387,7 @@ void PollTableModel::refresh()
             },
             Qt::QueuedConnection);
 
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh worker complete", func_name);
+        GUILogPrint(GUILogCategory::VOTE, "INFO: %s: refresh worker complete", func_name);
     });
 }
 

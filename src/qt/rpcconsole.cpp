@@ -1,4 +1,5 @@
 #include "rpcconsole.h"
+#include "qt/guilog.h"
 #include "ui_rpcconsole.h"
 
 #ifndef Q_MOC_RUN
@@ -194,7 +195,7 @@ void RPCExecutor::request(const QString &command)
     }
     catch (UniValue& objError)
     {
-		LogPrintf("gridcoinresearch:  Handling Error [Request %s]...",command.toStdString());
+        GUILogPrintf("gridcoinresearch:  Handling Error [Request %s]...", command.toStdString());
 
         try // Nice formatting for standard-format error
         {
@@ -209,7 +210,7 @@ void RPCExecutor::request(const QString &command)
     }
     catch (std::exception& e)
     {
-		LogPrintf("gridcoinresearch:  Handling Error[2]...");
+        GUILogPrintf("gridcoinresearch:  Handling Error[2]...");
 
         emit reply(RPCConsole::CMD_ERROR, QString("Error: ") + QString::fromStdString(e.what()));
     }
@@ -500,7 +501,7 @@ void RPCConsole::setNumBlocks(int count, int countOfPeers)
 
 void RPCConsole::displayScraperLogMessage(const QString& string)
 {
-    // LogPrintf("INFO: RPCConsole::displayScraperLogMessage: %s", string.toStdString());
+    // GUILogPrintf("INFO: RPCConsole::displayScraperLogMessage: %s", string.toStdString());
 
     ui->scraper_log->appendPlainText(string);
 }

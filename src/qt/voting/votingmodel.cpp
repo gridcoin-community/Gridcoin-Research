@@ -3,11 +3,11 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include "qt/guilog.h"
 #include "gridcoin/voting/poll.h"
 #include "interfaces/handler.h"
 #include "interfaces/researcher.h"
 #include "interfaces/voting.h"
-#include "logging.h"
 #include "optionsmodel.h"
 #include "qt/clientmodel.h"
 #include "qt/voting/votingmodel.h"
@@ -18,7 +18,6 @@
 #include <optional>
 
 using namespace GRC;
-using LogFlags = BCLog::LogFlags;
 
 namespace {
 //!
@@ -395,12 +394,12 @@ void VotingModel::subscribeToCoreSignals()
     // the Handler on teardown severs the callback before `this` is destroyed
     // (issue #3129).
     m_handlers.emplace_back(m_voting.handleNewPollReceived([this](int64_t poll_time) {
-        LogPrint(LogFlags::QT, "INFO: VotingModel: received NewPollReceived() notification");
+        GUILogPrint(GUILogCategory::QT, "INFO: VotingModel: received NewPollReceived() notification");
         QMetaObject::invokeMethod(this, "handleNewPoll", Qt::QueuedConnection, Q_ARG(int64_t, poll_time));
     }));
 
     m_handlers.emplace_back(m_voting.handleNewVoteReceived([this](std::string poll_txid) {
-        LogPrint(LogFlags::QT, "INFO: VotingModel: received NewVoteReceived() notification");
+        GUILogPrint(GUILogCategory::QT, "INFO: VotingModel: received NewVoteReceived() notification");
         // uint256 is not a registered Qt metatype, so marshal the hex string.
         QMetaObject::invokeMethod(this, "handleNewVote", Qt::QueuedConnection,
                                   Q_ARG(QString, QString::fromStdString(poll_txid)));

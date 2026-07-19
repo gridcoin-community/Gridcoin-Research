@@ -1,4 +1,5 @@
 #include "consolidateunspentwizardselectdestinationpage.h"
+#include "qt/guilog.h"
 #include "ui_consolidateunspentwizardselectdestinationpage.h"
 
 #include "util.h"
@@ -73,7 +74,7 @@ void ConsolidateUnspentWizardSelectDestinationPage::setDefaultAddressSelection(Q
 
         m_selectedDestinationAddress = {};
 
-        LogPrint(BCLog::LogFlags::QT, "INFO: %s: Cleared (default) address selection", __func__);
+        GUILogPrint(GUILogCategory::QT, "INFO: %s: Cleared (default) address selection", __func__);
 
         ui->isCompleteCheckBox->setChecked(false);
 
@@ -84,14 +85,14 @@ void ConsolidateUnspentWizardSelectDestinationPage::setDefaultAddressSelection(Q
 
     defaultAddress[0]->setSelected(true);
 
-    LogPrint(BCLog::LogFlags::QT, "INFO: %s: Set default address to %s, QTableWidgetItem %s",
+    GUILogPrint(GUILogCategory::QT, "INFO: %s: Set default address to %s, QTableWidgetItem %s",
               __func__,
               address.toStdString(),
               defaultAddress[0]->text().toStdString());
 
     ui->addressTableWidget->setCurrentItem(defaultAddress[0]);
 
-    LogPrintf("INFO: %s: currentRow = %i", __func__, ui->addressTableWidget->currentRow());
+    GUILogPrintf("INFO: %s: currentRow = %i", __func__, ui->addressTableWidget->currentRow());
 
     emit updateFieldsSignal();
 }
@@ -123,7 +124,7 @@ void ConsolidateUnspentWizardSelectDestinationPage::addressSelectionChanged()
 
     m_selectedDestinationAddress = std::make_pair(selectedLabel->text(), selectedAddress->text());
 
-    LogPrint(BCLog::LogFlags::QT, "INFO: %s: Label %, Address %s selected.", __func__,
+    GUILogPrint(GUILogCategory::QT, "INFO: %s: Label %s, Address %s selected.", __func__,
              m_selectedDestinationAddress.first.toStdString(),
              m_selectedDestinationAddress.second.toStdString());
 
