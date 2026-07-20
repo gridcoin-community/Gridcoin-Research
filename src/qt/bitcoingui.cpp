@@ -843,6 +843,13 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
         connect(clientModel, &ClientModel::psgtPoolChanged,
                 this, &BitcoinGUI::handlePSGTPoolChanged);
     }
+    else
+    {
+        // Shutdown teardown: propagate the cleared model so the RPC console
+        // stops its executor thread before the interfaces::Node it references
+        // is destroyed.
+        rpcConsole->setClientModel(nullptr);
+    }
 }
 
 void BitcoinGUI::setPSGTPoolContext(interfaces::PSGTPoolContext *context)

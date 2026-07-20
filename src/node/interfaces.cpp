@@ -25,8 +25,12 @@
 #include "net.h"
 #include "netbase.h"
 #include "node/ui_interface.h"
+#include "rpc/client.h"
+#include "rpc/server.h"
 #include "sync.h"
 #include "util.h"
+
+#include <univalue.h>
 
 #include <memory>
 #include <optional>
@@ -211,6 +215,46 @@ public:
     bool disconnectNode(int64_t node_id) override
     {
         return g_connman && g_connman->DisconnectNode(node_id);
+    }
+
+    RpcConsoleResult executeRpcConsoleCommand(const std::string& method,
+                                              const std::vector<std::string>& args) override
+    {
+        RpcConsoleResult out;
+
+        try {
+            // Convert the positional string args in the command-dependent way,
+            // dispatch, and format the reply -- all UniValue handling stays here.
+            UniValue result = tableRPC.execute(method, RPCConvertValues(method, args));
+
+            if (result.isNull()) {
+                out.output.clear();
+            } else if (result.isStr()) {
+                out.output = result.get_str();
+            } else {
+                out.output = result.write(2);
+            }
+            out.ok = true;
+        } catch (UniValue& objError) {
+            try { // Nice formatting for a standard-format error
+                const int code = find_value(objError, "code").get_int();
+                const std::string message = find_value(objError, "message").get_str();
+                out.output = strprintf("%s (code %d)", message, code);
+            } catch (const std::runtime_error&) { // missing code/message: raw JSON
+                out.output = objError.write();
+            }
+            out.ok = false;
+        } catch (const std::exception& e) {
+            out.output = std::string("Error: ") + e.what();
+            out.ok = false;
+        }
+
+        return out;
+    }
+
+    std::vector<std::string> listRpcCommands() override
+    {
+        return tableRPC.listCommands();
     }
 
     ScraperConvergenceSnapshot getScraperConvergenceSnapshot() override

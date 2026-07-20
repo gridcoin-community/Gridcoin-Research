@@ -18,6 +18,7 @@ class ClientModel;
 QT_BEGIN_NAMESPACE
 class QMenu;
 class QItemSelection;
+class QThread;
 QT_END_NAMESPACE
 
 /** Local Bitcoin RPC console. */
@@ -116,6 +117,13 @@ private:
     void updateNodeDetail(const interfaces::PeerInfo *stats);
 
     void startExecutor();
+    /** Stop the executor thread synchronously (quit + wait). Called when the
+        client model is cleared at shutdown, so a queued/in-flight command can
+        no longer dereference the interfaces::Node after it is destroyed. */
+    void stopExecutorThread();
+
+    //! The executor's worker thread, non-null once startExecutor() has run.
+    QThread *m_executorThread = nullptr;
 
     enum ColumnWidths
     {

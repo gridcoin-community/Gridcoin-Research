@@ -59,6 +59,18 @@ struct PeerInfo
     double min_ping = 0;
 };
 
+//! Result of running one RPC-console command. The whole UniValue round trip
+//! (arg conversion, dispatch, result/error formatting) happens node-side; only
+//! the already-formatted text crosses the boundary.
+struct RpcConsoleResult
+{
+    //! false when the command threw (RPC error or std::exception).
+    bool ok = false;
+    //! Formatted reply text on success, or the formatted error message on
+    //! failure ("<message> (code <n>)", or raw JSON / "Error: <what>").
+    std::string output;
+};
+
 //! Value snapshot of the scraper convergence status consumed by the GUI
 //! status icon. Taken under the scraper cache lock inside the implementation;
 //! callers hold nothing.
@@ -160,6 +172,16 @@ public:
     //! Disconnect the peer with the given connection id. Returns whether a peer
     //! was disconnected.
     virtual bool disconnectNode(int64_t node_id) = 0;
+
+    //! Run one RPC-console command: convert the positional string args per the
+    //! command's conversion table, dispatch it, and format the reply/error. All
+    //! UniValue handling stays node-side. Blocks while the command runs, so the
+    //! GUI calls it from its off-thread RPC executor.
+    virtual RpcConsoleResult executeRpcConsoleCommand(const std::string& method,
+                                                      const std::vector<std::string>& args) = 0;
+
+    //! The list of RPC command names, for the console's autocomplete.
+    virtual std::vector<std::string> listRpcCommands() = 0;
 
     //! Value snapshot of the scraper convergence status.
     virtual ScraperConvergenceSnapshot getScraperConvergenceSnapshot() = 0;

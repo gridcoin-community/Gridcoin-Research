@@ -58,9 +58,6 @@ src/qt/optionsmodel.cpp:miner.h
 src/qt/qtipcserver.cpp:node/ui_interface.h
 src/qt/qtipcserver.cpp:util.h
 src/qt/researcher/researcherwizardpoolpage.cpp:key.h
-src/qt/rpcconsole.cpp:rpc/client.h
-src/qt/rpcconsole.cpp:rpc/protocol.h
-src/qt/rpcconsole.cpp:rpc/server.h
 src/qt/transactiontablemodel.cpp:util.h
 src/qt/transactionview.cpp:util/system.h
 src/qt/updatedialog.h:gridcoin/upgrade.h
