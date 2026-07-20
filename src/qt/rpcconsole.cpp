@@ -6,13 +6,8 @@
 #include "clientmodel.h"
 #include "qt/bantablemodel.h"
 #include "qt/decoration.h"
-#include "rpc/server.h"
-#include "rpc/client.h"
-#include "rpc/protocol.h"
 #include "guiutil.h"
 #endif
-
-#include <stdexcept>
 
 #include <QThread>
 #include <QTextEdit>
@@ -52,11 +47,15 @@ const struct {
 class RPCExecutor: public QObject
 {
     Q_OBJECT
+public:
+    explicit RPCExecutor(interfaces::Node& node) : m_node(node) {}
 public slots:
     void start();
     void request(const QString &command);
 signals:
     void reply(int category, const QString &command);
+private:
+    interfaces::Node& m_node;
 };
 
 #include "rpcconsole.moc"
@@ -171,45 +170,21 @@ void RPCExecutor::request(const QString &command)
     }
     if(args.empty())
         return; // Nothing to do
-    try
+
+    // The dispatch, UniValue conversion and reply/error formatting all happen
+    // node-side; the GUI receives the already-formatted text. This runs on the
+    // executor thread, so a slow command does not block the GUI.
+    const interfaces::RpcConsoleResult result = m_node.executeRpcConsoleCommand(
+        args[0], std::vector<std::string>(args.begin() + 1, args.end()));
+
+    if (result.ok)
     {
-        std::string strPrint;
-        // Convert argument list to JSON objects in method-dependent way,
-        // and pass it along with the method name to the dispatcher.
-        UniValue result = tableRPC.execute(
-            args[0],
-            RPCConvertValues(args[0], std::vector<std::string>(args.begin() + 1, args.end())));
-
-        // Format result reply
-        if (result.isNull())
-            strPrint = "";
-        else if (result.isStr())
-            strPrint = result.get_str();
-        else
-            strPrint = result.write(2);
-
-        emit reply(RPCConsole::CMD_REPLY, QString::fromStdString(strPrint));
+        emit reply(RPCConsole::CMD_REPLY, QString::fromStdString(result.output));
     }
-    catch (UniValue& objError)
+    else
     {
         GUILogPrintf("gridcoinresearch:  Handling Error [Request %s]...", command.toStdString());
-
-        try // Nice formatting for standard-format error
-        {
-            int code = find_value(objError, "code").get_int();
-            std::string message = find_value(objError, "message").get_str();
-            emit reply(RPCConsole::CMD_ERROR, QString::fromStdString(message) + " (code " + QString::number(code) + ")");
-        }
-        catch(std::runtime_error &) // raised when converting to invalid type, i.e. missing code or message
-        {   // Show raw JSON object
-            emit reply(RPCConsole::CMD_ERROR, QString::fromStdString(objError.write()));
-        }
-    }
-    catch (std::exception& e)
-    {
-        GUILogPrintf("gridcoinresearch:  Handling Error[2]...");
-
-        emit reply(RPCConsole::CMD_ERROR, QString("Error: ") + QString::fromStdString(e.what()));
+        emit reply(RPCConsole::CMD_ERROR, QString::fromStdString(result.output));
     }
 }
 
@@ -244,7 +219,6 @@ RPCConsole::RPCConsole(QWidget *parent) :
     // set Qt version label
     ui->qtVersion->setText("Qt " + QString::fromLocal8Bit(qVersion()) + " (built against " + QString::fromStdString(QT_VERSION_STR) + ")");
 
-    startExecutor();
 	setTrafficGraphRange(INITIAL_TRAFFIC_GRAPH_MINS);
     clear();
 
@@ -253,7 +227,9 @@ RPCConsole::RPCConsole(QWidget *parent) :
 
 RPCConsole::~RPCConsole()
 {
-    emit stopExecutor();
+    // Normally the executor was already stopped on the setClientModel(nullptr)
+    // teardown path; this is an idempotent backstop.
+    stopExecutorThread();
     delete ui;
 }
 
@@ -306,6 +282,17 @@ void RPCConsole::setClientModel(ClientModel *model)
 
 	clientModel = model;
 	ui->trafficGraph->setClientModel(model);
+
+    if (!model)
+    {
+        // Client model (and the interfaces::Node it exposes) is going away on
+        // the shutdown teardown path: stop the executor thread now, before the
+        // node is destroyed, so an in-flight/queued command cannot dereference
+        // it. Safe no-op if the executor was never started.
+        stopExecutorThread();
+        return;
+    }
+
     if(model && clientModel->getPeerTableModel() && clientModel->getBanTableModel())
     {
         // Subscribe to information, replies, messages, errors
@@ -409,7 +396,7 @@ void RPCConsole::setClientModel(ClientModel *model)
 
         //Setup autocomplete and attach it
         QStringList wordList;
-        std::vector<std::string> commandList = tableRPC.listCommands();
+        std::vector<std::string> commandList = model->node().listRpcCommands();
         for (size_t i = 0; i < commandList.size(); ++i)
         {
             wordList << commandList[i].c_str();
@@ -417,6 +404,12 @@ void RPCConsole::setClientModel(ClientModel *model)
 
         autoCompleter = new QCompleter(wordList, this);
         ui->lineEdit->setCompleter(autoCompleter);
+
+        // Start the RPC executor now that we have a node to run commands
+        // against (the console is unusable without a model). Guarded so a
+        // second setClientModel(model) call cannot spawn a duplicate thread.
+        if (!m_executorThread)
+            startExecutor();
     }
 }
 
@@ -542,7 +535,8 @@ void RPCConsole::browseHistory(int offset)
 void RPCConsole::startExecutor()
 {
     QThread* thread = new QThread;
-    RPCExecutor *executor = new RPCExecutor();
+    m_executorThread = thread;
+    RPCExecutor *executor = new RPCExecutor(clientModel->node());
     executor->moveToThread(thread);
 
     // Notify executor when thread started (in executor thread)
@@ -562,6 +556,22 @@ void RPCConsole::startExecutor()
     // Default implementation of QThread::run() simply spins up an event loop in the thread,
     // which is what we want.
     thread->start();
+}
+
+void RPCConsole::stopExecutorThread()
+{
+    if (!m_executorThread)
+        return;
+
+    // stopExecutor quits the worker's event loop and queues the executor for
+    // deletion; wait() blocks until run() has returned so no further request()
+    // can dereference the interfaces::Node. If a command is in flight this
+    // drains it first, mirroring how the other GUI workers are quiesced on the
+    // model-teardown path. The thread object self-deletes via finished->
+    // deleteLater; drop our pointer so this is idempotent.
+    emit stopExecutor();
+    m_executorThread->wait();
+    m_executorThread = nullptr;
 }
 
 
