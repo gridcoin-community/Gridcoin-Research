@@ -261,6 +261,60 @@ BOOST_AUTO_TEST_CASE(wallet_address_book_handler_bridges_value_types)
     BOOST_CHECK_EQUAL(calls, 1);
 }
 
+BOOST_AUTO_TEST_CASE(wallet_address_book_query_surface)
+{
+    BOOST_REQUIRE(pwalletMain != nullptr);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(pwalletMain);
+
+    // Reserve a fresh owned address; the private key stays node-side and only
+    // the encoded destination comes back.
+    std::string address;
+    BOOST_REQUIRE(wallet->getNewReceiveAddress(address));
+    BOOST_CHECK(!address.empty());
+    BOOST_CHECK(IsValidDestination(DecodeDestination(address)));
+
+    // It is ours (from the key pool) but not yet in the address book.
+    BOOST_CHECK(wallet->isMine(address));
+    std::string label;
+    BOOST_CHECK(!wallet->getAddressLabel(address, label));
+
+    // Book it: the label round-trips and it shows up in the full snapshot as
+    // an owned (receiving) entry.
+    wallet->setAddressBook(address, "interfaces-book-label");
+    BOOST_REQUIRE(wallet->getAddressLabel(address, label));
+    BOOST_CHECK_EQUAL(label, "interfaces-book-label");
+
+    bool found_in_snapshot = false;
+    for (const interfaces::WalletAddress& entry : wallet->getAddresses()) {
+        if (entry.address == address) {
+            found_in_snapshot = true;
+            BOOST_CHECK(entry.is_mine);
+            BOOST_CHECK_EQUAL(entry.label, "interfaces-book-label");
+        }
+    }
+    BOOST_CHECK(found_in_snapshot);
+
+    // Removing it drops it from the book. The bool return depends on the wallet
+    // being file-backed (the unit-test wallet is not), so assert via the book
+    // rather than the return value.
+    wallet->delAddressBook(address);
+    BOOST_CHECK(!wallet->getAddressLabel(address, label));
+
+    // Failure cases: an unparseable address is not mine, has no label, and
+    // cannot be removed.
+    const std::string bogus = "not-a-valid-address";
+    BOOST_CHECK(!wallet->isMine(bogus));
+    BOOST_CHECK(!wallet->getAddressLabel(bogus, label));
+    BOOST_CHECK(!wallet->delAddressBook(bogus));
+
+    // getUnbookedReceiveAddresses is callable and yields well-formed encoded
+    // strings (contents depend on balances the unit-test wallet lacks).
+    for (const std::string& unbooked : wallet->getUnbookedReceiveAddresses()) {
+        BOOST_CHECK(!unbooked.empty());
+    }
+}
+
 BOOST_AUTO_TEST_CASE(node_value_queries_are_safe_in_empty_environment)
 {
     std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();

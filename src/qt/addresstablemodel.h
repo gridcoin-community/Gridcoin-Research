@@ -4,10 +4,7 @@
 #include <QAbstractTableModel>
 #include <QStringList>
 
-#include "wallet/ismine.h"
-
 class AddressTablePriv;
-class CWallet;
 class WalletModel;
 
 /**
@@ -17,7 +14,9 @@ class AddressTableModel : public QAbstractTableModel
 {
     Q_OBJECT
 public:
-    explicit AddressTableModel(CWallet* wallet, WalletModel* parent = nullptr);
+    // parent is required: the model reaches the wallet through parent->wallet(),
+    // so it is dereferenced unconditionally (no default null).
+    explicit AddressTableModel(WalletModel* parent);
     ~AddressTableModel();
 
     enum ColumnIndex {
@@ -80,7 +79,6 @@ public:
 
 private:
     WalletModel *walletModel;
-    CWallet *wallet;
     AddressTablePriv *priv;
     QStringList columns;
     EditStatus editStatus;

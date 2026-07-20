@@ -53,6 +53,19 @@ struct WalletOutput
     bool immature{false};
 };
 
+//! Value snapshot of one address-book entry for the GUI address table. The
+//! destination is carried as an already-encoded string so the GUI needs no
+//! core key_io/ismine headers.
+struct WalletAddress
+{
+    //! Encoded destination.
+    std::string address;
+    //! Address-book label (name); empty when the entry has no label.
+    std::string label;
+    //! Owned by this wallet (IsMine != ISMINE_NO): receiving vs sending.
+    bool is_mine{false};
+};
+
 //! The GUI's coin-selection value: the outpoints coin selection is pinned to,
 //! plus the change-destination override. This IS the selection container the
 //! coin-control dialogs build and mutate directly (replacing the core
@@ -317,6 +330,39 @@ public:
     //! interface only so the GUI needs no core message-magic/recover headers.
     virtual MessageVerifyStatus verifyMessage(const std::string& address, const std::string& message,
                                               const std::vector<unsigned char>& signature) = 0;
+
+    //! Snapshot of the whole address book for the GUI address table. Each entry
+    //! carries its encoded destination, label, and ownership flag.
+    virtual std::vector<WalletAddress> getAddresses() = 0;
+
+    //! Look up an address-book entry by encoded address. Returns false (and
+    //! leaves label_out unchanged) when the address is not in the book or does
+    //! not parse; otherwise fills label_out with its label.
+    virtual bool getAddressLabel(const std::string& address, std::string& label_out) = 0;
+
+    //! Whether the encoded address is owned by this wallet (IsMine != ISMINE_NO),
+    //! regardless of whether it is in the address book.
+    virtual bool isMine(const std::string& address) = 0;
+
+    //! Set (create or overwrite) the address book label for the encoded address.
+    virtual void setAddressBook(const std::string& address, const std::string& label) = 0;
+
+    //! Remove the encoded address from the address book. Removing an entry that
+    //! is not present is treated as success by the wallet DB layer. Returns
+    //! false when the address does not parse, or when the underlying wallet
+    //! erase fails (e.g. a non-file-backed wallet or a DB write error) -- note a
+    //! false return does not necessarily mean the in-memory entry survived.
+    virtual bool delAddressBook(const std::string& address) = 0;
+
+    //! Reserve a fresh key from the pool and return its encoded destination. The
+    //! wallet must already be unlocked (the GUI holds an UnlockContext); the key
+    //! never crosses the boundary. Returns false on key-generation failure. Does
+    //! not touch the address book -- the caller labels the address separately.
+    virtual bool getNewReceiveAddress(std::string& address_out) = 0;
+
+    //! Owned addresses with a positive balance that are not yet in the address
+    //! book (encoded), for the "add existing receive address" picker.
+    virtual std::vector<std::string> getUnbookedReceiveAddresses() = 0;
 
     //! Register a handler for encryption/lock status changes.
     using StatusChangedFn = std::function<void()>;

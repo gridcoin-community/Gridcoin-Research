@@ -28,9 +28,6 @@ FORBIDDEN_RE='^[[:space:]]*#[[:space:]]*include[[:space:]]*["<](main\.h|validati
 # rpcconsole.cpp:banman.h -- the coupling is old, only the include is new.)
 ALLOWLIST="\
 src/qt/aboutdialog.cpp:util.h
-src/qt/addresstablemodel.cpp:util.h
-src/qt/addresstablemodel.cpp:wallet/wallet.h
-src/qt/addresstablemodel.h:wallet/ismine.h
 src/qt/bitcoin.cpp:chainparamsbase.h
 src/qt/bitcoin.cpp:chainparams.h
 src/qt/bitcoin.cpp:gridcoin/gridcoin.h
