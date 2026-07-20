@@ -444,6 +444,7 @@ static const CRPCCommand vRPCCommands[] =
     { "signrawtransaction",      &signrawtransaction,      cat_wallet, &signrawtransaction_helpman, heritage_removed_upstream, "d75693d24eec" },
     { "signrawtransactionwithkey",    &signrawtransactionwithkey,    cat_wallet, &signrawtransactionwithkey_helpman, heritage_mixed, "6aca6f6eb6c9" },
     { "signrawtransactionwithwallet", &signrawtransactionwithwallet, cat_wallet, &signrawtransactionwithwallet_helpman, heritage_mixed, "1d9359847326" },
+    { "sweepuncoveredcoins",     &sweepuncoveredcoins,     cat_wallet, &sweepuncoveredcoins_helpman, heritage_pure_gridcoin, "" },
     { "upgradewallet",           &upgradewallet,           cat_wallet, &upgradewallet_helpman, heritage_removed_upstream, "2b104a7e47cc" },
     { "validateaddress",         &validateaddress,         cat_wallet, &validateaddress_helpman, heritage_mixed, "97873d91c025" },
     { "validatepubkey",          &validatepubkey,          cat_wallet, &validatepubkey_helpman, heritage_pure_gridcoin, "" },

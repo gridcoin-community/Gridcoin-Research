@@ -595,6 +595,18 @@ public:
         return m_seed_phrase_data;
     }
 
+    //! Coverage class of a wallet key against the seed phrase master: covered
+    //! by the phrase (the phrase-derived master itself or HD-derived from it),
+    //! derived from a prior (retired) HD master, or a legacy non-HD key. The
+    //! latter two remain usable but cannot be recovered from the phrase.
+    enum class SeedPhraseKeyClass { COVERED, PRIOR_HD, LEGACY };
+
+    //! Precondition: the wallet must have a seed phrase record
+    //! (HasSeedPhrase()); classifying against an unset master key id is
+    //! meaningless. All callers gate on it.
+    SeedPhraseKeyClass ClassifySeedPhraseKey(const CKeyID& key_id) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
     /* Returns true if HD is enabled */
     bool IsHDEnabled() const;
 
@@ -610,6 +622,15 @@ public:
     /** Upgrade the wallet */
     bool UpgradeWallet(int version, std::string& error);
 };
+
+//! Pure selection math for sweepuncoveredcoins, factored out for unit
+//! testing. Given candidate output values sorted ascending, a smallest-first
+//! batch of select_count outputs is chosen; while that batch cannot pay
+//! fee_ceiling, the largest unselected candidate is swapped in for the
+//! smallest selected one. Returns the number of swaps; the resulting batch
+//! is values[swaps, select_count) plus values[size - swaps, size).
+std::size_t SweepSwapCount(const std::vector<int64_t>& values, std::size_t select_count,
+                           int64_t fee_ceiling);
 
 /** A key allocated from the key pool. */
 class CReserveKey

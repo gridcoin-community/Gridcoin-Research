@@ -195,6 +195,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sendmany"               , 2 },
     { "sendtoaddress"          , 1 },
     { "settxfee"               , 0 },
+    { "sweepuncoveredcoins"    , 1 },
+    { "sweepuncoveredcoins"    , 2 },
     { "sethdseed"              , 0 },
     { "stakelimit"             , 0 },
     { "signrawtransaction"              , 1 },

@@ -17,7 +17,11 @@
 #include "gridcoin/backup.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/mnemonics.h"
+#include "gridcoin/sidestake.h"
 #include "gridcoin/staking/difficulty.h"
+#include "policy/fees.h"
+#include "policy/policy.h"
+#include "wallet/coincontrol.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/tx_message.h"
 #include "wallet/wallet.h"
@@ -3947,33 +3951,11 @@ UniValue upgradewallet(const UniValue& params)
 }
 
 namespace {
-//! Classification of a wallet key against the seed phrase master. A key is
-//! covered by the phrase when it is the phrase-derived master itself or was
-//! HD-derived from it; keys derived from a prior (retired) HD master and
-//! legacy non-HD keys remain usable but cannot be recovered from the phrase.
-enum class SeedPhraseKeyClass { COVERED, PRIOR_HD, LEGACY };
-
-SeedPhraseKeyClass ClassifySeedPhraseKey(const CKeyID& key_id, const CKeyID& phrase_master_id)
-    EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
-{
-    AssertLockHeld(pwalletMain->cs_wallet);
-
-    if (key_id == phrase_master_id) return SeedPhraseKeyClass::COVERED;
-
-    const auto meta_iter = pwalletMain->mapKeyMetadata.find(key_id);
-
-    if (meta_iter == pwalletMain->mapKeyMetadata.end() || meta_iter->second.hdKeypath.empty()) {
-        return SeedPhraseKeyClass::LEGACY;
-    }
-
-    return meta_iter->second.hdMasterKeyID == phrase_master_id
-        ? SeedPhraseKeyClass::COVERED
-        : SeedPhraseKeyClass::PRIOR_HD;
-}
+using SeedPhraseKeyClass = CWallet::SeedPhraseKeyClass;
 
 //! True when the wallet holds any key that a restore from the phrase would
-//! not recover.
-bool WalletHasUncoveredKeys(const CKeyID& phrase_master_id)
+//! not recover. Requires the seed phrase record to be set.
+bool WalletHasUncoveredKeys()
     EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
     AssertLockHeld(pwalletMain->cs_wallet);
@@ -3982,7 +3964,7 @@ bool WalletHasUncoveredKeys(const CKeyID& phrase_master_id)
     pwalletMain->GetKeys(key_ids);
 
     for (const CKeyID& key_id : key_ids) {
-        if (ClassifySeedPhraseKey(key_id, phrase_master_id) != SeedPhraseKeyClass::COVERED) {
+        if (pwalletMain->ClassifySeedPhraseKey(key_id) != SeedPhraseKeyClass::COVERED) {
             return true;
         }
     }
@@ -4148,7 +4130,7 @@ UniValue makeseedphrase(const UniValue& params)
                            "unlocking so new addresses derive from the phrase master.");
     }
 
-    if (WalletHasUncoveredKeys(data.masterKeyID)) {
+    if (WalletHasUncoveredKeys()) {
         warnings.push_back("This wallet contains pre-existing keys that are NOT covered by the seed "
                            "phrase. Keep backing up wallet.dat; run getseedphraseinfo for details.");
     }
@@ -4340,7 +4322,7 @@ UniValue restoreseedphrase(const UniValue& params)
                            "with rescan enabled.");
     }
 
-    if (WalletHasUncoveredKeys(data.masterKeyID)) {
+    if (WalletHasUncoveredKeys()) {
         warnings.push_back("This wallet contains pre-existing keys that are NOT covered by the seed "
                            "phrase. Keep backing up wallet.dat; run getseedphraseinfo for details.");
     }
@@ -4440,6 +4422,19 @@ static const RPCHelpMan getseedphraseinfo_help{
                             {RPCResult::Type::BOOL, "covered", "Whether the beacon key is phrase-covered."},
                         }},
                 }},
+            {RPCResult::Type::BOOL, "sidestaking_enabled", /*optional=*/true, "Whether local sidestaking is currently enabled (-enablesidestaking)."},
+            {RPCResult::Type::ARR, "sidestakes", /*optional=*/true, "All configured sidestakes (regardless of -enablesidestaking) and whether their wallet-owned targets are phrase-covered.",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "address", "The sidestake target address."},
+                            {RPCResult::Type::NUM, "allocation_pct", "Allocation percentage."},
+                            {RPCResult::Type::STR, "type", "local or mandatory."},
+                            {RPCResult::Type::STR, "status", "The sidestake entry status."},
+                            {RPCResult::Type::BOOL, "is_mine", "Whether this wallet can spend the target (script targets included)."},
+                            {RPCResult::Type::BOOL, "covered", /*optional=*/true, "Whether the wallet-owned target is verified phrase-covered; script targets cannot be verified and count as uncovered."},
+                        }},
+                }},
             {RPCResult::Type::ARR, "warnings", /*optional=*/true, "Coverage warnings.",
                 {
                     {RPCResult::Type::STR, "", ""},
@@ -4484,7 +4479,7 @@ UniValue getseedphraseinfo(const UniValue& params)
     int64_t keys_legacy = 0;
 
     for (const CKeyID& key_id : key_ids) {
-        switch (ClassifySeedPhraseKey(key_id, phrase_master_id)) {
+        switch (pwalletMain->ClassifySeedPhraseKey(key_id)) {
         case SeedPhraseKeyClass::COVERED:  ++keys_covered;  break;
         case SeedPhraseKeyClass::PRIOR_HD: ++keys_prior_hd; break;
         case SeedPhraseKeyClass::LEGACY:   ++keys_legacy;   break;
@@ -4526,7 +4521,7 @@ UniValue getseedphraseinfo(const UniValue& params)
             continue;
         }
 
-        switch (ClassifySeedPhraseKey(*key_id, phrase_master_id)) {
+        switch (pwalletMain->ClassifySeedPhraseKey(*key_id)) {
         case SeedPhraseKeyClass::COVERED:  bal_covered += txout.nValue;  break;
         case SeedPhraseKeyClass::PRIOR_HD: bal_prior_hd += txout.nValue; break;
         case SeedPhraseKeyClass::LEGACY:   bal_legacy += txout.nValue;   break;
@@ -4542,7 +4537,7 @@ UniValue getseedphraseinfo(const UniValue& params)
 
     if (pwalletMain->vchDefaultKey.IsValid()) {
         result.pushKV("default_key_covered",
-                      ClassifySeedPhraseKey(pwalletMain->vchDefaultKey.GetID(), phrase_master_id)
+                      pwalletMain->ClassifySeedPhraseKey(pwalletMain->vchDefaultKey.GetID())
                           == SeedPhraseKeyClass::COVERED);
     }
 
@@ -4573,7 +4568,7 @@ UniValue getseedphraseinfo(const UniValue& params)
         if (pwalletMain->HaveKey(key_id)) {
             push_beacon(beacon_pair.first, key_id,
                         beacon_pair.second->Expired(now) ? "expired" : "active",
-                        ClassifySeedPhraseKey(key_id, phrase_master_id) == SeedPhraseKeyClass::COVERED);
+                        pwalletMain->ClassifySeedPhraseKey(key_id) == SeedPhraseKeyClass::COVERED);
         }
     }
 
@@ -4581,23 +4576,68 @@ UniValue getseedphraseinfo(const UniValue& params)
         if (pwalletMain->HaveKey(beacon_pair.first)) {
             push_beacon(beacon_pair.second->m_cpid, beacon_pair.first,
                         beacon_pair.second->Expired(now) ? "expired" : "pending",
-                        ClassifySeedPhraseKey(beacon_pair.first, phrase_master_id)
+                        pwalletMain->ClassifySeedPhraseKey(beacon_pair.first)
                             == SeedPhraseKeyClass::COVERED);
         }
     }
 
     result.pushKV("wallet_beacons", beacons);
 
+    // Sidestakes whose target this wallet can spend. A sidestake pointing at
+    // an uncovered key continuously refills it with stake rewards, silently
+    // undoing a sweep. ALL configured entries are reported -- including
+    // local ones while -enablesidestaking is off, because re-enabling the
+    // flag resumes paying them.
+    UniValue sidestakes(UniValue::VARR);
+    bool uncovered_sidestake = false;
+
+    for (const auto& sidestake : GRC::GetSideStakeRegistry().SideStakeEntries()) {
+        const CTxDestination dest = sidestake->GetDestination();
+        const bool is_mine = ::IsMine(*pwalletMain, dest) & ISMINE_SPENDABLE;
+        const CKeyID* key_id = std::get_if<CKeyID>(&dest);
+
+        // A wallet-owned target that is not a single key (e.g. multisig)
+        // cannot be verified as phrase-covered and is conservatively
+        // treated as uncovered.
+        const bool covered =
+            is_mine && key_id
+            && pwalletMain->ClassifySeedPhraseKey(*key_id) == SeedPhraseKeyClass::COVERED;
+
+        uncovered_sidestake |= is_mine && !covered;
+
+        UniValue entry(UniValue::VOBJ);
+        entry.pushKV("address", EncodeDestination(dest));
+        entry.pushKV("allocation_pct", sidestake->GetAllocation().ToPercent());
+        entry.pushKV("type", sidestake->IsMandatory() ? "mandatory" : "local");
+        entry.pushKV("status", sidestake->StatusToString());
+        entry.pushKV("is_mine", is_mine);
+        if (is_mine) entry.pushKV("covered", covered);
+        sidestakes.push_back(entry);
+    }
+
+    result.pushKV("sidestaking_enabled", gArgs.GetBoolArg("-enablesidestaking"));
+    result.pushKV("sidestakes", sidestakes);
+
     UniValue warnings(UniValue::VARR);
 
     if (bal_prior_hd + bal_legacy + bal_other > 0) {
         warnings.push_back("Some unspent balance is NOT recoverable from the seed phrase; a "
-                           "wallet.dat backup is still required for it.");
+                           "wallet.dat backup is still required for it. Run sweepuncoveredcoins "
+                           "to move it to phrase-covered keys.");
     }
 
     if (uncovered_beacon) {
         warnings.push_back("A beacon private key in this wallet is NOT recoverable from the seed "
-                           "phrase; losing wallet.dat would require readvertising the beacon.");
+                           "phrase. Rotate the beacon to a covered key: run beaconauth to generate "
+                           "one, obtain the ownership proof from your BOINC project, then run "
+                           "advertisebeaconv3.");
+    }
+
+    if (uncovered_sidestake) {
+        warnings.push_back("A sidestake targets a wallet destination that is NOT verified as "
+                           "covered by the seed phrase; whenever sidestaking is enabled, stake "
+                           "rewards accrue to it and undo a sweep. Update the sidestake address "
+                           "to a covered one.");
     }
 
     if (pwalletMain->GetHDChain().masterKeyID != phrase_master_id) {
@@ -4606,6 +4646,348 @@ UniValue getseedphraseinfo(const UniValue& params)
     }
 
     result.pushKV("warnings", warnings);
+
+    return result;
+}
+
+static const RPCHelpMan sweepuncoveredcoins_help{
+    "sweepuncoveredcoins",
+    "Sweep confirmed unspent outputs held on keys NOT covered by the wallet's seed phrase -- "
+    "legacy keys and keys derived from a prior HD master -- to a phrase-covered address, so "
+    "the funds become recoverable from the phrase alone. Covered coins are never touched. "
+    "One transaction is sent per call, selecting the smallest outputs first and capped at "
+    "the consolidation input limit (larger outputs are pulled in automatically if the "
+    "smallest alone cannot pay the fee); run the command repeatedly until the result reports "
+    "complete. Immature and unconfirmed uncovered outputs are reported as pending and picked "
+    "up by later runs. Script outputs (e.g. multisig) cannot be classified per key and are "
+    "never swept. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"destination", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "A phrase-covered wallet address to sweep to. If omitted, a fresh address is drawn "
+            "from the keypool and verified to be phrase-covered."},
+        {"max_inputs", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Maximum inputs for this sweep transaction (default and clamped to the consolidation "
+            "input limit)."},
+        {"dry_run", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, report what would be swept without sending a transaction (default: false)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "complete", "True when no uncovered outputs remain beyond this sweep, including immature and unconfirmed ones."},
+            {RPCResult::Type::NUM, "swept_utxos", "Number of uncovered outputs selected."},
+            {RPCResult::Type::STR_AMOUNT, "swept_amount", "Total input value selected."},
+            {RPCResult::Type::STR_AMOUNT, "fee", "Transaction fee taken from the swept amount: the actual fee paid on a real run, an estimate on dry_run, 0 when nothing was selected."},
+            {RPCResult::Type::STR, "destination", "The phrase-covered address swept to."},
+            {RPCResult::Type::STR_HEX, "txid", /*optional=*/true, "Transaction id (absent on dry_run or when nothing was swept)."},
+            {RPCResult::Type::NUM, "remaining_utxos", "Uncovered sweepable outputs left for later runs."},
+            {RPCResult::Type::STR_AMOUNT, "remaining_amount", "Uncovered sweepable value left for later runs."},
+            {RPCResult::Type::NUM, "pending_utxos", "Uncovered outputs not yet sweepable (immature coinstakes, unconfirmed)."},
+            {RPCResult::Type::STR_AMOUNT, "pending_amount", "Uncovered value not yet sweepable."},
+            {RPCResult::Type::BOOL, "dry_run", "Whether this was a dry run."},
+        }},
+    RPCExamples{
+        HelpExampleCli("sweepuncoveredcoins", "") +
+        HelpExampleCli("sweepuncoveredcoins", "\"address\" 600 true") +
+        HelpExampleRpc("sweepuncoveredcoins", "\"address\"")},
+};
+const RPCHelpMan& sweepuncoveredcoins_helpman() { return sweepuncoveredcoins_help; }
+
+UniValue sweepuncoveredcoins(const UniValue& params)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    if (!pwalletMain->HasSeedPhrase()) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            "This wallet does not have a seed phrase, so nothing defines coverage. Use "
+            "makeseedphrase or restoreseedphrase first.");
+    }
+
+    unsigned int max_inputs = GetMaxInputsForConsolidationTxn();
+    if (!params[1].isNull()) {
+        max_inputs = std::min<unsigned int>(std::max(params[1].get_int(), 1),
+                                            GetMaxInputsForConsolidationTxn());
+    }
+
+    const bool dry_run = params[2].isNull() ? false : params[2].get_bool();
+
+    if (!dry_run) EnsureWalletIsUnlocked();
+
+    // Collect confirmed, spendable, per-key-classifiable outputs that the
+    // phrase does not cover, sorted ascending by value.
+    std::vector<COutput> outputs;
+    pwalletMain->AvailableCoins(outputs, true, nullptr, false);
+
+    // Yields the key id of a spendable single-key output, or nullopt for
+    // anything that cannot be classified per key (scripts, watch-only).
+    const auto spendable_key_of = [](const COutput& out) -> std::optional<CKeyID> {
+        const CTxOut& txout = out.tx->vout[out.i];
+
+        if (!(pwalletMain->IsMine(txout) & ISMINE_SPENDABLE)) return std::nullopt;
+
+        CTxDestination dest;
+        if (!ExtractDestination(txout.scriptPubKey, dest)) return std::nullopt;
+
+        const CKeyID* key_id = std::get_if<CKeyID>(&dest);
+        if (!key_id) return std::nullopt;
+
+        return *key_id;
+    };
+
+    std::vector<std::pair<int64_t, COutput>> candidates;
+
+    for (const COutput& out : outputs) {
+        const std::optional<CKeyID> key_id = spendable_key_of(out);
+
+        if (key_id && pwalletMain->ClassifySeedPhraseKey(*key_id) != SeedPhraseKeyClass::COVERED) {
+            candidates.push_back(std::make_pair(out.tx->vout[out.i].nValue, out));
+        }
+    }
+
+    std::sort(candidates.begin(), candidates.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    // Uncovered outputs that exist but are not yet sweepable (immature
+    // coinstakes, unconfirmed): they surface on later runs and must keep
+    // "complete" false. AvailableCoins with staking coins included sees
+    // immature coinstake outputs; the confirmed set above is subtracted.
+    std::set<std::pair<const CWalletTx*, unsigned int>> confirmed_set;
+    for (const auto& candidate : candidates) {
+        confirmed_set.insert(std::make_pair(candidate.second.tx, candidate.second.i));
+    }
+
+    uint64_t pending_utxos = 0;
+    CAmount pending_amount = 0;
+
+    {
+        // Two passes because neither AvailableCoins mode sees everything:
+        // with staking coins included it captures immature coinstakes but
+        // skips depth-0 transactions entirely, and without them it captures
+        // unconfirmed outputs but not immature coinstakes.
+        std::vector<COutput> wide_outputs;
+        pwalletMain->AvailableCoins(wide_outputs, false, nullptr, true);
+
+        {
+            std::vector<COutput> unconfirmed_outputs;
+            pwalletMain->AvailableCoins(unconfirmed_outputs, false, nullptr, false);
+            wide_outputs.insert(wide_outputs.end(), unconfirmed_outputs.begin(),
+                                unconfirmed_outputs.end());
+        }
+
+        std::set<std::pair<const CWalletTx*, unsigned int>> seen;
+
+        for (const COutput& out : wide_outputs) {
+            const auto outpoint = std::make_pair(out.tx, out.i);
+
+            if (confirmed_set.count(outpoint) || !seen.insert(outpoint).second) continue;
+
+            const std::optional<CKeyID> key_id = spendable_key_of(out);
+
+            if (key_id
+                && pwalletMain->ClassifySeedPhraseKey(*key_id) != SeedPhraseKeyClass::COVERED)
+            {
+                ++pending_utxos;
+                pending_amount += out.tx->vout[out.i].nValue;
+            }
+        }
+    }
+
+    // Select the smallest candidates first (mirrors consolidateunspent), but
+    // guarantee the batch can pay its own fee: while it cannot, swap the
+    // largest unselected candidate in for the smallest selected one. Without
+    // this, a wallet whose smallest max_inputs outputs are all dust would
+    // wedge the sweep forever while larger outputs sit beyond the cap. The
+    // window math lives in SweepSwapCount (unit-tested).
+    const size_t total = candidates.size();
+    const size_t select_count = std::min<size_t>(total, max_inputs);
+
+    // A conservative fee ceiling for a batch of select_count inputs, used
+    // only to drive the swap loop; the precise fee is computed below from
+    // the final input set.
+    const int64_t fee_ceiling_bytes = (int64_t)select_count * 180 + 2 * 34 + 10;
+    CTransaction txDummy;
+    const int64_t fee_ceiling =
+        std::max(GetMinFee(txDummy, 1000, GMF_SEND, fee_ceiling_bytes),
+                 nTransactionFee * (1 + fee_ceiling_bytes / 1000));
+
+    std::vector<int64_t> candidate_values;
+    candidate_values.reserve(total);
+    for (const auto& candidate : candidates) candidate_values.push_back(candidate.first);
+
+    const size_t swaps = SweepSwapCount(candidate_values, select_count, fee_ceiling);
+
+    std::set<std::pair<const CWalletTx*, unsigned int>> setCoins;
+    CAmount nAmount = 0;
+    unsigned int nBytesInputs = 0;
+
+    const auto add_input = [&](const COutput& out) {
+        setCoins.insert(std::make_pair(out.tx, out.i));
+        nAmount += out.tx->vout[out.i].nValue;
+
+        // Byte accounting for the fee estimate, as in consolidateunspent.
+        CTxDestination address;
+        CPubKey pubkey;
+        const CKeyID* key_id = nullptr;
+
+        if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, address)) {
+            key_id = std::get_if<CKeyID>(&address);
+        }
+
+        if (key_id && pwalletMain->GetPubKey(*key_id, pubkey)) {
+            nBytesInputs += (pubkey.IsCompressed() ? 148 : 180);
+        } else {
+            // Unreachable for the CKeyID-classified candidates this sweep
+            // selects, but if it ever fires, assume the worst-case size so
+            // the fee estimate stays conservative.
+            nBytesInputs += 180;
+        }
+    };
+
+    for (size_t i = swaps; i < select_count; ++i) add_input(candidates[i].second);
+    for (size_t i = total - swaps; i < total; ++i) add_input(candidates[i].second);
+
+    const unsigned int input_count = setCoins.size();
+
+    // Everything not selected remains for later runs.
+    uint64_t remaining_utxos = 0;
+    CAmount remaining_amount = 0;
+
+    for (size_t i = 0; i < swaps; ++i) {
+        ++remaining_utxos;
+        remaining_amount += candidates[i].first;
+    }
+    for (size_t i = select_count; i < total - swaps; ++i) {
+        ++remaining_utxos;
+        remaining_amount += candidates[i].first;
+    }
+
+    // Fee to avoid change, as in consolidateunspent (which reserves two
+    // output slots as headroom even though only one output is produced).
+    const int64_t nBytes = nBytesInputs + 2 * 34 + 10;
+    const int64_t nMinFee = GetMinFee(txDummy, 1000, GMF_SEND, nBytes);
+    const int64_t nFee = nTransactionFee * (1 + nBytes / 1000);
+    const int64_t nFeeRequired = std::max(nMinFee, nFee);
+
+    // Even with the largest candidates swapped in, the batch cannot pay its
+    // own fee: the wallet's whole uncovered balance is effectively dust.
+    // This holds for a dry run too -- the preview must surface the same
+    // failure the real run would hit.
+    if (input_count > 0 && nAmount <= nFeeRequired) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            strprintf("The sweepable uncovered outputs total %s, not enough to pay the %s "
+                      "transaction fee even with the largest outputs selected. Nothing can "
+                      "be swept.",
+                      FormatMoney(nAmount), FormatMoney(nFeeRequired)));
+    }
+
+    // Resolve and validate the destination for real runs AND dry runs (a
+    // preview that skips validation is a trap): a supplied phrase-covered
+    // wallet address, or a key reserved from the pool -- kept only when the
+    // sweep actually commits, returned otherwise.
+    CTxDestination sweep_dest;
+    CReserveKey dest_reserve(pwalletMain);
+    bool dest_from_pool = false;
+
+    if (!params[0].isNull()) {
+        sweep_dest = DecodeDestination(params[0].get_str());
+
+        if (!IsValidDestination(sweep_dest)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                               "Invalid Gridcoin address: " + params[0].get_str());
+        }
+
+        const CKeyID* dest_key_id = std::get_if<CKeyID>(&sweep_dest);
+
+        if (!dest_key_id || !pwalletMain->HaveKey(*dest_key_id)
+            || pwalletMain->ClassifySeedPhraseKey(*dest_key_id) != SeedPhraseKeyClass::COVERED)
+        {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                "The destination must be an address in this wallet whose key is covered by the "
+                "seed phrase (see getseedphraseinfo).");
+        }
+    } else {
+        CPubKey dest_pubkey;
+
+        if (!dest_reserve.GetReservedKey(dest_pubkey)) {
+            throw JSONRPCError(RPC_WALLET_KEYPOOL_RAN_OUT,
+                               "Keypool ran out, please call keypoolrefill first");
+        }
+
+        if (pwalletMain->ClassifySeedPhraseKey(dest_pubkey.GetID())
+            != SeedPhraseKeyClass::COVERED)
+        {
+            // Return the key to the pool: this RPC must not manufacture
+            // uncovered keys while telling the user coverage is broken.
+            dest_reserve.ReturnKey();
+            throw JSONRPCError(RPC_WALLET_ERROR,
+                "The keypool produced a key that is not covered by the seed phrase (the active "
+                "HD master is not the phrase master). Run restoreseedphrase to re-attach the "
+                "phrase master, then run keypoolrefill.");
+        }
+
+        sweep_dest = dest_pubkey.GetID();
+        dest_from_pool = true;
+    }
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("complete", remaining_utxos == 0 && pending_utxos == 0);
+    result.pushKV("swept_utxos", (uint64_t)input_count);
+    result.pushKV("swept_amount", ValueFromAmount(nAmount));
+
+    if (dry_run || input_count == 0) {
+        if (dest_from_pool) dest_reserve.ReturnKey();
+
+        result.pushKV("fee", ValueFromAmount(input_count ? nFeeRequired : 0));
+        result.pushKV("destination", EncodeDestination(sweep_dest));
+        result.pushKV("remaining_utxos", remaining_utxos);
+        result.pushKV("remaining_amount", ValueFromAmount(remaining_amount));
+        result.pushKV("pending_utxos", pending_utxos);
+        result.pushKV("pending_amount", ValueFromAmount(pending_amount));
+        result.pushKV("dry_run", dry_run);
+
+        return result;
+    }
+
+    CScript scriptDestPubKey;
+    scriptDestPubKey.SetDestination(sweep_dest);
+
+    std::vector<std::pair<CScript, int64_t>> vecSend;
+    vecSend.push_back(std::make_pair(scriptDestPubKey, nAmount - nFeeRequired));
+
+    // Any difference between the estimated and the converged fee comes back
+    // to the sweep destination as a second (change) output.
+    CCoinControl coinControl;
+    coinControl.destChange = sweep_dest;
+
+    CWalletTx wtxNew;
+    CReserveKey reservekey(pwalletMain);
+    int64_t nFeeActual = nFeeRequired;
+
+    if (!pwalletMain->CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeActual, &coinControl)) {
+        if (dest_from_pool) dest_reserve.ReturnKey();
+        throw JSONRPCError(RPC_WALLET_ERROR, "Sweep transaction creation failed");
+    }
+
+    if (!pwalletMain->CommitTransaction(wtxNew, reservekey)) {
+        if (dest_from_pool) dest_reserve.ReturnKey();
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            "The sweep transaction was rejected. This might happen if some of the coins in your "
+            "wallet were already spent.");
+    }
+
+    if (dest_from_pool) {
+        dest_reserve.KeepKey();
+        pwalletMain->SetAddressBookName(sweep_dest, "seed phrase sweep");
+    }
+
+    result.pushKV("fee", ValueFromAmount(nFeeActual));
+    result.pushKV("destination", EncodeDestination(sweep_dest));
+    result.pushKV("txid", wtxNew.GetHash().GetHex());
+    result.pushKV("remaining_utxos", remaining_utxos);
+    result.pushKV("remaining_amount", ValueFromAmount(remaining_amount));
+    result.pushKV("pending_utxos", pending_utxos);
+    result.pushKV("pending_amount", ValueFromAmount(pending_amount));
+    result.pushKV("dry_run", dry_run);
 
     return result;
 }
