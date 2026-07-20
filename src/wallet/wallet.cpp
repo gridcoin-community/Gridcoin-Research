@@ -602,6 +602,35 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             pwalletdbEncryption->WriteMasterKey(nMasterKeyMaxID, kMasterKey);
         }
 
+        // Convert the seed phrase record (if any) to its crypted form inside
+        // the same transaction that encrypts the keys: like the key records,
+        // the plaintext blob must never survive in an encrypted wallet.dat,
+        // even across a crash or write failure. Failure here aborts before
+        // anything is committed, leaving the wallet unencrypted and intact.
+        CSeedPhraseData crypted_seed_phrase;
+        const bool convert_seed_phrase = HasSeedPhrase() && !m_seed_phrase_blob_crypted;
+
+        if (convert_seed_phrase)
+        {
+            crypted_seed_phrase = m_seed_phrase_data;
+
+            const CKeyingMaterial plaintext(m_seed_phrase_data.vchBlob.begin(),
+                                            m_seed_phrase_data.vchBlob.end());
+
+            if (!EncryptSecret(vMasterKey, plaintext, Hash(crypted_seed_phrase.masterKeyID),
+                               crypted_seed_phrase.vchBlob)
+                || (fFileBacked && !pwalletdbEncryption->WriteCryptedSeedPhrase(crypted_seed_phrase)))
+            {
+                if (fFileBacked)
+                {
+                    pwalletdbEncryption->TxnAbort();
+                    delete pwalletdbEncryption;
+                    pwalletdbEncryption = nullptr;
+                }
+                return false;
+            }
+        }
+
         if (!EncryptKeys(vMasterKey))
         {
             if (fFileBacked)
@@ -621,11 +650,25 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             pwalletdbEncryption = nullptr;
         }
 
+        if (convert_seed_phrase)
+        {
+            m_seed_phrase_data = crypted_seed_phrase;
+            m_seed_phrase_blob_crypted = true;
+        }
+
         Lock();
         Unlock(strWalletPassphrase);
 
-        // if we are using HD, replace the HD master key (seed) with a new one
-        if (IsHDEnabled()) {
+        // If we are using HD, replace the HD master key (seed) with a new
+        // one -- unless the ACTIVE master is the phrase-derived one, in
+        // which case rotating it would silently detach the wallet from the
+        // phrase the user recorded. (Record presence alone is not enough:
+        // sethdseed can have moved the active master off the phrase, and a
+        // detached master must still rotate on encryption.)
+        const bool phrase_master_active =
+            HasSeedPhrase() && hdChain.masterKeyID == m_seed_phrase_data.masterKeyID;
+
+        if (IsHDEnabled() && !phrase_master_active) {
             CKey key;
             CPubKey masterPubKey = GenerateNewHDMasterKey();
             if (!SetHDMasterKey(masterPubKey))
@@ -1538,6 +1581,99 @@ bool CWallet::SetHDChain(const CHDChain& chain, bool memonly)
 bool CWallet::IsHDEnabled() const
 {
     return !hdChain.masterKeyID.IsNull();
+}
+
+bool CWallet::LoadSeedPhraseData(const CSeedPhraseData& data, bool crypted)
+{
+    LOCK(cs_wallet);
+
+    // Defense in depth: a correctly functioning wallet never has both a
+    // plaintext and a crypted record, but if one does (e.g. an interrupted
+    // conversion by an older build), the crypted record wins regardless of
+    // database cursor order.
+    if (!crypted && m_seed_phrase_blob_crypted && !m_seed_phrase_data.IsNull()) {
+        LogPrintf("WARNING: %s: ignoring plaintext seed phrase record shadowed by an encrypted one.",
+                  __func__);
+        return true;
+    }
+
+    m_seed_phrase_data = data;
+    m_seed_phrase_blob_crypted = crypted;
+
+    // The phrase birthday bounds restore rescans. The phrase master's key
+    // metadata is stamped at restore time, which can be long after the
+    // birthday, so make sure the first-key time the scanner consults never
+    // excludes blocks after the birthday.
+    if (data.nBirthday > 0 && (!nTimeFirstKey || data.nBirthday < nTimeFirstKey)) {
+        nTimeFirstKey = data.nBirthday;
+    }
+
+    return true;
+}
+
+bool CWallet::SetSeedPhraseData(const CSeedPhraseData& data)
+{
+    LOCK(cs_wallet);
+
+    if (!IsCrypted()) {
+        if (fFileBacked && !CWalletDB(strWalletFile).WriteSeedPhrase(data)) {
+            return false;
+        }
+
+        m_seed_phrase_data = data;
+        m_seed_phrase_blob_crypted = false;
+
+        // Keep the scanner's first-key bound at or before the phrase
+        // birthday (see LoadSeedPhraseData).
+        if (data.nBirthday > 0 && (!nTimeFirstKey || data.nBirthday < nTimeFirstKey)) {
+            nTimeFirstKey = data.nBirthday;
+        }
+
+        return true;
+    }
+
+    // Encrypted wallet: store the blob under the wallet's master keying
+    // material, mirroring the treatment of private keys, so that a phrase
+    // protected only by a weak (or empty) phrase password is not exposed
+    // to anyone holding the encrypted wallet.dat. Requires unlock.
+    CSeedPhraseData crypted_data = data;
+    const CKeyingMaterial plaintext(data.vchBlob.begin(), data.vchBlob.end());
+
+    if (!EncryptSecretWithMasterKey(plaintext, Hash(data.masterKeyID), crypted_data.vchBlob)) {
+        return false;
+    }
+
+    if (fFileBacked && !CWalletDB(strWalletFile).WriteCryptedSeedPhrase(crypted_data)) {
+        return false;
+    }
+
+    m_seed_phrase_data = crypted_data;
+    m_seed_phrase_blob_crypted = true;
+
+    // Keep the scanner's first-key bound at or before the phrase birthday
+    // (see LoadSeedPhraseData).
+    if (data.nBirthday > 0 && (!nTimeFirstKey || data.nBirthday < nTimeFirstKey)) {
+        nTimeFirstKey = data.nBirthday;
+    }
+
+    return true;
+}
+
+bool CWallet::GetSeedPhraseBlob(CKeyingMaterial& blob_out) const
+{
+    LOCK(cs_wallet);
+
+    if (m_seed_phrase_data.IsNull()) {
+        return false;
+    }
+
+    if (!m_seed_phrase_blob_crypted) {
+        blob_out.assign(m_seed_phrase_data.vchBlob.begin(), m_seed_phrase_data.vchBlob.end());
+        return true;
+    }
+
+    return DecryptSecretWithMasterKey(m_seed_phrase_data.vchBlob,
+                                      Hash(m_seed_phrase_data.masterKeyID), blob_out);
 }
 
 int64_t CWalletTx::GetTxTime() const
