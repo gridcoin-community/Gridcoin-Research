@@ -14,7 +14,9 @@ class AddressTableModel : public QAbstractTableModel
 {
     Q_OBJECT
 public:
-    explicit AddressTableModel(WalletModel* parent = nullptr);
+    // parent is required: the model reaches the wallet through parent->wallet(),
+    // so it is dereferenced unconditionally (no default null).
+    explicit AddressTableModel(WalletModel* parent);
     ~AddressTableModel();
 
     enum ColumnIndex {

@@ -347,8 +347,11 @@ public:
     //! Set (create or overwrite) the address book label for the encoded address.
     virtual void setAddressBook(const std::string& address, const std::string& label) = 0;
 
-    //! Remove the encoded address from the address book. Returns false when the
-    //! address does not parse.
+    //! Remove the encoded address from the address book. Removing an entry that
+    //! is not present is treated as success by the wallet DB layer. Returns
+    //! false when the address does not parse, or when the underlying wallet
+    //! erase fails (e.g. a non-file-backed wallet or a DB write error) -- note a
+    //! false return does not necessarily mean the in-memory entry survived.
     virtual bool delAddressBook(const std::string& address) = 0;
 
     //! Reserve a fresh key from the pool and return its encoded destination. The
