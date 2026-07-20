@@ -6,6 +6,7 @@
 #include <QDate>
 
 namespace interfaces {
+class Node;
 class SideStakeManager;
 } // namespace interfaces
 
@@ -22,7 +23,10 @@ class OptionsModel : public QAbstractListModel
 public:
     //! \p sidestake_manager backs the sidestake table model constructed here; it
     //! is owned by the process and must outlive this OptionsModel.
-    explicit OptionsModel(interfaces::SideStakeManager& sidestake_manager, QObject* parent = nullptr);
+    //! \p node is the settings command/query surface (a separate process in the
+    //! multiprocess build); the core-coupled options route reads and writes
+    //! through it instead of touching gArgs / core globals directly.
+    explicit OptionsModel(interfaces::Node& node, interfaces::SideStakeManager& sidestake_manager, QObject* parent = nullptr);
 
     enum OptionID {
         StartAtStartup,          // bool
@@ -59,6 +63,13 @@ public:
 
     void Init();
 
+    //! One-time migration of the settings that moved from Gridcoin-Qt.conf into
+    //! the core read-write settings file (proxy / UPnP / reservebalance /
+    //! update-check). Must be called from the composition root AFTER the config
+    //! and read-write settings files are loaded and the network is selected --
+    //! never from the constructor, which runs before those.
+    void migrateCoreSettings();
+
     int rowCount(const QModelIndex & parent = QModelIndex()) const;
     QVariant data(const QModelIndex & index, int role = Qt::DisplayRole) const;
     bool setData(const QModelIndex & index, const QVariant & value, int role = Qt::EditRole);
@@ -94,6 +105,8 @@ public:
     void toggleCoinControlFeatures();
 
 private:
+    //! Settings command/query surface; owned by the process, outlives this model.
+    interfaces::Node& m_node;
     int nDisplayUnit;
     bool fMinimizeToTray;
     bool fStartAtStartup;

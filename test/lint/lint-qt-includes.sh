@@ -53,7 +53,6 @@ src/qt/intro.cpp:chainparams.h
 src/qt/intro.cpp:util.h
 src/qt/optionsdialog.cpp:miner.h
 src/qt/optionsdialog.cpp:netbase.h
-src/qt/optionsmodel.cpp:init.h
 src/qt/optionsmodel.cpp:miner.h
 src/qt/qtipcserver.cpp:node/ui_interface.h
 src/qt/qtipcserver.cpp:util.h

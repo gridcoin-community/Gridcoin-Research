@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "init.h"
 #include "protocol.h"
 #include <rpc/util.h>
 #include <util.h>
@@ -170,119 +171,44 @@ UniValue changesettings(const UniValue& params)
     if (params.size() < 1)
         throw runtime_error(changesettings_helpman().ToString());
 
-    // -------- name ------------ value - value_changed - immediate_effect
-    std::map<std::string, std::tuple<std::string, bool, bool>> valid_settings;
+    // Parse the "name=value" positionals into pairs. The shared ChangeSettings()
+    // core (src/init.cpp) does validation, persistence to gridcoinsettings.json,
+    // the ForceSetArg, and the immediate side-effect application -- the same code
+    // path interfaces::Node::changeSettings() uses for the GUI, so the two never
+    // diverge.
+    std::vector<std::pair<std::string, std::string>> settings;
+    settings.reserve(params.size());
 
-    UniValue result(UniValue::VOBJ);
-    UniValue settings_stored_with_no_state_change(UniValue::VARR);
-    UniValue settings_immediate(UniValue::VARR);
-    UniValue settings_applied_requiring_restart(UniValue::VARR);
-    //UniValue invalid_settings_ignored(UniValue::VARR);
-
-    // Validation
     for (unsigned int i = 0; i < params.size(); ++i)
     {
-        std::string param = params[i].get_str();
+        const std::string param = params[i].get_str();
+        const std::string::size_type pos = param.find('=');
 
-        if (param.size() > 0 && param[0] == '-')
+        if (param.empty() || param[0] == '-' || pos == std::string::npos)
         {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Incorrectly formatted setting change: " + param);
         }
 
-        std::string::size_type pos;
-        std::string name;
-        std::string value;
-
-        if ((pos = param.find('=')) != std::string::npos)
-        {
-            name = param.substr(0, pos);
-            value = param.substr(pos + 1);
-        }
-        else
-        {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Incorrectly formatted setting change: " + param);
-        }
-
-        std::optional<unsigned int> flags = gArgs.GetArgFlags('-' + name);
-
-        if (!flags)
-        {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid setting: " + param);
-        }
-
-        // TODO: Record explicit default state for settings.
-        // This currently has a problem that I am not sure yet how to solve. Settings that are defaulted to true, unless
-        // they are set to the contrary, such as -staking, will falsely indicate a change because the defaulted state is
-        // not explicitly stored for comparison. After there is an explicit entry defined in the settings file, it works
-        // correctly.
-
-        // Also, the overloading of GetArg is NOT helpful here...
-        std::string current_value;
-
-        // It is either a string or a number.... One of these will succeed.
-        try
-        {
-            current_value = gArgs.GetArg(name, "never_used_default");
-        }
-        catch (...)
-        {
-            // If it is a number convert back to a string.
-            current_value = ToString(gArgs.GetArg(name, 1));
-        }
-
-        bool value_changed = (current_value != value);
-        bool immediate_effect = *flags & ArgsManager::IMMEDIATE_EFFECT;
-
-        auto insert_pair = valid_settings.insert(std::make_pair(
-                                                     name, std::make_tuple(value, value_changed, immediate_effect)));
-
-        if (!insert_pair.second)
-        {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "changesettings does not support more than one instance of the same "
-                                                      "setting: " + param);
-        }
+        settings.emplace_back(param.substr(0, pos), param.substr(pos + 1));
     }
 
-    // Now that validation is done do the update work.
     bool restart_required = false;
+    std::vector<std::string> no_change, immediate, requiring_restart;
+    std::string error;
 
-    for (const auto& setting : valid_settings)
+    if (!ChangeSettings(settings, restart_required, no_change, immediate, requiring_restart, error))
     {
-        const std::string& name = setting.first;
-        const std::string& value = std::get<0>(setting.second);
-        const bool& value_changed = std::get<1>(setting.second);
-        const bool& immediate_effect = std::get<2>(setting.second);
-
-        std::string param = name + "=" + value;
-
-        // Regardless, store in r-w settings file.
-        if (!updateRwSetting(name, value))
-        {
-            throw JSONRPCError(RPC_MISC_ERROR, "Error storing setting in read-write settings file.");
-        }
-
-        if (value_changed)
-        {
-            gArgs.ForceSetArg(name, value);
-
-            if (immediate_effect)
-            {
-                settings_immediate.push_back(param);
-            }
-            else
-            {
-                settings_applied_requiring_restart.push_back(param);
-
-                // Record if restart required.
-                restart_required |= !immediate_effect;
-            }
-        }
-        else
-        {
-            settings_stored_with_no_state_change.push_back(param);
-        }
+        throw JSONRPCError(RPC_INVALID_PARAMETER, error);
     }
 
+    UniValue settings_stored_with_no_state_change(UniValue::VARR);
+    for (const auto& s : no_change) settings_stored_with_no_state_change.push_back(s);
+    UniValue settings_immediate(UniValue::VARR);
+    for (const auto& s : immediate) settings_immediate.push_back(s);
+    UniValue settings_applied_requiring_restart(UniValue::VARR);
+    for (const auto& s : requiring_restart) settings_applied_requiring_restart.push_back(s);
+
+    UniValue result(UniValue::VOBJ);
     result.pushKV("settings_change_requires_restart", restart_required);
     result.pushKV("settings_stored_with_no_state_change", settings_stored_with_no_state_change);
     result.pushKV("settings_changed_taking_immediate_effect", settings_immediate);

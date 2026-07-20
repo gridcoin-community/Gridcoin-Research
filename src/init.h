@@ -9,6 +9,10 @@
 #include "wallet/wallet.h"
 #include <boost/thread.hpp>
 
+#include <string>
+#include <utility>
+#include <vector>
+
 //! Default value for -daemon option
 static constexpr bool DEFAULT_DAEMON = false;
 //! Default value for -daemonwait option
@@ -35,6 +39,31 @@ void SetupServerArgs();
 
 std::string VersionMessage();
 std::string LogSomething();
+
+//! Apply the immediate side effect of a changed read-write setting for the
+//! "push-model" knobs whose consumers do not re-read gArgs live (currently
+//! -proxy and -reservebalance apply here; -upnp restarts the port-map thread).
+//! No-op for pull-model settings (the staking cluster etc., which re-read gArgs
+//! on use). Shared by the changesettings RPC and interfaces::Node::changeSettings
+//! so a live edit takes effect without a restart in both paths.
+void ApplyRwSettingSideEffect(const std::string& name);
+
+//! Validate, persist to gridcoinsettings.json, force-set into the running args,
+//! and apply one or more settings given as name/value strings. Two-phase: every
+//! setting is validated before any is applied; on a validation error returns
+//! false with error_out set and nothing changed. An EMPTY value erases the
+//! setting (unset → default), which is how "off"/default is expressed for knobs
+//! like -proxy/-reservebalance and avoids persisting a value that would fail
+//! validation on restart. On success, each name is categorized into
+//! no_change_out / immediate_out / requires_restart_list_out and
+//! requires_restart_out is set. Shared core of the changesettings RPC and
+//! interfaces::Node::changeSettings.
+bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& settings,
+                    bool& requires_restart_out,
+                    std::vector<std::string>& no_change_out,
+                    std::vector<std::string>& immediate_out,
+                    std::vector<std::string>& requires_restart_list_out,
+                    std::string& error_out);
 
 extern bool fResetBlockchainRequest;
 #endif
