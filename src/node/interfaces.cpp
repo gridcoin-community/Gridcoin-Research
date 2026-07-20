@@ -178,15 +178,21 @@ public:
 
         // Look the peer's address up by connection id, then ban it and drop the
         // connection -- mirroring the GUI's ban action (ban address + disconnect).
-        std::vector<CNodeStats> vstats;
-        g_connman->GetNodeStats(vstats);
-
-        for (const CNodeStats& s : vstats) {
-            if (s.id == node_id) {
-                g_banman->Ban(s.addr, BanReasonManuallyAdded, ban_time_seconds);
-                g_connman->DisconnectNode(s.addr);
-                break;
+        // ForEachNode walks m_nodes under m_nodes_mutex; copy out just the address
+        // and do the Ban()/DisconnectNode() afterwards (outside that lock) rather
+        // than snapshotting every peer's full CNodeStats to find one address.
+        CAddress addr;
+        bool found = false;
+        g_connman->ForEachNode([&](CNode* pnode) {
+            if (!found && pnode->GetId() == node_id) {
+                addr = pnode->addr;
+                found = true;
             }
+        });
+
+        if (found) {
+            g_banman->Ban(addr, BanReasonManuallyAdded, ban_time_seconds);
+            g_connman->DisconnectNode(node_id);
         }
     }
 
