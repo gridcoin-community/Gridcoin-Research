@@ -192,6 +192,105 @@ public:
         return MessageVerifyStatus::OK;
     }
 
+    std::vector<WalletAddress> getAddresses() override
+    {
+        std::vector<WalletAddress> result;
+
+        LOCK(m_wallet->cs_wallet);
+        result.reserve(m_wallet->mapAddressBook.size());
+        for (const auto& item : m_wallet->mapAddressBook) {
+            const CTxDestination& dest = item.first;
+            WalletAddress entry;
+            entry.address = EncodeDestination(dest);
+            entry.label = item.second.name;
+            entry.is_mine = IsMine(*m_wallet, dest) != ISMINE_NO;
+            result.push_back(std::move(entry));
+        }
+
+        return result;
+    }
+
+    bool getAddressLabel(const std::string& address, std::string& label_out) override
+    {
+        const CTxDestination dest = DecodeDestination(address);
+        if (!IsValidDestination(dest)) {
+            return false;
+        }
+
+        LOCK(m_wallet->cs_wallet);
+        const auto it = m_wallet->mapAddressBook.find(dest);
+        if (it == m_wallet->mapAddressBook.end()) {
+            return false;
+        }
+
+        label_out = it->second.name;
+        return true;
+    }
+
+    bool isMine(const std::string& address) override
+    {
+        const CTxDestination dest = DecodeDestination(address);
+        if (!IsValidDestination(dest)) {
+            return false;
+        }
+
+        LOCK(m_wallet->cs_wallet);
+        return IsMine(*m_wallet, dest) != ISMINE_NO;
+    }
+
+    void setAddressBook(const std::string& address, const std::string& label) override
+    {
+        const CTxDestination dest = DecodeDestination(address);
+        if (!IsValidDestination(dest)) {
+            return;
+        }
+
+        // SetAddressBookName takes cs_wallet itself and fires NotifyAddressBookChanged.
+        m_wallet->SetAddressBookName(dest, label);
+    }
+
+    bool delAddressBook(const std::string& address) override
+    {
+        const CTxDestination dest = DecodeDestination(address);
+        if (!IsValidDestination(dest)) {
+            return false;
+        }
+
+        // DelAddressBookName takes cs_wallet itself and fires NotifyAddressBookChanged.
+        return m_wallet->DelAddressBookName(dest);
+    }
+
+    bool getNewReceiveAddress(std::string& address_out) override
+    {
+        // The wallet is unlocked by the GUI's UnlockContext before this call; the
+        // reserved key stays node-side and only its encoded address is returned.
+        // fAllowReuse=true matches the old GUI addRow() behavior.
+        CPubKey new_key;
+        if (!m_wallet->GetKeyFromPool(new_key, true)) {
+            return false;
+        }
+
+        address_out = EncodeDestination(new_key.GetID());
+        return true;
+    }
+
+    std::vector<std::string> getUnbookedReceiveAddresses() override
+    {
+        std::vector<std::string> result;
+
+        // cs_wallet is recursive, so it covers both GetAddressBalances (which
+        // re-locks internally) and the mapAddressBook membership test below.
+        LOCK(m_wallet->cs_wallet);
+        const std::map<CTxDestination, int64_t> balances = m_wallet->GetAddressBalances();
+        for (const auto& [dest, balance] : balances) {
+            if (balance > 0 && m_wallet->mapAddressBook.count(dest) == 0) {
+                result.push_back(EncodeDestination(dest));
+            }
+        }
+
+        return result;
+    }
+
     bool getPubKey(const CKeyID& address, CPubKey& pub_key_out) override
     {
         return m_wallet->GetPubKey(address, pub_key_out);

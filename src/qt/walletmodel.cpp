@@ -30,7 +30,7 @@ WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource&
          , cachedEncryptionStatus(Unencrypted)
          , cachedNumBlocks(0)
 {
-    addressTableModel = new AddressTableModel(core_wallet, this);
+    addressTableModel = new AddressTableModel(this);
     // TransactionTableModel's ctor performs the initial load via
     // txSource().reloadAndSnapshot(). The source's store-worker is already
     // running (started in the WalletTxSource ctor, before this model was
