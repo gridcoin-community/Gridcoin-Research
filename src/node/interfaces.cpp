@@ -282,7 +282,7 @@ public:
     {
         SettingChangeResult out;
         out.ok = ChangeSettings(settings, out.requires_restart, out.no_change, out.immediate,
-                                out.requires_restart_settings, out.error);
+                                out.requires_restart_settings, out.invalid_input, out.error);
         return out;
     }
 

@@ -184,7 +184,8 @@ UniValue changesettings(const UniValue& params)
         const std::string param = params[i].get_str();
         const std::string::size_type pos = param.find('=');
 
-        if (param.empty() || param[0] == '-' || pos == std::string::npos)
+        // Reject a leading dash, a missing '=', and an empty name ("=1").
+        if (param.empty() || param[0] == '-' || pos == std::string::npos || pos == 0)
         {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Incorrectly formatted setting change: " + param);
         }
@@ -194,11 +195,14 @@ UniValue changesettings(const UniValue& params)
 
     bool restart_required = false;
     std::vector<std::string> no_change, immediate, requiring_restart;
+    bool invalid_input = false;
     std::string error;
 
-    if (!ChangeSettings(settings, restart_required, no_change, immediate, requiring_restart, error))
+    if (!ChangeSettings(settings, restart_required, no_change, immediate, requiring_restart, invalid_input, error))
     {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, error);
+        // A caller/validation error is RPC_INVALID_PARAMETER; a settings-file
+        // write failure is an internal error.
+        throw JSONRPCError(invalid_input ? RPC_INVALID_PARAMETER : RPC_MISC_ERROR, error);
     }
 
     UniValue settings_stored_with_no_state_change(UniValue::VARR);

@@ -50,19 +50,23 @@ void ApplyRwSettingSideEffect(const std::string& name);
 
 //! Validate, persist to gridcoinsettings.json, force-set into the running args,
 //! and apply one or more settings given as name/value strings. Two-phase: every
-//! setting is validated before any is applied; on a validation error returns
-//! false with error_out set and nothing changed. An EMPTY value erases the
-//! setting (unset → default), which is how "off"/default is expressed for knobs
-//! like -proxy/-reservebalance and avoids persisting a value that would fail
-//! validation on restart. On success, each name is categorized into
+//! setting is fully validated (name is a known arg; proxy/reservebalance values
+//! must parse) before any is applied, so a validation failure changes nothing.
+//! An EMPTY value erases the setting (unset → default), which is how "off"/default
+//! is expressed for knobs like -proxy/-reservebalance and avoids persisting a
+//! value that would fail on restart. On success, each name is categorized into
 //! no_change_out / immediate_out / requires_restart_list_out and
-//! requires_restart_out is set. Shared core of the changesettings RPC and
-//! interfaces::Node::changeSettings.
+//! requires_restart_out is set. On failure returns false with error_out set and
+//! invalid_input_out distinguishing a caller/validation error (true; nothing was
+//! changed) from an internal storage error (false; the settings file write
+//! failed and some earlier settings in the batch may already be applied). Shared
+//! core of the changesettings RPC and interfaces::Node::changeSettings.
 bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& settings,
                     bool& requires_restart_out,
                     std::vector<std::string>& no_change_out,
                     std::vector<std::string>& immediate_out,
                     std::vector<std::string>& requires_restart_list_out,
+                    bool& invalid_input_out,
                     std::string& error_out);
 
 extern bool fResetBlockchainRequest;

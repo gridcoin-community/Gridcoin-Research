@@ -1025,20 +1025,25 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
                     std::vector<std::string>& no_change_out,
                     std::vector<std::string>& immediate_out,
                     std::vector<std::string>& requires_restart_list_out,
+                    bool& invalid_input_out,
                     std::string& error_out)
 {
     requires_restart_out = false;
+    // Phase-1 failures are caller/validation errors; a phase-2 storage failure
+    // flips this back to false.
+    invalid_input_out = true;
 
     // -------- name ------------ value - value_changed - immediate_effect
     std::map<std::string, std::tuple<std::string, bool, bool>> valid_settings;
 
-    // Phase 1: validate everything before mutating anything.
+    // Phase 1: fully validate (name and, for the knobs that would break on
+    // restart, the value) before mutating anything.
     for (const auto& setting : settings) {
         const std::string& name = setting.first;
         const std::string& value = setting.second;
 
-        if (!name.empty() && name[0] == '-') {
-            error_out = "Incorrectly formatted setting name: " + name;
+        if (name.empty() || name[0] == '-') {
+            error_out = "Incorrectly formatted setting name: '" + name + "'";
             return false;
         }
 
@@ -1046,6 +1051,24 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
         if (!flags) {
             error_out = "Invalid setting: " + name;
             return false;
+        }
+
+        // Value validation for the push-model network/staking knobs whose bad
+        // value would otherwise persist and fail at the next startup (the config
+        // consumers assert/InitError on a malformed value). An empty value erases
+        // and needs no check. GetBoolArg/GetArg coerce the rest leniently.
+        if (!value.empty()) {
+            if (name == "proxy" && !CService(LookupNumeric(value.c_str(), 9050)).IsValid()) {
+                error_out = "Invalid proxy address: " + value;
+                return false;
+            }
+            if (name == "reservebalance") {
+                int64_t parsed = 0;
+                if (!ParseMoney(value, parsed)) {
+                    error_out = "Invalid reservebalance amount: " + value;
+                    return false;
+                }
+            }
         }
 
         // GetArg is overloaded; one of these succeeds (matches the changesettings RPC).
@@ -1066,7 +1089,8 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
         }
     }
 
-    // Phase 2: apply.
+    // Phase 2: apply. A failure here is a storage error, not a caller error.
+    invalid_input_out = false;
     for (const auto& setting : valid_settings) {
         const std::string& name = setting.first;
         const std::string& value = std::get<0>(setting.second);
@@ -1076,9 +1100,7 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
 
         // An empty value erases the setting (unset → default); a null
         // SettingsValue removes the key from gridcoinsettings.json.
-        if (value.empty()) {
-            updateRwSetting(name, util::SettingsValue());
-        } else if (!updateRwSetting(name, value)) {
+        if (!updateRwSetting(name, value.empty() ? util::SettingsValue() : util::SettingsValue(value))) {
             error_out = "Error storing setting in read-write settings file: " + name;
             return false;
         }

@@ -31,12 +31,12 @@ std::string FormatReserveBalanceSetting(qint64 sat)
 //! gridcoinsettings.json through the node. Empty disables/erases -proxy; netbase
 //! cannot clear a live proxy, so disabling is effective on restart (unchanged
 //! from the previous behavior).
-void PushEffectiveProxy(interfaces::Node& node, QSettings& settings)
+bool PushEffectiveProxy(interfaces::Node& node, QSettings& settings)
 {
     const bool use_proxy = settings.value("fUseProxy", false).toBool();
     const std::string addr =
         use_proxy ? settings.value("addrProxy", "127.0.0.1:9050").toString().toStdString() : std::string();
-    node.changeSettings({{"proxy", addr}});
+    return node.changeSettings({{"proxy", addr}}).ok;
 }
 } // namespace
 
@@ -273,7 +273,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             break;
         case ProxyUse:
             settings.setValue("fUseProxy", value.toBool());
-            PushEffectiveProxy(m_node, settings);
+            successful = PushEffectiveProxy(m_node, settings);
             break;
         case ProxyIP: {
             // Replace the host part of the stored address; port is kept.
@@ -281,7 +281,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             const int colon = ap.lastIndexOf(':');
             const QString port = colon >= 0 ? ap.mid(colon + 1) : QString("9050");
             settings.setValue("addrProxy", value.toString() + ":" + port);
-            PushEffectiveProxy(m_node, settings);
+            successful = PushEffectiveProxy(m_node, settings);
         }
         break;
         case ProxyPort: {
@@ -290,7 +290,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             const int colon = ap.lastIndexOf(':');
             const QString host = colon >= 0 ? ap.left(colon) : ap;
             settings.setValue("addrProxy", host + ":" + QString::number(value.toInt()));
-            PushEffectiveProxy(m_node, settings);
+            successful = PushEffectiveProxy(m_node, settings);
         }
         break;
         case ReserveBalance: {
@@ -298,8 +298,11 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             // would reject a "-..." string, leaving the value stale.
             const qint64 sat = value.toLongLong() > 0 ? value.toLongLong() : 0;
             // Store as a plain money string (empty when zero => erase/no reserve).
-            m_node.changeSettings({{"reservebalance", sat > 0 ? FormatReserveBalanceSetting(sat) : std::string()}});
-            emit reserveBalanceChanged(sat);
+            successful = m_node.changeSettings(
+                {{"reservebalance", sat > 0 ? FormatReserveBalanceSetting(sat) : std::string()}}).ok;
+            if (successful) {
+                emit reserveBalanceChanged(sat);
+            }
         }
         break;
         case DisplayUnit:

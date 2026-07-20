@@ -72,11 +72,15 @@ struct RpcConsoleResult
     std::string output;
 };
 
-//! Result of Node::changeSettings, mirroring the changesettings RPC. `ok`
-//! false means a validation error (no setting was changed) with `error` set.
+//! Result of Node::changeSettings, mirroring the changesettings RPC. `ok` false
+//! means the change failed with `error` set: when `invalid_input` is true it was
+//! a caller/validation error and nothing was changed; when false it was an
+//! internal settings-file write error (and some earlier settings in the batch
+//! may already have been applied).
 struct SettingChangeResult
 {
     bool ok = false;
+    bool invalid_input = false;
     std::string error;
     //! At least one changed setting does not take effect until restart.
     bool requires_restart = false;
