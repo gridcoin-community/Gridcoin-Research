@@ -2280,4 +2280,92 @@ BOOST_AUTO_TEST_CASE(seed_phrase_crypted_blob_requires_unlock)
     BOOST_CHECK(test_wallet.GetSeedPhraseData().vchBlob == data.vchBlob);
 }
 
+BOOST_AUTO_TEST_CASE(seed_phrase_key_classification)
+{
+    CWallet test_wallet;
+    LOCK(test_wallet.cs_wallet);
+
+    CKey master_key;
+    master_key.MakeNewKey(true);
+    const CKeyID master_id = master_key.GetPubKey().GetID();
+
+    CSeedPhraseData data;
+    data.vchBlob.assign(GRC::Mnemonics::ENCIPHERED_LENGTH, 0x11);
+    data.masterKeyID = master_id;
+    data.nBirthday = GRC::Mnemonics::BIRTHDAY_EPOCH;
+    BOOST_REQUIRE(test_wallet.SetSeedPhraseData(data));
+
+    // The phrase master itself is covered.
+    BOOST_CHECK(test_wallet.ClassifySeedPhraseKey(master_id)
+                == CWallet::SeedPhraseKeyClass::COVERED);
+
+    // A key whose metadata descends from the phrase master is covered.
+    CKey child;
+    child.MakeNewKey(true);
+    const CKeyID child_id = child.GetPubKey().GetID();
+    CKeyMetadata child_meta(1);
+    child_meta.hdKeypath = "m/0'/0'/0'";
+    child_meta.hdMasterKeyID = master_id;
+    test_wallet.mapKeyMetadata[child_id] = child_meta;
+    BOOST_CHECK(test_wallet.ClassifySeedPhraseKey(child_id)
+                == CWallet::SeedPhraseKeyClass::COVERED);
+
+    // A key derived from a different (retired) master is prior-HD.
+    CKey other_master;
+    other_master.MakeNewKey(true);
+    CKey prior;
+    prior.MakeNewKey(true);
+    const CKeyID prior_id = prior.GetPubKey().GetID();
+    CKeyMetadata prior_meta(1);
+    prior_meta.hdKeypath = "m/0'/0'/1'";
+    prior_meta.hdMasterKeyID = other_master.GetPubKey().GetID();
+    test_wallet.mapKeyMetadata[prior_id] = prior_meta;
+    BOOST_CHECK(test_wallet.ClassifySeedPhraseKey(prior_id)
+                == CWallet::SeedPhraseKeyClass::PRIOR_HD);
+
+    // No metadata at all is legacy.
+    CKey legacy;
+    legacy.MakeNewKey(true);
+    BOOST_CHECK(test_wallet.ClassifySeedPhraseKey(legacy.GetPubKey().GetID())
+                == CWallet::SeedPhraseKeyClass::LEGACY);
+
+    // Metadata with an empty keypath (a pre-HD key) is also legacy.
+    CKey legacy_meta_key;
+    legacy_meta_key.MakeNewKey(true);
+    const CKeyID legacy_meta_id = legacy_meta_key.GetPubKey().GetID();
+    test_wallet.mapKeyMetadata[legacy_meta_id] = CKeyMetadata(1);
+    BOOST_CHECK(test_wallet.ClassifySeedPhraseKey(legacy_meta_id)
+                == CWallet::SeedPhraseKeyClass::LEGACY);
+}
+
+BOOST_AUTO_TEST_CASE(sweep_swap_count_selection_math)
+{
+    // Values sorted ascending, as SweepSwapCount requires.
+
+    // Plenty of value in the smallest-first batch: no swaps.
+    BOOST_CHECK_EQUAL(SweepSwapCount({100, 200, 300, 400}, 2, 250), 0U);
+
+    // The dust-wedge case: the two smallest cannot pay the fee, but swapping
+    // the largest candidate in for the smallest selected one can.
+    BOOST_CHECK_EQUAL(SweepSwapCount({1, 2, 3, 1000}, 2, 10), 1U);
+
+    // Two swaps needed.
+    BOOST_CHECK_EQUAL(SweepSwapCount({1, 1, 1, 500, 600}, 3, 700), 2U);
+
+    // All candidates selected: swapping is meaningless, zero swaps even
+    // though the batch cannot pay the fee (caller reports dust-only).
+    BOOST_CHECK_EQUAL(SweepSwapCount({1, 2, 3}, 3, 100), 0U);
+
+    // Swaps exhaust the unselected pool without reaching the ceiling: the
+    // loop stops at the overlap bound.
+    BOOST_CHECK_EQUAL(SweepSwapCount({1, 1, 1, 2}, 3, 100), 1U);
+
+    // Degenerate inputs.
+    BOOST_CHECK_EQUAL(SweepSwapCount({}, 5, 100), 0U);
+    BOOST_CHECK_EQUAL(SweepSwapCount({50}, 1, 10), 0U);
+
+    // select_count larger than the candidate list clamps.
+    BOOST_CHECK_EQUAL(SweepSwapCount({1, 2}, 10, 100), 0U);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

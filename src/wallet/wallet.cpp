@@ -1676,6 +1676,51 @@ bool CWallet::GetSeedPhraseBlob(CKeyingMaterial& blob_out) const
                                       Hash(m_seed_phrase_data.masterKeyID), blob_out);
 }
 
+std::size_t SweepSwapCount(const std::vector<int64_t>& values, std::size_t select_count,
+                           int64_t fee_ceiling)
+{
+    const std::size_t total = values.size();
+    select_count = std::min(select_count, total);
+
+    const auto batch_value = [&](std::size_t swap_count) {
+        int64_t value = 0;
+        for (std::size_t i = swap_count; i < select_count; ++i) {
+            value += values[i];
+        }
+        for (std::size_t i = total - swap_count; i < total; ++i) {
+            value += values[i];
+        }
+        return value;
+    };
+
+    std::size_t swaps = 0;
+
+    while (select_count > 0 && swaps < select_count && select_count + swaps < total
+           && batch_value(swaps) <= fee_ceiling)
+    {
+        ++swaps;
+    }
+
+    return swaps;
+}
+
+CWallet::SeedPhraseKeyClass CWallet::ClassifySeedPhraseKey(const CKeyID& key_id) const
+{
+    AssertLockHeld(cs_wallet);
+
+    if (key_id == m_seed_phrase_data.masterKeyID) return SeedPhraseKeyClass::COVERED;
+
+    const auto meta_iter = mapKeyMetadata.find(key_id);
+
+    if (meta_iter == mapKeyMetadata.end() || meta_iter->second.hdKeypath.empty()) {
+        return SeedPhraseKeyClass::LEGACY;
+    }
+
+    return meta_iter->second.hdMasterKeyID == m_seed_phrase_data.masterKeyID
+        ? SeedPhraseKeyClass::COVERED
+        : SeedPhraseKeyClass::PRIOR_HD;
+}
+
 int64_t CWalletTx::GetTxTime() const
 {
     int64_t n = nTimeSmart;

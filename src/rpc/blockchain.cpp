@@ -1638,6 +1638,9 @@ static const RPCHelpMan beaconauth_help{
             {RPCResult::Type::STR, "cpid", "The CPID associated with the beacon."},
             {RPCResult::Type::STR_HEX, "public_key", "The beacon's public key."},
             {RPCResult::Type::STR, "verification_code", "The beacon's verification code."},
+            {RPCResult::Type::BOOL, "covered_by_seed_phrase", /*optional=*/true,
+                "Whether the new beacon key is recoverable from the wallet's seed phrase "
+                "(present only on phrase-backed wallets)."},
         }},
     RPCExamples{
         HelpExampleCli("beaconauth", "") +
@@ -1671,6 +1674,16 @@ UniValue beaconauth(const UniValue& params)
         res.pushKV("cpid", cpid->ToString());
         res.pushKV("public_key", HexStr(beacon.m_public_key));
         res.pushKV("verification_code", beacon.GetVerificationCode());
+
+        // When the wallet is phrase-backed, report whether the freshly
+        // generated beacon key is recoverable from the seed phrase, so a
+        // migrating cruncher can verify the rotation target before
+        // advertising it.
+        if (pwalletMain->HasSeedPhrase()) {
+            res.pushKV("covered_by_seed_phrase",
+                       pwalletMain->ClassifySeedPhraseKey(beacon.m_public_key.GetID())
+                           == CWallet::SeedPhraseKeyClass::COVERED);
+        }
 
         return res;
     }
