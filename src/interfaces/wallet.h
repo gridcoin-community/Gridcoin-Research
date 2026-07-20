@@ -125,6 +125,25 @@ struct WalletSendRecipient
     bool subtract_fee_from_amount{false};
 };
 
+//! Result of Wallet::signMessage. The GUI pre-validates the address and key
+//! type; this covers the wallet/crypto half (the private key never crosses the
+//! boundary -- the signing happens node-side).
+enum class MessageSignStatus
+{
+    OK,
+    KeyNotAvailable, //!< No private key for the address in this wallet.
+    SigningFailed,   //!< SignCompact failed.
+};
+
+//! Result of Wallet::verifyMessage (pure crypto, but kept behind the interface
+//! so the GUI needs no core message-magic/recover headers).
+enum class MessageVerifyStatus
+{
+    OK,
+    RecoverFailed,   //!< The signature did not recover a public key.
+    AddressMismatch, //!< Recovered key does not match the given address.
+};
+
 //! Result statuses for Wallet::sendCoins. GUI-detectable conditions
 //! (duplicate recipient, user abort) are pre-checked by the GUI and never
 //! reach the interface; addresses and amounts are nevertheless re-validated
@@ -285,6 +304,19 @@ public:
     //! belongs to the same node, so it stays behind the wallet boundary
     //! rather than requiring a separate node reach for one file copy.
     virtual bool backupConfigFile(const std::string& dest) = 0;
+
+    //! Sign message with the private key for address (the "sign message" tool).
+    //! The wallet must already be unlocked (the GUI holds an UnlockContext). On
+    //! OK, signature_out is the base64 signature. The private key never leaves
+    //! the node.
+    virtual MessageSignStatus signMessage(const std::string& address, const std::string& message,
+                                          std::string& signature_out) = 0;
+
+    //! Verify that signature (raw bytes) over message was produced by the key
+    //! for address (the "verify message" tool). Stateless crypto; behind the
+    //! interface only so the GUI needs no core message-magic/recover headers.
+    virtual MessageVerifyStatus verifyMessage(const std::string& address, const std::string& message,
+                                              const std::vector<unsigned char>& signature) = 0;
 
     //! Register a handler for encryption/lock status changes.
     using StatusChangedFn = std::function<void()>;

@@ -6,11 +6,14 @@
 
 #include "gridcoin/backup.h"
 #include "gridcoin/tx_message.h"
+#include "hash.h"
 #include "interfaces/handler.h"
 #include "key_io.h"
 #include "main.h"
 #include "policy/fees.h"
 #include "policy/policy.h"
+#include "streams.h"
+#include "util/strencodings.h"
 #include "wallet/coincontrol.h"
 #include "wallet/wallet.h"
 
@@ -139,6 +142,54 @@ public:
     bool backupConfigFile(const std::string& dest) override
     {
         return GRC::BackupConfigFile(dest);
+    }
+
+    MessageSignStatus signMessage(const std::string& address, const std::string& message,
+                                  std::string& signature_out) override
+    {
+        const CTxDestination dest = DecodeDestination(address);
+        const CKeyID* key_id = std::get_if<CKeyID>(&dest);
+        if (!key_id) {
+            return MessageSignStatus::KeyNotAvailable;
+        }
+
+        CKey key;
+        if (!WITH_LOCK(m_wallet->cs_wallet, return m_wallet->GetKey(*key_id, key))) {
+            return MessageSignStatus::KeyNotAvailable;
+        }
+
+        CDataStream ss(SER_GETHASH, 0);
+        ss << strMessageMagic;
+        ss << message;
+
+        std::vector<unsigned char> signature;
+        if (!key.SignCompact(Hash(ss), signature)) {
+            return MessageSignStatus::SigningFailed;
+        }
+
+        signature_out = EncodeBase64(signature.data(), signature.size());
+        return MessageSignStatus::OK;
+    }
+
+    MessageVerifyStatus verifyMessage(const std::string& address, const std::string& message,
+                                      const std::vector<unsigned char>& signature) override
+    {
+        const CTxDestination dest = DecodeDestination(address);
+
+        CDataStream ss(SER_GETHASH, 0);
+        ss << strMessageMagic;
+        ss << message;
+
+        CPubKey pubkey;
+        if (!pubkey.RecoverCompact(Hash(ss), signature)) {
+            return MessageVerifyStatus::RecoverFailed;
+        }
+
+        if (CTxDestination(pubkey.GetID()) != dest) {
+            return MessageVerifyStatus::AddressMismatch;
+        }
+
+        return MessageVerifyStatus::OK;
     }
 
     bool getPubKey(const CKeyID& address, CPubKey& pub_key_out) override

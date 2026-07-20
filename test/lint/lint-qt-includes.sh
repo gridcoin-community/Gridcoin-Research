@@ -64,9 +64,6 @@ src/qt/researcher/researcherwizardpoolpage.cpp:key.h
 src/qt/rpcconsole.cpp:rpc/client.h
 src/qt/rpcconsole.cpp:rpc/protocol.h
 src/qt/rpcconsole.cpp:rpc/server.h
-src/qt/signverifymessagedialog.cpp:init.h
-src/qt/signverifymessagedialog.cpp:main.h
-src/qt/signverifymessagedialog.cpp:wallet/wallet.h
 src/qt/transactiontablemodel.cpp:util.h
 src/qt/transactionview.cpp:util/system.h
 src/qt/updatedialog.h:gridcoin/upgrade.h
