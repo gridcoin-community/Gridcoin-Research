@@ -33,6 +33,32 @@ struct BannedNode
     int64_t ban_until = 0; //!< Ban expiry, seconds since epoch.
 };
 
+//! Value snapshot of one connected peer's stats, as the GUI peer table and the
+//! RPC-console peer-detail panel display them (the Qt-free mirror of the fields
+//! the GUI read from the core CNodeStats). id is the connection's NodeId, which
+//! the ban/disconnect commands act on.
+struct PeerInfo
+{
+    int64_t id = 0;
+    std::string addr_name;   //!< Display address (host:port).
+    std::string addr_local;  //!< Local address the peer sees us as.
+    std::string subversion;  //!< Reported user agent.
+    uint64_t services = 0;
+    int version = 0;
+    int starting_height = 0;
+    int misbehavior = 0;     //!< Ban score.
+    bool inbound = false;
+    int64_t last_send = 0;
+    int64_t last_recv = 0;
+    uint64_t send_bytes = 0;
+    uint64_t recv_bytes = 0;
+    int64_t time_connected = 0;
+    int64_t time_offset = 0;
+    double ping_time = 0;
+    double ping_wait = 0;
+    double min_ping = 0;
+};
+
 //! Value snapshot of the scraper convergence status consumed by the GUI
 //! status icon. Taken under the scraper cache lock inside the implementation;
 //! callers hold nothing.
@@ -116,6 +142,24 @@ public:
 
     //! Current ban list.
     virtual std::vector<BannedNode> getBanned() = 0;
+
+    //! Value snapshots of all currently-connected peers, for the peer table and
+    //! the RPC-console peer-detail panel. Empty when the connection manager is
+    //! not up.
+    virtual std::vector<PeerInfo> getPeers() = 0;
+
+    //! Ban and disconnect the peer with the given connection id for ban_time
+    //! seconds (mirrors the GUI's ban action, which bans the address and drops
+    //! the connection). No-op for an unknown id.
+    virtual void banNode(int64_t node_id, int64_t ban_time_seconds) = 0;
+
+    //! Remove a ban on the given subnet/address string (from the ban table).
+    //! Returns false if the string is not a valid subnet or was not banned.
+    virtual bool unban(const std::string& subnet) = 0;
+
+    //! Disconnect the peer with the given connection id. Returns whether a peer
+    //! was disconnected.
+    virtual bool disconnectNode(int64_t node_id) = 0;
 
     //! Value snapshot of the scraper convergence status.
     virtual ScraperConvergenceSnapshot getScraperConvergenceSnapshot() = 0;

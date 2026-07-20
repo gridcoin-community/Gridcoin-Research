@@ -4,7 +4,6 @@
 #include "qt/guiutil.h"
 #include "qt/peertablemodel.h"
 
-#include "net.h"
 
 #include <QDialog>
 #include <QWidget>
@@ -107,14 +106,14 @@ private:
     ClientModel *clientModel;
     QStringList history;
     int historyPtr = 0;
-    QList<NodeId> cachedNodeids;
+    QList<int64_t> cachedNodeids;
     QMenu *peersTableContextMenu = nullptr;
     QMenu *banTableContextMenu = nullptr;
     QCompleter *autoCompleter;
     static QString FormatBytes(quint64 bytes);
     void setTrafficGraphRange(int mins);
     /** show detailed information on ui about selected node */
-    void updateNodeDetail(const CNodeCombinedStats *stats);
+    void updateNodeDetail(const interfaces::PeerInfo *stats);
 
     void startExecutor();
 

@@ -3,9 +3,6 @@
 #include "ui_rpcconsole.h"
 
 #ifndef Q_MOC_RUN
-#include "banman.h" // Direct include: previously supplied transitively by the
-                     // pre-interfaces bantablemodel.h; the ban/unban mutations
-                     // here are existing coupling scheduled for Phase 1e.
 #include "clientmodel.h"
 #include "qt/bantablemodel.h"
 #include "qt/decoration.h"
@@ -646,7 +643,7 @@ void RPCConsole::peerSelected(const QItemSelection &selected, const QItemSelecti
     if (!clientModel || !clientModel->getPeerTableModel() || selected.indexes().isEmpty())
         return;
 
-    const CNodeCombinedStats *stats = clientModel->getPeerTableModel()->getNodeStats(selected.indexes().first().row());
+    const interfaces::PeerInfo *stats = clientModel->getPeerTableModel()->getNodeStats(selected.indexes().first().row());
     if (stats)
         updateNodeDetail(stats);
 }
@@ -657,8 +654,8 @@ void RPCConsole::peerLayoutAboutToChange()
     cachedNodeids.clear();
     for(int i = 0; i < selected.size(); i++)
     {
-        const CNodeCombinedStats *stats = clientModel->getPeerTableModel()->getNodeStats(selected.at(i).row());
-        cachedNodeids.append(stats->nodeStats.id);
+        const interfaces::PeerInfo *stats = clientModel->getPeerTableModel()->getNodeStats(selected.at(i).row());
+        cachedNodeids.append(stats->id);
     }
 }
 
@@ -667,7 +664,7 @@ void RPCConsole::peerLayoutChanged()
     if (!clientModel || !clientModel->getPeerTableModel())
         return;
 
-    const CNodeCombinedStats *stats = nullptr;
+    const interfaces::PeerInfo *stats = nullptr;
     bool fUnselect = false;
     bool fReselect = false;
 
@@ -719,55 +716,38 @@ void RPCConsole::peerLayoutChanged()
         updateNodeDetail(stats);
 }
 
-void RPCConsole::updateNodeDetail(const CNodeCombinedStats *stats)
+void RPCConsole::updateNodeDetail(const interfaces::PeerInfo *stats)
 {
     // update the detail ui with latest node information
-    QString peerAddrDetails(QString::fromStdString(stats->nodeStats.addrName) + " ");
-    peerAddrDetails += tr("(node id: %1)").arg(QString::number(stats->nodeStats.id));
-    if (!stats->nodeStats.addrLocal.empty())
-        peerAddrDetails += "<br />" + tr("via %1").arg(QString::fromStdString(stats->nodeStats.addrLocal));
+    QString peerAddrDetails(QString::fromStdString(stats->addr_name) + " ");
+    peerAddrDetails += tr("(node id: %1)").arg(QString::number(stats->id));
+    if (!stats->addr_local.empty())
+        peerAddrDetails += "<br />" + tr("via %1").arg(QString::fromStdString(stats->addr_local));
     ui->peerHeading->setText(peerAddrDetails);
-    ui->peerServices->setText(GUIUtil::formatServicesStr(stats->nodeStats.nServices));
-    ui->peerLastSend->setText(stats->nodeStats.nLastSend ? GUIUtil::formatDurationStr(GetTimeSeconds() - stats->nodeStats.nLastSend) : tr("never"));
-    ui->peerLastRecv->setText(stats->nodeStats.nLastRecv ? GUIUtil::formatDurationStr(GetTimeSeconds() - stats->nodeStats.nLastRecv) : tr("never"));
-    ui->peerBytesSent->setText(GUIUtil::formatBytes(stats->nodeStats.nSendBytes));
-    ui->peerBytesRecv->setText(GUIUtil::formatBytes(stats->nodeStats.nRecvBytes));
-    ui->peerConnTime->setText(GUIUtil::formatDurationStr(GetTimeSeconds() - stats->nodeStats.nTimeConnected));
-    ui->peerPingTime->setText(GUIUtil::formatPingTime(stats->nodeStats.dPingTime));
-    ui->peerPingWait->setText(GUIUtil::formatPingTime(stats->nodeStats.dPingWait));
-    ui->peerMinPing->setText(GUIUtil::formatPingTime(stats->nodeStats.dMinPing));
-    ui->timeoffset->setText(GUIUtil::formatTimeOffset(stats->nodeStats.nTimeOffset));
-    ui->peerVersion->setText(QString("%1").arg(QString::number(stats->nodeStats.nVersion)));
-    if (!stats->nodeStats.strSubVer.empty()) {
+    ui->peerServices->setText(GUIUtil::formatServicesStr(stats->services));
+    ui->peerLastSend->setText(stats->last_send ? GUIUtil::formatDurationStr(GetTimeSeconds() - stats->last_send) : tr("never"));
+    ui->peerLastRecv->setText(stats->last_recv ? GUIUtil::formatDurationStr(GetTimeSeconds() - stats->last_recv) : tr("never"));
+    ui->peerBytesSent->setText(GUIUtil::formatBytes(stats->send_bytes));
+    ui->peerBytesRecv->setText(GUIUtil::formatBytes(stats->recv_bytes));
+    ui->peerConnTime->setText(GUIUtil::formatDurationStr(GetTimeSeconds() - stats->time_connected));
+    ui->peerPingTime->setText(GUIUtil::formatPingTime(stats->ping_time));
+    ui->peerPingWait->setText(GUIUtil::formatPingTime(stats->ping_wait));
+    ui->peerMinPing->setText(GUIUtil::formatPingTime(stats->min_ping));
+    ui->timeoffset->setText(GUIUtil::formatTimeOffset(stats->time_offset));
+    ui->peerVersion->setText(QString("%1").arg(QString::number(stats->version)));
+    if (!stats->subversion.empty()) {
         // remove leading and trailing slash
-        ui->peerSubversion->setText(QString::fromStdString(stats->nodeStats.strSubVer.substr(1, stats->nodeStats.strSubVer.length() - 2)));
+        ui->peerSubversion->setText(QString::fromStdString(stats->subversion.substr(1, stats->subversion.length() - 2)));
     } else {
         ui->peerSubversion->clear();
     }
-    ui->peerDirection->setText(stats->nodeStats.fInbound ? tr("Inbound") : tr("Outbound"));
-    ui->peerHeight->setText(QString("%1").arg(QString::number(stats->nodeStats.nStartingHeight)));
-    // ui->peerWhitelisted->setText(stats->nodeStats.fWhitelisted ? tr("Yes") : tr("No"));
-    // Ban score is init to 0
-    ui->peerBanScore->setText(QString("%1").arg(stats->nodeStats.nMisbehavior));
+    ui->peerDirection->setText(stats->inbound ? tr("Inbound") : tr("Outbound"));
+    ui->peerHeight->setText(QString("%1").arg(QString::number(stats->starting_height)));
+    ui->peerBanScore->setText(QString("%1").arg(stats->misbehavior));
 
-    // This check fails for example if the lock was busy and
-    // nodeStateStats couldn't be fetched.
-    if (stats->fNodeStateStatsAvailable) {
-        // Ban score is init to 0
-        // ui->peerBanScore->setText(QString("%1").arg(stats->nodeStats.nMisbehavior));
-
-        // Sync height is init to -1
-        // (stats->nodeStats.nSyncHeight > -1)
-        //    ui->peerSyncHeight->setText(QString("%1").arg(stats->nodeStats.nSyncHeight));
-        //else
-            ui->peerSyncHeight->setText(tr("Unknown"));
-
-        // Common height is init to -1
-        //if (stats->nodeStateStats.nCommonHeight > -1)
-        //    ui->peerCommonHeight->setText(QString("%1").arg(stats->nodeStats.nCommonHeight));
-        //else
-            ui->peerCommonHeight->setText(tr("Unknown"));
-    }
+    // Sync/common height are not tracked yet (there is no CNodeStateStats), so
+    // the peerSyncHeight/peerCommonHeight labels keep their designer default and
+    // are intentionally left untouched here.
 
     ui->peerDetailWidget->show();
 }
@@ -825,24 +805,13 @@ void RPCConsole::banSelectedNode(int bantime)
     if (!clientModel)
         return;
 
-    // Get selected peer addresses
+    // Ban (and disconnect) each selected peer by its connection id. The node
+    // side looks the peer's address up and applies the ban + disconnect.
     QList<QModelIndex> nodes = GUIUtil::getEntryData(ui->peerWidget, PeerTableModel::NetNodeId);
     for(int i = 0; i < nodes.count(); i++)
     {
-        // Get currently selected peer address
-        NodeId id = nodes.at(i).data().toLongLong();
-
-        // Get currently selected peer address
-        int detailNodeRow = clientModel->getPeerTableModel()->getRowByNodeId(id);
-        if (detailNodeRow < 0) return;
-
-        // Find possible nodes, ban it and clear the selected node
-        const CNodeCombinedStats *stats = clientModel->getPeerTableModel()->getNodeStats(detailNodeRow);
-        if (stats) {
-            g_banman->Ban(stats->nodeStats.addr, BanReasonManuallyAdded, bantime);
-            // issue #2558 PR 9b: disconnect via the CConnman node-access API.
-            if (g_connman) g_connman->DisconnectNode(stats->nodeStats.addr);
-        }
+        const int64_t id = nodes.at(i).data().toLongLong();
+        clientModel->node().banNode(id, bantime);
     }
     clearSelectedNode();
     clientModel->getBanTableModel()->refresh();
@@ -859,10 +828,8 @@ void RPCConsole::unbanSelectedNode()
     {
         // Get currently selected ban address
         QString strNode = nodes.at(i).data().toString();
-        CSubNet possibleSubnet;
 
-        LookupSubNet(strNode.toStdString().c_str(), possibleSubnet);
-        if (possibleSubnet.IsValid() && g_banman->Unban(possibleSubnet))
+        if (clientModel->node().unban(strNode.toStdString()))
         {
             clientModel->getBanTableModel()->refresh();
         }
@@ -889,17 +856,15 @@ void RPCConsole::showOrHideBanTableIfRequired()
 
 void RPCConsole::disconnectSelectedNode()
 {
-    // Get selected peer addresses
+    if (!clientModel)
+        return;
+
+    // Disconnect each selected peer by its connection id, node-side.
     QList<QModelIndex> nodes = GUIUtil::getEntryData(ui->peerWidget, PeerTableModel::NetNodeId);
     for(int i = 0; i < nodes.count(); i++)
     {
-        // Get currently selected peer address
-        NodeId id = nodes.at(i).data().toLongLong();
-        // Find the node, disconnect it and clear the selected node (issue #2558
-        // PR 9b: disconnect via the CConnman node-access API). g_connman is live
-        // whenever the peers tab is populated, so the guard only no-ops during
-        // shutdown -- where leaving the selection is harmless.
-        if (g_connman && g_connman->DisconnectNode(id))
+        const int64_t id = nodes.at(i).data().toLongLong();
+        if (clientModel->node().disconnectNode(id))
             clearSelectedNode();
     }
 }

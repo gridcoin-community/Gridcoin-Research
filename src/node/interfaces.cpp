@@ -23,6 +23,7 @@
 #include "interfaces/wallet_tx_source.h"
 #include "main.h"
 #include "net.h"
+#include "netbase.h"
 #include "node/ui_interface.h"
 #include "sync.h"
 #include "util.h"
@@ -129,6 +130,87 @@ public:
         }
 
         return banned;
+    }
+
+    std::vector<PeerInfo> getPeers() override
+    {
+        std::vector<PeerInfo> peers;
+
+        if (!g_connman) {
+            return peers;
+        }
+
+        std::vector<CNodeStats> vstats;
+        g_connman->GetNodeStats(vstats);
+        peers.reserve(vstats.size());
+
+        for (const CNodeStats& s : vstats) {
+            PeerInfo p;
+            p.id = s.id;
+            p.addr_name = s.addrName;
+            p.addr_local = s.addrLocal;
+            p.subversion = s.strSubVer;
+            p.services = s.nServices;
+            p.version = s.nVersion;
+            p.starting_height = s.nStartingHeight;
+            p.misbehavior = s.nMisbehavior;
+            p.inbound = s.fInbound;
+            p.last_send = s.nLastSend;
+            p.last_recv = s.nLastRecv;
+            p.send_bytes = s.nSendBytes;
+            p.recv_bytes = s.nRecvBytes;
+            p.time_connected = s.nTimeConnected;
+            p.time_offset = s.nTimeOffset;
+            p.ping_time = s.dPingTime;
+            p.ping_wait = s.dPingWait;
+            p.min_ping = s.dMinPing;
+            peers.push_back(std::move(p));
+        }
+
+        return peers;
+    }
+
+    void banNode(int64_t node_id, int64_t ban_time_seconds) override
+    {
+        if (!g_connman || !g_banman) {
+            return;
+        }
+
+        // Look the peer's address up by connection id, then ban it and drop the
+        // connection -- mirroring the GUI's ban action (ban address + disconnect).
+        // ForEachNode walks m_nodes under m_nodes_mutex; copy out just the address
+        // and do the Ban()/DisconnectNode() afterwards (outside that lock) rather
+        // than snapshotting every peer's full CNodeStats to find one address.
+        CAddress addr;
+        bool found = false;
+        g_connman->ForEachNode([&](CNode* pnode) {
+            if (!found && pnode->GetId() == node_id) {
+                addr = pnode->addr;
+                found = true;
+            }
+        });
+
+        if (found) {
+            g_banman->Ban(addr, BanReasonManuallyAdded, ban_time_seconds);
+            g_connman->DisconnectNode(node_id);
+        }
+    }
+
+    bool unban(const std::string& subnet) override
+    {
+        if (!g_banman) {
+            return false;
+        }
+
+        CSubNet sub;
+        LookupSubNet(subnet.c_str(), sub);
+
+        return sub.IsValid() && g_banman->Unban(sub);
+    }
+
+    bool disconnectNode(int64_t node_id) override
+    {
+        return g_connman && g_connman->DisconnectNode(node_id);
     }
 
     ScraperConvergenceSnapshot getScraperConvergenceSnapshot() override
