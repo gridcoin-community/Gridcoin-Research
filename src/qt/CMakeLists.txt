@@ -86,6 +86,7 @@ add_library(gridcoinqt STATIC
     sendcoinsentry.cpp
     sidestaketablemodel.cpp
     signverifymessagedialog.cpp
+    splashscreen.cpp
     multisigndialog.cpp
     psgtpoolpage.cpp
     psgtpooltablemodel.cpp
