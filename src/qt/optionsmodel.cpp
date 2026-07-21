@@ -6,8 +6,11 @@
 #include "bitcoinunits.h"
 #include "guiutil.h"
 #include "interfaces/node.h"
+#include "util/strencodings.h" // For SplitHostPort (IPv6-aware host:port parsing).
 
 #include "miner.h"
+
+#include <utility>
 
 namespace {
 //! Format a satoshi amount as a plain money string (no localization/thousands
@@ -37,6 +40,27 @@ bool PushEffectiveProxy(interfaces::Node& node, QSettings& settings)
     const std::string addr =
         use_proxy ? settings.value("addrProxy", "127.0.0.1:9050").toString().toStdString() : std::string();
     return node.changeSettings({{"proxy", addr}}).ok;
+}
+
+//! Split a stored "host:port" proxy string into host and port, IPv6-aware
+//! (SplitHostPort strips the [] brackets around an IPv6 host and only treats a
+//! colon as the port separator when it is unambiguous). Port defaults to 9050.
+std::pair<QString, int> SplitProxy(const QString& addr)
+{
+    int port = 9050;
+    std::string host;
+    SplitHostPort(addr.toStdString(), port, host);
+    return {QString::fromStdString(host), port};
+}
+
+//! Format host + port back into the stored proxy string, bracketing an IPv6
+//! host (one containing a colon) so it round-trips through SplitProxy and is
+//! accepted by the node's proxy validation -- matching the old
+//! CService::ToStringIPPort() form.
+QString FormatProxy(const QString& host, int port)
+{
+    const QString h = host.contains(':') ? "[" + host + "]" : host;
+    return h + ":" + QString::number(port);
 }
 } // namespace
 
@@ -125,10 +149,12 @@ void OptionsModel::migrateCoreSettings()
     if (!m_node.isSettingSet("disableupdatecheck") && settings.contains("fDisableUpdateCheck")) {
         migrate.emplace_back("disableupdatecheck", settings.value("fDisableUpdateCheck").toBool() ? "1" : "0");
     }
-    if (!migrate.empty()) {
-        m_node.changeSettings(migrate);
+    // Only mark the migration done once it has actually been persisted. If the
+    // node write fails, leave the flag unset so the next launch retries rather
+    // than permanently dropping the user's old Gridcoin-Qt.conf values.
+    if (migrate.empty() || m_node.changeSettings(migrate).ok) {
+        settings.setValue("coreSettingsMigrated", true);
     }
-    settings.setValue("coreSettingsMigrated", true);
 }
 
 int OptionsModel::rowCount(const QModelIndex & parent) const
@@ -163,16 +189,10 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             // GUI editing state: whether the user enabled the proxy. The effective
             // proxy address is mirrored to the core -proxy setting on change.
             return settings.value("fUseProxy", false);
-        case ProxyIP: {
-            const QString ap = settings.value("addrProxy", "127.0.0.1:9050").toString();
-            const int colon = ap.lastIndexOf(':');
-            return QVariant(colon >= 0 ? ap.left(colon) : ap);
-        }
-        case ProxyPort: {
-            const QString ap = settings.value("addrProxy", "127.0.0.1:9050").toString();
-            const int colon = ap.lastIndexOf(':');
-            return QVariant(colon >= 0 ? ap.mid(colon + 1).toInt() : 9050);
-        }
+        case ProxyIP:
+            return QVariant(SplitProxy(settings.value("addrProxy", "127.0.0.1:9050").toString()).first);
+        case ProxyPort:
+            return QVariant(SplitProxy(settings.value("addrProxy", "127.0.0.1:9050").toString()).second);
         case ReserveBalance: {
             qint64 sat = 0;
             BitcoinUnits::parse(BitcoinUnits::BTC,
@@ -265,7 +285,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case MapPortUPnP:
             // Core setting: the node applies it (SetUseUPnP + MapPort start/stop
             // the port-map thread) via the immediate-effect hook.
-            m_node.changeSettings({{"upnp", value.toBool() ? "1" : "0"}});
+            successful = m_node.changeSettings({{"upnp", value.toBool() ? "1" : "0"}}).ok;
             break;
         case MinimizeOnClose:
             fMinimizeOnClose = value.toBool();
@@ -276,20 +296,17 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             successful = PushEffectiveProxy(m_node, settings);
             break;
         case ProxyIP: {
-            // Replace the host part of the stored address; port is kept.
-            const QString ap = settings.value("addrProxy", "127.0.0.1:9050").toString();
-            const int colon = ap.lastIndexOf(':');
-            const QString port = colon >= 0 ? ap.mid(colon + 1) : QString("9050");
-            settings.setValue("addrProxy", value.toString() + ":" + port);
+            // Replace the host part of the stored address; port is kept. IPv6-aware
+            // via SplitProxy/FormatProxy (brackets round-trip correctly).
+            const int port = SplitProxy(settings.value("addrProxy", "127.0.0.1:9050").toString()).second;
+            settings.setValue("addrProxy", FormatProxy(value.toString(), port));
             successful = PushEffectiveProxy(m_node, settings);
         }
         break;
         case ProxyPort: {
             // Replace the port part of the stored address; host is kept.
-            const QString ap = settings.value("addrProxy", "127.0.0.1:9050").toString();
-            const int colon = ap.lastIndexOf(':');
-            const QString host = colon >= 0 ? ap.left(colon) : ap;
-            settings.setValue("addrProxy", host + ":" + QString::number(value.toInt()));
+            const QString host = SplitProxy(settings.value("addrProxy", "127.0.0.1:9050").toString()).first;
+            settings.setValue("addrProxy", FormatProxy(host, value.toInt()));
             successful = PushEffectiveProxy(m_node, settings);
         }
         break;
@@ -349,7 +366,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case DisableUpdateCheck:
             // Core read-write setting (the core scheduler and the GUI both read
             // it); route through the node so it persists to gridcoinsettings.json.
-            m_node.changeSettings({{"disableupdatecheck", value.toBool() ? "1" : "0"}});
+            successful = m_node.changeSettings({{"disableupdatecheck", value.toBool() ? "1" : "0"}}).ok;
             break;
         case DataDir:
             // There is no SetArgument here, because the core data directory cannot
@@ -362,22 +379,22 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         // file. The node validates, persists, and force-sets them (the miner
         // re-reads them live on each stake).
         case EnableStaking:
-            m_node.changeSettings({{"staking", value.toBool() ? "1" : "0"}});
+            successful = m_node.changeSettings({{"staking", value.toBool() ? "1" : "0"}}).ok;
             break;
         case EnableStakeSplit:
-            m_node.changeSettings({{"enablestakesplit", value.toBool() ? "1" : "0"}});
+            successful = m_node.changeSettings({{"enablestakesplit", value.toBool() ? "1" : "0"}}).ok;
             break;
         case EnableSideStaking:
-            m_node.changeSettings({{"enablesidestaking", value.toBool() ? "1" : "0"}});
+            successful = m_node.changeSettings({{"enablesidestaking", value.toBool() ? "1" : "0"}}).ok;
             break;
         case StakingEfficiency:
-            m_node.changeSettings({{"stakingefficiency", value.toString().toStdString()}});
+            successful = m_node.changeSettings({{"stakingefficiency", value.toString().toStdString()}}).ok;
             break;
         case MinStakeSplitValue:
-            m_node.changeSettings({{"minstakesplitvalue", value.toString().toStdString()}});
+            successful = m_node.changeSettings({{"minstakesplitvalue", value.toString().toStdString()}}).ok;
             break;
         case ContractChangeToInput:
-            m_node.changeSettings({{"contractchangetoinputaddress", value.toBool() ? "1" : "0"}});
+            successful = m_node.changeSettings({{"contractchangetoinputaddress", value.toBool() ? "1" : "0"}}).ok;
             break;
         default:
             break;
