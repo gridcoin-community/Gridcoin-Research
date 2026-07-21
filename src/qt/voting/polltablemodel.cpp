@@ -235,7 +235,7 @@ void PollTableDataModel::handlePollStaleFlag(QString poll_txid_string)
 PollTableModel::PollTableModel(QObject* parent)
     : QSortFilterProxyModel(parent)
     , m_data_model(new PollTableDataModel())
-    , m_filter_flags(GRC::PollFilterFlag::NO_FILTER)
+    , m_filter_flags(PollFilterFlag::NO_FILTER)
 {
     setSourceModel(m_data_model.get());
     setDynamicSortFilter(true);

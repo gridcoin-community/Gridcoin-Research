@@ -1,0 +1,18 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/src/scrypt-x86.S
+config/gridcoin-config.h
+-
+
+/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/src/scrypt-x86_64.S
+config/gridcoin-config.h
+-
+
+src/config/gridcoin-config.h
+

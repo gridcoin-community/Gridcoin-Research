@@ -1,0 +1,94 @@
+#ifndef GRIDCOIN_CONFIG_H
+#define GRIDCOIN_CONFIG_H
+
+#define PACKAGE_NAME "Gridcoin"
+#define PACKAGE_VERSION "5.5.1.4"
+#define PACKAGE_BUGREPORT "https://github.com/gridcoin-community/Gridcoin-Research/issues"
+#define CLIENT_VERSION_MAJOR 5
+#define CLIENT_VERSION_MINOR 5
+#define CLIENT_VERSION_REVISION 1
+#define CLIENT_VERSION_BUILD 4
+#define CLIENT_VERSION_IS_RELEASE false
+#define COPYRIGHT_YEAR "2026"
+#define COPYRIGHT_HOLDERS_FINAL "The Gridcoin developers"
+
+#ifndef ENABLE_SSE41
+#define ENABLE_SSE41
+#endif
+
+#ifndef ENABLE_AVX2
+#define ENABLE_AVX2
+#endif
+
+#ifndef ENABLE_X86_SHANI
+#define ENABLE_X86_SHANI
+#endif
+
+#ifndef ENABLE_ARM_CRC
+/* #undef ENABLE_ARM_CRC */
+#endif
+
+#ifndef ENABLE_ARM_SHANI
+/* #undef ENABLE_ARM_SHANI */
+#endif
+
+#define USE_ASM
+#define USE_ASM_SCRYPT
+
+/* #undef USE_DBUS */
+
+#define HAVE_STRERROR_R
+/* #undef STRERROR_R_CHAR_P */
+
+/* #undef WORDS_BIGENDIAN */
+
+#define HAVE_BYTESWAP_H
+#define HAVE_ENDIAN_H
+/* #undef HAVE_SYS_ENDIAN_H */
+#define HAVE_SYS_PRCTL_H
+
+#define HAVE_DECL_FORK 1
+#define HAVE_DECL_PIPE2 1
+#define HAVE_DECL_SETSID 1
+
+#define HAVE_DECL_LE16TOH 1
+#define HAVE_DECL_LE32TOH 1
+#define HAVE_DECL_LE64TOH 1
+
+#define HAVE_DECL_HTOLE16 1
+#define HAVE_DECL_HTOLE32 1
+#define HAVE_DECL_HTOLE64 1
+
+#define HAVE_DECL_BE16TOH 1
+#define HAVE_DECL_BE32TOH 1
+#define HAVE_DECL_BE64TOH 1
+
+#define HAVE_DECL_HTOBE16 1
+#define HAVE_DECL_HTOBE32 1
+#define HAVE_DECL_HTOBE64 1
+
+#define HAVE_DECL_BSWAP_16 1
+#define HAVE_DECL_BSWAP_32 1
+#define HAVE_DECL_BSWAP_64 1
+
+/* #undef HAVE_BUILTIN_CLZL */
+/* #undef HAVE_BUILTIN_CLZLL */
+
+#define HAVE_MSG_NOSIGNAL
+#define HAVE_MSG_DONTWAIT
+
+#define HAVE_MALLOC_INFO
+#define HAVE_MALLOPT_ARENA_MAX
+
+#define HAVE_SYSTEM 1
+#define HAVE_GMTIME_R
+
+#define HAVE_GETRANDOM
+#define HAVE_GETENTROPY_RAND
+/* #undef HAVE_SYSCTL */
+/* #undef HAVE_SYSCTL_ARND */
+
+#define HAVE_O_CLOEXEC 1
+#define HAVE_STRONG_GETAUXVAL
+
+#endif //GRIDCOIN_CONFIG_H

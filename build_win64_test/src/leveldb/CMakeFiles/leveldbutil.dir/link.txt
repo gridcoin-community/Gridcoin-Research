@@ -1,0 +1,3 @@
+/usr/bin/cmake -E rm -f CMakeFiles/leveldbutil.dir/objects.a
+x86_64-w64-mingw32-ar qc CMakeFiles/leveldbutil.dir/objects.a @CMakeFiles/leveldbutil.dir/objects1.rsp
+/bin/x86_64-w64-mingw32-g++ -pipe -std=c++17 -fno-exceptions -O2  -O2 -g -DNDEBUG -static -Wl,--whole-archive CMakeFiles/leveldbutil.dir/objects.a -Wl,--no-whole-archive -o leveldbutil.exe -Wl,--out-implib,libleveldbutil.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles/leveldbutil.dir/linkLibs.rsp

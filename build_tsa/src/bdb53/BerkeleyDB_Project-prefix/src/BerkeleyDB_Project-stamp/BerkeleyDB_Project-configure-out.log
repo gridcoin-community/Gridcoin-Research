@@ -1,0 +1,310 @@
+configure: loading site script /usr/share/site/x86_64-pc-linux-gnu
+checking build system type... x86_64-pc-linux-gnu
+checking host system type... x86_64-pc-linux-gnu
+checking if building in the top-level or dist directories... no
+checking if --enable-smallbuild option specified... no
+checking if --disable-atomicsupport option specified... no
+checking if --disable-compression option specified... no
+checking if --disable-hash option specified... no
+checking if --disable-heap option specified... no
+checking if --disable-mutexsupport option specified... no
+checking if --disable-log_checksum option specified... no
+checking if --disable-partition option specified... no
+checking if --disable-queue option specified... no
+checking if --disable-replication option specified... yes
+checking if --disable-statistics option specified... no
+checking if --disable-verify option specified... no
+checking if --enable-compat185 option specified... no
+checking if --enable-cxx option specified... yes
+checking if --enable-debug option specified... no
+checking if --enable-debug_rop option specified... no
+checking if --enable-debug_wop option specified... no
+checking if --enable-diagnostic option specified... no
+checking if --enable-dump185 option specified... no
+checking if --enable-java option specified... no
+checking if --enable-mingw option specified... no
+checking if --enable-o_direct option specified... no
+checking if --enable-posixmutexes option specified... no
+checking if --enable-rpc option specified... no
+checking if --enable-sql option specified... no
+checking if --enable-sql_compat option specified... no
+checking if --enable-jdbc option specified... no
+checking if --with-jdbc=DIR option specified... no
+checking if --enable-amalgamation option specified... no
+checking if --enable-sql_codegen option specified... no
+checking if --enable-stl option specified... no
+checking if --enable-tcl option specified... no
+checking if --enable-test option specified... no
+checking if --enable-localization option specified... no
+checking if --enable-stripped_messages option specified... no
+checking if --enable-dbm option specified... no
+checking if --enable-dtrace option specified... no
+checking if --enable-systemtap option specified... no
+checking if --enable-perfmon-statistics option specified... no
+checking if --enable-uimutexes option specified... no
+checking if --enable-umrw option specified... no
+checking if --enable-atomicfileread option specified... no
+checking if --with-cryptography option specified... yes
+checking if --with-mutex=MUTEX option specified... no
+checking if --with-tcl=DIR option specified... no
+checking if --with-uniquename=NAME option specified... no
+checking for chmod... chmod
+checking for cp... cp
+checking for ln... ln
+checking for mkdir... mkdir
+checking for rm... rm
+checking for mv... mv
+checking for sh... /usr/bin/sh
+checking for a BSD-compatible install... /usr/bin/install -c
+checking for cc... cc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables... 
+checking whether we are cross compiling... no
+checking for suffix of object files... o
+checking whether we are using the GNU C compiler... yes
+checking whether cc accepts -g... yes
+checking for cc option to accept ISO C89... none needed
+checking for an ANSI C-conforming const... yes
+checking for inline... inline
+checking for GCC aligned attribute... yes
+checking for g++... g++
+checking whether we are using the GNU C++ compiler... yes
+checking whether g++ accepts -g... yes
+checking how to run the C++ preprocessor... g++ -E
+checking whether C++ supports the ISO C++ standard includes... yes
+checking whether we are using gcc version 2.96... no
+checking how to print strings... printf
+checking for a sed that does not truncate output... /usr/bin/sed
+checking for grep that handles long lines and -e... /usr/bin/grep
+checking for egrep... /usr/bin/grep -E
+checking for fgrep... /usr/bin/grep -F
+checking for ld used by cc... /usr/x86_64-suse-linux/bin/ld
+checking if the linker (/usr/x86_64-suse-linux/bin/ld) is GNU ld... yes
+checking for BSD- or MS-compatible name lister (nm)... /usr/bin/nm -B
+checking the name lister (/usr/bin/nm -B) interface... BSD nm
+checking whether ln -s works... yes
+checking the maximum length of command line arguments... 1572864
+checking whether the shell understands some XSI constructs... yes
+checking whether the shell understands "+="... yes
+checking how to convert x86_64-pc-linux-gnu file names to x86_64-pc-linux-gnu format... func_convert_file_noop
+checking how to convert x86_64-pc-linux-gnu file names to toolchain format... func_convert_file_noop
+checking for /usr/x86_64-suse-linux/bin/ld option to reload object files... -r
+checking for objdump... objdump
+checking how to recognize dependent libraries... pass_all
+checking for dlltool... no
+checking how to associate runtime and link libraries... printf %s\n
+checking for ar... ar
+checking for archiver @FILE support... @
+checking for strip... strip
+checking for ranlib... ranlib
+checking for gawk... gawk
+checking command to parse /usr/bin/nm -B output from cc object... ok
+checking for sysroot... no
+checking for mt... mt
+checking if mt is a manifest tool... no
+checking how to run the C preprocessor... cc -E
+checking for ANSI C header files... yes
+checking for sys/types.h... yes
+checking for sys/stat.h... yes
+checking for stdlib.h... yes
+checking for string.h... yes
+checking for memory.h... yes
+checking for strings.h... yes
+checking for inttypes.h... yes
+checking for stdint.h... yes
+checking for unistd.h... yes
+checking for dlfcn.h... yes
+checking for objdir... .libs
+checking if cc supports -fno-rtti -fno-exceptions... no
+checking for cc option to produce PIC... -fPIC -DPIC
+checking if cc PIC flag -fPIC -DPIC works... yes
+checking if cc static flag -static works... yes
+checking if cc supports -c -o file.o... yes
+checking if cc supports -c -o file.o... (cached) yes
+checking whether the cc linker (/usr/x86_64-suse-linux/bin/ld -m elf_x86_64) supports shared libraries... yes
+checking whether -lc should be explicitly linked in... no
+checking dynamic linker characteristics... GNU/Linux ld.so
+checking how to hardcode library paths into programs... immediate
+checking whether stripping libraries is possible... yes
+checking if libtool supports shared libraries... yes
+checking whether to build shared libraries... yes
+checking whether to build static libraries... yes
+checking how to run the C++ preprocessor... g++ -E
+checking for ld used by g++... /usr/x86_64-suse-linux/bin/ld -m elf_x86_64
+checking if the linker (/usr/x86_64-suse-linux/bin/ld -m elf_x86_64) is GNU ld... yes
+checking whether the g++ linker (/usr/x86_64-suse-linux/bin/ld -m elf_x86_64) supports shared libraries... yes
+checking for g++ option to produce PIC... -fPIC -DPIC
+checking if g++ PIC flag -fPIC -DPIC works... yes
+checking if g++ static flag -static works... yes
+checking if g++ supports -c -o file.o... yes
+checking if g++ supports -c -o file.o... (cached) yes
+checking whether the g++ linker (/usr/x86_64-suse-linux/bin/ld -m elf_x86_64) supports shared libraries... yes
+checking dynamic linker characteristics... (cached) GNU/Linux ld.so
+checking how to hardcode library paths into programs... immediate
+checking SOSUFFIX from libtool... .so
+checking MODSUFFIX from libtool... .so
+checking JMODSUFFIX from libtool... .so
+checking whether stat file-mode macros are broken... no
+checking whether time.h and sys/time.h may both be included... yes
+checking for dirent.h that defines DIR... yes
+checking for library containing opendir... none required
+checking execinfo.h usability... yes
+checking execinfo.h presence... yes
+checking for execinfo.h... yes
+checking sys/select.h usability... yes
+checking sys/select.h presence... yes
+checking for sys/select.h... yes
+checking sys/socket.h usability... yes
+checking sys/socket.h presence... yes
+checking for sys/socket.h... yes
+checking sys/time.h usability... yes
+checking sys/time.h presence... yes
+checking for sys/time.h... yes
+checking for struct stat.st_blksize... yes
+checking for inttypes.h... (cached) yes
+checking for stdint.h... yes
+checking if stdint.h can be used by C++... yes
+checking stddef.h usability... yes
+checking stddef.h presence... yes
+checking for stddef.h... yes
+checking for unistd.h... (cached) yes
+checking size of char... 1
+checking size of unsigned char... 1
+checking size of short... 2
+checking size of unsigned short... 2
+checking size of int... 4
+checking size of unsigned int... 4
+checking size of long... 8
+checking size of unsigned long... 8
+checking size of long long... 8
+checking size of unsigned long long... 8
+checking size of char *... 8
+checking for u_char... yes
+checking for u_short... yes
+checking for u_int... yes
+checking for u_long... yes
+checking for u_int8_t... yes
+checking for u_int16_t... yes
+checking for int16_t... yes
+checking for u_int32_t... yes
+checking for int32_t... yes
+checking for u_int64_t... yes
+checking for int64_t... yes
+checking for FILE *... yes
+checking for off_t... yes
+checking for pid_t... yes
+checking for size_t... yes
+checking for time_t... yes
+checking size of size_t... 8
+checking for ssize_t... yes
+checking for uintmax_t... yes
+checking for uintptr_t... yes
+checking for socklen_t... yes
+checking for ANSI C exit success/failure values... yes
+checking for getopt optreset variable... no
+checking for mutexes... x86_64/gcc-assembly
+checking pthread.h usability... yes
+checking pthread.h presence... yes
+checking for pthread.h... yes
+checking for main in -lpthread... yes
+checking for atomic operations... x86/gcc-assembly
+checking for library containing sched_yield... none required
+checking for library containing fdatasync... none required
+checking for library containing getaddrinfo... none required
+checking for library containing hstrerror... none required
+checking for main in -lm... yes
+checking for main in -lnsl... no
+checking for main in -lsocket... no
+checking for abort... yes
+checking for atoi... yes
+checking for atol... yes
+checking for bsearch... yes
+checking for getcwd... yes
+checking for getenv... yes
+checking for getopt... yes
+checking for isalpha... yes
+checking for isdigit... yes
+checking for isprint... yes
+checking for isspace... yes
+checking for memcmp... yes
+checking for memcpy... yes
+checking for memmove... yes
+checking for printf... yes
+checking for qsort... yes
+checking for raise... yes
+checking for rand... yes
+checking for strcasecmp... yes
+checking for strcat... yes
+checking for strchr... yes
+checking for strdup... yes
+checking for strerror... yes
+checking for strncat... yes
+checking for strncmp... yes
+checking for strrchr... yes
+checking for strsep... yes
+checking for strtol... yes
+checking for strtoul... yes
+checking for _fstati64... no
+checking for backtrace... yes
+checking for backtrace_symbols... yes
+checking for directio... no
+checking for fchmod... yes
+checking for fclose... yes
+checking for fcntl... yes
+checking for fdatasync... yes
+checking for fgetc... yes
+checking for fgets... yes
+checking for fopen... yes
+checking for fwrite... yes
+checking for getgid... yes
+checking for getrusage... yes
+checking for getuid... yes
+checking for hstrerror... yes
+checking for mprotect... yes
+checking for pstat_getdynamic... no
+checking for pthread_self... yes
+checking for pthread_yield... no
+checking for random... yes
+checking for sched_yield... yes
+checking for select... yes
+checking for setgid... yes
+checking for setuid... yes
+checking for sigaction... yes
+checking for snprintf... yes
+checking for stat... yes
+checking for sysconf... yes
+checking for vsnprintf... yes
+checking for yield... no
+checking for gettimeofday... yes
+checking for localtime... yes
+checking for time... yes
+checking for strftime... yes
+checking for clock_gettime... yes
+checking for clock_gettime monotonic clock... no
+checking for ctime_r... yes
+checking for 2 or 3 argument version of ctime_r... 2-argument
+checking for ftruncate... yes
+checking for pread... yes
+checking for pwrite... yes
+checking for getaddrinfo... yes
+checking for fcntl/F_SETFD... yes
+checking for special C compiler options needed for large files... no
+checking for _FILE_OFFSET_BITS value needed for large files... no
+checking for mlock... yes
+checking for munlock... yes
+checking for mmap... yes
+checking for munmap... yes
+checking for shmget... yes
+checking for shmctl... yes
+checking for 64-bit integral type support for sequences... no
+checking for growing a file under an mmap region... no
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: creating db_cxx.h
+config.status: creating db_int.h
+config.status: creating clib_port.h
+config.status: creating include.tcl
+config.status: creating db.h
+config.status: creating db_config.h
+config.status: executing libtool commands

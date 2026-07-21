@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/CMakeFiles/BerkeleyDB_Project"
+		},
+		{
+			"file" : "/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/CMakeFiles/BerkeleyDB_Project.rule"
+		},
+		{
+			"file" : "/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/CMakeFiles/BerkeleyDB_Project-complete.rule"
+		},
+		{
+			"file" : "/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-build.rule"
+		},
+		{
+			"file" : "/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-configure.rule"
+		},
+		{
+			"file" : "/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-download.rule"
+		},
+		{
+			"file" : "/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-install.rule"
+		},
+		{
+			"file" : "/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-mkdir.rule"
+		},
+		{
+			"file" : "/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-patch.rule"
+		},
+		{
+			"file" : "/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"BerkeleyDB_Project"
+		],
+		"name" : "BerkeleyDB_Project"
+	}
+}

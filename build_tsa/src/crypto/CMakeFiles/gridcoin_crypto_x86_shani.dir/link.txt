@@ -1,0 +1,2 @@
+/usr/bin/llvm-ar qc libgridcoin_crypto_x86_shani.a CMakeFiles/gridcoin_crypto_x86_shani.dir/sha256_x86_shani.cpp.o
+/usr/bin/llvm-ranlib libgridcoin_crypto_x86_shani.a

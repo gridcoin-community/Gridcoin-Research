@@ -1,0 +1,16 @@
+gmake[4]: warning: -j32 forced in submake: resetting jobserver mode.
+gmake[4]: warning: -j32 forced in submake: resetting jobserver mode.
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++
+cc1plus: warning: command-line option '-Wno-incompatible-pointer-types' is valid for C/ObjC but not for C++

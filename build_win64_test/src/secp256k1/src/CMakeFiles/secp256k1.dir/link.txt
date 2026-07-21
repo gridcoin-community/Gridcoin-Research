@@ -1,0 +1,2 @@
+x86_64-w64-mingw32-ar qc ../lib/libsecp256k1.a CMakeFiles/secp256k1.dir/secp256k1.c.obj CMakeFiles/secp256k1_precomputed.dir/precomputed_ecmult.c.obj CMakeFiles/secp256k1_precomputed.dir/precomputed_ecmult_gen.c.obj
+x86_64-w64-mingw32-ranlib ../lib/libsecp256k1.a

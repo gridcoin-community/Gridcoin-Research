@@ -6,7 +6,6 @@
 #define GRIDCOIN_QT_VOTING_VOTINGMODEL_H
 
 #include "amount.h"
-#include "gridcoin/voting/filter.h"
 #include "qt/voting/poll_types.h"
 #include "gridcoin/voting/poll.h"
 
@@ -180,7 +179,7 @@ public:
     //! expiration), and which have not previously been included on the list (i.e. notified).
     //!
     QStringList getExpiringPollsNotNotified();
-    std::vector<PollItem> buildPollTable(const GRC::PollFilterFlag flags);
+    std::vector<PollItem> buildPollTable(const PollFilterFlag flags);
 
     CAmount estimatePollFee() const;
 

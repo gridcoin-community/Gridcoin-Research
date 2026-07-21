@@ -8,6 +8,17 @@
 #include <QString>
 #include <vector>
 
+//! GUI-side mirror of the poll filter bit flags. The values match the core
+//! GRC::PollFilterFlag (gridcoin/voting/filter.h); VotingModel casts these to
+//! the int the interfaces::VotingManager takes, so the GUI needs no core header
+//! for the enum. Kept in sync with the (stateless) core enum.
+enum PollFilterFlag
+{
+    NO_FILTER = 0, //!< No active filter. Include all results.
+    ACTIVE = 1,    //!< Include unfinished polls.
+    FINISHED = 2,  //!< Include finished polls.
+};
+
 class PollTypeItem
 {
 public:

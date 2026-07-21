@@ -26,4 +26,10 @@ static const CAmount CENT = 1000000;
 static const CAmount MAX_MONEY = 2000000000 * COIN;
 inline bool MoneyRange(const CAmount& nValue) { return (nValue >= 0 && nValue <= MAX_MONEY); }
 
+//! Default minimum output value (in whole GRC) for a post-split output when
+//! stake splitting. Lives in this stateless header (rather than miner.h) so the
+//! GUI options can read the default without pulling in the miner's chain/wallet
+//! state.
+static const int64_t MIN_STAKE_SPLIT_VALUE_GRC = 800;
+
 #endif //  BITCOIN_AMOUNT_H

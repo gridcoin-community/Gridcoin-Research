@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>us.gridcoin.GridcoinResearch</id>
+
+  <name>Gridcoin Research</name>
+  <summary>Cryptocurrency rewarding BOINC computation</summary>
+
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+
+  <description>
+    <p>
+      Gridcoin is a proof-of-stake cryptocurrency that rewards users for
+      contributing computational power to scientific research through BOINC
+      (Berkeley Open Infrastructure for Network Computing).
+    </p>
+    <p>
+      Gridcoin Research is the full-featured desktop wallet with a graphical
+      interface for sending and receiving Gridcoin, managing BOINC researcher
+      identities, staking, and participating in network governance through
+      on-chain voting.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">us.gridcoin.GridcoinResearch.desktop</launchable>
+
+  <url type="homepage">https://gridcoin.us</url>
+  <url type="bugtracker">https://github.com/gridcoin-community/Gridcoin-Research/issues</url>
+  <url type="help">https://wiki.gridcoin.us</url>
+  <url type="vcs-browser">https://github.com/gridcoin-community/Gridcoin-Research</url>
+
+  <categories>
+    <category>Office</category>
+    <category>Finance</category>
+    <category>Network</category>
+  </categories>
+
+  <provides>
+    <binary>gridcoinresearch</binary>
+  </provides>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#7c50ea</color>
+    <color type="primary" scheme_preference="dark">#5a2dba</color>
+  </branding>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="5.5.1.4" date="2026-07-21" />
+  </releases>
+</component>

@@ -1,0 +1,1 @@
+cmd='/usr/bin/sh;/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/src/bdb53/dist/configure;--disable-java;--disable-jdbc;--disable-replication;--enable-cxx;CFLAGS=-Wno-implicit-function-declaration -Wno-incompatible-pointer-types'

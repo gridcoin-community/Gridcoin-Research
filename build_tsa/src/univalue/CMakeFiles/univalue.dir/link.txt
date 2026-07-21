@@ -1,0 +1,2 @@
+/usr/bin/llvm-ar qc libunivalue.a CMakeFiles/univalue.dir/lib/univalue.cpp.o CMakeFiles/univalue.dir/lib/univalue_get.cpp.o CMakeFiles/univalue.dir/lib/univalue_read.cpp.o CMakeFiles/univalue.dir/lib/univalue_write.cpp.o
+/usr/bin/llvm-ranlib libunivalue.a

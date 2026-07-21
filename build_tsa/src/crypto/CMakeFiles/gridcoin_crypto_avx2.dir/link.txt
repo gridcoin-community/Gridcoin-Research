@@ -1,0 +1,2 @@
+/usr/bin/llvm-ar qc libgridcoin_crypto_avx2.a CMakeFiles/gridcoin_crypto_avx2.dir/sha256_avx2.cpp.o
+/usr/bin/llvm-ranlib libgridcoin_crypto_avx2.a

@@ -1,0 +1,2 @@
+x86_64-w64-mingw32-ar qc libgridcoin_crypto_sse41.a CMakeFiles/gridcoin_crypto_sse41.dir/sha256_sse41.cpp.obj
+x86_64-w64-mingw32-ranlib libgridcoin_crypto_sse41.a

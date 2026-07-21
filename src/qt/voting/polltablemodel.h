@@ -6,7 +6,6 @@
 #define GRIDCOIN_QT_VOTING_POLLTABLEMODEL_H
 
 #include "uint256.h"
-#include "gridcoin/voting/filter.h"
 #include "qt/voting/votingmodel.h"
 
 #include <atomic>
@@ -65,7 +64,7 @@ public:
     ~PollTableModel();
 
     void setModel(VotingModel* model = nullptr);
-    void setPollFilterFlags(GRC::PollFilterFlag flags);
+    void setPollFilterFlags(PollFilterFlag flags);
     bool includesActivePolls() const;
 
     int size() const;
@@ -92,7 +91,7 @@ private:
     // detach (setModel(nullptr)), which made the lack of init reachable.
     VotingModel* m_voting_model{nullptr};
     std::unique_ptr<PollTableDataModel> m_data_model;
-    GRC::PollFilterFlag m_filter_flags;
+    PollFilterFlag m_filter_flags;
     // Debounce flag for refresh(). Set on the GUI thread when a refresh
     // worker is launched, cleared inside the GUI continuation lambda once
     // reload() has actually run. Covering the full build + queued reload

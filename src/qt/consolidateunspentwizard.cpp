@@ -4,7 +4,6 @@
 #include "qt/decoration.h"
 #include "ui_consolidateunspentwizard.h"
 
-#include "util.h"
 
 
 ConsolidateUnspentWizard::ConsolidateUnspentWizard(QWidget *parent,

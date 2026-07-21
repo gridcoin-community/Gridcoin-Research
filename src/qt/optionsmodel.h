@@ -75,7 +75,6 @@ public:
     bool setData(const QModelIndex & index, const QVariant & value, int role = Qt::EditRole);
 
     /* Explicit getters */
-    qint64 getTransactionFee();
     qint64 getReserveBalance();
     bool getStartAtStartup();
     bool getStartMin();

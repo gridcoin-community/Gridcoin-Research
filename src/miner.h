@@ -7,6 +7,7 @@
 #ifndef BITCOIN_MINER_H
 #define BITCOIN_MINER_H
 
+#include "amount.h" // For MIN_STAKE_SPLIT_VALUE_GRC.
 #include "main.h"
 #include "gridcoin/sidestake.h"
 
@@ -40,10 +41,10 @@ int32_t ComputeBlockVersion(int height);
 // (Particl-analog) and consumed in StakeMiner. Unused on testnet / mainnet.
 extern std::atomic<int> g_stakelimit_height;
 
-// Note the below constant controls the minimum value allowed for post
-// split UTXO size. It is int64_t but in GRC so that it matches the entry in the config file.
-// It will be converted to Halfords in GetNumberOfStakeOutputs by multiplying by COIN.
-static const int64_t MIN_STAKE_SPLIT_VALUE_GRC = 800;
+// MIN_STAKE_SPLIT_VALUE_GRC (the minimum post-split UTXO size, in GRC) now lives
+// in amount.h so the GUI options can read it without including this state-carrying
+// header. It is converted to Halfords in GetNumberOfStakeOutputs by multiplying
+// by COIN.
 
 void SplitCoinStakeOutput(CMutableTransaction& mtxCoinstake, CBlock &blocknew, int64_t &nReward,
                           bool &fEnableStakeSplit, bool &fEnableSideStaking,

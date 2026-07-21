@@ -1,0 +1,316 @@
+configure: loading site script /usr/share/site/x86_64-pc-linux-gnu
+checking build system type... x86_64-pc-linux-gnu
+checking host system type... x86_64-w64-mingw32
+checking if building in the top-level or dist directories... no
+checking if --enable-smallbuild option specified... no
+checking if --disable-atomicsupport option specified... no
+checking if --disable-compression option specified... no
+checking if --disable-hash option specified... no
+checking if --disable-heap option specified... no
+checking if --disable-mutexsupport option specified... no
+checking if --disable-log_checksum option specified... no
+checking if --disable-partition option specified... no
+checking if --disable-queue option specified... no
+checking if --disable-replication option specified... yes
+checking if --disable-statistics option specified... no
+checking if --disable-verify option specified... no
+checking if --enable-compat185 option specified... no
+checking if --enable-cxx option specified... yes
+checking if --enable-debug option specified... no
+checking if --enable-debug_rop option specified... no
+checking if --enable-debug_wop option specified... no
+checking if --enable-diagnostic option specified... no
+checking if --enable-dump185 option specified... no
+checking if --enable-java option specified... no
+checking if --enable-mingw option specified... yes
+checking if --enable-o_direct option specified... no
+checking if --enable-posixmutexes option specified... no
+checking if --enable-rpc option specified... no
+checking if --enable-sql option specified... no
+checking if --enable-sql_compat option specified... no
+checking if --enable-jdbc option specified... no
+checking if --with-jdbc=DIR option specified... no
+checking if --enable-amalgamation option specified... no
+checking if --enable-sql_codegen option specified... no
+checking if --enable-stl option specified... no
+checking if --enable-tcl option specified... no
+checking if --enable-test option specified... no
+checking if --enable-localization option specified... no
+checking if --enable-stripped_messages option specified... no
+checking if --enable-dbm option specified... no
+checking if --enable-dtrace option specified... no
+checking if --enable-systemtap option specified... no
+checking if --enable-perfmon-statistics option specified... no
+checking if --enable-uimutexes option specified... no
+checking if --enable-umrw option specified... no
+checking if --enable-atomicfileread option specified... no
+checking if --with-cryptography option specified... yes
+checking if --with-mutex=MUTEX option specified... no
+checking if --with-tcl=DIR option specified... no
+checking if --with-uniquename=NAME option specified... no
+checking for x86_64-w64-mingw32-chmod... no
+checking for chmod... chmod
+checking for x86_64-w64-mingw32-cp... no
+checking for cp... cp
+checking for x86_64-w64-mingw32-ln... no
+checking for ln... ln
+checking for x86_64-w64-mingw32-mkdir... no
+checking for mkdir... mkdir
+checking for x86_64-w64-mingw32-rm... no
+checking for rm... rm
+checking for x86_64-w64-mingw32-mv... no
+checking for mv... mv
+checking for x86_64-w64-mingw32-sh... no
+checking for sh... /usr/bin/sh
+checking for a BSD-compatible install... /usr/bin/install -c
+checking for x86_64-w64-mingw32-cc... /bin/x86_64-w64-mingw32-gcc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.exe
+checking for suffix of executables... .exe
+checking whether we are cross compiling... yes
+checking for suffix of object files... o
+checking whether we are using the GNU C compiler... yes
+checking whether /bin/x86_64-w64-mingw32-gcc accepts -g... yes
+checking for /bin/x86_64-w64-mingw32-gcc option to accept ISO C89... none needed
+checking for an ANSI C-conforming const... yes
+checking for inline... inline
+checking for GCC aligned attribute... yes
+checking whether we are using the GNU C++ compiler... yes
+checking whether /bin/x86_64-w64-mingw32-g++ accepts -g... yes
+checking how to run the C++ preprocessor... /bin/x86_64-w64-mingw32-g++ -E
+checking whether C++ supports the ISO C++ standard includes... yes
+checking whether we are using gcc version 2.96... no
+checking how to print strings... printf
+checking for a sed that does not truncate output... /usr/bin/sed
+checking for grep that handles long lines and -e... /usr/bin/grep
+checking for egrep... /usr/bin/grep -E
+checking for fgrep... /usr/bin/grep -F
+checking for ld used by /bin/x86_64-w64-mingw32-gcc... /usr/x86_64-w64-mingw32/bin/ld
+checking if the linker (/usr/x86_64-w64-mingw32/bin/ld) is GNU ld... yes
+checking for BSD- or MS-compatible name lister (nm)... /usr/bin/x86_64-w64-mingw32-nm -B
+checking the name lister (/usr/bin/x86_64-w64-mingw32-nm -B) interface... BSD nm
+checking whether ln -s works... yes
+checking the maximum length of command line arguments... 1572864
+checking whether the shell understands some XSI constructs... yes
+checking whether the shell understands "+="... yes
+checking how to convert x86_64-pc-linux-gnu file names to x86_64-w64-mingw32 format... func_convert_file_nix_to_w32
+checking how to convert x86_64-pc-linux-gnu file names to toolchain format... func_convert_file_noop
+checking for /usr/x86_64-w64-mingw32/bin/ld option to reload object files... -r
+checking for x86_64-w64-mingw32-objdump... x86_64-w64-mingw32-objdump
+checking how to recognize dependent libraries... file_magic ^x86 archive import|^x86 DLL
+checking for x86_64-w64-mingw32-dlltool... x86_64-w64-mingw32-dlltool
+checking how to associate runtime and link libraries... func_cygming_dll_for_implib
+checking for x86_64-w64-mingw32-ar... x86_64-w64-mingw32-ar
+checking for archiver @FILE support... @
+checking for x86_64-w64-mingw32-strip... x86_64-w64-mingw32-strip
+checking for x86_64-w64-mingw32-ranlib... x86_64-w64-mingw32-ranlib
+checking for gawk... gawk
+checking command to parse /usr/bin/x86_64-w64-mingw32-nm -B output from /bin/x86_64-w64-mingw32-gcc object... ok
+checking for sysroot... no
+checking for x86_64-w64-mingw32-mt... no
+checking for mt... mt
+checking if mt is a manifest tool... no
+checking how to run the C preprocessor... /bin/x86_64-w64-mingw32-gcc -E
+checking for ANSI C header files... yes
+checking for sys/types.h... yes
+checking for sys/stat.h... yes
+checking for stdlib.h... yes
+checking for string.h... yes
+checking for memory.h... yes
+checking for strings.h... yes
+checking for inttypes.h... yes
+checking for stdint.h... yes
+checking for unistd.h... yes
+checking for dlfcn.h... no
+checking for objdir... .libs
+checking if /bin/x86_64-w64-mingw32-gcc supports -fno-rtti -fno-exceptions... no
+checking for /bin/x86_64-w64-mingw32-gcc option to produce PIC... -DDLL_EXPORT -DPIC
+checking if /bin/x86_64-w64-mingw32-gcc PIC flag -DDLL_EXPORT -DPIC works... yes
+checking if /bin/x86_64-w64-mingw32-gcc static flag -static works... yes
+checking if /bin/x86_64-w64-mingw32-gcc supports -c -o file.o... yes
+checking if /bin/x86_64-w64-mingw32-gcc supports -c -o file.o... (cached) yes
+checking whether the /bin/x86_64-w64-mingw32-gcc linker (/usr/x86_64-w64-mingw32/bin/ld) supports shared libraries... yes
+checking whether -lc should be explicitly linked in... yes
+checking dynamic linker characteristics... Win32 ld.exe
+checking how to hardcode library paths into programs... immediate
+checking whether stripping libraries is possible... yes
+checking if libtool supports shared libraries... yes
+checking whether to build shared libraries... yes
+checking whether to build static libraries... yes
+checking how to run the C++ preprocessor... /bin/x86_64-w64-mingw32-g++ -E
+checking for ld used by /bin/x86_64-w64-mingw32-g++... /usr/x86_64-w64-mingw32/bin/ld
+checking if the linker (/usr/x86_64-w64-mingw32/bin/ld) is GNU ld... yes
+checking whether the /bin/x86_64-w64-mingw32-g++ linker (/usr/x86_64-w64-mingw32/bin/ld) supports shared libraries... yes
+checking for /bin/x86_64-w64-mingw32-g++ option to produce PIC... -DDLL_EXPORT -DPIC
+checking if /bin/x86_64-w64-mingw32-g++ PIC flag -DDLL_EXPORT -DPIC works... yes
+checking if /bin/x86_64-w64-mingw32-g++ static flag -static works... yes
+checking if /bin/x86_64-w64-mingw32-g++ supports -c -o file.o... yes
+checking if /bin/x86_64-w64-mingw32-g++ supports -c -o file.o... (cached) yes
+checking whether the /bin/x86_64-w64-mingw32-g++ linker (/usr/x86_64-w64-mingw32/bin/ld) supports shared libraries... yes
+checking dynamic linker characteristics... Win32 ld.exe
+checking how to hardcode library paths into programs... immediate
+checking SOSUFFIX from libtool... .dll
+checking MODSUFFIX from libtool... .dll
+checking JMODSUFFIX from libtool... .dll
+checking whether stat file-mode macros are broken... no
+checking whether time.h and sys/time.h may both be included... yes
+checking for dirent.h that defines DIR... yes
+checking for library containing opendir... none required
+checking execinfo.h usability... no
+checking execinfo.h presence... no
+checking for execinfo.h... no
+checking sys/select.h usability... no
+checking sys/select.h presence... no
+checking for sys/select.h... no
+checking sys/socket.h usability... no
+checking sys/socket.h presence... no
+checking for sys/socket.h... no
+checking sys/time.h usability... yes
+checking sys/time.h presence... yes
+checking for sys/time.h... yes
+checking for struct stat.st_blksize... no
+checking for inttypes.h... (cached) yes
+checking for stdint.h... yes
+checking if stdint.h can be used by C++... yes
+checking stddef.h usability... yes
+checking stddef.h presence... yes
+checking for stddef.h... yes
+checking for unistd.h... (cached) yes
+checking size of char... 1
+checking size of unsigned char... 1
+checking size of short... 2
+checking size of unsigned short... 2
+checking size of int... 4
+checking size of unsigned int... 4
+checking size of long... 4
+checking size of unsigned long... 4
+checking size of long long... 8
+checking size of unsigned long long... 8
+checking size of char *... 8
+checking for u_char... no
+checking for u_short... no
+checking for u_int... no
+checking for u_long... no
+checking for u_int8_t... no
+checking for u_int16_t... no
+checking for int16_t... yes
+checking for u_int32_t... no
+checking for int32_t... yes
+checking for u_int64_t... no
+checking for int64_t... yes
+checking for FILE *... yes
+checking for off_t... yes
+checking for pid_t... yes
+checking for size_t... yes
+checking for time_t... yes
+checking size of size_t... 8
+checking for ssize_t... yes
+checking for uintmax_t... yes
+checking for uintptr_t... yes
+checking for socklen_t... no
+checking for socklen_t equivalent... int
+checking for ANSI C exit success/failure values... yes
+checking for getopt optreset variable... no
+checking for mutexes... win32/gcc
+checking pthread.h usability... yes
+checking pthread.h presence... yes
+checking for pthread.h... yes
+checking for main in -lpthread... yes
+checking for atomic operations... mingw
+checking for library containing sched_yield... none required
+checking for library containing fdatasync... no
+checking for library containing getaddrinfo... no
+checking for library containing hstrerror... no
+checking for main in -lm... yes
+checking for main in -lnsl... no
+checking for main in -lsocket... no
+checking for abort... yes
+checking for atoi... yes
+checking for atol... yes
+checking for bsearch... yes
+checking for getcwd... yes
+checking for getenv... yes
+checking for getopt... yes
+checking for isalpha... yes
+checking for isdigit... yes
+checking for isprint... yes
+checking for isspace... yes
+checking for memcmp... yes
+checking for memcpy... yes
+checking for memmove... yes
+checking for printf... yes
+checking for qsort... yes
+checking for raise... yes
+checking for rand... yes
+checking for strcasecmp... yes
+checking for strcat... yes
+checking for strchr... yes
+checking for strdup... yes
+checking for strerror... yes
+checking for strncat... yes
+checking for strncmp... yes
+checking for strrchr... yes
+checking for strsep... no
+checking for strtol... yes
+checking for strtoul... yes
+checking for _fstati64... yes
+checking for backtrace... no
+checking for backtrace_symbols... no
+checking for directio... no
+checking for fchmod... no
+checking for fclose... yes
+checking for fcntl... no
+checking for fdatasync... no
+checking for fgetc... yes
+checking for fgets... yes
+checking for fopen... yes
+checking for fwrite... yes
+checking for getgid... no
+checking for getrusage... no
+checking for getuid... no
+checking for hstrerror... no
+checking for mprotect... yes
+checking for pstat_getdynamic... no
+checking for pthread_self... yes
+checking for pthread_yield... no
+checking for random... no
+checking for sched_yield... yes
+checking for select... no
+checking for setgid... no
+checking for setuid... no
+checking for sigaction... no
+checking for snprintf... yes
+checking for stat... yes
+checking for sysconf... no
+checking for vsnprintf... yes
+checking for yield... no
+checking for gettimeofday... yes
+checking for localtime... yes
+checking for time... yes
+checking for strftime... yes
+checking for clock_gettime... yes
+checking for clock_gettime monotonic clock... yes
+checking for ctime_r... no
+checking for ftruncate... yes
+checking for pread... no
+checking for pwrite... no
+checking for getaddrinfo... no
+checking for fcntl/F_SETFD... no
+checking for special C compiler options needed for large files... no
+checking for _FILE_OFFSET_BITS value needed for large files... 64
+checking for mlock... no
+checking for munlock... no
+checking for mmap... no
+checking for munmap... no
+checking for shmget... no
+checking for shmctl... no
+checking for 64-bit integral type support for sequences... yes
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: creating db_cxx.h
+config.status: creating db_int.h
+config.status: creating clib_port.h
+config.status: creating include.tcl
+config.status: creating db.h
+config.status: creating db_config.h
+config.status: executing libtool commands

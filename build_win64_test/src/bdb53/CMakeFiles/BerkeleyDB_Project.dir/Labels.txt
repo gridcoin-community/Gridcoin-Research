@@ -1,0 +1,13 @@
+# Target labels
+ BerkeleyDB_Project
+# Source files and their labels
+/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/CMakeFiles/BerkeleyDB_Project
+/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/CMakeFiles/BerkeleyDB_Project.rule
+/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/CMakeFiles/BerkeleyDB_Project-complete.rule
+/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-build.rule
+/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-configure.rule
+/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-download.rule
+/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-install.rule
+/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-mkdir.rule
+/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-patch.rule
+/home/jco/builds/Gridcoin-Research/.claude/worktrees/gui-interfaces-1c1/build_win64_test/src/bdb53/BerkeleyDB_Project-prefix/src/BerkeleyDB_Project-stamp/BerkeleyDB_Project-update.rule

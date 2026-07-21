@@ -1,0 +1,3 @@
+/usr/bin/cmake -E rm -f CMakeFiles/test_gridcoin.dir/objects.a
+x86_64-w64-mingw32-ar qc CMakeFiles/test_gridcoin.dir/objects.a @CMakeFiles/test_gridcoin.dir/objects1.rsp
+/bin/x86_64-w64-mingw32-g++ -pipe -std=c++17 -O2  -O2 -g -DNDEBUG -static -Wl,--whole-archive CMakeFiles/test_gridcoin.dir/objects.a -Wl,--no-whole-archive -o test_gridcoin.exe -Wl,--out-implib,libtest_gridcoin.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles/test_gridcoin.dir/linkLibs.rsp

@@ -1,0 +1,2 @@
+x86_64-w64-mingw32-ar qc libunivalue.a CMakeFiles/univalue.dir/lib/univalue.cpp.obj CMakeFiles/univalue.dir/lib/univalue_get.cpp.obj CMakeFiles/univalue.dir/lib/univalue_read.cpp.obj CMakeFiles/univalue.dir/lib/univalue_write.cpp.obj
+x86_64-w64-mingw32-ranlib libunivalue.a

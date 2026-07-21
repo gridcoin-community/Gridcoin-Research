@@ -1,0 +1,4 @@
+configure: WARNING: if you wanted to set the --build type, don't use --host.
+    If a cross compiler is detected then cross compile mode will be used
+configure: WARNING: using cross tools not prefixed with host triplet
+configure: WARNING: Neither mmap/munmap(2) or shmget(2) library functions.

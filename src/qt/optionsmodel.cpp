@@ -8,7 +8,7 @@
 #include "interfaces/node.h"
 #include "util/strencodings.h" // For SplitHostPort (IPv6-aware host:port parsing).
 
-#include "miner.h"
+#include "amount.h"
 
 #include <utility>
 
@@ -403,11 +403,6 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
     emit dataChanged(index, index);
 
     return successful;
-}
-
-qint64 OptionsModel::getTransactionFee()
-{
-    return nTransactionFee;
 }
 
 qint64 OptionsModel::getReserveBalance()
