@@ -1032,7 +1032,13 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
                     bool& invalid_input_out,
                     std::string& error_out)
 {
+    // Reset all outputs so results are well-defined even if the caller reuses
+    // the vectors across calls (or on an early-return failure).
     requires_restart_out = false;
+    no_change_out.clear();
+    immediate_out.clear();
+    requires_restart_list_out.clear();
+    error_out.clear();
     // Phase-1 failures are caller/validation errors; a phase-2 storage failure
     // flips this back to false.
     invalid_input_out = true;
@@ -1088,7 +1094,7 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
 
         if (!valid_settings.insert(std::make_pair(
                 name, std::make_tuple(value, value_changed, immediate_effect))).second) {
-            error_out = "changeSettings does not support more than one instance of the same setting: " + name;
+            error_out = "The same setting was specified more than once: " + name;
             return false;
         }
     }
