@@ -1004,10 +1004,14 @@ void ApplyRwSettingSideEffect(const std::string& name)
             }
         }
     } else if (name == "upnp") {
+#ifdef USE_UPNP
+        // USE_UPNP is only defined when UPnP support is compiled in; without it
+        // there is nothing to toggle and SetUseUPnP/MapPort do not apply.
         if (g_connman) {
             g_connman->SetUseUPnP(gArgs.GetBoolArg("-upnp", USE_UPNP));
             MapPort(); // starts or stops the port-map thread to match the flag
         }
+#endif
     } else if (name == "reservebalance") {
         // Empty/unset → 0 (no reserve). ParseMoney fills reserve on success.
         int64_t reserve = 0;
