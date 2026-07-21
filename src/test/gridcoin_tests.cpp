@@ -14,7 +14,6 @@
 #include <map>
 #include <string>
 
-extern bool fTestNet;
 extern leveldb::DB *txdb;
 
 namespace {
@@ -75,26 +74,20 @@ BOOST_AUTO_TEST_SUITE(gridcoin_tests)
 
 BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock1010000InProduction)
 {
-    bool was_testnet = fTestNet;
-    fTestNet = false;
     SelectParams(CBaseChainParams::MAIN);
     BOOST_CHECK(IsV8Enabled(1009999) == false);
     BOOST_CHECK(IsV8Enabled(1010000) == false);
     BOOST_CHECK(IsV8Enabled(1010001) == true);
-    fTestNet = was_testnet;
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock312000InTestnet)
 {
-    bool was_testnet = fTestNet;
-    fTestNet = true;
     SelectParams(CBaseChainParams::TESTNET);
     // With testnet block 312000 was created as the first V8 block,
     // hence the difference in testing setup compared to the production
     // tests.
     BOOST_CHECK(IsV8Enabled(311999) == false);
     BOOST_CHECK(IsV8Enabled(312000) == true);
-    fTestNet = was_testnet;
     SelectParams(CBaseChainParams::MAIN);
 }
 

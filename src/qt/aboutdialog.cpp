@@ -34,17 +34,6 @@ AboutDialog::AboutDialog(QWidget *parent) :
 
     connect(&m_version_check_watcher, &QFutureWatcher<AboutVersionInfo>::finished,
             this, &AboutDialog::versionCheckFinished);
-
-    if (!fTestNet && !gArgs.GetBoolArg("-disableupdatecheck", false)) {
-        connect(ui->versionInfoButton, &QAbstractButton::pressed, this, [this]() { handlePressVersionInfoButton(); });
-    } else if (gArgs.GetBoolArg("-disableupdatecheck", false)) {
-        ui->versionInfoButton->setDisabled(true);
-        ui->versionInfoButton->setToolTip(tr("Version information and update check has been disabled "
-                                             "by config or startup parameter."));
-    } else {
-        ui->versionInfoButton->setDisabled(true);
-        ui->versionInfoButton->setToolTip(tr("Version information is not available on testnet."));
-    }
 }
 
 void AboutDialog::setModel(ClientModel *model)
@@ -52,6 +41,21 @@ void AboutDialog::setModel(ClientModel *model)
     if(model)
     {
         ui->versionLabel->setText(model->formatFullVersion());
+
+        // Wire the version-info / update-check button. Testnet status is read
+        // through the client model's node interface (never the raw OnTestnet()
+        // global); done here rather than in the constructor because the model is
+        // only available once set. -disableupdatecheck is a config read.
+        if (!model->isTestNet() && !gArgs.GetBoolArg("-disableupdatecheck", false)) {
+            connect(ui->versionInfoButton, &QAbstractButton::pressed, this, [this]() { handlePressVersionInfoButton(); });
+        } else if (gArgs.GetBoolArg("-disableupdatecheck", false)) {
+            ui->versionInfoButton->setDisabled(true);
+            ui->versionInfoButton->setToolTip(tr("Version information and update check has been disabled "
+                                                 "by config or startup parameter."));
+        } else {
+            ui->versionInfoButton->setDisabled(true);
+            ui->versionInfoButton->setToolTip(tr("Version information is not available on testnet."));
+        }
     }
 }
 

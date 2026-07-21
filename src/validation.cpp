@@ -420,11 +420,11 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
                 }
                 if (!txindex.vSpent[prevout.n].IsNull())
                 {
-                    if (fTestNet && pindexBlock->nHeight < nGrandfather)
+                    if (OnTestnet() && pindexBlock->nHeight < nGrandfather)
                     {
                         return fMiner ? false : true;
                     }
-                    if (!fTestNet && pindexBlock->nHeight < nGrandfather)
+                    if (!OnTestnet() && pindexBlock->nHeight < nGrandfather)
                     {
                         return fMiner ? false : true;
                     }
@@ -639,7 +639,7 @@ CTxDestination FoundationSideStakeAddress() {
     CTxDestination foundation_address;
 
     // If on testnet set foundation destination address to test wallet address
-    if (fTestNet) {
+    if (OnTestnet()) {
         foundation_address = DecodeDestination("mfiy9sc2QEZZCK3WMUMZjNfrdRA6gXzRhr");
 
         return foundation_address;
@@ -660,7 +660,7 @@ unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation
     // should reduce the pressure for slots in the initial stages of MRC.
     // For testnet is it set to a much lower number 3 to facilitate easier overflow testing.
     if (block_version >= 12) {
-        output_limit = fTestNet ? 3 : 10;
+        output_limit = OnTestnet() ? 3 : 10;
     }
 
     // If the include_foundation_sidestake is false (meaning that the foundation sidestake should not be counted
@@ -1190,7 +1190,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
 
     // Allow the genesis block to pass.
     if(block.hashPrevBlock.IsNull() &&
-       block.GetHash(true) == (Params().IsMockableChain() ? hashGenesisBlockRegTest : fTestNet ? hashGenesisBlockTestNet : hashGenesisBlock))
+       block.GetHash(true) == (Params().IsMockableChain() ? hashGenesisBlockRegTest : OnTestnet() ? hashGenesisBlockTestNet : hashGenesisBlock))
         return true;
 
     if (block.fChecked)
@@ -1250,7 +1250,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
             return state.DoS(100, error("%s: legacy claim", __func__));
         }
 
-        if (!fTestNet && block.GetClaim().m_version == 2) {
+        if (!OnTestnet() && block.GetClaim().m_version == 2) {
             return state.DoS(100, error("%s: testnet-only claim", __func__));
         }
     }
@@ -1647,7 +1647,7 @@ bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx, int& DoS
 
     // For mainnet, if either the payment_interval_by_mrc_reject OR the payment_interval_by_tx_time_reject is true,
     // then return false. This is stricter than testnet below. See the commentary below on why.
-    if (!fTestNet && (payment_interval_by_mrc_reject || payment_interval_by_tx_time_reject)) {
+    if (!OnTestnet() && (payment_interval_by_mrc_reject || payment_interval_by_tx_time_reject)) {
         DoS = 25;
 
         return error("%s: Validation failed: MRC payment interval by mrc time, %" PRId64 " sec, is less than 1/2 of the MRC "
@@ -1666,7 +1666,7 @@ bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx, int& DoS
     // last_block_hash_matched is false due to the AND instead of OR condition.
     //
     // TODO: On the next mandatory align the restriction to mainnet from that point forward.
-    if (fTestNet && payment_interval_by_mrc_reject && payment_interval_by_tx_time_reject) {
+    if (OnTestnet() && payment_interval_by_mrc_reject && payment_interval_by_tx_time_reject) {
         DoS = 25;
 
         return error("%s: Validation failed: MRC payment interval on testnet by both mrc time, %" PRId64 " sec, "
@@ -1938,7 +1938,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         }
 
         // Check for non-standard pay-to-script-hash in inputs
-        if (!AreInputsStandard(tx, mapInputs) && !fTestNet)
+        if (!AreInputsStandard(tx, mapInputs) && !OnTestnet())
             return state.Invalid(error("AcceptToMemoryPool : nonstandard transaction input"),
                                  "bad-txns-nonstandard-inputs");
 

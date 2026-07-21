@@ -37,7 +37,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, std::string&
 {
     // If testnet skip this || If the user changes this to disable while wallet running just drop out of here now.
     // (Need a way to remove items from scheduler.)
-    if (fTestNet || gArgs.GetBoolArg("-disableupdatecheck", false))
+    if (OnTestnet() || gArgs.GetBoolArg("-disableupdatecheck", false))
         return false;
 
     Http VersionPull;

@@ -99,13 +99,13 @@ CBlock CreateGenesisBlock()
     // returns a zero subsidy, which fails Claim::WellFormed.
     block.nVersion = fRegTest ? 14 : 1;
     //R&D - Testers Wanted Thread:
-    block.nTime    = fRegTest ? 1296688602 : !fTestNet ? 1413033777 : 1406674534;
+    block.nTime    = fRegTest ? 1296688602 : !OnTestnet() ? 1413033777 : 1406674534;
     //Official Launch time:
     block.nBits    = UintToArith256(Params().GetConsensus().powLimit).GetCompact();
-    block.nNonce = fRegTest ? 0 : !fTestNet ? 130208 : 22436;
+    block.nNonce = fRegTest ? 0 : !OnTestnet() ? 130208 : 22436;
     LogPrintf("starting Genesis Check...");
     // If genesis block hash does not match, then generate new genesis hash.
-    if (block.GetHash(true) != (fRegTest ? hashGenesisBlockRegTest : !fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
+    if (block.GetHash(true) != (fRegTest ? hashGenesisBlockRegTest : !OnTestnet() ? hashGenesisBlock : hashGenesisBlockTestNet))
     {
         LogPrintf("Searching for genesis block...");
         // This will figure out a valid hash and Nonce if you're
@@ -142,7 +142,7 @@ CBlock CreateGenesisBlock()
     if (!fRegTest) {
         uint256 merkle_root = uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
         assert(block.hashMerkleRoot == merkle_root);
-        assert(block.GetHash(true) == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+        assert(block.GetHash(true) == (!OnTestnet() ? hashGenesisBlock : hashGenesisBlockTestNet));
     } else {
         // Regtest genesis is deterministic (fixed nVersion/nTime/nNonce and a
         // fixed premine coinbase), so its hash is stable and assertable. Mirror

@@ -87,7 +87,7 @@ BOOST_AUTO_TEST_CASE(node_wraps_chain_globals)
 
     BOOST_CHECK_EQUAL(node->getNumBlocks(), WITH_LOCK(cs_main, return nBestHeight));
     BOOST_CHECK(node->getBestBlockHash() == WITH_LOCK(cs_main, return hashBestChain));
-    BOOST_CHECK_EQUAL(node->isTestNet(), fTestNet);
+    BOOST_CHECK_EQUAL(node->isTestNet(), OnTestnet());
     BOOST_CHECK_EQUAL(node->getClientVersion(), FormatFullVersion());
     // No peers in the unit-test environment.
     BOOST_CHECK_EQUAL(node->getNodeCount(), 0);

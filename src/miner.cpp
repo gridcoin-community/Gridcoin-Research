@@ -1435,7 +1435,7 @@ bool IsMiningAllowed(CWallet *pwallet)
     // IBD OFFLINE gate there only; main/testnet keep the full requirement.
     if (!Params().IsMockableChain()
             && (numNodes < GetMinimumConnectionsRequiredForStaking()
-                || (!fTestNet && IsInitialBlockDownload()))) {
+                || (!OnTestnet() && IsInitialBlockDownload()))) {
         g_miner_status.AddError(GRC::MinerStatus::OFFLINE);
     }
 

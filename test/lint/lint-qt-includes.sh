@@ -26,6 +26,14 @@ FORBIDDEN_RE='^[[:space:]]*#[[:space:]]*include[[:space:]]*["<](main\.h|validati
 # exception: an entry may be added when a migration surfaces PRE-EXISTING
 # coupling that was previously hidden behind a transitive include, e.g.
 # rpcconsole.cpp:banman.h -- the coupling is old, only the include is new.)
+#
+# PERMANENT exception (not a migrate-away target): guiutil.cpp:chainparams.h.
+# GetAutoStartupArguments() must resolve the network THIS GUI process was
+# launched with (its own -testnet/-chain arg) locally, via OnTestnet() over the
+# process's own SelectParams() result. It cannot route through
+# interfaces::Node::isTestNet() because in the separated build no core process
+# exists yet at that point -- the local resolution is what selects WHICH core
+# (mainnet vs testnet) the GUI then connects to. Bootstrap catch-22; keep.
 ALLOWLIST="\
 src/qt/aboutdialog.cpp:util.h
 src/qt/bitcoin.cpp:chainparamsbase.h
@@ -47,7 +55,7 @@ src/qt/consolidateunspentwizardsendpage.cpp:util.h
 src/qt/detailedtxmodel.cpp:util/system.h
 src/qt/diagnosticsdialog.h:sync.h
 src/qt/diagnosticsdialog.h:wallet/diagnose.h
-src/qt/guiutil.cpp:protocol.h
+src/qt/guiutil.cpp:chainparams.h
 src/qt/guiutil.cpp:util.h
 src/qt/intro.cpp:chainparams.h
 src/qt/intro.cpp:util.h

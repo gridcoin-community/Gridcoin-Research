@@ -308,7 +308,7 @@ bool LoadBlockIndex(bool fAllowNew)
         nGrandfather = 0;
         MAX_OUTBOUND_CONNECTIONS = (int)gArgs.GetArg("-maxoutboundconnections", 8);
     }
-    else if (fTestNet)
+    else if (OnTestnet())
     {
         // GLOBAL TESTNET SETTINGS - R HALFORD
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
@@ -318,7 +318,7 @@ bool LoadBlockIndex(bool fAllowNew)
         MAX_OUTBOUND_CONNECTIONS = (int)gArgs.GetArg("-maxoutboundconnections", 8);
     }
 
-    LogPrintf("Mode=%s", Params().IsMockableChain() ? "RegTest" : fTestNet ? "TestNet" : "Prod");
+    LogPrintf("Mode=%s", Params().IsMockableChain() ? "RegTest" : OnTestnet() ? "TestNet" : "Prod");
 
     //
     // Load block index

@@ -399,7 +399,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             if (pindexGenesisBlock == nullptr) {
                 const uint256 expected_genesis = Params().IsMockableChain()
                     ? (hashGenesisBlockRegTest.IsNull() ? hash : hashGenesisBlockRegTest)
-                    : (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet);
+                    : (!OnTestnet() ? hashGenesisBlock : hashGenesisBlockTestNet);
                 if (hash != expected_genesis) {
                     txdb.TxnAbort();
                     return error("%s: genesis block hash does not match", __func__);
@@ -673,7 +673,7 @@ bool GridcoinServices() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     // below.
     //
     if (!IsV9Enabled_Tally(nBestHeight)
-        && IsV9Enabled(nBestHeight + (fTestNet ? 200 : 40))
+        && IsV9Enabled(nBestHeight + (OnTestnet() ? 200 : 40))
         && nBestHeight % 20 == 0)
     {
         LogPrint(BCLog::LogFlags::TALLY,

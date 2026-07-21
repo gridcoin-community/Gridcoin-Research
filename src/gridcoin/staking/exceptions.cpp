@@ -4,7 +4,7 @@
 
 #include "gridcoin/staking/exceptions.h"
 
-extern bool fTestNet;
+extern bool OnTestnet();
 
 namespace
 {
@@ -252,7 +252,7 @@ namespace
 
 const std::set<uint256>& GRC::GetBadBlocks()
 {
-    return fTestNet
+    return OnTestnet()
             ? bad_blocks_testnet
             : bad_blocks;
 }

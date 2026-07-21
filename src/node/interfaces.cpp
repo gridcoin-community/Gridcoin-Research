@@ -106,7 +106,7 @@ public:
 
     std::string getClientVersion() override { return FormatFullVersion(); }
 
-    bool isTestNet() override { return fTestNet; }
+    bool isTestNet() override { return OnTestnet(); }
 
     double getBlockDifficulty(uint32_t target_bits) override
     {

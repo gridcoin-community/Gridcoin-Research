@@ -390,7 +390,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EX
         pindex = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Params().GetConsensus().StandardContractReplayLookback);
     }
 
-    if (pindex->nHeight < (fTestNet ? 1 : 164618)) {
+    if (pindex->nHeight < (OnTestnet() ? 1 : 164618)) {
         return;
     }
 

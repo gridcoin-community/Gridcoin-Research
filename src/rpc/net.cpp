@@ -226,7 +226,7 @@ UniValue getaddednodeinfo(const UniValue& params)
     for (auto const& strAddNode : laddedNodes)
     {
         vector<CService> vservNode(0);
-        if(Lookup(strAddNode.c_str(), vservNode, GetDefaultPort(), fNameLookup, 0))
+        if(Lookup(strAddNode.c_str(), vservNode, GetDefaultPort(OnTestnet()), fNameLookup, 0))
             laddedAddresses.push_back(make_pair(strAddNode, vservNode));
         else
         {

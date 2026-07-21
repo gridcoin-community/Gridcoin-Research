@@ -58,7 +58,7 @@ void CBlockLocator::Set(const CBlockIndex* pindex)
         if (vHave.size() > 10)
             nStep *= 2;
     }
-    vHave.push_back((Params().IsMockableChain() ? hashGenesisBlockRegTest : !fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+    vHave.push_back((Params().IsMockableChain() ? hashGenesisBlockRegTest : !OnTestnet() ? hashGenesisBlock : hashGenesisBlockTestNet));
 }
 
 int CBlockLocator::GetDistanceBack()
@@ -111,7 +111,7 @@ uint256 CBlockLocator::GetBlockHash()
                 return hash;
         }
     }
-    return (Params().IsMockableChain() ? hashGenesisBlockRegTest : !fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet);
+    return (Params().IsMockableChain() ? hashGenesisBlockRegTest : !OnTestnet() ? hashGenesisBlock : hashGenesisBlockTestNet);
 }
 
 int CBlockLocator::GetHeight()

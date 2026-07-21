@@ -77,6 +77,10 @@ public:
     /* Explicit getters */
     qint64 getTransactionFee();
     qint64 getReserveBalance();
+    //! Whether the node is on testnet, read through the interface (never the raw
+    //! fTestNet global). Lets dialogs that hold an OptionsModel gate testnet-only
+    //! UI without reaching a core global.
+    bool isTestNet();
     bool getStartAtStartup();
     bool getStartMin();
     bool getMinimizeToTray();

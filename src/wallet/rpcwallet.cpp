@@ -223,7 +223,7 @@ UniValue getinfo(const UniValue& params)
     diff.pushKV("target", GRC::GetTargetDifficulty());
     obj.pushKV("difficulty",    diff);
 
-    obj.pushKV("testnet",       fTestNet);
+    obj.pushKV("testnet",       OnTestnet());
     obj.pushKV("keypoololdest", pwalletMain->GetOldestKeyPoolTime());
     obj.pushKV("keypoolsize",   (int)pwalletMain->GetKeyPoolSize());
     obj.pushKV("paytxfee",      ValueFromAmount(nTransactionFee));

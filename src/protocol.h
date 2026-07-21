@@ -18,8 +18,7 @@
 #include <limits>
 #include <string>
 
-extern bool fTestNet;
-static inline unsigned short GetDefaultPort(const bool testnet = fTestNet)
+static inline unsigned short GetDefaultPort(const bool testnet)
 {
     return testnet ? 32748 : 32749;
 }

@@ -1470,7 +1470,7 @@ void Tally::LegacyRecount(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs
     int64_t max_depth = consensus_depth - (consensus_depth % TALLY_GRANULARITY);
     int64_t min_depth = max_depth - lookback_depth;
 
-    if (fTestNet && !IsV9Enabled_Tally(pindex->nHeight)) {
+    if (OnTestnet() && !IsV9Enabled_Tally(pindex->nHeight)) {
         LogPrint(LogFlags::TALLY, "Tally::LegacyRecount(): retired tally");
         max_depth = consensus_depth - (consensus_depth % BLOCK_GRANULARITY);
         min_depth -= (max_depth - lookback_depth) % TALLY_GRANULARITY;

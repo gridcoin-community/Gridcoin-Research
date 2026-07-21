@@ -178,7 +178,7 @@ bool AreInputsStandard(const CTransaction& tx, const MapPrevTx& mapInputs)
 
 unsigned int GetMinimumConnectionsRequiredForStaking()
 {
-    return fTestNet ? 1 : 3;
+    return OnTestnet() ? 1 : 3;
 }
 
 unsigned int GetMaxInputsForConsolidationTxn()

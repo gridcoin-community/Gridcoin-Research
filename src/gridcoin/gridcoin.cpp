@@ -611,7 +611,7 @@ void ScheduleBackups(CScheduler& scheduler)
 //!
 void ScheduleUpdateChecks(CScheduler& scheduler)
 {
-    if (fTestNet) {
+    if (OnTestnet()) {
         LogPrintf("Gridcoin: update checks disabled for testnet");
         return;
     }

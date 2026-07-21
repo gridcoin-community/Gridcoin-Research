@@ -671,7 +671,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
         // Apparently the superblock flags in pindex are broken for superblocks earlier than 1034768 on mainnet and
         // earlier than 196562 on testnet.
         // TODO: Repair the index flags loaded in LevelDB. (This will require a special correction routine at startup.)
-        if ((fTestNet && pindex->nHeight < 196562) || (!fTestNet && pindex->nHeight < 1034768) || pindex->IsSuperblock()) {
+        if ((OnTestnet() && pindex->nHeight < 196562) || (!OnTestnet() && pindex->nHeight < 1034768) || pindex->IsSuperblock()) {
 
             const GRC::ClaimOption claim = GetClaimByIndex(pindex);
 
