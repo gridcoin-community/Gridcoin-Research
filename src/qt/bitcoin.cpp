@@ -51,7 +51,7 @@
 #include <QTextCodec>
 #include <QLocale>
 #include <QTranslator>
-#include <QSplashScreen>
+#include "qt/splashscreen.h"
 #include <QLibraryInfo>
 #include <QProcess>
 
@@ -86,7 +86,7 @@ extern bool fQtActive;
 
 // Need a global reference for the notifications to find the GUI
 static BitcoinGUI *guiref;
-static QSplashScreen *splashref;
+static SplashScreen *splashref;
 
 static void RegisterMetaTypes()
 {
@@ -552,10 +552,13 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
     uiInterface.UpdateMessageBox_connect(UpdateMessageBox);
 
-    QSplashScreen splash(QPixmap(":/images/splash"));
+    // Custom splash (a normal top-level QWidget, not a QSplashScreen) so the
+    // block-loading progress stays on top under Xwayland, where the
+    // Qt::SplashScreen window type is dropped behind the other windows -- see
+    // qt/splashscreen.h.
+    SplashScreen splash;
     if (gArgs.GetBoolArg("-splash", true) && !gArgs.GetBoolArg("-min"))
     {
-        splash.setEnabled(false);
         splash.show();
         splashref = &splash;
     }
@@ -598,7 +601,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             }
 
             if (splashref)
-                splash.finish(&window);
+                splash.finish();
 
             if (!fRequestShutdown) {
                 // Put this in a block, so that the Model objects are cleaned up
