@@ -515,7 +515,7 @@ void SetupServerArgs()
     argsman.AddArg("-blockmaxsize=<n>", strprintf("Set maximum block size in bytes (default: %u)", MAX_BLOCK_SIZE_GEN/2),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-disableupdatecheck", "Optional: Disable update checks by wallet",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
     argsman.AddArg("-updatecheckinterval=<n>", "Optional: Check for updates every <n> hours (default: 120, minimum: 1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-updatecheckurl=<url>", "Optional: URL for the update version checks (ex: "
@@ -581,6 +581,8 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-minstakesplitvalue=<n>", strprintf("Specify minimum output value for post split output when stake "
                                                         "splitting (default: %" PRId64 "GRC)", MIN_STAKE_SPLIT_VALUE_GRC),
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-reservebalance=<amt>", "Keep <amt> GRC unspent and unstaked (reserve). Applied live when changed.",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
 
     // Scraper
@@ -664,7 +666,7 @@ void SetupServerArgs()
                                        " a peer may be inactive before the connection to it is dropped. (minimum: 1, default:"
                                        " 45)",
                    ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::CONNECTION);
-    argsman.AddArg("-proxy=<ip:port>", "Connect through SOCKS5 proxy", ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-proxy=<ip:port>", "Connect through SOCKS5 proxy", ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::CONNECTION);
     argsman.AddArg("-tor=<ip:port>", "Use proxy to reach Tor onion services (default: same as -proxy)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-dns", "Allow DNS lookups for -addnode, -seednode and -connect",
@@ -712,10 +714,10 @@ void SetupServerArgs()
 #ifdef USE_UPNP
 #if USE_UPNP
     argsman.AddArg("-upnp", "Use UPnP to map the listening port (default: 1 when listening and no -proxy)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::CONNECTION);
 #else
     argsman.AddArg("-upnp", "Use UPnP to map the listening port (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::CONNECTION);
 #endif
 #else
     hidden_args.emplace_back("-upnp");
@@ -984,6 +986,152 @@ void InitLogging()
 }
 
 
+
+void ApplyRwSettingSideEffect(const std::string& name)
+{
+    if (name == "proxy") {
+        // Enable/redirect the SOCKS proxy live from the current -proxy value. An
+        // empty value means "off"; netbase has no primitive to clear a live
+        // proxy, so disabling is (as it always was) effective on restart, when
+        // the erased setting leaves -proxy unset.
+        const std::string proxy_arg = gArgs.GetArg("-proxy", "");
+        if (!proxy_arg.empty()) {
+            CService addrProxy(LookupNumeric(proxy_arg.c_str(), 9050));
+            if (addrProxy.IsValid()) {
+                if (!IsLimited(NET_IPV4)) SetProxy(NET_IPV4, addrProxy);
+                if (!IsLimited(NET_IPV6)) SetProxy(NET_IPV6, addrProxy);
+                SetNameProxy(addrProxy);
+            }
+        }
+    } else if (name == "upnp") {
+#ifdef USE_UPNP
+        // USE_UPNP is only defined when UPnP support is compiled in; without it
+        // there is nothing to toggle and SetUseUPnP/MapPort do not apply.
+        if (g_connman) {
+            g_connman->SetUseUPnP(gArgs.GetBoolArg("-upnp", USE_UPNP));
+            MapPort(); // starts or stops the port-map thread to match the flag
+        }
+#endif
+    } else if (name == "reservebalance") {
+        // Empty/unset → 0 (no reserve). ParseMoney fills reserve on success.
+        int64_t reserve = 0;
+        const std::string reserve_arg = gArgs.GetArg("-reservebalance", "");
+        if (reserve_arg.empty() || ParseMoney(reserve_arg, reserve)) {
+            nReserveBalance = reserve;
+        }
+    }
+    // else: pull-model setting (staking cluster, disableupdatecheck, ...) whose
+    // consumers re-read gArgs on use; nothing to apply here.
+}
+
+bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& settings,
+                    bool& requires_restart_out,
+                    std::vector<std::string>& no_change_out,
+                    std::vector<std::string>& immediate_out,
+                    std::vector<std::string>& requires_restart_list_out,
+                    bool& invalid_input_out,
+                    std::string& error_out)
+{
+    // Reset all outputs so results are well-defined even if the caller reuses
+    // the vectors across calls (or on an early-return failure).
+    requires_restart_out = false;
+    no_change_out.clear();
+    immediate_out.clear();
+    requires_restart_list_out.clear();
+    error_out.clear();
+    // Phase-1 failures are caller/validation errors; a phase-2 storage failure
+    // flips this back to false.
+    invalid_input_out = true;
+
+    // -------- name ------------ value - value_changed - immediate_effect
+    std::map<std::string, std::tuple<std::string, bool, bool>> valid_settings;
+
+    // Phase 1: fully validate (name and, for the knobs that would break on
+    // restart, the value) before mutating anything.
+    for (const auto& setting : settings) {
+        const std::string& name = setting.first;
+        const std::string& value = setting.second;
+
+        if (name.empty() || name[0] == '-') {
+            error_out = "Incorrectly formatted setting name: '" + name + "'";
+            return false;
+        }
+
+        std::optional<unsigned int> flags = gArgs.GetArgFlags('-' + name);
+        if (!flags) {
+            error_out = "Invalid setting: " + name;
+            return false;
+        }
+
+        // Value validation for the push-model network/staking knobs whose bad
+        // value would otherwise persist and fail at the next startup (the config
+        // consumers assert/InitError on a malformed value). An empty value erases
+        // and needs no check. GetBoolArg/GetArg coerce the rest leniently.
+        if (!value.empty()) {
+            if (name == "proxy" && !CService(LookupNumeric(value.c_str(), 9050)).IsValid()) {
+                error_out = "Invalid proxy address: " + value;
+                return false;
+            }
+            if (name == "reservebalance") {
+                int64_t parsed = 0;
+                if (!ParseMoney(value, parsed)) {
+                    error_out = "Invalid reservebalance amount: " + value;
+                    return false;
+                }
+            }
+        }
+
+        // GetArg is overloaded; one of these succeeds (matches the changesettings RPC).
+        std::string current_value;
+        try {
+            current_value = gArgs.GetArg(name, "never_used_default");
+        } catch (...) {
+            current_value = ToString(gArgs.GetArg(name, 1));
+        }
+
+        const bool value_changed = (current_value != value);
+        const bool immediate_effect = *flags & ArgsManager::IMMEDIATE_EFFECT;
+
+        if (!valid_settings.insert(std::make_pair(
+                name, std::make_tuple(value, value_changed, immediate_effect))).second) {
+            error_out = "The same setting was specified more than once: " + name;
+            return false;
+        }
+    }
+
+    // Phase 2: apply. A failure here is a storage error, not a caller error.
+    invalid_input_out = false;
+    for (const auto& setting : valid_settings) {
+        const std::string& name = setting.first;
+        const std::string& value = std::get<0>(setting.second);
+        const bool value_changed = std::get<1>(setting.second);
+        const bool immediate_effect = std::get<2>(setting.second);
+        const std::string param = name + "=" + value;
+
+        // An empty value erases the setting (unset → default); a null
+        // SettingsValue removes the key from gridcoinsettings.json.
+        if (!updateRwSetting(name, value.empty() ? util::SettingsValue() : util::SettingsValue(value))) {
+            error_out = "Error storing setting in read-write settings file: " + name;
+            return false;
+        }
+
+        if (value_changed) {
+            gArgs.ForceSetArg(name, value);
+
+            if (immediate_effect) {
+                ApplyRwSettingSideEffect(name);
+                immediate_out.push_back(param);
+            } else {
+                requires_restart_list_out.push_back(param);
+                requires_restart_out = true;
+            }
+        } else {
+            no_change_out.push_back(param);
+        }
+    }
+
+    return true;
+}
 
 void ThreadAppInit2(ThreadHandlerPtr th)
 {

@@ -257,6 +257,40 @@ public:
         return tableRPC.listCommands();
     }
 
+    bool getSettingBool(const std::string& name, bool default_val) override
+    {
+        return gArgs.GetBoolArg("-" + name, default_val);
+    }
+
+    int64_t getSettingInt(const std::string& name, int64_t default_val) override
+    {
+        return gArgs.GetArg("-" + name, default_val);
+    }
+
+    std::string getSettingStr(const std::string& name, const std::string& default_val) override
+    {
+        return gArgs.GetArg("-" + name, default_val);
+    }
+
+    bool isSettingSet(const std::string& name) override
+    {
+        return gArgs.IsArgSet("-" + name);
+    }
+
+    SettingChangeResult changeSettings(
+        const std::vector<std::pair<std::string, std::string>>& settings) override
+    {
+        SettingChangeResult out;
+        out.ok = ChangeSettings(settings, out.requires_restart, out.no_change, out.immediate,
+                                out.requires_restart_settings, out.invalid_input, out.error);
+        return out;
+    }
+
+    std::unique_ptr<Handler> handleRwSettingsUpdated(RwSettingsUpdatedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(std::move(fn)));
+    }
+
     ScraperConvergenceSnapshot getScraperConvergenceSnapshot() override
     {
         LOCK(cs_ConvergedScraperStatsCache);

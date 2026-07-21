@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <utility>
 #include <memory>
 #include <optional>
 #include <string>
@@ -69,6 +70,24 @@ struct RpcConsoleResult
     //! Formatted reply text on success, or the formatted error message on
     //! failure ("<message> (code <n>)", or raw JSON / "Error: <what>").
     std::string output;
+};
+
+//! Result of Node::changeSettings, mirroring the changesettings RPC. `ok` false
+//! means the change failed with `error` set: when `invalid_input` is true it was
+//! a caller/validation error and nothing was changed; when false it was an
+//! internal settings-file write error (and some earlier settings in the batch
+//! may already have been applied).
+struct SettingChangeResult
+{
+    bool ok = false;
+    bool invalid_input = false;
+    std::string error;
+    //! At least one changed setting does not take effect until restart.
+    bool requires_restart = false;
+    //! name=value strings, categorized like the changesettings RPC.
+    std::vector<std::string> no_change;
+    std::vector<std::string> immediate;
+    std::vector<std::string> requires_restart_settings;
 };
 
 //! Value snapshot of the scraper convergence status consumed by the GUI
@@ -182,6 +201,34 @@ public:
 
     //! The list of RPC command names, for the console's autocomplete.
     virtual std::vector<std::string> listRpcCommands() = 0;
+
+    //! Read the current effective value of a read-write/config setting, typed.
+    //! `name` is the bare arg name without the leading dash. `default_val` is
+    //! returned when the setting is unset. These forward to the node's argument
+    //! store so the GUI (a separate process) never reads gArgs directly.
+    virtual bool getSettingBool(const std::string& name, bool default_val) = 0;
+    virtual int64_t getSettingInt(const std::string& name, int64_t default_val) = 0;
+    virtual std::string getSettingStr(const std::string& name, const std::string& default_val) = 0;
+
+    //! Whether the setting is explicitly set (config file, command line, or the
+    //! read-write settings file) rather than falling back to its default. Used
+    //! by the one-time GUI-settings migration to avoid overriding a value the
+    //! user already set in gridcoinresearch.conf.
+    virtual bool isSettingSet(const std::string& name) = 0;
+
+    //! Change one or more settings (name/value, no leading dash). The node
+    //! validates, persists to gridcoinsettings.json, and applies immediate side
+    //! effects -- the same path as the changesettings RPC. An empty value erases
+    //! the setting (unset -> default). This is deliberately a generic catch-all:
+    //! the caller (OptionsModel) is typed and formats each value; the transport
+    //! is name/value strings; the node coerces at read time.
+    virtual SettingChangeResult changeSettings(
+        const std::vector<std::pair<std::string, std::string>>& settings) = 0;
+
+    //! Register a handler fired when the read-write settings file changes, so the
+    //! GUI can refetch. Payload-free (bridges uiInterface.RwSettingsUpdated).
+    using RwSettingsUpdatedFn = std::function<void()>;
+    virtual std::unique_ptr<Handler> handleRwSettingsUpdated(RwSettingsUpdatedFn fn) = 0;
 
     //! Value snapshot of the scraper convergence status.
     virtual ScraperConvergenceSnapshot getScraperConvergenceSnapshot() = 0;

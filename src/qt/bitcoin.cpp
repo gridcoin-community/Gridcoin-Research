@@ -363,10 +363,16 @@ int main(int argc, char *argv[])
     // instead of a locally-minted one.
     std::unique_ptr<interfaces::Init> gui_init = interfaces::MakeGridcoinInit();
     std::unique_ptr<interfaces::SideStakeManager> sidestake_manager = gui_init->makeSideStakeManager();
+    // Settings command/query surface for OptionsModel. Minted here (like the
+    // sidestake manager) so it outlives optionsModel; Phase 2 hands this out from
+    // the single process Init. The node wraps globals and reads them at call time,
+    // so it is safe to construct before core init -- OptionsModel only reads/writes
+    // settings through it later (dialog open, migrateCoreSettings()).
+    std::unique_ptr<interfaces::Node> gui_node = gui_init->makeNode();
 
     // Load the optionsModel. This has to be loaded before the translations, because the language selection is
     // a setting that can be stored in options.
-    OptionsModel optionsModel(*sidestake_manager);
+    OptionsModel optionsModel(*gui_node, *sidestake_manager);
 
     // Get desired locale (e.g. "de_DE") from command line or use system locale
     QString lang_territory = QString::fromStdString(gArgs.GetArg("-lang", QLocale::system().name().toStdString()));
@@ -466,6 +472,11 @@ int main(int argc, char *argv[])
                               QObject::tr("Error initializing settings: %1").arg(QString::fromStdString(error)));
         return EXIT_FAILURE;
     }
+
+    // Now that the config file, network selection and read-write settings file
+    // are loaded, migrate any proxy / UPnP / reservebalance / update-check values
+    // the user had in Gridcoin-Qt.conf into the core read-write settings (one-time).
+    optionsModel.migrateCoreSettings();
 
     // Initialize logging as early as possible.
     InitLogging();
