@@ -99,7 +99,7 @@ static void RegisterMetaTypes()
     qRegisterMetaType<uint32_t>("uint32_t");
 }
 
-int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel, interfaces::Node& node);
+int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel, interfaces::Node& gui_node);
 
 static void SetupUIArgs(ArgsManager& argsman)
 {
@@ -534,7 +534,7 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 }
 
-int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel, interfaces::Node& node)
+int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel, interfaces::Node& gui_node)
 {
     // Set global boolean to indicate intended presence of GUI to core.
     fQtActive = true;
@@ -553,12 +553,12 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     // Core-initiated shutdown (RPC stop / SIGTERM / low-disk abort) -> quit the
     // GUI. Routed through the node interface rather than a raw
     // uiInterface.QueueShutdown_connect so Phase 2 can deliver it over IPC. The
-    // handler must outlive app.exec(), so it is held for this function's scope;
-    // the node reference (main()'s gui_node) outlives this call. Wired here,
-    // before AppInit2, so a shutdown requested during core init still reaches the
-    // GUI.
-    std::unique_ptr<interfaces::Handler> shutdown_handler =
-        node.handleInitShutdown(QueueShutdown);
+    // returned Handler is kept only to keep the subscription alive (RAII): it
+    // must outlive app.exec(), so it lives for this function's scope. gui_node
+    // (main()'s early node) outlives this call. Wired here, before AppInit2, so a
+    // shutdown requested during core init still reaches the GUI.
+    [[maybe_unused]] std::unique_ptr<interfaces::Handler> shutdown_handler =
+        gui_node.handleInitShutdown(QueueShutdown);
 
     uiInterface.UpdateMessageBox_connect(UpdateMessageBox);
 
