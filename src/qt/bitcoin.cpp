@@ -99,7 +99,7 @@ static void RegisterMetaTypes()
     qRegisterMetaType<uint32_t>("uint32_t");
 }
 
-int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel);
+int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel, interfaces::Node& node);
 
 static void SetupUIArgs(ArgsManager& argsman)
 {
@@ -507,7 +507,7 @@ int main(int argc, char *argv[])
     }
 
     /** Start Qt as normal before it was moved into this function **/
-    StartGridcoinQt(argc, argv, app, optionsModel);
+    StartGridcoinQt(argc, argv, app, optionsModel, *gui_node);
 
     // We received a request to remove blockchain data so client user can start to sync from 0
     if (fResetBlockchainRequest)
@@ -534,7 +534,7 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 }
 
-int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel)
+int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel, interfaces::Node& node)
 {
     // Set global boolean to indicate intended presence of GUI to core.
     fQtActive = true;
@@ -548,8 +548,17 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     uiInterface.ThreadSafeMessageBox_connect(ThreadSafeMessageBox);
     uiInterface.ThreadSafeHandleURI_connect(ThreadSafeHandleURI);
     uiInterface.InitMessage_connect(InitMessage);
-    uiInterface.QueueShutdown_connect(QueueShutdown);
     uiInterface.Translate_connect(Translate);
+
+    // Core-initiated shutdown (RPC stop / SIGTERM / low-disk abort) -> quit the
+    // GUI. Routed through the node interface rather than a raw
+    // uiInterface.QueueShutdown_connect so Phase 2 can deliver it over IPC. The
+    // handler must outlive app.exec(), so it is held for this function's scope;
+    // the node reference (main()'s gui_node) outlives this call. Wired here,
+    // before AppInit2, so a shutdown requested during core init still reaches the
+    // GUI.
+    std::unique_ptr<interfaces::Handler> shutdown_handler =
+        node.handleInitShutdown(QueueShutdown);
 
     uiInterface.UpdateMessageBox_connect(UpdateMessageBox);
 

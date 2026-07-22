@@ -291,6 +291,11 @@ public:
         return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(std::move(fn)));
     }
 
+    std::unique_ptr<Handler> handleInitShutdown(InitShutdownFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.QueueShutdown_connect(std::move(fn)));
+    }
+
     ScraperConvergenceSnapshot getScraperConvergenceSnapshot() override
     {
         LOCK(cs_ConvergedScraperStatsCache);
