@@ -30,11 +30,11 @@
 #include "rpc/server.h"
 #include "sync.h"
 #include "util.h"
+#include "util/strencodings.h"
 #include "wallet/diagnose.h"
 
 #include <univalue.h>
 
-#include <cctype>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -60,14 +60,16 @@ namespace {
 std::string ArgSubstitute(std::string text, const std::vector<std::string>& args)
 {
     for (const std::string& arg : args) {
-        // Find the lowest-numbered %N marker currently in the string.
+        // Find the lowest-numbered %N marker currently in the string. IsDigit()
+        // (util/strencodings.h) is used rather than std::isdigit, which is
+        // locale-dependent (banned by lint-locale-dependence.sh).
         int lowest = -1;
         for (size_t i = 0; i + 1 < text.size(); ++i) {
-            if (text[i] != '%' || !std::isdigit(static_cast<unsigned char>(text[i + 1]))) continue;
+            if (text[i] != '%' || !IsDigit(text[i + 1])) continue;
 
             size_t j = i + 1;
             int value = 0;
-            while (j < text.size() && std::isdigit(static_cast<unsigned char>(text[j]))) {
+            while (j < text.size() && IsDigit(text[j])) {
                 value = value * 10 + (text[j] - '0');
                 ++j;
             }
