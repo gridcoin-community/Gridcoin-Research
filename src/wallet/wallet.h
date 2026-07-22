@@ -14,6 +14,7 @@
 #include <stdlib.h>
 
 #include "amount.h"
+#include "node/shutdown.h"
 #include "consensus/tx_verify.h"
 #include "gridcoin/staking/status.h"
 #include "main.h"
@@ -648,7 +649,7 @@ public:
 
     ~CReserveKey()
     {
-        if (!fShutdown)
+        if (!ShutdownInProgress())
             ReturnKey();
     }
 

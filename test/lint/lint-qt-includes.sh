@@ -33,6 +33,7 @@ src/qt/bitcoin.cpp:chainparams.h
 src/qt/bitcoin.cpp:gridcoin/gridcoin.h
 src/qt/bitcoin.cpp:gridcoin/upgrade.h
 src/qt/bitcoin.cpp:init.h
+src/qt/bitcoin.cpp:node/shutdown.h
 src/qt/bitcoin.cpp:node/ui_interface.h
 src/qt/bitcoin.cpp:policy/fees.h
 src/qt/bitcoin.cpp:txdb.h

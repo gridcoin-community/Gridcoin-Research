@@ -17,6 +17,7 @@
 #include "txdb.h"
 #include "wallet/walletdb.h"
 #include "init.h"
+#include "node/shutdown.h"
 #include "rpc/server.h"
 #include "rpc/client.h"
 #include "node/ui_interface.h"

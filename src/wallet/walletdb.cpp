@@ -6,6 +6,7 @@
 #include "streams.h"
 #include "wallet/walletdb.h"
 #include "wallet/wallet.h"
+#include "node/shutdown.h"
 #include "init.h"
 
 #include <stdexcept>
@@ -690,7 +691,7 @@ void ThreadFlushWalletDB(void* parg)
     unsigned int nLastSeen = nWalletDBUpdated;
     unsigned int nLastFlushed = nWalletDBUpdated;
     int64_t nLastWalletUpdate = GetTime();
-    while (!fShutdown)
+    while (!ShutdownInProgress())
     {
         UninterruptibleSleep(std::chrono::milliseconds{500});
 
@@ -714,7 +715,7 @@ void ThreadFlushWalletDB(void* parg)
                     mi++;
                 }
 
-                if (nRefCount == 0 && !fShutdown)
+                if (nRefCount == 0 && !ShutdownInProgress())
                 {
                     map<string, int>::iterator mi = bitdb.mapFileUseCount.find(strFile);
                     if (mi != bitdb.mapFileUseCount.end())

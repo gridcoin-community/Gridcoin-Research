@@ -28,8 +28,6 @@
 using namespace std;
 
 bool fPrintToConsole = false;
-bool fRequestShutdown = false;
-std::atomic<bool> fShutdown = false;
 bool fCommandLine = false;
 bool fTestNet = false;
 bool fNoListen = false;

@@ -17,6 +17,7 @@
 #include "index/txindex.h"
 #include "node/coherence.h"  // GRC::PackBlockFilePos
 #include "txdb.h"
+#include "node/shutdown.h"
 #include "main.h"
 #include "node/blockstorage.h"
 #include "node/chainman.h"
@@ -561,7 +562,7 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         string strType;
         ssKey >> strType;
         // Did we reach the end of the data to read?
-        if (fRequestShutdown || strType != "blockindex")
+        if (ShutdownRequested() || strType != "blockindex")
             break;
         CDiskBlockIndex diskindex;
         ssValue >> diskindex;
@@ -646,7 +647,7 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     for (CBlockIndex* pindex = pindexBest; pindex && pindex->pprev; pindex = pindex->pprev)
     {
         int nCurrentDepth = nBestHeight - pindex->nHeight + 1;
-        if (fRequestShutdown || nCurrentDepth > nCheckDepth)
+        if (ShutdownRequested() || nCurrentDepth > nCheckDepth)
             break;
         CBlock block;
         if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
@@ -792,7 +793,7 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     LogPrintf("Time to Verify Blocks %15" PRId64 "ms", GetTimeMillis() - nStart);
 
-    if (pindexFork && !fRequestShutdown)
+    if (pindexFork && !ShutdownRequested())
     {
         // Reorg back to the fork
         LogPrintf("LoadBlockIndex() : *** moving best chain pointer back to block %d", pindexFork->nHeight);

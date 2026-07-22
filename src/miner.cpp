@@ -8,6 +8,7 @@
 #include "consensus/merkle.h"
 #include "consensus/tx_verify.h"
 #include "txdb.h"
+#include "node/shutdown.h"
 #include "miner.h"
 #include "main.h"
 #include "node/chainman.h"
@@ -1504,7 +1505,7 @@ void StakeMiner(CWallet *pwallet)
     std::string function = __func__;
     function += ": ";
 
-    while (!fShutdown)
+    while (!ShutdownInProgress())
     {
         // nMinStakeSplitValue and dEfficiency are out parameters.
         // cs_main is required for the GetAverageDifficulty(160) lookup inside;
@@ -1681,7 +1682,7 @@ void StakeMiner(CWallet *pwallet)
         g_miner_status.UpdateLastStake(StakeBlock.vtx[1].GetHash());
 
         g_timer.GetTimes(function + "ProcessBlock", "miner");
-    } //end while(!fShutdown)
+    } //end while(!ShutdownInProgress())
 }
 
 // Regtest helper: run one iteration of the staking pipeline and emit the

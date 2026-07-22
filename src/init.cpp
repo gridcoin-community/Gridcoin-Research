@@ -9,6 +9,7 @@
 #include "dbwrapper.h"
 #include "gridcoin/support/block_finder.h"
 #include "util.h"
+#include "node/shutdown.h"
 #include "util/threadnames.h"
 #include "net.h"
 #include "wallet/walletdb.h"
@@ -141,11 +142,6 @@ static void ShutdownNotify(const ArgsManager& args)
 }
 #endif
 
-bool ShutdownRequested()
-{
-    return fRequestShutdown;
-}
-
 void StartShutdown()
 {
 
@@ -156,7 +152,7 @@ void StartShutdown()
         uiInterface.QueueShutdown();
     else
         // Without UI, shutdown is initiated and shutdown() is called in AppInit
-        fRequestShutdown = true;
+        SetShutdownRequested();
 }
 
 void Shutdown(void* parg)
@@ -185,7 +181,7 @@ void Shutdown(void* parg)
             ShutdownNotify(gArgs);
         #endif
 
-        fShutdown = true;
+        SetShutdownInProgress();
 
         // Signal to the scheduler to stop. Guarded because Shutdown() can run
         // after an early AppInit2 failure, before the scheduler is constructed.
@@ -214,8 +210,8 @@ void Shutdown(void* parg)
         LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
         StopNode();
 
-        // The stake miner exits via fShutdown plus the g_thread_interrupt()
-        // call above, which wakes its MilliSleep.
+        // The stake miner exits via ShutdownInProgress() plus the
+        // g_thread_interrupt() call above, which wakes its MilliSleep.
         LogPrintf("INFO: %s: Stopping the stake miner thread.", __func__);
         if (g_stake_miner_thread.joinable()) {
             g_stake_miner_thread.join();
@@ -334,7 +330,7 @@ void Shutdown(void* parg)
 #ifndef WIN32
 static void HandleSIGTERM(int)
 {
-    fRequestShutdown = true;
+    SetShutdownRequested();
 }
 
 static void HandleSIGHUP(int)
@@ -344,7 +340,7 @@ static void HandleSIGHUP(int)
 #else
 static BOOL WINAPI consoleCtrlHandler(DWORD dwCtrlType)
 {
-    fRequestShutdown = true;
+    SetShutdownRequested();
     Sleep(INFINITE);
     return true;
 }
@@ -1144,7 +1140,7 @@ void ThreadAppInit2(ThreadHandlerPtr th)
     LogPrintf("Initializing Core...");
 
     if (!AppInit2(th)) {
-        fRequestShutdown = true;
+        SetShutdownRequested();
     }
 
     LogPrintf("Core Initialized...");
@@ -1634,13 +1630,13 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     uiInterface.InitMessage(_("Loading block index..."));
     LogPrintf("Loading block index...");
-    if (!LoadBlockIndex() && !fRequestShutdown)
+    if (!LoadBlockIndex() && !ShutdownRequested())
         return InitError(_("Error loading blkindex.dat"));
 
     // as LoadBlockIndex can take several minutes, it's possible the user
     // requested to kill bitcoin-qt during the last operation. If so, exit.
     // As the program has not fully started yet, Shutdown() is possibly overkill.
-    if (fRequestShutdown)
+    if (ShutdownRequested())
     {
         LogPrintf("Shutdown requested. Exiting.");
         return false;

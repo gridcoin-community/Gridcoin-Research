@@ -30,6 +30,7 @@
 #include "interfaces/wallet.h"
 #include "interfaces/wallet_tx_source.h"
 #include "init.h"
+#include "node/shutdown.h"
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
 #include "txdb.h"
@@ -603,7 +604,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             if (splashref)
                 splash.finish();
 
-            if (!fRequestShutdown) {
+            if (!ShutdownRequested()) {
                 // Put this in a block, so that the Model objects are cleaned up
                 // before calling Shutdown(). interface_init (created above, ahead
                 // of the readiness wait) outlives every model constructed here.
@@ -719,6 +720,11 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 GUIUtil::SetStartOnSystemStartup(optionsModel.getStartAtStartup(), optionsModel.getStartMin());
 
                 app.exec();
+
+                // Stop the GUI-process-local URI-listener thread now that the
+                // event loop has returned (it no longer reads the core shutdown
+                // state; see qtipcserver ipcShutdown()).
+                ipcShutdown();
 
                 window.hide();
                 window.setClientModel(nullptr);
