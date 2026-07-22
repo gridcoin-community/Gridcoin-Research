@@ -606,7 +606,26 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
     def connect_nodes(self, a, b):
         def connect_nodes_helper(from_connection, node_num):
             ip_port = "127.0.0.1:" + str(p2p_port(node_num))
-            from_connection.addnode(ip_port, "onetry")
+
+            # A "onetry" connect races the target node's P2P listener coming up:
+            # if that node's daemon is still binding its port when we get here,
+            # the connect is refused immediately and the daemon throws
+            # RPC_CLIENT_NODE_ALREADY_ADDED (-23) with "Node connection failed"
+            # (rpc/net.cpp). Under host saturation (seen intermittently on the
+            # Sanitizers CI job, where the SUT builds run slow) this is a
+            # transient startup race, not a real failure, so retry the onetry
+            # until it is accepted. A genuinely unreachable peer still surfaces:
+            # wait_until_helper raises once its timeout elapses.
+            def issue_onetry():
+                try:
+                    from_connection.addnode(ip_port, "onetry")
+                    return True
+                except JSONRPCException as e:
+                    if e.error['code'] == -23 and 'Node connection failed' in e.error['message']:
+                        return False
+                    raise
+            wait_until_helper(issue_onetry)
+
             # Poll until the version handshake has produced a peer with a
             # negotiated protocol version. Gridcoin's getpeerinfo does not
             # expose Bitcoin Core's per-message byte counters (bytesrecv_per_msg),
@@ -799,6 +818,11 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         the REAL clock — but long enough for real time to clear the highest
         mock time ever pinned (the daemon's rate-limit map may hold an accept
         timestamp from when the clock ran ahead), not just `spacing` seconds."""
+        # Enforce the >= 6 constraint the docstring relies on: a smaller spacing
+        # can leave two connects in the same integer-second boundary (delta 4),
+        # tripping the daemon's inbound rate limit and reintroducing the exact
+        # intermittent connect-drop this helper exists to prevent.
+        assert spacing >= 6, "add_p2p_connection_spaced spacing must be >= 6 (daemon 5s inbound rate limit)"
         if node._mocktime_off:
             time.sleep(max(spacing, node._mocktime_high + spacing - int(time.time())))
         else:
