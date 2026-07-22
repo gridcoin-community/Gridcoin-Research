@@ -230,6 +230,18 @@ public:
     using RwSettingsUpdatedFn = std::function<void()>;
     virtual std::unique_ptr<Handler> handleRwSettingsUpdated(RwSettingsUpdatedFn fn) = 0;
 
+    //! Register a handler fired when the core begins shutting down (RPC `stop`,
+    //! SIGTERM, a low-disk abort, etc.). The GUI reacts by leaving its event loop
+    //! and quitting its own process. This is the core->GUI half of the shutdown
+    //! model: quitting the GUI shuts down only the GUI process, but a
+    //! core-initiated shutdown must tell an attached GUI to follow. Payload-free;
+    //! bridges uiInterface.QueueShutdown today, and in the separated build Phase 2
+    //! delivers it as an IPC callback instead of an in-process signal -- which is
+    //! why the GUI must route it through this interface rather than connecting to
+    //! uiInterface directly.
+    using InitShutdownFn = std::function<void()>;
+    virtual std::unique_ptr<Handler> handleInitShutdown(InitShutdownFn fn) = 0;
+
     //! Value snapshot of the scraper convergence status.
     virtual ScraperConvergenceSnapshot getScraperConvergenceSnapshot() = 0;
 

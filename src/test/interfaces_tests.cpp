@@ -109,6 +109,22 @@ BOOST_AUTO_TEST_CASE(node_handler_bridges_ui_signal)
     BOOST_CHECK_EQUAL(calls, 1);
 }
 
+BOOST_AUTO_TEST_CASE(node_init_shutdown_handler_bridges_queue_shutdown)
+{
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+    int calls = 0;
+
+    std::unique_ptr<interfaces::Handler> handler =
+        node->handleInitShutdown([&] { ++calls; });
+
+    uiInterface.QueueShutdown();
+    BOOST_CHECK_EQUAL(calls, 1);
+
+    handler->disconnect();
+    uiInterface.QueueShutdown();
+    BOOST_CHECK_EQUAL(calls, 1);
+}
+
 BOOST_AUTO_TEST_CASE(wallet_wraps_cwallet)
 {
     BOOST_REQUIRE(pwalletMain != nullptr);
