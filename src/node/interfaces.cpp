@@ -30,12 +30,15 @@
 #include "rpc/server.h"
 #include "sync.h"
 #include "util.h"
+#include "wallet/diagnose.h"
 
 #include <univalue.h>
 
+#include <cctype>
 #include <memory>
 #include <optional>
 #include <utility>
+#include <vector>
 
 // The converged scraper stats cache has no header declaration; every consumer
 // declares the extern locally (quorum.cpp, scraper_net.cpp, rpc/blockchain.cpp).
@@ -44,6 +47,45 @@ extern std::atomic<bool> bGridcoinCoreInitComplete;
 
 namespace interfaces {
 namespace {
+
+//! Substitute a diagnostic template's positional placeholders the same way the
+//! GUI formerly did with QString::arg(): each argument, in order, replaces the
+//! lowest-numbered "%N" marker still present in the string (all occurrences of
+//! that marker). The diagnostic templates only ever use "%1", but this mirrors
+//! QString::arg's lowest-marker-first rule so multi-arg templates behave
+//! identically if any are added. This matches QString::arg exactly for the
+//! diagnostic args, which are all numeric (no '%'); an argument that itself
+//! contained "%N" could be rescanned by a later argument (QString::arg tracks
+//! already-filled positions), but no diagnostic produces such an argument.
+std::string ArgSubstitute(std::string text, const std::vector<std::string>& args)
+{
+    for (const std::string& arg : args) {
+        // Find the lowest-numbered %N marker currently in the string.
+        int lowest = -1;
+        for (size_t i = 0; i + 1 < text.size(); ++i) {
+            if (text[i] != '%' || !std::isdigit(static_cast<unsigned char>(text[i + 1]))) continue;
+
+            size_t j = i + 1;
+            int value = 0;
+            while (j < text.size() && std::isdigit(static_cast<unsigned char>(text[j]))) {
+                value = value * 10 + (text[j] - '0');
+                ++j;
+            }
+
+            if (lowest == -1 || value < lowest) lowest = value;
+        }
+
+        if (lowest == -1) break; // No markers left; extra args are dropped (as QString::arg would).
+
+        const std::string marker = "%" + ToString(lowest);
+        for (size_t pos = text.find(marker); pos != std::string::npos; pos = text.find(marker, pos)) {
+            text.replace(pos, marker.size(), arg);
+            pos += arg.size();
+        }
+    }
+
+    return text;
+}
 
 //! In-process Node implementation: thin wrappers over the existing globals.
 //! Methods that read cs_main-guarded chain state take the lock themselves, so
@@ -125,6 +167,67 @@ public:
                       "LatestVersionInfo::upgrade_type int contract must match GRC::Upgrade::UpgradeType");
         info.upgrade_type = static_cast<int>(upgrade_type);
         return info;
+    }
+
+    std::vector<DiagnosticResult> runDiagnostics() override
+    {
+        // The GUI-facing test-id and status mirrors must match the core enums.
+        static_assert(static_cast<int>(DiagnosticTest::CheckConnectionCount) == DiagnoseLib::Diagnose::CheckConnectionCount
+                      && static_cast<int>(DiagnosticTest::CheckOutboundConnectionCount) == DiagnoseLib::Diagnose::CheckOutboundConnectionCount
+                      && static_cast<int>(DiagnosticTest::VerifyWalletIsSynced) == DiagnoseLib::Diagnose::VerifyWalletIsSynced
+                      && static_cast<int>(DiagnosticTest::CheckClientVersion) == DiagnoseLib::Diagnose::CheckClientVersion
+                      && static_cast<int>(DiagnosticTest::VerifyBoincPath) == DiagnoseLib::Diagnose::VerifyBoincPath
+                      && static_cast<int>(DiagnosticTest::VerifyCPIDHasRAC) == DiagnoseLib::Diagnose::VerifyCPIDHasRAC
+                      && static_cast<int>(DiagnosticTest::VerifyCPIDIsActive) == DiagnoseLib::Diagnose::VerifyCPIDIsActive
+                      && static_cast<int>(DiagnosticTest::VerifyCPIDValid) == DiagnoseLib::Diagnose::VerifyCPIDValid
+                      && static_cast<int>(DiagnosticTest::VerifyClock) == DiagnoseLib::Diagnose::VerifyClock
+                      && static_cast<int>(DiagnosticTest::VerifyTCPPort) == DiagnoseLib::Diagnose::VerifyTCPPort
+                      && static_cast<int>(DiagnosticTest::CheckDifficulty) == DiagnoseLib::Diagnose::CheckDifficulty
+                      && static_cast<int>(DiagnosticTest::CheckETTS) == DiagnoseLib::Diagnose::CheckETTS,
+                      "interfaces::DiagnosticTest must mirror DiagnoseLib::Diagnose::TestNames");
+        static_assert(static_cast<int>(DiagnosticStatus::PASS) == DiagnoseLib::Diagnose::PASS
+                      && static_cast<int>(DiagnosticStatus::WARNING) == DiagnoseLib::Diagnose::WARNING
+                      && static_cast<int>(DiagnosticStatus::FAIL) == DiagnoseLib::Diagnose::FAIL
+                      && static_cast<int>(DiagnosticStatus::NONE) == DiagnoseLib::Diagnose::NONE,
+                      "interfaces::DiagnosticStatus must mirror DiagnoseLib::Diagnose::diagnoseResults");
+
+        // Resolve the researcher mode the tests branch on (reads core researcher
+        // state, not the GUI model).
+        DiagnoseLib::Diagnose::setResearcherModel();
+
+        // Construct all tests up front so they are all registered before any
+        // runs: two tests (VerifyClock, VerifyTCPPort) read CheckConnectionCount's
+        // result through the shared test map, and CheckConnectionCount -- enum id
+        // 0 -- is run first below, so its result is available to them.
+        std::vector<std::unique_ptr<DiagnoseLib::Diagnose>> tests;
+        tests.push_back(std::make_unique<DiagnoseLib::CheckConnectionCount>());
+        tests.push_back(std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>());
+        tests.push_back(std::make_unique<DiagnoseLib::VerifyWalletIsSynced>());
+        tests.push_back(std::make_unique<DiagnoseLib::CheckClientVersion>());
+        tests.push_back(std::make_unique<DiagnoseLib::VerifyBoincPath>());
+        tests.push_back(std::make_unique<DiagnoseLib::VerifyCPIDHasRAC>());
+        tests.push_back(std::make_unique<DiagnoseLib::VerifyCPIDIsActive>());
+        tests.push_back(std::make_unique<DiagnoseLib::VerifyCPIDValid>());
+        tests.push_back(std::make_unique<DiagnoseLib::VerifyClock>());
+        tests.push_back(std::make_unique<DiagnoseLib::VerifyTCPPort>());
+        tests.push_back(std::make_unique<DiagnoseLib::CheckDifficulty>());
+        tests.push_back(std::make_unique<DiagnoseLib::CheckETTS>());
+
+        std::vector<DiagnosticResult> results;
+        results.reserve(tests.size());
+
+        for (auto& test : tests) {
+            test->runCheck();
+
+            DiagnosticResult result;
+            result.test_id = static_cast<int>(test->getTestName());
+            result.status = static_cast<int>(test->getResults());
+            result.result_string = ArgSubstitute(test->getResultsString(), test->getStringArgs());
+            result.tip_string = ArgSubstitute(test->getResultsTip(), test->getTipArgs());
+            results.push_back(std::move(result));
+        }
+
+        return results;
     }
 
     double getBlockDifficulty(uint32_t target_bits) override

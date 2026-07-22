@@ -833,6 +833,7 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
         connect(m_mask_values_action, &QAction::toggled, this, &BitcoinGUI::setPrivacy);
 
         rpcConsole->setClientModel(clientModel);
+        diagnosticsDialog->setClientModel(clientModel);
         addressBookPage->setOptionsModel(clientModel->getOptionsModel());
         receiveCoinsPage->setOptionsModel(clientModel->getOptionsModel());
         votingPage->setOptionsModel(clientModel->getOptionsModel());
@@ -847,8 +848,9 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
     {
         // Shutdown teardown: propagate the cleared model so the RPC console
         // stops its executor thread before the interfaces::Node it references
-        // is destroyed.
+        // is destroyed. The diagnostics dialog likewise drops its node pointer.
         rpcConsole->setClientModel(nullptr);
+        diagnosticsDialog->setClientModel(nullptr);
     }
 }
 
@@ -1244,7 +1246,7 @@ void BitcoinGUI::update(const QString &title, const QString& version, const int&
 
     updateMessageDialog->setWindowTitle(title);
     updateMessageDialog->setVersion(version);
-    updateMessageDialog->setUpgradeType(static_cast<GRC::Upgrade::UpgradeType>(upgrade_type));
+    updateMessageDialog->setUpgradeType(upgrade_type);
     updateMessageDialog->setDetails(message);
     updateMessageDialog->setModal(false);
 

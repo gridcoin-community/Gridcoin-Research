@@ -611,6 +611,63 @@ public:
         return 50 * COIN;
     }
 
+    std::vector<PollTypeMeta> getPollTypes() override
+    {
+        // The GUI-facing enum mirrors and limit constants must match the core.
+        static_assert(static_cast<int>(PollFilterFlag::NO_FILTER) == static_cast<int>(GRC::PollFilterFlag::NO_FILTER)
+                      && static_cast<int>(PollFilterFlag::ACTIVE) == static_cast<int>(GRC::PollFilterFlag::ACTIVE)
+                      && static_cast<int>(PollFilterFlag::FINISHED) == static_cast<int>(GRC::PollFilterFlag::FINISHED),
+                      "interfaces::PollFilterFlag must mirror GRC::PollFilterFlag");
+        static_assert(static_cast<int>(PollType::UNKNOWN) == static_cast<int>(GRC::PollType::UNKNOWN)
+                      && static_cast<int>(PollType::SURVEY) == static_cast<int>(GRC::PollType::SURVEY)
+                      && static_cast<int>(PollType::PROJECT) == static_cast<int>(GRC::PollType::PROJECT)
+                      && static_cast<int>(PollType::DEVELOPMENT) == static_cast<int>(GRC::PollType::DEVELOPMENT)
+                      && static_cast<int>(PollType::GOVERNANCE) == static_cast<int>(GRC::PollType::GOVERNANCE)
+                      && static_cast<int>(PollType::MARKETING) == static_cast<int>(GRC::PollType::MARKETING)
+                      && static_cast<int>(PollType::OUTREACH) == static_cast<int>(GRC::PollType::OUTREACH)
+                      && static_cast<int>(PollType::COMMUNITY) == static_cast<int>(GRC::PollType::COMMUNITY)
+                      && static_cast<int>(PollType::OUT_OF_BOUND) == static_cast<int>(GRC::PollType::OUT_OF_BOUND),
+                      "interfaces::PollType must mirror GRC::PollType");
+        static_assert(static_cast<int>(PollWeightType::UNKNOWN) == static_cast<int>(GRC::PollWeightType::UNKNOWN)
+                      && static_cast<int>(PollWeightType::MAGNITUDE) == static_cast<int>(GRC::PollWeightType::MAGNITUDE)
+                      && static_cast<int>(PollWeightType::BALANCE) == static_cast<int>(GRC::PollWeightType::BALANCE)
+                      && static_cast<int>(PollWeightType::BALANCE_AND_MAGNITUDE) == static_cast<int>(GRC::PollWeightType::BALANCE_AND_MAGNITUDE)
+                      && static_cast<int>(PollWeightType::CPID_COUNT) == static_cast<int>(GRC::PollWeightType::CPID_COUNT)
+                      && static_cast<int>(PollWeightType::PARTICIPANT_COUNT) == static_cast<int>(GRC::PollWeightType::PARTICIPANT_COUNT)
+                      && static_cast<int>(PollWeightType::OUT_OF_BOUND) == static_cast<int>(GRC::PollWeightType::OUT_OF_BOUND),
+                      "interfaces::PollWeightType must mirror GRC::PollWeightType");
+        static_assert(poll_limits::MIN_DURATION_DAYS == static_cast<int>(GRC::Poll::MIN_DURATION_DAYS)
+                      && poll_limits::MAX_TITLE_LENGTH == static_cast<int>(GRC::Poll::MAX_TITLE_SIZE)
+                      && poll_limits::MAX_URL_LENGTH == static_cast<int>(GRC::Poll::MAX_URL_SIZE)
+                      && poll_limits::MAX_QUESTION_LENGTH == static_cast<int>(GRC::Poll::MAX_QUESTION_SIZE)
+                      && poll_limits::MAX_CHOICE_LABEL_LENGTH == static_cast<int>(GRC::Poll::Choice::MAX_LABEL_SIZE)
+                      && poll_limits::MAX_ADDITIONAL_FIELD_NAME_LENGTH == static_cast<int>(GRC::Poll::AdditionalField::MAX_NAME_SIZE)
+                      && poll_limits::MAX_ADDITIONAL_FIELD_VALUE_LENGTH == static_cast<int>(GRC::Poll::AdditionalField::MAX_VALUE_SIZE)
+                      && poll_limits::MAX_CHOICES == static_cast<int>(GRC::POLL_MAX_CHOICES_SIZE),
+                      "interfaces::poll_limits must mirror GRC::Poll::MAX_* / MIN_DURATION_DAYS");
+
+        std::vector<PollTypeMeta> types;
+        for (const auto& type : GRC::Poll::POLL_TYPES) {
+            if (type == GRC::PollType::OUT_OF_BOUND) continue;
+
+            PollTypeMeta meta;
+            meta.type = static_cast<int>(type);
+            meta.name = GRC::Poll::PollTypeToString(type);
+            meta.description = GRC::Poll::PollTypeToDescString(type);
+            meta.min_duration_days =
+                static_cast<int>(GRC::Poll::POLL_TYPE_RULES[static_cast<int>(type)].m_mininum_duration);
+            meta.required_fields = GRC::Poll::POLL_TYPE_RULES[static_cast<int>(type)].m_required_fields;
+            types.push_back(std::move(meta));
+        }
+        return types;
+    }
+
+    bool pollV3Enabled() override
+    {
+        LOCK(cs_main);
+        return IsPollV3Enabled(nBestHeight);
+    }
+
     std::string currentPollTitle() override
     {
         // Raw title; the GUI applies its cosmetic formatting (length cap, '_' -> ' ').

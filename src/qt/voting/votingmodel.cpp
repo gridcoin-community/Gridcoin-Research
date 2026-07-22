@@ -4,7 +4,6 @@
 
 #include "amount.h"
 #include "qt/guilog.h"
-#include "gridcoin/voting/poll.h"
 #include "interfaces/handler.h"
 #include "interfaces/researcher.h"
 #include "interfaces/voting.h"
@@ -16,8 +15,6 @@
 #include "util/time.h"
 
 #include <optional>
-
-using namespace GRC;
 
 namespace {
 //!
@@ -121,7 +118,7 @@ VotingModel::~VotingModel()
 
 int VotingModel::minPollDurationDays()
 {
-    return Poll::MIN_DURATION_DAYS;
+    return interfaces::poll_limits::MIN_DURATION_DAYS;
 }
 
 int VotingModel::maxPollDurationDays()
@@ -139,7 +136,7 @@ int VotingModel::maxPollTitleLength()
     // Qt limits field lengths in UTF-8 characters which may be represented by
     // more than one byte.
     //
-    return Poll::MAX_TITLE_SIZE;
+    return interfaces::poll_limits::MAX_TITLE_LENGTH;
 }
 
 int VotingModel::maxPollUrlLength()
@@ -148,7 +145,7 @@ int VotingModel::maxPollUrlLength()
     // Qt limits field lengths in UTF-8 characters which may be represented by
     // more than one byte.
     //
-    return Poll::MAX_URL_SIZE;
+    return interfaces::poll_limits::MAX_URL_LENGTH;
 }
 
 int VotingModel::maxPollQuestionLength()
@@ -157,7 +154,7 @@ int VotingModel::maxPollQuestionLength()
     // Qt limits field lengths in UTF-8 characters which may be represented by
     // more than one byte.
     //
-    return Poll::MAX_QUESTION_SIZE;
+    return interfaces::poll_limits::MAX_QUESTION_LENGTH;
 }
 
 int VotingModel::maxPollChoiceLabelLength()
@@ -166,7 +163,7 @@ int VotingModel::maxPollChoiceLabelLength()
     // Qt limits field lengths in UTF-8 characters which may be represented by
     // more than one byte.
     //
-    return Poll::Choice::MAX_LABEL_SIZE;
+    return interfaces::poll_limits::MAX_CHOICE_LABEL_LENGTH;
 }
 
 int VotingModel::maxPollAdditionalFieldNameLength()
@@ -175,7 +172,7 @@ int VotingModel::maxPollAdditionalFieldNameLength()
     // Qt limits field lengths in UTF-8 characters which may be represented by
     // more than one byte.
     //
-    return Poll::AdditionalField::MAX_NAME_SIZE;
+    return interfaces::poll_limits::MAX_ADDITIONAL_FIELD_NAME_LENGTH;
 }
 
 int VotingModel::maxPollAdditionalFieldValueLength()
@@ -184,7 +181,7 @@ int VotingModel::maxPollAdditionalFieldValueLength()
     // Qt limits field lengths in UTF-8 characters which may be represented by
     // more than one byte.
     //
-    return Poll::AdditionalField::MAX_VALUE_SIZE;
+    return interfaces::poll_limits::MAX_ADDITIONAL_FIELD_VALUE_LENGTH;
 }
 
 int VotingModel::maxPollProjectNameLength() const
@@ -267,7 +264,7 @@ QStringList VotingModel::getExpiringPollsNotNotified()
     return expiring_polls;
 }
 
-std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags)
+std::vector<PollItem> VotingModel::buildPollTable(const interfaces::PollFilterFlag flags)
 {
     // The tally, its cache, the reorg-retry and the registry walk all live in the
     // core now (interfaces::VotingManager over PollResultCache). This maps the
@@ -304,8 +301,18 @@ CAmount VotingModel::estimatePollFee() const
     return m_voting.estimatePollFee();
 }
 
+std::vector<interfaces::PollTypeMeta> VotingModel::getPollTypes() const
+{
+    return m_voting.getPollTypes();
+}
+
+bool VotingModel::pollV3Enabled() const
+{
+    return m_voting.pollV3Enabled();
+}
+
 VotingResult VotingModel::sendPoll(
-        const PollType& type,
+        const interfaces::PollType type,
         const QString& title,
         const int duration_days,
         const QString& question,

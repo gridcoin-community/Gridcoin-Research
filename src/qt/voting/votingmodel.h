@@ -6,9 +6,8 @@
 #define GRIDCOIN_QT_VOTING_VOTINGMODEL_H
 
 #include "amount.h"
-#include "gridcoin/voting/filter.h"
+#include "interfaces/voting.h"
 #include "qt/voting/poll_types.h"
-#include "gridcoin/voting/poll.h"
 
 #include <QDateTime>
 #include <QObject>
@@ -180,12 +179,20 @@ public:
     //! expiration), and which have not previously been included on the list (i.e. notified).
     //!
     QStringList getExpiringPollsNotNotified();
-    std::vector<PollItem> buildPollTable(const GRC::PollFilterFlag flags);
+    std::vector<PollItem> buildPollTable(const interfaces::PollFilterFlag flags);
+
+    //! Poll-type metadata rows (name/description/min-duration/required fields)
+    //! for the poll-creation wizard.
+    std::vector<interfaces::PollTypeMeta> getPollTypes() const;
+
+    //! Whether poll v3 is active at the current tip (gates the project poll's
+    //! additional fields).
+    bool pollV3Enabled() const;
 
     CAmount estimatePollFee() const;
 
     VotingResult sendPoll(
-            const GRC::PollType& type,
+            const interfaces::PollType type,
             const QString& title,
             const int duration_days,
             const QString& question,

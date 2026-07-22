@@ -58,8 +58,8 @@ VotingPage::VotingPage(QWidget* parent)
         ui->finishedPollsTab
     };
 
-    ui->activePollsTab->setPollFilterFlags(PollFilterFlag::ACTIVE);
-    ui->finishedPollsTab->setPollFilterFlags(PollFilterFlag::FINISHED);
+    ui->activePollsTab->setPollFilterFlags(interfaces::ACTIVE);
+    ui->finishedPollsTab->setPollFilterFlags(interfaces::FINISHED);
 
     m_filter_action->setShortcut(Qt::CTRL | Qt::Key_F);
     ui->filterLineEdit->addAction(m_filter_action.get(), QLineEdit::LeadingPosition);

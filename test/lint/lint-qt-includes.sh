@@ -25,8 +25,15 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 # GUI may include them directly and they are no longer forbidden here.
 FORBIDDEN_RE='^[[:space:]]*#[[:space:]]*include[[:space:]]*["<](main\.h|validation\.h|init\.h|net\.h|net_processing\.h|miner\.h|txdb\.h|txdb-leveldb\.h|txmempool\.h|banman\.h|alert\.h|keystore\.h|key\.h|chain\.h|psgt\.h|node/[^">]+|util/system\.h|wallet/[^">]+|gridcoin/[^">]+|rpc/[^">]+|policy/[^">]+|script/[^">]+)[">]'
 
-# file:header pairs present when the ratchet was introduced. DO NOT ADD
-# ENTRIES -- migrate the file onto src/interfaces/*.h instead. (Sole
+# Remaining file:header pairs. The Phase 1e burn-down has driven this down to
+# the composition-root floor: every entry now lives in one of the three process
+# entry points -- bitcoin.cpp (the app main / model wiring), bitcoingui.cpp, and
+# upgradeqt.cpp (the standalone updater) -- which legitimately drive core
+# start-up, shutdown and the updater and so are not themselves migrated onto
+# src/interfaces/*.h. Flipping the ratchet to a hard-fail against exactly this
+# floor is the Phase 1f gate.
+#
+# DO NOT ADD ENTRIES -- migrate the file onto src/interfaces/*.h instead. (Sole
 # exception: an entry may be added when a migration surfaces PRE-EXISTING
 # coupling that was previously hidden behind a transitive include, e.g.
 # rpcconsole.cpp:banman.h -- the coupling is old, only the include is new.)
@@ -40,16 +47,7 @@ src/qt/bitcoin.cpp:policy/fees.h
 src/qt/bitcoin.cpp:txdb.h
 src/qt/bitcoin.cpp:validation.h
 src/qt/bitcoingui.cpp:init.h
-src/qt/diagnosticsdialog.h:wallet/diagnose.h
-src/qt/qtipcserver.cpp:node/ui_interface.h
 src/qt/upgradeqt.cpp:gridcoin/upgrade.h
-src/qt/voting/polltab.h:gridcoin/voting/filter.h
-src/qt/voting/polltablemodel.h:gridcoin/voting/filter.h
-src/qt/voting/poll_types.cpp:gridcoin/voting/poll.h
-src/qt/voting/pollwizarddetailspage.cpp:main.h
-src/qt/voting/votingmodel.cpp:gridcoin/voting/poll.h
-src/qt/voting/votingmodel.h:gridcoin/voting/filter.h
-src/qt/voting/votingmodel.h:gridcoin/voting/poll.h
 "
 
 EXIT_CODE=0

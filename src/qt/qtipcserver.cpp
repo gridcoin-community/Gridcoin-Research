@@ -5,10 +5,11 @@
 #include "qtipcserver.h"
 #include "qt/guilog.h"
 #include "guiconstants.h"
-#include "node/ui_interface.h"
 #include "util.h"
 
 #include <atomic>
+#include <functional>
+#include <string>
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -27,7 +28,7 @@ using namespace boost::posix_time;
 // URI handling not implemented on OSX yet
 
 void ipcScanRelay(int argc, char *argv[]) { }
-void ipcInit(int argc, char *argv[]) { }
+void ipcInit(int argc, char *argv[], std::function<void(const std::string&)> uri_handler) { }
 void ipcShutdown() { }
 
 #else
@@ -38,6 +39,13 @@ void ipcShutdown() { }
 //! -- the URI server is owned by this GUI process, so its exit is gated on the
 //! GUI quitting, never on core teardown state.
 static std::atomic<bool> g_ipc_shutdown{false};
+
+//! GUI-supplied handler invoked with each received "gridcoin:" URI. Set by
+//! ipcInit() before the listener thread starts and only read afterwards (the
+//! thread is joined via g_ipc_shutdown before the GUI tears down), so no
+//! additional synchronization is needed. Replaces the former
+//! uiInterface.ThreadSafeHandleURI signal dispatch.
+static std::function<void(const std::string&)> g_uri_handler;
 
 void ipcShutdown()
 {
@@ -113,7 +121,8 @@ static void ipcThread2(void* pArg)
         ptime d = boost::posix_time::microsec_clock::universal_time() + millisec(100);
         if (mq->timed_receive(&buffer, sizeof(buffer), nSize, nPriority, d))
         {
-            uiInterface.ThreadSafeHandleURI(std::string(buffer, nSize));
+            if (g_uri_handler)
+                g_uri_handler(std::string(buffer, nSize));
             UninterruptibleSleep(std::chrono::seconds{1});
         }
 
@@ -127,8 +136,10 @@ static void ipcThread2(void* pArg)
     delete mq;
 }
 
-void ipcInit(int argc, char *argv[])
+void ipcInit(int argc, char *argv[], std::function<void(const std::string&)> uri_handler)
 {
+    g_uri_handler = std::move(uri_handler);
+
     message_queue* mq = nullptr;
     char buffer[MAX_URI_LENGTH + 1] = "";
     size_t nSize = 0;
@@ -143,7 +154,8 @@ void ipcInit(int argc, char *argv[])
             ptime d = boost::posix_time::microsec_clock::universal_time() + millisec(1);
             if (mq->timed_receive(&buffer, sizeof(buffer), nSize, nPriority, d))
             {
-                uiInterface.ThreadSafeHandleURI(std::string(buffer, nSize));
+                if (g_uri_handler)
+                    g_uri_handler(std::string(buffer, nSize));
             }
             else
                 break;
