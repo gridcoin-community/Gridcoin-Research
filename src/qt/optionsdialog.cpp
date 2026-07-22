@@ -8,7 +8,7 @@
 #include "monitoreddatamapper.h"
 #include "optionsmodel.h"
 #include "qt/decoration.h"
-#include "miner.h"
+#include "amount.h" // For MIN_STAKE_SPLIT_VALUE_GRC.
 #include "sidestaketablemodel.h"
 #include "editsidestakedialog.h"
 

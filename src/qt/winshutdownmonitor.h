@@ -13,9 +13,15 @@
 
 #include <QAbstractNativeEventFilter>
 
+namespace interfaces { class Node; }
+
 class WinShutdownMonitor : public QAbstractNativeEventFilter
 {
 public:
+    //! \p node is used to request shutdown on WM_QUERYENDSESSION; it is
+    //! process-lifetime (main()'s gui_node), so holding a reference is safe.
+    explicit WinShutdownMonitor(interfaces::Node& node) : m_node(node) {}
+
     /** Implements QAbstractNativeEventFilter interface for processing Windows messages */
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     bool nativeEventFilter(const QByteArray &eventType, void *pMessage, qintptr *pnResult);
@@ -25,6 +31,9 @@ public:
 
     /** Register the reason for blocking shutdown on Windows to allow clean client exit */
     static void registerShutdownBlockReason(const QString& strReason, const HWND& mainWinId);
+
+private:
+    interfaces::Node& m_node;
 };
 #endif
 

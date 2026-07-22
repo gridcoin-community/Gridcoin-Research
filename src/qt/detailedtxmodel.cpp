@@ -7,7 +7,7 @@
 #include "qt/transactiontablemodel.h"
 #include "qt/walletmodel.h"
 #include "interfaces/wallet_tx_source.h"
-#include "util/system.h"
+#include "optionsmodel.h" // For getOptionsModel()->getShowOrphans().
 
 #include <QTimer>
 
@@ -55,7 +55,7 @@ DetailedTxModel::DetailedTxModel(WalletModel* walletModel, QObject* parent)
     // runtime input is -showorphans, read once here (a launch-time arg with no
     // runtime mutation path, behavior-identical to reading it repeatedly).
     GRC::FilterSpec spec;
-    spec.show_orphans = gArgs.GetBoolArg("-showorphans", false);
+    spec.show_orphans = m_walletModel->getOptionsModel()->getShowOrphans();
     interfaces::WalletTxSource& store = m_walletModel->txSource();
     store.registerView(GRC::VIEW_DETAILED, spec, GRC::TXCOL_DATE, GRC::TXSORT_DESC);
 

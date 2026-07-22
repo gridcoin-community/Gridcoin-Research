@@ -8,8 +8,6 @@
 
 #include <QStringList>
 
-using namespace GRC;
-
 namespace {
 class AdditionalFieldsTableDataModel : public QAbstractTableModel
 {

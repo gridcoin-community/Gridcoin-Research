@@ -8,7 +8,7 @@
 #include "interfaces/node.h"
 #include "util/strencodings.h" // For SplitHostPort (IPv6-aware host:port parsing).
 
-#include "miner.h"
+#include "amount.h" // For MIN_STAKE_SPLIT_VALUE_GRC.
 
 #include <utility>
 
@@ -405,11 +405,6 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
     return successful;
 }
 
-qint64 OptionsModel::getTransactionFee()
-{
-    return nTransactionFee;
-}
-
 qint64 OptionsModel::getReserveBalance()
 {
     qint64 sat = 0;
@@ -441,6 +436,14 @@ bool OptionsModel::getLimitTxnDisplay()
 bool OptionsModel::getSuppressNetworkGraph()
 {
     return gArgs.GetArg("-suppressnetworkgraph", "false") == "true";
+}
+
+bool OptionsModel::getShowOrphans()
+{
+    // Routed through the node settings surface (equivalent to the former
+    // gArgs.GetBoolArg("-showorphans", false)) so the transaction models can
+    // read it without a direct util/system.h include.
+    return m_node.getSettingBool("showorphans", false);
 }
 
 bool OptionsModel::getMaskValues()

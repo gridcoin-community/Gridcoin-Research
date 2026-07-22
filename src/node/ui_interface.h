@@ -91,9 +91,6 @@ public:
     /** Update notification message box. */
     ADD_SIGNALS_DECL_WRAPPER(UpdateMessageBox, void, const std::string& version, const int& update_type, const std::string& message);
 
-    /** Handle a URL passed at the command line. */
-    ADD_SIGNALS_DECL_WRAPPER(ThreadSafeHandleURI, void, const std::string& strURI);
-
     /** Progress message during initialization. */
     ADD_SIGNALS_DECL_WRAPPER(InitMessage, void, const std::string &message);
 

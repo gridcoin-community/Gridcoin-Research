@@ -75,7 +75,6 @@ public:
     bool setData(const QModelIndex & index, const QVariant & value, int role = Qt::EditRole);
 
     /* Explicit getters */
-    qint64 getTransactionFee();
     qint64 getReserveBalance();
     //! Whether the node is on testnet, read through the node interface
     //! (interfaces::Node::isTestNet). Lets dialogs that hold an OptionsModel gate
@@ -94,6 +93,10 @@ public:
     bool getLimitTxnDisplay();
     bool getSuppressNetworkGraph();
     bool getMaskValues();
+    //! Whether stale (orphaned) coinstake txns are shown in the transaction
+    //! list (-showorphans). Read through the node settings interface so the tx
+    //! models need not include util/system.h to reach gArgs.
+    bool getShowOrphans();
     QDate getLimitTxnDate();
     int64_t getLimitTxnDateTime();
     double getPollExpireNotification();

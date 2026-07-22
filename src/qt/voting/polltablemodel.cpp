@@ -14,8 +14,6 @@
 #include <QSortFilterProxyModel>
 #include <QStringList>
 
-using namespace GRC;
-
 PollTableDataModel::PollTableDataModel()
 {
     qRegisterMetaType<QList<QPersistentModelIndex>>();
@@ -235,7 +233,7 @@ void PollTableDataModel::handlePollStaleFlag(QString poll_txid_string)
 PollTableModel::PollTableModel(QObject* parent)
     : QSortFilterProxyModel(parent)
     , m_data_model(new PollTableDataModel())
-    , m_filter_flags(GRC::PollFilterFlag::NO_FILTER)
+    , m_filter_flags(interfaces::NO_FILTER)
 {
     setSourceModel(m_data_model.get());
     setDynamicSortFilter(true);
@@ -288,14 +286,14 @@ void PollTableModel::setModel(VotingModel* model)
     }
 }
 
-void PollTableModel::setPollFilterFlags(PollFilterFlag flags)
+void PollTableModel::setPollFilterFlags(interfaces::PollFilterFlag flags)
 {
     m_filter_flags = flags;
 }
 
 bool PollTableModel::includesActivePolls() const
 {
-    return (m_filter_flags & PollFilterFlag::ACTIVE) != 0;
+    return (m_filter_flags & interfaces::ACTIVE) != 0;
 }
 
 int PollTableModel::size() const

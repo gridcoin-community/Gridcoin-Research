@@ -73,13 +73,13 @@ PollCard::PollCard(const PollItem& poll_item, QWidget* parent)
                                                                                       * (double) 100.0, 'f', 4) + '\%');
     }
 
-    if (!(poll_item.m_weight_type == (int)GRC::PollWeightType::BALANCE ||
-          poll_item.m_weight_type == (int)GRC::PollWeightType::BALANCE_AND_MAGNITUDE)) {
+    if (!(poll_item.m_weight_type == (int)interfaces::PollWeightType::BALANCE ||
+          poll_item.m_weight_type == (int)interfaces::PollWeightType::BALANCE_AND_MAGNITUDE)) {
         ui->balanceLabel->hide();
     }
 
-    if (!(poll_item.m_weight_type == (int)GRC::PollWeightType::MAGNITUDE ||
-          poll_item.m_weight_type == (int)GRC::PollWeightType::BALANCE_AND_MAGNITUDE)) {
+    if (!(poll_item.m_weight_type == (int)interfaces::PollWeightType::MAGNITUDE ||
+          poll_item.m_weight_type == (int)interfaces::PollWeightType::BALANCE_AND_MAGNITUDE)) {
         ui->magnitudeLabel->hide();
     }
 

@@ -360,6 +360,12 @@ public:
     //! not touch the address book -- the caller labels the address separately.
     virtual bool getNewReceiveAddress(std::string& address_out) = 0;
 
+    //! Reserve a fresh (non-reused) key from the pool, set its address-book
+    //! label, and return its encoded destination -- the CPubKey stays node-side.
+    //! For the researcher pool page, which previously reserved the key and
+    //! encoded the address GUI-side. Returns false on key-generation failure.
+    virtual bool getNewReceiveAddress(const std::string& label, std::string& address_out) = 0;
+
     //! Owned addresses with a positive balance that are not yet in the address
     //! book (encoded), for the "add existing receive address" picker.
     virtual std::vector<std::string> getUnbookedReceiveAddresses() = 0;

@@ -19,6 +19,68 @@ namespace interfaces {
 
 class Handler;
 
+//! GUI-facing mirror of GRC::PollFilterFlag (gridcoin/voting/filter.h). A plain
+//! (unscoped) enum like the core one, because it is used as a bitmask
+//! (flags & ACTIVE). The values match; the VotingManager impl static_asserts
+//! them. Lets the voting widgets/models express a filter without the core header.
+enum PollFilterFlag {
+    NO_FILTER = 0,
+    ACTIVE = 1,
+    FINISHED = 2,
+};
+
+//! GUI-facing mirror of GRC::PollType (gridcoin/voting/fwd.h). Values match; the
+//! implementation static_asserts them.
+enum class PollType {
+    UNKNOWN = 0,
+    SURVEY,
+    PROJECT,
+    DEVELOPMENT,
+    GOVERNANCE,
+    MARKETING,
+    OUTREACH,
+    COMMUNITY,
+    OUT_OF_BOUND,
+};
+
+//! GUI-facing mirror of GRC::PollWeightType (gridcoin/voting/fwd.h), so the
+//! pollcard can classify PollTableItem::weight_type (the raw enum value) without
+//! the core header. Values match; the implementation static_asserts them.
+enum class PollWeightType {
+    UNKNOWN = 0,
+    MAGNITUDE,
+    BALANCE,
+    BALANCE_AND_MAGNITUDE,
+    CPID_COUNT,
+    PARTICIPANT_COUNT,
+    OUT_OF_BOUND,
+};
+
+//! Poll field-size limits, mirrored from GRC::Poll::MAX_* / MIN_DURATION_DAYS so
+//! the GUI's (static) input-validation helpers can read them without
+//! gridcoin/voting/poll.h. The VotingManager implementation static_asserts each
+//! value against the core constant, so drift is a compile error.
+namespace poll_limits {
+inline constexpr int MIN_DURATION_DAYS = 7;
+inline constexpr int MAX_TITLE_LENGTH = 80;
+inline constexpr int MAX_URL_LENGTH = 100;
+inline constexpr int MAX_QUESTION_LENGTH = 100;
+inline constexpr int MAX_CHOICE_LABEL_LENGTH = 100;
+inline constexpr int MAX_ADDITIONAL_FIELD_NAME_LENGTH = 100;
+inline constexpr int MAX_ADDITIONAL_FIELD_VALUE_LENGTH = 500;
+inline constexpr int MAX_CHOICES = 20;
+} // namespace poll_limits
+
+//! Metadata for one poll type (from the core POLL_TYPES / POLL_TYPE_RULES
+//! tables), as a value row for the GUI's poll-type picker.
+struct PollTypeMeta {
+    int type = 0;                       //!< PollType raw value.
+    std::string name;                   //!< Translated type name.
+    std::string description;            //!< Translated type description.
+    int min_duration_days = 0;
+    std::vector<std::string> required_fields;
+};
+
 //! One choice of a poll together with its tallied result, as pointer-free value
 //! data (Phase 1d-iii). The label is resolved on the node side; weight is
 //! already scaled to whole GRC (divided by COIN), matching what the GUI renders.
@@ -142,6 +204,14 @@ public:
     //! against a single pinned tip. Potentially slow (a large poll's tally), so
     //! callers must invoke it off the UI thread. Thread-safe.
     virtual std::vector<PollTableItem> buildPollTable(int filter_flags) = 0;
+
+    //! Poll-type metadata (name/description/min-duration/required fields) for
+    //! each valid poll type, in enum order, excluding OUT_OF_BOUND.
+    virtual std::vector<PollTypeMeta> getPollTypes() = 0;
+
+    //! Whether poll v3 is active at the current tip (replaces a GUI-side
+    //! IsPollV3Enabled(nBestHeight) read); gates the extra project poll fields.
+    virtual bool pollV3Enabled() = 0;
 
     //! Estimated fee to create a poll, in 1/COIN units.
     virtual CAmount estimatePollFee() = 0;

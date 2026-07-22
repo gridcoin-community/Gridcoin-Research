@@ -5,7 +5,6 @@
 #include "addresstablemodel.h"
 #include "transactiontablemodel.h"
 
-#include "node/ui_interface.h" /* for ChangeType */
 #include <key_io.h>
 #include "util.h" /* for LogPrint / LogPrintf */
 
@@ -537,6 +536,15 @@ bool WalletModel::getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const
 bool WalletModel::getKeyFromPool(CPubKey& out_public_key, const std::string& label)
 {
     return m_wallet.getKeyFromPool(out_public_key, label);
+}
+
+QString WalletModel::getNewReceiveAddress(const QString& label)
+{
+    std::string address;
+    if (!m_wallet.getNewReceiveAddress(label.toStdString(), address)) {
+        return QString();
+    }
+    return QString::fromStdString(address);
 }
 
 // returns value snapshots of the given outpoints (unknown or conflicted

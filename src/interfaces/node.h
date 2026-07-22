@@ -102,6 +102,56 @@ struct ScraperConvergenceSnapshot
     std::vector<std::string> scrapers_not_publishing;
 };
 
+//! Result of the GitHub "latest release" check the About dialog runs. Value
+//! snapshot so the GUI needs no gridcoin/upgrade.h. upgrade_type carries a
+//! GRC::Upgrade::UpgradeType value as int (0 Unknown / 1 Leisure / 2 Mandatory
+//! / 3 Unsupported); the implementation static_asserts that mapping.
+struct LatestVersionInfo
+{
+    std::string version;      //!< Human-readable latest-version message.
+    std::string details;      //!< Change log / details text.
+    int upgrade_type = 0;
+};
+
+//! GUI-facing mirror of DiagnoseLib::Diagnose::TestNames (wallet/diagnose.h). The
+//! diagnostics dialog maps each result to its row label by this id without the
+//! core header. Values match the core enum; runDiagnostics() static_asserts them.
+enum class DiagnosticTest {
+    CheckConnectionCount = 0,
+    CheckOutboundConnectionCount,
+    VerifyWalletIsSynced,
+    CheckClientVersion,
+    VerifyBoincPath,
+    VerifyCPIDHasRAC,
+    VerifyCPIDIsActive,
+    VerifyCPIDValid,
+    VerifyClock,
+    VerifyTCPPort,
+    CheckDifficulty,
+    CheckETTS,
+};
+
+//! GUI-facing mirror of DiagnoseLib::Diagnose::diagnoseResults. Values match the
+//! core enum; runDiagnostics() static_asserts them.
+enum class DiagnosticStatus {
+    PASS = 0,
+    WARNING,
+    FAIL,
+    NONE,
+};
+
+//! One diagnostic test's outcome as pointer-free value data. The node runs the
+//! test and resolves its result/tip templates (translated by _() with their %1
+//! arguments already substituted), so the GUI only maps test_id to the row label
+//! and renders the status colour and the two strings.
+struct DiagnosticResult
+{
+    int test_id = 0;            //!< DiagnosticTest raw value.
+    int status = 0;            //!< DiagnosticStatus raw value.
+    std::string result_string; //!< Final result text ("" when none).
+    std::string tip_string;    //!< Final tooltip text ("" when none).
+};
+
 //! Top-level node interface for the GUI: chain and network state queries plus
 //! notification registration. In the monolithic build the implementation
 //! wraps the existing globals directly (see src/node/interfaces.cpp); in the
@@ -162,6 +212,23 @@ public:
 
     //! Whether the node runs on testnet.
     virtual bool isTestNet() = 0;
+
+    //! Request that the node begin shutting down (the GUI->core direction, e.g.
+    //! a Windows WM_QUERYENDSESSION). Wraps the core StartShutdown(); in the
+    //! monolith this brings the whole app down, matching the prior direct call.
+    virtual void startShutdown() = 0;
+
+    //! Run the blocking GitHub "latest release" check (the read-only half of
+    //! GRC::Upgrade) and return the result as a value. Callers run this off the
+    //! GUI thread -- it does a libcurl GET with up to a 10 s connect timeout.
+    virtual LatestVersionInfo checkForLatestUpdate() = 0;
+
+    //! Run every wallet diagnostic and return the results as value rows, one per
+    //! DiagnosticTest in enum order. Runs synchronously and can take several
+    //! seconds -- it includes an NTP (UDP) clock probe and a TCP listen-port
+    //! probe -- so the GUI shows a pending state and lets the event loop paint
+    //! before calling it.
+    virtual std::vector<DiagnosticResult> runDiagnostics() = 0;
 
     //! Proof-of-stake difficulty corresponding to a compact target-bits
     //! value (pure conversion; no chain state read).

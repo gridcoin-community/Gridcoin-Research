@@ -17,8 +17,6 @@
 #include <QPropertyAnimation>
 #include <QResizeEvent>
 
-using namespace GRC;
-
 namespace {
 QString RefreshMessage()
 {
@@ -179,7 +177,7 @@ void PollTab::setVotingModel(VotingModel* model)
     ui->table->setAccessibleName(tr("Polls (table view)"));
 }
 
-void PollTab::setPollFilterFlags(PollFilterFlag flags)
+void PollTab::setPollFilterFlags(interfaces::PollFilterFlag flags)
 {
     m_polltable_model->setPollFilterFlags(flags);
 }

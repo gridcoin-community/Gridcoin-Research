@@ -14,7 +14,7 @@
 PollWizard::PollWizard(VotingModel& voting_model, QWidget* parent)
     : QWizard(parent)
     , ui(new Ui::PollWizard)
-    , m_poll_types(new PollTypes())
+    , m_poll_types(new PollTypes(voting_model.getPollTypes()))
 {
     ui->setupUi(this);
 

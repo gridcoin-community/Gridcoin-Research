@@ -2,8 +2,6 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include <key_io.h>
-#include "key.h"
 #include "qt/decoration.h"
 #include "qt/forms/ui_researcherwizardpoolpage.h"
 #include "qt/guiutil.h"
@@ -105,15 +103,14 @@ void ResearcherWizardPoolPage::getNewAddress()
         return;
     }
 
-    CPubKey public_key;
+    const QString address = m_wallet_model->getNewReceiveAddress(label);
 
-    if (!m_wallet_model->getKeyFromPool(public_key, label.toStdString())) {
+    if (address.isEmpty()) {
         ui->addressLabel->setText(tr("Error: failed to generate a new address."));
         return;
     }
 
-    ui->addressLabel->setText(
-        QString::fromStdString(EncodeDestination(public_key.GetID())));
+    ui->addressLabel->setText(address);
     ui->copyToClipboardButton->setVisible(true);
 }
 

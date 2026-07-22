@@ -40,11 +40,6 @@ int32_t ComputeBlockVersion(int height);
 // (Particl-analog) and consumed in StakeMiner. Unused on testnet / mainnet.
 extern std::atomic<int> g_stakelimit_height;
 
-// Note the below constant controls the minimum value allowed for post
-// split UTXO size. It is int64_t but in GRC so that it matches the entry in the config file.
-// It will be converted to Halfords in GetNumberOfStakeOutputs by multiplying by COIN.
-static const int64_t MIN_STAKE_SPLIT_VALUE_GRC = 800;
-
 //! Whether the development-build staking cripple is active. When true,
 //! ThreadStakeMiner refuses to stake and CommitTransaction refuses
 //! reward-bearing sends: a development build disables all staking unless the

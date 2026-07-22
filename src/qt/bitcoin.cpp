@@ -352,11 +352,6 @@ int main(int argc, char *argv[])
     // Install global event filter that suppresses help context question mark
     app.installEventFilter(new GUIUtil::WindowContextHelpButtonHintFilter(&app));
 
-#if defined(WIN32)
-    // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
-    app.installNativeEventFilter(new WinShutdownMonitor());
-#endif
-
     // The sidestake registry interface backs the OptionsModel's sidestake table
     // model (Phase 1d-ii). Created here, before optionsModel, so it outlives it
     // (reverse destruction order). It wraps the global registry, so it needs no
@@ -370,6 +365,14 @@ int main(int argc, char *argv[])
     // so it is safe to construct before core init -- OptionsModel only reads/writes
     // settings through it later (dialog open, migrateCoreSettings()).
     std::unique_ptr<interfaces::Node> gui_node = gui_init->makeNode();
+
+#if defined(WIN32)
+    // Install global event filter for processing Windows session related Windows
+    // messages (WM_QUERYENDSESSION and WM_ENDSESSION). Placed after gui_node so
+    // the monitor can request shutdown through the node interface; installing it
+    // here (still well before app.exec()) is soon enough to catch session-end.
+    app.installNativeEventFilter(new WinShutdownMonitor(*gui_node));
+#endif
 
     // Load the optionsModel. This has to be loaded before the translations, because the language selection is
     // a setting that can be stored in options.
@@ -546,7 +549,6 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
     // Subscribe to global signals from core
     uiInterface.ThreadSafeMessageBox_connect(ThreadSafeMessageBox);
-    uiInterface.ThreadSafeHandleURI_connect(ThreadSafeHandleURI);
     uiInterface.InitMessage_connect(InitMessage);
     uiInterface.Translate_connect(Translate);
 
@@ -717,7 +719,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 }
 
                 // Place this here as guiref has to be defined if we don't want to lose URIs
-                ipcInit(argc, argv);
+                ipcInit(argc, argv, ThreadSafeHandleURI);
 
 #if defined(WIN32) && defined(QT_GUI)
                 WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)window.winId());

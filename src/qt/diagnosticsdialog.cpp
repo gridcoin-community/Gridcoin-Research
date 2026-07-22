@@ -3,13 +3,33 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "diagnosticsdialog.h"
+#include "interfaces/node.h"
+#include "qt/clientmodel.h"
 #include "qt/guilog.h"
 #include "qt/forms/ui_diagnosticsdialog.h"
 #include "qt/decoration.h"
 #include "qt/researcher/researchermodel.h"
 
-#include <numeric>
-#include <type_traits>
+#include <QCoreApplication>
+
+#include <algorithm>
+
+namespace {
+//! Map a node-side diagnostic status (interfaces::DiagnosticStatus raw value) to
+//! the dialog's display result. The node runs the tests; the dialog only renders
+//! the outcome.
+DiagnosticsDialog::DiagnosticResult MapStatus(int status)
+{
+    switch (static_cast<interfaces::DiagnosticStatus>(status)) {
+    case interfaces::DiagnosticStatus::FAIL:    return DiagnosticsDialog::failed;
+    case interfaces::DiagnosticStatus::WARNING: return DiagnosticsDialog::warning;
+    case interfaces::DiagnosticStatus::PASS:    return DiagnosticsDialog::passed;
+    case interfaces::DiagnosticStatus::NONE:    return DiagnosticsDialog::NA;
+    }
+
+    return DiagnosticsDialog::NA;
+}
+} // anonymous namespace
 
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researcher_model) :
     QDialog(parent),
@@ -24,38 +44,45 @@ DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researche
     GRC::ScaleFontPointSize(ui->overallResultLabel, 12);
     GRC::ScaleFontPointSize(ui->overallResultResultLabel, 12);
 
-    // Construct the tests needed.
-    // If need to add a test m just add it to the below set.
-    // Check Diagnose.h for the base class to create tests.
-    diagnoseTestInsertInSet(ui->checkConnectionCountResultLabel,
-                            std::make_unique<DiagnoseLib::CheckConnectionCount>());
-    diagnoseTestInsertInSet(ui->checkOutboundConnectionCountResultLabel,
-                            std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>());
-    diagnoseTestInsertInSet(ui->verifyWalletIsSyncedResultLabel,
-                            std::make_unique<DiagnoseLib::VerifyWalletIsSynced>());
-    diagnoseTestInsertInSet(ui->verifyClockResultLabel,
-                            std::make_unique<DiagnoseLib::VerifyClock>());
-    diagnoseTestInsertInSet(ui->checkClientVersionResultLabel,
-                            std::make_unique<DiagnoseLib::CheckClientVersion>());
-    diagnoseTestInsertInSet(ui->verifyBoincPathResultLabel,
-                            std::make_unique<DiagnoseLib::VerifyBoincPath>());
-    diagnoseTestInsertInSet(ui->verifyCPIDValidResultLabel,
-                            std::make_unique<DiagnoseLib::VerifyCPIDValid>());
-    diagnoseTestInsertInSet(ui->verifyCPIDHasRACResultLabel,
-                            std::make_unique<DiagnoseLib::VerifyCPIDHasRAC>());
-    diagnoseTestInsertInSet(ui->verifyCPIDIsActiveResultLabel,
-                            std::make_unique<DiagnoseLib::VerifyCPIDIsActive>());
-    diagnoseTestInsertInSet(ui->verifyTCPPortResultLabel,
-                            std::make_unique<DiagnoseLib::VerifyTCPPort>());
-    diagnoseTestInsertInSet(ui->checkDifficultyResultLabel,
-                            std::make_unique<DiagnoseLib::CheckDifficulty>());
-    diagnoseTestInsertInSet(ui->checkETTSResultLabel,
-                            std::make_unique<DiagnoseLib::CheckETTS>());
+    // Associate each result-row label with the test whose outcome it displays.
+    // The tests themselves run in the node (interfaces::Node::runDiagnostics);
+    // the dialog keys on the interfaces::DiagnosticTest id carried back in each
+    // interfaces::DiagnosticResult. If a test is added, add its row here and bump
+    // m_number_of_tests.
+    m_test_labels[static_cast<int>(interfaces::DiagnosticTest::CheckConnectionCount)] =
+        ui->checkConnectionCountResultLabel;
+    m_test_labels[static_cast<int>(interfaces::DiagnosticTest::CheckOutboundConnectionCount)] =
+        ui->checkOutboundConnectionCountResultLabel;
+    m_test_labels[static_cast<int>(interfaces::DiagnosticTest::VerifyWalletIsSynced)] =
+        ui->verifyWalletIsSyncedResultLabel;
+    m_test_labels[static_cast<int>(interfaces::DiagnosticTest::VerifyClock)] =
+        ui->verifyClockResultLabel;
+    m_test_labels[static_cast<int>(interfaces::DiagnosticTest::CheckClientVersion)] =
+        ui->checkClientVersionResultLabel;
+    m_test_labels[static_cast<int>(interfaces::DiagnosticTest::VerifyBoincPath)] =
+        ui->verifyBoincPathResultLabel;
+    m_test_labels[static_cast<int>(interfaces::DiagnosticTest::VerifyCPIDValid)] =
+        ui->verifyCPIDValidResultLabel;
+    m_test_labels[static_cast<int>(interfaces::DiagnosticTest::VerifyCPIDHasRAC)] =
+        ui->verifyCPIDHasRACResultLabel;
+    m_test_labels[static_cast<int>(interfaces::DiagnosticTest::VerifyCPIDIsActive)] =
+        ui->verifyCPIDIsActiveResultLabel;
+    m_test_labels[static_cast<int>(interfaces::DiagnosticTest::VerifyTCPPort)] =
+        ui->verifyTCPPortResultLabel;
+    m_test_labels[static_cast<int>(interfaces::DiagnosticTest::CheckDifficulty)] =
+        ui->checkDifficultyResultLabel;
+    m_test_labels[static_cast<int>(interfaces::DiagnosticTest::CheckETTS)] =
+        ui->checkETTSResultLabel;
 }
 
 DiagnosticsDialog::~DiagnosticsDialog()
 {
     delete ui;
+}
+
+void DiagnosticsDialog::setClientModel(ClientModel* client_model)
+{
+    m_node = client_model ? &client_model->node() : nullptr;
 }
 
 void DiagnosticsDialog::SetResearcherModel(ResearcherModel *researcherModel)
@@ -105,8 +132,6 @@ void DiagnosticsDialog::SetResultLabel(QLabel *label, DiagnosticTestStatus test_
 
 unsigned int DiagnosticsDialog::GetNumberOfTestsPending()
 {
-    LOCK(cs_diagnostictests);
-
     unsigned int pending_count = 0;
 
     for (const auto& entry : m_test_status_map)
@@ -117,11 +142,9 @@ unsigned int DiagnosticsDialog::GetNumberOfTestsPending()
     return pending_count;
 }
 
-DiagnosticsDialog::DiagnosticTestStatus DiagnosticsDialog::GetTestStatus(DiagnoseLib::Diagnose::TestNames test_name)
+DiagnosticsDialog::DiagnosticTestStatus DiagnosticsDialog::GetTestStatus(int test_id)
 {
-    LOCK(cs_diagnostictests);
-
-    auto entry = m_test_status_map.find(test_name);
+    auto entry = m_test_status_map.find(test_id);
 
     if (entry != m_test_status_map.end())
     {
@@ -133,37 +156,31 @@ DiagnosticsDialog::DiagnosticTestStatus DiagnosticsDialog::GetTestStatus(Diagnos
     }
 }
 
-unsigned int DiagnosticsDialog::UpdateTestStatus(DiagnoseLib::Diagnose::TestNames test_name, QLabel *label,
+unsigned int DiagnosticsDialog::UpdateTestStatus(int test_id, QLabel *label,
                                                  DiagnosticTestStatus test_status, DiagnosticResult test_result,
                                                  QString override_text, QString tooltip_text)
 {
-    LOCK(cs_diagnostictests);
-
-    m_test_status_map[test_name] = test_status;
+    m_test_status_map[test_id] = test_status;
 
     SetResultLabel(label, test_status, test_result, override_text, tooltip_text);
 
-    UpdateTestResult(test_name, test_result);
+    UpdateTestResult(test_id, test_result);
 
     UpdateOverallDiagnosticResult(test_result);
 
     return m_test_status_map.size();
 }
 
-void DiagnosticsDialog::UpdateTestResult(DiagnoseLib::Diagnose::TestNames test_name, DiagnosticResult test_result)
+void DiagnosticsDialog::UpdateTestResult(int test_id, DiagnosticResult test_result)
 {
-    LOCK(cs_diagnostictests);
-
-    m_test_result_map[test_name] = test_result;
+    m_test_result_map[test_id] = test_result;
 }
 
-DiagnosticsDialog::DiagnosticResult DiagnosticsDialog::GetTestResult(DiagnoseLib::Diagnose::TestNames test_name)
+DiagnosticsDialog::DiagnosticResult DiagnosticsDialog::GetTestResult(int test_id)
 {
-    LOCK(cs_diagnostictests);
-
     DiagnosticResult result;
 
-    auto iter = m_test_result_map.find(test_name);
+    auto iter = m_test_result_map.find(test_id);
 
     if (iter == m_test_result_map.end()) {
         result = NA;
@@ -176,8 +193,6 @@ DiagnosticsDialog::DiagnosticResult DiagnosticsDialog::GetTestResult(DiagnoseLib
 
 void DiagnosticsDialog::ResetOverallDiagnosticResult()
 {
-    LOCK(cs_diagnostictests);
-
     m_test_status_map.clear();
     m_test_result_map.clear();
 
@@ -188,9 +203,7 @@ void DiagnosticsDialog::ResetOverallDiagnosticResult()
 
 void DiagnosticsDialog::UpdateOverallDiagnosticResult(DiagnosticResult diagnostic_result_in)
 {
-    LOCK(cs_diagnostictests);
-
-    // Set diagnostic_result_status to completed. This is under lock, so no one can snoop.
+    // Set diagnostic_result_status to completed.
     m_overall_diagnostic_result_status = completed;
 
     // If the total number of registered tests is less than the initialized number, then
@@ -218,13 +231,11 @@ void DiagnosticsDialog::UpdateOverallDiagnosticResult(DiagnosticResult diagnosti
     }
 }
 
-// Lock should be taken on cs_diagnostictests before calling this function.
 DiagnosticsDialog::DiagnosticResult DiagnosticsDialog::GetOverallDiagnosticResult()
 {
     return m_overall_diagnostic_result;
 }
 
-// Lock should be taken on cs_diagnostictests before calling this function.
 DiagnosticsDialog::DiagnosticTestStatus DiagnosticsDialog::GetOverallDiagnosticStatus()
 {
     return m_overall_diagnostic_result_status;
@@ -233,8 +244,6 @@ DiagnosticsDialog::DiagnosticTestStatus DiagnosticsDialog::GetOverallDiagnosticS
 
 void DiagnosticsDialog::DisplayOverallDiagnosticResult()
 {
-    LOCK(cs_diagnostictests);
-
     DiagnosticsDialog::DiagnosticTestStatus overall_diagnostic_status = GetOverallDiagnosticStatus();
     DiagnosticsDialog::DiagnosticResult overall_diagnostic_result = GetOverallDiagnosticResult();
 
@@ -276,37 +285,26 @@ void DiagnosticsDialog::on_testButton_clicked()
         return;
     }
 
+    if (!m_node) return;
+
     ResetOverallDiagnosticResult();
+
+    // Show every row as pending, then let the event loop paint before the
+    // blocking node call. runDiagnostics() runs all tests (including the NTP and
+    // TCP-port network probes) and can take several seconds.
+    for (const auto& [test_id, label] : m_test_labels) {
+        UpdateTestStatus(test_id, label, pending, NA);
+    }
     DisplayOverallDiagnosticResult();
+    QCoreApplication::processEvents();
 
-    DiagnoseLib::Diagnose::setResearcherModel();
+    for (const interfaces::DiagnosticResult& result : m_node->runDiagnostics()) {
+        auto entry = m_test_labels.find(result.test_id);
+        if (entry == m_test_labels.end()) continue;
 
-    for (auto& i : m_diagnostic_tests) {
-        auto& diagnose_test = i.second;
-        auto diagnoselabel = i.first;
-        UpdateTestStatus(i.second->getTestName(), diagnoselabel, pending, NA);
-        diagnose_test->runCheck();
-        QString tooltip = tr(diagnose_test->getResultsTip().c_str());
-        QString resultString = tr(diagnose_test->getResultsString().c_str());
-        for (auto& j : diagnose_test->getStringArgs()) {
-            resultString = resultString.arg(QString::fromStdString(j));
-        }
-        for (auto& j : diagnose_test->getTipArgs()) {
-            tooltip = tooltip.arg(QString::fromStdString(j));
-        }
-
-        if (diagnose_test->getResults() == DiagnoseLib::Diagnose::NONE) {
-            UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, NA);
-        } else if (diagnose_test->getResults() == DiagnoseLib::Diagnose::FAIL) {
-            UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, failed,
-                             resultString, tooltip);
-        } else if (diagnose_test->getResults() == DiagnoseLib::Diagnose::WARNING) {
-            UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, warning,
-                             resultString, tooltip);
-        } else {
-            UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, passed,
-                             resultString);
-        }
+        UpdateTestStatus(result.test_id, entry->second, completed, MapStatus(result.status),
+                         QString::fromStdString(result.result_string),
+                         QString::fromStdString(result.tip_string));
     }
 
     DisplayOverallDiagnosticResult();

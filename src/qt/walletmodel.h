@@ -169,6 +169,10 @@ public:
 
     bool getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
     bool getKeyFromPool(CPubKey& out_public_key, const std::string& label);
+    //! Reserve a fresh receive key labeled \p label and return its encoded
+    //! address (empty on failure). The key stays node-side; used by the
+    //! researcher pool page so it needs no key.h / CPubKey.
+    QString getNewReceiveAddress(const QString& label);
     std::vector<interfaces::WalletOutput> getOutputs(const std::vector<COutPoint>& vOutpoints) const;
     std::map<std::string, std::vector<interfaces::WalletOutput>> listCoins() const;
 
