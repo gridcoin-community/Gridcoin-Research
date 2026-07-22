@@ -7,6 +7,7 @@
 #include "amount.h"
 #include <base58.h>
 #include "init.h"
+#include "node/shutdown.h"
 #include "sync.h"
 #include <key_io.h>
 #include "node/ui_interface.h"
@@ -1021,7 +1022,7 @@ static string JSONRPCExecBatch(const UniValue& vReq)
 void ServiceConnection(AcceptedConnection *conn)
 {
     bool fRun = true;
-    while (fRun && !fShutdown)
+    while (fRun && !ShutdownInProgress())
     {
         int nProto = 0;
         map<string, string> mapHeaders;

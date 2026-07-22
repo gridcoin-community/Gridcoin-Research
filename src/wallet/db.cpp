@@ -4,6 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "wallet/db.h"
+#include "node/shutdown.h"
 #include "dbwrapper.h"
 #include "net.h"
 #include "main.h"
@@ -61,7 +62,7 @@ bool CDBEnv::Open(fs::path pathEnv_)
     if (fDbEnvInit)
         return true;
 
-    if (fShutdown)
+    if (ShutdownInProgress())
         return false;
 
     pathEnv = pathEnv_;
@@ -134,7 +135,7 @@ void CDBEnv::MakeMock()
     if (fDbEnvInit)
         throw runtime_error("CDBEnv::MakeMock(): already initialized");
 
-    if (fShutdown)
+    if (ShutdownInProgress())
         throw runtime_error("CDBEnv::MakeMock(): during shutdown");
 
     LogPrint(BCLog::LogFlags::WALLETDB, "CDBEnv::MakeMock()");
@@ -372,7 +373,7 @@ bool CDBEnv::RemoveDb(const string& strFile)
 
 bool CDB::Rewrite(const string& strFile, const char* pszSkip)
 {
-    while (!fShutdown)
+    while (!ShutdownInProgress())
     {
         {
             LOCK(bitdb.cs_db);

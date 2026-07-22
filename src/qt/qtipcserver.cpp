@@ -8,6 +8,8 @@
 #include "node/ui_interface.h"
 #include "util.h"
 
+#include <atomic>
+
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/interprocess/ipc/message_queue.hpp>
@@ -26,8 +28,21 @@ using namespace boost::posix_time;
 
 void ipcScanRelay(int argc, char *argv[]) { }
 void ipcInit(int argc, char *argv[]) { }
+void ipcShutdown() { }
 
 #else
+
+//! GUI-process-local stop flag for the URI-listener thread (grc-gui-ipc). Set by
+//! ipcShutdown() when the GUI event loop returns; the thread polls it once per
+//! 100 ms receive timeout. Replaces the former read of the core fShutdown global
+//! -- the URI server is owned by this GUI process, so its exit is gated on the
+//! GUI quitting, never on core teardown state.
+static std::atomic<bool> g_ipc_shutdown{false};
+
+void ipcShutdown()
+{
+    g_ipc_shutdown = true;
+}
 
 static void ipcThread2(void* pArg);
 
@@ -102,7 +117,7 @@ static void ipcThread2(void* pArg)
             UninterruptibleSleep(std::chrono::seconds{1});
         }
 
-        if (fShutdown)
+        if (g_ipc_shutdown)
             break;
     }
 

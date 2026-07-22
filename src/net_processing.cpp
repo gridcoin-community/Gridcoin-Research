@@ -11,6 +11,7 @@
 #include "consensus/tx_verify.h"
 #include "gridcoin/voting/registry.h"
 #include "util.h"
+#include "node/shutdown.h"
 #include "net.h"
 #include "streams.h"
 #include "alert.h"
@@ -628,7 +629,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         int64_t nSince = nNow - 10 * 60;
         for (auto &addr : vAddr)
         {
-            if (fShutdown)
+            if (ShutdownInProgress())
                 return true;
             if (addr.nTime <= 100000000 || addr.nTime > nNow + 10 * 60)
                 addr.nTime = nNow - 5 * 24 * 60 * 60;
@@ -676,7 +677,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             const CInv &inv = vInv[nInv];
 
-            if (fShutdown) return true;
+            if (ShutdownInProgress()) return true;
 
             // cs_main lock here must be tightly scoped and not be concatenated outside the cs_mapManifest lock, because
             // that will lead to a deadlock. In the original position above the for loop, cs_main is taken first here, then
@@ -763,7 +764,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         for (auto const& inv : vInv)
         {
-            if (fShutdown)
+            if (ShutdownInProgress())
                 return true;
             if (vInv.size() == 1)
             {
@@ -1345,7 +1346,7 @@ static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRe
         try
         {
             fRet = ProcessMessage(pfrom, strCommand, vRecv, msg.nTime);
-            if (fShutdown)
+            if (ShutdownInProgress())
                 break;
         }
         catch (std::ios_base::failure& e)

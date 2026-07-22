@@ -4,6 +4,7 @@
 
 #include "main.h"
 #include "node/ui_interface.h"
+#include "node/shutdown.h"
 #include "random.h"
 #include "rpc/util.h"
 
@@ -1549,7 +1550,7 @@ void Scraper(bool bSingleShot)
     uint256 nmScraperFileManifestHash;
 
     // The scraper thread loop...
-    while (!fShutdown)
+    while (!ShutdownInProgress())
     {
         // Only proceed if wallet is in sync. Check every 8 seconds since no callback is available.
         // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
@@ -1796,7 +1797,7 @@ void ScraperSubscriber()
 
     auto scraper_sleep = []() { LOCK(cs_ScraperGlobals); return nScraperSleep; };
 
-    while(!fShutdown)
+    while(!ShutdownInProgress())
     {
         // Only proceed if wallet is in sync. Check every 8 seconds since no callback is available.
         // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.

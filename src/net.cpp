@@ -10,6 +10,7 @@
 #include "wallet/db.h"
 #include "banman.h"
 #include "net.h"
+#include "node/shutdown.h"
 #include "net_processing.h"
 #include "init.h"
 #include "node/ui_interface.h"
@@ -851,13 +852,13 @@ void CConnman::ThreadSocketHandler2()
         }
         else if (!Sock::WaitMany(timeout, events_per_sock))
         {
-            if (fShutdown)
+            if (ShutdownInProgress())
                 return;
             LogPrint(BCLog::LogFlags::NET, "socket wait error %d", WSAGetLastError());
             if (!MilliSleep(timeout.count())) return;
             continue; // rebuild the wait set next iteration
         }
-        if (fShutdown)
+        if (ShutdownInProgress())
             return;
 
 
@@ -969,7 +970,7 @@ void CConnman::ThreadSocketHandler2()
         }
         for (auto const& pnode : vNodesCopy)
         {
-            if (fShutdown)
+            if (ShutdownInProgress())
                 return;
 
             //
@@ -1213,7 +1214,7 @@ void ThreadMapPort2(void* parg)
         int i = 1;
         while (true)
         {
-            if (fShutdown || !g_connman || !g_connman->GetUseUPnP())
+            if (ShutdownInProgress() || !g_connman || !g_connman->GetUseUPnP())
             {
                 r = UPNP_DeletePortMapping(urls.controlURL, data.first.servicetype, port.c_str(), "TCP", nullptr);
                 LogPrintf("UPNP_DeletePortMapping() returned : %d", r);
@@ -1251,7 +1252,7 @@ void ThreadMapPort2(void* parg)
             FreeUPNPUrls(&urls);
         while (true)
         {
-            if (fShutdown || !g_connman || !g_connman->GetUseUPnP()) return;
+            if (ShutdownInProgress() || !g_connman || !g_connman->GetUseUPnP()) return;
             if (!MilliSleep(2000)) return;
         }
     }
@@ -1378,7 +1379,7 @@ void DumpAddresses()
 
 void ThreadDumpAddress2(void* parg)
 {
-    while (!fShutdown)
+    while (!ShutdownInProgress())
     {
         DumpAddresses();
         if (!MilliSleep(600000)) return;
@@ -1492,7 +1493,7 @@ void CConnman::ThreadOpenConnections2()
                 for (int i = 0; i < 10 && i < nLoop; i++)
                 {
                     UninterruptibleSleep(std::chrono::milliseconds{500});
-                    if (fShutdown)
+                    if (ShutdownInProgress())
                         return;
                 }
             }
@@ -1507,11 +1508,11 @@ void CConnman::ThreadOpenConnections2()
         ProcessOneShot();
         UninterruptibleSleep(std::chrono::milliseconds{500});
 
-        if (fShutdown)
+        if (ShutdownInProgress())
             return;
 
         CSemaphoreGrant grant(*semOutbound);
-        if (fShutdown)
+        if (ShutdownInProgress())
             return;
 
         // Add seed nodes
@@ -1625,7 +1626,7 @@ void CConnman::ThreadOpenAddedConnections2()
         return;
 
     if (HaveNameProxy()) {
-        while(!fShutdown) {
+        while(!ShutdownInProgress()) {
             for (auto const& strAddNode : gArgs.GetArgs("-addnode")) {
                 CAddress addr;
                 CSemaphoreGrant grant(*semOutbound);
@@ -1675,11 +1676,11 @@ void CConnman::ThreadOpenAddedConnections2()
             CSemaphoreGrant grant(*semOutbound);
             OpenNetworkConnection(CAddress(*(vserv.begin())), &grant);
             UninterruptibleSleep(std::chrono::milliseconds{500});
-            if (fShutdown) return;
+            if (ShutdownInProgress()) return;
         }
-        if (fShutdown) return;
+        if (ShutdownInProgress()) return;
         if (!MilliSleep(120000)) return; // Retry every 2 minutes
-        if (fShutdown) return;
+        if (ShutdownInProgress()) return;
     }
 }
 
@@ -1689,7 +1690,7 @@ bool CConnman::OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGran
     //
     // Initiate outbound network connection
     //
-    if (fShutdown)
+    if (ShutdownInProgress())
         return false;
     if (!strDest)
         if (IsLocal(addrConnect) ||
@@ -1700,7 +1701,7 @@ bool CConnman::OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGran
         return false;
 
     std::shared_ptr<CNode> pnode = ConnectNode(addrConnect, strDest);
-    if (fShutdown)
+    if (ShutdownInProgress())
         return false;
     if (!pnode)
         return false;
@@ -1742,7 +1743,7 @@ void CConnman::ThreadMessageHandler()
 void CConnman::ThreadMessageHandler2()
 {
     LogPrint(BCLog::LogFlags::NET, "ThreadMessageHandler started");
-    while (!fShutdown)
+    while (!ShutdownInProgress())
     {
         // Drive message processing through the connection manager's configured
         // NetEventsInterface (issue #2558 PR 8c) rather than naming g_peerman
@@ -1776,7 +1777,7 @@ void CConnman::ThreadMessageHandler2()
                         pnode->CloseSocketDisconnect();
             }
 
-            if (fShutdown)
+            if (ShutdownInProgress())
                 return;
 
             // Send messages
@@ -1800,17 +1801,17 @@ void CConnman::ThreadMessageHandler2()
                 }
             }
 
-            if (fShutdown)
+            if (ShutdownInProgress())
                 return;
         }
         // vNodesCopy released as it leaves scope at the next iteration (issue #3066).
 
         // Wait and allow messages to bunch up.
-        // we're sleeping, but we must always check fShutdown after doing this.
+        // we're sleeping, but we must always check ShutdownInProgress() after doing this.
         UninterruptibleSleep(std::chrono::milliseconds{100});
-        if (fRequestShutdown)
+        if (ShutdownRequested())
             StartShutdown();
-        if (fShutdown)
+        if (ShutdownInProgress())
             return;
     }
 }
@@ -2196,7 +2197,7 @@ void CConnman::RelayAddress(const CAddress& addr, bool fReachable)
 
 bool CConnman::Start()
 {
-    fShutdown = false;
+    SetShutdownInProgress(false);
     MAX_OUTBOUND_CONNECTIONS = m_options.nMaxOutbound;
     int max_connections = m_options.nMaxConnections;
     int nMaxOutbound = 0;
@@ -2219,7 +2220,7 @@ bool CConnman::Start()
     //
 
     // Net threads now run as std::thread members owned by CConnman (issue
-    // #2558 PR 4). Each loop exits on fShutdown; its interruptible MilliSleep
+    // #2558 PR 4). Each loop exits on ShutdownInProgress(); its interruptible MilliSleep
     // is woken by the global g_thread_interrupt fired in Shutdown(). The
     // optional ThreadMapPort still launches on netThreads (on demand, including
     // the Qt UPnP toggle) and is joined via netThreads->removeAll() in Stop().
@@ -2253,7 +2254,7 @@ bool CConnman::Start()
 
 void CConnman::Interrupt()
 {
-    fShutdown = true;
+    SetShutdownInProgress(true);
     if (semOutbound)
         for (int i=0; i<MAX_OUTBOUND_CONNECTIONS; i++)
             semOutbound->post();
@@ -2263,7 +2264,7 @@ void CConnman::Stop()
 {
     Interrupt();
 
-    // Join the std::thread net threads. They wake via fShutdown plus the global
+    // Join the std::thread net threads. They wake via ShutdownInProgress() plus the global
     // g_thread_interrupt (already fired in Shutdown before StopNode), so the
     // interruptible MilliSleep loops return promptly.
     for (auto& thread : m_net_threads) {

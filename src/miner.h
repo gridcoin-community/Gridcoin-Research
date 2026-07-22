@@ -82,7 +82,7 @@ bool TryMineRegtestBlock(CWallet* pwallet,
                          std::string& err,
                          int stake_time_slot_offset = 0);
 
-//! \brief The proof-of-stake miner loop. Runs until \ref fShutdown is set.
+//! \brief The proof-of-stake miner loop. Runs until ShutdownInProgress().
 void StakeMiner(CWallet* pwallet);
 
 //! \brief Thread entry point wrapping StakeMiner. \p parg is the CWallet to

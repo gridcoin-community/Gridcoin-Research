@@ -4,6 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "node/blockstorage.h"
+#include "node/shutdown.h"
 
 #include "chainparams.h"
 #include "clientversion.h"
@@ -139,7 +140,7 @@ bool CheckDiskSpace(uint64_t nAdditionalBytes)
     // Check for nMinDiskSpace bytes (currently 50MB)
     if (nFreeBytesAvailable < nMinDiskSpace + nAdditionalBytes)
     {
-        fShutdown = true;
+        SetShutdownInProgress();
         std::string strMessage = _("Warning: Disk space is low!");
         strMiscWarning = strMessage;
         LogPrintf("*** %s", strMessage);
@@ -216,7 +217,7 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
         try {
             CAutoFile blkdat(fileIn, SER_DISK, CLIENT_VERSION);
             unsigned int nPos = 0;
-            while (nPos != (unsigned int)-1 && !fRequestShutdown)
+            while (nPos != (unsigned int)-1 && !ShutdownRequested())
             {
                 unsigned char pchData[65536];
                 do {
@@ -239,7 +240,7 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                     }
                     else
                         nPos += sizeof(pchData) - CMessageHeader::MESSAGE_START_SIZE + 1;
-                } while(!fRequestShutdown);
+                } while(!ShutdownRequested());
 
                 if (nPos == (unsigned int)-1) {
                     if (display_progress) {
@@ -377,7 +378,7 @@ bool LoadBlockIndex(bool fAllowNew)
         }
     }
 
-    if (fRequestShutdown) {
+    if (ShutdownRequested()) {
         return true;
     }
 
