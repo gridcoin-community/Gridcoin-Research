@@ -380,11 +380,15 @@ TransactionTableModel *WalletModel::getTransactionTableModel()
 
 WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
 {
-    if(!m_wallet.isCrypted())
+    // One snapshot read: crypted and locked come back together (a narrower window
+    // than two separate reads) and the split build makes a single round trip.
+    const interfaces::WalletLockState lock_state = m_wallet.getLockState();
+
+    if (!lock_state.crypted)
     {
         return Unencrypted;
     }
-    else if(m_wallet.isLocked())
+    else if (lock_state.locked)
     {
         return Locked;
     }

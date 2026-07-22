@@ -169,9 +169,9 @@ bool MRCModel::isMRCError(MRCRequestStatus &s, QString& e)
 bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e)
 {
     if (m_mrc_status != MRCRequestStatus::ELIGIBLE) {
-        return error("%s: submitMRC called while m_mrc_status, %i, is not ELIGIBLE.",
-                     __func__,
-                     static_cast<int>(m_mrc_status));
+        return GUIError("%s: submitMRC called while m_mrc_status, %i, is not ELIGIBLE.",
+                        __func__,
+                        static_cast<int>(m_mrc_status));
     }
 
     // The node recreates the claim fresh at the current tip and broadcasts it

@@ -132,8 +132,12 @@ BOOST_AUTO_TEST_CASE(wallet_wraps_cwallet)
     std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(pwalletMain);
 
     BOOST_CHECK_EQUAL(wallet->getBalance(), pwalletMain->GetBalance());
-    BOOST_CHECK_EQUAL(wallet->isCrypted(), pwalletMain->IsCrypted());
-    BOOST_CHECK_EQUAL(wallet->isLocked(), pwalletMain->IsLocked());
+
+    const interfaces::WalletLockState lock_state = wallet->getLockState();
+    BOOST_CHECK_EQUAL(lock_state.crypted, pwalletMain->IsCrypted());
+    BOOST_CHECK_EQUAL(lock_state.locked, pwalletMain->IsLocked());
+    BOOST_CHECK_EQUAL(lock_state.unlocked_for_staking_only, wallet->isUnlockedForStakingOnly());
+    BOOST_CHECK_EQUAL(lock_state.staking_only_flag, wallet->getUnlockStakingOnlyFlag());
 
     int calls = 0;
     uint256 seen_hash;

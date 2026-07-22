@@ -75,6 +75,27 @@ void LogPrintf(const char* fmt, const Args&... args)
     LogPrintStr(log_msg);
 }
 
+//! Log a GUI error line and return false (mirror of the core error() helper), so
+//! it drops into a `return GUIError(...)` statement exactly like the core one.
+//! Prefixes "ERROR: " and logs unconditionally -- errors surface regardless of
+//! category filtering, matching core error() (the sink still no-ops when logging
+//! is off entirely). Kept a template (not a tfm::format macro) so the
+//! format-string lint can parse it, like LogPrintf. tfm::format is wrapped so a
+//! malformed format string logs an error rather than aborting the GUI.
+template <typename... Args>
+bool Error(const char* fmt, const Args&... args)
+{
+    std::string log_msg;
+    try {
+        log_msg = tfm::format(fmt, args...);
+    } catch (tinyformat::format_error& e) {
+        log_msg = "Error \"" + std::string(e.what()) + "\" while formatting GUI error message: " + fmt;
+    }
+
+    LogPrintStr("ERROR: " + log_msg);
+    return false;
+}
+
 } // namespace GUILog
 
 //! Unconditional GUI log line (mirror of LogPrintf).
@@ -87,5 +108,8 @@ void LogPrintf(const char* fmt, const Args&... args)
             GUILog::LogPrintf(__VA_ARGS__);              \
         }                                                \
     } while (0)
+
+//! Log a GUI error and return false (mirror of the core error()).
+#define GUIError(...) GUILog::Error(__VA_ARGS__)
 
 #endif // GRIDCOIN_QT_GUILOG_H
