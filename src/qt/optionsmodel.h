@@ -77,9 +77,9 @@ public:
     /* Explicit getters */
     qint64 getTransactionFee();
     qint64 getReserveBalance();
-    //! Whether the node is on testnet, read through the interface (never the raw
-    //! fTestNet global). Lets dialogs that hold an OptionsModel gate testnet-only
-    //! UI without reaching a core global.
+    //! Whether the node is on testnet, read through the node interface
+    //! (interfaces::Node::isTestNet). Lets dialogs that hold an OptionsModel gate
+    //! testnet-only UI without calling chainparams (OnTestnet()) from GUI code.
     bool isTestNet();
     bool getStartAtStartup();
     bool getStartMin();

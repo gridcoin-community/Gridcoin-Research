@@ -99,7 +99,7 @@ void AddOneShot(string strDest)
 
 unsigned short GetListenPort()
 {
-    return (unsigned short)(gArgs.GetArg("-port", GetDefaultPort(OnTestnet())));
+    return (unsigned short)(gArgs.GetArg("-port", Params().GetDefaultPort()));
 }
 
 void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd)
@@ -369,7 +369,7 @@ std::shared_ptr<CNode> CConnman::ConnectNode(CAddress addrConnect, const char *p
 
     // Connect
     SOCKET hSocket;
-    if (pszDest ? ConnectSocketByName(addrConnect, hSocket, pszDest, GetDefaultPort(OnTestnet())) : ConnectSocket(addrConnect, hSocket))
+    if (pszDest ? ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort()) : ConnectSocket(addrConnect, hSocket))
     {
         g_connman->GetAddrMan().Attempt(addrConnect);
         /// debug print
@@ -1331,7 +1331,7 @@ void ThreadDNSAddressSeed2(void* parg)
                     for (auto const& ip : vIPs)
                     {
                         int nOneDay = 24*3600;
-                        CAddress addr = CAddress(CService(ip, GetDefaultPort(OnTestnet())));
+                        CAddress addr = CAddress(CService(ip, Params().GetDefaultPort()));
                         addr.nTime = GetAdjustedTime() - 3*nOneDay - GetRand(4*nOneDay); // use a random age between 3 and 7 days old
                         vAdd.push_back(addr);
                         found++;
@@ -1527,7 +1527,7 @@ void CConnman::ThreadOpenConnections2()
                 const int64_t nOneWeek = 7*24*60*60;
                 struct in_addr ip;
                 memcpy(&ip, &seed, sizeof(ip));
-                CAddress addr(CService(ip, GetDefaultPort(OnTestnet())));
+                CAddress addr(CService(ip, Params().GetDefaultPort()));
                 addr.nTime = GetAdjustedTime() - GetRand(nOneWeek) - nOneWeek;
                 vAdd.push_back(addr);
             }
@@ -1579,7 +1579,7 @@ void CConnman::ThreadOpenConnections2()
                 continue;
 
             // do not allow non-default ports, unless after 50 invalid addresses selected already
-            if (addr.GetPort() != GetDefaultPort(OnTestnet()) && nTries < 50)
+            if (addr.GetPort() != Params().GetDefaultPort() && nTries < 50)
                 continue;
 
             addrConnect = addr;
@@ -1643,7 +1643,7 @@ void CConnman::ThreadOpenAddedConnections2()
         LogPrint(BCLog::LogFlags::NET, "INFO: %s: addnode %s.", __func__, strAddNode);
 
         vector<CService> vservNode(0);
-        if(Lookup(strAddNode.c_str(), vservNode, GetDefaultPort(OnTestnet()), fNameLookup, 0))
+        if(Lookup(strAddNode.c_str(), vservNode, Params().GetDefaultPort(), fNameLookup, 0))
         {
             vservAddressesToAdd.push_back(vservNode);
             {

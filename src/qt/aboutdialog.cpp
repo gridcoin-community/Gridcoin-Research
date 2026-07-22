@@ -43,8 +43,9 @@ void AboutDialog::setModel(ClientModel *model)
         ui->versionLabel->setText(model->formatFullVersion());
 
         // Wire the version-info / update-check button. Testnet status is read
-        // through the client model's node interface (never the raw OnTestnet()
-        // global); done here rather than in the constructor because the model is
+        // through the client model's node interface (ClientModel::isTestNet ->
+        // interfaces::Node), never by calling chainparams (OnTestnet()) from GUI
+        // code; done here rather than in the constructor because the model is
         // only available once set. -disableupdatecheck is a config read.
         if (!model->isTestNet() && !gArgs.GetBoolArg("-disableupdatecheck", false)) {
             connect(ui->versionInfoButton, &QAbstractButton::pressed, this, [this]() { handlePressVersionInfoButton(); });
