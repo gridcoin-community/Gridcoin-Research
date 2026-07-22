@@ -438,6 +438,14 @@ bool OptionsModel::getSuppressNetworkGraph()
     return gArgs.GetArg("-suppressnetworkgraph", "false") == "true";
 }
 
+bool OptionsModel::getShowOrphans()
+{
+    // Routed through the node settings surface (equivalent to the former
+    // gArgs.GetBoolArg("-showorphans", false)) so the transaction models can
+    // read it without a direct util/system.h include.
+    return m_node.getSettingBool("showorphans", false);
+}
+
 bool OptionsModel::getMaskValues()
 {
     return fMaskValues;

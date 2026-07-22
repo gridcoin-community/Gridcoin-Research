@@ -102,6 +102,17 @@ struct ScraperConvergenceSnapshot
     std::vector<std::string> scrapers_not_publishing;
 };
 
+//! Result of the GitHub "latest release" check the About dialog runs. Value
+//! snapshot so the GUI needs no gridcoin/upgrade.h. upgrade_type carries a
+//! GRC::Upgrade::UpgradeType value as int (0 Unknown / 1 Leisure / 2 Mandatory
+//! / 3 Unsupported); the implementation static_asserts that mapping.
+struct LatestVersionInfo
+{
+    std::string version;      //!< Human-readable latest-version message.
+    std::string details;      //!< Change log / details text.
+    int upgrade_type = 0;
+};
+
 //! Top-level node interface for the GUI: chain and network state queries plus
 //! notification registration. In the monolithic build the implementation
 //! wraps the existing globals directly (see src/node/interfaces.cpp); in the
@@ -162,6 +173,11 @@ public:
 
     //! Whether the node runs on testnet.
     virtual bool isTestNet() = 0;
+
+    //! Run the blocking GitHub "latest release" check (the read-only half of
+    //! GRC::Upgrade) and return the result as a value. Callers run this off the
+    //! GUI thread -- it does a libcurl GET with up to a 10 s connect timeout.
+    virtual LatestVersionInfo checkForLatestUpdate() = 0;
 
     //! Proof-of-stake difficulty corresponding to a compact target-bits
     //! value (pure conversion; no chain state read).

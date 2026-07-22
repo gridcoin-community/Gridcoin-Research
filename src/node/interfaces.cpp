@@ -10,6 +10,7 @@
 #include "gridcoin/scraper/scraper.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/upgrade.h"
 #include "init.h"
 #include "interfaces/handler.h"
 #include "interfaces/init.h"
@@ -107,6 +108,22 @@ public:
     std::string getClientVersion() override { return FormatFullVersion(); }
 
     bool isTestNet() override { return OnTestnet(); }
+
+    LatestVersionInfo checkForLatestUpdate() override
+    {
+        LatestVersionInfo info;
+        GRC::Upgrade::UpgradeType upgrade_type = GRC::Upgrade::UpgradeType::Unknown;
+        GRC::Upgrade::CheckForLatestUpdate(info.version, info.details, upgrade_type, false);
+        // Lock the int contract carried in LatestVersionInfo::upgrade_type (and
+        // mirrored GUI-side by UpdateDialog::UpdateType) to the core enum.
+        static_assert(static_cast<int>(GRC::Upgrade::UpgradeType::Unknown) == 0
+                      && static_cast<int>(GRC::Upgrade::UpgradeType::Leisure) == 1
+                      && static_cast<int>(GRC::Upgrade::UpgradeType::Mandatory) == 2
+                      && static_cast<int>(GRC::Upgrade::UpgradeType::Unsupported) == 3,
+                      "LatestVersionInfo::upgrade_type int contract must match GRC::Upgrade::UpgradeType");
+        info.upgrade_type = static_cast<int>(upgrade_type);
+        return info;
+    }
 
     double getBlockDifficulty(uint32_t target_bits) override
     {

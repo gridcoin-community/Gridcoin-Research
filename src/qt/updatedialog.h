@@ -5,12 +5,23 @@
 #ifndef BITCOIN_QT_UPDATEDIALOG_H
 #define BITCOIN_QT_UPDATEDIALOG_H
 
-#include "gridcoin/upgrade.h"
 #include <QDialog>
 
 namespace Ui {
 class UpdateDialog;
 }
+
+//! GUI-local mirror of GRC::Upgrade::UpgradeType. The value is transported as a
+//! plain int across the About dialog's QtConcurrent boundary (aboutdialog.cpp
+//! stamps static_cast<int>(GRC::Upgrade::UpgradeType)), so this dialog need not
+//! include gridcoin/upgrade.h. The enumerator values MUST stay in sync with
+//! GRC::Upgrade::UpgradeType; aboutdialog.cpp static_asserts that they do.
+enum class UpdateType {
+    Unknown = 0,
+    Leisure = 1,
+    Mandatory = 2,
+    Unsupported = 3,
+};
 
 class UpdateDialog : public QDialog
 {
@@ -22,7 +33,8 @@ public:
 
     void setVersion(QString version);
     void setDetails(QString message);
-    void setUpgradeType(GRC::Upgrade::UpgradeType upgrade_type);
+    //! \p upgrade_type is a UpdateType value passed as int (see the enum note).
+    void setUpgradeType(int upgrade_type);
 
 private:
     Ui::UpdateDialog *ui;

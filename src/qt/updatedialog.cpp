@@ -33,22 +33,22 @@ void UpdateDialog::setDetails(QString message)
     ui->versionDetails->setText(message);
 }
 
-void UpdateDialog::setUpgradeType(GRC::Upgrade::UpgradeType upgrade_type)
+void UpdateDialog::setUpgradeType(int upgrade_type)
 {
     QIcon info_icon = QApplication::style()->standardIcon(QStyle::SP_MessageBoxInformation);
     QIcon warning_icon = QApplication::style()->standardIcon(QStyle::SP_MessageBoxWarning);
     QIcon unknown_icon = QApplication::style()->standardIcon(QStyle::SP_MessageBoxQuestion);
 
-    switch (upgrade_type) {
-    case GRC::Upgrade::UpgradeType::Mandatory:
+    switch (static_cast<UpdateType>(upgrade_type)) {
+    case UpdateType::Mandatory:
         [[fallthrough]];
-    case GRC::Upgrade::UpgradeType::Unsupported:
+    case UpdateType::Unsupported:
         ui->infoIcon->setPixmap(GRC::ScaleIcon(this, warning_icon, 48));
         break;
-    case GRC::Upgrade::UpgradeType::Leisure:
+    case UpdateType::Leisure:
         ui->infoIcon->setPixmap(GRC::ScaleIcon(this, info_icon, 48));
         break;
-    case GRC::Upgrade::Unknown:
+    case UpdateType::Unknown:
         ui->infoIcon->setPixmap(GRC::ScaleIcon(this, unknown_icon, 48));
         break;
     }

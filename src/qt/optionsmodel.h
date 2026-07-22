@@ -93,6 +93,10 @@ public:
     bool getLimitTxnDisplay();
     bool getSuppressNetworkGraph();
     bool getMaskValues();
+    //! Whether stale (orphaned) coinstake txns are shown in the transaction
+    //! list (-showorphans). Read through the node settings interface so the tx
+    //! models need not include util/system.h to reach gArgs.
+    bool getShowOrphans();
     QDate getLimitTxnDate();
     int64_t getLimitTxnDateTime();
     double getPollExpireNotification();

@@ -5,7 +5,6 @@
 #include "addresstablemodel.h"
 #include "transactiontablemodel.h"
 
-#include "node/ui_interface.h" /* for ChangeType */
 #include <key_io.h>
 #include "util.h" /* for LogPrint / LogPrintf */
 

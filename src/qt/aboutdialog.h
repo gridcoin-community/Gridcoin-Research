@@ -10,6 +10,7 @@ namespace Ui {
     class AboutDialog;
 }
 class ClientModel;
+namespace interfaces { class Node; }
 
 /** "About" dialog box */
 class AboutDialog : public QDialog
@@ -34,6 +35,10 @@ private:
     };
 
     Ui::AboutDialog *ui;
+    //! Node settings/query surface; set in setModel(). Used off the GUI thread
+    //! for checkForLatestUpdate() -- process-lifetime, so capturing it in the
+    //! background worker is safe.
+    interfaces::Node* m_node = nullptr;
     //! Watches the background version-check fetch so the blocking libcurl GET
     //! never runs on the GUI thread.
     QFutureWatcher<AboutVersionInfo> m_version_check_watcher;

@@ -14,7 +14,6 @@
 #include "optionsmodel.h"
 #include "guiutil.h"
 #include "qt/decoration.h"
-#include "util/system.h"
 
 #include <algorithm>
 #include <limits>
@@ -215,7 +214,7 @@ void TransactionView::setModel(WalletModel *model)
         // local filter spec's -showorphans gate to match the model's registered
         // spec so the first widget-driven applyFilter() does not drop it.
         m_filterSpec = GRC::FilterSpec();
-        m_filterSpec.show_orphans = gArgs.GetBoolArg("-showorphans", false);
+        m_filterSpec.show_orphans = model->getOptionsModel()->getShowOrphans();
 
         m_detailedModel = new DetailedTxModel(model, this);
 
