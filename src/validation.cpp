@@ -420,11 +420,12 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
                 }
                 if (!txindex.vSpent[prevout.n].IsNull())
                 {
-                    if (OnTestnet() && pindexBlock->nHeight < nGrandfather)
+                    const bool on_testnet = OnTestnet();
+                    if (on_testnet && pindexBlock->nHeight < nGrandfather)
                     {
                         return fMiner ? false : true;
                     }
-                    if (!OnTestnet() && pindexBlock->nHeight < nGrandfather)
+                    if (!on_testnet && pindexBlock->nHeight < nGrandfather)
                     {
                         return fMiner ? false : true;
                     }

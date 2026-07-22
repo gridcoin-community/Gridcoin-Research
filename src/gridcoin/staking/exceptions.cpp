@@ -3,8 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/staking/exceptions.h"
-
-extern bool OnTestnet();
+#include "chainparams.h" // For OnTestnet().
 
 namespace
 {
