@@ -14,11 +14,11 @@ BOOST_AUTO_TEST_SUITE(sync_tests)
 BOOST_AUTO_TEST_CASE(potential_deadlock_detected)
 {
     #ifdef DEBUG_LOCKORDER
-    bool prev_lockorder_abort = g_debug_lockorder_abort;
-    bool prev_lockorder_throw_exception = g_debug_lockorder_throw_exception;
+    bool prev_lockorder_abort = GetLockOrderDebugAbort();
+    bool prev_lockorder_throw_exception = GetLockOrderDebugThrowException();
 
-    g_debug_lockorder_abort = false;
-    g_debug_lockorder_throw_exception = true;
+    SetLockOrderDebugAbort(false);
+    SetLockOrderDebugThrowException(true);
 
     #endif
 
@@ -42,8 +42,8 @@ BOOST_AUTO_TEST_CASE(potential_deadlock_detected)
     #endif
 
     #ifdef DEBUG_LOCKORDER
-    g_debug_lockorder_abort = prev_lockorder_abort;
-    g_debug_lockorder_throw_exception = prev_lockorder_throw_exception;
+    SetLockOrderDebugAbort(prev_lockorder_abort);
+    SetLockOrderDebugThrowException(prev_lockorder_throw_exception);
     #endif
 }
 

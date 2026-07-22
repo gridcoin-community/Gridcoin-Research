@@ -188,7 +188,9 @@ bool AppInit(int argc, char* argv[])
             return InitError("Error initializing settings.\n");
         }
 
-        // Command-line RPC  - single commands execute and exit.
+        // Command-line RPC  - single commands execute and exit. Local to this
+        // entry point; formerly a util.h global read nowhere else.
+        bool fCommandLine = false;
         for (int i = 1; i < argc; i++)
             if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoinresearchd"))
                 fCommandLine = true;

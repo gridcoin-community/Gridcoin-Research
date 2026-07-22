@@ -335,7 +335,14 @@ static void HandleSIGTERM(int)
 
 static void HandleSIGHUP(int)
 {
-    fReopenDebugLog = true;
+    // Ask the logger to reopen debug.log on the next write (log rotation).
+    // m_reopen_file is a std::atomic<bool>, and by the time any signal is
+    // delivered LogInstance() just returns the already-constructed logger, so
+    // this handler only flips an atomic flag -- the same reopen mechanism Bitcoin
+    // Core uses from its SIGHUP handler. (This does not make the whole handler
+    // formally async-signal-safe; it replaces the former fReopenDebugLog global,
+    // which only shadowed this flag.)
+    LogInstance().m_reopen_file = true;
 }
 #else
 static BOOL WINAPI consoleCtrlHandler(DWORD dwCtrlType)
@@ -884,8 +891,6 @@ static void StartupNotify(const ArgsManager& args)
  */
 void InitLogging()
 {
-    fPrintToConsole = gArgs.GetBoolArg("-printtoconsole");
-    fLogTimestamps = gArgs.GetBoolArg("-logtimestamps", true);
 
     // This is needed because it is difficult to inject the equivalent of -nodebuglogfile in the testing suite for
     // console only logging, so in the testing suite, -debuglogfile=none is used.
@@ -896,8 +901,8 @@ void InitLogging()
     }
 
     LogInstance().m_file_path = AbsPathForConfigVal(gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
-    LogInstance().m_print_to_console = fPrintToConsole;
-    LogInstance().m_log_timestamps = fLogTimestamps;
+    LogInstance().m_print_to_console = gArgs.GetBoolArg("-printtoconsole");
+    LogInstance().m_log_timestamps = gArgs.GetBoolArg("-logtimestamps", true);
     LogInstance().m_log_time_micros = gArgs.GetBoolArg("-logtimemicros", DEFAULT_LOGTIMEMICROS);
     LogInstance().m_log_threadnames = gArgs.GetBoolArg("-logthreadnames", DEFAULT_LOGTHREADNAMES);
 
@@ -1310,7 +1315,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     {
         int nNewTimeout = gArgs.GetArg("-timeout", 5000);
         if (nNewTimeout > 0 && nNewTimeout < 600000)
-            nConnectTimeout = nNewTimeout;
+            SetConnectTimeout(nNewTimeout);
     }
 
     if (gArgs.IsArgSet("-peertimeout"))
@@ -1411,14 +1416,14 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     std::ostringstream strErrors;
 
-    fDevbuildCripple = false;
+    SetDevbuildCripple(false);
     if ((CLIENT_VERSION_BUILD != 0) && !OnTestnet())
     {
-        fDevbuildCripple = true;
+        SetDevbuildCripple(true);
         if ((gArgs.GetArg("-devbuild", "") == "override"))
         {
             LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
-            fDevbuildCripple = false;
+            SetDevbuildCripple(false);
             LogPrintf("WARNING: Running development version outside of testnet in override mode!\n"
                       "VERBOSE logging is enabled.");
         }
@@ -1526,12 +1531,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     // see Step 2: parameter interactions for more information about these
-    fNoListen = !gArgs.GetBoolArg("-listen", true);
+    SetListenDisabled(!gArgs.GetBoolArg("-listen", true));
     fDiscover = gArgs.GetBoolArg("-discover", true);
-    fNameLookup = gArgs.GetBoolArg("-dns", true);
+    SetNameLookup(gArgs.GetBoolArg("-dns", true));
 
     bool fBound = false;
-    if (!fNoListen)
+    if (!IsListenDisabled())
     {
         std::string strError;
         if (gArgs.GetArgs("-bind").size()) {
@@ -1559,7 +1564,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         for (auto const& strAddr : gArgs.GetArgs("-externalip"))
         {
             CService addrLocal;
-            if (Lookup(strAddr.c_str(), addrLocal, GetListenPort(), fNameLookup) && addrLocal.IsValid())
+            if (Lookup(strAddr.c_str(), addrLocal, GetListenPort(), GetNameLookup()) && addrLocal.IsValid())
                 AddLocal(addrLocal, LOCAL_MANUAL);
             else
                 return InitError(strprintf(_("Cannot resolve -externalip address: '%s'"), strAddr));

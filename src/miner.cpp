@@ -45,6 +45,12 @@ using namespace std;
 
 unsigned int nMinerSleep;
 
+// Development-build staking cripple; see miner.h. Extracted from the former
+// util.h global. Set from init (AppInit2 devbuild/testnet gating).
+static bool fDevbuildCripple = false;
+bool GetDevbuildCripple() { return fDevbuildCripple; }
+void SetDevbuildCripple(bool crippled) { fDevbuildCripple = crippled; }
+
 std::atomic<int> g_stakelimit_height{0};
 
 int32_t ComputeBlockVersion(int height)
@@ -1421,7 +1427,7 @@ bool IsMiningAllowed(CWallet *pwallet)
         g_miner_status.AddError(GRC::MinerStatus::WALLET_LOCKED);
     }
 
-    if (fDevbuildCripple) {
+    if (GetDevbuildCripple()) {
         g_miner_status.AddError(GRC::MinerStatus::TESTNET_ONLY);
     }
 

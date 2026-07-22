@@ -62,12 +62,18 @@ void DeleteLock(void* cs);
 bool LockStackEmpty();
 
 /**
- * Call abort() if a potential lock order deadlock bug is detected, instead of
- * just logging information and throwing a logic_error. Defaults to true, and
- * set to false in DEBUG_LOCKORDER unit tests.
+ * Lock-order debugging flags (state lives in sync.cpp). When the abort flag
+ * (SetLockOrderDebugAbort) is set, potential_deadlock_detected() calls abort()
+ * instead of just logging and throwing a std::logic_error; when the
+ * throw-exception flag (SetLockOrderDebugThrowException) is set, it throws that
+ * logic_error. Both initialize to false; the DEBUG_LOCKORDER unit test toggles
+ * them (throw on, abort off) to exercise the detector without aborting the
+ * process. Exposed as functions, not externs, so this header stays stateless.
  */
-extern bool g_debug_lockorder_abort;
-extern bool g_debug_lockorder_throw_exception;
+bool GetLockOrderDebugAbort();
+void SetLockOrderDebugAbort(bool enable);
+bool GetLockOrderDebugThrowException();
+void SetLockOrderDebugThrowException(bool enable);
 #else
 inline void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry = false) {}
 inline void LeaveCritical() {}

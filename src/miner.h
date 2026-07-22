@@ -45,6 +45,15 @@ extern std::atomic<int> g_stakelimit_height;
 // It will be converted to Halfords in GetNumberOfStakeOutputs by multiplying by COIN.
 static const int64_t MIN_STAKE_SPLIT_VALUE_GRC = 800;
 
+//! Whether the development-build staking cripple is active. When true,
+//! ThreadStakeMiner refuses to stake and CommitTransaction refuses
+//! reward-bearing sends: a development build disables all staking unless the
+//! hidden `devbuild=override` setting is passed. State lives in miner.cpp;
+//! extracted from the former util.h fDevbuildCripple global so util.h is
+//! stateless. Set from init.
+bool GetDevbuildCripple();
+void SetDevbuildCripple(bool crippled);
+
 void SplitCoinStakeOutput(CMutableTransaction& mtxCoinstake, CBlock &blocknew, int64_t &nReward,
                           bool &fEnableStakeSplit, bool &fEnableSideStaking,
                           int64_t &nMinStakeSplitValue, double &dEfficiency) EXCLUSIVE_LOCKS_REQUIRED(cs_main);

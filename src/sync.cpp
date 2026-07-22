@@ -88,6 +88,15 @@ LockData& GetLockData() {
     return lock_data;
 }
 
+namespace {
+// Lock-order debugging flags, extracted from the former sync.h externs so the
+// header carries only the (stateless) lock primitives and macros. Defined ahead
+// of their in-file readers below; toggled from unit tests through the
+// Get/Set accessors (defined at the bottom of the DEBUG_LOCKORDER block).
+bool g_debug_lockorder_abort = false;
+bool g_debug_lockorder_throw_exception = false;
+} // namespace
+
 static void potential_deadlock_detected(const LockPair& mismatch, const LockStack& s1, const LockStack& s2)
 {
     // Identify the two conflicting locks by name. Try s2 (current stack) first,
@@ -297,7 +306,9 @@ bool LockStackEmpty()
     return it->second.empty();
 }
 
-bool g_debug_lockorder_abort = false;
-bool g_debug_lockorder_throw_exception = false;
+bool GetLockOrderDebugAbort() { return g_debug_lockorder_abort; }
+void SetLockOrderDebugAbort(bool enable) { g_debug_lockorder_abort = enable; }
+bool GetLockOrderDebugThrowException() { return g_debug_lockorder_throw_exception; }
+void SetLockOrderDebugThrowException(bool enable) { g_debug_lockorder_throw_exception = enable; }
 
 #endif /* DEBUG_LOCKORDER */

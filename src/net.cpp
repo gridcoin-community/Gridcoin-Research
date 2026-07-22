@@ -55,6 +55,12 @@ void ThreadDNSAddressSeed2(void* parg);
 //
 // Global state variables
 //
+// -listen=0 disables inbound P2P. Extracted from the former util.h fNoListen
+// global (all readers are net / net_processing); set once from init.
+static bool fNoListen = false;
+bool IsListenDisabled() { return fNoListen; }
+void SetListenDisabled(bool disabled) { fNoListen = disabled; }
+
 bool fDiscover = true;
 ServiceFlags nLocalServices = NODE_NETWORK;
 CCriticalSection cs_mapLocalHost;
@@ -122,7 +128,7 @@ void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd)
 // find 'best' local address for a particular peer
 bool GetLocal(CService& addr, const CNetAddr *paddrPeer)
 {
-    if (fNoListen)
+    if (IsListenDisabled())
         return false;
 
     int nBestScore = -1;
@@ -180,7 +186,7 @@ bool IsPeerAddrLocalGood(CNode *pnode)
 // pushes our own address to a peer
 void AdvertiseLocal(CNode *pnode)
 {
-    if (!fNoListen && pnode->fSuccessfullyConnected)
+    if (!IsListenDisabled() && pnode->fSuccessfullyConnected)
     {
         CAddress addrLocal = GetLocalAddress(&pnode->addr);
 
@@ -1644,7 +1650,7 @@ void CConnman::ThreadOpenAddedConnections2()
         LogPrint(BCLog::LogFlags::NET, "INFO: %s: addnode %s.", __func__, strAddNode);
 
         vector<CService> vservNode(0);
-        if(Lookup(strAddNode.c_str(), vservNode, Params().GetDefaultPort(), fNameLookup, 0))
+        if(Lookup(strAddNode.c_str(), vservNode, Params().GetDefaultPort(), GetNameLookup(), 0))
         {
             vservAddressesToAdd.push_back(vservNode);
             {
@@ -1658,7 +1664,7 @@ void CConnman::ThreadOpenAddedConnections2()
     {
         vector<vector<CService> > vservConnectAddresses = vservAddressesToAdd;
         // Attempt to connect to each IP for each addnode entry until at least one is successful per addnode entry
-        // (keeping in mind that addnode entries can have many IPs if fNameLookup)
+        // (keeping in mind that addnode entries can have many IPs if GetNameLookup())
         {
             LOCK(m_nodes_mutex);
             for (auto const& pnode : m_nodes)

@@ -23,8 +23,17 @@ using namespace std;
 static proxyType proxyInfo[NET_MAX];
 static CService nameProxy;
 static CCriticalSection cs_proxyInfos;
-int nConnectTimeout = 5000;
-bool fNameLookup = false;
+// Extracted from the former netbase.h externs so the header carries only
+// stateless declarations; set once from init (-timeout / -dns) and otherwise
+// read-only. Internal readers below use these directly; external callers go
+// through the accessors.
+static int nConnectTimeout = 5000;
+static bool fNameLookup = false;
+
+int GetConnectTimeout() { return nConnectTimeout; }
+void SetConnectTimeout(int timeout) { nConnectTimeout = timeout; }
+bool GetNameLookup() { return fNameLookup; }
+void SetNameLookup(bool enable) { fNameLookup = enable; }
 
 enum Network ParseNetwork(std::string net) {
     net = ToLower(net);
