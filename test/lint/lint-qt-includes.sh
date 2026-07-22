@@ -42,7 +42,6 @@ src/qt/bitcoin.cpp:validation.h
 src/qt/bitcoingui.cpp:init.h
 src/qt/diagnosticsdialog.h:wallet/diagnose.h
 src/qt/qtipcserver.cpp:node/ui_interface.h
-src/qt/researcher/researcherwizardpoolpage.cpp:key.h
 src/qt/upgradeqt.cpp:gridcoin/upgrade.h
 src/qt/voting/polltab.h:gridcoin/voting/filter.h
 src/qt/voting/polltablemodel.h:gridcoin/voting/filter.h
@@ -51,7 +50,6 @@ src/qt/voting/pollwizarddetailspage.cpp:main.h
 src/qt/voting/votingmodel.cpp:gridcoin/voting/poll.h
 src/qt/voting/votingmodel.h:gridcoin/voting/filter.h
 src/qt/voting/votingmodel.h:gridcoin/voting/poll.h
-src/qt/winshutdownmonitor.cpp:init.h
 "
 
 EXIT_CODE=0

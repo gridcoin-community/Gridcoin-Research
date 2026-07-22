@@ -274,6 +274,23 @@ public:
         return true;
     }
 
+    bool getNewReceiveAddress(const std::string& label, std::string& address_out) override
+    {
+        // fAllowReuse=false to match the researcher pool page's former
+        // getKeyFromPool(..., false) call: a deliberately fresh receive key.
+        CPubKey new_key;
+        if (!m_wallet->GetKeyFromPool(new_key, false)) {
+            return false;
+        }
+
+        if (!label.empty()) {
+            m_wallet->SetAddressBookName(new_key.GetID(), label);
+        }
+
+        address_out = EncodeDestination(new_key.GetID());
+        return true;
+    }
+
     std::vector<std::string> getUnbookedReceiveAddresses() override
     {
         std::vector<std::string> result;

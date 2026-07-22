@@ -174,6 +174,11 @@ public:
     //! Whether the node runs on testnet.
     virtual bool isTestNet() = 0;
 
+    //! Request that the node begin shutting down (the GUI->core direction, e.g.
+    //! a Windows WM_QUERYENDSESSION). Wraps the core StartShutdown(); in the
+    //! monolith this brings the whole app down, matching the prior direct call.
+    virtual void startShutdown() = 0;
+
     //! Run the blocking GitHub "latest release" check (the read-only half of
     //! GRC::Upgrade) and return the result as a value. Callers run this off the
     //! GUI thread -- it does a libcurl GET with up to a 10 s connect timeout.

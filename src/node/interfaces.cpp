@@ -109,6 +109,8 @@ public:
 
     bool isTestNet() override { return OnTestnet(); }
 
+    void startShutdown() override { StartShutdown(); }
+
     LatestVersionInfo checkForLatestUpdate() override
     {
         LatestVersionInfo info;

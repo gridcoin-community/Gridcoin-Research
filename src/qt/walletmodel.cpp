@@ -538,6 +538,15 @@ bool WalletModel::getKeyFromPool(CPubKey& out_public_key, const std::string& lab
     return m_wallet.getKeyFromPool(out_public_key, label);
 }
 
+QString WalletModel::getNewReceiveAddress(const QString& label)
+{
+    std::string address;
+    if (!m_wallet.getNewReceiveAddress(label.toStdString(), address)) {
+        return QString();
+    }
+    return QString::fromStdString(address);
+}
+
 // returns value snapshots of the given outpoints (unknown or conflicted
 // outpoints are skipped)
 std::vector<interfaces::WalletOutput> WalletModel::getOutputs(const std::vector<COutPoint>& vOutpoints) const
