@@ -119,6 +119,19 @@ std::unique_ptr<const CChainParams> CreateChainParams(const std::string& chain);
 const CChainParams &Params();
 
 /**
+ * Whether the currently selected chain is the test network. Derived from the
+ * active chain params -- the single source of network identity, selected once
+ * via SelectParams() from the -testnet/-chain arg, before AppInit2 runs. This
+ * replaces the former fTestNet global: core code queries the network through
+ * this, and the GUI queries it through interfaces::Node::isTestNet(), whose
+ * implementation also calls this.
+ */
+inline bool OnTestnet()
+{
+    return Params().NetworkIDString() == CBaseChainParams::TESTNET;
+}
+
+/**
  * Sets the params returned by Params() to those for the given chain name.
  * @throws std::runtime_error when the chain is not supported.
  */
@@ -253,18 +266,18 @@ inline bool IsProjectV4Enabled(int nHeight)
 
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
-    return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
+    return (OnTestnet() ? 86400 : (nHeight > 364500) ? 86400 : 43200);
 }
 
 inline int GetOrigNewbieSnapshotFixHeight()
 {
     // This is the original hard fork point for the newbie accrual fix that didn't work.
-    return fTestNet ? 1393000 : 2104000;
+    return OnTestnet() ? 1393000 : 2104000;
 }
 
 inline int GetNewbieSnapshotFixHeight()
 {
-    return fTestNet ? 1480000 : 2197000;
+    return OnTestnet() ? 1480000 : 2197000;
 }
 
 #endif // BITCOIN_CHAINPARAMS_H

@@ -18,12 +18,6 @@
 #include <limits>
 #include <string>
 
-extern bool fTestNet;
-static inline unsigned short GetDefaultPort(const bool testnet = fTestNet)
-{
-    return testnet ? 32748 : 32749;
-}
-
 
 /** Message header.
  * (4) message start.

@@ -31,7 +31,6 @@ bool fPrintToConsole = false;
 bool fRequestShutdown = false;
 std::atomic<bool> fShutdown = false;
 bool fCommandLine = false;
-bool fTestNet = false;
 bool fNoListen = false;
 bool fLogTimestamps = false;
 CMedianFilter<int64_t> vTimeOffsets(200,0);

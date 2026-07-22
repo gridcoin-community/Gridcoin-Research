@@ -4805,7 +4805,7 @@ UniValue getblockchaininfo(const UniValue& params)
     diff.pushKV("current", GRC::GetCurrentDifficulty());
     diff.pushKV("target", GRC::GetTargetDifficulty());
     res.pushKV("difficulty", diff);
-    res.pushKV("testnet", fTestNet);
+    res.pushKV("testnet", OnTestnet());
     res.pushKV("errors", GetWarnings("statusbar"));
 
     return res;
@@ -5183,7 +5183,7 @@ UniValue createmrcrequest(const UniValue& params) {
     }
 
     if (params.size() > 1) {
-        force = params[1].get_bool() && fTestNet;
+        force = params[1].get_bool() && OnTestnet();
     }
 
     if (params.size() > 2) {

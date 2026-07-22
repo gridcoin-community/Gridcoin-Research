@@ -3,7 +3,15 @@
 #include "walletmodel.h"
 #include "bitcoinunits.h"
 #include "util.h"
-#include "protocol.h"
+// GUI-process-local network identity: GetAutoStartupArguments() must decide the
+// autostart shortcut suffix / relaunch args from the network THIS GUI process
+// selected on its own command line. In the separated (multiprocess) build there
+// is no core process yet to answer a Node::isTestNet() call -- resolving the
+// GUI's own -testnet/-chain arg locally is precisely what tells the GUI which
+// core (mainnet vs testnet) to connect to. So this one file reads OnTestnet()
+// (the GUI's own SelectParams() result) directly; documented exception in
+// test/lint/lint-qt-includes.sh.
+#include "chainparams.h"
 #include "clientversion.h"
 #include <codecvt>
 
@@ -477,7 +485,7 @@ AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
 
     result.arguments = {};
 
-    if (fTestNet)
+    if (OnTestnet())
     {
         result.link_name_suffix += "-testnet";
         result.arguments = "-testnet";

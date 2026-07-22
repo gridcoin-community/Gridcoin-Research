@@ -83,7 +83,6 @@ extern bool fPrintToConsole;
 extern bool fRequestShutdown;
 extern std::atomic<bool> fShutdown;
 extern bool fCommandLine;
-extern bool fTestNet;
 extern bool fNoListen;
 extern bool fLogTimestamps;
 extern bool fReopenDebugLog;

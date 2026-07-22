@@ -1254,7 +1254,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     mempool.SetMaxSize(static_cast<size_t>(nMaxMempoolMB) * 1000 * 1000);
 
     nDerivationMethodIndex = 0;
-    fTestNet = gArgs.GetBoolArg("-testnet");
 
     if (gArgs.GetArgs("-bind").size()) {
         // when specifying an explicit binding address, you want to listen on it
@@ -1417,7 +1416,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     std::ostringstream strErrors;
 
     fDevbuildCripple = false;
-    if ((CLIENT_VERSION_BUILD != 0) && !fTestNet)
+    if ((CLIENT_VERSION_BUILD != 0) && !OnTestnet())
     {
         fDevbuildCripple = true;
         if ((gArgs.GetArg("-devbuild", "") == "override"))

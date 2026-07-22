@@ -694,7 +694,7 @@ bool BlockRewardRules::CheckResearchReward(std::string& error_out) const EXCLUSI
 
     // Testnet v9 exception: some blocks had bad interest claims masked by
     // short 10-block-span pending accrual.
-    if (fTestNet && m_block_version <= 9) {
+    if (OnTestnet() && m_block_version <= 9) {
         std::string dummy;
         if (!CheckReward(0, out_stake_owed, 0, 0, 0, 0, dummy)) {
             return true;
@@ -747,7 +747,7 @@ bool BlockRewardRules::CheckBeaconSignature(std::string& error_out) const EXCLUS
     // Mainnet declares block exceptions for this problem. To avoid declaring exceptions for the 55 testnet
     // blocks, the following check ignores beaconalt verification failure for the range of heights that include
     // these blocks:
-    if (fTestNet
+    if (OnTestnet()
         && (m_pindex->nHeight >= 495352 && m_pindex->nHeight <= 600876))
     {
         return true;

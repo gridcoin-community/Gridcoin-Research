@@ -418,6 +418,11 @@ qint64 OptionsModel::getReserveBalance()
     return sat;
 }
 
+bool OptionsModel::isTestNet()
+{
+    return m_node.isTestNet();
+}
+
 bool OptionsModel::getCoinControlFeatures()
 {
     return fCoinControlFeatures;

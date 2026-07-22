@@ -124,8 +124,6 @@ OptionsDialog::OptionsDialog(QWidget* parent)
     /** setup/change UI elements when poll expiry notification time window is valid/invalid */
     connect(this, &OptionsDialog::pollExpireNotifyValid, this, &OptionsDialog::handlePollExpireNotifyValid);
 
-    if (fTestNet) ui->disableUpdateCheck->setHidden(true);
-
     ui->gridcoinAtStartupMinimised->setHidden(!ui->gridcoinAtStartup->isChecked());
     ui->limitTxnDisplayDateEdit->setHidden(!ui->limitTxnDisplayCheckBox->isChecked());
 
@@ -161,6 +159,14 @@ void OptionsDialog::setModel(OptionsModel *model)
     if(model)
     {
         connect(model, &OptionsModel::displayUnitChanged, this, &OptionsDialog::updateDisplayUnit);
+
+        // Hide the update-check option on testnet. Read testnet status through
+        // the model's node interface (never the raw fTestNet global), and do it
+        // here rather than in the constructor because the model -- and thus the
+        // node -- is only available once it is set.
+        if (model->isTestNet()) {
+            ui->disableUpdateCheck->setHidden(true);
+        }
 
         mapper->setModel(model);
         setMapper();

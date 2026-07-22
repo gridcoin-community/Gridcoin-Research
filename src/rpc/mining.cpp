@@ -185,7 +185,7 @@ UniValue getstakinginfo(const UniValue& params)
     obj.pushKV("errors",        GetWarnings("statusbar"));
     obj.pushKV("pooledtx",      (uint64_t)mempool.size());
 
-    obj.pushKV("testnet",       fTestNet);
+    obj.pushKV("testnet",       OnTestnet());
 
     const GRC::MiningId mining_id = GRC::Researcher::Get()->Id();
     obj.pushKV("CPID", mining_id.ToString());

@@ -295,7 +295,7 @@ public:
         // Total peer count via the CConnman node-access API (issue #2558 PR 9a).
         m_connections = g_connman ? g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
 
-        size_t minimum_connections_to_stake = fTestNet ? 1 : 3;
+        size_t minimum_connections_to_stake = OnTestnet() ? 1 : 3;
         std::string s_connections = ToString(m_connections);
 
         if (m_connections <= 7 && m_connections >= minimum_connections_to_stake) {
@@ -684,7 +684,7 @@ public:
         {
             LOCK(cs_main);
 
-            scale_factor = fTestNet ? 0.1 : 1.0;
+            scale_factor = OnTestnet() ? 0.1 : 1.0;
 
             diff = GRC::GetAverageDifficulty(80);
         }

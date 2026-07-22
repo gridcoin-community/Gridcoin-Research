@@ -307,7 +307,7 @@ public:
     static bool Participating(const std::string& grc_address, const int64_t time)
     {
         // This hash is approximately 25% of the MD5 range (90% for testnet):
-        static const arith_uint256 reference_hash = fTestNet
+        static const arith_uint256 reference_hash = OnTestnet()
             ? arith_uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
             : arith_uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b");
 
