@@ -106,8 +106,12 @@ public:
         // cs_KeyStore internally and fWalletUnlockStakingOnly is atomic -- so this
         // deliberately does NOT take cs_wallet: getEncryptionStatus() is polled
         // from the GUI thread and must not stall behind a long cs_wallet holder
-        // (the O(N) updateWallet path). crypted is read before locked so the pair
-        // can't momentarily read crypted-but-unlocked during a concurrent encrypt.
+        // (the O(N) updateWallet path). Because the reads are unlocked, a
+        // concurrent lock/unlock/encrypt can be caught mid-transition; that is
+        // harmless because every (crypted, locked) pair is a valid encryption
+        // status (crypted && !locked is simply Unlocked -- the state EncryptWallet
+        // itself ends in), so the snapshot is always self-consistent and any
+        // transient value corrects on the next poll.
         const bool crypted = m_wallet->IsCrypted();
         const bool locked = m_wallet->IsLocked();
         const bool staking_only_flag = fWalletUnlockStakingOnly;
