@@ -231,6 +231,14 @@ class P2PInterface(P2PConnection):
     def peer_connect_send_version(self):
         # Send a version message on connection.
         vt = msg_version()
+        # msg_version stamps nTime from the real clock; a test can pre-set
+        # `version_time` on the peer to stamp a specific time instead. The
+        # daemon disconnects any peer whose version.nTime is more than 480
+        # seconds from its adjusted time, and under mock-time lockstep the
+        # node's clock legitimately runs ahead of the real clock — so
+        # add_p2p_connection_spaced stamps the target node's own clock here.
+        if getattr(self, "version_time", None) is not None:
+            vt.nTime = self.version_time
         vt.nServices = NODE_NETWORK
         vt.addrTo.ip = self.dstaddr
         vt.addrTo.port = self.dstport

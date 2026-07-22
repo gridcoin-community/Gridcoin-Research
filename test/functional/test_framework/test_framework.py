@@ -48,6 +48,13 @@ TEST_EXIT_SKIPPED = 77
 
 TMPDIR_PREFIX = "gridcoin_func_test_"
 
+# Mirrors STAKE_TIMESTAMP_MASK in src/gridcoin/staking/kernel.h: proof-of-stake
+# masks coinstake timestamps down to (mask+1)-second slots — 16 seconds — and
+# the miner excludes mempool transactions with nTime > block.nTime, so block
+# times march in 16-second steps and can legitimately run ahead of the wall
+# clock. See advance_to_next_stake_slot() / sync_clocks().
+STAKE_TIMESTAMP_MASK = 15
+
 
 class SkipTest(Exception):
     """This exception is raised to skip a test"""
@@ -599,7 +606,26 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
     def connect_nodes(self, a, b):
         def connect_nodes_helper(from_connection, node_num):
             ip_port = "127.0.0.1:" + str(p2p_port(node_num))
-            from_connection.addnode(ip_port, "onetry")
+
+            # A "onetry" connect races the target node's P2P listener coming up:
+            # if that node's daemon is still binding its port when we get here,
+            # the connect is refused immediately and the daemon throws
+            # RPC_CLIENT_NODE_ALREADY_ADDED (-23) with "Node connection failed"
+            # (rpc/net.cpp). Under host saturation (seen intermittently on the
+            # Sanitizers CI job, where the SUT builds run slow) this is a
+            # transient startup race, not a real failure, so retry the onetry
+            # until it is accepted. A genuinely unreachable peer still surfaces:
+            # wait_until_helper raises once its timeout elapses.
+            def issue_onetry():
+                try:
+                    from_connection.addnode(ip_port, "onetry")
+                    return True
+                except JSONRPCException as e:
+                    if e.error['code'] == -23 and 'Node connection failed' in e.error['message']:
+                        return False
+                    raise
+            wait_until_helper(issue_onetry)
+
             # Poll until the version handshake has produced a peer with a
             # negotiated protocol version. Gridcoin's getpeerinfo does not
             # expose Bitcoin Core's per-message byte counters (bytesrecv_per_msg),
@@ -671,6 +697,10 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         while time.time() <= stop_time:
             best_hash = [x.getbestblockhash() for x in rpc_connections]
             if best_hash.count(best_hash[0]) == len(rpc_connections):
+                # Everyone agrees on the tip; also bring every node's clock up
+                # to it, so nodes that merely synced the blocks do not stamp
+                # their next transactions behind the chain (issue #3165).
+                self.sync_clocks(rpc_connections)
                 return
             # Check that each peer has at least one connection
             assert (all([len(x.getpeerinfo()) for x in rpc_connections]))
@@ -710,6 +740,98 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
     def wait_until(self, test_function, timeout=60):
         return wait_until_helper(test_function, timeout=timeout, timeout_factor=self.options.timeout_factor)
 
+    def sync_clocks(self, nodes=None):
+        """Advance every node's mock clock to its own chain tip's time.
+
+        Forward-only: a no-op for a node whose clock is not behind its tip,
+        and skipped for nodes that opted out via setmocktime(0). PR #3161's
+        generatetoaddress shadow keeps the MINING node's adjusted time in step
+        with the blocks it produces, but a node that merely syncs those blocks
+        over P2P keeps a lagging clock and stamps its next transactions behind
+        the chain, tripping the coinstake input-timestamp consensus rule
+        ("transaction timestamp earlier than input transaction") as an
+        intermittent -22 send failure (issue #3165). Called automatically from
+        sync_blocks once tips agree; also callable standalone — e.g. after
+        restart_node, which resets the daemon's mock clock while the tip may
+        still sit ahead of real time.
+
+        Nodes still at genesis are skipped: the genesis timestamp is in the
+        distant past (nothing to advance to), and getblock crashes the daemon
+        on the genesis block (blockToJSON; pre-existing bug, reported
+        separately)."""
+        for node in (nodes or self.nodes):
+            if node.getblockcount() == 0:
+                continue
+            node.advance_mocktime_to(node.getblock(node.getbestblockhash())['time'])
+
+    def advance_to_next_stake_slot(self, nodes=None):
+        """Advance every node's mock clock to the next 16-second coinstake slot
+        boundary and return that timestamp.
+
+        The miner excludes mempool transactions with nTime > block.nTime and
+        stamps blocks on STAKE_TIMESTAMP_MASK slot boundaries, so a transaction
+        sent mid-slot is only guaranteed into the next mined block once the
+        clock has crossed the next boundary. This replaces the old wall-clock
+        wait (time.sleep(16 - now % 16 + 1)), which stops working the moment
+        mock time engages. Every pending transaction was stamped <= now <
+        target, the target is itself slot-aligned, and the target is ahead of
+        every tip, so the next mined block — at the target slot or a later
+        miner retry slot — includes the pending transactions.
+
+        Lockstep assumption: a node that opted out via setmocktime(0) cannot
+        be advanced and is skipped with a warning; a block stamped more than
+        128 seconds past such a node's real clock would be rejected there."""
+        nodes = nodes or self.nodes
+        slot = STAKE_TIMESTAMP_MASK + 1
+        # Nodes at genesis contribute only their clock: the genesis timestamp
+        # is far in the past, and getblock crashes the daemon on the genesis
+        # block (blockToJSON; pre-existing bug, reported separately).
+        now = max(max(node.mock_now(),
+                      node.getblock(node.getbestblockhash())['time']
+                      if node.getblockcount() else 0)
+                  for node in nodes)
+        target = (now // slot + 1) * slot
+        for node in nodes:
+            if node._mocktime_off:
+                self.log.warning("advance_to_next_stake_slot: node%d opted out "
+                                 "of mock time; not advanced", node.index)
+                continue
+            node.advance_mocktime_to(target)
+        return target
+
+    def add_p2p_connection_spaced(self, node, peer, spacing=6):
+        """add_p2p_connection with the daemon's inbound rate limit respected:
+        at most one inbound connection per 5 seconds per IP (net.cpp
+        AcceptConnection), and every scripted peer is 127.0.0.1. The limit
+        compares integer-second deltas of GetAdjustedTime() — mock-affected —
+        so the spacing is applied to the mock clocks (of ALL nodes, keeping
+        lockstep); spacing must be >= 6 because advancing exactly 5 can land
+        two connects in the same second boundary (delta 4) and get the second
+        one dropped and misbehavior-scored.
+
+        The peer's version handshake is stamped from the node's own clock:
+        the daemon disconnects a peer whose version.nTime is more than 480
+        seconds from its adjusted time, and the mock clock legitimately runs
+        ahead of the real clock the default stamp uses.
+
+        Fallback when the target node opted out via setmocktime(0): sleep on
+        the REAL clock — but long enough for real time to clear the highest
+        mock time ever pinned (the daemon's rate-limit map may hold an accept
+        timestamp from when the clock ran ahead), not just `spacing` seconds."""
+        # Enforce the >= 6 constraint the docstring relies on: a smaller spacing
+        # can leave two connects in the same integer-second boundary (delta 4),
+        # tripping the daemon's inbound rate limit and reintroducing the exact
+        # intermittent connect-drop this helper exists to prevent.
+        assert spacing >= 6, "add_p2p_connection_spaced spacing must be >= 6 (daemon 5s inbound rate limit)"
+        if node._mocktime_off:
+            time.sleep(max(spacing, node._mocktime_high + spacing - int(time.time())))
+        else:
+            target = max(n.mock_now() for n in self.nodes) + spacing
+            for n in self.nodes:
+                n.advance_mocktime_to(target)
+        peer.version_time = node.mock_now()
+        return node.add_p2p_connection(peer)
+
     def grow_utxo_universe(self, funder, count=48, *, agree_with=None, confirm_on=None):
         """Fan one mature premine UTXO on `funder` into `count` ordinary,
         consensus-agreed outputs so a test's mature-UTXO funding scan never runs
@@ -746,54 +868,104 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         if agree_with is not None:
             self.sync_blocks()
 
-        # Pick a mature source UTXO unspent in every consensus view.
-        src = None
-        for cand in funder.listunspent(11):
-            # Amount math stays in Decimal end to end (authproxy parses amounts
-            # as Decimal), exact at 1e-8 (satoshi) granularity, and is handed
-            # straight to createrawtransaction: a Decimal serializes to a JSON
-            # string, which AmountFromValue now parses exactly to the satoshi
-            # (issue #3148). No float() round-trip, so no double-rounding.
-            amount = cand["amount"] - Decimal("1.0")  # ~1 GRC fee
-            if amount <= 0:
+        # Lockstep removes the clock-skew failure modes but not the supply
+        # one: kernel selection is random per run, so the staker can have
+        # churned every mature output right when we scan (empty scan), and the
+        # confirm block's own coinstake can race the very source the split
+        # spends. Both are absorbed by a bounded retry; final failure keeps
+        # the original diagnostic (plus the last miner error, if any).
+        tried = set()
+        last_error = None
+        for _ in range(3):
+            # Pick a mature source UTXO unspent in every consensus view.
+            src = None
+            for cand in funder.listunspent(11):
+                if (cand["txid"], cand["vout"]) in tried:
+                    continue
+                # Amount math stays in Decimal end to end (authproxy parses
+                # amounts as Decimal), exact at 1e-8 (satoshi) granularity, and
+                # is handed straight to createrawtransaction: a Decimal
+                # serializes to a JSON string, which AmountFromValue now parses
+                # exactly to the satoshi (issue #3148). No float() round-trip,
+                # so no double-rounding.
+                amount = cand["amount"] - Decimal("1.0")  # ~1 GRC fee
+                if amount <= 0:
+                    continue
+                probe = funder.signrawtransactionwithwallet(
+                    funder.createrawtransaction(
+                        [{"txid": cand["txid"], "vout": cand["vout"]}],
+                        {funder.getnewaddress(): amount}))
+                if not probe.get("complete"):
+                    continue
+                if not funder.testmempoolaccept([probe["hex"]])[0]["allowed"]:
+                    continue
+                if agree_with is not None and not agree_with.testmempoolaccept([probe["hex"]])[0]["allowed"]:
+                    continue
+                src = cand
+                break
+
+            if src is None:
+                # Supply starved: mine one block on funder to mature another
+                # coinstake into listunspent(11) range, then rescan. The refill
+                # mine can itself fail while starved ("CreateCoinStake: no
+                # stake found") — treat that as a failed attempt, not a crash.
+                try:
+                    self.advance_to_next_stake_slot()
+                    funder.generatetoaddress(1, funder.getnewaddress())
+                    if agree_with is not None:
+                        self.sync_blocks()
+                except JSONRPCException as e:
+                    last_error = e
                 continue
-            probe = funder.signrawtransactionwithwallet(
+            tried.add((src["txid"], src["vout"]))
+
+            # ROUND_DOWN to the satoshi so count * per_out never exceeds the
+            # input (rounding up could make the outputs sum > the source,
+            # invalidating the tx). Decimal at 1e-8 is the exact int64_t
+            # CAmount in GRC units.
+            per_out = ((src["amount"] - Decimal("1.0")) / count).quantize(
+                Decimal("0.00000001"), rounding=ROUND_DOWN)  # ~1 GRC total fee
+            assert per_out > 0, "source UTXO too small to fan out into `count` outputs"
+            outputs = {funder.getnewaddress(): per_out for _ in range(count)}
+            signed = funder.signrawtransactionwithwallet(
                 funder.createrawtransaction(
-                    [{"txid": cand["txid"], "vout": cand["vout"]}],
-                    {funder.getnewaddress(): amount}))
-            if not probe.get("complete"):
-                continue
-            if not funder.testmempoolaccept([probe["hex"]])[0]["allowed"]:
-                continue
-            if agree_with is not None and not agree_with.testmempoolaccept([probe["hex"]])[0]["allowed"]:
-                continue
-            src = cand
-            break
-        assert src is not None, "no spendable consensus-unspent UTXO to seed the universe"
+                    [{"txid": src["txid"], "vout": src["vout"]}], outputs))
+            assert signed.get("complete"), "failed to sign the universe split transaction"
+            split_txid = funder.sendrawtransaction(signed["hex"])
 
-        # ROUND_DOWN to the satoshi so count * per_out never exceeds the input
-        # (rounding up could make the outputs sum > the source, invalidating the
-        # tx). Decimal at 1e-8 is the exact int64_t CAmount in GRC units.
-        per_out = ((src["amount"] - Decimal("1.0")) / count).quantize(
-            Decimal("0.00000001"), rounding=ROUND_DOWN)  # ~1 GRC total fee
-        assert per_out > 0, "source UTXO too small to fan out into `count` outputs"
-        outputs = {funder.getnewaddress(): per_out for _ in range(count)}
-        signed = funder.signrawtransactionwithwallet(
-            funder.createrawtransaction(
-                [{"txid": src["txid"], "vout": src["vout"]}], outputs))
-        assert signed.get("complete"), "failed to sign the universe split transaction"
-        split_txid = funder.sendrawtransaction(signed["hex"])
+            # Confirm in a single block. If confirming on a different node,
+            # wait for the split tx to propagate there first. Advance to the
+            # next 16-second STAKE_TIMESTAMP_MASK slot either way: the miner
+            # excludes txs with nTime > block.nTime, so mining too early would
+            # leave the split out.
+            if confirm_on is not funder:
+                self.wait_until(lambda: split_txid in confirm_on.getrawmempool())
+            self.advance_to_next_stake_slot()
+            try:
+                confirm_on.generatetoaddress(1, confirm_on.getnewaddress())
+            except JSONRPCException as e:
+                # The confirm block's coinstake can pick the very UTXO the
+                # pending split spends (the wallet does not track raw spends):
+                # the block then double-spends its own transaction and is
+                # rejected — "ConnectInputs(): prev tx already used" — which
+                # surfaces here as an RPC error after the miner's retries.
+                # Retry with a different source.
+                last_error = e
+                continue
+            if agree_with is not None:
+                self.sync_blocks()
 
-        # Confirm in a single block. If confirming on a different node, wait for
-        # the split tx to propagate there first. Wait for the next 16-second
-        # STAKE_TIMESTAMP_MASK boundary either way: the miner excludes txs with
-        # nTime > block.nTime, so mining too early would leave the split out.
-        if confirm_on is not funder:
-            self.wait_until(lambda: split_txid in confirm_on.getrawmempool())
-        time.sleep(16 - (int(time.time()) % 16) + 1)
-        confirm_on.generatetoaddress(1, confirm_on.getnewaddress())
-        if agree_with is not None:
-            self.sync_blocks()
+            # The coinstake race can also confirm quietly AGAINST the split
+            # (the split simply vanishes as a double-spend loser), so declare
+            # success only once the split itself is buried.
+            try:
+                if funder.getrawtransaction(split_txid, True).get("confirmations", 0) >= 1:
+                    return
+            except JSONRPCException:
+                pass
+        raise AssertionError(
+            "no spendable consensus-unspent UTXO to seed the universe"
+            + (" (last mining error: %s)" % (last_error,) if last_error else ""))
 
     # Private helper methods. These should not be accessed by the subclass test scripts.
 

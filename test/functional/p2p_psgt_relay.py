@@ -31,6 +31,7 @@ message and we assert, in order:
 import time
 from decimal import Decimal
 
+from test_framework.authproxy import JSONRPCException
 from test_framework.messages import (
     CInv,
     MSG_PSGT,
@@ -76,29 +77,23 @@ class P2PPsgtRelayTest(GridcoinTestFramework):
         self.extra_args = [["-staking=0", "-blockv15height=0"], ["-staking=0", "-blockv15height=0"]]
 
     def confirm_funding(self, txid):
-        """Confirm a just-sent funding transaction. PoS block timestamps are
-        masked down to 16-second boundaries (STAKE_TIMESTAMP_MASK) and the
-        miner excludes transactions with nTime > block.nTime, so wait for the
-        next boundary before mining the confirmation block. Returns False if
-        the transaction vanished instead (double-spent by the staker's own
-        coinstake -- the wallet does not track raw spends)."""
+        """Confirm a just-sent funding transaction. The miner excludes
+        transactions with nTime > block.nTime, so advance every node's mock
+        clock to the next 16-second STAKE_TIMESTAMP_MASK slot before mining
+        the confirmation block. Returns False if the funding lost a race with
+        the staker's own coinstake instead (the wallet does not track raw
+        spends, so CreateCoinStake can pick the funding's input): either the
+        coinstake confirmed AGAINST it (the funding vanishes as a double-spend
+        loser) or the miner built a self-conflicting block containing both --
+        rejected as "ConnectInputs(): prev tx already used" (#3165), which
+        surfaces here as an RPC error after the miner's retries."""
         node0 = self.nodes[0]
-        time.sleep(16 - (int(time.time()) % 16) + 1)
-        node0.generatetoaddress(1, node0.getnewaddress())
+        self.advance_to_next_stake_slot()
         try:
+            node0.generatetoaddress(1, node0.getnewaddress())
             return node0.getrawtransaction(txid, True).get("confirmations", 0) >= 1
-        except Exception:
+        except JSONRPCException:
             return False
-
-    def add_spaced_p2p(self, node, peer):
-        """add_p2p_connection with the daemon's inbound rate limit respected:
-        at most one inbound per 5 seconds per IP (net.cpp AcceptConnection),
-        and every scripted peer here is 127.0.0.1. The limit compares integer
-        second deltas from GetAdjustedTime(), so sleep a full 6 s -- sleeping
-        exactly 5 can land two connects in the same second boundary (delta 4)
-        and get the second one dropped / misbehavior-scored."""
-        time.sleep(6)
-        return node.add_p2p_connection(peer)
 
     def setup_network(self):
         # Bring the nodes up without the base-class createwallet path (the
@@ -131,10 +126,15 @@ class P2PPsgtRelayTest(GridcoinTestFramework):
         for _ in range(5):
             # 1 confirmation: grow_utxo_universe's split outputs are ordinary
             # outputs, spendable immediately; confirm_funding + this retry loop
-            # still absorb the staker racing us for a chosen output.
-            candidates = [u for u in node0.listunspent(1)
-                          if (u["txid"], u["vout"]) not in tried
-                          and u["amount"] - 1 > Decimal("0.01")]
+            # still absorb the staker racing us for a chosen output. Prefer the
+            # SMALLEST candidate: the staker's kernel search is weight-driven,
+            # so funding from a small split output rather than a huge premine
+            # output keeps the funding input out of CreateCoinStake's likeliest
+            # picks and shrinks the race window to marginal.
+            candidates = sorted((u for u in node0.listunspent(1)
+                                 if (u["txid"], u["vout"]) not in tried
+                                 and u["amount"] - 1 > Decimal("0.01")),
+                                key=lambda u: u["amount"])
             assert candidates, "no mature UTXO left to fund the multisig"
             utxo = candidates[0]
             tried.add((utxo["txid"], utxo["vout"]))
@@ -182,9 +182,13 @@ class P2PPsgtRelayTest(GridcoinTestFramework):
         wire = self.make_partially_signed_psgt()
         revision = uint256_from_str(hash256(wire))
 
-        sender = node1.add_p2p_connection(P2PInterface())
-        watcher = self.add_spaced_p2p(node1, InvCollector())
-        old_peer = self.add_spaced_p2p(node1, OldVersionInvCollector())
+        # All scripted peers connect through the spaced helper: it paces the
+        # daemon's inbound rate limit on the mock clocks and stamps each
+        # version handshake from the node's own clock (which runs ahead of the
+        # real time a plain connect would stamp).
+        sender = self.add_p2p_connection_spaced(node1, P2PInterface())
+        watcher = self.add_p2p_connection_spaced(node1, InvCollector())
+        old_peer = self.add_p2p_connection_spaced(node1, OldVersionInvCollector())
 
         # --- inject: node1 must validate, pool, and announce the revision ---
         sender.send_message(msg_psgt(wire))
@@ -199,7 +203,7 @@ class P2PPsgtRelayTest(GridcoinTestFramework):
 
         # --- daemon-to-daemon relay + connect-time push: node0 fetched the
         # PSGT from node1, and advertises it to fresh v15 peers on connect ---
-        late_peer = self.add_spaced_p2p(node0, InvCollector())
+        late_peer = self.add_p2p_connection_spaced(node0, InvCollector())
         late_peer.wait_until(lambda: revision in late_peer.psgt_invs)
         self.log.info("node0 pooled the PSGT and pushed it to a connecting peer")
 
@@ -217,7 +221,7 @@ class P2PPsgtRelayTest(GridcoinTestFramework):
         self.log.info("pre-PSGT protocol peer received no MSG_PSGT inventory")
 
         # --- invalid psgt messages: rejected without relay, node unfazed ---
-        bad_peer = self.add_spaced_p2p(node1, P2PInterface())
+        bad_peer = self.add_p2p_connection_spaced(node1, P2PInterface())
         announced_before = len(watcher.psgt_invs)
         bad_peer.send_message(msg_psgt(b"not a psgt"))
         corrupted = bytearray(wire)

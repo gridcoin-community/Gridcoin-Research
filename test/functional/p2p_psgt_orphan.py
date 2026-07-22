@@ -127,10 +127,19 @@ class P2PPsgtOrphanTest(GridcoinTestFramework):
         # longer knows the funding output -- exactly the relay-race condition.
         self.restart_node(0, self.extra_args[0])
         assert_equal(node0.getrawmempool(), [])
+        # The restart also reset the daemon's mock clock while the tip may sit
+        # ahead of real time (block times march in 16-second slots): re-pin the
+        # clock to the tip so the resubmitted funding transaction is not
+        # future-dated and the spaced connect below stays deterministic.
+        # (sync_blocks would do this, but node0 has no peers here.)
+        self.sync_clocks([node0])
 
         watcher = node0.add_p2p_connection(InvCollector())
-        time.sleep(6)  # inbound rate limit: 1 per 5s per IP (all 127.0.0.1)
-        sender = node0.add_p2p_connection(P2PInterface())
+        # Second connect through the spaced helper: the daemon's inbound rate
+        # limit (1 per 5s per IP, on mock-affected GetAdjustedTime) would
+        # otherwise drop it -- a real sleep no longer helps once the mock
+        # clock is pinned ahead of real time.
+        sender = self.add_p2p_connection_spaced(node0, P2PInterface())
 
         # --- inject the PSGT while the funding is unknown: held, not pooled ---
         sender.send_message(msg_psgt(wire))
