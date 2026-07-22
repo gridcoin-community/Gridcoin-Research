@@ -42,10 +42,10 @@ struct WalletBalances
 //! Wallet::getLockState).
 struct WalletLockState
 {
-    bool crypted = false;                   //!< IsCrypted(): the wallet has a passphrase.
-    bool locked = false;                    //!< IsLocked(): the keys are not in memory.
-    bool unlocked_for_staking_only = false; //!< Unlocked but restricted to staking.
-    bool staking_only_flag = false;         //!< Persisted staking-only unlock preference.
+    bool crypted{false};                   //!< IsCrypted(): the wallet has a passphrase.
+    bool locked{false};                    //!< IsLocked(): the keys are not in memory.
+    bool unlocked_for_staking_only{false}; //!< Unlocked but restricted to staking.
+    bool staking_only_flag{false};         //!< Persisted staking-only unlock preference.
 };
 
 //! Value snapshot of one unspent wallet output for the coin-control views.

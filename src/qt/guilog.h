@@ -77,18 +77,24 @@ void LogPrintf(const char* fmt, const Args&... args)
 
 //! Log a GUI error line and return false (mirror of the core error() helper), so
 //! it drops into a `return GUIError(...)` statement exactly like the core one.
-//! Prefixes "ERROR: " and logs unconditionally -- errors surface regardless of
-//! category filtering, matching core error() (the sink still no-ops when logging
-//! is off entirely). Kept a template (not a tfm::format macro) so the
-//! format-string lint can parse it, like LogPrintf. tfm::format is wrapped so a
-//! malformed format string logs an error rather than aborting the GUI.
+//! Prefixes "ERROR: " and is not category-gated -- errors surface whenever
+//! logging is enabled at all, matching core error(). The Enabled() check comes
+//! first (like LogPrintf) so a wholly-disabled logger skips the formatting work;
+//! this is output-neutral, since with no sink the line would be discarded anyway.
+//! Kept a template (not a tfm::format macro) so the format-string lint can parse
+//! it, like LogPrintf. tfm::format is wrapped so a malformed format string logs
+//! an error rather than aborting the GUI.
 template <typename... Args>
 bool Error(const char* fmt, const Args&... args)
 {
+    if (!Enabled()) {
+        return false;
+    }
+
     std::string log_msg;
     try {
         log_msg = tfm::format(fmt, args...);
-    } catch (tinyformat::format_error& e) {
+    } catch (const tinyformat::format_error& e) {
         log_msg = "Error \"" + std::string(e.what()) + "\" while formatting GUI error message: " + fmt;
     }
 
