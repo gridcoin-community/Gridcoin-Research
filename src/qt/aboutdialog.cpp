@@ -39,9 +39,12 @@ AboutDialog::AboutDialog(QWidget *parent) :
 
 void AboutDialog::setModel(ClientModel *model)
 {
+    // Set unconditionally so a teardown setModel(nullptr) clears the pointer
+    // rather than leaving it dangling at the previous model's node.
+    m_node = model ? &model->node() : nullptr;
+
     if(model)
     {
-        m_node = &model->node();
         ui->versionLabel->setText(model->formatFullVersion());
 
         // Wire the version-info / update-check button. Testnet status is read
@@ -74,6 +77,12 @@ void AboutDialog::on_buttonBox_accepted()
 
 void AboutDialog::handlePressVersionInfoButton()
 {
+    // No node (dialog shown before setModel(), or cleared at teardown): nothing
+    // to query. The captured pointer below must be non-null off the GUI thread.
+    if (!m_node) {
+        return;
+    }
+
     // CheckForLatestUpdate does a blocking libcurl GET of the GitHub release
     // JSON (up to a 10 s connect timeout). Run it off the GUI thread so a click
     // never freezes the UI. Guard against overlapping checks: a second click

@@ -11,11 +11,12 @@ namespace Ui {
 class UpdateDialog;
 }
 
-//! GUI-local mirror of GRC::Upgrade::UpgradeType. The value is transported as a
-//! plain int across the About dialog's QtConcurrent boundary (aboutdialog.cpp
-//! stamps static_cast<int>(GRC::Upgrade::UpgradeType)), so this dialog need not
-//! include gridcoin/upgrade.h. The enumerator values MUST stay in sync with
-//! GRC::Upgrade::UpgradeType; aboutdialog.cpp static_asserts that they do.
+//! GUI-local mirror of GRC::Upgrade::UpgradeType. The value is carried as a plain
+//! int in interfaces::LatestVersionInfo::upgrade_type, which the About dialog
+//! obtains from interfaces::Node::checkForLatestUpdate() and passes here, so this
+//! dialog need not include gridcoin/upgrade.h. The enumerator values MUST stay in
+//! sync with GRC::Upgrade::UpgradeType; src/node/interfaces.cpp static_asserts
+//! that they do.
 enum class UpdateType {
     Unknown = 0,
     Leisure = 1,

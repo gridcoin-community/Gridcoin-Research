@@ -48,7 +48,11 @@ void UpdateDialog::setUpgradeType(int upgrade_type)
     case UpdateType::Leisure:
         ui->infoIcon->setPixmap(GRC::ScaleIcon(this, info_icon, 48));
         break;
-    case UpdateType::Unknown:
+    default:
+        // UpdateType::Unknown and any unexpected int (future enum value / corrupt
+        // input): show the unknown icon rather than leaving it unset. Unknown is
+        // handled here rather than as its own case so the switch keeps a default
+        // without tripping -Wcovered-switch-default.
         ui->infoIcon->setPixmap(GRC::ScaleIcon(this, unknown_icon, 48));
         break;
     }
