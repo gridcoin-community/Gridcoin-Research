@@ -79,13 +79,6 @@
 
 extern int GetDayOfYear(int64_t timestamp);
 
-extern bool fPrintToConsole;
-extern bool fCommandLine;
-extern bool fNoListen;
-extern bool fLogTimestamps;
-extern bool fReopenDebugLog;
-extern bool fDevbuildCripple;
-
 void LogException(std::exception* pex, const char* pszThread);
 void PrintException(std::exception* pex, const char* pszThread);
 void PrintExceptionContinue(std::exception* pex, const char* pszThread);

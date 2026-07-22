@@ -53,6 +53,12 @@ unsigned short GetListenPort();
 bool BindListenPort(const CService &bindAddr, std::string& strError=REF(std::string()));
 void StartNode(void* parg);
 bool StopNode();
+
+//! Whether inbound P2P listening is disabled (-listen=0). State lives in
+//! net.cpp; extracted from the former util.h fNoListen global so util.h is
+//! stateless. Set once from init.
+bool IsListenDisabled();
+void SetListenDisabled(bool disabled);
 // Declared below CNode (the EXCLUSIVE_LOCKS_REQUIRED annotation references
 // pnode->cs_vSend and needs the complete CNode type).
 void SocketSendData(CNode *pnode);

@@ -66,8 +66,14 @@ bool LockStackEmpty();
  * just logging information and throwing a logic_error. Defaults to true, and
  * set to false in DEBUG_LOCKORDER unit tests.
  */
-extern bool g_debug_lockorder_abort;
-extern bool g_debug_lockorder_throw_exception;
+// Test-only hooks for the lock-order debugging flags. The state lives in
+// sync.cpp; DEBUG_LOCKORDER unit tests toggle these to exercise the deadlock
+// detector without aborting the process. Kept as functions (not externs) so
+// this header stays stateless.
+bool GetLockOrderDebugAbort();
+void SetLockOrderDebugAbort(bool enable);
+bool GetLockOrderDebugThrowException();
+void SetLockOrderDebugThrowException(bool enable);
 #else
 inline void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry = false) {}
 inline void LeaveCritical() {}

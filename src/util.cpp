@@ -27,14 +27,7 @@
 
 using namespace std;
 
-bool fPrintToConsole = false;
-bool fCommandLine = false;
-bool fNoListen = false;
-bool fLogTimestamps = false;
 CMedianFilter<int64_t> vTimeOffsets(200,0);
-bool fReopenDebugLog = false;
-
-bool fDevbuildCripple;
 
 /** A map that contains all the currently held directory locks. After
  * successful locking, these will be held here until the global destructor

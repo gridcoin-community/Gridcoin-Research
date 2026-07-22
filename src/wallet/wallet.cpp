@@ -7,6 +7,7 @@
 #include <key_io.h>
 #include "txdb.h"
 #include "wallet/wallet.h"
+#include "miner.h" // For GetDevbuildCripple() (staking cripple gate).
 #include "wallet/walletdb.h"
 #include "crypter.h"
 #include "node/ui_interface.h"
@@ -3520,7 +3521,7 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
 // Call after CreateTransaction unless you want to abort
 bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 {
-    if(fDevbuildCripple)
+    if(GetDevbuildCripple())
     {
         return error("CommitTransaction(): Development build restrictions in effect");
     }

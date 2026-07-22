@@ -537,7 +537,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (!pfrom->fInbound)
         {
             // Advertise our address
-            if (!fNoListen && !IsInitialBlockDownload())
+            if (!IsListenDisabled() && !IsInitialBlockDownload())
             {
                 AdvertiseLocal(pfrom);
             }
@@ -1454,7 +1454,7 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
             // Periodically clear setAddrKnown to allow refresh broadcasts
             //pnode->setAddrKnown.clear();
             // Rebroadcast our address
-            if (!fNoListen)
+            if (!IsListenDisabled())
             {
                 AdvertiseLocal(pto);
                 pto->nNextRebroadcastTime = GetAdjustedTime() + 12*60*60 + GetRand(12*60*60);
