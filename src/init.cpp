@@ -335,9 +335,13 @@ static void HandleSIGTERM(int)
 
 static void HandleSIGHUP(int)
 {
-    // Ask the logger to reopen debug.log on the next write (log rotation). The
-    // flag is a std::atomic<bool>, so setting it from a signal handler is safe;
-    // this replaces the former fReopenDebugLog global, which only shadowed it.
+    // Ask the logger to reopen debug.log on the next write (log rotation).
+    // m_reopen_file is a std::atomic<bool>, and by the time any signal is
+    // delivered LogInstance() just returns the already-constructed logger, so
+    // this handler only flips an atomic flag -- the same reopen mechanism Bitcoin
+    // Core uses from its SIGHUP handler. (This does not make the whole handler
+    // formally async-signal-safe; it replaces the former fReopenDebugLog global,
+    // which only shadowed this flag.)
     LogInstance().m_reopen_file = true;
 }
 #else
