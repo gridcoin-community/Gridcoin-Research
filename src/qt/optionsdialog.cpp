@@ -657,7 +657,7 @@ void OptionsDialog::sidestakeSelectionChanged()
         if (indexes.size() > 1) {
             ui->pushButtonEditSideStake->setEnabled(false);
             ui->pushButtonDeleteSideStake->setEnabled(false);
-        } else if (static_cast<GRC::SideStake*>(indexes.at(0).internalPointer())->IsMandatory()) {
+        } else if (model->getSideStakeTableModel()->isMandatory(indexes.at(0).row())) {
             ui->pushButtonEditSideStake->setEnabled(false);
             ui->pushButtonDeleteSideStake->setEnabled(false);
         } else {
