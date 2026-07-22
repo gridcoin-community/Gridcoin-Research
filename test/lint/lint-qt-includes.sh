@@ -42,8 +42,6 @@ src/qt/bitcoin.cpp:validation.h
 src/qt/bitcoingui.cpp:init.h
 src/qt/detailedtxmodel.cpp:util/system.h
 src/qt/diagnosticsdialog.h:wallet/diagnose.h
-src/qt/optionsdialog.cpp:miner.h
-src/qt/optionsmodel.cpp:miner.h
 src/qt/qtipcserver.cpp:node/ui_interface.h
 src/qt/researcher/researcherwizardpoolpage.cpp:key.h
 src/qt/transactionview.cpp:util/system.h
