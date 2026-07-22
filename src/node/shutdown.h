@@ -9,9 +9,12 @@
 //! Node shutdown state, extracted from the former util.h fRequestShutdown /
 //! fShutdown globals (multiprocess Phase 1e) so the GUI can no longer read core
 //! lifecycle state as a process global. Core code queries and mutates the
-//! shutdown state exclusively through these functions; the GUI observes a
+//! shutdown state through these functions. GUI code should generally observe a
 //! core-initiated shutdown through interfaces:: (uiInterface.QueueShutdown
-//! today), never these.
+//! today) rather than polling these directly; the one narrowly-scoped exception
+//! is the composition root (qt/bitcoin.cpp), which constructs both the core and
+//! the GUI in the monolithic build and may query ShutdownRequested() while
+//! sequencing startup/teardown.
 //!
 //! Two distinct concepts are tracked:
 //!  - "requested": someone asked the node to stop -- the RPC `stop` command (via

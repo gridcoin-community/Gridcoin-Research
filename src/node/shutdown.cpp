@@ -16,24 +16,36 @@ std::atomic<bool> g_shutdown_requested{false};
 //! Set once node teardown begins; observed by worker threads as their loop-exit
 //! condition. Replaces the former std::atomic<bool> fShutdown.
 std::atomic<bool> g_shutdown_in_progress{false};
+
+// SetShutdownRequested() is called from the POSIX/Windows signal handlers, where
+// only lock-free atomic operations are async-signal-safe. Enforce that the
+// platform actually provides a lock-free bool atomic at compile time rather than
+// relying on the assumption silently. std::atomic<bool> is always lock-free on
+// every platform this project targets, so this never fires in practice.
+static_assert(std::atomic<bool>::is_always_lock_free,
+              "shutdown flags must be lock-free: they are written from signal handlers");
 } // namespace
 
 void SetShutdownRequested()
 {
-    g_shutdown_requested = true;
+    // Relaxed: this flag carries no data dependency with other memory; the
+    // daemon main loop and worker threads only need to observe the value change
+    // eventually, and a relaxed store is what keeps the signal-handler path
+    // async-signal-safe.
+    g_shutdown_requested.store(true, std::memory_order_relaxed);
 }
 
 bool ShutdownRequested()
 {
-    return g_shutdown_requested;
+    return g_shutdown_requested.load(std::memory_order_relaxed);
 }
 
 void SetShutdownInProgress(bool in_progress)
 {
-    g_shutdown_in_progress = in_progress;
+    g_shutdown_in_progress.store(in_progress, std::memory_order_relaxed);
 }
 
 bool ShutdownInProgress()
 {
-    return g_shutdown_in_progress;
+    return g_shutdown_in_progress.load(std::memory_order_relaxed);
 }
