@@ -75,6 +75,12 @@ public:
 
     EditStatus getEditStatus() const;
 
+    //! Whether the entry at \p row is a mandatory (contract) sidestake, which
+    //! cannot be edited or deleted. Reads the interfaces::SideStakeEntry value
+    //! row, so callers need no core sidestake type. Returns false for an
+    //! out-of-range row.
+    bool isMandatory(int row) const;
+
 public Q_SLOTS:
     void refresh();
 

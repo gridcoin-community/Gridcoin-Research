@@ -393,6 +393,12 @@ SideStakeTableModel::EditStatus SideStakeTableModel::getEditStatus() const
     return m_edit_status;
 }
 
+bool SideStakeTableModel::isMandatory(int row) const
+{
+    const interfaces::SideStakeEntry* rec = m_priv->at(row);
+    return rec && rec->is_mandatory;
+}
+
 void SideStakeTableModel::refresh()
 {
     Q_EMIT layoutAboutToBeChanged();
