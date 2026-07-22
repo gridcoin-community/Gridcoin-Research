@@ -3521,7 +3521,7 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
 // Call after CreateTransaction unless you want to abort
 bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 {
-    if(GetDevbuildCripple())
+    if (GetDevbuildCripple())
     {
         return error("CommitTransaction(): Development build restrictions in effect");
     }
