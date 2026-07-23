@@ -2276,6 +2276,82 @@ BOOST_AUTO_TEST_CASE(incoming_tx_gets_order_position)
     pwalletMain->EraseFromWallet(tx2.GetHash());
 }
 
+BOOST_AUTO_TEST_CASE(mempool_spend_marks_parent_output_spent)
+{
+    // Legacy WalletUpdateSpent parity restored on the SyncTransaction path:
+    // a spend of our output observed in the MEMPOOL already marks the parent
+    // output spent; before the fix only a confirmed sighting did.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CKey key;
+    key.MakeNewKey(true);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));
+
+    CMutableTransaction parent;
+    parent.vin.resize(1);
+    parent.vin[0].prevout = COutPoint(uint256S("0x3333333333333333333333333333333333333333333333333333333333333333"), 0);
+    parent.vout.resize(1);
+    parent.vout[0].nValue = 2 * COIN;
+    parent.vout[0].scriptPubKey.SetDestination(CTxDestination(key.GetPubKey().GetID()));
+    const CTransaction parent_tx(parent);
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(parent_tx), TxStateInMempool{}));
+
+    // Child spends our parent output, paying a key we do not own (from-me).
+    CKey external_key;
+    external_key.MakeNewKey(true);
+    CMutableTransaction child;
+    child.vin.resize(1);
+    child.vin[0].prevout = COutPoint(parent_tx.GetHash(), 0);
+    child.vout.resize(1);
+    child.vout[0].nValue = 1 * COIN;
+    child.vout[0].scriptPubKey.SetDestination(CTxDestination(external_key.GetPubKey().GetID()));
+    const CTransaction child_tx(child);
+
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(child_tx), TxStateInMempool{}));
+
+    const auto it = pwalletMain->mapWallet.find(parent_tx.GetHash());
+    BOOST_REQUIRE(it != pwalletMain->mapWallet.end());
+    BOOST_CHECK(it->second.IsSpent(0));
+
+    pwalletMain->EraseFromWallet(child_tx.GetHash());
+    pwalletMain->EraseFromWallet(parent_tx.GetHash());
+}
+
+BOOST_AUTO_TEST_CASE(incoming_payment_rotates_default_key)
+{
+    // Legacy AddToWallet parity restored on the SyncTransaction path: a
+    // payment to the default receiving address rotates it to a fresh key
+    // (daemon mode; the Qt GUI manages its own receiving addresses).
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    if (!pwalletMain->vchDefaultKey.IsValid()) {
+        CPubKey bootstrap_default;
+        BOOST_REQUIRE(pwalletMain->GetKeyFromPool(bootstrap_default, false));
+        BOOST_REQUIRE(pwalletMain->SetDefaultKey(bootstrap_default));
+    }
+
+    const CPubKey old_default = pwalletMain->vchDefaultKey;
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("0x4444444444444444444444444444444444444444444444444444444444444444"), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey.SetDestination(CTxDestination(old_default.GetID()));
+    const CTransaction tx(mtx);
+
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(tx), TxStateInMempool{}));
+
+    // Rotated away from the paid key; the fresh default is booked with the
+    // empty label so it surfaces as a receiving address.
+    BOOST_CHECK(pwalletMain->vchDefaultKey.IsValid());
+    BOOST_CHECK(pwalletMain->vchDefaultKey != old_default);
+    BOOST_CHECK(pwalletMain->mapAddressBook.count(
+        CTxDestination(pwalletMain->vchDefaultKey.GetID())));
+
+    pwalletMain->EraseFromWallet(tx.GetHash());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 // ===========================================================================

@@ -1003,8 +1003,14 @@ bool CWallet::SyncTransaction(const CTransactionRef& ptx,
 
     std::vector<CWalletTx*> txns_to_write;
 
-    // Mark consumed inputs as spent when confirming
-    if (std::holds_alternative<TxStateConfirmed>(state)) {
+    // Mark consumed inputs as spent. Legacy parity: WalletUpdateSpent ran on
+    // every AddToWallet sighting, so a spend already observed in the mempool
+    // marks our parent outputs (repairing stale flags from wallet copies and
+    // keeping unconfirmed balances honest). blockDisconnected reverses the
+    // marks on reorg; inactive/unrecognized states do not mark.
+    if (std::holds_alternative<TxStateConfirmed>(state)
+        || std::holds_alternative<TxStateInMempool>(state))
+    {
         for (const auto& txin : ptx->vin) {
             auto mi = mapWallet.find(txin.prevout.hash);
             if (mi != mapWallet.end()) {
@@ -1026,14 +1032,44 @@ bool CWallet::SyncTransaction(const CTransactionRef& ptx,
                     parent_wtx.MarkSpent(txin.prevout.n);
                     parent_wtx.MarkDirty();
                     txns_to_write.push_back(&parent_wtx);
+
+                    // Legacy WalletUpdateSpent parity: surface the parent's
+                    // changed spent state to the UI.
+                    NotifyTransactionChanged(this, txin.prevout.hash, CT_UPDATED);
                 }
             }
         }
+    }
 
+    if (std::holds_alternative<TxStateConfirmed>(state)) {
         // Ensure legacy fields are in sync after state update
         auto it = mapWallet.find(hash);
         if (it != mapWallet.end()) {
             it->second.SyncLegacyFromState();
+        }
+    }
+
+    // If the default receiving address was paid, rotate it to a fresh key
+    // (legacy AddToWallet parity; the Qt GUI manages its own receiving
+    // addresses). The rotation is naturally idempotent across the
+    // mempool-then-confirmed resync of the same transaction: after the first
+    // rotation the transaction no longer pays the current default key.
+    if (!fQtActive && vchDefaultKey.IsValid()) {
+        CScript scriptDefaultKey;
+        scriptDefaultKey.SetDestination(vchDefaultKey.GetID());
+
+        for (auto const& txout : ptx->vout) {
+            if (txout.scriptPubKey == scriptDefaultKey) {
+                // Book the fresh default only if it was fully activated;
+                // one rotation retires the paid key, so further outputs to
+                // it need no additional rotations (unlike the legacy loop,
+                // which drew one pool key per matching output).
+                CPubKey newDefaultKey;
+                if (GetKeyFromPool(newDefaultKey, false) && SetDefaultKey(newDefaultKey)) {
+                    SetAddressBookName(vchDefaultKey.GetID(), "");
+                }
+                break;
+            }
         }
     }
 
@@ -1060,6 +1096,24 @@ bool CWallet::SyncTransaction(const CTransactionRef& ptx,
 
     // Notify UI of transaction change
     NotifyTransactionChanged(this, hash, fInsertedNew ? CT_NEW : CT_UPDATED);
+
+    // Notify an external script of network-observed transactions, which the
+    // state machine rewrite had dropped. Fire on the wallet's first sighting
+    // and on confirmation, not on every state resync: for sends this matches
+    // the legacy cadence (commit via AddToWallet, then confirm); for
+    // receives it matches upstream Core (legacy Gridcoin never synced
+    // wallets on mempool accept, so it only fired at confirmation).
+#if HAVE_SYSTEM
+    if (fInsertedNew || std::holds_alternative<TxStateConfirmed>(state)) {
+        std::string strCmd = gArgs.GetArg("-walletnotify", "");
+        if (!strCmd.empty())
+        {
+            ReplaceAll(strCmd, "%s", hash.GetHex());
+            boost::thread t(runCommand, strCmd);
+            t.detach(); // run free; never let t's destructor join/terminate
+        }
+    }
+#endif
 
     return true;
 }
