@@ -5,7 +5,11 @@
 #ifndef GRIDCOIN_INTERFACES_INIT_H
 #define GRIDCOIN_INTERFACES_INIT_H
 
+#include "interfaces/marshal.h"
+
+#include <cstdint>
 #include <memory>
+#include <string>
 
 class CWallet;
 
@@ -20,6 +24,33 @@ class StakingStatus;
 class VotingManager;
 class Wallet;
 class WalletTxSource;
+
+//! The node's compile-time build fingerprint. After authentication the GUI
+//! compares its own embedded fingerprint against the node's, per the matching
+//! policy in doc/multiprocess_design.md section 4.2 (schema_major mismatch is a
+//! hard fail, git_commit mismatch a dismissible soft-warn banner, etc.). Value
+//! snapshot; crosses the IPC boundary.
+struct BuildInfo
+{
+    std::string git_commit;      //!< BUILD_GIT_COMMIT (may carry a -dirty suffix).
+    std::string built_at;        //!< Build timestamp (informational, About dialog).
+    uint32_t schema_major = 0;   //!< Cap'n Proto schema major (wire compatibility).
+    uint32_t schema_minor = 0;
+    uint32_t protocol_version = 0;
+};
+
+//! The node's per-datadir identity. The GUI persists the expected node_id +
+//! network on first successful connect and hard-fails on every later launch when
+//! a different node_id answers at the same socket path (a moved datadir, a
+//! -reindex rotation, or a foreign node squatting the socket). See
+//! doc/multiprocess_design.md section 4.2. Value snapshot; crosses IPC.
+struct NodeIdentity
+{
+    std::string node_id;      //!< Random per-datadir UUID (from node_identity.json).
+    std::string network;      //!< Chain name ("main" / "test" / "regtest").
+    std::string datadir;      //!< Canonical datadir path.
+    std::string genesis_hash; //!< Genesis block hash, hex.
+};
 
 //! Per-process bootstrap interface: hands out the other interfaces. In the
 //! monolithic build MakeGridcoinInit() returns an implementation whose
@@ -40,6 +71,26 @@ public:
     //! bGridcoinCoreInitComplete global; a Stage-2 IPC readiness handshake later
     //! replaces the poll. The default (no core to wait on) reports ready.
     virtual bool isCoreReady();
+
+    //! First IPC call of the connect handshake (doc/multiprocess_design.md
+    //! section 4.3, step 5): the GUI presents the 256-bit cookie it read from
+    //! <datadir>/<network>/ipc.cookie; the node compares it constant-time against
+    //! the cookie it wrote at startup and returns whether it matches. Build and
+    //! identity information are never served to an unauthenticated peer, so the
+    //! GUI hard-fails and disconnects on a false result. Authentication precedes
+    //! every other exchange. The monolithic default (no IPC peer) returns true.
+    virtual bool authenticate(const std::string& cookie);
+
+    //! The node's build fingerprint, for the schema/protocol/commit comparison in
+    //! the handshake (section 4.2). Only meaningful after a successful
+    //! authenticate(). The base default returns an empty snapshot; the node's
+    //! serving Init populates it from the process's embedded build constants.
+    virtual BuildInfo getBuildInfo();
+
+    //! The node's per-datadir identity, compared against the GUI's stored
+    //! expectation (section 4.2). Only meaningful after authenticate(). The base
+    //! default returns an empty snapshot; the node's serving Init populates it.
+    virtual NodeIdentity getIdentity();
 
     //! The defaults return nullptr and are defined out of line (init.cpp):
     //! inline definitions would require every includer to see the complete
@@ -89,6 +140,11 @@ public:
 
 //! Return the monolithic-build Init implementation.
 std::unique_ptr<Init> MakeGridcoinInit();
+
+// Marshalability pins (interfaces/marshal.h): the handshake DTOs cross the IPC
+// boundary and must stay copyable value types.
+INTERFACES_ASSERT_MARSHALABLE(BuildInfo);
+INTERFACES_ASSERT_MARSHALABLE(NodeIdentity);
 
 } // namespace interfaces
 

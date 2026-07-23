@@ -17,12 +17,15 @@
 #include <mp/proxy-types.h>
 
 // Type-marshalling support: the construct() ThreadMap exchange (type-threadmap),
-// returned interface capabilities (type-interface), the Bool result of
-// isCoreReady (type-number), and the framework Context.
+// returned interface capabilities (type-interface), Bool/UInt32 scalars
+// (type-number), Text (type-string), the BuildInfo/NodeIdentity value structs
+// (type-struct), and the framework Context.
 #include <mp/type-context.h>
 #include <mp/type-decay.h>
 #include <mp/type-interface.h>
 #include <mp/type-number.h>
+#include <mp/type-string.h>
+#include <mp/type-struct.h>
 #include <mp/type-threadmap.h>
 
 #endif // GRIDCOIN_IPC_CAPNP_INIT_TYPES_H

@@ -20,6 +20,15 @@ Init::~Init() = default;
 
 bool Init::isCoreReady() { return true; }
 
+// Handshake surface (doc/multiprocess_design.md section 4.3). The monolithic
+// build has no IPC peer, so authenticate() reports success and the build/identity
+// snapshots are empty; the node's serving Init (Stage 2) overrides these.
+bool Init::authenticate(const std::string& /*cookie*/) { return true; }
+
+BuildInfo Init::getBuildInfo() { return BuildInfo{}; }
+
+NodeIdentity Init::getIdentity() { return NodeIdentity{}; }
+
 std::unique_ptr<Node> Init::makeNode() { return nullptr; }
 
 std::unique_ptr<StakingStatus> Init::makeStakingStatus() { return nullptr; }
