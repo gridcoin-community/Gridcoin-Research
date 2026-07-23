@@ -23,6 +23,14 @@
 #include "node/ui_interface.h"
 #include "gridcoin/upgrade.h"
 
+#ifdef ENABLE_MULTIPROCESS
+#include "interfaces/init.h"
+#include "interfaces/ipc.h"
+#include "ipc/handshake.h"
+#include "ipc/serve_init.h"
+#include <memory>
+#endif
+
 #include <boost/thread.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <stdio.h>
@@ -291,9 +299,33 @@ bool AppInit(int argc, char* argv[])
     }
 
     if (fRet) {
+#ifdef ENABLE_MULTIPROCESS
+        // Multiprocess (RFC #2937): after core init, optionally listen on the
+        // AF_UNIX socket and serve the interfaces::Init to an attached GUI. The
+        // serving Init + Ipc live for the run, torn down after the wait loop.
+        std::unique_ptr<interfaces::Init> serve_init;
+        std::unique_ptr<interfaces::Ipc> ipc;
+        if (gArgs.GetBoolArg("-multiprocess", false)) {
+            try {
+                std::string cookie = ipc::WriteCookie(GetDataDir());
+                interfaces::NodeIdentity identity = ipc::WriteIdentity(GetDataDir());
+                serve_init = ipc::MakeServeInit(interfaces::MakeGridcoinInit(),
+                                                std::move(cookie), std::move(identity));
+                ipc = interfaces::MakeIpc("gridcoinresearchd", *serve_init);
+                std::string address = "unix";
+                ipc->listenAddress(address);
+                LogPrintf("IPC: serving GUI connections on %s\n", address);
+            } catch (const std::exception& e) {
+                LogPrintf("IPC: failed to start the multiprocess listener: %s\n", e.what());
+            }
+        }
+#endif
         while (!ShutdownRequested()) {
             UninterruptibleSleep(std::chrono::milliseconds{500});
         }
+#ifdef ENABLE_MULTIPROCESS
+        if (ipc) ipc->disconnectIncoming();
+#endif
     }
 
     Shutdown(nullptr);

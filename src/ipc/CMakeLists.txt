@@ -23,6 +23,8 @@ endif()
 add_library(gridcoin_ipc STATIC EXCLUDE_FROM_ALL
     process.cpp
     interfaces.cpp
+    handshake.cpp
+    serve_init.cpp
     capnp/protocol.cpp
 )
 

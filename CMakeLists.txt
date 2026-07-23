@@ -318,6 +318,9 @@ if(ENABLE_MULTIPROCESS)
         message(STATUS "Multiprocess (IPC) build: ENABLED (vendored subtree)")
     endif()
     message(STATUS "  Cap'n Proto: ${CapnProto_VERSION}")
+    # Compile definition so the -multiprocess seam code (in gridcoinresearchd and
+    # the GUI) is gated: OFF builds neither reference nor link gridcoin_ipc.
+    add_compile_definitions(ENABLE_MULTIPROCESS)
 else()
     message(STATUS "Multiprocess (IPC) build: disabled (monolithic, direct calls)")
 endif()
