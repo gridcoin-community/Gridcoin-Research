@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_INTERFACES_RESEARCHER_H
 #define GRIDCOIN_INTERFACES_RESEARCHER_H
 
+#include "interfaces/marshal.h"
+
 #include "amount.h"
 
 #include <cstdint>
@@ -258,6 +260,13 @@ public:
 //! registries and the node's single wallet. \p wallet must outlive the object.
 std::unique_ptr<ResearcherContext> MakeResearcherContext(CWallet* wallet);
 
+
+// Marshalability pins (interfaces/marshal.h): each DTO above must stay a
+// copyable value type the node side can fill and ship across the boundary.
+INTERFACES_ASSERT_MARSHALABLE(ResearcherSnapshot);
+INTERFACES_ASSERT_MARSHALABLE(ResearcherProjectRow);
+INTERFACES_ASSERT_MARSHALABLE(BeaconAdvertiseResult);
+INTERFACES_ASSERT_MARSHALABLE(WhitelistProject);
 } // namespace interfaces
 
 #endif // GRIDCOIN_INTERFACES_RESEARCHER_H

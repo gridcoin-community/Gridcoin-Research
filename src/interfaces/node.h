@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_INTERFACES_NODE_H
 #define GRIDCOIN_INTERFACES_NODE_H
 
+#include "interfaces/marshal.h"
+
 #include "interfaces/handler.h"
 // For scrapereventtypes' enumerators, which consumers of the scraper-event
 // handler discriminate on. TODO(Stage 2): extract the enum into a standalone
@@ -349,6 +351,16 @@ public:
 //! Return an in-process Node interface implementation.
 std::unique_ptr<Node> MakeNode();
 
+
+// Marshalability pins (interfaces/marshal.h): each DTO above must stay a
+// copyable value type the node side can fill and ship across the boundary.
+INTERFACES_ASSERT_MARSHALABLE(BannedNode);
+INTERFACES_ASSERT_MARSHALABLE(PeerInfo);
+INTERFACES_ASSERT_MARSHALABLE(RpcConsoleResult);
+INTERFACES_ASSERT_MARSHALABLE(SettingChangeResult);
+INTERFACES_ASSERT_MARSHALABLE(ScraperConvergenceSnapshot);
+INTERFACES_ASSERT_MARSHALABLE(LatestVersionInfo);
+INTERFACES_ASSERT_MARSHALABLE(DiagnosticResult);
 } // namespace interfaces
 
 #endif // GRIDCOIN_INTERFACES_NODE_H

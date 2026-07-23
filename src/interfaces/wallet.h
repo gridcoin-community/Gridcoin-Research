@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_INTERFACES_WALLET_H
 #define GRIDCOIN_INTERFACES_WALLET_H
 
+#include "interfaces/marshal.h"
+
 #include "interfaces/handler.h"
 #include "node/ui_interface.h" // For ChangeType.
 #include "primitives/transaction.h" // For COutPoint.
@@ -407,6 +409,17 @@ public:
 //! wallet, which must outlive the returned object.
 std::unique_ptr<Wallet> MakeWallet(CWallet* wallet);
 
+
+// Marshalability pins (interfaces/marshal.h): each DTO above must stay a
+// copyable value type the node side can fill and ship across the boundary.
+INTERFACES_ASSERT_MARSHALABLE(WalletBalances);
+INTERFACES_ASSERT_MARSHALABLE(WalletLockState);
+INTERFACES_ASSERT_MARSHALABLE(WalletOutput);
+INTERFACES_ASSERT_MARSHALABLE(WalletAddress);
+INTERFACES_ASSERT_MARSHALABLE(WalletCoinControl);
+INTERFACES_ASSERT_MARSHALABLE(CoinControlSummary);
+INTERFACES_ASSERT_MARSHALABLE(WalletSendRecipient);
+INTERFACES_ASSERT_MARSHALABLE(SendCoinsResult);
 } // namespace interfaces
 
 #endif // GRIDCOIN_INTERFACES_WALLET_H

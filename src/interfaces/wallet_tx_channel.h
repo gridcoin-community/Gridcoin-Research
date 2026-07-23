@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_INTERFACES_WALLET_TX_CHANNEL_H
 #define GRIDCOIN_INTERFACES_WALLET_TX_CHANNEL_H
 
+#include "interfaces/marshal.h"
+
 #include "interfaces/wallet_tx_filter.h"
 #include "interfaces/wallet_tx_record.h"
 #include "uint256.h"
@@ -308,5 +310,17 @@ struct WalletTxDetail
     std::vector<InputInfo> inputs;
 };
 
+
+// Marshalability pins (interfaces/marshal.h): each DTO above must stay a
+// copyable value type the node side can fill and ship across the boundary.
+INTERFACES_ASSERT_MARSHALABLE(RowsInsertedPayload);
+INTERFACES_ASSERT_MARSHALABLE(RowsRemovedPayload);
+INTERFACES_ASSERT_MARSHALABLE(RowsResetPayload);
+INTERFACES_ASSERT_MARSHALABLE(RowCountChangedPayload);
+INTERFACES_ASSERT_MARSHALABLE(RowsChangedPayload);
+INTERFACES_ASSERT_MARSHALABLE(ChainTipChangedPayload);
+INTERFACES_ASSERT_MARSHALABLE(WalletEvent);
+INTERFACES_ASSERT_MARSHALABLE(RowsResult);
+INTERFACES_ASSERT_MARSHALABLE(WalletTxDetail);
 } // namespace GRC
 #endif // GRIDCOIN_INTERFACES_WALLET_TX_CHANNEL_H

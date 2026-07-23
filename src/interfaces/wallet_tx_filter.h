@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_INTERFACES_WALLET_TX_FILTER_H
 #define GRIDCOIN_INTERFACES_WALLET_TX_FILTER_H
 
+#include "interfaces/marshal.h"
+
 #include <cstdint>
 #include <string>
 
@@ -182,6 +184,12 @@ int CompareKeys(const SortKey& a, const SortKey& b, int column, int order);
 //!
 bool Less(const SortKey& a, const SortKey& b, int column, int order);
 
+
+// Marshalability pins (interfaces/marshal.h): each DTO above must stay a
+// copyable value type the node side can fill and ship across the boundary.
+INTERFACES_ASSERT_MARSHALABLE(FilterSpec);
+INTERFACES_ASSERT_MARSHALABLE(TxFilterFields);
+INTERFACES_ASSERT_MARSHALABLE(SortKey);
 } // namespace GRC
 
 #endif // GRIDCOIN_INTERFACES_WALLET_TX_FILTER_H
