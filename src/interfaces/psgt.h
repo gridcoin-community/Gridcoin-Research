@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_INTERFACES_PSGT_H
 #define GRIDCOIN_INTERFACES_PSGT_H
 
+#include "interfaces/marshal.h"
+
 #include "amount.h"
 
 #include <cstdint>
@@ -302,6 +304,19 @@ public:
 //! single wallet. \p wallet must outlive the object.
 std::unique_ptr<PSGTPoolContext> MakePSGTPoolContext(CWallet* wallet);
 
+
+// Marshalability pins (interfaces/marshal.h): each DTO above must stay a
+// copyable value type the node side can fill and ship across the boundary.
+INTERFACES_ASSERT_MARSHALABLE(PSGTPoolStatus);
+INTERFACES_ASSERT_MARSHALABLE(PSGTPoolRow);
+INTERFACES_ASSERT_MARSHALABLE(PSGTInputInfo);
+INTERFACES_ASSERT_MARSHALABLE(PSGTOutputInfo);
+INTERFACES_ASSERT_MARSHALABLE(PSGTDescription);
+INTERFACES_ASSERT_MARSHALABLE(PSGTSignResult);
+INTERFACES_ASSERT_MARSHALABLE(PSGTCombineResult);
+INTERFACES_ASSERT_MARSHALABLE(PSGTSubmitResult);
+INTERFACES_ASSERT_MARSHALABLE(PSGTFinalizeResult);
+INTERFACES_ASSERT_MARSHALABLE(PSGTDecodeResult);
 } // namespace interfaces
 
 #endif // GRIDCOIN_INTERFACES_PSGT_H

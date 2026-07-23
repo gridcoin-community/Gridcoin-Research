@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_INTERFACES_MRC_H
 #define GRIDCOIN_INTERFACES_MRC_H
 
+#include "interfaces/marshal.h"
+
 #include "amount.h"
 
 #include <functional>
@@ -144,6 +146,11 @@ public:
 //! outlive the returned object.
 std::unique_ptr<MRC> MakeMRC(CWallet* wallet);
 
+
+// Marshalability pins (interfaces/marshal.h): each DTO above must stay a
+// copyable value type the node side can fill and ship across the boundary.
+INTERFACES_ASSERT_MARSHALABLE(MRCSnapshot);
+INTERFACES_ASSERT_MARSHALABLE(MRCSubmitResult);
 } // namespace interfaces
 
 #endif // GRIDCOIN_INTERFACES_MRC_H

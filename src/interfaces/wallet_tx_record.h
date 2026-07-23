@@ -1,6 +1,7 @@
 #ifndef GRIDCOIN_INTERFACES_WALLET_TX_RECORD_H
 #define GRIDCOIN_INTERFACES_WALLET_TX_RECORD_H
 
+#include "interfaces/marshal.h"
 #include "uint256.h"
 #include "wallet/generated_type.h"
 #include "wallet/ismine.h"
@@ -173,18 +174,14 @@ public:
     std::string label;
 };
 
-//! Marshalability pin (multiprocess design §4.1, windowed-model design): these
+//! Marshalability pins (multiprocess design §4.1, windowed-model design): these
 //! records are the wallet-transaction-channel DTOs and must stay value types a
 //! node-side source can fill and ship across the interfaces:: boundary — no Qt
 //! types, no pointers into core state, freely copyable. The translated type
 //! rendering lives GUI-side (transactionview/transactiontablemodel), not here.
-static_assert(std::is_copy_constructible_v<TransactionRecord>
-                  && std::is_copy_assignable_v<TransactionRecord>
-                  && std::is_move_constructible_v<TransactionRecord>,
-              "TransactionRecord must remain a copyable value type");
-static_assert(std::is_copy_constructible_v<TransactionStatus>
-                  && std::is_copy_assignable_v<TransactionStatus>,
-              "TransactionStatus must remain a copyable value type");
+//! The fixed-width pin additionally locks the amount/time wire representation.
+INTERFACES_ASSERT_MARSHALABLE(TransactionRecord);
+INTERFACES_ASSERT_MARSHALABLE(TransactionStatus);
 static_assert(std::is_same_v<decltype(TransactionRecord::time), int64_t>
                   && std::is_same_v<decltype(TransactionRecord::debit), int64_t>
                   && std::is_same_v<decltype(TransactionRecord::credit), int64_t>,

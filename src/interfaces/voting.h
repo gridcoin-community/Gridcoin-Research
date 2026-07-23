@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_INTERFACES_VOTING_H
 #define GRIDCOIN_INTERFACES_VOTING_H
 
+#include "interfaces/marshal.h"
+
 #include "amount.h"
 
 #include <cstdint>
@@ -247,6 +249,16 @@ public:
 //! result cache and the node's single wallet.
 std::unique_ptr<VotingManager> MakeVotingManager();
 
+
+// Marshalability pins (interfaces/marshal.h): each DTO above must stay a
+// copyable value type the node side can fill and ship across the boundary.
+INTERFACES_ASSERT_MARSHALABLE(PollTypeMeta);
+INTERFACES_ASSERT_MARSHALABLE(PollChoiceResult);
+INTERFACES_ASSERT_MARSHALABLE(PollAdditionalField);
+INTERFACES_ASSERT_MARSHALABLE(PollSelfVoteResponse);
+INTERFACES_ASSERT_MARSHALABLE(PollTableItem);
+INTERFACES_ASSERT_MARSHALABLE(PollSubmission);
+INTERFACES_ASSERT_MARSHALABLE(VotingSubmitResult);
 } // namespace interfaces
 
 #endif // GRIDCOIN_INTERFACES_VOTING_H
