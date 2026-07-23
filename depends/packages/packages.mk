@@ -12,6 +12,13 @@ endif
 
 upnp_packages=miniupnpc
 
+# Multiprocess (IPC) toolchain: the cross-compiled Cap'n Proto + libmultiprocess
+# runtimes, plus the native code generators (capnp / capnpc-c++ / mpgen). Added to
+# the build only when MULTIPROCESS=1 is passed to depends (see the Makefile), so
+# the default depends build is unchanged.
+multiprocess_packages = capnp libmultiprocess
+multiprocess_native_packages = native_capnp native_libmultiprocess
+
 darwin_native_packages = native_ds_store native_mac_alias
 
 ifneq ($(build_os),darwin)

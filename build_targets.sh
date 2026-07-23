@@ -41,6 +41,10 @@ print_help() {
     echo "                      Bypasses Homebrew detection if set."
     echo "  DEBUG_LOCKORDER=<bool> Enable run-time lock-order checking. Options: true, false."
     echo "                      Default: false"
+    echo "  ENABLE_MULTIPROCESS=<bool> Build with Cap'n Proto + libmultiprocess (IPC build). Options: true, false."
+    echo "                      Default: false. Native requires system capnproto (auto-installed"
+    echo "                      by SKIP_DEPS=false) and libmultiprocess; depends builds also need"
+    echo "                      the depends recipes built with MULTIPROCESS=1."
     echo "  EXTRA_CMAKE_ARGS    Pass additional arguments to CMake (e.g. '-DBoost_USE_STATIC_LIBS=ON')"
     echo "  CC=<path>           Override C compiler (also read from the CC environment variable)."
     echo "  CXX=<path>          Override C++ compiler (also read from the CXX environment variable)."
@@ -200,6 +204,7 @@ USE_CCACHE="false"
 WITH_GUI="true"
 WITH_DOCS="false"
 USE_QT6="true"
+ENABLE_MULTIPROCESS="false"
 # Seed from the conventional CC/CXX environment variables; a positional
 # CC=/CXX= argument (parsed below) still overrides them.
 CC_OVERRIDE="${CC:-}"
@@ -240,6 +245,10 @@ for arg in "$@"; do
             ;;
         USE_QT6=*)
             USE_QT6="${arg#*=}"
+            shift
+            ;;
+        ENABLE_MULTIPROCESS=*)
+            ENABLE_MULTIPROCESS="${arg#*=}"
             shift
             ;;
         PARALLEL=*)
@@ -333,6 +342,16 @@ else
     LOCKORDER_CMAKE_FLAG="-DENABLE_DEBUG_LOCKORDER=OFF"
 fi
 
+# Multiprocess (IPC) logic. Passed to every target's CMake invocation so the
+# depends and cross builds honor it too; in depends mode the depends recipes must
+# also be built with MULTIPROCESS=1 (see depends/README) so the toolchain file
+# provides the Cap'n Proto / libmultiprocess tools this flag then consumes.
+if [ "$ENABLE_MULTIPROCESS" = "true" ]; then
+    MULTIPROCESS_CMAKE_FLAG="-DENABLE_MULTIPROCESS=ON"
+else
+    MULTIPROCESS_CMAKE_FLAG="-DENABLE_MULTIPROCESS=OFF"
+fi
+
 # Determine Concurrency
 if [ -n "$PARALLEL" ]; then
     CORES="$PARALLEL"
@@ -360,6 +379,7 @@ echo "With GUI:     $WITH_GUI"
 echo "With Docs:    $WITH_DOCS"
 echo "Lock Order:   $DEBUG_LOCKORDER"
 echo "Qt6:          $USE_QT6"
+echo "Multiprocess: $ENABLE_MULTIPROCESS"
 if [ -n "$MANUAL_QT_PATH" ]; then echo "Manual Qt:    $MANUAL_QT_PATH"; fi
 if [ -n "$EXTRA_ARGS" ]; then     echo "Extra Args:   $EXTRA_ARGS"; fi
 if [ -n "$CC_OVERRIDE" ]; then    echo "C Compiler:   $CC_OVERRIDE"; fi
@@ -382,7 +402,7 @@ else
     if [ -f "./install_dependencies.sh" ]; then
         source ./install_dependencies.sh
         # Pass TARGET, USE_QT6, and WITH_GUI to install_deps
-        install_deps "$TARGET" "$USE_QT6" "$WITH_GUI"
+        install_deps "$TARGET" "$USE_QT6" "$WITH_GUI" "$ENABLE_MULTIPROCESS"
     else
         echo "Error: install_dependencies.sh not found. Cannot install dependencies."
         exit 1
@@ -417,6 +437,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "native" ]] && [[ "$(uname -s)" == "Lin
             $GUI_CMAKE_FLAG \
             $DOCS_CMAKE_FLAG \
             $LOCKORDER_CMAKE_FLAG \
+            $MULTIPROCESS_CMAKE_FLAG \
             -DENABLE_QRENCODE=ON \
             -DUSE_DBUS=ON \
             -DENABLE_UPNP=ON \
@@ -504,6 +525,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "depends" ]] && [[ "$(uname -s)" == "Li
             $GUI_CMAKE_FLAG \
             $DOCS_CMAKE_FLAG \
             $LOCKORDER_CMAKE_FLAG \
+            $MULTIPROCESS_CMAKE_FLAG \
             -DUSE_QT6=ON \
             -DSTATIC_LIBS=ON \
             -DENABLE_UPNP=ON \
@@ -595,6 +617,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "win64" ]] && [[ "$(uname -s)" == "Linu
             $GUI_CMAKE_FLAG \
             $DOCS_CMAKE_FLAG \
             $LOCKORDER_CMAKE_FLAG \
+            $MULTIPROCESS_CMAKE_FLAG \
             -DUSE_QT6=ON \
             -DENABLE_UPNP=ON \
             -DDEFAULT_UPNP=ON \
@@ -690,6 +713,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darw
             $GUI_CMAKE_FLAG \
             $DOCS_CMAKE_FLAG \
             $LOCKORDER_CMAKE_FLAG \
+            $MULTIPROCESS_CMAKE_FLAG \
             -DENABLE_QRENCODE=ON \
             -DENABLE_UPNP=ON \
             -DDEFAULT_UPNP=ON \

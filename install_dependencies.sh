@@ -17,6 +17,11 @@ install_deps() {
     local TARGET="$1"
     local USE_QT6="$2"
     local WITH_GUI="$3"
+    # Multiprocess (IPC) build: when "true", add the system Cap'n Proto packages
+    # needed for a native ENABLE_MULTIPROCESS=ON build. Defaults to "false" so
+    # existing 3-arg callers are unaffected. Note: libmultiprocess is not packaged
+    # by any distro and must be built from source (see the note emitted below).
+    local ENABLE_MULTIPROCESS="${4:-false}"
 
     # Detect OS Type first
     OS_TYPE=$(uname -s)
@@ -405,6 +410,50 @@ install_deps() {
             return 1
             ;;
     esac
+
+    # --- Multiprocess (IPC) System Dependencies ---
+    # Only relevant for native / all targets (a depends build gets Cap'n Proto and
+    # libmultiprocess from the depends recipes built with MULTIPROCESS=1, not from
+    # system packages). libmultiprocess itself is not packaged by any distro, so we
+    # install only Cap'n Proto here and emit build-from-source guidance for the
+    # rest.
+    if [[ "$ENABLE_MULTIPROCESS" == "true" ]] && [[ "$TARGET" == "native" || "$TARGET" == "all" || "$TARGET" == "macos" ]]; then
+        echo "Multiprocess build requested: adding Cap'n Proto system packages."
+        case $OS in
+            macos)
+                append_base capnp
+                ;;
+            debian|ubuntu|linuxmint)
+                append_base capnproto libcapnp-dev
+                ;;
+            fedora|rhel)
+                append_base capnproto capnproto-devel
+                ;;
+            opensuse*|sles)
+                append_base capnproto libcapnp-devel
+                ;;
+            arch|manjaro)
+                append_base capnproto
+                ;;
+            alpine)
+                append_base capnproto capnproto-dev
+                ;;
+        esac
+
+        echo "----------------------------------------------------------------"
+        echo "NOTE: libmultiprocess is not available as a distro package and is"
+        echo "      NOT installed by this script. Build and install it from source"
+        echo "      once (it provides the 'mpgen' code generator and runtime lib):"
+        echo ""
+        echo "        git clone https://github.com/bitcoin-core/libmultiprocess"
+        echo "        cmake -B libmultiprocess/build -S libmultiprocess"
+        echo "        cmake --build libmultiprocess/build"
+        echo "        sudo cmake --install libmultiprocess/build"
+        echo ""
+        echo "      Then reconfigure with ENABLE_MULTIPROCESS=true. See"
+        echo "      doc/multiprocess.md."
+        echo "----------------------------------------------------------------"
+    fi
 
     # --- Determine Final Package List to Install ---
     PKGS_TO_INSTALL=""

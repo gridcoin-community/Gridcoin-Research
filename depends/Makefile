@@ -149,8 +149,13 @@ qt_native_packages_$(NO_QT) = $(qt_native_packages)
 wallet_packages_$(NO_WALLET) = $(wallet_packages)
 upnp_packages_$(NO_UPNP) = $(upnp_packages)
 
-packages += $($(host_arch)_$(host_os)_packages) $($(host_os)_packages) $(qt_packages_) $(wallet_packages_) $(upnp_packages_)
-native_packages += $($(host_arch)_$(host_os)_native_packages) $($(host_os)_native_packages) $(qt_native_packages_)
+# Multiprocess is opt-in (default OFF), so it uses a positive MULTIPROCESS switch
+# rather than a NO_* one: the packages are only pulled in when MULTIPROCESS=1.
+multiprocess_packages_1 = $(multiprocess_packages)
+multiprocess_native_packages_1 = $(multiprocess_native_packages)
+
+packages += $($(host_arch)_$(host_os)_packages) $($(host_os)_packages) $(qt_packages_) $(wallet_packages_) $(upnp_packages_) $(multiprocess_packages_$(MULTIPROCESS))
+native_packages += $($(host_arch)_$(host_os)_native_packages) $($(host_os)_native_packages) $(qt_native_packages_) $(multiprocess_native_packages_$(MULTIPROCESS))
 
 
 all_packages = $(packages) $(native_packages)
@@ -207,6 +212,7 @@ $(host_prefix)/toolchain.cmake : toolchain.cmake.in $(host_prefix)/.stamp_$(fina
             -e 's|@LDFLAGS@|$(strip $(host_LDFLAGS))|' \
             -e 's|@LDFLAGS_RELEASE@|$(strip $(host_release_LDFLAGS))|' \
             -e 's|@LDFLAGS_DEBUG@|$(strip $(host_debug_LDFLAGS))|' \
+            -e 's|@multiprocess_packages@|$(multiprocess_packages_$(MULTIPROCESS))|' \
             $< > $@
 	touch $@
 

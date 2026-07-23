@@ -130,3 +130,18 @@ set(ENV{PKG_CONFIG_PATH} ${pkg_config_path})
 set(ENV{PKG_CONFIG_LIBDIR} ${pkg_config_path})
 unset(pkg_config_path)
 set(PKG_CONFIG_ARGN --static)
+
+# Multiprocess (IPC) toolchain. When depends was built with MULTIPROCESS=1 the
+# Cap'n Proto + libmultiprocess packages were staged and @multiprocess_packages@
+# expands to a non-empty list; force ENABLE_MULTIPROCESS ON and point the build at
+# the native code generators depends built for this machine (mpgen / capnp /
+# capnpc-c++ under native/bin). When multiprocess was not built this expands to an
+# empty string and the block is skipped, leaving the project default (OFF).
+set(multiprocess_packages @multiprocess_packages@)
+if(NOT "${multiprocess_packages}" STREQUAL "")
+  set(ENABLE_MULTIPROCESS ON CACHE BOOL "")
+  set(MPGEN_EXECUTABLE "${CMAKE_CURRENT_LIST_DIR}/native/bin/mpgen" CACHE FILEPATH "")
+  set(CAPNP_EXECUTABLE "${CMAKE_CURRENT_LIST_DIR}/native/bin/capnp" CACHE FILEPATH "")
+  set(CAPNPC_CXX_EXECUTABLE "${CMAKE_CURRENT_LIST_DIR}/native/bin/capnpc-c++" CACHE FILEPATH "")
+endif()
+unset(multiprocess_packages)

@@ -27,6 +27,8 @@ These options toggle specific functionality within the Gridcoin client.
 | `ENABLE_QRENCODE` | `OFF` | **QR Codes.** Allows the GUI to display QR codes for wallet addresses. Convenient for mobile payments. | `libqrencode` |
 | `USE_DBUS` | `OFF` | **Desktop Bus.** Enables OS notifications on Linux desktops (e.g., "Staked a block!"). | `QtDBus` |
 | `USE_QT6` | `OFF` | Builds against Qt 6 instead of Qt 5. Recommended for modern Linux distributions. | `Qt6` |
+| `ENABLE_MULTIPROCESS` | `OFF` | **Multiprocess (IPC) build (RFC #2937).** Builds against Cap'n Proto + libmultiprocess so the `interfaces::` boundaries can be driven over IPC. Toolchain-only for now; see [multiprocess.md](multiprocess.md). | `CapnProto`, `Libmultiprocess` |
+| `WITH_EXTERNAL_LIBMULTIPROCESS` | `ON` | Use an external (system / depends) libmultiprocess rather than a vendored copy. Currently the only supported mode when `ENABLE_MULTIPROCESS` is ON. | `ENABLE_MULTIPROCESS` |
 
 ---
 
