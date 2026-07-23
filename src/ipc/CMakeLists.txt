@@ -14,12 +14,17 @@ if(NOT WITH_EXTERNAL_LIBMULTIPROCESS)
     add_libmultiprocess(libmultiprocess)
 endif()
 
-# The generated Cap'n Proto proxy layer. target_capnp_sources runs mpgen on each
+# The IPC layer: the hand-written transport (process/protocol/interfaces) plus the
+# generated Cap'n Proto proxy layer. target_capnp_sources runs mpgen on each
 # .capnp, generating the raw capnp types (.capnp.h/.c++) and the ProxyClient/
 # ProxyServer marshalling code (.proxy-*), and adds them as sources of this
 # library. The include prefix (this dir) reproduces the ipc/capnp/... include
 # spelling the schemas' $Proxy.includeTypes and consumers use.
-add_library(gridcoin_ipc STATIC EXCLUDE_FROM_ALL)
+add_library(gridcoin_ipc STATIC EXCLUDE_FROM_ALL
+    process.cpp
+    interfaces.cpp
+    capnp/protocol.cpp
+)
 
 target_capnp_sources(gridcoin_ipc ${CMAKE_CURRENT_SOURCE_DIR}
     capnp/handler.capnp
