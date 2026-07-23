@@ -17,6 +17,16 @@ add_compile_definitions(
     __STDC_FORMAT_MACROS
 )
 
+# Multiprocess (IPC) build, RFC #2937. In the default (vendored) mode, build the
+# libmultiprocess runtime and its mpgen code generator from the in-tree subtree at
+# src/ipc/libmultiprocess. Cap'n Proto was already located in the top-level
+# CMakeLists.txt. This only defines the build targets; no Gridcoin target consumes
+# them yet (the .capnp schemas and proxy wiring come in a later Phase 2 step).
+if(ENABLE_MULTIPROCESS AND NOT WITH_EXTERNAL_LIBMULTIPROCESS)
+    include(${CMAKE_SOURCE_DIR}/cmake/libmultiprocess.cmake)
+    add_libmultiprocess(ipc/libmultiprocess)
+endif()
+
 if(WIN32)
     # _WIN32_WINNT is already defined by the toolchain/CMake.
     # We remove it here to avoid "redefined" warnings.

@@ -130,6 +130,19 @@ option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
 option(USE_QT6          "Use Qt 6 instead of Qt 5" OFF)
 
+# Multiprocess (Phase 2 GUI/node IPC split, RFC #2937). OFF = the monolithic
+# build with direct in-process calls (current behavior); ON = build against
+# Cap'n Proto + libmultiprocess so the interfaces:: boundaries can be driven
+# over IPC. This flag only wires the toolchain (dependency detection + codegen
+# tooling); it does not by itself change any runtime behavior yet.
+option(ENABLE_MULTIPROCESS "Build with Cap'n Proto + libmultiprocess for the multiprocess (IPC) build" OFF)
+
+# Build against an external libmultiprocess (system / depends install) instead of
+# the vendored in-tree subtree (src/ipc/libmultiprocess). OFF (the default) builds
+# the runtime from the subtree, matching Bitcoin Core; ON is mainly useful for
+# developing libmultiprocess itself against a separate checkout.
+option(WITH_EXTERNAL_LIBMULTIPROCESS "Use an external libmultiprocess instead of the vendored subtree" OFF)
+
 # Bundled packages
 option(SYSTEM_BDB       "Find system installation of Berkeley DB CXX 5.3" OFF)
 option(SYSTEM_LEVELDB   "Find system installation of leveldb" OFF)
@@ -276,6 +289,37 @@ if(ENABLE_UPNP)
         find_package(miniupnpc CONFIG REQUIRED)
         set(LIBMINIUPNPC miniupnpc::miniupnpc)
     endif()
+endif()
+
+if(ENABLE_MULTIPROCESS)
+    # Cap'n Proto provides the serialization runtime and the capnp / capnpc-c++
+    # code generators; libmultiprocess provides the proxy runtime and the mpgen
+    # generator that turns an interfaces .capnp schema into client/server proxies.
+    #
+    # Cap'n Proto is always an external dependency (system / /usr/local, or the
+    # depends 'capnp' package). In a depends build the toolchain file
+    # (depends/toolchain.cmake.in) pre-seeds MPGEN_EXECUTABLE / CAPNP_EXECUTABLE /
+    # CAPNPC_CXX_EXECUTABLE to the tools it built and points CMAKE_PREFIX_PATH at
+    # the staged libraries, so find_package resolves there.
+    find_package(CapnProto CONFIG REQUIRED)
+
+    if(WITH_EXTERNAL_LIBMULTIPROCESS)
+        # Developer path: link an external libmultiprocess and locate its mpgen.
+        find_package(Libmultiprocess CONFIG REQUIRED)
+        if(NOT MPGEN_EXECUTABLE)
+            find_program(MPGEN_EXECUTABLE NAMES mpgen REQUIRED)
+        endif()
+        message(STATUS "Multiprocess (IPC) build: ENABLED (external libmultiprocess)")
+        message(STATUS "  mpgen:       ${MPGEN_EXECUTABLE}")
+    else()
+        # Default path: build the vendored subtree in-tree (see src/CMakeLists.txt,
+        # add_libmultiprocess()). It produces the 'multiprocess' runtime library and
+        # the 'mpgen' code generator as build targets.
+        message(STATUS "Multiprocess (IPC) build: ENABLED (vendored subtree)")
+    endif()
+    message(STATUS "  Cap'n Proto: ${CapnProto_VERSION}")
+else()
+    message(STATUS "Multiprocess (IPC) build: disabled (monolithic, direct calls)")
 endif()
 
 if(ENABLE_TESTS)

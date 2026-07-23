@@ -17,6 +17,11 @@ install_deps() {
     local TARGET="$1"
     local USE_QT6="$2"
     local WITH_GUI="$3"
+    # Multiprocess (IPC) build: when "true", add the system Cap'n Proto packages
+    # needed for a native ENABLE_MULTIPROCESS=ON build. Defaults to "false" so
+    # existing 3-arg callers are unaffected. Note: libmultiprocess is not packaged
+    # by any distro and must be built from source (see the note emitted below).
+    local ENABLE_MULTIPROCESS="${4:-false}"
 
     # Detect OS Type first
     OS_TYPE=$(uname -s)
@@ -405,6 +410,35 @@ install_deps() {
             return 1
             ;;
     esac
+
+    # --- Multiprocess (IPC) System Dependencies ---
+    # Only relevant for native / all targets (a depends build gets Cap'n Proto from
+    # the depends 'capnp' recipe built with MULTIPROCESS=1). Only Cap'n Proto is a
+    # system dependency: libmultiprocess is vendored in-tree (src/ipc/libmultiprocess)
+    # and built from source by the project, so nothing to install for it here.
+    if [[ "$ENABLE_MULTIPROCESS" == "true" ]] && [[ "$TARGET" == "native" || "$TARGET" == "all" || "$TARGET" == "macos" ]]; then
+        echo "Multiprocess build requested: adding Cap'n Proto system packages."
+        case $OS in
+            macos)
+                append_base capnp
+                ;;
+            debian|ubuntu|linuxmint)
+                append_base capnproto libcapnp-dev
+                ;;
+            fedora|rhel)
+                append_base capnproto capnproto-devel
+                ;;
+            opensuse*|sles)
+                append_base capnproto libcapnp-devel
+                ;;
+            arch|manjaro)
+                append_base capnproto
+                ;;
+            alpine)
+                append_base capnproto capnproto-dev
+                ;;
+        esac
+    fi
 
     # --- Determine Final Package List to Install ---
     PKGS_TO_INSTALL=""
