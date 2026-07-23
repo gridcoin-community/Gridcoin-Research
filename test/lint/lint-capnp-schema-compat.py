@@ -5,13 +5,21 @@
 
 """Cap'n Proto schema backward-compatibility lint (multiprocess, design section 4.2).
 
-The IPC wire format is defined by the src/ipc/capnp/*.capnp schemas. Cap'n Proto
-compatibility depends on ordinals (@N) and the file id (@0x...) being *stable*:
-an ordinal may never be renumbered, reused, or removed, and a field/method's
-ordinal must keep its name -- otherwise an old client and a new node disagree on
-the wire. This lint diffs each schema against its version at the most recent
-mainnet release tag and fails if any released ordinal was removed or renamed, or
-if a file's id changed.
+The IPC wire format is defined by the src/ipc/capnp/*.capnp schemas. Two distinct
+kinds of stability matter, and this lint guards both:
+
+  * Wire compatibility depends on the file id (@0x...) and the ordinals (@N)
+    with their types: renumbering, reusing, removing, or changing the type of a
+    released ordinal makes an old peer and a new one disagree on the wire.
+  * Member *names* do NOT affect the wire -- renaming a field/method while
+    keeping its ordinal is wire-compatible. But the name IS the generated C++
+    proxy API (and the $Proxy.name mapping to the C++ member), so a rename is a
+    source-level break for everything that uses the proxies.
+
+This lint diffs each schema against its version at the most recent mainnet
+release tag and fails if a released ordinal was removed or renamed, or if a
+file's id changed. (It does not yet diff field types; type changes on an existing
+ordinal are a wire break it would miss -- a future enhancement.)
 
 Schemas that did not exist at the baseline release are new: there is nothing to
 compare, so they pass (their ordinals become the baseline at the next release).
@@ -120,11 +128,12 @@ def main():
             head_members = head_scopes.get(scope, {})
             for ordinal, name in members.items():
                 if ordinal not in head_members:
-                    problems.append(f"{path}: {scope} @{ordinal} ('{name}') removed since {tag} (ordinals are append-only)")
+                    problems.append(f"{path}: {scope} @{ordinal} ('{name}') removed since {tag} "
+                                    "(removing/renumbering a released ordinal breaks the wire)")
                 elif head_members[ordinal] != name:
                     problems.append(
                         f"{path}: {scope} @{ordinal} renamed '{name}' -> '{head_members[ordinal]}' since {tag} "
-                        "(ordinal reuse breaks the wire format)")
+                        "(wire-safe, but breaks the generated proxy API and $Proxy.name mapping)")
 
     if problems:
         print(f"Cap'n Proto schema compatibility regressions vs release {tag}:")
