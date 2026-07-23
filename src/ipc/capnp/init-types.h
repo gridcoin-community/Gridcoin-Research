@@ -11,6 +11,7 @@
 // scope to build/read the returned capabilities.
 #include <ipc/capnp/node.capnp.proxy-types.h>
 #include <ipc/capnp/staking.capnp.proxy-types.h>
+#include <ipc/capnp/wallet.capnp.proxy-types.h>
 
 #include <ipc/capnp/init.capnp.proxy.h>
 

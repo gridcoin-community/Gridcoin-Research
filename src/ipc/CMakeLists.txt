@@ -32,6 +32,7 @@ target_capnp_sources(gridcoin_ipc ${CMAKE_CURRENT_SOURCE_DIR}
     capnp/handler.capnp
     capnp/staking.capnp
     capnp/node.capnp
+    capnp/wallet.capnp
     capnp/init.capnp
 )
 

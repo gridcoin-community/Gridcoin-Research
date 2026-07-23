@@ -13,6 +13,7 @@ $Proxy.includeTypes("ipc/capnp/init-types.h");
 
 using Node = import "node.capnp";
 using Staking = import "staking.capnp";
+using Wallet = import "wallet.capnp";
 
 # Per-process bootstrap interface (interfaces::Init). construct @0 is the
 # libmultiprocess lifecycle entry point (ThreadMap exchange); the makeX methods
@@ -31,6 +32,7 @@ interface Init $Proxy.wrap("interfaces::Init") {
     authenticate @4 (context :Proxy.Context, cookie :Text) -> (result :Bool);
     getBuildInfo @5 (context :Proxy.Context) -> (result :BuildInfo);
     getIdentity @6 (context :Proxy.Context) -> (result :NodeIdentity);
+    makeWallet @7 (context :Proxy.Context) -> (result :Wallet.Wallet);
 }
 
 struct BuildInfo $Proxy.wrap("interfaces::BuildInfo") {

@@ -539,13 +539,13 @@ bool WalletModel::getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const
 
 bool WalletModel::getKeyFromPool(CPubKey& out_public_key, const std::string& label)
 {
-    return m_wallet.getKeyFromPool(out_public_key, label);
+    return m_wallet.getKeyFromPool(label, out_public_key);
 }
 
 QString WalletModel::getNewReceiveAddress(const QString& label)
 {
     std::string address;
-    if (!m_wallet.getNewReceiveAddress(label.toStdString(), address)) {
+    if (!m_wallet.getNewReceiveAddressWithLabel(label.toStdString(), address)) {
         return QString();
     }
     return QString::fromStdString(address);
