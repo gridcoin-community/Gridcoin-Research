@@ -20,10 +20,14 @@ Init::~Init() = default;
 
 bool Init::isCoreReady() { return true; }
 
-// Handshake surface (doc/multiprocess_design.md section 4.3). The monolithic
-// build has no IPC peer, so authenticate() reports success and the build/identity
-// snapshots are empty; the node's serving Init (Stage 2) overrides these.
-bool Init::authenticate(const std::string& /*cookie*/) { return true; }
+// Handshake surface (doc/multiprocess_design.md section 4.3). The base default
+// denies: authentication is only meaningful for an Init served over IPC, and the
+// serving wrapper (ipc::MakeServeInit) overrides this to grant on a valid cookie.
+// Denying by default means a base Init accidentally served directly never grants
+// unauthenticated access. (The monolithic build never calls authenticate() -- it
+// uses the in-process Init without a handshake.) The build/identity snapshots are
+// empty for the same reason; the serving Init overrides them.
+bool Init::authenticate(const std::string& /*cookie*/) { return false; }
 
 BuildInfo Init::getBuildInfo() { return BuildInfo{}; }
 

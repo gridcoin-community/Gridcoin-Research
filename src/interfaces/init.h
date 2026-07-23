@@ -78,7 +78,9 @@ public:
     //! the cookie it wrote at startup and returns whether it matches. Build and
     //! identity information are never served to an unauthenticated peer, so the
     //! GUI hard-fails and disconnects on a false result. Authentication precedes
-    //! every other exchange. The monolithic default (no IPC peer) returns true.
+    //! every other exchange. The base default denies (returns false); only the
+    //! serving Init wrapper grants on a valid cookie, so a base Init served
+    //! directly never leaks access. The monolithic build never calls this.
     virtual bool authenticate(const std::string& cookie);
 
     //! The node's build fingerprint, for the schema/protocol/commit comparison in

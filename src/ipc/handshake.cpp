@@ -15,8 +15,11 @@
 
 #include <array>
 #include <cstddef>
+#include <fcntl.h>
 #include <fstream>
 #include <sys/stat.h>
+#include <system_error>
+#include <unistd.h>
 
 namespace ipc {
 namespace {
@@ -32,17 +35,39 @@ std::optional<std::string> ReadFile(const fs::path& path)
     return contents;
 }
 
-//! Write \p contents to \p path atomically (temp file + rename) with mode 0600.
+//! Write \p contents to \p path atomically (temp file + rename). The temp file is
+//! created with mode 0600 from the start (no umask window that could expose the
+//! secret cookie), the write is verified, and any failure throws so the caller
+//! knows the file does not hold what it expects.
 void WriteFileAtomic(const fs::path& path, const std::string& contents)
 {
     fs::path tmp = path;
     tmp += ".tmp";
-    {
-        std::ofstream out(tmp.string(), std::ios::binary | std::ios::trunc);
-        out << contents;
+    const std::string tmp_str = tmp.string();
+
+    int fd = ::open(tmp_str.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd == -1) {
+        throw std::system_error(errno, std::system_category(), "open " + tmp_str);
     }
-    ::chmod(tmp.string().c_str(), 0600);
-    fs::rename(tmp, path);
+    size_t written = 0;
+    while (written < contents.size()) {
+        ssize_t n = ::write(fd, contents.data() + written, contents.size() - written);
+        if (n < 0) {
+            int e = errno;
+            ::close(fd);
+            throw std::system_error(e, std::system_category(), "write " + tmp_str);
+        }
+        written += static_cast<size_t>(n);
+    }
+    if (::fsync(fd) != 0) {
+        int e = errno;
+        ::close(fd);
+        throw std::system_error(e, std::system_category(), "fsync " + tmp_str);
+    }
+    if (::close(fd) != 0) {
+        throw std::system_error(errno, std::system_category(), "close " + tmp_str);
+    }
+    fs::rename(tmp, path); // throws (boost::filesystem) on failure
 }
 
 //! 16 strong random bytes as hex -- a per-datadir node identifier.
@@ -104,9 +129,10 @@ interfaces::NodeIdentity WriteIdentity(const fs::path& dir)
     std::string node_id;
     if (auto existing = ReadFile(path)) {
         UniValue obj;
-        if (obj.read(*existing) && obj.isObject() && obj.exists("node_id")) {
+        if (obj.read(*existing) && obj.isObject() && obj.exists("node_id") && obj["node_id"].isStr()) {
             node_id = obj["node_id"].get_str();
         }
+        // A malformed/non-string node_id falls through to a freshly generated one.
     }
     if (node_id.empty()) node_id = GenerateNodeId();
 
@@ -132,11 +158,14 @@ std::optional<interfaces::NodeIdentity> ReadIdentity(const fs::path& dir)
     UniValue obj;
     if (!obj.read(*contents) || !obj.isObject()) return std::nullopt;
 
+    // Guard each field with isStr(): UniValue::get_str() throws on a non-string,
+    // but a malformed file must yield nullopt (the documented contract), not an
+    // exception the GUI caller may not catch.
     interfaces::NodeIdentity id;
-    if (obj.exists("node_id")) id.node_id = obj["node_id"].get_str();
-    if (obj.exists("network")) id.network = obj["network"].get_str();
-    if (obj.exists("datadir")) id.datadir = obj["datadir"].get_str();
-    if (obj.exists("genesis_hash")) id.genesis_hash = obj["genesis_hash"].get_str();
+    if (obj.exists("node_id") && obj["node_id"].isStr()) id.node_id = obj["node_id"].get_str();
+    if (obj.exists("network") && obj["network"].isStr()) id.network = obj["network"].get_str();
+    if (obj.exists("datadir") && obj["datadir"].isStr()) id.datadir = obj["datadir"].get_str();
+    if (obj.exists("genesis_hash") && obj["genesis_hash"].isStr()) id.genesis_hash = obj["genesis_hash"].get_str();
     if (id.node_id.empty()) return std::nullopt;
     return id;
 }

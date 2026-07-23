@@ -14,10 +14,21 @@
 #include <string>
 #include <system_error>
 #include <typeindex>
+#include <unistd.h>
 #include <utility>
 
 namespace ipc {
 namespace {
+
+//! Closes a socket fd on scope exit unless release()d. Protects the window
+//! between acquiring the fd (Process::connect/bind) and the protocol layer taking
+//! ownership of it -- if the protocol call throws, the fd is not leaked.
+struct FdGuard
+{
+    int fd;
+    ~FdGuard() { if (fd != -1) ::close(fd); }
+    void release() { fd = -1; }
+};
 
 class IpcImpl : public interfaces::Ipc
 {
@@ -50,13 +61,18 @@ public:
         } else {
             fd = m_process->connect(GetDataDir(), address);
         }
-        return m_protocol->connect(fd, m_exe_name);
+        FdGuard guard{fd};
+        auto init = m_protocol->connect(fd, m_exe_name);
+        guard.release(); // the protocol/stream now owns the fd
+        return init;
     }
 
     void listenAddress(std::string& address) override
     {
         int fd = m_process->bind(GetDataDir(), address);
+        FdGuard guard{fd};
         m_protocol->listen(fd, m_exe_name, m_init);
+        guard.release(); // the protocol/listener now owns the fd
     }
 
     void disconnectIncoming() override { m_protocol->disconnectIncoming(); }

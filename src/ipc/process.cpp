@@ -99,12 +99,33 @@ public:
             ::chmod(path.parent_path().string().c_str(), 0700);
         }
 
-        // Anti-hijack (design section 4.3): if the socket path already exists,
-        // connect-probe it. A live listener means the node is already running --
-        // refuse to start rather than displace it. A refused/absent connection
-        // means a stale path left by a crash -- unlink and rebind. Never unlink a
-        // live socket.
-        if (fs::symlink_status(path).type() == fs::socket_file) {
+        // Try to bind; only if the path already exists (EADDRINUSE) do we probe it.
+        // A live listener means the node is already running (refuse to start rather
+        // than displace it); a refused/absent connection means a stale path from a
+        // crash (unlink and retry once). Binding first -- rather than pre-emptively
+        // unlinking -- avoids a window where we remove a socket another starting
+        // node just bound. (A residual race with a live-but-backlog-full listener
+        // remains; a lock file is the future hardening.)
+        for (int attempt = 0; attempt < 2; ++attempt) {
+            int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+            if (fd == -1) {
+                throw std::system_error(errno, std::system_category());
+            }
+            // Create the socket node with 0600 from the start: bind() honors the
+            // umask, so a permissive umask would otherwise leave a world-accessible
+            // window before an after-the-fact chmod.
+            const mode_t old_umask = ::umask(0177);
+            const int rc = ::bind(fd, (const struct sockaddr*)&addr, sizeof(addr));
+            const int bind_errno = errno;
+            ::umask(old_umask);
+            if (rc == 0) {
+                ::chmod(path.string().c_str(), 0600); // belt-and-suspenders
+                return fd;
+            }
+            ::close(fd);
+            if (bind_errno != EADDRINUSE || attempt == 1) {
+                throw std::system_error(bind_errno, std::system_category());
+            }
             int probe_errno = 0;
             int probe_fd = TryConnect(addr, probe_errno);
             if (probe_fd != -1) {
@@ -113,22 +134,11 @@ public:
                     "Another process is already listening on the IPC socket '%s'; refusing to start.",
                     path.string()));
             }
-            // Stale socket (connection refused / gone): safe to remove.
-            fs::remove(path);
+            if (fs::symlink_status(path).type() == fs::socket_file) {
+                fs::remove(path); // stale: safe to remove, then retry the bind
+            }
         }
-
-        int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
-        if (fd == -1) {
-            throw std::system_error(errno, std::system_category());
-        }
-        if (::bind(fd, (const struct sockaddr*)&addr, sizeof(addr)) != 0) {
-            int bind_error = errno;
-            ::close(fd);
-            throw std::system_error(bind_error, std::system_category());
-        }
-        // Socket 0600 (design section 4.3).
-        ::chmod(path.string().c_str(), 0600);
-        return fd;
+        throw std::runtime_error("Failed to bind the IPC socket"); // unreachable
     }
 };
 } // namespace

@@ -64,7 +64,11 @@ public:
         if (::listen(listen_fd, /*backlog=*/5) != 0) {
             throw std::system_error(errno, std::system_category());
         }
-        mp::ListenConnections<messages::Init>(*m_loop, listen_fd, init);
+        // Cap at a single simultaneous connection: the served Init (and its
+        // authentication state) is shared, and the v1 model is exactly one GUI.
+        // This prevents a second peer from riding an already-authenticated session
+        // (see ServeInit). Per-connection auth would lift this cap later.
+        mp::ListenConnections<messages::Init>(*m_loop, listen_fd, init, /*max_connections=*/1);
     }
 
     void disconnectIncoming() override
@@ -91,14 +95,23 @@ public:
         if (m_loop) return;
         std::promise<void> promise;
         m_loop_thread = std::thread([&] {
-            RenameThread("capnp-loop");
-            m_loop.emplace(exe_name, mp::LogFn{IpcLogFn}, &m_context);
-            m_loop_ref.emplace(*m_loop);
+            try {
+                RenameThread("capnp-loop");
+                m_loop.emplace(exe_name, mp::LogFn{IpcLogFn}, &m_context);
+                m_loop_ref.emplace(*m_loop);
+            } catch (...) {
+                // Surface a construction failure to the waiting thread instead of
+                // escaping std::thread (which would call std::terminate).
+                promise.set_exception(std::current_exception());
+                return;
+            }
             promise.set_value();
             m_loop->loop();
             m_loop.reset();
         });
-        promise.get_future().wait();
+        // Rethrows here if the loop thread failed to construct the EventLoop, so
+        // the caller (IpcImpl / AppInit) can log and continue instead of crashing.
+        promise.get_future().get();
     }
 
     Context m_context;

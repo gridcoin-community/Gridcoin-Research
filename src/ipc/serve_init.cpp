@@ -16,10 +16,13 @@
 namespace ipc {
 namespace {
 
-//! Auth-gating wrapper served to IPC clients. The authenticated flag is per
-//! served-Init object (one per node process); with the 0600 socket + per-user
-//! ownership that is sufficient for the single-GUI v1. Per-connection auth state
-//! (for multiple simultaneous clients) is a later hardening.
+//! Auth-gating wrapper served to IPC clients. The authenticated flag lives on
+//! this served object, which is shared across connections; the node caps the
+//! listener at one connection (see CapnpProtocol::listen), so in the single-GUI
+//! v1 there is no second peer to bleed state to. authenticate() only ever *sets*
+//! the flag on a valid cookie -- it never clears it -- so a later bad-cookie call
+//! cannot de-authenticate the established session. Per-connection auth state (for
+//! multiple simultaneous clients) is a later hardening.
 class ServeInit : public interfaces::Init
 {
 public:
@@ -30,8 +33,11 @@ public:
 
     bool authenticate(const std::string& cookie) override
     {
-        m_authenticated = ConstantTimeEqual(cookie, m_cookie);
-        return m_authenticated;
+        // Return whether THIS cookie is valid (the client checks the result), but
+        // only ever set -- never clear -- the sticky session flag.
+        const bool ok = ConstantTimeEqual(cookie, m_cookie);
+        if (ok) m_authenticated = true;
+        return ok;
     }
 
     interfaces::BuildInfo getBuildInfo() override
