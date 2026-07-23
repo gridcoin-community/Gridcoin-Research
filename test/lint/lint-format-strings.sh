@@ -20,6 +20,7 @@ FUNCTION_NAMES_AND_NUMBER_OF_LEADING_ARGUMENTS=(
     "LogPrintf,0"
     "GUILogPrint,1"
     "GUILogPrintf,0"
+    "GUIError,0"
     "printf,0"
     "snprintf,2"
     "sprintf,1"

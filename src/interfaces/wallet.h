@@ -36,6 +36,18 @@ struct WalletBalances
     int64_t immature_balance{0};
 };
 
+//! Snapshot of the wallet's lock/encryption state, so a consumer that needs more
+//! than one facet -- the encryption-status enum is crypted && locked -- reads
+//! them together in one call instead of several round trips (see
+//! Wallet::getLockState).
+struct WalletLockState
+{
+    bool crypted{false};                   //!< IsCrypted(): the wallet has a passphrase.
+    bool locked{false};                    //!< IsLocked(): the keys are not in memory.
+    bool unlocked_for_staking_only{false}; //!< Unlocked but restricted to staking.
+    bool staking_only_flag{false};         //!< Persisted staking-only unlock preference.
+};
+
 //! Value snapshot of one unspent wallet output for the coin-control views.
 //! Carries no pointers into the wallet: everything the GUI renders —
 //! including the maturity flag, which needs cs_main — is computed node-side.
@@ -234,13 +246,17 @@ public:
     //! Number of transactions in the wallet.
     virtual int getNumTransactions() = 0;
 
-    //! Whether the wallet is encrypted.
-    virtual bool isCrypted() = 0;
+    //! The wallet's lock/encryption state as one snapshot. Preferred over separate
+    //! reads whenever more than one facet is needed together (the encryption-status
+    //! enum is crypted && locked): the facets are read back-to-back in one call
+    //! (a narrower window than separate reads) and the split build makes one round
+    //! trip. It intentionally does not lock -- see the impl for why.
+    virtual WalletLockState getLockState() = 0;
 
-    //! Whether the wallet is locked.
-    virtual bool isLocked() = 0;
-
-    //! Whether an unlocked wallet is restricted to staking only.
+    //! Whether an unlocked wallet is restricted to staking only. Kept as an
+    //! individual accessor (rather than only a WalletLockState field) because
+    //! requestUnlock re-reads it fresh across its own relock/unlock mutations,
+    //! where a snapshot taken earlier would be stale.
     virtual bool isUnlockedForStakingOnly() = 0;
 
     //! The persisted staking-only unlock preference, independent of the

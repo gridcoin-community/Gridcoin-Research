@@ -97,9 +97,32 @@ public:
                          return static_cast<int>(m_wallet->mapWallet.size()));
     }
 
-    bool isCrypted() override { return m_wallet->IsCrypted(); }
+    WalletLockState getLockState() override
+    {
+        // A single batched read of every lock/encryption facet: the split build's
+        // one round trip instead of several, and a narrower window than the former
+        // two separate getEncryptionStatus() reads. Each facet is read once, as
+        // the individual accessors did -- IsCrypted()/IsLocked() are guarded by
+        // cs_KeyStore internally and fWalletUnlockStakingOnly is atomic -- so this
+        // deliberately does NOT take cs_wallet: getEncryptionStatus() is polled
+        // from the GUI thread and must not stall behind a long cs_wallet holder
+        // (the O(N) updateWallet path). Because the reads are unlocked, a
+        // concurrent lock/unlock/encrypt can be caught mid-transition; that is
+        // harmless because every (crypted, locked) pair is a valid encryption
+        // status (crypted && !locked is simply Unlocked -- the state EncryptWallet
+        // itself ends in), so the snapshot is always self-consistent and any
+        // transient value corrects on the next poll.
+        const bool crypted = m_wallet->IsCrypted();
+        const bool locked = m_wallet->IsLocked();
+        const bool staking_only_flag = fWalletUnlockStakingOnly;
 
-    bool isLocked() override { return m_wallet->IsLocked(); }
+        WalletLockState state;
+        state.crypted = crypted;
+        state.locked = locked;
+        state.unlocked_for_staking_only = !locked && staking_only_flag;
+        state.staking_only_flag = staking_only_flag;
+        return state;
+    }
 
     bool isUnlockedForStakingOnly() override
     {
