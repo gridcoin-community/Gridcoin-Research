@@ -2,6 +2,7 @@
 #include <QObject>
 
 #include "bitcoinunitstests.h"
+#include "sidestakemodeltests.h"
 #include "uritests.h"
 
 #if defined(QT_STATICPLUGIN)
@@ -30,6 +31,10 @@ int main(int argc, char *argv[])
 
     URITests test2;
     if (QTest::qExec(&test2) != 0)
+        fInvalid = true;
+
+    SideStakeModelTests test3;
+    if (QTest::qExec(&test3) != 0)
         fInvalid = true;
 
     return fInvalid;
