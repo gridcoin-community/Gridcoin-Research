@@ -63,6 +63,15 @@ public:
 
     void Init();
 
+    //! Read the per-node GUI preferences into the model's members. Split out of
+    //! Init() because those settings live under a per-node QSettings group keyed
+    //! on the datadir (GUIUtil::nodeSettingsKey), which is only known once the
+    //! datadir is finalized. Init() runs from the constructor -- before the
+    //! datadir is chosen (it seeds -datadir from the stored value) -- so it cannot
+    //! read them; the composition root calls this afterwards. See the ordering
+    //! note in bitcoin.cpp.
+    void readNodeSettings();
+
     //! One-time migration of the settings that moved from Gridcoin-Qt.conf into
     //! the core read-write settings file (proxy / UPnP / reservebalance /
     //! update-check). Must be called from the composition root AFTER the config

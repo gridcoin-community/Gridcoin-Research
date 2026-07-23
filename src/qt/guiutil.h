@@ -73,6 +73,16 @@ namespace GUIUtil
 
     QString getDefaultDataDirectory();
 
+    //! Namespace a QSettings key per node (datadir) so multiple wallet instances
+    //! on one machine don't overwrite each other's GUI preferences. Returns \p key
+    //! unchanged for the default datadir (preserving the existing flat keys, so the
+    //! primary node needs no migration), and prefixes a per-datadir group
+    //! ("node_<sanitized datadir>/") otherwise. Combined with the network-scoped
+    //! application name, this isolates each (network, datadir) node. MUST be called
+    //! only after the datadir is finalized (GetDataDir() valid) -- see
+    //! OptionsModel::readNodeSettings and the note in bitcoin.cpp.
+    QString nodeSettingsKey(const QString& key);
+
     /** Get save filename, mimics QFileDialog::getSaveFileName, except that it appends a default suffix
         when no suffix is provided by the user.
 

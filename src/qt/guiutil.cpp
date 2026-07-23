@@ -13,6 +13,8 @@
 // test/lint/lint-qt-includes.sh.
 #include "chainparams.h"
 #include "clientversion.h"
+#include "util/strencodings.h" // For SanitizeString (per-node QSettings key).
+#include <algorithm>           // For std::replace.
 #include <codecvt>
 
 #include <QString>
@@ -334,6 +336,29 @@ QString boostPathToQString(const fs::path &path)
 QString getDefaultDataDirectory()
 {
     return boostPathToQString(GetDefaultDataDir());
+}
+
+namespace {
+//! The per-node QSettings group: "" for the default datadir (keep the existing
+//! flat keys), "node_<sanitized datadir>" otherwise. Path separators are
+//! flattened so the datadir becomes one group level rather than nested QSettings
+//! groups.
+QString NodeSettingsGroup()
+{
+    if (GetDataDir() == GetDefaultDataDir()) {
+        return QString();
+    }
+    std::string dd = SanitizeString(GetDataDir().string());
+    std::replace(dd.begin(), dd.end(), '/', '_');
+    std::replace(dd.begin(), dd.end(), '\\', '_');
+    return "node_" + QString::fromStdString(dd);
+}
+} // namespace
+
+QString nodeSettingsKey(const QString& key)
+{
+    const QString group = NodeSettingsGroup();
+    return group.isEmpty() ? key : group + "/" + key;
 }
 
 QString getSaveFileName(QWidget *parent, const QString &caption,
