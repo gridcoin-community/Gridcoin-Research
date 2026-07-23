@@ -696,7 +696,13 @@ int64_t CWallet::IncOrderPosNext(CWalletDB *pwalletdb) EXCLUSIVE_LOCKS_REQUIRED(
     if (pwalletdb) {
         pwalletdb->WriteOrderPosNext(nOrderPosNext);
     } else {
-        CWalletDB(strWalletFile).WriteOrderPosNext(nOrderPosNext);
+        // flush_on_close=false: the default would run a full Berkeley DB
+        // checkpoint per call, which is prohibitive when this is reached per
+        // new transaction during a rescan. A crash loses the counter bump
+        // together with the same-session transaction writes; the load-time
+        // ReorderTransactions repair covers that, matching the legacy
+        // AddToWalletIfInvolvingMe flush-off contract.
+        CWalletDB(strWalletFile, "r+", /*flush_on_close=*/false).WriteOrderPosNext(nOrderPosNext);
     }
     return nRet;
 }
@@ -1141,6 +1147,14 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
         wtx.SetTxState(state);
         wtx.nTimeReceived = GetTime();
         wtx.fFromMe = fIsFromMe;
+
+        // Assign the wallet ordering position. Without this the entry keeps
+        // the -1 sentinel, sorts before every existing transaction in
+        // OrderedTxItems (listtransactions shows it as the oldest entry),
+        // and is only repaired by ReorderTransactions at the next wallet
+        // load. The pre-state-machine path went through AddToWallet, which
+        // assigns it; this insert path must do the same.
+        wtx.nOrderPos = IncOrderPosNext();
 
         wtx.nTimeSmart = wtx.nTimeReceived;
         if (const auto* conf = std::get_if<TxStateConfirmed>(&state)) {

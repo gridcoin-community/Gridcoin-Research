@@ -2,6 +2,7 @@
 
 #include "gridcoin/mnemonics.h"
 #include "gridcoin/sidestake.h"
+#include "init.h"
 #include "main.h"
 #include "wallet/wallet.h"
 
@@ -2061,6 +2062,53 @@ BOOST_AUTO_TEST_CASE(maptxspends_cleanup_preserves_other_conflicts)
         BOOST_CHECK(range.first != range.second);
         BOOST_CHECK_EQUAL(range.first->second, hash2);
     }
+}
+
+BOOST_AUTO_TEST_CASE(incoming_tx_gets_order_position)
+{
+    // Regression test for the #2839 state-machine rewrite: incoming
+    // transactions inserted through SyncTransaction/AddToWalletIfInvolvingMe
+    // kept the default nOrderPos of -1, so OrderedTxItems (and therefore
+    // listtransactions) sorted every new receive/stake as the OLDEST entry
+    // until ReorderTransactions repaired the sentinel at the next wallet
+    // load. Locally created sends were unaffected (CommitTransaction goes
+    // through AddToWallet, which assigns the position).
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CKey key;
+    key.MakeNewKey(true);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));
+
+    // A payment to an owned key funded by an outpoint this wallet does not
+    // know: the shape of an external receive. GetDebit finds no prevout in
+    // mapWallet, so IsFromMe is false, and the non-null prevout keeps the
+    // transaction structurally valid (and distinct from a coinbase).
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("0x1111111111111111111111111111111111111111111111111111111111111111"), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 5 * COIN;
+    mtx.vout[0].scriptPubKey.SetDestination(CTxDestination(key.GetPubKey().GetID()));
+    const CTransaction tx1(mtx);
+
+    mtx.vout[0].nValue = 6 * COIN; // distinct hash
+    const CTransaction tx2(mtx);
+
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(tx1), TxStateInMempool{}));
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(tx2), TxStateInMempool{}));
+
+    const auto it1 = pwalletMain->mapWallet.find(tx1.GetHash());
+    const auto it2 = pwalletMain->mapWallet.find(tx2.GetHash());
+    BOOST_REQUIRE(it1 != pwalletMain->mapWallet.end());
+    BOOST_REQUIRE(it2 != pwalletMain->mapWallet.end());
+
+    // Both entries carry real, strictly increasing order positions.
+    BOOST_CHECK(it1->second.nOrderPos >= 0);
+    BOOST_CHECK(it2->second.nOrderPos > it1->second.nOrderPos);
+
+    // Clean up so later cases see the wallet they expect.
+    pwalletMain->EraseFromWallet(tx1.GetHash());
+    pwalletMain->EraseFromWallet(tx2.GetHash());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
