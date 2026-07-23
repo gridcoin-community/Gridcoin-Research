@@ -345,10 +345,19 @@ namespace {
 //! groups.
 QString NodeSettingsGroup()
 {
-    if (GetDataDir() == GetDefaultDataDir()) {
+    // Compare the NON-net-specific datadir against the default. The network is
+    // already separated by the QSettings ApplicationName, so the group only needs
+    // to distinguish datadirs. GetDataDir() (net-specific) includes the
+    // "testnet"/"regtest" subdir, which would make even the default datadir look
+    // non-default on those networks -- breaking the "primary node keeps flat keys"
+    // goal. GetDataDir(false) answers "did the user override -datadir?" regardless
+    // of network.
+    if (GetDataDir(false) == GetDefaultDataDir()) {
         return QString();
     }
-    std::string dd = SanitizeString(GetDataDir().string());
+    // Convert via boostPathToQString(), not fs::path::string(): a raw narrowing
+    // can corrupt non-codepage path characters on Windows (see boostPathToQString).
+    std::string dd = SanitizeString(boostPathToQString(GetDataDir(false)).toStdString());
     std::replace(dd.begin(), dd.end(), '/', '_');
     std::replace(dd.begin(), dd.end(), '\\', '_');
     return "node_" + QString::fromStdString(dd);

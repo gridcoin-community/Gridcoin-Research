@@ -77,6 +77,27 @@ void OptionsModel::Init()
 {
     QSettings settings;
 
+    // Give the per-node preference members determinate values up front. They are
+    // re-read from the per-node QSettings group in readNodeSettings() once the
+    // datadir is finalized, but Init() runs from the constructor (before that), so
+    // without this any access in the interim would read an uninitialized member.
+    // Keep these defaults in sync with readNodeSettings().
+    nDisplayUnit = BitcoinUnits::BTC;
+    fStartAtStartup = false;
+    fStartMin = true;
+    fMinimizeToTray = false;
+    fDisableTrxNotifications = false;
+    fDisablePollNotifications = false;
+    bDisplayAddresses = false;
+    fMinimizeOnClose = false;
+    fConfirmOnClose = false;
+    fCoinControlFeatures = false;
+    fLimitTxnDisplay = false;
+    fMaskValues = false;
+    limitTxnDate = QDate();
+    pollExpireNotification = 8.0;
+    walletStylesheet = "dark";
+
     // language is read HERE (not in readNodeSettings) because it feeds -lang for
     // the Qt translator, which is installed before the datadir is finalized -- so
     // it stays a global (not per-node) setting. Every other Qt-only preference is
