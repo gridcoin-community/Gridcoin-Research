@@ -500,6 +500,12 @@ if [[ "$TARGET" == "all" || "$TARGET" == "depends" ]] && [[ "$(uname -s)" == "Li
         if [ "$USE_CCACHE" = "true" ]; then
              DEPENDS_ARGS="CC_CACHE=ccache"
         fi
+        # Build the multiprocess (Cap'n Proto / mpgen) depends packages so the
+        # generated toolchain.cmake enables ENABLE_MULTIPROCESS and provides the
+        # native code generators the subsequent CMake configure consumes.
+        if [ "$ENABLE_MULTIPROCESS" = "true" ]; then
+            DEPENDS_ARGS="$DEPENDS_ARGS MULTIPROCESS=1"
+        fi
 
         make HOST=x86_64-pc-linux-gnu $DEPENDS_ARGS -j $CORES
         cd ..
@@ -587,6 +593,12 @@ if [[ "$TARGET" == "all" || "$TARGET" == "win64" ]] && [[ "$(uname -s)" == "Linu
         DEPENDS_ARGS=""
         if [ "$USE_CCACHE" = "true" ]; then
              DEPENDS_ARGS="CC_CACHE=ccache"
+        fi
+        # Build the multiprocess (Cap'n Proto / mpgen) depends packages so the
+        # generated toolchain.cmake enables ENABLE_MULTIPROCESS and provides the
+        # native code generators the subsequent CMake configure consumes.
+        if [ "$ENABLE_MULTIPROCESS" = "true" ]; then
+            DEPENDS_ARGS="$DEPENDS_ARGS MULTIPROCESS=1"
         fi
 
         make HOST=x86_64-w64-mingw32 $DEPENDS_ARGS -j $CORES
