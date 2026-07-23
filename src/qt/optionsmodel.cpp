@@ -36,9 +36,10 @@ std::string FormatReserveBalanceSetting(qint64 sat)
 //! from the previous behavior).
 bool PushEffectiveProxy(interfaces::Node& node, QSettings& settings)
 {
-    const bool use_proxy = settings.value("fUseProxy", false).toBool();
+    const bool use_proxy = settings.value(GUIUtil::nodeSettingsKey("fUseProxy"), false).toBool();
     const std::string addr =
-        use_proxy ? settings.value("addrProxy", "127.0.0.1:9050").toString().toStdString() : std::string();
+        use_proxy ? settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString().toStdString()
+                  : std::string();
     return node.changeSettings({{"proxy", addr}}).ok;
 }
 
@@ -76,23 +77,32 @@ void OptionsModel::Init()
 {
     QSettings settings;
 
-    // These are Qt-only settings:
-    nDisplayUnit = settings.value("nDisplayUnit", BitcoinUnits::BTC).toInt();
-    fStartAtStartup = settings.value("fStartAtStartup", false).toBool();
-    fStartMin = settings.value("fStartMin", true).toBool();
-    fMinimizeToTray = settings.value("fMinimizeToTray", false).toBool();
-    fDisableTrxNotifications = settings.value("fDisableTrxNotifications", false).toBool();
-    fDisablePollNotifications = settings.value("fDisablePollNotifications", false).toBool();
-    bDisplayAddresses = settings.value("bDisplayAddresses", false).toBool();
-    fMinimizeOnClose = settings.value("fMinimizeOnClose", false).toBool();
-    fConfirmOnClose = settings.value("fConfirmOnClose", false).toBool();
-    fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
-    fLimitTxnDisplay = settings.value("fLimitTxnDisplay", false).toBool();
-    fMaskValues = settings.value("fMaskValues", false).toBool();
-    limitTxnDate = settings.value("limitTxnDate", QDate()).toDate();
-    pollExpireNotification = settings.value("pollExpireNotification", 8.0).toDouble();
+    // Give the per-node preference members determinate values up front. They are
+    // re-read from the per-node QSettings group in readNodeSettings() once the
+    // datadir is finalized, but Init() runs from the constructor (before that), so
+    // without this any access in the interim would read an uninitialized member.
+    // Keep these defaults in sync with readNodeSettings().
+    nDisplayUnit = BitcoinUnits::BTC;
+    fStartAtStartup = false;
+    fStartMin = true;
+    fMinimizeToTray = false;
+    fDisableTrxNotifications = false;
+    fDisablePollNotifications = false;
+    bDisplayAddresses = false;
+    fMinimizeOnClose = false;
+    fConfirmOnClose = false;
+    fCoinControlFeatures = false;
+    fLimitTxnDisplay = false;
+    fMaskValues = false;
+    limitTxnDate = QDate();
+    pollExpireNotification = 8.0;
+    walletStylesheet = "dark";
+
+    // language is read HERE (not in readNodeSettings) because it feeds -lang for
+    // the Qt translator, which is installed before the datadir is finalized -- so
+    // it stays a global (not per-node) setting. Every other Qt-only preference is
+    // per-node and read later, in readNodeSettings(), once GetDataDir() is known.
     language = settings.value("language", "").toString();
-    walletStylesheet = settings.value("walletStylesheet", "dark").toString();
 
     // Language stays GUI-local (the core does not read -lang): apply it into this
     // process's own args for the Qt translator.
@@ -112,6 +122,37 @@ void OptionsModel::Init()
     }
 
     m_sidestake_model = new SideStakeTableModel(m_sidestake_manager, this);
+}
+
+void OptionsModel::readNodeSettings()
+{
+    // The per-node GUI preferences, read under the datadir-keyed QSettings group
+    // (GUIUtil::nodeSettingsKey) so multiple wallet instances on one machine do
+    // not overwrite each other. Deferred out of Init() because the datadir is not
+    // finalized there; the composition root calls this once it is.
+    QSettings settings;
+    nDisplayUnit = settings.value(GUIUtil::nodeSettingsKey("nDisplayUnit"), BitcoinUnits::BTC).toInt();
+    // fStartAtStartup / fStartMin are deliberately NOT per-node: the OS autostart
+    // entry they mirror (GUIUtil::SetStartOnSystemStartup) is keyed only by network
+    // ("gridcoin-mainnet.desktop" / "gridcoin-testnet.desktop"), not by datadir, so
+    // all same-network nodes share one entry. Per-node QSettings state would let the
+    // UI show an autostart status that disagrees with the single OS entry. Use flat
+    // (network-scoped, via ApplicationName) keys so the stored state matches the
+    // actual per-network behavior. Keep this in sync with the setData() cases.
+    fStartAtStartup = settings.value("fStartAtStartup", false).toBool();
+    fStartMin = settings.value("fStartMin", true).toBool();
+    fMinimizeToTray = settings.value(GUIUtil::nodeSettingsKey("fMinimizeToTray"), false).toBool();
+    fDisableTrxNotifications = settings.value(GUIUtil::nodeSettingsKey("fDisableTrxNotifications"), false).toBool();
+    fDisablePollNotifications = settings.value(GUIUtil::nodeSettingsKey("fDisablePollNotifications"), false).toBool();
+    bDisplayAddresses = settings.value(GUIUtil::nodeSettingsKey("bDisplayAddresses"), false).toBool();
+    fMinimizeOnClose = settings.value(GUIUtil::nodeSettingsKey("fMinimizeOnClose"), false).toBool();
+    fConfirmOnClose = settings.value(GUIUtil::nodeSettingsKey("fConfirmOnClose"), false).toBool();
+    fCoinControlFeatures = settings.value(GUIUtil::nodeSettingsKey("fCoinControlFeatures"), false).toBool();
+    fLimitTxnDisplay = settings.value(GUIUtil::nodeSettingsKey("fLimitTxnDisplay"), false).toBool();
+    fMaskValues = settings.value(GUIUtil::nodeSettingsKey("fMaskValues"), false).toBool();
+    limitTxnDate = settings.value(GUIUtil::nodeSettingsKey("limitTxnDate"), QDate()).toDate();
+    pollExpireNotification = settings.value(GUIUtil::nodeSettingsKey("pollExpireNotification"), 8.0).toDouble();
+    walletStylesheet = settings.value(GUIUtil::nodeSettingsKey("walletStylesheet"), "dark").toString();
 }
 
 void OptionsModel::migrateCoreSettings()
@@ -188,11 +229,11 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case ProxyUse:
             // GUI editing state: whether the user enabled the proxy. The effective
             // proxy address is mirrored to the core -proxy setting on change.
-            return settings.value("fUseProxy", false);
+            return settings.value(GUIUtil::nodeSettingsKey("fUseProxy"), false);
         case ProxyIP:
-            return QVariant(SplitProxy(settings.value("addrProxy", "127.0.0.1:9050").toString()).first);
+            return QVariant(SplitProxy(settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString()).first);
         case ProxyPort:
-            return QVariant(SplitProxy(settings.value("addrProxy", "127.0.0.1:9050").toString()).second);
+            return QVariant(SplitProxy(settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString()).second);
         case ReserveBalance: {
             qint64 sat = 0;
             BitcoinUnits::parse(BitcoinUnits::BTC,
@@ -206,7 +247,7 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case Language:
             return settings.value("language", "");
         case WalletStylesheet:
-            return settings.value("walletStylesheet", "dark");
+            return settings.value(GUIUtil::nodeSettingsKey("walletStylesheet"), "dark");
         case CoinControlFeatures:
             return QVariant(fCoinControlFeatures);
         case LimitTxnDisplay:
@@ -254,6 +295,8 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             if (fStartAtStartup != value.toBool())
             {
                 fStartAtStartup = value.toBool();
+                // Flat (network-scoped) key, not per-node: the OS autostart entry is
+                // per-network, not per-datadir. See readNodeSettings().
                 settings.setValue("fStartAtStartup", fStartAtStartup);
                 successful = GUIUtil::SetStartOnSystemStartup(fStartAtStartup, fStartMin);
             }
@@ -262,25 +305,26 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             if (fStartMin != value.toBool())
             {
                 fStartMin = value.toBool();
+                // Flat (network-scoped) key, not per-node: see readNodeSettings().
                 settings.setValue("fStartMin", fStartMin);
                 successful = GUIUtil::SetStartOnSystemStartup(fStartAtStartup, fStartMin);
             }
             break;
         case MinimizeToTray:
             fMinimizeToTray = value.toBool();
-            settings.setValue("fMinimizeToTray", fMinimizeToTray);
+            settings.setValue(GUIUtil::nodeSettingsKey("fMinimizeToTray"), fMinimizeToTray);
             break;
         case ConfirmOnClose:
             fConfirmOnClose = value.toBool();
-            settings.setValue("fConfirmOnClose", fConfirmOnClose);
+            settings.setValue(GUIUtil::nodeSettingsKey("fConfirmOnClose"), fConfirmOnClose);
             break;
         case DisableTrxNotifications:
             fDisableTrxNotifications = value.toBool();
-            settings.setValue("fDisableTrxNotifications", fDisableTrxNotifications);
+            settings.setValue(GUIUtil::nodeSettingsKey("fDisableTrxNotifications"), fDisableTrxNotifications);
             break;
         case DisablePollNotifications:
             fDisablePollNotifications = value.toBool();
-            settings.setValue("fDisablePollNotifications", fDisablePollNotifications);
+            settings.setValue(GUIUtil::nodeSettingsKey("fDisablePollNotifications"), fDisablePollNotifications);
             break;
         case MapPortUPnP:
             // Core setting: the node applies it (SetUseUPnP + MapPort start/stop
@@ -289,24 +333,24 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             break;
         case MinimizeOnClose:
             fMinimizeOnClose = value.toBool();
-            settings.setValue("fMinimizeOnClose", fMinimizeOnClose);
+            settings.setValue(GUIUtil::nodeSettingsKey("fMinimizeOnClose"), fMinimizeOnClose);
             break;
         case ProxyUse:
-            settings.setValue("fUseProxy", value.toBool());
+            settings.setValue(GUIUtil::nodeSettingsKey("fUseProxy"), value.toBool());
             successful = PushEffectiveProxy(m_node, settings);
             break;
         case ProxyIP: {
             // Replace the host part of the stored address; port is kept. IPv6-aware
             // via SplitProxy/FormatProxy (brackets round-trip correctly).
-            const int port = SplitProxy(settings.value("addrProxy", "127.0.0.1:9050").toString()).second;
-            settings.setValue("addrProxy", FormatProxy(value.toString(), port));
+            const int port = SplitProxy(settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString()).second;
+            settings.setValue(GUIUtil::nodeSettingsKey("addrProxy"), FormatProxy(value.toString(), port));
             successful = PushEffectiveProxy(m_node, settings);
         }
         break;
         case ProxyPort: {
             // Replace the port part of the stored address; host is kept.
-            const QString host = SplitProxy(settings.value("addrProxy", "127.0.0.1:9050").toString()).first;
-            settings.setValue("addrProxy", FormatProxy(host, value.toInt()));
+            const QString host = SplitProxy(settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString()).first;
+            settings.setValue(GUIUtil::nodeSettingsKey("addrProxy"), FormatProxy(host, value.toInt()));
             successful = PushEffectiveProxy(m_node, settings);
         }
         break;
@@ -324,44 +368,44 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         break;
         case DisplayUnit:
             nDisplayUnit = value.toInt();
-            settings.setValue("nDisplayUnit", nDisplayUnit);
+            settings.setValue(GUIUtil::nodeSettingsKey("nDisplayUnit"), nDisplayUnit);
             emit displayUnitChanged(nDisplayUnit);
             break;
 		case DisplayAddresses:
              bDisplayAddresses = value.toBool();
-             settings.setValue("bDisplayAddresses", bDisplayAddresses);
+             settings.setValue(GUIUtil::nodeSettingsKey("bDisplayAddresses"), bDisplayAddresses);
              break;
         case Language:
             settings.setValue("language", value);
             break;
         case WalletStylesheet:
             walletStylesheet = value.toString();
-            settings.setValue("walletStylesheet", walletStylesheet);
+            settings.setValue(GUIUtil::nodeSettingsKey("walletStylesheet"), walletStylesheet);
             emit walletStylesheetChanged(walletStylesheet);
             break;
         case CoinControlFeatures: {
             fCoinControlFeatures = value.toBool();
-            settings.setValue("fCoinControlFeatures", fCoinControlFeatures);
+            settings.setValue(GUIUtil::nodeSettingsKey("fCoinControlFeatures"), fCoinControlFeatures);
             emit coinControlFeaturesChanged(fCoinControlFeatures);
             }
             break;
         case LimitTxnDisplay:
             fLimitTxnDisplay = value.toBool();
-            settings.setValue("fLimitTxnDisplay", fLimitTxnDisplay);
+            settings.setValue(GUIUtil::nodeSettingsKey("fLimitTxnDisplay"), fLimitTxnDisplay);
             emit LimitTxnDisplayChanged(fLimitTxnDisplay);
             break;
         case MaskValues:
             fMaskValues = value.toBool();
-            settings.setValue("fMaskValues", fMaskValues);
+            settings.setValue(GUIUtil::nodeSettingsKey("fMaskValues"), fMaskValues);
             emit MaskValuesChanged(fMaskValues);
             break;
         case LimitTxnDate:
             limitTxnDate = value.toDate();
-            settings.setValue("limitTxnDate", limitTxnDate);
+            settings.setValue(GUIUtil::nodeSettingsKey("limitTxnDate"), limitTxnDate);
             break;
         case PollExpireNotification:
             pollExpireNotification = value.toDouble();
-            settings.setValue("pollExpireNotification", pollExpireNotification);
+            settings.setValue(GUIUtil::nodeSettingsKey("pollExpireNotification"), pollExpireNotification);
             break;
         case DisableUpdateCheck:
             // Core read-write setting (the core scheduler and the GUI both read

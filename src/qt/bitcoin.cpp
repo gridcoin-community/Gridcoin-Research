@@ -477,6 +477,12 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    // The datadir is now finalized (network selected, -datadir resolved), so the
+    // per-node QSettings group is known: read the GUI preferences that are keyed
+    // per node. OptionsModel's constructor (Init) ran earlier -- before the
+    // datadir was chosen -- so it deliberately deferred these until now.
+    optionsModel.readNodeSettings();
+
     // Now that the config file, network selection and read-write settings file
     // are loaded, migrate any proxy / UPnP / reservebalance / update-check values
     // the user had in Gridcoin-Qt.conf into the core read-write settings (one-time).

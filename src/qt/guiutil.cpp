@@ -13,6 +13,8 @@
 // test/lint/lint-qt-includes.sh.
 #include "chainparams.h"
 #include "clientversion.h"
+#include "util/strencodings.h" // For SanitizeString (per-node QSettings key).
+#include <algorithm>           // For std::replace.
 #include <codecvt>
 
 #include <QString>
@@ -334,6 +336,38 @@ QString boostPathToQString(const fs::path &path)
 QString getDefaultDataDirectory()
 {
     return boostPathToQString(GetDefaultDataDir());
+}
+
+namespace {
+//! The per-node QSettings group: "" for the default datadir (keep the existing
+//! flat keys), "node_<sanitized datadir>" otherwise. Path separators are
+//! flattened so the datadir becomes one group level rather than nested QSettings
+//! groups.
+QString NodeSettingsGroup()
+{
+    // Compare the NON-net-specific datadir against the default. The network is
+    // already separated by the QSettings ApplicationName, so the group only needs
+    // to distinguish datadirs. GetDataDir() (net-specific) includes the
+    // "testnet"/"regtest" subdir, which would make even the default datadir look
+    // non-default on those networks -- breaking the "primary node keeps flat keys"
+    // goal. GetDataDir(false) answers "did the user override -datadir?" regardless
+    // of network.
+    if (GetDataDir(false) == GetDefaultDataDir()) {
+        return QString();
+    }
+    // Convert via boostPathToQString(), not fs::path::string(): a raw narrowing
+    // can corrupt non-codepage path characters on Windows (see boostPathToQString).
+    std::string dd = SanitizeString(boostPathToQString(GetDataDir(false)).toStdString());
+    std::replace(dd.begin(), dd.end(), '/', '_');
+    std::replace(dd.begin(), dd.end(), '\\', '_');
+    return "node_" + QString::fromStdString(dd);
+}
+} // namespace
+
+QString nodeSettingsKey(const QString& key)
+{
+    const QString group = NodeSettingsGroup();
+    return group.isEmpty() ? key : group + "/" + key;
 }
 
 QString getSaveFileName(QWidget *parent, const QString &caption,
