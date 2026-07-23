@@ -11,6 +11,7 @@
 #include <mp/util.h>
 
 #include <cstring>
+#include <stdexcept>
 #include <vector>
 
 //! Custom marshalling for Gridcoin value types that cross the IPC boundary but
@@ -34,6 +35,13 @@ template <typename Input, typename ReadDest>
 decltype(auto) CustomReadField(TypeList<uint256>, Priority<1>, InvokeContext& invoke_context, Input&& input, ReadDest&& read_dest)
 {
     auto data = input.get();
+    // The Data field comes off the wire (untrusted in the separated build). The
+    // uint256(vector) constructor asserts the length and then memcpy's a fixed
+    // 32 bytes, so a short buffer would read out of bounds once asserts are
+    // compiled out (NDEBUG). Validate the length here and fail fast on mismatch.
+    if (data.size() != uint256::size()) {
+        throw std::runtime_error("uint256 IPC field has wrong length");
+    }
     return read_dest.construct(std::vector<unsigned char>(data.begin(), data.end()));
 }
 
