@@ -137,11 +137,11 @@ option(USE_QT6          "Use Qt 6 instead of Qt 5" OFF)
 # tooling); it does not by itself change any runtime behavior yet.
 option(ENABLE_MULTIPROCESS "Build with Cap'n Proto + libmultiprocess for the multiprocess (IPC) build" OFF)
 
-# Build against an external libmultiprocess (system / depends install) rather
-# than a vendored copy. Gridcoin has no in-tree libmultiprocess subtree, so this
-# is currently the only supported path when ENABLE_MULTIPROCESS is ON; the option
-# exists to mirror Bitcoin Core's knob and to leave room for vendoring later.
-option(WITH_EXTERNAL_LIBMULTIPROCESS "Use an external libmultiprocess instead of a vendored copy" ON)
+# Build against an external libmultiprocess (system / depends install) instead of
+# the vendored in-tree subtree (src/ipc/libmultiprocess). OFF (the default) builds
+# the runtime from the subtree, matching Bitcoin Core; ON is mainly useful for
+# developing libmultiprocess itself against a separate checkout.
+option(WITH_EXTERNAL_LIBMULTIPROCESS "Use an external libmultiprocess instead of the vendored subtree" OFF)
 
 # Bundled packages
 option(SYSTEM_BDB       "Find system installation of Berkeley DB CXX 5.3" OFF)
@@ -296,33 +296,28 @@ if(ENABLE_MULTIPROCESS)
     # code generators; libmultiprocess provides the proxy runtime and the mpgen
     # generator that turns an interfaces .capnp schema into client/server proxies.
     #
-    # In a depends build the toolchain file (depends/toolchain.cmake.in) pre-seeds
-    # MPGEN_EXECUTABLE / CAPNP_EXECUTABLE / CAPNPC_CXX_EXECUTABLE to the tools it
-    # built for the build machine, and points CMAKE_PREFIX_PATH at the staged
-    # runtime libraries, so these find_package calls resolve there. In a native
-    # build they resolve against the system / /usr/local install (see
-    # install_dependencies.sh and doc/multiprocess.md).
+    # Cap'n Proto is always an external dependency (system / /usr/local, or the
+    # depends 'capnp' package). In a depends build the toolchain file
+    # (depends/toolchain.cmake.in) pre-seeds MPGEN_EXECUTABLE / CAPNP_EXECUTABLE /
+    # CAPNPC_CXX_EXECUTABLE to the tools it built and points CMAKE_PREFIX_PATH at
+    # the staged libraries, so find_package resolves there.
     find_package(CapnProto CONFIG REQUIRED)
 
     if(WITH_EXTERNAL_LIBMULTIPROCESS)
+        # Developer path: link an external libmultiprocess and locate its mpgen.
         find_package(Libmultiprocess CONFIG REQUIRED)
+        if(NOT MPGEN_EXECUTABLE)
+            find_program(MPGEN_EXECUTABLE NAMES mpgen REQUIRED)
+        endif()
+        message(STATUS "Multiprocess (IPC) build: ENABLED (external libmultiprocess)")
+        message(STATUS "  mpgen:       ${MPGEN_EXECUTABLE}")
     else()
-        message(FATAL_ERROR
-            "ENABLE_MULTIPROCESS with WITH_EXTERNAL_LIBMULTIPROCESS=OFF requires a "
-            "vendored libmultiprocess subtree, which Gridcoin does not (yet) ship. "
-            "Set WITH_EXTERNAL_LIBMULTIPROCESS=ON to use a system / depends install.")
+        # Default path: build the vendored subtree in-tree (see src/CMakeLists.txt,
+        # add_libmultiprocess()). It produces the 'multiprocess' runtime library and
+        # the 'mpgen' code generator as build targets.
+        message(STATUS "Multiprocess (IPC) build: ENABLED (vendored subtree)")
     endif()
-
-    # The mpgen code generator. In a depends build MPGEN_EXECUTABLE is already set
-    # by the toolchain file; otherwise locate the one installed alongside
-    # libmultiprocess (e.g. /usr/local/bin/mpgen).
-    if(NOT MPGEN_EXECUTABLE)
-        find_program(MPGEN_EXECUTABLE NAMES mpgen REQUIRED)
-    endif()
-
-    message(STATUS "Multiprocess (IPC) build: ENABLED")
     message(STATUS "  Cap'n Proto: ${CapnProto_VERSION}")
-    message(STATUS "  mpgen:       ${MPGEN_EXECUTABLE}")
 else()
     message(STATUS "Multiprocess (IPC) build: disabled (monolithic, direct calls)")
 endif()

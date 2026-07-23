@@ -412,11 +412,10 @@ install_deps() {
     esac
 
     # --- Multiprocess (IPC) System Dependencies ---
-    # Only relevant for native / all targets (a depends build gets Cap'n Proto and
-    # libmultiprocess from the depends recipes built with MULTIPROCESS=1, not from
-    # system packages). libmultiprocess itself is not packaged by any distro, so we
-    # install only Cap'n Proto here and emit build-from-source guidance for the
-    # rest.
+    # Only relevant for native / all targets (a depends build gets Cap'n Proto from
+    # the depends 'capnp' recipe built with MULTIPROCESS=1). Only Cap'n Proto is a
+    # system dependency: libmultiprocess is vendored in-tree (src/ipc/libmultiprocess)
+    # and built from source by the project, so nothing to install for it here.
     if [[ "$ENABLE_MULTIPROCESS" == "true" ]] && [[ "$TARGET" == "native" || "$TARGET" == "all" || "$TARGET" == "macos" ]]; then
         echo "Multiprocess build requested: adding Cap'n Proto system packages."
         case $OS in
@@ -439,20 +438,6 @@ install_deps() {
                 append_base capnproto capnproto-dev
                 ;;
         esac
-
-        echo "----------------------------------------------------------------"
-        echo "NOTE: libmultiprocess is not available as a distro package and is"
-        echo "      NOT installed by this script. Build and install it from source"
-        echo "      once (it provides the 'mpgen' code generator and runtime lib):"
-        echo ""
-        echo "        git clone https://github.com/bitcoin-core/libmultiprocess"
-        echo "        cmake -B libmultiprocess/build -S libmultiprocess"
-        echo "        cmake --build libmultiprocess/build"
-        echo "        sudo cmake --install libmultiprocess/build"
-        echo ""
-        echo "      Then reconfigure with ENABLE_MULTIPROCESS=true. See"
-        echo "      doc/multiprocess.md."
-        echo "----------------------------------------------------------------"
     fi
 
     # --- Determine Final Package List to Install ---

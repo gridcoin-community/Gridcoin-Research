@@ -1,14 +1,10 @@
 package=native_libmultiprocess
-# NOTE: Bitcoin Core builds libmultiprocess from an in-tree git subtree
-# (depends uses $(package)_local_dir=../src/ipc/libmultiprocess). Gridcoin does
-# not (yet) vendor that subtree, so we pin and download a specific upstream
-# commit instead. Keep this commit in sync with libmultiprocess.mk (the
-# cross-compiled runtime) -- both must be the same revision.
-$(package)_version=3f221b5bfd7ee0e7972e3c5ed4bb7ee86e457f6d
-$(package)_download_path=https://github.com/bitcoin-core/libmultiprocess/archive
-$(package)_download_file=$($(package)_version).tar.gz
-$(package)_file_name=libmultiprocess-$($(package)_version).tar.gz
-$(package)_sha256_hash=1914a8aca106f787968f8efa0492ee581646d90610e3c8fc3d6292492a30cad5
+# Build the native mpgen code generator from the vendored in-tree subtree
+# (src/ipc/libmultiprocess), the same way Bitcoin Core does. The runtime library
+# itself is NOT a depends package: it is compiled in-tree via add_subdirectory
+# (see cmake/libmultiprocess.cmake), so depends only needs to provide the native
+# generator for cross builds.
+$(package)_local_dir=../src/ipc/libmultiprocess
 $(package)_dependencies=native_capnp
 
 define $(package)_config_cmds
@@ -19,9 +15,8 @@ define $(package)_build_cmds
   $(MAKE)
 endef
 
-# install-bin stages only the native code generator (mpgen) and the shared
-# schema/header bits it needs -- this package exists to provide the build
-# machine's mpgen, not a runtime library.
+# install-bin stages only the native code generator (mpgen) and its shared
+# schema/header bits -- this package exists to provide the build machine's mpgen.
 define $(package)_stage_cmds
   $(MAKE) DESTDIR=$($(package)_staging_dir) install-bin
 endef
