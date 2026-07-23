@@ -1,0 +1,28 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef GRIDCOIN_IPC_CAPNP_INIT_TYPES_H
+#define GRIDCOIN_IPC_CAPNP_INIT_TYPES_H
+
+#include <interfaces/init.h>
+
+// Init hands out other interface capabilities, so it needs their proxy-types in
+// scope to build/read the returned capabilities.
+#include <ipc/capnp/node.capnp.proxy-types.h>
+#include <ipc/capnp/staking.capnp.proxy-types.h>
+
+#include <ipc/capnp/init.capnp.proxy.h>
+
+#include <mp/proxy-types.h>
+
+// Type-marshalling support: the construct() ThreadMap exchange (type-threadmap),
+// returned interface capabilities (type-interface), the Bool result of
+// isCoreReady (type-number), and the framework Context.
+#include <mp/type-context.h>
+#include <mp/type-decay.h>
+#include <mp/type-interface.h>
+#include <mp/type-number.h>
+#include <mp/type-threadmap.h>
+
+#endif // GRIDCOIN_IPC_CAPNP_INIT_TYPES_H

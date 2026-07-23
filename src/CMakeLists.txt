@@ -17,15 +17,9 @@ add_compile_definitions(
     __STDC_FORMAT_MACROS
 )
 
-# Multiprocess (IPC) build, RFC #2937. In the default (vendored) mode, build the
-# libmultiprocess runtime and its mpgen code generator from the in-tree subtree at
-# src/ipc/libmultiprocess. Cap'n Proto was already located in the top-level
-# CMakeLists.txt. This only defines the build targets; no Gridcoin target consumes
-# them yet (the .capnp schemas and proxy wiring come in a later Phase 2 step).
-if(ENABLE_MULTIPROCESS AND NOT WITH_EXTERNAL_LIBMULTIPROCESS)
-    include(${CMAKE_SOURCE_DIR}/cmake/libmultiprocess.cmake)
-    add_libmultiprocess(ipc/libmultiprocess)
-endif()
+# Multiprocess (IPC) build, RFC #2937: src/ipc is add_subdirectory'd later in this
+# file (after gridcoin_util is defined, since the generated proxy layer links it
+# for the core interface headers). See the ENABLE_MULTIPROCESS block near the end.
 
 if(WIN32)
     # _WIN32_WINNT is already defined by the toolchain/CMake.
@@ -299,6 +293,18 @@ if(UNIX)
 endif()
 
 target_link_libraries(gridcoin_util PUBLIC ${LIBGRIDCOIN_CRYPTO})
+
+# Multiprocess (IPC) build, RFC #2937. src/ipc owns the libmultiprocess runtime +
+# mpgen (built from the in-tree subtree in the default vendored mode) and the
+# generated Cap'n Proto proxy layer (gridcoin_ipc). Added here, after gridcoin_util
+# is defined, because the generated proxy code includes the interfaces:: headers,
+# which transitively pull core headers (univalue, etc.); gridcoin_ipc links
+# gridcoin_util for that include environment. The proxy targets are
+# EXCLUDE_FROM_ALL; no Gridcoin binary links them yet (transport + client wiring
+# are later Phase 2 steps).
+if(ENABLE_MULTIPROCESS)
+    add_subdirectory(ipc)
+endif()
 
 if(WIN32)
     target_link_libraries(gridcoin_util PUBLIC
