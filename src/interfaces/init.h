@@ -101,10 +101,11 @@ public:
 
     virtual std::unique_ptr<StakingStatus> makeStakingStatus();
 
-    //! Returns the Manual Research Claim interface over the node's single
-    //! wallet. Returns nullptr for a null wallet; \p wallet must outlive the
-    //! returned object.
-    virtual std::unique_ptr<MRC> makeMRC(CWallet* wallet);
+    //! Returns the Manual Research Claim interface over the node's single wallet.
+    //! Takes no wallet argument: the implementation uses the node's single wallet
+    //! (a node-internal CWallet* cannot cross the IPC boundary in the split build).
+    //! Returns nullptr before wallet startup completes.
+    virtual std::unique_ptr<MRC> makeMRC();
 
     //! Returns the sidestake registry interface (the unified mandatory + local
     //! sidestake table and local add/edit/delete commands). Over the global
@@ -118,26 +119,26 @@ public:
 
     //! Returns the researcher/beacon interface (identity/magnitude/accrual/beacon
     //! snapshot, the fused project table, and beacon/mode commands) over the
-    //! global researcher registries and the node's single wallet. Returns nullptr
-    //! for a null wallet; \p wallet must outlive the returned object.
-    virtual std::unique_ptr<ResearcherContext> makeResearcherContext(CWallet* wallet);
+    //! global researcher registries and the node's single wallet. Takes no wallet
+    //! argument (see makeMRC). Returns nullptr before wallet startup completes.
+    virtual std::unique_ptr<ResearcherContext> makeResearcherContext();
 
     //! Returns the PSGT pool + multisig-workbench interface (pool table reads/
     //! commands and the PSGT sign/combine/submit/finalize operations) over the
-    //! global PSGT pool and the node's single wallet. Returns nullptr for a null
-    //! wallet; \p wallet must outlive the returned object.
-    virtual std::unique_ptr<PSGTPoolContext> makePSGTPoolContext(CWallet* wallet);
+    //! global PSGT pool and the node's single wallet. Takes no wallet argument
+    //! (see makeMRC). Returns nullptr before wallet startup completes.
+    virtual std::unique_ptr<PSGTPoolContext> makePSGTPoolContext();
 
     //! Returns the interface for the node's single wallet. May return nullptr
     //! before wallet startup completes.
     virtual std::unique_ptr<Wallet> makeWallet();
 
-    //! Returns a transaction-table source over \p wallet (the windowed
-    //! tx-table store, its worker, and the producer subscriptions). The
-    //! returned object owns the node-side machinery, so a headless process
-    //! that never calls this pays nothing. Returns nullptr for a null wallet.
-    //! \p wallet must outlive the returned object.
-    virtual std::shared_ptr<WalletTxSource> makeWalletTxSource(CWallet* wallet);
+    //! Returns a transaction-table source over the node's single wallet (the
+    //! windowed tx-table store, its worker, and the producer subscriptions). The
+    //! returned object owns the node-side machinery, so a headless process that
+    //! never calls this pays nothing. Takes no wallet argument (see makeMRC).
+    //! Returns nullptr before wallet startup completes.
+    virtual std::shared_ptr<WalletTxSource> makeWalletTxSource();
 };
 
 //! Return the monolithic-build Init implementation.

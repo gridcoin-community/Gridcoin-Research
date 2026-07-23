@@ -37,18 +37,18 @@ std::unique_ptr<Node> Init::makeNode() { return nullptr; }
 
 std::unique_ptr<StakingStatus> Init::makeStakingStatus() { return nullptr; }
 
-std::unique_ptr<MRC> Init::makeMRC(CWallet* /*wallet*/) { return nullptr; }
+std::unique_ptr<MRC> Init::makeMRC() { return nullptr; }
 
 std::unique_ptr<SideStakeManager> Init::makeSideStakeManager() { return nullptr; }
 
 std::unique_ptr<VotingManager> Init::makeVotingManager() { return nullptr; }
 
-std::unique_ptr<ResearcherContext> Init::makeResearcherContext(CWallet* /*wallet*/) { return nullptr; }
+std::unique_ptr<ResearcherContext> Init::makeResearcherContext() { return nullptr; }
 
-std::unique_ptr<PSGTPoolContext> Init::makePSGTPoolContext(CWallet* /*wallet*/) { return nullptr; }
+std::unique_ptr<PSGTPoolContext> Init::makePSGTPoolContext() { return nullptr; }
 
 std::unique_ptr<Wallet> Init::makeWallet() { return nullptr; }
 
-std::shared_ptr<WalletTxSource> Init::makeWalletTxSource(CWallet* /*wallet*/) { return nullptr; }
+std::shared_ptr<WalletTxSource> Init::makeWalletTxSource() { return nullptr; }
 
 } // namespace interfaces

@@ -644,14 +644,14 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // WalletModel that drives it and is torn down — worker joined,
                 // producers severed — before Shutdown() destroys the wallet.
                 std::shared_ptr<interfaces::WalletTxSource> wallet_tx_source =
-                    interface_init->makeWalletTxSource(pwalletMain);
+                    interface_init->makeWalletTxSource();
                 if (!wallet_tx_source) {
                     throw std::runtime_error("wallet tx source unavailable after init");
                 }
                 // The Manual Research Claim interface over the node's wallet
                 // (Phase 1d-i). Owned here so it outlives the MRCModel that
                 // drives it.
-                std::unique_ptr<interfaces::MRC> mrc = interface_init->makeMRC(pwalletMain);
+                std::unique_ptr<interfaces::MRC> mrc = interface_init->makeMRC();
                 if (!mrc) {
                     throw std::runtime_error("MRC interface unavailable after init");
                 }
@@ -666,7 +666,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // wallet. Owned here so it outlives the ResearcherModel that drives
                 // it (and the MRCModel/VotingModel that read researcher state).
                 std::unique_ptr<interfaces::ResearcherContext> researcher_context =
-                    interface_init->makeResearcherContext(pwalletMain);
+                    interface_init->makeResearcherContext();
                 if (!researcher_context) {
                     throw std::runtime_error("researcher interface unavailable after init");
                 }
@@ -675,7 +675,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // PSGTPoolTableModel and MultisignPSGTDialog that use it; cleared
                 // from them on teardown below before this is destroyed.
                 std::unique_ptr<interfaces::PSGTPoolContext> psgt_pool_context =
-                    interface_init->makePSGTPoolContext(pwalletMain);
+                    interface_init->makePSGTPoolContext();
                 if (!psgt_pool_context) {
                     throw std::runtime_error("PSGT pool interface unavailable after init");
                 }
