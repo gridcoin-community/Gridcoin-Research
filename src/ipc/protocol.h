@@ -25,8 +25,11 @@ public:
     virtual ~Protocol() = default;
 
     //! Return an Init interface that forwards calls over \p fd. I/O runs on a
-    //! background thread.
-    virtual std::unique_ptr<interfaces::Init> connect(int fd, const char* exe_name) = 0;
+    //! background thread. If \p on_disconnect is set it is invoked (on the
+    //! event-loop thread) when the peer's connection drops unexpectedly — the
+    //! GUI uses it to quit gracefully when the node process exits.
+    virtual std::unique_ptr<interfaces::Init> connect(int fd, const char* exe_name,
+                                                      std::function<void()> on_disconnect = {}) = 0;
 
     //! Listen for connections on \p listen_fd, accept them, and serve \p init on
     //! each. Non-blocking; I/O runs on a background thread.

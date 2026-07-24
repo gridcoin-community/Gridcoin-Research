@@ -39,7 +39,8 @@ public:
     {
     }
 
-    std::unique_ptr<interfaces::Init> connectAddress(std::string& address) override
+    std::unique_ptr<interfaces::Init> connectAddress(std::string& address,
+                                                     std::function<void()> on_disconnect) override
     {
         if (address.empty() || address == "0") return nullptr;
         int fd;
@@ -62,7 +63,7 @@ public:
             fd = m_process->connect(GetDataDir(), address);
         }
         FdGuard guard{fd};
-        auto init = m_protocol->connect(fd, m_exe_name);
+        auto init = m_protocol->connect(fd, m_exe_name, std::move(on_disconnect));
         guard.release(); // the protocol/stream now owns the fd
         return init;
     }

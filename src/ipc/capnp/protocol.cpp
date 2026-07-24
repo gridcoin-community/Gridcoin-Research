@@ -30,16 +30,35 @@ namespace ipc {
 namespace capnp {
 namespace {
 
-//! Route libmultiprocess log messages into the Gridcoin log. Raise-level
-//! messages are turned into exceptions (mp's convention for fatal protocol
-//! errors), matching Bitcoin Core's IpcLogFn.
+//! Route libmultiprocess log messages into the Gridcoin log. This is high-volume
+//! bookkeeping (per-request send/recv, proxy create/destroy, post-disconnect
+//! "method called after disconnect" notices), so gate it behind the verbose
+//! category -- silent by default, surfaced with -debug=verbose. (Bitcoin Core
+//! gates this behind a dedicated BCLog::IPC category; Gridcoin's LogFlags bits are
+//! all allocated, so it rides the verbose category instead.) Raise-level messages
+//! are still turned into exceptions (mp's convention for a fatal protocol error);
+//! the message survives via the thrown exception if it goes uncaught.
 void IpcLogFn(mp::LogMessage message)
 {
+    LogPrint(BCLog::VERBOSE, "ipc: %s\n", message.message);
     if (message.level == mp::Log::Raise) {
-        LogPrintf("ipc: %s\n", message.message);
         throw std::runtime_error(message.message);
     }
-    LogPrintf("ipc: %s\n", message.message);
+}
+
+//! Invoke a caller-supplied disconnect callback with a guard. It runs on the
+//! event-loop thread, so a throw would unwind through libmultiprocess's task set
+//! and terminate the process; contain and log it instead.
+void InvokeDisconnectCb(const std::function<void()>& cb)
+{
+    if (!cb) return;
+    try {
+        cb();
+    } catch (const std::exception& e) {
+        LogPrintf("ipc: disconnect callback threw: %s\n", e.what());
+    } catch (...) {
+        LogPrintf("ipc: disconnect callback threw a non-standard exception\n");
+    }
 }
 
 class CapnpProtocol : public Protocol
@@ -52,10 +71,34 @@ public:
         assert(!m_loop);
     }
 
-    std::unique_ptr<interfaces::Init> connect(int fd, const char* exe_name) override
+    std::unique_ptr<interfaces::Init> connect(int fd, const char* exe_name,
+                                              std::function<void()> on_disconnect) override
     {
         startLoop(exe_name);
-        return mp::ConnectStream<messages::Init>(*m_loop, mp::MakeStream(*m_loop, fd));
+        auto client = mp::ConnectStream<messages::Init>(*m_loop, mp::MakeStream(*m_loop, fd));
+        if (on_disconnect && client) {
+            // Register a caller-facing disconnect handler ALONGSIDE ConnectStream's
+            // own (which logs and frees the Connection). Connection::onDisconnect
+            // accumulates handlers and defers each to the EventLoop task set, so
+            // both run as independent tasks; ours only forwards a notification and
+            // never touches the Connection, so it stays safe even after the
+            // internal handler frees it. Registered under m_loop->sync() because
+            // Connection state is owned by the event-loop thread.
+            m_loop->sync([&] {
+                if (client->m_context.connection) {
+                    client->m_context.connection->onDisconnect(
+                        [on_disconnect = std::move(on_disconnect)]() mutable { InvokeDisconnectCb(on_disconnect); });
+                } else {
+                    // Early-disconnect race: the peer dropped between ConnectStream()
+                    // and here, so libmultiprocess cleanup already nulled the
+                    // connection and the onDisconnect above would never register.
+                    // Notify now (on the event-loop thread, same as the handler would
+                    // run) so the caller still learns the connection is gone.
+                    InvokeDisconnectCb(on_disconnect);
+                }
+            });
+        }
+        return client;
     }
 
     void listen(int listen_fd, const char* exe_name, interfaces::Init& init) override

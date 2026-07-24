@@ -182,59 +182,79 @@ void WalletModel::drainEventQueue()
     // request that arrives after this point schedules a new kick (PR4-fix D).
     m_event_drain_requested = false;
 
-    // Bound the per-tick batch so a large backlog (reorg flood, IBD catch-up)
-    // cannot freeze the Qt main thread in a single apply pass. If the queue
-    // still has events after this batch, re-arm immediately (see below)
-    // instead of waiting MODEL_EVENT_DRAIN_INTERVAL for the periodic tick.
-    auto events = m_tx_source.drainEvents(MODEL_EVENT_DRAIN_MAX_BATCH);
-    if (events.empty()) {
-        return;
-    }
-
-    GUILogPrint(GUILogCategory::VERBOSE,
-             "WalletModel::drainEventQueue: applying %u events (front seqno=%llu, back seqno=%llu)",
-             static_cast<unsigned int>(events.size()),
-             static_cast<unsigned long long>(events.front().seqno),
-             static_cast<unsigned long long>(events.back().seqno));
-
-    // Cache the pushed tip height (GUI-thread-owned) so the windowed views can
-    // derive live confirmation counts on read — no cs_main, no reach-through to
-    // core state; the wallet model is self-contained for the process split.
-    // Last tip event in the batch wins.
-    for (const auto& ev : events) {
-        if (const auto* tip = std::get_if<GRC::ChainTipChangedPayload>(&ev.payload)) {
-            cachedNumBlocks = tip->height;
+    // Multiprocess safety net: every core-touching call in this drain — the
+    // drainEvents() round-trip AND the apply path reached through
+    // walletEventsDrained (each windowed view's getRows) and checkBalanceChanged
+    // — is a synchronous IPC call that throws std::runtime_error("IPC client
+    // method called after disconnect.") once the node process is gone. A drop can
+    // land mid-drain, and a posted BitcoinGUI::requestQuit() (from the IPC
+    // disconnect hook, bitcoin.cpp) cannot preempt a drain already running on this
+    // thread, so an uncaught throw here would escape a Qt slot and abort the GUI.
+    // Catch it, stop the periodic drain, and bail; the disconnect hook drives the
+    // graceful quit. e.what() is logged so a non-disconnect exception is still
+    // surfaced rather than silently swallowed.
+    try {
+        // Bound the per-tick batch so a large backlog (reorg flood, IBD catch-up)
+        // cannot freeze the Qt main thread in a single apply pass. If the queue
+        // still has events after this batch, re-arm immediately (see below)
+        // instead of waiting MODEL_EVENT_DRAIN_INTERVAL for the periodic tick.
+        std::vector<GRC::WalletEvent> events = m_tx_source.drainEvents(MODEL_EVENT_DRAIN_MAX_BATCH);
+        if (events.empty()) {
+            return;
         }
-    }
 
-    // General "wallet transactions changed" pulse (OverviewPage refreshes its
-    // recent list on it). The windowed views (OverviewTxModel / DetailedTxModel)
-    // and the new-transaction balloon consume the event batch directly through
-    // walletEventsDrained below; per-row confirmation refresh is likewise driven
-    // by each view's own ChainTipChanged handling, not a full-replica model.
-    emit transactionUpdated();
+        GUILogPrint(GUILogCategory::VERBOSE,
+                 "WalletModel::drainEventQueue: applying %u events (front seqno=%llu, back seqno=%llu)",
+                 static_cast<unsigned int>(events.size()),
+                 static_cast<unsigned long long>(events.front().seqno),
+                 static_cast<unsigned long long>(events.back().seqno));
 
-    // Fan the same batch out to the per-view windowed consumers (OverviewTxModel),
-    // which filter to their own viewId. The queue is drained exactly once, here.
-    emit walletEventsDrained(events);
+        // Cache the pushed tip height (GUI-thread-owned) so the windowed views can
+        // derive live confirmation counts on read — no cs_main, no reach-through to
+        // core state; the wallet model is self-contained for the process split.
+        // Last tip event in the batch wins.
+        for (const auto& ev : events) {
+            if (const auto* tip = std::get_if<GRC::ChainTipChangedPayload>(&ev.payload)) {
+                cachedNumBlocks = tip->height;
+            }
+        }
 
-    // Balance and number of transactions might have changed.
-    checkBalanceChanged();
+        // General "wallet transactions changed" pulse (OverviewPage refreshes its
+        // recent list on it). The windowed views (OverviewTxModel / DetailedTxModel)
+        // and the new-transaction balloon consume the event batch directly through
+        // walletEventsDrained below; per-row confirmation refresh is likewise driven
+        // by each view's own ChainTipChanged handling, not a full-replica model.
+        emit transactionUpdated();
 
-    int newNumTransactions = getNumTransactions();
-    if (cachedNumTransactions != newNumTransactions) {
-        cachedNumTransactions = newNumTransactions;
+        // Fan the same batch out to the per-view windowed consumers (OverviewTxModel),
+        // which filter to their own viewId. The queue is drained exactly once, here.
+        emit walletEventsDrained(events);
 
-        emit numTransactionsChanged(newNumTransactions);
-    }
+        // Balance and number of transactions might have changed.
+        checkBalanceChanged();
 
-    // If this drain hit the per-tick batch cap there is still a backlog.
-    // Re-arm immediately (0ms) rather than waiting for the next periodic
-    // tick: this returns control to the Qt event loop — keeping the GUI
-    // responsive between batches — but resumes draining straight away so a
-    // burst clears in a few event-loop turns instead of one per 500ms.
-    if (events.size() >= static_cast<std::size_t>(MODEL_EVENT_DRAIN_MAX_BATCH)) {
-        QTimer::singleShot(0, this, &WalletModel::drainEventQueue);
+        int newNumTransactions = getNumTransactions();
+        if (cachedNumTransactions != newNumTransactions) {
+            cachedNumTransactions = newNumTransactions;
+
+            emit numTransactionsChanged(newNumTransactions);
+        }
+
+        // If this drain hit the per-tick batch cap there is still a backlog.
+        // Re-arm immediately (0ms) rather than waiting for the next periodic
+        // tick: this returns control to the Qt event loop — keeping the GUI
+        // responsive between batches — but resumes draining straight away so a
+        // burst clears in a few event-loop turns instead of one per 500ms.
+        if (events.size() >= static_cast<std::size_t>(MODEL_EVENT_DRAIN_MAX_BATCH)) {
+            QTimer::singleShot(0, this, &WalletModel::drainEventQueue);
+        }
+    } catch (const std::exception& e) {
+        // Almost always the node connection dropping mid-drain (multiprocess), but
+        // do not assert the cause in the message — any drain exception lands here.
+        GUILogPrintf("WalletModel: wallet event drain failed; stopping the periodic drain: %s", e.what());
+        if (eventDrainTimer) {
+            eventDrainTimer->stop();
+        }
     }
 }
 

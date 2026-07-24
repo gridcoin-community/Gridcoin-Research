@@ -47,7 +47,9 @@
 #include "validation.h"
 #include "decoration.h"
 
+#include <atomic>
 #include <stdexcept>
+#include <thread>
 
 #include <QMessageBox>
 #include <QGridLayout>
@@ -123,7 +125,27 @@ static void SetupUIArgs(ArgsManager& argsman)
                    ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
     argsman.AddArg("-showorphans", "Include stale (orphaned) coinstake transactions in the transaction list",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-guilogfile=<file>",
+                   "In -multiprocess mode the GUI runs as a separate process from the node and MUST NOT "
+                   "share the node's debug log file (the node rotates it by rename, which would orphan the "
+                   "GUI's writes). The GUI logs to its own file: this option names it (relative paths are "
+                   "under the data directory). Default: the -debuglogfile name with \"_gui\" inserted "
+                   "(e.g. debug_gui.log). Must resolve to a different path than -debuglogfile. Ignored "
+                   "outside -multiprocess.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
 }
+
+#ifdef ENABLE_MULTIPROCESS
+//! Derive the default GUI log path from the node's log path by inserting "_gui"
+//! before the extension (e.g. /data/debug.log -> /data/debug_gui.log), so the two
+//! processes default to distinct files in the shared data directory.
+static fs::path DeriveGuiLogPath(const fs::path& node_log)
+{
+    const std::string stem = node_log.stem().string();
+    const std::string ext = node_log.extension().string();
+    return node_log.parent_path() / fs::path(stem + "_gui" + ext);
+}
+#endif
 
 static void ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style)
 {
@@ -495,6 +517,40 @@ int main(int argc, char *argv[])
     // the user had in Gridcoin-Qt.conf into the core read-write settings (one-time).
     optionsModel.migrateCoreSettings();
 
+#ifdef ENABLE_MULTIPROCESS
+    // In -multiprocess mode the GUI and the node are separate processes sharing a
+    // data directory, and they must NOT write the same log file. The node rotates
+    // its debug log by renaming it (BCLog::Logger::archive), which would orphan a
+    // second writer's open fd -- the GUI's lines would then trail into the renamed,
+    // soon-unlinked file rather than the live one -- and on Windows the node's
+    // rename would be blocked outright while the GUI holds the file open. So the GUI
+    // logs to its OWN file. InitLogging() (below) reads -debuglogfile and opens the
+    // log (it calls StartLogging), so the redirect has to happen HERE, before it:
+    // compute the GUI path, refuse a same-file override, and force -debuglogfile to
+    // the GUI file for this (GUI) process only. InitLogging then opens/shrinks the
+    // GUI file exactly as it would the node's. The node is a separate process and
+    // keeps its own -debuglogfile.
+    if (gArgs.GetBoolArg("-multiprocess", false)) {
+        const fs::path node_log = AbsPathForConfigVal(gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
+        const fs::path gui_log = gArgs.IsArgSet("-guilogfile")
+            ? AbsPathForConfigVal(fs::path(gArgs.GetArg("-guilogfile", "")))
+            : DeriveGuiLogPath(node_log);
+
+        if (gui_log == node_log) {
+            const std::string msg = strprintf(
+                "The GUI and the Gridcoin daemon cannot share the log file %s in -multiprocess mode. "
+                "Set -guilogfile to a different path, or unset it to use the default (%s).",
+                node_log.string(), DeriveGuiLogPath(node_log).string());
+            // Logging is not up yet, so report to stderr as well as a dialog.
+            tfm::format(std::cerr, "%s\n", msg.c_str());
+            QMessageBox::critical(nullptr, PACKAGE_NAME, QString::fromStdString(msg));
+            return EXIT_FAILURE;
+        }
+
+        gArgs.ForceSetArg("-debuglogfile", gui_log.string());
+    }
+#endif
+
     // Initialize logging as early as possible.
     InitLogging();
 
@@ -626,7 +682,27 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             // node_connection, so it is declared first.
             local_init = interfaces::MakeGridcoinInit();
             std::string ipc_error;
-            node_connection = ipc::ConnectToNode(GetDataDir(), *local_init, ipc_error);
+            node_connection = ipc::ConnectToNode(GetDataDir(), *local_init, ipc_error,
+                /*on_disconnect=*/[] {
+                    // Fires on the IPC event-loop thread when the daemon vanishes
+                    // without a clean shutdown message (crash / SIGKILL, or a stop
+                    // that raced the handshake). Post a graceful quit to the Qt
+                    // main thread — the same path as a core-initiated shutdown
+                    // (QueueShutdown) — so the GUI tears down cleanly instead of
+                    // faulting on the next call to a now-dead proxy. requestQuit()
+                    // is idempotent, so a duplicate (e.g. a drain that also failed)
+                    // is harmless.
+                    GUILogPrintf("IPC: lost connection to the Gridcoin daemon; closing the GUI");
+                    // Guard the instance(): a disconnect that races the GUI's own
+                    // shutdown (local teardown normally cancels this handler first,
+                    // but the connection delete is async) could arrive after the
+                    // QCoreApplication is gone.
+                    if (QCoreApplication* qapp = QCoreApplication::instance()) {
+                        QMetaObject::invokeMethod(qapp,
+                                                  [] { BitcoinGUI::requestQuit(); },
+                                                  Qt::QueuedConnection);
+                    }
+                });
             if (!node_connection)
             {
                 // One dialog: this runs after ThreadSafeMessageBox_connect, so a
@@ -637,6 +713,50 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 return EXIT_FAILURE;
             }
             interface_init = node_connection->init.get();
+
+            // The multiprocess GUI logs to its own file (set up in main() before
+            // this function) but, unlike the node, runs no core scheduler to rotate
+            // it. Drive the same daily-archive check the node schedules in
+            // GRC::ScheduleBackgroundJobs: every 5 minutes archive(false) is a cheap
+            // no-op until the day boundary is crossed (and a full no-op when
+            // -logarchivedaily=false). Run it OFF the Qt main thread: when it does
+            // archive, archive()'s gzip compression is synchronous and would freeze
+            // the UI (the node runs archive() on its scheduler thread for the same
+            // reason). archive() serializes on the logger mutex, so it is safe
+            // off-thread; a guard skips a tick while a previous (slow) archive is
+            // still compressing. The GUI owns this file exclusively, so the
+            // close-rename-reopen is safe on every platform. Timer parented to
+            // `app`, so it lives for the run.
+            static std::atomic<bool> gui_archive_running{false};
+            QTimer* logArchiveTimer = new QTimer(&app);
+            QObject::connect(logArchiveTimer, &QTimer::timeout, [] {
+                bool expected = false;
+                if (!gui_archive_running.compare_exchange_strong(expected, true)) {
+                    return;  // a previous archive pass is still running
+                }
+                try {
+                    std::thread([] {
+                        RenameThread("gui-log-archive");
+                        try {
+                            fs::path plogfile_out;
+                            LogInstance().archive(false, plogfile_out);
+                        } catch (const std::exception& e) {
+                            // A throw here would terminate the detached thread (and the
+                            // process); contain it. The logger is left valid (the file is
+                            // reopened before the cleanup step); the next tick retries.
+                            GUILogPrintf("WARNING: GUI log archive pass failed: %s", e.what());
+                        }
+                        gui_archive_running = false;
+                    }).detach();
+                } catch (const std::exception& e) {
+                    // std::thread construction can throw (e.g. resource exhaustion).
+                    // Reset the guard so a later tick can retry, and don't let it
+                    // escape the Qt slot (which would abort the GUI).
+                    GUILogPrintf("WARNING: could not start GUI log archive thread: %s", e.what());
+                    gui_archive_running = false;
+                }
+            });
+            logArchiveTimer->start(300000);  // 5 minutes, matching the node's schedule
 #else
             GUILogPrintf("IPC: -multiprocess requested but this build has no multiprocess (IPC) support");
             QMessageBox::critical(nullptr, PACKAGE_NAME,

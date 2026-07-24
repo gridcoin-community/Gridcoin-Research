@@ -35,8 +35,11 @@ public:
     //! Connect to a socket address and return a pointer to the remote process's
     //! Init interface. Returns null if \p address is empty ("") or disabled
     //! ("0"), or if a connection was refused/absent but not required ("auto");
-    //! throws on an unexpected error.
-    virtual std::unique_ptr<Init> connectAddress(std::string& address) = 0;
+    //! throws on an unexpected error. If \p on_disconnect is set it is invoked
+    //! (on the IPC event-loop thread) when the remote drops the connection
+    //! unexpectedly — the GUI uses it to quit gracefully when the node exits.
+    virtual std::unique_ptr<Init> connectAddress(std::string& address,
+                                                 std::function<void()> on_disconnect = {}) = 0;
 
     //! Listen on a socket address, exposing this process's Init interface to
     //! clients. Throws on error (including a live listener already on the path).

@@ -471,29 +471,51 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
 
             std::set<fs::directory_entry, std::greater <fs::directory_entry>> SortedDirEntries;
 
-            // Iterate through the log archive directory and delete the oldest files beyond the retention rule
-            // The names are in format <logname base>-YYYYMMDDHHMMSS.log for the logs, so filter by containing <logname base>.
-            // The greater than sort in the set should then return descending order by datetime.
-            for (fs::directory_entry& DirEntry : fs::directory_iterator(LogArchiveDir))
-            {
-                std::string sFilename = DirEntry.path().filename().string();
-                size_t FoundPos = sFilename.find(m_file_path.filename().stem().string());
+            // Archive names are "<stem>-YYYYMMDDHHMMSS<ext>.gz" (see pfile_out
+            // above). Match only THIS log's archives by an exact "<stem>-" PREFIX,
+            // not a substring search: with a substring search a stem that is a
+            // prefix of another (e.g. the node's "debug" vs the multiprocess GUI's
+            // "debug_gui") would also match — and delete — the other log's archives,
+            // since they share this one logarchive directory. The '-' separator is
+            // included so "debug-" cannot match "debug_gui-".
+            const std::string archive_prefix = m_file_path.filename().stem().string() + "-";
 
-                if (FoundPos != std::string::npos) SortedDirEntries.insert(DirEntry);
-            }
-
-            // Now iterate through set of filtered filenames. Delete all files greater than retention count.
-            unsigned int i = 0;
-            for (auto const& iter : SortedDirEntries)
+            // The logarchive directory can be modified concurrently by another
+            // process that shares it: in -multiprocess mode the GUI archives its own
+            // debug_gui.log alongside the node's debug.log. A file vanishing between
+            // the directory read and its use can throw a filesystem_error mid-scan;
+            // contain it so retention degrades to a skipped pass instead of
+            // propagating out of archive() (the log file is already reopened above,
+            // so logging continues; the next archive retries). Each process only
+            // ever removes its OWN "<stem>-" archives, so their cleanups never
+            // target the same files.
+            try
             {
-                if (i >= nRetention)
+                // The greater than sort in the set should then return descending order by datetime.
+                for (fs::directory_entry& DirEntry : fs::directory_iterator(LogArchiveDir))
                 {
-                    fs::remove(iter.path());
+                    std::string sFilename = DirEntry.path().filename().string();
 
-                    LogPrintf("INFO: Logger: Removed old archive gzip file %s.", iter.path().filename().string());
+                    if (sFilename.rfind(archive_prefix, 0) == 0) SortedDirEntries.insert(DirEntry);
                 }
 
-                ++i;
+                // Now iterate through set of filtered filenames. Delete all files greater than retention count.
+                unsigned int i = 0;
+                for (auto const& iter : SortedDirEntries)
+                {
+                    if (i >= nRetention)
+                    {
+                        fs::remove(iter.path());
+
+                        LogPrintf("INFO: Logger: Removed old archive gzip file %s.", iter.path().filename().string());
+                    }
+
+                    ++i;
+                }
+            }
+            catch (const std::exception& e)
+            {
+                LogPrintf("WARNING: Logger: archive retention pass skipped: %s", e.what());
             }
         }
 
