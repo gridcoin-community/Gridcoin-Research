@@ -5,10 +5,17 @@
 #include "ipc/serve_init.h"
 
 #include "ipc/handshake.h"
-// Complete types needed for the unique_ptr<Node>/<StakingStatus> the delegated
-// factory methods return (interfaces/init.h only forward-declares them).
+// Complete types needed for the unique_ptr/shared_ptr the delegated factory
+// methods return (interfaces/init.h only forward-declares them).
+#include "interfaces/mrc.h"
 #include "interfaces/node.h"
+#include "interfaces/psgt.h"
+#include "interfaces/researcher.h"
+#include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
+#include "interfaces/voting.h"
+#include "interfaces/wallet.h"
+#include "interfaces/wallet_tx_source.h"
 
 #include <stdexcept>
 #include <utility>
@@ -68,6 +75,48 @@ public:
     {
         RequireAuth();
         return m_inner->makeStakingStatus();
+    }
+
+    std::unique_ptr<interfaces::Wallet> makeWallet() override
+    {
+        RequireAuth();
+        return m_inner->makeWallet();
+    }
+
+    std::shared_ptr<interfaces::WalletTxSource> makeWalletTxSource() override
+    {
+        RequireAuth();
+        return m_inner->makeWalletTxSource();
+    }
+
+    std::unique_ptr<interfaces::MRC> makeMRC() override
+    {
+        RequireAuth();
+        return m_inner->makeMRC();
+    }
+
+    std::unique_ptr<interfaces::VotingManager> makeVotingManager() override
+    {
+        RequireAuth();
+        return m_inner->makeVotingManager();
+    }
+
+    std::unique_ptr<interfaces::ResearcherContext> makeResearcherContext() override
+    {
+        RequireAuth();
+        return m_inner->makeResearcherContext();
+    }
+
+    std::unique_ptr<interfaces::PSGTPoolContext> makePSGTPoolContext() override
+    {
+        RequireAuth();
+        return m_inner->makePSGTPoolContext();
+    }
+
+    std::unique_ptr<interfaces::SideStakeManager> makeSideStakeManager() override
+    {
+        RequireAuth();
+        return m_inner->makeSideStakeManager();
     }
 
 private:
