@@ -54,13 +54,34 @@ class SidestakeTest(GridcoinTestFramework):
 
         # --- chain still advances (stakes) with sidestaking enabled ---
         start = node.getblockcount()
-        node.generatetoaddress(10, node.getnewaddress())
+        stake_addr = node.getnewaddress()
+        blocks = node.generatetoaddress(10, stake_addr)
         assert_equal(node.getblockcount(), start + 10)
 
-        # reward split is observational only (regtest subsidy may be 0)
+        # Observational only, and NOT because the subsidy might be 0: generatetoaddress goes
+        # through TryMineRegtestBlock, which never calls SplitCoinStakeOutput (only the real
+        # StakeMiner does, and this node runs with -staking=0). No sidestake output is emitted
+        # on this path regardless of subsidy, so this stays 0.
         received = node.getreceivedbyaddress(ss_addr, 0)
         self.log.info("sidestake address received %s GRC over 10 staked blocks "
-                      "(0 is acceptable if the regtest subsidy is 0)", received)
+                      "(0 is expected: the regtest mining path does not split coinstakes)",
+                      received)
+
+        # The staking destination, however, is a real coinstake receipt, and getreceivedbyaddress
+        # must count it net of the staked principal. It is P2PK in the coinstake even though
+        # getnewaddress handed out a P2PKH address, so this also covers destination matching.
+        coinstake_txid = node.getblock(blocks[0])["tx"][1]
+        coinstake = node.getrawtransaction(coinstake_txid, 1)
+        assert_equal(coinstake["vout"][0]["value"], 0)  # the empty coinstake marker
+        assert_equal(coinstake["vout"][1]["scriptPubKey"]["type"], "pubkey")
+
+        stake_dest = coinstake["vout"][1]["scriptPubKey"]["addresses"][0]
+        stake_received = node.getreceivedbyaddress(stake_dest, 0)
+        assert stake_received > 0, \
+            "coinstake receipt not counted for staking address {}: {}".format(
+                stake_dest, stake_received)
+        self.log.info("staking address %s received %s GRC (net of the staked principal)",
+                      stake_dest, stake_received)
 
 
 if __name__ == "__main__":

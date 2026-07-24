@@ -932,10 +932,139 @@ UniValue verifymessage(const UniValue& params)
 }
 
 
+//! One receipt this wallet can claim from a transaction, coalesced per destination.
+struct ReceivedOutput
+{
+    CTxDestination dest;
+    int64_t nAmount;
+    //! Newly minted value: our stake/research reward, a sidestake paid to us, or an MRC
+    //! payout. Generated value is never change, so ListReceived surfaces it on unbooked
+    //! addresses even though our own coinstake is a transaction this wallet funded.
+    bool fGenerated;
+};
+
+//! Shared eligibility gate for the six receivedby* RPCs. Coinbase stays excluded (a Gridcoin
+//! divergence from upstream, which counts mature coinbase -- see doc/rpc-heritage.md);
+//! non-final transactions are skipped; the caller's minconf applies; and generated value must
+//! have matured, the same rule GetAccountBalance() and CWallet::AvailableCoins() apply, so a
+//! receivedby* total never counts coins getbalance refuses to count. GetBlocksToMaturity()
+//! returns 0 immediately for non-generated transactions, so the extra chain-index lookup is
+//! paid only by wallet coinstakes.
+static bool ReceiptTxEligible(const CWalletTx& wtx, int nMinDepth, int& nDepth)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
+{
+    if (wtx.IsCoinBase() || !IsFinalTx(wtx)) return false;
+
+    nDepth = wtx.GetDepthInMainChain();
+    if (nDepth < nMinDepth) return false;
+
+    return wtx.GetBlocksToMaturity() == 0;
+}
+
+//! Receipts this wallet can claim from wtx, one entry per destination.
+//!
+//! Ordinary transactions: every output owned under `filter`, at face value.
+//!
+//! Coinstakes need netting. A Gridcoin coinstake both RETURNS the staked principal and MINTS
+//! the reward (see SplitCoinStakeOutput in miner.cpp): vout[0] is the empty marker, vout[1..m]
+//! all carry vout[1]'s scriptPubKey and hold the principal plus our cut of the reward, then
+//! come the sidestakes and, last, the MRC payouts. Crediting the split outputs at face value
+//! would report the principal we already owned as income, so they are summed and the staked
+//! principal is netted out. Every other owned output -- a sidestake or MRC payout back to us,
+//! or anything we own in a coinstake somebody else staked -- is a face-value receipt.
+//!
+//! `filter` must be at least as permissive as the ownership test the caller applies to
+//! outputs: the principal is resolved with GetDebit(filter), and a narrower filter silently
+//! reports 0, which would book a watch-only staker's whole principal as income.
+static void TallyTxReceipts(const CWalletTx& wtx, const isminefilter& filter,
+                            std::vector<ReceivedOutput>& vReceived)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
+{
+    vReceived.clear();
+
+    // Coalesce per destination. One coinstake really can pay the same destination twice: a
+    // voluntary sidestake back to the staking address is built with SetDestination (P2PKH)
+    // while the coinstake output is P2PK (CreateCoinStake converts TX_PUBKEYHASH kernels), so
+    // the script-equality self-sidestake guard in SplitCoinStakeOutput never fires. Both
+    // scripts extract to the same CKeyID, so coalescing keeps them on one row -- and it stops
+    // one transaction pushing its txid into a tallyitem more than once.
+    const auto credit_receipt = [&vReceived](const CTxDestination& dest, int64_t nValue, bool fGenerated) {
+        for (ReceivedOutput& out : vReceived) {
+            if (out.dest == dest) {
+                out.nAmount += nValue;
+                out.fGenerated |= fGenerated;
+                return;
+            }
+        }
+        vReceived.push_back({dest, nValue, fGenerated});
+    };
+
+    const bool fIsCoinStake = wtx.IsCoinStake();
+
+    // vout[1] has the same owner as the coinstake input (consensus), so it decides whether we
+    // staked this block or were merely paid by it. IsCoinStake() guarantees vout.size() >= 2.
+    const bool fStakeIsMine = fIsCoinStake
+        && (IsMine(*pwalletMain, wtx.vout[1].scriptPubKey) & filter);
+
+    CTxDestination stakeDest;
+    bool fHaveStakeDest = false;
+    int64_t nStakeGroup = 0;
+
+    if (fStakeIsMine) {
+        fHaveStakeDest = ExtractDestination(wtx.vout[1].scriptPubKey, stakeDest);
+    }
+
+    // Only a coinstake carries the empty marker at vout[0]; every other transaction can be
+    // paid at index 0, and coinbase is already excluded by ReceiptTxEligible.
+    for (unsigned int i = fIsCoinStake ? 1 : 0; i < wtx.vout.size(); ++i)
+    {
+        const CTxOut& txout = wtx.vout[i];
+
+        // A stake split, not a receipt: it carries the principal back to us and is netted
+        // below. Equal scripts imply an equal destination, so an owned output at a DIFFERENT
+        // destination can never be absorbed into the group.
+        if (fStakeIsMine && txout.scriptPubKey == wtx.vout[1].scriptPubKey) {
+            nStakeGroup += txout.nValue;
+            continue;
+        }
+
+        CTxDestination dest;
+        if (!ExtractDestination(txout.scriptPubKey, dest)) continue;
+        if (!(IsMine(*pwalletMain, dest) & filter)) continue;
+
+        credit_receipt(dest, txout.nValue, fIsCoinStake);
+    }
+
+    if (!fStakeIsMine || !fHaveStakeDest) return;
+
+    // GetDebit() resolves the staked input through mapWallet. If the funding transaction is
+    // not there -- a wallet restored without a full rescan, or a key imported after the fact
+    // -- it reports 0 and the principal becomes indistinguishable from the reward. Drop the
+    // group rather than book the principal as income.
+    const int64_t nPrincipal = wtx.GetDebit(filter);
+
+    if (nPrincipal <= 0) {
+        LogPrint(BCLog::LogFlags::VERBOSE, "%s: coinstake %s: staked input not in the wallet; "
+                 "omitting the stake reward from the received tally", __func__,
+                 wtx.GetHash().ToString());
+        return;
+    }
+
+    credit_receipt(stakeDest, std::max<int64_t>(0, nStakeGroup - nPrincipal), true);
+}
+
 static const RPCHelpMan getreceivedbyaddress_help{
     "getreceivedbyaddress",
     "Returns the total amount received by the given Gridcoin address in transactions "
-    "with at least [minconf] confirmations.",
+    "with at least [minconf] confirmations.\n"
+    "\n"
+    "Coinstake receipts are included. A sidestake or MRC payout received from another\n"
+    "staker's coinstake counts at face value; a coinstake this wallet staked counts only\n"
+    "the net reward, because the staked principal it returns is not income. Generated\n"
+    "amounts are counted only once mature. Coinbase outputs are never counted.\n"
+    "\n"
+    "Outputs are matched by destination, so amounts paid to the address as a bare public\n"
+    "key (the form every coinstake output takes) are counted too.",
     {
         {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
             "The Gridcoin address to total received-by."},
@@ -956,11 +1085,9 @@ UniValue getreceivedbyaddress(const UniValue& params)
 
     // Bitcoin address
     CTxDestination address = DecodeDestination(params[0].get_str());
-    CScript scriptPubKey;
     if (!IsValidDestination(address))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-    scriptPubKey.SetDestination(address);
-    if (IsMine(*pwalletMain,scriptPubKey) == ISMINE_NO)
+    if (IsMine(*pwalletMain, address) == ISMINE_NO)
         return ValueFromAmount(0);
 
     // Minimum confirmations
@@ -968,20 +1095,27 @@ UniValue getreceivedbyaddress(const UniValue& params)
     if (params.size() > 1)
         nMinDepth = params[1].get_int();
 
-    // Tally
+    // Tally. Matching is by destination, not by raw scriptPubKey: a coinstake pays P2PK even
+    // when the staked UTXO was P2PKH (CreateCoinStake converts the kernel script), so a script
+    // comparison against the address would miss every staking receipt -- and every plain P2PK
+    // payment, which listreceivedbyaddress has always counted.
     int64_t nAmount = 0;
+    std::vector<ReceivedOutput> vReceived;
+
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
         const CWalletTx& wtx = it->second;
-        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !IsFinalTx(wtx)) {
-            continue;
-        }
 
-        for (auto const& txout : wtx.vout) {
-            if (txout.scriptPubKey == scriptPubKey) {
-                if (wtx.GetDepthInMainChain() >= nMinDepth) {
-                    nAmount += txout.nValue;
-                }
+        int nDepth = 0;
+        if (!ReceiptTxEligible(wtx, nMinDepth, nDepth)) continue;
+
+        // ISMINE_ALL: this RPC has no watch-only switch and has always counted watch-only
+        // receipts, so the coinstake principal must be netted over the same ownership set.
+        TallyTxReceipts(wtx, ISMINE_ALL, vReceived);
+
+        for (auto const& received : vReceived) {
+            if (received.dest == address) {
+                nAmount += received.nAmount;
             }
         }
     }
@@ -1011,7 +1145,12 @@ static const RPCHelpMan getreceivedbyaccount_help{
     "\n"
     "Only addresses carrying <account> in the address book are tallied; payments to wallet\n"
     "addresses without an address book entry are not included even for the default \"\"\n"
-    "account (listreceivedbyaccount counts those under \"\").",
+    "account (listreceivedbyaccount counts those under \"\").\n"
+    "\n"
+    "Coinstake receipts are included. A sidestake or MRC payout received from another\n"
+    "staker's coinstake counts at face value; a coinstake this wallet staked counts only\n"
+    "the net reward, because the staked principal it returns is not income. Generated\n"
+    "amounts are counted only once mature. Coinbase outputs are never counted.",
     {
         {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name."},
         {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
@@ -1031,20 +1170,23 @@ static int64_t TallyReceivedByAddresses(const set<CTxDestination>& setAddress, i
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
 {
     int64_t nAmount = 0;
+    std::vector<ReceivedOutput> vReceived;
+
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
         const CWalletTx& wtx = it->second;
-        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !IsFinalTx(wtx)) {
-            continue;
-        }
 
-        for (auto const& txout : wtx.vout)
-        {
-            CTxDestination address;
-            if (ExtractDestination(txout.scriptPubKey, address) && (IsMine(*pwalletMain, address) != ISMINE_NO) && setAddress.count(address)) {
-                if (wtx.GetDepthInMainChain() >= nMinDepth) {
-                    nAmount += txout.nValue;
-                }
+        int nDepth = 0;
+        if (!ReceiptTxEligible(wtx, nMinDepth, nDepth)) continue;
+
+        // ISMINE_ALL: this tally has always counted watch-only receipts (the ownership test
+        // below was IsMine(...) != ISMINE_NO), so the coinstake principal must be netted over
+        // the same ownership set. A narrower filter would resolve it to 0.
+        TallyTxReceipts(wtx, ISMINE_ALL, vReceived);
+
+        for (auto const& received : vReceived) {
+            if (setAddress.count(received.dest)) {
+                nAmount += received.nAmount;
             }
         }
     }
@@ -1077,7 +1219,12 @@ static const RPCHelpMan getreceivedbylabel_help{
     "\n"
     "Only addresses carrying <label> in the address book are tallied; payments to wallet\n"
     "addresses without an address book entry are not included even for the default \"\"\n"
-    "label (listreceivedbylabel counts those under \"\").",
+    "label (listreceivedbylabel counts those under \"\").\n"
+    "\n"
+    "Coinstake receipts are included. A sidestake or MRC payout received from another\n"
+    "staker's coinstake counts at face value; a coinstake this wallet staked counts only\n"
+    "the net reward, because the staked principal it returns is not income. Generated\n"
+    "amounts are counted only once mature. Coinbase outputs are never counted.",
     {
         {"label", RPCArg::Type::STR, RPCArg::Optional::NO, "The selected label, may be the default label using \"\"."},
         {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
@@ -1829,38 +1976,34 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts, const string& st
 
     // Tally
     map<CTxDestination, tallyitem> mapTally;
+    std::vector<ReceivedOutput> vReceived;
+
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
         const CWalletTx& wtx = it->second;
 
-        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !IsFinalTx(wtx))
-            continue;
-
-        int nDepth = wtx.GetDepthInMainChain();
-        if (nDepth < nMinDepth)
+        int nDepth = 0;
+        if (!ReceiptTxEligible(wtx, nMinDepth, nDepth))
             continue;
 
         // A tx the wallet did not fund is an external receipt for every owned output it
-        // pays; one the wallet funded only produces change (see CWallet::IsChange).
+        // pays; one the wallet funded only produces change (see CWallet::IsChange) -- except
+        // for value a coinstake MINTED, which is income, not change.
         const bool fTxFromMe = wtx.IsFromMe(filter);
 
-        for (auto const& txout : wtx.vout)
+        TallyTxReceipts(wtx, filter, vReceived);
+
+        for (auto const& received : vReceived)
         {
-            CTxDestination address;
-            if (!ExtractDestination(txout.scriptPubKey, address))
-                 continue;
+            isminefilter mine = IsMine(*pwalletMain, received.dest);
 
-            isminefilter mine = IsMine(*pwalletMain, address);
-            if (!(mine & filter))
-                continue;
-
-            tallyitem& item = mapTally[address];
-            item.nAmount += txout.nValue;
+            tallyitem& item = mapTally[received.dest];
+            item.nAmount += received.nAmount;
             item.nConf = min(item.nConf, nDepth);
             item.txids.push_back(wtx.GetHash());
             if (mine & ISMINE_WATCH_ONLY)
               item.fIsWatchonly = true;
-            if (!fTxFromMe)
+            if (!fTxFromMe || received.fGenerated)
                 item.fIsExternal = true;
         }
     }
@@ -1992,7 +2135,14 @@ static const RPCHelpMan listreceivedbyaddress_help{
     "change included, matching getreceivedbyaddress. Addresses whose payments all arrived in\n"
     "transactions funded by this wallet (change, or receipts inside wallet-cofunded\n"
     "transactions) are omitted until given an address book entry; qualification is evaluated\n"
-    "within the same minconf filter.",
+    "within the same minconf filter.\n"
+    "\n"
+    "Coinstake receipts are included. A sidestake or MRC payout received from another\n"
+    "staker's coinstake counts at face value; a coinstake this wallet staked counts only\n"
+    "the net reward, because the staked principal it returns is not income. Generated\n"
+    "amounts are counted only once mature. Coinbase outputs are never counted. Minted value\n"
+    "is never change, so a staking or sidestake address is listed even with no address book\n"
+    "entry.",
     {
         {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
             "The minimum number of confirmations before payments are included (default: 1)."},
@@ -2036,7 +2186,14 @@ static const RPCHelpMan listreceivedbyaccount_help{
     "are counted under the default \"\" account at their full received total (change\n"
     "included). Addresses whose payments all arrived in transactions funded by this wallet\n"
     "are not counted. Note that getreceivedbyaccount \"\" reads only the address book, so it\n"
-    "does not include these amounts.",
+    "does not include these amounts.\n"
+    "\n"
+    "Coinstake receipts are included. A sidestake or MRC payout received from another\n"
+    "staker's coinstake counts at face value; a coinstake this wallet staked counts only\n"
+    "the net reward, because the staked principal it returns is not income. Generated\n"
+    "amounts are counted only once mature. Coinbase outputs are never counted. Minted value\n"
+    "is never change, so a staking or sidestake address is counted even with no address book\n"
+    "entry.",
     {
         {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
             "Minimum confirmations before payments are included. Default: 1."},
@@ -2079,7 +2236,14 @@ static const RPCHelpMan listreceivedbylabel_help{
     "default \"\" label at their full received total (change included). Addresses whose\n"
     "payments all arrived in transactions funded by this wallet are not counted. Note that\n"
     "getreceivedbylabel \"\" reads only the address book, so it does not include these\n"
-    "amounts.",
+    "amounts.\n"
+    "\n"
+    "Coinstake receipts are included. A sidestake or MRC payout received from another\n"
+    "staker's coinstake counts at face value; a coinstake this wallet staked counts only\n"
+    "the net reward, because the staked principal it returns is not income. Generated\n"
+    "amounts are counted only once mature. Coinbase outputs are never counted. Minted value\n"
+    "is never change, so a staking or sidestake address is counted even with no address book\n"
+    "entry.",
     {
         {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
             "Minimum confirmations before payments are included. Default: 1."},
