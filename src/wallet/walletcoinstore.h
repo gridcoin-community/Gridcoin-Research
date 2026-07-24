@@ -258,7 +258,7 @@ private:
     std::unordered_map<COutPoint, std::size_t, OutPointHasher> m_by_outpoint GUARDED_BY(cs_store);
     std::unordered_multimap<uint256, std::size_t, CoinTxHashHasher> m_by_hash GUARDED_BY(cs_store);
 
-    //! The grouped index core (flat/tree/direcory positional arithmetic,
+    //! The grouped index core (flat/tree/directory positional arithmetic,
     //! aggregates, scope high-waters).
     CoinViews m_views GUARDED_BY(cs_store);
 

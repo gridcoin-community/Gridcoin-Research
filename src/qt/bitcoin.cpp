@@ -41,6 +41,7 @@
 #include "qtipcserver.h"
 #include "txdb.h"
 #include "util.h"
+#include "util/strencodings.h"
 #include "util/threadnames.h"
 #include "winshutdownmonitor.h"
 #include "gridcoin/upgrade.h"
@@ -73,7 +74,6 @@
 #include <QLocale>
 #include <QTranslator>
 #include "qt/splashscreen.h"
-#include "qt/syntheticcoinsource.h"
 #include <QLibraryInfo>
 #include <QProcess>
 
@@ -1426,16 +1426,21 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 if (!synthetic_coins.empty()) {
                     // DEV HARNESS: the #3183 acceptance-gate substitution — the
                     // real store/views/queue over synthetic records at the
-                    // requested scale (see qt/syntheticcoinsource.h).
-                    int synth_total = 0;
-                    int synth_groups = 3;
+                    // requested scale (see interfaces/wallet_coin_source.h).
+                    int32_t synth_total = 0;
+                    int32_t synth_groups = 3;
                     const std::size_t colon = synthetic_coins.find(":");
-                    synth_total = std::atoi(synthetic_coins.substr(0, colon).c_str());
-                    if (colon != std::string::npos) {
-                        synth_groups = std::atoi(synthetic_coins.substr(colon + 1).c_str());
+                    // Locale-independent parse (lint-locale-dependence bars
+                    // atoi); a malformed argument is a dev-side typo, so fail
+                    // loudly rather than silently harnessing the wrong scale.
+                    if (!ParseInt32(synthetic_coins.substr(0, colon), &synth_total)
+                        || (colon != std::string::npos
+                            && !ParseInt32(synthetic_coins.substr(colon + 1), &synth_groups))) {
+                        throw std::runtime_error(
+                            "-devsyntheticcoins expects integers: <n>[:<groups>]");
                     }
                     wallet_coin_source =
-                        std::make_shared<SyntheticCoinSource>(synth_total, synth_groups);
+                        interfaces::MakeSyntheticCoinSource(synth_total, synth_groups);
                 } else {
                     wallet_coin_source = interface_init->makeWalletCoinSource();
                 }

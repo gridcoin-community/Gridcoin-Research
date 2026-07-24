@@ -160,6 +160,23 @@ public:
 //! until then this factory has no definition and nothing links against it.
 std::shared_ptr<WalletCoinSource> MakeWalletCoinSource(CWallet* wallet);
 
+//! DEV HARNESS ONLY (-devsyntheticcoins=<n>[:<groups>]): a WalletCoinSource
+//! over a null-wallet coin store seeded with <total_coins> synthetic records
+//! spread over <groups> addresses — the #3183 acceptance-gate substitution.
+//!
+//! Because the REAL store, views and queue are underneath (only the wallet
+//! scan is replaced by the synthetic seed), every windowing, epoch/floor and
+//! selection-mirror semantic the production dialog exercises is exercised
+//! here too, at whatever scale the argument requests. Group 0 receives the
+//! bulk of the coins (the pathological single-address case); the remaining
+//! groups get 1000 each.
+//!
+//! Limits vs production: the summary labels read 0 (computeCoinControlSummary
+//! resolves outpoints against the real wallet), and there is no live mutation
+//! feed — this harness is for model/view behavior and the measured 500k-child
+//! expand gate, not fee math.
+std::shared_ptr<WalletCoinSource> MakeSyntheticCoinSource(int total_coins, int groups);
+
 } // namespace interfaces
 
 #endif // GRIDCOIN_INTERFACES_WALLET_COIN_SOURCE_H
