@@ -297,7 +297,7 @@ public:
         return true;
     }
 
-    bool getNewReceiveAddress(const std::string& label, std::string& address_out) override
+    bool getNewReceiveAddressWithLabel(const std::string& label, std::string& address_out) override
     {
         // fAllowReuse=false to match the researcher pool page's former
         // getKeyFromPool(..., false) call: a deliberately fresh receive key.
@@ -336,7 +336,7 @@ public:
         return m_wallet->GetPubKey(address, pub_key_out);
     }
 
-    bool getKeyFromPool(CPubKey& pub_key_out, const std::string& label) override
+    bool getKeyFromPool(const std::string& label, CPubKey& pub_key_out) override
     {
         if (!m_wallet->GetKeyFromPool(pub_key_out, false)) {
             return false;

@@ -481,9 +481,9 @@ public:
 
     std::unique_ptr<StakingStatus> makeStakingStatus() override { return MakeStakingStatus(); }
 
-    std::unique_ptr<MRC> makeMRC(CWallet* wallet) override
+    std::unique_ptr<MRC> makeMRC() override
     {
-        return wallet ? MakeMRC(wallet) : nullptr;
+        return pwalletMain ? MakeMRC(pwalletMain) : nullptr;
     }
 
     std::unique_ptr<SideStakeManager> makeSideStakeManager() override
@@ -496,14 +496,14 @@ public:
         return MakeVotingManager();
     }
 
-    std::unique_ptr<ResearcherContext> makeResearcherContext(CWallet* wallet) override
+    std::unique_ptr<ResearcherContext> makeResearcherContext() override
     {
-        return wallet ? MakeResearcherContext(wallet) : nullptr;
+        return pwalletMain ? MakeResearcherContext(pwalletMain) : nullptr;
     }
 
-    std::unique_ptr<PSGTPoolContext> makePSGTPoolContext(CWallet* wallet) override
+    std::unique_ptr<PSGTPoolContext> makePSGTPoolContext() override
     {
-        return wallet ? MakePSGTPoolContext(wallet) : nullptr;
+        return pwalletMain ? MakePSGTPoolContext(pwalletMain) : nullptr;
     }
 
     std::unique_ptr<Wallet> makeWallet() override
@@ -511,9 +511,9 @@ public:
         return pwalletMain ? MakeWallet(pwalletMain) : nullptr;
     }
 
-    std::shared_ptr<WalletTxSource> makeWalletTxSource(CWallet* wallet) override
+    std::shared_ptr<WalletTxSource> makeWalletTxSource() override
     {
-        return wallet ? MakeWalletTxSource(wallet) : nullptr;
+        return pwalletMain ? MakeWalletTxSource(pwalletMain) : nullptr;
     }
 };
 

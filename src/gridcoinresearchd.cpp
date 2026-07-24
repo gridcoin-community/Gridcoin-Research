@@ -23,12 +23,26 @@
 #include "node/ui_interface.h"
 #include "gridcoin/upgrade.h"
 
+#ifdef ENABLE_MULTIPROCESS
+#include "interfaces/init.h"
+#include "interfaces/ipc.h"
+#include "ipc/handshake.h"
+#include "ipc/serve_init.h"
+#include <atomic>
+#include <memory>
+#endif
+
 #include <boost/thread.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <stdio.h>
 #include <stdexcept>
 
 extern bool fQtActive;
+// Set true at the end of core init. The GUI sets it via ThreadAppInit2; the
+// daemon runs AppInit2 directly, so it sets it here (below) -- otherwise a
+// multiprocess GUI's isCoreReady() poll, served from this process, never
+// returns true and the GUI hangs on the splash.
+extern std::atomic<bool> bGridcoinCoreInitComplete;
 
 #if HAVE_DECL_FORK
 
@@ -291,9 +305,38 @@ bool AppInit(int argc, char* argv[])
     }
 
     if (fRet) {
+        // Core init succeeded. ThreadAppInit2 (the GUI's init wrapper) sets this
+        // for the monolith; the daemon calls AppInit2 directly, so set it here so
+        // a multiprocess GUI's isCoreReady() (served from this process) returns
+        // true once the core is up.
+        bGridcoinCoreInitComplete = true;
+#ifdef ENABLE_MULTIPROCESS
+        // Multiprocess (RFC #2937): after core init, optionally listen on the
+        // AF_UNIX socket and serve the interfaces::Init to an attached GUI. The
+        // serving Init + Ipc live for the run, torn down after the wait loop.
+        std::unique_ptr<interfaces::Init> serve_init;
+        std::unique_ptr<interfaces::Ipc> ipc;
+        if (gArgs.GetBoolArg("-multiprocess", false)) {
+            try {
+                std::string cookie = ipc::WriteCookie(GetDataDir());
+                interfaces::NodeIdentity identity = ipc::WriteIdentity(GetDataDir());
+                serve_init = ipc::MakeServeInit(interfaces::MakeGridcoinInit(),
+                                                std::move(cookie), std::move(identity));
+                ipc = interfaces::MakeIpc("gridcoinresearchd", *serve_init);
+                std::string address = "unix";
+                ipc->listenAddress(address);
+                LogPrintf("IPC: serving GUI connections on %s\n", address);
+            } catch (const std::exception& e) {
+                LogPrintf("IPC: failed to start the multiprocess listener: %s\n", e.what());
+            }
+        }
+#endif
         while (!ShutdownRequested()) {
             UninterruptibleSleep(std::chrono::milliseconds{500});
         }
+#ifdef ENABLE_MULTIPROCESS
+        if (ipc) ipc->disconnectIncoming();
+#endif
     }
 
     Shutdown(nullptr);

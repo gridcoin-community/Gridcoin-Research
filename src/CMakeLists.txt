@@ -350,6 +350,13 @@ if(ENABLE_DAEMON)
     target_include_directories(gridcoinresearchd PRIVATE ${CMAKE_BINARY_DIR})
     target_compile_definitions(gridcoinresearchd PRIVATE CURL_STATICLIB) # <--- ADDED
 
+    # Multiprocess (RFC #2937): the daemon links the IPC layer so -multiprocess can
+    # serve the GUI over the socket. gridcoin_ipc is EXCLUDE_FROM_ALL, so listing it
+    # here is what pulls it into the build for this configuration.
+    if(ENABLE_MULTIPROCESS)
+        target_link_libraries(gridcoinresearchd PRIVATE gridcoin_ipc)
+    endif()
+
     # Link gridcoinresearchd to gridcoin_util AND all of gridcoin_util's
     # dependencies, because it is a static library.
     target_link_libraries(gridcoinresearchd PUBLIC

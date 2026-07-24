@@ -729,6 +729,12 @@ void SetupServerArgs()
     // RPC
     argsman.AddArg("-server", "Accept command line and JSON-RPC commands",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-multiprocess",
+                   "Run in multiprocess mode (RFC #2937): the daemon also listens on an AF_UNIX "
+                   "socket in the data directory and serves the GUI over IPC; the GUI (started "
+                   "separately with -multiprocess) connects to it instead of running core in-process. "
+                   "Default: off (monolithic).",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-rpcuser=<user>", "Username for JSON-RPC connections",
                    ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::RPC);
     argsman.AddArg("-rpcwait", "Wait for RPC server to start.",

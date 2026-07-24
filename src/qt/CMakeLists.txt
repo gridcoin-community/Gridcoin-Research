@@ -248,6 +248,14 @@ target_link_libraries(gridcoinresearch PRIVATE
     gridcoinqt
 )
 
+# The GUI connects to a separately-started daemon over IPC when run with
+# -multiprocess (qt/bitcoin.cpp -> ipc::ConnectToNode); link the IPC layer that
+# provides it, mirroring gridcoinresearchd. gridcoin_ipc is EXCLUDE_FROM_ALL, so
+# it is only built when something (here) links it.
+if(ENABLE_MULTIPROCESS)
+    target_link_libraries(gridcoinresearch PRIVATE gridcoin_ipc)
+endif()
+
 # Linux Static Math Lib Workaround
 if(UNIX AND NOT APPLE AND DEFINED DEP_LIB)
     # Ensure DEP_LIB is absolute so the link command works from any directory.

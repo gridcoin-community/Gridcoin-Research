@@ -292,6 +292,13 @@ if(ENABLE_UPNP)
 endif()
 
 if(ENABLE_MULTIPROCESS)
+    # The IPC transport is pathname AF_UNIX sockets with POSIX close-on-exec /
+    # umask semantics (src/ipc/); it is a Unix-only feature. Fail with a clear
+    # message rather than a confusing compile error if it is enabled on Windows.
+    if(WIN32)
+        message(FATAL_ERROR "ENABLE_MULTIPROCESS is not supported on Windows (it requires POSIX AF_UNIX sockets).")
+    endif()
+
     # Cap'n Proto provides the serialization runtime and the capnp / capnpc-c++
     # code generators; libmultiprocess provides the proxy runtime and the mpgen
     # generator that turns an interfaces .capnp schema into client/server proxies.
@@ -318,6 +325,9 @@ if(ENABLE_MULTIPROCESS)
         message(STATUS "Multiprocess (IPC) build: ENABLED (vendored subtree)")
     endif()
     message(STATUS "  Cap'n Proto: ${CapnProto_VERSION}")
+    # Compile definition so the -multiprocess seam code (in gridcoinresearchd and
+    # the GUI) is gated: OFF builds neither reference nor link gridcoin_ipc.
+    add_compile_definitions(ENABLE_MULTIPROCESS)
 else()
     message(STATUS "Multiprocess (IPC) build: disabled (monolithic, direct calls)")
 endif()

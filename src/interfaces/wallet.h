@@ -286,8 +286,10 @@ public:
     virtual bool getPubKey(const CKeyID& address, CPubKey& pub_key_out) = 0;
 
     //! Fetch a fresh public key from the key pool, labeling its address in
-    //! the address book when label is non-empty.
-    virtual bool getKeyFromPool(CPubKey& pub_key_out, const std::string& label) = 0;
+    //! the address book when label is non-empty. Input (label) precedes the
+    //! output (pub_key_out) so the IPC proxy maps request/response fields to
+    //! these arguments in order.
+    virtual bool getKeyFromPool(const std::string& label, CPubKey& pub_key_out) = 0;
 
     //! Value snapshots of the given outpoints; unknown or conflicted
     //! (negative-depth) outpoints are skipped.
@@ -382,7 +384,10 @@ public:
     //! label, and return its encoded destination -- the CPubKey stays node-side.
     //! For the researcher pool page, which previously reserved the key and
     //! encoded the address GUI-side. Returns false on key-generation failure.
-    virtual bool getNewReceiveAddress(const std::string& label, std::string& address_out) = 0;
+    //! Distinct name (not an overload of getNewReceiveAddress) because the IPC
+    //! proxy generator takes a member-function pointer and cannot disambiguate
+    //! overloaded names.
+    virtual bool getNewReceiveAddressWithLabel(const std::string& label, std::string& address_out) = 0;
 
     //! Owned addresses with a positive balance that are not yet in the address
     //! book (encoded), for the "add existing receive address" picker.

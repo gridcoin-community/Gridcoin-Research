@@ -8,7 +8,6 @@
 
 #include <vector>
 
-class CWallet;
 class TransactionTablePriv;
 class TransactionRecord;
 class WalletModel;
@@ -19,7 +18,7 @@ class TransactionTableModel : public QAbstractTableModel
 {
     Q_OBJECT
 public:
-    explicit TransactionTableModel(CWallet* wallet, WalletModel* parent = nullptr);
+    explicit TransactionTableModel(WalletModel* parent = nullptr);
     ~TransactionTableModel();
 
     enum ColumnIndex {
@@ -86,7 +85,6 @@ public:
     void applyEventBatch(const std::vector<GRC::WalletEvent>& events);
 
 private:
-    CWallet* wallet;
     WalletModel *walletModel;
     QStringList columns;
     TransactionTablePriv *priv;
