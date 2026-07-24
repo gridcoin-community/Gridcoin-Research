@@ -1319,7 +1319,14 @@ void CWallet::TransactionReplacedInMempool(const CTransactionRef& tx)
     // mempool. Preserve the legacy EraseFromWallets behavior: drop the defunct
     // copy entirely (EraseFromWallet takes cs_wallet internally). This replaces
     // the setpwalletRegistered EraseFromWallets wrapper (issue #3030).
-    EraseFromWallet(tx->GetHash());
+    const uint256 hash = tx->GetHash();
+
+    if (EraseFromWallet(hash)) {
+        // Without this the erased tx lingers in derived views (tx tables,
+        // coin lists) until restart. CT_DELETED handlers touch only the hash
+        // and expect no wallet locks held.
+        NotifyTransactionChanged(this, hash, CT_DELETED);
+    }
 }
 
 void CWallet::BlockConnected(const CBlock& block, int height)
@@ -1449,6 +1456,10 @@ void CWallet::BlockDisconnected(const CBlock& block, int height)
         pwalletdb = std::make_unique<CWalletDB>(strWalletFile);
     }
 
+    // Parents whose outputs are unmarked spent below; notified once each after
+    // the loop so subscribers see the restored coins.
+    std::set<uint256> parents_unspent;
+
     for (const auto& tx : block.vtx) {
         const uint256& hash = tx.GetHash();
         auto it = mapWallet.find(hash);
@@ -1513,12 +1524,24 @@ void CWallet::BlockDisconnected(const CBlock& block, int height)
 
                     // Persist the change to disk using shared database session
                     parent_wtx.WriteToDisk(pwalletdb.get());
+
+                    parents_unspent.insert(txin.prevout.hash);
                 }
             }
         }
 
         wtx.MarkDirty();
         wtx.WriteToDisk(pwalletdb.get());
+    }
+
+    // Notify once per parent whose outputs were unmarked above. Deduplicated
+    // across the whole block: a disconnected consolidation tx can consume
+    // hundreds of outputs of the same parent, and per-input signals would fan
+    // out to subscribers as repeated synchronous re-decompositions mid-reorg.
+    // cs_main (held by caller) and cs_wallet (held above) satisfy the
+    // CT_UPDATED handler contract.
+    for (const uint256& parent_hash : parents_unspent) {
+        NotifyTransactionChanged(this, parent_hash, CT_UPDATED);
     }
 
     // Update last block processed marker
@@ -2216,6 +2239,14 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
             pindex = pindex->pnext;
         }
     }
+
+    if (ret > 0) {
+        // AddToWalletIfInvolvingMe was called directly (not via the
+        // SyncTransaction path), so no per-tx NotifyTransactionChanged fired
+        // for anything found here. Let derived views resynchronize once.
+        NotifyTransactionsBulkChanged();
+    }
+
     return ret;
 }
 
@@ -2275,6 +2306,7 @@ void CWallet::ReacceptWalletTransactions()
 {
     CTxDB txdb("r");
     bool fRepeat = true;
+    bool fAnyUpdated = false;
     while (fRepeat)
     {
         LOCK2(cs_main, cs_wallet);
@@ -2306,6 +2338,7 @@ void CWallet::ReacceptWalletTransactions()
                     wtx.MarkDirty();
                     CWalletDB walletdb(strWalletFile);
                     wtx.WriteToDisk(&walletdb);
+                    fAnyUpdated = true;
                 }
                 continue;
             }
@@ -2352,6 +2385,7 @@ void CWallet::ReacceptWalletTransactions()
                 wtx.MarkDirty();
                 CWalletDB walletdb(strWalletFile);
                 wtx.WriteToDisk(&walletdb);
+                fAnyUpdated = true;
             }
         }
         if (!vMissingTx.empty()) {
@@ -2359,6 +2393,12 @@ void CWallet::ReacceptWalletTransactions()
             if (ScanForWalletTransactions(pindexGenesisBlock))
                 fRepeat = true;  // Found missing transactions: re-do re-accept.
         }
+    }
+
+    if (fAnyUpdated) {
+        // The state migrations and MarkSpent calls above bypass the per-tx
+        // notification path; let derived views resynchronize once.
+        NotifyTransactionsBulkChanged();
     }
 }
 
@@ -4419,7 +4459,11 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
     nMismatchFound = 0;
     nBalanceInQuestion = 0;
 
-    LOCK(cs_wallet);
+    // cs_main is required by the CT_UPDATED notification contract below (and
+    // guards the txindex reads). Callers either already hold it
+    // (ReorganizeChain) or hold neither lock (init, checkwallet/repairwallet
+    // RPCs), so taking both here is safe in the canonical order.
+    LOCK2(cs_main, cs_wallet);
     vector<CWalletTx*> vCoins;
     vCoins.reserve(mapWallet.size());
     for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
@@ -4427,6 +4471,12 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
     }
 
     CWalletDB walletdb(strWalletFile);
+
+    // Transactions whose vfSpent was repaired below; notified once each after
+    // the loop so derived views hear about the availability changes (this runs
+    // from ReorganizeChain's otherwise-silent cleanup as well as the
+    // repairwallet RPC).
+    std::set<uint256> repaired;
 
     CTxDB txdb("r");
     for (auto const& pcoin : vCoins)
@@ -4448,6 +4498,7 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
                 {
                     pcoin->MarkUnspent(n);
                     pcoin->WriteToDisk(&walletdb);
+                    repaired.insert(pcoin->GetHash());
                 }
             }
             else if ((IsMine(pcoin->vout[n]) != ISMINE_NO) && !pcoin->IsSpent(n) && (txindex.vSpent.size() > n && !txindex.vSpent[n].IsNull()))
@@ -4460,9 +4511,14 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
                 {
                     pcoin->MarkSpent(n);
                     pcoin->WriteToDisk(&walletdb);
+                    repaired.insert(pcoin->GetHash());
                 }
             }
         }
+    }
+
+    for (const uint256& hash : repaired) {
+        NotifyTransactionChanged(this, hash, CT_UPDATED);
     }
 }
 
