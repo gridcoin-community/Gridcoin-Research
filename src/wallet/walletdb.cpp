@@ -191,6 +191,13 @@ CWalletDB::ReorderTransactions(CWallet* pwallet)
 
             if (pwtx != nullptr) {
                 pwtx->nOrderPos = nOrderPos;
+
+                // Persist the repair (upstream parity): without this the
+                // record keeps -1 on disk, ReorderTransactions re-runs on
+                // every load, and every valid-position transaction sorting
+                // after this one is shifted and rewritten at each restart.
+                if (!WriteTx(pwtx->GetHash(), *pwtx))
+                    return DB_LOAD_FAIL;
             } else if (pacentry_opt.has_value()) {
                 // Have to write accounting regardless, since we don't keep it in memory
                 CAccountingEntry entry_copy = pacentry_opt.value();
