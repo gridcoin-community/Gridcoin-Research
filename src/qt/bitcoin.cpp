@@ -629,16 +629,16 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             node_connection = ipc::ConnectToNode(GetDataDir(), *local_init, ipc_error);
             if (!node_connection)
             {
-                ThreadSafeMessageBox(strprintf("Could not connect to the Gridcoin daemon: %s\n", ipc_error),
-                        "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+                // One dialog: this runs after ThreadSafeMessageBox_connect, so a
+                // uiInterface message box here would double up with the direct one.
+                GUILogPrintf("IPC: could not connect to the Gridcoin daemon: %s", ipc_error);
                 QMessageBox::critical(nullptr, PACKAGE_NAME,
                         QObject::tr("Could not connect to the Gridcoin daemon:\n%1").arg(QString::fromStdString(ipc_error)));
                 return EXIT_FAILURE;
             }
             interface_init = node_connection->init.get();
 #else
-            ThreadSafeMessageBox("This build was compiled without multiprocess (IPC) support.\n",
-                    "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+            GUILogPrintf("IPC: -multiprocess requested but this build has no multiprocess (IPC) support");
             QMessageBox::critical(nullptr, PACKAGE_NAME,
                     QObject::tr("This build was compiled without multiprocess (IPC) support."));
             return EXIT_FAILURE;

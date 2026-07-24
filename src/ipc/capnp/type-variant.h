@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 #include <tuple>
 #include <utility>
 #include <variant>
@@ -94,6 +95,11 @@ decltype(auto) CustomReadField(TypeList<std::variant<Alts...>>,
     std::uint16_t which = 0;
     ReadField(TypeList<std::uint16_t>(), invoke_context,
         Make<StructField, std::tuple_element_t<0, Accessors>>(wire), ReadDestUpdate(which));
+    // The discriminant is untrusted in the separated build; reject an
+    // out-of-range value rather than silently leaving the variant default.
+    if (which >= std::variant_size_v<Variant>) {
+        throw std::runtime_error("variant discriminant out of range in IPC message");
+    }
     return read_dest.update([&](Variant& value) {
         ReadVariantAlt<0, Variant, Accessors>(invoke_context, wire, which,
             [&](auto index_tag, auto&&... args) -> auto& {

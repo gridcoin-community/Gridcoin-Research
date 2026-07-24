@@ -11,6 +11,7 @@
 
 #include <cerrno>
 #include <cstring>
+#include <fcntl.h>
 #include <stdexcept>
 #include <string>
 #include <sys/socket.h>
@@ -55,11 +56,33 @@ fs::path ParseAddress(std::string& address, const fs::path& data_dir, struct soc
     return path;
 }
 
+//! Create an AF_UNIX SOCK_STREAM socket with close-on-exec set, so the IPC fd
+//! cannot leak into an exec'd child. Uses SOCK_CLOEXEC atomically where the
+//! platform provides it (Linux, the BSDs); falls back to fcntl(FD_CLOEXEC) on
+//! platforms that lack it (notably macOS). Returns -1 with errno set on failure.
+int MakeCloexecStreamSocket()
+{
+#ifdef SOCK_CLOEXEC
+    return ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+#else
+    int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd == -1) return -1;
+    const int flags = ::fcntl(fd, F_GETFD);
+    if (flags == -1 || ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == -1) {
+        const int saved = errno;
+        ::close(fd);
+        errno = saved;
+        return -1;
+    }
+    return fd;
+#endif
+}
+
 //! Connect a fresh AF_UNIX SOCK_STREAM socket to \p addr. Returns the connected
 //! fd, or -1 with \p out_errno set on failure (caller decides how to react).
 int TryConnect(const struct sockaddr_un& addr, int& out_errno)
 {
-    int fd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    int fd = MakeCloexecStreamSocket();
     if (fd == -1) {
         out_errno = errno;
         return -1;
@@ -111,7 +134,7 @@ public:
         // node just bound. (A residual race with a live-but-backlog-full listener
         // remains; a lock file is the future hardening.)
         for (int attempt = 0; attempt < 2; ++attempt) {
-            int fd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+            int fd = MakeCloexecStreamSocket();
             if (fd == -1) {
                 throw std::system_error(errno, std::system_category());
             }
