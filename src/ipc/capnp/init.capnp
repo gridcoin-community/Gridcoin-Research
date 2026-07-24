@@ -17,6 +17,7 @@ using Wallet = import "wallet.capnp";
 using WalletTxSource = import "wallet_tx_source.capnp";
 using MRC = import "mrc.capnp";
 using Voting = import "voting.capnp";
+using Researcher = import "researcher.capnp";
 
 # Per-process bootstrap interface (interfaces::Init). construct @0 is the
 # libmultiprocess lifecycle entry point (ThreadMap exchange); the makeX methods
@@ -39,6 +40,7 @@ interface Init $Proxy.wrap("interfaces::Init") {
     makeWalletTxSource @8 (context :Proxy.Context) -> (result :WalletTxSource.WalletTxSource);
     makeMRC @9 (context :Proxy.Context) -> (result :MRC.MRC);
     makeVotingManager @10 (context :Proxy.Context) -> (result :Voting.VotingManager);
+    makeResearcherContext @11 (context :Proxy.Context) -> (result :Researcher.ResearcherContext);
 }
 
 struct BuildInfo $Proxy.wrap("interfaces::BuildInfo") {
