@@ -4,6 +4,7 @@
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
 #include "uint256.h"
+#include <gridcoin/scraper/fwd.h>
 #include <node/ui_interface.h>
 
 #include <boost/signals2/optional_last_value.hpp>
@@ -81,7 +82,29 @@ void CClientUIInterface::PSGTPoolChanged(const uint256& revision_hash, ChangeTyp
 void CClientUIInterface::NewPollReceived(int64_t poll_time) { return g_ui_signals.NewPollReceived(poll_time); }
 void CClientUIInterface::NewVoteReceived(const uint256& poll_txid) { return g_ui_signals.NewVoteReceived(poll_txid); }
 void CClientUIInterface::NotifyAlertChanged(const uint256 &hash, ChangeType status) { return g_ui_signals.NotifyAlertChanged(hash, status); }
-void CClientUIInterface::NotifyScraperEvent(const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message) { return g_ui_signals.NotifyScraperEvent(ScraperEventtype, status, message); }
+void CClientUIInterface::NotifyScraperEvent(const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message)
+{
+    // Remember the last icon-relevant event so a late-connecting UI can hydrate
+    // (see GetLastScraperEvent). Log events carry console text, not an icon
+    // state, and the GUI routes them separately, so they must not overwrite the
+    // cached status. relaxed ordering: the value is a self-contained snapshot
+    // read independently, with no other memory it must synchronize against.
+    if (ScraperEventtype != scrapereventtypes::Log) {
+        const uint32_t packed = (static_cast<uint32_t>(static_cast<int>(ScraperEventtype)) << 16)
+                                | (static_cast<uint32_t>(static_cast<int>(status)) & 0xFFFFu);
+        m_last_scraper_event.store(packed, std::memory_order_relaxed);
+    }
+    return g_ui_signals.NotifyScraperEvent(ScraperEventtype, status, message);
+}
+
+bool CClientUIInterface::GetLastScraperEvent(int& event_type, int& status) const
+{
+    const uint32_t packed = m_last_scraper_event.load(std::memory_order_relaxed);
+    if (packed == kNoScraperEvent) return false;
+    event_type = static_cast<int>(packed >> 16);
+    status = static_cast<int>(packed & 0xFFFFu);
+    return true;
+}
 void CClientUIInterface::RwSettingsUpdated() { return g_ui_signals.RwSettingsUpdated(); }
 void CClientUIInterface::MandatorySideStakeChanged() { return g_ui_signals.MandatorySideStakeChanged(); }
 

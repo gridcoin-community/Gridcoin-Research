@@ -431,6 +431,11 @@ public:
         snapshot.excluded_scrapers = ConvergedScraperStatsCache.Convergence.vExcludedScrapers;
         snapshot.scrapers_not_publishing = ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing;
 
+        // Current scraper status (last non-Log event), so the GUI can initialize
+        // its icon at connect time. Lock-free read; leaves the -1/-1 defaults
+        // when no event has fired yet.
+        uiInterface.GetLastScraperEvent(snapshot.current_event_type, snapshot.current_event_status);
+
         return snapshot;
     }
 
