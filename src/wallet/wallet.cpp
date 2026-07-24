@@ -1973,18 +1973,40 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
             // If we are on the last output of the coinstake, then push the net amount.
             if (i == vout.size() - 1)
             {
-                // We want the destination for the overall coinstake to come from output one,
-                // which also matches the input.
-                ExtractDestination(vout[1].scriptPubKey, address);
+                // nDebit is the staked principal, resolved through mapWallet by
+                // CWallet::GetDebit(const CTxIn&). If the funding transaction is not there -- a
+                // wallet restored without a full rescan, or a key imported after the fact -- it
+                // reports 0 while IsMine(vout[1]) stays true, and the principal becomes
+                // indistinguishable from the reward. Rolling up anyway would report the WHOLE
+                // staked principal as a received amount, so omit the entry instead. Only the
+                // rollup is suppressed; the per-output branches below are left alone.
+                if (nDebit > 0)
+                {
+                    // We want the destination for the overall coinstake to come from output one,
+                    // which also matches the input.
+                    ExtractDestination(vout[1].scriptPubKey, address);
 
-                // For the rolled up coinstake entry, the first output is indicated in the pushed output
-                output = {address, amount - nDebit, 1};
-                listReceived.push_back(output);
+                    // For the rolled up coinstake entry, the first output is indicated in the pushed output
+                    output = {address, amount - nDebit, 1};
+                    listReceived.push_back(output);
+                }
+                else
+                {
+                    LogPrint(BCLog::LogFlags::VERBOSE, "%s: coinstake %s: staked input not in the "
+                             "wallet; omitting the rolled-up coinstake entry", __func__,
+                             this->GetHash().ToString());
+                }
             }
         }
 
         // If this is my output AND the transaction is not from me, then record the output as received.
-        if (fIsMine != ISMINE_NO && !fIsFromMe)
+        //
+        // Not for a coinstake we staked: the rollup above owns that accounting, and reporting the
+        // outputs here as well would double count. Normally fIsFromMe is true for our own
+        // coinstake so this branch is already skipped, but it goes false exactly when the staked
+        // input is missing from mapWallet -- the case the rollup guard above declines to net --
+        // and then the untouched output value IS the staked principal.
+        if (fIsMine != ISMINE_NO && !fIsFromMe && !fIsCoinStakeMine)
         {
             if (!ExtractDestination(txout.scriptPubKey, address) && !txout.scriptPubKey.IsUnspendable())
             {

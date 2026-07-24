@@ -582,6 +582,59 @@ BOOST_AUTO_TEST_CASE(sweep_swap_count_selection_math)
     BOOST_CHECK_EQUAL(SweepSwapCount({1, 2}, 10, 100), 0U);
 }
 
+// CWalletTx::GetAmounts rolls an owned coinstake up into one received entry of
+// (all outputs - staked principal). The principal comes from GetDebit(), which resolves the
+// staked input through mapWallet, so a wallet that does not have the funding transaction -- one
+// restored without a full rescan, or a key imported after the fact -- reports 0 while
+// IsMine(vout[1]) stays true. Netting against 0 would report the WHOLE staked principal as a
+// received amount in listtransactions/gettransaction/listsinceblock, so the rollup is omitted.
+BOOST_AUTO_TEST_CASE(getamounts_omits_coinstake_rollup_when_staked_input_is_unknown)
+{
+    CWallet w("wallet_getamounts.dat");
+
+    CKey key;
+    key.MakeNewKey(false);
+    {
+        LOCK(w.cs_wallet);
+        BOOST_REQUIRE(w.AddKey(key));
+    }
+
+    // The script CreateCoinStake actually emits: a bare public key.
+    CScript coinstake_script;
+    coinstake_script << key.GetPubKey() << OP_CHECKSIG;
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);   // deliberately NOT in mapWallet
+
+    CTxOut empty;
+    empty.SetEmpty();
+    mtx.vout.push_back(empty);
+    mtx.vout.push_back(CTxOut(110 * COIN, coinstake_script));
+
+    CTransaction tx(mtx);
+    BOOST_REQUIRE(tx.IsCoinStake());
+
+    CWalletTx wtx(&w, tx);
+
+    std::list<COutputEntry> listReceived;
+    std::list<COutputEntry> listSent;
+    int64_t nFee = 0;
+    std::string strSentAccount;
+
+    {
+        LOCK(w.cs_wallet);
+        wtx.GetAmounts(listReceived, listSent, nFee, strSentAccount);
+    }
+
+    // The staked input is unknown, so GetDebit() is 0. Nothing may be reported as received --
+    // in particular not the 110 GRC, which is principal plus reward and mostly not income.
+    for (auto const& r : listReceived) {
+        BOOST_CHECK_MESSAGE(r.amount != 110 * COIN,
+                            "the whole staked principal was reported as a received amount");
+    }
+    BOOST_CHECK(listReceived.empty());
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 
