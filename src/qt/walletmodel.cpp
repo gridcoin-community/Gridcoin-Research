@@ -249,7 +249,9 @@ void WalletModel::drainEventQueue()
             QTimer::singleShot(0, this, &WalletModel::drainEventQueue);
         }
     } catch (const std::exception& e) {
-        GUILogPrintf("WalletModel: event drain failed (core connection lost): %s", e.what());
+        // Almost always the node connection dropping mid-drain (multiprocess), but
+        // do not assert the cause in the message — any drain exception lands here.
+        GUILogPrintf("WalletModel: wallet event drain failed; stopping the periodic drain: %s", e.what());
         if (eventDrainTimer) {
             eventDrainTimer->stop();
         }

@@ -30,16 +30,20 @@ namespace ipc {
 namespace capnp {
 namespace {
 
-//! Route libmultiprocess log messages into the Gridcoin log. Raise-level
-//! messages are turned into exceptions (mp's convention for fatal protocol
-//! errors), matching Bitcoin Core's IpcLogFn.
+//! Route libmultiprocess log messages into the Gridcoin log. This is high-volume
+//! bookkeeping (per-request send/recv, proxy create/destroy, post-disconnect
+//! "method called after disconnect" notices), so gate it behind the verbose
+//! category -- silent by default, surfaced with -debug=verbose. (Bitcoin Core
+//! gates this behind a dedicated BCLog::IPC category; Gridcoin's LogFlags bits are
+//! all allocated, so it rides the verbose category instead.) Raise-level messages
+//! are still turned into exceptions (mp's convention for a fatal protocol error);
+//! the message survives via the thrown exception if it goes uncaught.
 void IpcLogFn(mp::LogMessage message)
 {
+    LogPrint(BCLog::VERBOSE, "ipc: %s\n", message.message);
     if (message.level == mp::Log::Raise) {
-        LogPrintf("ipc: %s\n", message.message);
         throw std::runtime_error(message.message);
     }
-    LogPrintf("ipc: %s\n", message.message);
 }
 
 class CapnpProtocol : public Protocol
@@ -69,6 +73,13 @@ public:
                 if (client->m_context.connection) {
                     client->m_context.connection->onDisconnect(
                         [on_disconnect = std::move(on_disconnect)]() mutable { on_disconnect(); });
+                } else {
+                    // Early-disconnect race: the peer dropped between ConnectStream()
+                    // and here, so libmultiprocess cleanup already nulled the
+                    // connection and the onDisconnect above would never register.
+                    // Notify now (on the event-loop thread, same as the handler would
+                    // run) so the caller still learns the connection is gone.
+                    on_disconnect();
                 }
             });
         }

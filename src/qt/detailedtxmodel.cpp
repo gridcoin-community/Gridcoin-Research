@@ -4,6 +4,7 @@
 
 #include "qt/detailedtxmodel.h"
 
+#include "qt/guilog.h"
 #include "qt/transactiontablemodel.h"
 #include "qt/walletmodel.h"
 #include "interfaces/wallet_tx_source.h"
@@ -89,13 +90,15 @@ DetailedTxModel::~DetailedTxModel()
     if (m_walletModel) {
         try {
             m_walletModel->txSource().unregisterView(GRC::VIEW_DETAILED);
-        } catch (const std::exception&) {
+        } catch (const std::exception& e) {
             // Multiprocess teardown after the node connection dropped: the remote
             // cursor died with the core, so this proxy call throws "IPC client
             // method called after disconnect." Swallow — a destructor must not
             // propagate, and there is nothing left to unregister. The disconnect
             // hook (bitcoin.cpp) already logged the lost connection and drove the
-            // quit that is running this teardown.
+            // quit that is running this teardown. Log at verbose so a failure for
+            // any OTHER reason is still observable.
+            GUILogPrint(GUILogCategory::VERBOSE, "DetailedTxModel: unregisterView skipped: %s", e.what());
         }
     }
 }
