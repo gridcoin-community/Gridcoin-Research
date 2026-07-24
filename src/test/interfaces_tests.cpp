@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "chain.h"
 #include "clientversion.h"
 #include "interfaces/handler.h"
@@ -9,10 +10,13 @@
 #include "interfaces/node.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
+#include "key.h"
 #include "key_io.h"
 #include "node/ui_interface.h"
 #include "gridcoin/scraper/fwd.h"
+#include "primitives/transaction.h"
 #include "sync.h"
+#include "txmempool.h"
 #include "util.h"
 #include "wallet/wallet.h"
 
@@ -422,6 +426,367 @@ BOOST_AUTO_TEST_CASE(init_hands_out_interfaces)
     // pwalletMain exists in the unit-test environment, so the monolithic
     // Init must hand out a wallet interface for it.
     BOOST_CHECK(init->makeWallet() != nullptr);
+}
+
+namespace {
+CKey NewKey(bool compressed)
+{
+    CKey key;
+    key.MakeNewKey(compressed);
+    return key;
+}
+
+//! One transaction carrying every output shape computeCoinControlSummary's byte
+//! estimate distinguishes, plus a tiny output for the after_fee floor case.
+//!
+//! Outputs (value, expected input bytes):
+//!   0: 1 COIN, P2PKH to a compressed key in the wallet    -> 148
+//!   1: 2 COIN, P2PKH to an uncompressed key in the wallet -> 180
+//!   2: 3 COIN, P2PKH to a key the wallet does not hold    -> 148 (GetPubKey fails)
+//!   3: 4 COIN, P2SH                                       -> 148 (destination is not a CKeyID)
+//!   4: 5 COIN, OP_RETURN                                  -> 148 (ExtractDestination fails)
+//!   5: 1000,   P2PKH to the compressed key                -> 148
+CTransaction MakeFundingTx(const CKey& compressed, const CKey& uncompressed, const CKey& foreign)
+{
+    CMutableTransaction mtx;
+    mtx.vout.resize(6);
+
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey.SetDestination(compressed.GetPubKey().GetID());
+    mtx.vout[1].nValue = 2 * COIN;
+    mtx.vout[1].scriptPubKey.SetDestination(uncompressed.GetPubKey().GetID());
+    mtx.vout[2].nValue = 3 * COIN;
+    mtx.vout[2].scriptPubKey.SetDestination(foreign.GetPubKey().GetID());
+    mtx.vout[3].nValue = 4 * COIN;
+    mtx.vout[3].scriptPubKey.SetDestination(CScriptID(CScript() << OP_TRUE));
+    mtx.vout[4].nValue = 5 * COIN;
+    mtx.vout[4].scriptPubKey = CScript() << OP_RETURN;
+    mtx.vout[5].nValue = 1000;
+    mtx.vout[5].scriptPubKey.SetDestination(compressed.GetPubKey().GetID());
+
+    return CTransaction(mtx);
+}
+
+//! A second wallet transaction, deliberately never placed in the mempool. Its
+//! distinct value keeps its txid off the funding transaction's (see the txid
+//! aliasing note on CoinControlSetup).
+CTransaction MakeOrphanTx(const CKey& compressed)
+{
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 7 * COIN;
+    mtx.vout[0].scriptPubKey.SetDestination(compressed.GetPubKey().GetID());
+
+    return CTransaction(mtx);
+}
+
+//! Fixture for the computeCoinControlSummary cases.
+//!
+//! The implementation skips any selected outpoint whose GetDepthInMainChain()
+//! is < 0, and depth 0 is the only non-negative depth reachable here: the
+//! global test fixture builds no chain and leaves pindexBest null, so the
+//! TxStateConfirmed arm of CWalletTx::GetDepthInMainChainINTERNAL() -- which
+//! dereferences pindexBest -- must never be taken. Do not extend these cases to
+//! confirmed transactions without building a mock block index first.
+//!
+//! Mempool residence, not the wallet transaction state, is what lifts the depth
+//! off -1: CMerkleTx::GetDepthInMainChain() demotes 0 to -1 only when
+//! !mempool.exists(). The seeding below is therefore load-bearing for every
+//! case that expects quantity > 0, and TxStateInMempool is set for realism
+//! rather than as the mechanism.
+//!
+//! One multi-output funding transaction covers every byte-sizing branch, the
+//! out-of-range-n skip and the multi-input cases with a single mapWallet entry.
+//! Separate synthetic transactions would be a hazard: CMutableTransaction::nTime
+//! defaults to GetAdjustedTime() and is inside the hash preimage, so two built
+//! in the same second with the same outputs share a txid, which would silently
+//! collapse two selected "inputs" into one.
+struct CoinControlSetup
+{
+    CWallet test_wallet;
+    CKey key_compressed{NewKey(true)};
+    CKey key_uncompressed{NewKey(false)};
+    //! Never added to the wallet: exercises the GetPubKey-fails byte fallback.
+    CKey key_foreign{NewKey(true)};
+    CTransaction funding{MakeFundingTx(key_compressed, key_uncompressed, key_foreign)};
+    CTransaction orphan{MakeOrphanTx(key_compressed)};
+    const int64_t saved_transaction_fee{nTransactionFee};
+
+    CoinControlSetup()
+    {
+        // An abort() in an earlier case unwinds no destructors, so start from a
+        // known-empty pool rather than trusting the previous case's cleanup.
+        mempool.clear();
+
+        // Every fee expectation below is anchored to this value, so pin it
+        // rather than inheriting whatever the process left behind.
+        nTransactionFee = MIN_TX_FEE * 10;
+
+        BOOST_REQUIRE(funding.GetHash() != orphan.GetHash());
+
+        {
+            LOCK2(cs_main, test_wallet.cs_wallet);
+
+            BOOST_REQUIRE(test_wallet.AddKey(key_compressed));
+            BOOST_REQUIRE(test_wallet.AddKey(key_uncompressed));
+
+            CWalletTx funded(&test_wallet, funding);
+            funded.SetTxState(TxStateInMempool{});
+            test_wallet.mapWallet[funding.GetHash()] = funded;
+
+            // Left in the default (unrecognized) state and out of the mempool:
+            // GetDepthInMainChain() reports -1, the skip the selection loop
+            // applies to vanished and conflicted coins.
+            CWalletTx orphaned(&test_wallet, orphan);
+            test_wallet.mapWallet[orphan.GetHash()] = orphaned;
+
+            // addUnchecked does no internal locking (unlike remove/clear/exists):
+            // the caller must hold mempool.cs, acquired last per the canonical
+            // cs_main -> cs_wallet -> subsystem order.
+            LOCK(mempool.cs);
+            mempool.addUnchecked(funding.GetHash(), CTxMemPoolEntry(
+                funding, /*fee=*/0, /*time=*/0, /*height=*/0,
+                ::GetSerializeSize(funding, SER_NETWORK, PROTOCOL_VERSION)));
+        }
+    }
+
+    ~CoinControlSetup()
+    {
+        nTransactionFee = saved_transaction_fee;
+
+        LOCK(cs_main);
+        mempool.remove(funding);
+    }
+
+    //! The wallet locks are released before every call: computeCoinControlSummary
+    //! takes cs_main then cs_wallet itself, and holding cs_wallet across it would
+    //! invert the canonical order.
+    interfaces::CoinControlSummary Compute(const interfaces::WalletCoinControl& selection,
+                                           const std::vector<int64_t>& recipient_amounts,
+                                           bool subtract_fee_from_amount)
+    {
+        return interfaces::MakeWallet(&test_wallet)
+            ->computeCoinControlSummary(selection, recipient_amounts, subtract_fee_from_amount);
+    }
+
+    interfaces::WalletCoinControl SelectFunded(const std::vector<unsigned int>& indexes)
+    {
+        interfaces::WalletCoinControl selection;
+        for (const unsigned int n : indexes) {
+            selection.Select(COutPoint(funding.GetHash(), n));
+        }
+
+        return selection;
+    }
+};
+
+//! The base fee for every case below: nTransactionFee (pinned by the fixture)
+//! and GetMinFee(GMF_SEND) both scale MIN_TX_FEE * 10 by (1 + bytes / 1000), and
+//! no case exceeds 1000 bytes.
+const int64_t BASE_FEE = MIN_TX_FEE * 10;
+} // namespace
+
+BOOST_FIXTURE_TEST_CASE(wallet_coin_control_summary_empty_selection, CoinControlSetup)
+{
+    interfaces::WalletCoinControl selection;
+
+    // Nothing selected and nothing to pay: every field keeps its default.
+    interfaces::CoinControlSummary summary = Compute(selection, {}, false);
+    BOOST_CHECK_EQUAL(summary.quantity, 0);
+    BOOST_CHECK_EQUAL(summary.amount, 0);
+    BOOST_CHECK_EQUAL(summary.fee, 0);
+    BOOST_CHECK_EQUAL(summary.after_fee, 0);
+    BOOST_CHECK_EQUAL(summary.bytes, 0u);
+    BOOST_CHECK_EQUAL(summary.change, 0);
+    BOOST_CHECK(!summary.low_output);
+    // dust is never written on any path: it mirrors a pre-migration flag that
+    // was declared but never set true (see interfaces/wallet.h).
+    BOOST_CHECK(!summary.dust);
+
+    // The recipient scan runs before the quantity > 0 gate, so a sub-CENT
+    // recipient raises low_output even with nothing selected.
+    summary = Compute(selection, {CENT / 2}, false);
+    BOOST_CHECK(summary.low_output);
+    BOOST_CHECK_EQUAL(summary.quantity, 0);
+    BOOST_CHECK_EQUAL(summary.bytes, 0u);
+    BOOST_CHECK_EQUAL(summary.fee, 0);
+    BOOST_CHECK_EQUAL(summary.change, 0);
+    BOOST_CHECK_EQUAL(summary.after_fee, 0);
+}
+
+BOOST_FIXTURE_TEST_CASE(wallet_coin_control_summary_sizes_every_input_shape, CoinControlSetup)
+{
+    // No recipients: pay_amount stays 0, so the change/byte adjustment block is
+    // skipped entirely and bytes is the unadjusted estimate. This is also the
+    // state the send dialog starts in, before any amount is typed.
+    const interfaces::CoinControlSummary summary = Compute(SelectFunded({0, 1, 2, 3, 4}), {}, false);
+
+    BOOST_CHECK_EQUAL(summary.quantity, 5);
+    BOOST_CHECK_EQUAL(summary.amount, 15 * COIN);
+
+    // 148 (compressed) + 180 (uncompressed) + 148 (key not ours) + 148 (P2SH)
+    // + 148 (no destination) = 772 input bytes, + 2 * 34 for the empty-recipient
+    // arm of the output term, + 10 fixed. The 34 for the change output is NOT
+    // subtracted here: that only happens when pay_amount > 0 leaves change at 0.
+    BOOST_CHECK_EQUAL(summary.bytes, 850u);
+
+    BOOST_CHECK_EQUAL(summary.fee, BASE_FEE);
+    BOOST_CHECK_EQUAL(summary.after_fee, 15 * COIN - BASE_FEE);
+    BOOST_CHECK_EQUAL(summary.change, 0);
+    BOOST_CHECK(!summary.low_output);
+
+    // Outputs 2-4 pay destinations the wallet does not own, and the selection
+    // loop applies no IsMine, spent or maturity filter -- those live upstream in
+    // listCoins/AvailableCoins. The summary counts whatever it is handed.
+    const interfaces::CoinControlSummary unowned = Compute(SelectFunded({2}), {}, false);
+    BOOST_CHECK_EQUAL(unowned.quantity, 1);
+    BOOST_CHECK_EQUAL(unowned.amount, 3 * COIN);
+}
+
+BOOST_FIXTURE_TEST_CASE(wallet_coin_control_summary_fee_takes_larger_of_configured_and_minimum, CoinControlSetup)
+{
+    const interfaces::WalletCoinControl selection = SelectFunded({0, 1, 2, 3, 4});
+
+    // The two arms of the max() are equal under the default configured fee, so
+    // move it to prove each one can win. The fixture restores the global.
+    nTransactionFee = 0;
+    interfaces::CoinControlSummary summary = Compute(selection, {}, false);
+    BOOST_CHECK_EQUAL(summary.bytes, 850u);
+    BOOST_CHECK_EQUAL(summary.fee, BASE_FEE); // the GetMinFee floor wins
+
+    nTransactionFee = 5 * CENT;
+    summary = Compute(selection, {}, false);
+    BOOST_CHECK_EQUAL(summary.fee, 5 * CENT); // the configured fee wins
+    BOOST_CHECK_EQUAL(summary.after_fee, 15 * COIN - 5 * CENT);
+}
+
+BOOST_FIXTURE_TEST_CASE(wallet_coin_control_summary_absorbs_subcent_change, CoinControlSetup)
+{
+    // One compressed input: 148 + (1 + 1) * 34 + 10 = 226 bytes before the
+    // change-output adjustment, 192 after.
+    const interfaces::WalletCoinControl selection = SelectFunded({0});
+    const int64_t input = 1 * COIN;
+
+    // Sub-CENT change is folded into the fee rather than paid out.
+    int64_t pay = input - BASE_FEE - 500000;
+    interfaces::CoinControlSummary summary = Compute(selection, {pay}, false);
+    BOOST_CHECK_EQUAL(summary.amount, input);
+    BOOST_CHECK_EQUAL(summary.change, 0);
+    BOOST_CHECK_EQUAL(summary.fee, BASE_FEE + 500000);
+    BOOST_CHECK_EQUAL(summary.bytes, 192u);
+    // The migration replaced the pre-migration `nPayFee = nChange` with
+    // `fee += change`. These two invariants are what distinguish them: the old
+    // form dropped the already-computed base fee, breaking conservation and
+    // short-changing the recipients by that amount.
+    BOOST_CHECK_EQUAL(summary.fee + pay + summary.change, summary.amount);
+    BOOST_CHECK_EQUAL(summary.after_fee, pay);
+
+    // Boundary: exactly CENT of change is not sub-CENT, so it is paid out and
+    // the change output stays in the byte estimate.
+    pay = input - BASE_FEE - CENT;
+    summary = Compute(selection, {pay}, false);
+    BOOST_CHECK_EQUAL(summary.change, CENT);
+    BOOST_CHECK_EQUAL(summary.fee, BASE_FEE);
+    BOOST_CHECK_EQUAL(summary.bytes, 226u);
+    BOOST_CHECK_EQUAL(summary.fee + pay + summary.change, summary.amount);
+
+    // Boundary: a single satoshi of change is absorbed.
+    pay = input - BASE_FEE - 1;
+    summary = Compute(selection, {pay}, false);
+    BOOST_CHECK_EQUAL(summary.change, 0);
+    BOOST_CHECK_EQUAL(summary.fee, BASE_FEE + 1);
+    BOOST_CHECK_EQUAL(summary.bytes, 192u);
+    BOOST_CHECK_EQUAL(summary.after_fee, pay);
+}
+
+BOOST_FIXTURE_TEST_CASE(wallet_coin_control_summary_subtract_fee_from_amount, CoinControlSetup)
+{
+    const interfaces::WalletCoinControl selection = SelectFunded({0});
+    const int64_t input = 1 * COIN;
+
+    // The fee comes out of the recipients, so change is the whole remainder.
+    int64_t pay = input - CENT;
+    interfaces::CoinControlSummary summary = Compute(selection, {pay}, true);
+    BOOST_CHECK_EQUAL(summary.change, CENT);
+    BOOST_CHECK_EQUAL(summary.fee, BASE_FEE);
+    BOOST_CHECK_EQUAL(summary.bytes, 226u);
+    BOOST_CHECK_EQUAL(summary.after_fee, input - BASE_FEE);
+
+    // The absorption block is NOT gated on the flag: it runs on whichever
+    // change value the branch above produced, so a sub-CENT remainder is still
+    // folded into the fee here.
+    pay = input - (CENT - 1);
+    summary = Compute(selection, {pay}, true);
+    BOOST_CHECK_EQUAL(summary.change, 0);
+    BOOST_CHECK_EQUAL(summary.fee, BASE_FEE + CENT - 1);
+    BOOST_CHECK_EQUAL(summary.bytes, 192u);
+}
+
+BOOST_FIXTURE_TEST_CASE(wallet_coin_control_summary_floors_after_fee, CoinControlSetup)
+{
+    // Output 5 holds 1000 satoshis, far below the fee its own size implies.
+    const interfaces::CoinControlSummary summary = Compute(SelectFunded({5}), {500}, false);
+
+    BOOST_CHECK_EQUAL(summary.amount, 1000);
+    BOOST_CHECK_EQUAL(summary.fee, BASE_FEE);
+    BOOST_CHECK_EQUAL(summary.after_fee, 0); // floored, not negative
+    // Change is left negative: only sub-CENT positive change is absorbed, and
+    // the byte estimate keeps its change output.
+    BOOST_CHECK_EQUAL(summary.change, 1000 - BASE_FEE - 500);
+    BOOST_CHECK_EQUAL(summary.bytes, 226u);
+    BOOST_CHECK(summary.low_output);
+    BOOST_CHECK(!summary.dust);
+}
+
+BOOST_FIXTURE_TEST_CASE(wallet_coin_control_summary_skips_unusable_outpoints, CoinControlSetup)
+{
+    interfaces::WalletCoinControl selection;
+    // Not in the wallet at all.
+    selection.Select(COutPoint(uint256S("0xdeadbeef"), 0));
+    // In the wallet, but past the end of the transaction's outputs.
+    selection.Select(COutPoint(funding.GetHash(), 6));
+    // In the wallet, but neither confirmed nor in the mempool: depth -1, the
+    // vanished/conflicted case.
+    selection.Select(COutPoint(orphan.GetHash(), 0));
+
+    interfaces::CoinControlSummary summary = Compute(selection, {}, false);
+    BOOST_CHECK_EQUAL(summary.quantity, 0);
+    BOOST_CHECK_EQUAL(summary.amount, 0);
+    BOOST_CHECK_EQUAL(summary.bytes, 0u);
+    BOOST_CHECK_EQUAL(summary.fee, 0);
+
+    // Mixed with a usable outpoint, only the usable one contributes.
+    selection.Select(COutPoint(funding.GetHash(), 0));
+    summary = Compute(selection, {}, false);
+    BOOST_CHECK_EQUAL(summary.quantity, 1);
+    BOOST_CHECK_EQUAL(summary.amount, 1 * COIN);
+    BOOST_CHECK_EQUAL(summary.bytes, 226u); // 148 + 2 * 34 + 10
+}
+
+BOOST_FIXTURE_TEST_CASE(wallet_coin_control_summary_counts_every_recipient_entry, CoinControlSetup)
+{
+    const interfaces::WalletCoinControl selection = SelectFunded({0});
+    const int64_t input = 1 * COIN;
+
+    // The byte estimate counts every entry in recipient_amounts, while
+    // pay_amount, low_output and the dust-check outputs only consider entries
+    // above zero. A zero-amount row therefore adds 34 bytes for an output that
+    // would never be created: 148 + (2 + 1) * 34 + 10 = 260.
+    interfaces::CoinControlSummary summary = Compute(selection, {2 * CENT, 0}, false);
+    BOOST_CHECK_EQUAL(summary.bytes, 260u);
+    BOOST_CHECK(!summary.low_output);
+    BOOST_CHECK_EQUAL(summary.fee, BASE_FEE);
+    BOOST_CHECK_EQUAL(summary.change, input - BASE_FEE - 2 * CENT);
+    BOOST_CHECK_EQUAL(summary.fee + 2 * CENT + summary.change, summary.amount);
+
+    // A recipient list summing to zero or less leaves pay_amount at 0, which
+    // skips the change/byte adjustment entirely despite the list being
+    // non-empty -- the same path as no recipients at all.
+    summary = Compute(selection, {2 * CENT, -3 * CENT}, false);
+    BOOST_CHECK_EQUAL(summary.bytes, 260u);
+    BOOST_CHECK_EQUAL(summary.change, 0);
+    BOOST_CHECK(!summary.low_output);
+    BOOST_CHECK_EQUAL(summary.after_fee, input - BASE_FEE);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
