@@ -80,6 +80,13 @@ add_executable(test_gridcoin
     # into the GUI-OFF binary pins the Qt-freedom the node-side source needs.
     ${CMAKE_SOURCE_DIR}/src/wallet/transactionrecord.cpp
     qt_transactionrecord_tests.cpp
+    # Qt-free grouped index core (src/wallet/coinviews.cpp) of the windowed
+    # coin-control selection model (#3183) + its unit suite: flat/tree index
+    # maintenance, directory aggregate arithmetic, per-scope deltas, and the
+    # scope-local high-water + per-view floor contract exercised against the
+    # real WindowCache gate — tested GUI-OFF like the cursor.
+    ${CMAKE_SOURCE_DIR}/src/wallet/coinviews.cpp
+    qt_coinviews_tests.cpp
     # Qt-free wallet event queue (src/wallet/wallet_event_queue.h, a header-only
     # template shared by the tx and coin channels) unit suite: the MPSC intake
     # drain/ordering + multi-producer seqno-density contract (GUI-OFF).
