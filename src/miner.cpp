@@ -944,13 +944,16 @@ void SplitCoinStakeOutput(CMutableTransaction& mtxCoinstake, CBlock &blocknew, i
     SideStakeAlloc local_sidestakes;
     unsigned int nMandatoryOutputLimit = GetMandatorySideStakeOutputLimit(blocknew.nVersion);
 
+    // The coinstake destination. Needed both for the mandatory sidestake spec below and by the
+    // voluntary allocation lambda, which suppresses a sidestake back to the staking address.
+    CTxDestination coinstake_dest;
+    bool have_coinstake_dest = ExtractDestination(CoinStakeScriptPubKey, coinstake_dest);
+
     if (fEnableSideStaking) {
         // Compute the mandatory sidestake spec using BlockRewardRules — the shared invariant computation that
         // both miner and validator consume. This replaces the separate ActiveSideStakeEntries() call and manual
         // dust/address filtering that previously lived only here, eliminating the class of drift bugs where the
         // miner and validator made different eligibility decisions (see #2848).
-        CTxDestination coinstake_dest;
-        bool have_coinstake_dest = ExtractDestination(CoinStakeScriptPubKey, coinstake_dest);
         if (!have_coinstake_dest) {
             LogPrintf("WARN: SplitCoinStakeOutput: could not extract coinstake destination, "
                       "skipping mandatory sidestake spec computation.");
@@ -1058,7 +1061,14 @@ void SplitCoinStakeOutput(CMutableTransaction& mtxCoinstake, CBlock &blocknew, i
             // case. The coins should flow down to the coinstake outputs and be returned there. This will also simplify the
             // display logic in the UI, because it makes the sidestake and coinstake outputs disjoint from an address point
             // of view.
-            if (SideStakeScriptPubKey == CoinStakeScriptPubKey)
+            //
+            // The comparison MUST be on the destination, not the script. SideStakeScriptPubKey is P2PKH
+            // (SetDestination above) while CreateCoinStake converts a TX_PUBKEYHASH kernel to P2PK, so a script
+            // comparison never matched and this suppression silently did nothing: a voluntary sidestake back to
+            // the staking address was emitted anyway, leaving the coinstake and sidestake outputs sharing an
+            // address after all. Mandatory sidestakes already compare destinations
+            // (BlockRewardRules::ComputeEligibleMandatorySidestakes).
+            if (have_coinstake_dest && address == coinstake_dest)
                 continue;
 
             int64_t nSideStake = 0;

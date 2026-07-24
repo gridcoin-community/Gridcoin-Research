@@ -388,6 +388,76 @@ BOOST_AUTO_TEST_CASE(sidestake_outputs_placed)
 }
 
 // --------------------------------------------------------------------------
+// Test 5b: A voluntary sidestake back to the STAKING address must be suppressed,
+// so the coinstake and sidestake outputs stay disjoint by address.
+//
+// The suppression used to compare scripts. That never matched in production: the sidestake
+// script is built with SetDestination (P2PKH) while CreateCoinStake converts a TX_PUBKEYHASH
+// kernel to P2PK, so a self-sidestake was emitted anyway. This test therefore builds the
+// coinstake output as P2PK -- exactly what CreateCoinStake emits -- which is what makes it
+// reproduce the bug; with the P2PKH coinstake used by the other cases here, the old script
+// comparison would have matched and the test would pass either way.
+// --------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(self_sidestake_to_staking_address_is_suppressed)
+{
+    // Sidestake configured to the SAME destination the coinstake pays.
+    const CTxDestination coinstake_dest = key.GetPubKey().GetID();
+
+    GRC::LocalSideStake sidestake(
+        coinstake_dest,
+        GRC::Allocation(0.10), // 10%
+        "self sidestake",
+        GRC::LocalSideStake::LocalSideStakeStatus::ACTIVE
+    );
+    GRC::GetSideStakeRegistry().NonContractAdd(sidestake, false);
+
+    // Build the coinstake with a P2PK output, as CreateCoinStake does.
+    CMutableTransaction coinstake;
+    coinstake.nVersion = 2;
+    coinstake.nTime = pindex->nTime;
+    coinstake.vin.resize(1);
+    coinstake.vin[0].prevout = COutPoint(uint256(InsecureRandBytes(32)), 0);
+
+    CTxOut empty;
+    empty.SetEmpty();
+    coinstake.vout.push_back(empty);
+
+    CScript coinstake_script;
+    coinstake_script << key.GetPubKey() << OP_CHECKSIG;
+    coinstake.vout.push_back(CTxOut(10000 * COIN, coinstake_script));
+
+    CBlock block = MakeBlock();
+
+    int64_t nReward = 100 * COIN;
+    bool fEnableStakeSplit = false;
+    bool fEnableSideStaking = true;
+    int64_t nMinStakeSplitValue = 800;
+    double dEfficiency = 98.0;
+
+    LOCK(cs_main);
+
+    SplitCoinStakeOutput(coinstake, block, nReward, fEnableStakeSplit, fEnableSideStaking,
+                         nMinStakeSplitValue, dEfficiency);
+
+    // No output may pay the staking destination through the P2PKH sidestake script: the
+    // allocation must have flowed back into the coinstake outputs instead.
+    CScript sidestake_script;
+    sidestake_script.SetDestination(coinstake_dest);
+
+    for (size_t i = 1; i < coinstake.vout.size(); ++i) {
+        BOOST_CHECK_MESSAGE(coinstake.vout[i].scriptPubKey != sidestake_script,
+                            "a sidestake was emitted back to the staking address");
+    }
+
+    // Value is conserved either way.
+    CAmount total = 0;
+    for (const auto& out : coinstake.vout) {
+        total += out.nValue;
+    }
+    BOOST_CHECK_EQUAL(total, 10000 * COIN);
+}
+
+// --------------------------------------------------------------------------
 // Test 6: Full pipeline round-trip — reward, MRC, split, then serialize.
 // --------------------------------------------------------------------------
 BOOST_AUTO_TEST_CASE(full_pipeline_roundtrip)
