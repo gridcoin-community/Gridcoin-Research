@@ -239,7 +239,7 @@ BOOST_AUTO_TEST_CASE(wallet_key_from_pool_labels_address_book)
 
     CPubKey pub_key;
     const std::string label = "interfaces-test-label";
-    BOOST_REQUIRE(wallet->getKeyFromPool(pub_key, label));
+    BOOST_REQUIRE(wallet->getKeyFromPool(label, pub_key));
     BOOST_CHECK(pub_key.IsValid());
 
     LOCK(pwalletMain->cs_wallet);
