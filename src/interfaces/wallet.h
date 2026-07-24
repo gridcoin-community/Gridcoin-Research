@@ -295,9 +295,6 @@ public:
     //! (negative-depth) outpoints are skipped.
     virtual std::vector<WalletOutput> getOutputs(const std::vector<COutPoint>& outpoints) = 0;
 
-    //! Spendable outputs grouped by address, with change outputs grouped
-    //! under the address they derive from (walked node-side).
-    virtual std::map<std::string, std::vector<WalletOutput>> listCoins() = 0;
 
     //! Compute the coin-control fee/quantity summary for the given selection
     //! and recipient amounts in one call. All fee math runs node-side (see

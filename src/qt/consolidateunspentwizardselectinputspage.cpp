@@ -1,13 +1,12 @@
-#include "coincontroldialog.h"
 #include "qt/guilog.h"
 #include "consolidateunspentwizardselectinputspage.h"
 #include "ui_consolidateunspentwizardselectinputspage.h"
 
 #include "bitcoinunits.h"
-#include "addresstablemodel.h"
 #include "key_io.h"
 #include "optionsmodel.h"
-#include "consolidateunspentdialog.h"
+#include "qt/coinselectionmodel.h"
+#include "qt/coinselectionview.h"
 
 #include <set>
 
@@ -15,7 +14,9 @@ using namespace std;
 
 ConsolidateUnspentWizardSelectInputsPage::ConsolidateUnspentWizardSelectInputsPage(QWidget *parent) :
     QWizardPage(parent),
-    ui(new Ui::ConsolidateUnspentWizardSelectInputsPage)
+    ui(new Ui::ConsolidateUnspentWizardSelectInputsPage),
+    sortColumn(CoinSelectionModel::COLUMN_AMOUNT),
+    sortOrder(Qt::DescendingOrder)
 {
     ui->setupUi(this);
 
@@ -23,12 +24,9 @@ ConsolidateUnspentWizardSelectInputsPage::ConsolidateUnspentWizardSelectInputsPa
     connect(ui->treeModeRadioButton, &QRadioButton::toggled, this, &ConsolidateUnspentWizardSelectInputsPage::treeModeRadioButton);
     connect(ui->listModeRadioButton, &QRadioButton::toggled, this, &ConsolidateUnspentWizardSelectInputsPage::listModeRadioButton);
 
-    // click on checkbox
-    connect(ui->treeWidget, &QTreeWidget::itemChanged, this, &ConsolidateUnspentWizardSelectInputsPage::viewItemChanged);
-
     // click on header
-    ui->treeWidget->header()->setSectionsClickable(true);
-    connect(ui->treeWidget->header(), &QHeaderView::sectionClicked, this, &ConsolidateUnspentWizardSelectInputsPage::headerSectionClicked);
+    ui->treeView->header()->setSectionsClickable(true);
+    connect(ui->treeView->header(), &QHeaderView::sectionClicked, this, &ConsolidateUnspentWizardSelectInputsPage::headerSectionClicked);
 
     // (un)select all
     connect(ui->selectAllPushButton, &QPushButton::clicked, this, &ConsolidateUnspentWizardSelectInputsPage::buttonSelectAllClicked);
@@ -42,17 +40,6 @@ ConsolidateUnspentWizardSelectInputsPage::ConsolidateUnspentWizardSelectInputsPa
     // filter
     connect(ui->filterPushButton, &QPushButton::clicked, this, &ConsolidateUnspentWizardSelectInputsPage::buttonFilterClicked);
 
-    ui->treeWidget->setColumnWidth(COLUMN_CHECKBOX, 150);
-    ui->treeWidget->setColumnWidth(COLUMN_AMOUNT, 170);
-    ui->treeWidget->setColumnWidth(COLUMN_LABEL, 200);
-    ui->treeWidget->setColumnWidth(COLUMN_ADDRESS, 290);
-    ui->treeWidget->setColumnWidth(COLUMN_DATE, 110);
-    ui->treeWidget->setColumnWidth(COLUMN_CONFIRMATIONS, 100);
-    ui->treeWidget->setColumnHidden(COLUMN_TXHASH, true);         // store transacton hash in this column, but don't show it
-    ui->treeWidget->setColumnHidden(COLUMN_VOUT_INDEX, true);     // store vout index in this column, but don't show it
-    ui->treeWidget->setColumnHidden(COLUMN_AMOUNT_INT64, true);   // store amount int64_t in this column, but don't show it
-    ui->treeWidget->setColumnHidden(COLUMN_CHANGE_BOOL, true);    // store change flag but don't show it
-
     // This is to provide a convenient way to populate the fields shown on the last page ("send" screen).
     registerField("quantityField", ui->quantityLabel, "text", "updateFieldsSignal()");
     registerField("feeField", ui->feeLabel, "text", "updateFieldsSignal()");
@@ -60,9 +47,6 @@ ConsolidateUnspentWizardSelectInputsPage::ConsolidateUnspentWizardSelectInputsPa
 
     //This is used to control the disable/enable of the next button on this page.
     registerField("isCompleteSelectInputs*", ui->isCompleteCheckBox);
-
-    // default view is sorted by amount desc
-    sortView(COLUMN_AMOUNT_INT64, Qt::DescendingOrder);
 
     // The tooltips that show m_InputSelectionLimit are set in setModel(), once
     // the value is available from the wallet interface (no model at construction).
@@ -82,7 +66,7 @@ void ConsolidateUnspentWizardSelectInputsPage::setModel(WalletModel *model)
 {
     this->model = model;
 
-    if (model && model->getOptionsModel() && model->getAddressTableModel() && coinControl != nullptr)
+    if (model && model->getOptionsModel() && coinControl != nullptr)
     {
         // The consolidation input cap is a policy value from the wallet
         // interface; set it and the tooltips that show it here (no model exists
@@ -96,8 +80,35 @@ void ConsolidateUnspentWizardSelectInputsPage::setModel(WalletModel *model)
                                                     "the number of inputs to %1 or less to prevent a transaction failure due to "
                                                     "too many inputs.").arg(m_InputSelectionLimit));
 
-        updateView();
-        updateLabels();
+        // The shared windowed selection model on the wizard's own view id:
+        // registers node-side, reconciles the selection against the store,
+        // and seeds from the (possibly still loading) snapshot.
+        m_selection_model = new CoinSelectionModel(model, coinControl, GRC::VIEW_COIN_WIZARD, this);
+        ui->treeView->setModel(m_selection_model);
+        ui->treeView->setAlternatingRowColors(m_selection_model->displayMode() == GRC::CoinViewMode::Flat);
+
+        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_CHECKBOX, 150);
+        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_AMOUNT, 170);
+        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_LABEL, 200);
+        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_ADDRESS, 290);
+        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_DATE, 110);
+        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_CONFIRMATIONS, 100);
+
+        connect(ui->treeView, &CoinSelectionView::visibleIndexesChanged,
+                m_selection_model, &CoinSelectionModel::onVisibleIndexes);
+        connect(m_selection_model, &CoinSelectionModel::selectionChanged,
+                this, &ConsolidateUnspentWizardSelectInputsPage::modelSelectionChanged);
+        connect(m_selection_model, &CoinSelectionModel::loadingFinished,
+                this, &ConsolidateUnspentWizardSelectInputsPage::modelLoadingFinished);
+
+        // default view is sorted by amount desc
+        ui->treeView->header()->setSortIndicator(CoinSelectionModel::COLUMN_AMOUNT, Qt::DescendingOrder);
+
+        if (m_selection_model->isLoading()) {
+            ui->treeView->setEnabled(false);
+        } else {
+            modelLoadingFinished();
+        }
     }
 }
 
@@ -111,25 +122,30 @@ void ConsolidateUnspentWizardSelectInputsPage::setPayAmounts(QList<qint64> *payA
     this->payAmounts = payAmounts;
 }
 
-// helper function str_pad
-QString ConsolidateUnspentWizardSelectInputsPage::strPad(QString s, int nPadLength, QString sPadding)
+void ConsolidateUnspentWizardSelectInputsPage::modelLoadingFinished()
 {
-    while (s.length() < nPadLength)
-        s = sPadding + s;
+    ui->treeView->setEnabled(true);
+    updateLabels();
+}
 
-    return s;
+void ConsolidateUnspentWizardSelectInputsPage::modelSelectionChanged()
+{
+    // Any USER-driven selection mutation invalidates the filter's cull state
+    // (the WARNING boundary depends on it); the filter's own bulk mutation
+    // must not clear the flag it just set.
+    if (!m_ApplyingFilter) m_InputSelectionLimitedByFilter = false;
+
+    updateLabels();
 }
 
 // (un)select all
 void ConsolidateUnspentWizardSelectInputsPage::buttonSelectAllClicked()
 {
+    if (!m_selection_model) return;
+
     m_InputSelectionLimitedByFilter = false;
 
-    ui->treeWidget->setEnabled(false);
-    for (int i = 0; i < ui->treeWidget->topLevelItemCount(); i++)
-            if (ui->treeWidget->topLevelItem(i)->checkState(COLUMN_CHECKBOX) != m_ToState)
-                ui->treeWidget->topLevelItem(i)->setCheckState(COLUMN_CHECKBOX, m_ToState);
-    ui->treeWidget->setEnabled(true);
+    m_selection_model->selectAll(m_ToState == Qt::Checked);
 
     if (m_ToState == Qt::Checked)
     {
@@ -148,8 +164,6 @@ void ConsolidateUnspentWizardSelectInputsPage::buttonSelectAllClicked()
     {
        ui->selectAllPushButton->setText(tr("Select None"));
     }
-
-    updateLabels();
 }
 
 void ConsolidateUnspentWizardSelectInputsPage::maxMinOutputValueChanged()
@@ -173,189 +187,68 @@ void ConsolidateUnspentWizardSelectInputsPage::buttonFilterModeClicked()
 
 void ConsolidateUnspentWizardSelectInputsPage::buttonFilterClicked()
 {
-    m_ViewItemsChangedViaFilter = true;
+    if (!m_selection_model) return;
 
-    m_InputSelectionLimitedByFilter = filterInputsByValue(m_FilterMode, ui->maxMinOutputValue->value(), m_InputSelectionLimit);
+    m_ApplyingFilter = true;
+    m_InputSelectionLimitedByFilter =
+        m_selection_model->applyValueFilter(m_FilterMode, ui->maxMinOutputValue->value(),
+                                            m_InputSelectionLimit);
+    m_ApplyingFilter = false;
 
     updateLabels();
-
-    m_ViewItemsChangedViaFilter = false;
-}
-
-bool ConsolidateUnspentWizardSelectInputsPage::filterInputsByValue(const bool& less, const CAmount& inputFilterValue,
-                                            const unsigned int& inputSelectionLimit)
-{
-
-    // Disable generating update signals unnecessarily during this filter operation.
-    ui->treeWidget->setEnabled(false);
-
-    QTreeWidgetItemIterator iter(ui->treeWidget);
-
-    // If less is true, then we are choosing the smallest inputs upward, and so the map comparator needs to be "less than".
-    // If less is false, then we are choosing the largest inputs downward, and so the map comparator needs to be "greater
-    // than".
-    auto comp = [less](CAmount a, CAmount b)
-    {
-        if (less)
-        {
-            return (a < b);
-        }
-        else
-        {
-            return (a > b);
-        }
-    };
-
-    std::multimap<CAmount, std::pair<QTreeWidgetItem*, COutPoint>, decltype(comp)> input_map(comp);
-
-    bool culled_inputs = false;
-
-    while (*iter)
-    {
-        CAmount input_value = (*iter)->text(COLUMN_AMOUNT_INT64).toLongLong();
-        COutPoint outpoint(uint256S((*iter)->text(COLUMN_TXHASH).toStdString()), (*iter)->text(COLUMN_VOUT_INDEX).toUInt());
-
-        if ((*iter)->checkState(COLUMN_CHECKBOX) == Qt::Checked)
-        {
-            if ((*iter)->text(COLUMN_TXHASH).length() == 64)
-            {
-                if ((less && input_value <= inputFilterValue) || (!less && input_value >= inputFilterValue))
-                {
-                    input_map.insert(std::make_pair(input_value, std::make_pair(*iter, outpoint)));
-                }
-                else
-                {
-                    (*iter)->setCheckState(COLUMN_CHECKBOX, Qt::Unchecked);
-                    coinControl->UnSelect(outpoint);
-                }
-            }
-        }
-
-        ++iter;
-    }
-
-    // The second loop is to limit the number of selected outputs to the inputCountLimit.
-    unsigned int input_count = 0;
-
-    for (auto& input : input_map)
-    {
-        if (input_count >= inputSelectionLimit)
-        {
-            GUILogPrint(GUILogCategory::QT, "INFO: %s: Culled input %u with value %f.",
-                     __func__, input_count, (double) input.first / COIN);
-
-            if (coinControl->IsSelected(input.second.second.hash, input.second.second.n))
-            {
-                input.second.first->setCheckState(COLUMN_CHECKBOX, Qt::Unchecked);
-
-                culled_inputs = true;
-                coinControl->UnSelect(input.second.second);
-            }
-        }
-
-        ++input_count;
-    }
-
-    // Re-enable update signals.
-    ui->treeWidget->setEnabled(true);
-
-    // If the number of inputs selected was limited, then true is returned.
-    return culled_inputs;
-}
-
-// treeview: sort
-void ConsolidateUnspentWizardSelectInputsPage::sortView(int column, Qt::SortOrder order)
-{
-    sortColumn = column;
-    sortOrder = order;
-    ui->treeWidget->sortItems(column, order);
-    ui->treeWidget->header()->setSortIndicator((sortColumn == COLUMN_AMOUNT_INT64 ?
-                                                    COLUMN_AMOUNT : sortColumn),
-                                               sortOrder);
 }
 
 // treeview: clicked on header
 void ConsolidateUnspentWizardSelectInputsPage::headerSectionClicked(int logicalIndex)
 {
-    if (logicalIndex == COLUMN_CHECKBOX) // click on most left column -> do nothing
+    if (logicalIndex == CoinSelectionModel::COLUMN_CHECKBOX) // click on most left column -> do nothing
     {
-        ui->treeWidget->header()->setSortIndicator((sortColumn == COLUMN_AMOUNT_INT64 ?
-                                                        COLUMN_AMOUNT : sortColumn),
-                                                   sortOrder);
+        ui->treeView->header()->setSortIndicator(sortColumn, sortOrder);
+        return;
+    }
+
+    if (sortColumn == logicalIndex)
+    {
+        sortOrder = ((sortOrder == Qt::AscendingOrder) ? Qt::DescendingOrder : Qt::AscendingOrder);
     }
     else
     {
-        if (logicalIndex == COLUMN_AMOUNT) // sort by amount
-            logicalIndex = COLUMN_AMOUNT_INT64;
+        sortColumn = logicalIndex;
 
-        if (sortColumn == logicalIndex)
-            sortOrder = ((sortOrder == Qt::AscendingOrder) ? Qt::DescendingOrder : Qt::AscendingOrder);
-        else
-        {
-            sortColumn = logicalIndex;
-
-            // if amount,date,conf then default => desc, else default => asc
-            sortOrder = ((sortColumn == COLUMN_AMOUNT_INT64 || sortColumn == COLUMN_DATE || sortColumn == COLUMN_CONFIRMATIONS) ?
-                             Qt::DescendingOrder : Qt::AscendingOrder);
-        }
-
-        sortView(sortColumn, sortOrder);
+        // if amount,date,conf then default => desc, else default => asc
+        sortOrder = ((sortColumn == CoinSelectionModel::COLUMN_AMOUNT
+                      || sortColumn == CoinSelectionModel::COLUMN_DATE
+                      || sortColumn == CoinSelectionModel::COLUMN_CONFIRMATIONS) ?
+                         Qt::DescendingOrder : Qt::AscendingOrder);
     }
-}
 
+    m_selection_model->sort(sortColumn, sortOrder);
+    ui->treeView->header()->setSortIndicator(sortColumn, sortOrder);
+}
 
 // toggle tree mode
 void ConsolidateUnspentWizardSelectInputsPage::treeModeRadioButton(bool checked)
 {
-    if (checked && model)
-        updateView();
+    if (checked && m_selection_model)
+    {
+        ui->treeView->setAlternatingRowColors(false);
+        m_selection_model->setDisplayMode(GRC::CoinViewMode::Tree);
+    }
 }
 
 // toggle list mode
 void ConsolidateUnspentWizardSelectInputsPage::listModeRadioButton(bool checked)
 {
-    if (checked && model)
-        updateView();
-}
-
-// checkbox clicked by user
-void ConsolidateUnspentWizardSelectInputsPage::viewItemChanged(QTreeWidgetItem* item, int column)
-{
-    if (!m_ViewItemsChangedViaFilter) m_InputSelectionLimitedByFilter = false;
-
-    if (column == COLUMN_CHECKBOX)
+    if (checked && m_selection_model)
     {
-        // transaction hash is 64 characters (this means it is a child node, so it is not a parent node in tree mode)
-        if (item->text(COLUMN_TXHASH).length() == 64)
-        {
-            COutPoint outpt(uint256S(item->text(COLUMN_TXHASH).toStdString()), item->text(COLUMN_VOUT_INDEX).toUInt());
-
-            if (item->checkState(COLUMN_CHECKBOX) == Qt::Unchecked)
-            {
-                coinControl->UnSelect(outpt);
-            }
-            else if (item->isDisabled()) // locked (this happens if "check all" through parent node)
-            {
-                item->setCheckState(COLUMN_CHECKBOX, Qt::Unchecked);
-            }
-            else
-            {
-                coinControl->Select(outpt);
-            }
-        }
-
-        // selection changed -> update labels
-        if (ui->treeWidget->isEnabled())
-        {
-            // do not update on every click for (un)select all
-            updateLabels();
-        }
+        ui->treeView->setAlternatingRowColors(true);
+        m_selection_model->setDisplayMode(GRC::CoinViewMode::Flat);
     }
 }
 
 void ConsolidateUnspentWizardSelectInputsPage::updateLabels()
 {
-    if (!model) return;
+    if (!model || !m_selection_model) return;
 
     // Gather the recipient amounts; all fee/quantity math (byte sizing via
     // pubkey compression, nTransactionFee/GetMinFee, sub-CENT change absorption)
@@ -382,27 +275,28 @@ void ConsolidateUnspentWizardSelectInputsPage::updateLabels()
     ui->feeLabel->setText(BitcoinUnits::formatWithUnit(nDisplayUnit, summary.fee));       // Fee
     ui->afterFeeLabel->setText(BitcoinUnits::formatWithUnit(nDisplayUnit, summary.after_fee)); // After Fee
 
+    // The candidate destinations and the default: served by the group
+    // directory's aggregates (no realized children needed). A group qualifies
+    // when it has at least one direct (non-change) output; it counts as
+    // "checked" when any of its members is selected. The default address is
+    // the LABEL (the destination page matches it against its label column)
+    // when exactly one qualifying group has selections.
     std::map<QString, QString> addressList;
     QString defaultAddress;
     unsigned int numberAddressesWhereOutputsChecked = 0;
 
-    for (int i = 0; i < ui->treeWidget->topLevelItemCount(); ++i)
+    for (const GRC::CoinGroupInfo& group : m_selection_model->groupDirectory())
     {
-        QString label = ui->treeWidget->topLevelItem(i)->text(COLUMN_LABEL);
-        QString address = ui->treeWidget->topLevelItem(i)->text(COLUMN_ADDRESS);
-        QString change = ui->treeWidget-> topLevelItem(i)->text(COLUMN_CHANGE_BOOL);
+        if (group.direct_output_count <= 0) continue;
 
-        Qt::CheckState state = ui->treeWidget->topLevelItem(i)->checkState(COLUMN_CHECKBOX);
+        const QString label = group.label.empty() ? tr("(no label)")
+                                                  : QString::fromStdString(group.label);
+        addressList[QString::fromStdString(group.address)] = label;
 
-        // If a not unchecked top level item is not a change address and it results in an insert into the m_AddressList
-        if (!change.toInt() && addressList.insert(std::make_pair(address, label)).second)
+        if (group.selected_count > 0)
         {
-            if (state == Qt::Checked || state == Qt::PartiallyChecked)
-            {
-                defaultAddress = label;
-
-                ++numberAddressesWhereOutputsChecked;
-            }
+            defaultAddress = label;
+            ++numberAddressesWhereOutputsChecked;
         }
     }
 
@@ -443,160 +337,6 @@ void ConsolidateUnspentWizardSelectInputsPage::updateLabels()
     {
         SetOutputWarningStop(InputStatus::STOP);
     }
-}
-
-void ConsolidateUnspentWizardSelectInputsPage::updateView()
-{
-    bool treeMode = ui->treeModeRadioButton->isChecked();
-
-    ui->treeWidget->clear();
-    ui->treeWidget->setEnabled(false); // performance, otherwise updateLabels would be called for every checked checkbox
-    ui->treeWidget->setAlternatingRowColors(!treeMode);
-    QFlags<Qt::ItemFlag> flgCheckbox=Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsUserCheckable;
-    QFlags<Qt::ItemFlag> flgTristate=Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsUserCheckable | Qt::ItemIsAutoTristate;
-
-    int nDisplayUnit = BitcoinUnits::BTC;
-
-    if (model && model->getOptionsModel())
-    {
-        nDisplayUnit = model->getOptionsModel()->getDisplayUnit();
-    }
-
-    const std::map<std::string, std::vector<interfaces::WalletOutput>> mapCoins = model->listCoins();
-
-    // Reconcile the selection against the currently-available coins: keep only
-    // the selected outpoints that still exist (e.g. drop a coin the wallet
-    // staked out from under the selection). Scan the already-fetched coin list
-    // once, testing membership against the usually-small selection, so we never
-    // materialize a set of every outpoint (important on large wallets). The
-    // send path re-validates node-side regardless.
-    {
-        std::set<COutPoint> still_selected;
-        for (auto const& coins : mapCoins)
-            for (auto const& out : coins.second)
-                if (coinControl->selected.count(out.outpoint))
-                    still_selected.insert(out.outpoint);
-
-        coinControl->selected.swap(still_selected);
-    }
-
-    for (auto const& coins : mapCoins)
-    {
-        QTreeWidgetItem *itemWalletAddress = new QTreeWidgetItem();
-        QString sWalletAddress = QString::fromStdString(coins.first);
-        QString sWalletLabel = "";
-        if (model->getAddressTableModel())
-            sWalletLabel = model->getAddressTableModel()->labelForAddress(sWalletAddress);
-        if (sWalletLabel.length() == 0)
-            sWalletLabel = tr("(no label)");
-
-        if (treeMode)
-        {
-            // wallet address
-            ui->treeWidget->addTopLevelItem(itemWalletAddress);
-
-            itemWalletAddress->setFlags(flgTristate);
-            itemWalletAddress->setCheckState(COLUMN_CHECKBOX,Qt::Unchecked);
-
-            // label
-            itemWalletAddress->setText(COLUMN_LABEL, sWalletLabel);
-
-            // address
-            itemWalletAddress->setText(COLUMN_ADDRESS, sWalletAddress);
-        }
-
-        int64_t nSum = 0;
-        int nChildren = 0;
-
-        for (auto const& out : coins.second)
-        {
-            nSum += out.amount;
-            nChildren++;
-
-            QTreeWidgetItem *itemOutput;
-            if (treeMode)    itemOutput = new QTreeWidgetItem(itemWalletAddress);
-            else             itemOutput = new QTreeWidgetItem(ui->treeWidget);
-            itemOutput->setFlags(flgCheckbox);
-            itemOutput->setCheckState(COLUMN_CHECKBOX,Qt::Unchecked);
-
-            // address
-            QString sAddress = QString::fromStdString(out.address);
-            if (!sAddress.isEmpty())
-            {
-                // if listMode or change => show bitcoin address. In tree mode, address is not shown again for direct wallet address outputs
-                if (!treeMode || (!(sAddress == sWalletAddress)))
-                    itemOutput->setText(COLUMN_ADDRESS, sAddress);
-            }
-
-            // label
-            if (!(sAddress == sWalletAddress)) // change
-            {
-                // tooltip from where the change comes from
-                itemOutput->setToolTip(COLUMN_LABEL, tr("change from %1 (%2)").arg(sWalletLabel, sWalletAddress));
-                itemOutput->setText(COLUMN_LABEL, tr("(change)"));
-                itemOutput->setText(COLUMN_CHANGE_BOOL, QString::number(1));
-            }
-            else if (!treeMode)
-            {
-                QString sLabel = "";
-                if (model->getAddressTableModel())
-                    sLabel = model->getAddressTableModel()->labelForAddress(sAddress);
-                if (sLabel.length() == 0)
-                    sLabel = tr("(no label)");
-                itemOutput->setText(COLUMN_LABEL, sLabel);
-            }
-
-            // amount
-            itemOutput->setText(COLUMN_AMOUNT, BitcoinUnits::format(nDisplayUnit, out.amount));
-            itemOutput->setText(COLUMN_AMOUNT_INT64, strPad(QString::number(out.amount), 15, " ")); // padding so that sorting works correctly
-
-            // date
-            itemOutput->setText(COLUMN_DATE, QDateTime::fromSecsSinceEpoch(out.time).toUTC().toString("yy-MM-dd hh:mm"));
-
-            // immature PoS reward — flagged node-side (the maturity check
-            // needs cs_main, which no longer belongs on the GUI thread)
-            if (out.immature) {
-                itemOutput->setBackground(COLUMN_CONFIRMATIONS, Qt::red);
-                itemOutput->setDisabled(true);
-            }
-
-            // confirmations
-            itemOutput->setText(COLUMN_CONFIRMATIONS, strPad(QString::number(out.depth), 8, " "));
-
-            // transaction hash
-            uint256 txhash = out.outpoint.hash;
-            itemOutput->setText(COLUMN_TXHASH, txhash.GetHex().c_str());
-
-            // vout index
-            itemOutput->setText(COLUMN_VOUT_INDEX, QString::number(out.outpoint.n));
-
-            // set checkbox
-            if (coinControl->IsSelected(txhash, out.outpoint.n))
-            {
-                itemOutput->setCheckState(COLUMN_CHECKBOX,Qt::Checked);
-            }
-        }
-
-        // amount
-        if (treeMode)
-        {
-            itemWalletAddress->setText(COLUMN_CHECKBOX, "(" + QString::number(nChildren) + ")");
-            itemWalletAddress->setText(COLUMN_AMOUNT, BitcoinUnits::format(nDisplayUnit, nSum));
-            itemWalletAddress->setText(COLUMN_AMOUNT_INT64, strPad(QString::number(nSum), 15, " "));
-        }
-    }
-
-    // expand all partially selected
-    if (treeMode)
-    {
-        for (int i = 0; i < ui->treeWidget->topLevelItemCount(); i++)
-            if (ui->treeWidget->topLevelItem(i)->checkState(COLUMN_CHECKBOX) == Qt::PartiallyChecked)
-                ui->treeWidget->topLevelItem(i)->setExpanded(true);
-    }
-
-    // sort view
-    sortView(sortColumn, sortOrder);
-    ui->treeWidget->setEnabled(true);
 }
 
 void ConsolidateUnspentWizardSelectInputsPage::SetOutputWarningStop(InputStatus input_status)

@@ -203,7 +203,6 @@ BOOST_AUTO_TEST_CASE(wallet_query_surface_wraps_cwallet)
     const std::vector<COutPoint> unknown{COutPoint(uint256S("0xdeadbeef"), 0)};
     BOOST_CHECK(wallet->getOutputs(unknown).empty());
     BOOST_CHECK(wallet->getOutputs({}).empty());
-    BOOST_CHECK(wallet->listCoins().empty());
 }
 
 BOOST_AUTO_TEST_CASE(wallet_send_coins_boundary_guards)

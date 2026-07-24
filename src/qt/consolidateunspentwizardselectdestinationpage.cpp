@@ -83,6 +83,16 @@ void ConsolidateUnspentWizardSelectDestinationPage::setDefaultAddressSelection(Q
 
     QList<QTableWidgetItem*> defaultAddress = ui->addressTableWidget->findItems(address, Qt::MatchExactly);
 
+    // The default "address" is a LABEL matched by exact text against the
+    // label column; a miss (e.g. a label edited between signals) must not
+    // dereference an empty result.
+    if (defaultAddress.isEmpty())
+    {
+        GUILogPrint(GUILogCategory::QT, "WARN: %s: default address label %s not found in table",
+                    __func__, address.toStdString());
+        return;
+    }
+
     defaultAddress[0]->setSelected(true);
 
     GUILogPrint(GUILogCategory::QT, "INFO: %s: Set default address to %s, QTableWidgetItem %s",
