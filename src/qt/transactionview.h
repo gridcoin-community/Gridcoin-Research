@@ -125,7 +125,7 @@ public slots:
     void changedPrefix(const QString &prefix);
     void changedAmount(const QString &amount);
     void exportClicked();
-    void focusTransaction(const QModelIndex&);
+    void focusTransaction(const uint256& hash);
     void resizeTableColumns(const bool& neighbor_pair_adjust = false, const int& index = 0,
                             const int& old_size = 0, const int& new_size = 0);
 };

@@ -68,9 +68,8 @@ QVariant OverviewTxModel::data(const QModelIndex& index, int role) const
     // delegate composes (its DecorationRole is the transaction-TYPE icon
     // txAddressDecoration, and its DisplayRole is the address), matching the old
     // proxy list which set modelColumn = ToAddress. Reuse the TransactionTableModel
-    // formatters. const_cast: formatRole takes a non-const record (legacy
-    // getTxID()/describe() are non-const) but does not mutate it.
-    return m_ttm->formatRole(const_cast<TransactionRecord*>(&m_rows[index.row()]),
+    // stateless formatters.
+    return m_ttm->formatRole(&m_rows[index.row()],
                              TransactionTableModel::ToAddress, role);
 }
 

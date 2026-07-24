@@ -82,7 +82,7 @@ public:
 
     //!
     //! \brief Start the store-worker thread. Called once by WalletModel after
-    //! construction, before the first reloadAndSnapshot. Idempotent.
+    //! construction, before the first prime. Idempotent.
     //!
     void start();
 
@@ -134,8 +134,8 @@ public:
     //! got from TransactionTableModel::index()'s lazy updateStatus (windowed-model
     //! PR4-A). Runs INLINE (not on the store-worker) so it can take cs_wallet +
     //! cs_store under the caller's cs_main without the worker ever needing
-    //! cs_main/cs_wallet (which would deadlock reloadAndSnapshot's park protocol);
-    //! cs_main also mutually excludes this from reloadAndSnapshot.
+    //! cs_main/cs_wallet (which would deadlock prime's park protocol);
+    //! cs_main also mutually excludes this from prime.
     //!
     void applyChainTipRefresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
@@ -207,20 +207,23 @@ public:
     WalletTxDetail getRowDetail(const uint256& hash, int idx);
 
     //!
-    //! \brief Qt thread: rebuild the store from the wallet and return a full
-    //! decomposed snapshot for the consumer's replica.
+    //! \brief Qt thread: (re)build the store from the wallet and re-arm every
+    //! registered view cursor. Returns nothing — the full transaction list never
+    //! leaves the node; the windowed consumers refill their slice via getRows()
+    //! off the Reset this pushes to each cursor.
     //!
     //! Holds cs_main + cs_wallet across the whole rebuild (blocking producers,
     //! exactly as the old loadWallet did), swaps the index under cs_store, and
     //! drains+discards any pending queue events while producers are still
-    //! blocked — so the returned snapshot, the rebuilt index, and the (now
-    //! empty) queue are mutually consistent. Any producer event after this
-    //! returns is computed against the rebuilt index and applied by the next
-    //! drain. \p limit_enabled / \p limit_time are the OptionsModel
-    //! datetime-display cutoff (read on the Qt thread by the caller); the store
-    //! caches them and applies them to subsequent insertTransaction calls.
+    //! blocked — so the rebuilt index, the re-armed cursors, and the (now empty)
+    //! queue are mutually consistent. Any producer event after this returns is
+    //! computed against the rebuilt index and applied by the next drain.
+    //! \p limit_enabled / \p limit_time are the OptionsModel datetime-display
+    //! cutoff (read on the Qt thread by the caller); the store caches them and
+    //! applies them to subsequent insertTransaction calls, so re-calling prime()
+    //! when the option changes re-filters every view.
     //!
-    std::vector<TransactionRecord> reloadAndSnapshot(bool limit_enabled, int64_t limit_time);
+    void prime(bool limit_enabled, int64_t limit_time);
 
 private:
     //! One unit of deferred store maintenance handed from a producer to the worker.
@@ -252,7 +255,7 @@ private:
     //! record whose address matches, refresh its cached projector outputs, and
     //! re-evaluate each cursor (the label drives the Address sort + label filter).
     //! The new label is carried in, so no cs_wallet is needed — keeping the worker
-    //! free of cs_main/cs_wallet (reloadAndSnapshot's park protocol depends on it).
+    //! free of cs_main/cs_wallet (prime's park protocol depends on it).
     void applyAddressBookChange(const std::string& address, const std::string& label);
     //! Lock-free cores (caller already holds cs_store): the actual O(N) maintenance
     //! + cursor drive. insert/removeTransaction are thin lock-taking wrappers;
@@ -335,7 +338,7 @@ private:
     //! getRows would otherwise be applied twice).
     std::map<int, uint64_t> m_view_seqno GUARDED_BY(cs_store);
 
-    //! Cached OptionsModel datetime-display cutoff, set by reloadAndSnapshot.
+    //! Cached OptionsModel datetime-display cutoff, set by prime.
     bool m_limit_enabled GUARDED_BY(cs_store){false};
     int64_t m_limit_time GUARDED_BY(cs_store){0};
 
@@ -346,10 +349,10 @@ private:
     mutable Mutex cs_intake;
     std::deque<IntakeItem> m_intake GUARDED_BY(cs_intake);
     bool m_stop GUARDED_BY(cs_intake){false};          //!< shutdown request (dtor)
-    bool m_rebuilding GUARDED_BY(cs_intake){false};    //!< reloadAndSnapshot wants the worker parked
+    bool m_rebuilding GUARDED_BY(cs_intake){false};    //!< prime wants the worker parked
     bool m_worker_parked GUARDED_BY(cs_intake){false}; //!< worker has acknowledged the pause
     CConditionVariable m_intake_cv;  //!< worker waits for work / stop / resume
-    CConditionVariable m_idle_cv;    //!< reloadAndSnapshot waits for m_worker_parked
+    CConditionVariable m_idle_cv;    //!< prime waits for m_worker_parked
     std::thread m_worker;
     bool m_started{false};           //!< Qt-thread only: start() idempotency guard
 };

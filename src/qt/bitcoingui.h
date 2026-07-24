@@ -6,7 +6,9 @@
 #include <QMenu>
 #include <stdint.h>
 #include <memory>
+#include <vector>
 #include "guiconstants.h"
+#include "interfaces/wallet_tx_channel.h" // GRC::WalletEvent for processDrainedTransactions
 
 #ifdef Q_OS_MAC
 #include <qt/macos_appnap.h>
@@ -315,7 +317,10 @@ private slots:
 
         The new items are those between start and end inclusive, under the given parent item.
     */
-    void incomingTransaction(const QModelIndex & parent, int start, int end);
+    //! Balloon-notify new wallet transactions from a drained wallet-event batch
+    //! (the VIEW_FULL RowsInserted records), replacing the old full-replica
+    //! TransactionTableModel::rowsInserted path.
+    void processDrainedTransactions(const std::vector<GRC::WalletEvent>& events);
     /** Encrypt the wallet */
     void encryptWallet();
     /** Backup the wallet */

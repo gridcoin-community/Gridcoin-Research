@@ -28,266 +28,20 @@ static int column_alignments[] = {
         Qt::AlignRight|Qt::AlignVCenter
     };
 
-// The cached-wallet ORDERING (time DESC, hash ASC, idx ASC) and the position /
-// contiguous-range computation now live producer-side in GRC::WalletTxStore
-// (src/qt/wallettxstore.{h,cpp}), built on the Qt-free GRC::TxOrderLess
-// (src/qt/txorder.h). This model is a thin consumer: it keeps a replica that
-// it mutates in lockstep from the producer's position-stamped RowsInserted /
-// RowsRemoved events — it never computes positions itself.
-
-// Private implementation
-class TransactionTablePriv
-{
-public:
-    TransactionTablePriv(WalletModel *walletModel, TransactionTableModel *parent):
-            walletModel(walletModel),
-            parent(parent)
-    {
-    }
-    WalletModel *walletModel;
-    TransactionTableModel *parent;
-
-    //!
-    //! \brief Consumer-side replica of the ordered wallet view, kept in
-    //! lockstep with the producer-owned GRC::WalletTxStore by replaying its
-    //! position-stamped RowsInserted / RowsRemoved events. Each entry is one
-    //! row of the table. This is Qt-thread-exclusive (only data(),
-    //! applyEventBatch, and loadWallet touch it, all on the Qt main thread),
-    //! so it needs no lock. The producer's authoritative ordering store is a
-    //! separate object guarded by cs_store; the consumer never reads it on the
-    //! render path. (The replica shrinks to a viewport slice in the windowing
-    //! step, PR5.)
-    //!
-    std::vector<TransactionRecord> cachedWallet;
-
-    /* Query entire wallet anew from core, via the producer store. */
-    void loadWallet()
-    {
-        // reloadAndSnapshot rebuilds the producer-side ordering store (under
-        // cs_main + cs_wallet, blocking producers and discarding any stale
-        // queued events) and returns a fresh, fully decomposed, sorted snapshot
-        // for this replica. The datetime-display cutoff is applied store-side.
-        const bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
-        const int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
-        cachedWallet = walletModel->txSource().reloadAndSnapshot(fLimitTxnDisplay, limitTxnDateTime);
-    }
-
-
-    /* Reset the cached transaction list with a fresh query from core.
-     */
-    void refreshWallet()
-    {
-        GUILogPrint(GUILogCategory::MISC, "refreshWallet()");
-
-        parent->beginResetModel();
-
-        loadWallet();
-
-        parent->endResetModel();
-    }
-
-    //!
-    //! \brief Apply a batch of WalletEvents drained from the producer→GUI
-    //! queue. This is the new incremental update path; it runs on the Qt
-    //! main thread and does NOT take cs_main or cs_wallet.
-    //!
-    //! - RowsInserted payloads carry a producer-computed position and the
-    //!   decomposed records (already datetime-filtered and de-duped store-side).
-    //!   The consumer splices them into its replica at exactly that position
-    //!   inside one beginInsertRows/endInsertRows bracket. It reads ONLY the
-    //!   payload, never the producer store, so the replica tracks the begin/end
-    //!   replay even when a drain batch contains several inserts that reorder
-    //!   rows — which keeps the QSortFilterProxyModel on top consistent.
-    //!
-    //! - RowsRemoved payloads carry a producer-computed position + count for a
-    //!   contiguous run; the consumer erases that range in one
-    //!   beginRemoveRows/endRemoveRows bracket.
-    //!
-    //! - ChainTipChanged: no row mutation. Per-row status (confirmations) is
-    //!   refreshed lazily on read in index(), driven once per batch by
-    //!   updateConfirmations() at the WalletModel drain level.
-    //!
-    void applyEventBatch(const std::vector<GRC::WalletEvent>& events)
-    {
-        for (const auto& ev : events) {
-            std::visit([&](auto&& payload) {
-                using P = std::decay_t<decltype(payload)>;
-                if constexpr (std::is_same_v<P, GRC::RowsInsertedPayload>) {
-                    applyRowsInserted(payload);
-                } else if constexpr (std::is_same_v<P, GRC::RowsRemovedPayload>) {
-                    applyRowsRemoved(payload);
-                } else if constexpr (std::is_same_v<P, GRC::ChainTipChangedPayload>) {
-                    // Handled at the WalletModel drain level (updateConfirmations
-                    // + checkBalanceChanged once per batch). No row mutation.
-                }
-            }, ev.payload);
-        }
-    }
-
-    void applyRowsInserted(const GRC::RowsInsertedPayload& payload)
-    {
-        // This consumer owns only the native, unfiltered VIEW_FULL stream;
-        // per-view cursor events (OverviewPage etc.) belong to other consumers.
-        if (payload.viewId != GRC::VIEW_FULL) {
-            return;
-        }
-        if (payload.records.empty()) {
-            return;
-        }
-
-        // The store computes `position` against an ordering that mirrors this
-        // replica (both start identical and replay the same position-stamped
-        // events in seqno order), so position is provably in range for the
-        // current producer. Validate it explicitly anyway: the DEPLOYED build
-        // is -DNDEBUG, so an assert here would vanish and a bad position would
-        // become a huge size_t -> out-of-bounds insert (heap corruption). If a
-        // future producer regression ever emits a bad position, degrade safely
-        // — log and skip — rather than corrupt the heap.
-        if (payload.position < 0
-                || static_cast<std::size_t>(payload.position) > cachedWallet.size()) {
-            GUILogPrintf("ERROR: %s: RowsInserted position %d out of range [0, %u] — skipping",
-                      __func__, payload.position,
-                      static_cast<unsigned int>(cachedWallet.size()));
-            return;
-        }
-        const std::size_t insertIdx = static_cast<std::size_t>(payload.position);
-        const std::size_t insertCount = payload.records.size();
-
-        parent->beginInsertRows(QModelIndex(),
-                                static_cast<int>(insertIdx),
-                                static_cast<int>(insertIdx + insertCount - 1));
-        cachedWallet.insert(cachedWallet.begin() + insertIdx,
-                            payload.records.begin(), payload.records.end());
-        parent->endInsertRows();
-    }
-
-    void applyRowsRemoved(const GRC::RowsRemovedPayload& payload)
-    {
-        if (payload.viewId != GRC::VIEW_FULL) {
-            return;  // per-view cursor event — not this consumer's
-        }
-        // A RowsRemoved is emitted only for a real, non-empty erase the store
-        // located, so the range is provably in this replica. Validate anyway —
-        // the deployed -DNDEBUG build drops asserts, and a bad position/count
-        // would become a huge size_t -> out-of-bounds erase (heap corruption).
-        // Degrade safely on a future producer regression.
-        if (payload.position < 0 || payload.count <= 0
-                || static_cast<std::size_t>(payload.position)
-                       + static_cast<std::size_t>(payload.count) > cachedWallet.size()) {
-            GUILogPrintf("ERROR: %s: RowsRemoved range [%d, +%d) out of bounds for %u rows — skipping",
-                      __func__, payload.position, payload.count,
-                      static_cast<unsigned int>(cachedWallet.size()));
-            return;
-        }
-        const std::size_t pos = static_cast<std::size_t>(payload.position);
-        const std::size_t count = static_cast<std::size_t>(payload.count);
-
-        parent->beginRemoveRows(QModelIndex(),
-                                static_cast<int>(pos),
-                                static_cast<int>(pos + count - 1));
-        cachedWallet.erase(cachedWallet.begin() + pos,
-                           cachedWallet.begin() + pos + count);
-        parent->endRemoveRows();
-    }
-
-    int size()
-    {
-        return static_cast<int>(cachedWallet.size());
-    }
-
-    // Returns the cached record for replica row \p idx (backs indexForTxid ->
-    // OverviewPage click-through). NO lazy status refresh: status is computed
-    // producer-side — on insert under cs_main (walletmodel.cpp, before enqueue)
-    // and per-block via WalletTxStore::applyChainTipRefresh — so the Qt render
-    // and click-through threads never touch cs_main / cs_wallet here
-    // (windowed-model PR5-C; the detail dialog now formats via
-    // WalletTxStore::getRowDetail on the producer).
-    TransactionRecord *index(int idx)
-    {
-        if(idx >= 0 && static_cast<std::size_t>(idx) < cachedWallet.size())
-        {
-            return &cachedWallet[idx];
-        }
-        else
-        {
-            return nullptr;
-        }
-    }
-
-};
+// This model holds no per-row state: it is a stateless formatter (formatRole and
+// its helpers). The ordered transaction store lives producer-side in
+// GRC::WalletTxStore; the windowed views (OverviewTxModel / DetailedTxModel) hold
+// only the slice they display and render it through formatRole here.
 
 TransactionTableModel::TransactionTableModel(WalletModel *parent):
-        QAbstractTableModel(parent),
-        walletModel(parent),
-        priv(new TransactionTablePriv(walletModel, this))
+        QObject(parent),
+        walletModel(parent)
 {
     columns << QString() << tr("Date") << tr("Type") << tr("Address") << tr("Amount");
-
-    priv->loadWallet();
-
-    connect(walletModel->getOptionsModel(), &OptionsModel::displayUnitChanged, this, &TransactionTableModel::updateDisplayUnit);
-    connect(walletModel->getOptionsModel(), &OptionsModel::LimitTxnDisplayChanged, this, &TransactionTableModel::refreshWallet);
 }
 
 TransactionTableModel::~TransactionTableModel()
 {
-    delete priv;
-}
-
-void TransactionTableModel::applyEventBatch(const std::vector<GRC::WalletEvent>& events)
-{
-    GUILogPrint(GUILogCategory::VERBOSE, "TransactionTableModel::applyEventBatch(%u events)",
-             static_cast<unsigned int>(events.size()));
-
-    priv->applyEventBatch(events);
-}
-
-void TransactionTableModel::refreshWallet()
-{
-    priv->refreshWallet();
-}
-
-void TransactionTableModel::updateConfirmations()
-{
-    GUILogPrint(GUILogCategory::MISC, "TransactionTableModel::updateConfirmations()");
-
-    // Blocks came in since last poll: invalidate the Status (confirmation count)
-    // and ToAddress columns for all rows.
-    //
-    // NOTE (windowed-model PR5-C): this dataChanged is currently OBSERVERLESS — no
-    // view binds TransactionTableModel as its model (the views are DetailedTxModel /
-    // OverviewTxModel, refreshed by their own producer event stream; only
-    // BitcoinGUI consumes TTM's rowsInserted, not dataChanged). It is kept as the
-    // model-correct signal should TTM ever be re-attached as a view model. If it is,
-    // note that index() no longer self-refreshes status from the wallet (the lazy
-    // TRY_LOCK was removed in PR5-C); status is computed producer-side on insert and
-    // refreshed per-block via WalletTxStore::applyChainTipRefresh, so a re-wire must
-    // rely on that producer path, not on a paint-thread refresh.
-    emit dataChanged(index(0, Status), index(priv->size()-1, Status));
-    emit dataChanged(index(0, ToAddress), index(priv->size()-1, ToAddress));
-}
-
-int TransactionTableModel::rowCount(const QModelIndex &parent) const
-{
-    if (parent.isValid()) {
-        return 0;
-    }
-    return priv->size();
-}
-
-QModelIndex TransactionTableModel::indexForTxid(const uint256& hash) const
-{
-    // First replica row whose tx hash matches (same-hash parts are contiguous;
-    // the first is a fine click-through anchor). Linear scan — off the hot path
-    // (runs only on a recent-transaction click).
-    const int rows = priv->size();
-    for (int row = 0; row < rows; ++row) {
-        TransactionRecord* rec = priv->index(row);
-        if (rec && rec->hash == hash) {
-            return index(row, 0);
-        }
-    }
-    return QModelIndex();
 }
 
 int TransactionTableModel::columnCount(const QModelIndex &parent) const
@@ -296,6 +50,37 @@ int TransactionTableModel::columnCount(const QModelIndex &parent) const
         return 0;
     }
     return columns.length();
+}
+
+QVariant TransactionTableModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    if(orientation == Qt::Horizontal)
+    {
+        if(role == Qt::DisplayRole)
+        {
+            return columns[section];
+        }
+        else if (role == Qt::TextAlignmentRole)
+        {
+            return column_alignments[section];
+        } else if (role == Qt::ToolTipRole)
+        {
+            switch(section)
+            {
+            case Status:
+                return tr("Transaction status. Hover over this field to show number of confirmations.");
+            case Date:
+                return tr("Date and time that the transaction was received.");
+            case Type:
+                return tr("Type of transaction.");
+            case ToAddress:
+                return tr("Destination address of transaction.");
+            case Amount:
+                return tr("Amount removed from or added to balance.");
+            }
+        }
+    }
+    return QVariant();
 }
 
 QString TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) const
@@ -663,28 +448,7 @@ QString TransactionTableModel::formatTxTypeExplanation(const TransactionRecord *
     }
 }
 
-QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
-{
-    if(!index.isValid())
-        return QVariant();
-
-    // Resolve the row each call rather than trusting index.internalPointer().
-    // The pointer stored at createIndex() time can dangle: std::vector
-    // reallocation on insert (and element shifts on insert/erase past the
-    // held row) invalidate every TransactionRecord*. QSortFilterProxyModel
-    // and selection state hold persistent QModelIndexes across mutations.
-    TransactionRecord *rec = priv->index(index.row());
-    if (!rec) return QVariant();
-
-    return formatRole(rec, index.column(), role);
-}
-
-// Role-formatting core, factored out of data() so the per-view consumers
-// (OverviewPage's OverviewTxModel — windowed-model PR3) render their own served
-// records through the identical formatters instead of duplicating them. `rec`
-// is any record (this model's replica row or a cursor's served row); `columnInt`
-// is a TransactionTableModel::ColumnIndex.
-QVariant TransactionTableModel::formatRole(TransactionRecord *rec, int columnInt, int role) const
+QVariant TransactionTableModel::formatRole(const TransactionRecord *rec, int columnInt, int role) const
 {
     // Public helper (per-view consumers call it too): validate the column so an
     // out-of-range value cannot index column_alignments[] out of bounds or land in
@@ -800,55 +564,3 @@ QVariant TransactionTableModel::formatRole(TransactionRecord *rec, int columnInt
     return QVariant();
 }
 
-QVariant TransactionTableModel::headerData(int section, Qt::Orientation orientation, int role) const
-{
-    if(orientation == Qt::Horizontal)
-    {
-        if(role == Qt::DisplayRole)
-        {
-            return columns[section];
-        }
-        else if (role == Qt::TextAlignmentRole)
-        {
-            return column_alignments[section];
-        } else if (role == Qt::ToolTipRole)
-        {
-            switch(section)
-            {
-            case Status:
-                return tr("Transaction status. Hover over this field to show number of confirmations.");
-            case Date:
-                return tr("Date and time that the transaction was received.");
-            case Type:
-                return tr("Type of transaction.");
-            case ToAddress:
-                return tr("Destination address of transaction.");
-            case Amount:
-                return tr("Amount removed from or added to balance.");
-            }
-        }
-    }
-    return QVariant();
-}
-
-QModelIndex TransactionTableModel::index(int row, int column, const QModelIndex &parent) const
-{
-    Q_UNUSED(parent);
-    if (row < 0 || row >= priv->size()) {
-        return QModelIndex();
-    }
-    // Pass an explicit nullptr internalPointer — data() resolves the row
-    // each call (see comment there). Storing a TransactionRecord* would
-    // dangle across any vector insert/erase that shifts the row's
-    // storage. The nullptr is explicit (rather than relying on the
-    // default-arg overload of createIndex) to match the third-arg
-    // convention used by the sibling table models and avoid any
-    // Qt-version-specific overload-resolution drift.
-    return createIndex(row, column, nullptr);
-}
-
-void TransactionTableModel::updateDisplayUnit()
-{
-    // emit dataChanged to update Amount column with the current unit
-    emit dataChanged(index(0, Amount), index(priv->size()-1, Amount));
-}

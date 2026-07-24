@@ -101,9 +101,9 @@ public:
         return m_store.getRowDetail(hash, idx);
     }
 
-    std::vector<TransactionRecord> reloadAndSnapshot(bool limit_enabled, int64_t limit_time) override
+    void prime(bool limit_enabled, int64_t limit_time) override
     {
-        return m_store.reloadAndSnapshot(limit_enabled, limit_time);
+        m_store.prime(limit_enabled, limit_time);
     }
 
     std::vector<GRC::WalletEvent> drainEvents(std::size_t max_batch) override
@@ -304,7 +304,7 @@ void WalletTxSourceImpl::onBlocksChanged(bool /*syncing*/, int height, int64_t b
     // height-volatile set inline (we already hold cs_main,
     // so the store takes cs_wallet + cs_store in canonical order with no worker
     // involvement — the worker must stay cs_main/cs_wallet-free or it would
-    // deadlock reloadAndSnapshot's park protocol).
+    // deadlock prime's park protocol).
     m_queue.push(GRC::ChainTipChangedPayload{height, best_time});
     m_store.applyChainTipRefresh();
 }

@@ -207,14 +207,12 @@ OverviewPage::OverviewPage(QWidget *parent) :
 
 void OverviewPage::handleTransactionClicked(const QModelIndex &index)
 {
-    // Map the clicked served-window row to a TransactionTableModel index (via the
-    // tx identity) so the detailed view can select it — the windowed equivalent
-    // of the old proxy mapToSource().
-    if (m_overviewTxModel && walletModel && walletModel->getTransactionTableModel()) {
+    // Emit the clicked row's tx identity; the detailed view re-resolves it to a
+    // row through its own windowed cursor (no full-replica index needed).
+    if (m_overviewTxModel) {
         const uint256 txid = m_overviewTxModel->txidAt(index.row());
-        const QModelIndex source = walletModel->getTransactionTableModel()->indexForTxid(txid);
-        if (source.isValid()) {
-            emit transactionClicked(source);
+        if (!txid.IsNull()) {
+            emit transactionClicked(txid);
         }
     }
 }

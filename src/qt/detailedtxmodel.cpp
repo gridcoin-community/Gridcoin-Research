@@ -109,10 +109,9 @@ QVariant DetailedTxModel::data(const QModelIndex& index, int role) const
     if (!rec) {
         return QVariant();
     }
-    // Reuse the TransactionTableModel formatters. const_cast: formatRole takes a
-    // non-const record (legacy getTxID()/describe() are non-const) but does not
-    // mutate it; the pointer is valid only within this call (m_cache.at contract).
-    return m_ttm->formatRole(const_cast<TransactionRecord*>(rec), index.column(), role);
+    // Reuse the TransactionTableModel stateless formatters; the pointer is valid
+    // only within this call (m_cache.at contract).
+    return m_ttm->formatRole(rec, index.column(), role);
 }
 
 QVariant DetailedTxModel::headerData(int section, Qt::Orientation orientation, int role) const

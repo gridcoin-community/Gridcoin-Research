@@ -30,7 +30,7 @@ interface WalletTxSource $Proxy.wrap("interfaces::WalletTxSource") {
     getAllRows @7 (context :Proxy.Context, viewId :Int32) -> (result :RowsResult);
     rowForKey @8 (context :Proxy.Context, viewId :Int32, hash :Data, idx :Int32) -> (result :Int32);
     getRowDetail @9 (context :Proxy.Context, hash :Data, idx :Int32) -> (result :WalletTxDetail);
-    reloadAndSnapshot @10 (context :Proxy.Context, limitEnabled :Bool, limitTime :Int64) -> (result :List(TransactionRecord));
+    prime @10 (context :Proxy.Context, limitEnabled :Bool, limitTime :Int64) -> ();
     drainEvents @11 (context :Proxy.Context, maxBatch :UInt64) -> (result :List(WalletEvent));
     noteAddressBookChanged @12 (context :Proxy.Context, address :Text, label :Text) -> ();
 }

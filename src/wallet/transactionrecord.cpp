@@ -469,7 +469,7 @@ bool TransactionRecord::statusUpdateNeeded() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     return status.cur_num_blocks != nBestHeight;
 }
 
-std::string TransactionRecord::getTxID()
+std::string TransactionRecord::getTxID() const
 {
     return hash.ToString();
 }

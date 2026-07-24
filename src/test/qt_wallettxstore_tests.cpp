@@ -8,7 +8,7 @@
 // the core locks, pushing the position-stamped events. These exercise the
 // worker's drain/ordering/concurrency and clean shutdown. The store has zero Qt
 // dependencies, so it compiles into the GUI-OFF test binary directly. The
-// rebuild barrier (reloadAndSnapshot quiescing the worker) needs a live
+// rebuild barrier (prime quiescing the worker) needs a live
 // CWallet, so it is covered by the ASan-GUI mesh soak + isolated-testnet
 // validation, exactly as the PR2 store proper was.
 
@@ -99,7 +99,7 @@ BOOST_AUTO_TEST_SUITE(qt_wallettxstore_tests)
 BOOST_AUTO_TEST_CASE(workerDrainsAllInsertsInOrder)
 {
     WalletEventQueue q;
-    // reloadAndSnapshot (the only consumer of m_wallet) is not exercised here,
+    // prime (the only consumer of m_wallet) is not exercised here,
     // so a null wallet is safe — the worker's insert/remove path is wallet-free.
     WalletTxStore store(nullptr, q);
     store.start();

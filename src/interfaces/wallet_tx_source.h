@@ -78,11 +78,14 @@ public:
     //! §4.1); see GRC::WalletTxDetail.
     virtual GRC::WalletTxDetail getRowDetail(const uint256& hash, int idx) = 0;
 
-    //! Rebuild the store from the wallet and return a full decomposed snapshot
-    //! for the consumer's replica. \p limit_enabled / \p limit_time are the
-    //! GUI's datetime-display cutoff, cached by the source for later inserts.
-    virtual std::vector<TransactionRecord> reloadAndSnapshot(bool limit_enabled,
-                                                             int64_t limit_time) = 0;
+    //! Prime (or re-prime) the node-side store: scan the wallet, (re)build the
+    //! ordered record table and every registered view cursor, and push each
+    //! cursor a Reset so the windowed consumers refill their slice via getRows().
+    //! Returns nothing — the whole transaction list never crosses the boundary
+    //! (the windowed views fetch only what they display). \p limit_enabled /
+    //! \p limit_time are the GUI's datetime-display cutoff, cached by the source
+    //! for later inserts; call again when that option changes to re-filter.
+    virtual void prime(bool limit_enabled, int64_t limit_time) = 0;
 
     //! Pull up to \p max_batch pending events in seqno order (the GUI's
     //! periodic drain). Returns an empty vector when none are pending.
