@@ -175,7 +175,7 @@ void WalletTxStore::workerLoop()
         // thread-safety analyzer does not propagate the held lock into a lambda
         // body, but it does into this loop, so the guarded reads stay verified.
         while (!m_stop && (m_rebuilding || m_intake.empty())) {
-            // While a rebuild is pending, park and tell reloadAndSnapshot we are
+            // While a rebuild is pending, park and tell prime we are
             // idle so it can clear the intake queue and rebuild the index with no
             // concurrent worker mutation.
             if (m_rebuilding && !m_worker_parked) {
@@ -247,7 +247,7 @@ void WalletTxStore::insertTransaction(std::vector<TransactionRecord> records)
 
 void WalletTxStore::insertLocked(std::vector<TransactionRecord> records)
 {
-    // Datetime-display cutoff (cached from the last reloadAndSnapshot). All
+    // Datetime-display cutoff (cached from the last prime). All
     // records of one tx share `time`, so this is all-or-nothing.
     if (m_limit_enabled) {
         // Hoist the guarded member into a local read under cs_store: the Clang
@@ -383,7 +383,7 @@ void WalletTxStore::removeLocked(const uint256& hash)
     }
 }
 
-std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabled, int64_t limit_time)
+void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
 {
     std::vector<TransactionRecord> built;
 
@@ -395,8 +395,8 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
     // wallet.cpp) under cs_main even though they do NOT hold cs_wallet at the
     // fire site. So holding cs_main across both the index rebuild and the
     // queue drain fully excludes producers: no event can be queued between the
-    // two, which makes the returned snapshot, the rebuilt index, and the
-    // emptied queue mutually consistent.
+    // two, which makes the rebuilt index, the re-armed cursors, and the emptied
+    // queue mutually consistent.
     LOCK2(cs_main, m_wallet->cs_wallet);
 
     // Quiesce the store-worker (PR2.5) before clearing/rebuilding. The worker is
@@ -445,7 +445,7 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
         LOCK(cs_store);
         m_limit_enabled = limit_enabled;
         m_limit_time = limit_time;
-        m_records = built;
+        m_records = std::move(built);
         rebuildIndex();
         // Rebuild the projector caches and the volatile set parallel to m_records
         // (PR4-fix F/A) BEFORE the cursors rebuild — cursor.rebuild() reads the
@@ -470,9 +470,10 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
     }
 
     // Discard any events queued before this rebuild: they were computed against
-    // the old index and are superseded by `built`. Producers are still blocked
-    // on cs_wallet, so nothing new can be queued until we return; the returned
-    // snapshot, the rebuilt index, and the now-empty queue are consistent.
+    // the old index and are superseded by the freshly scanned records now in
+    // m_records. Producers are still blocked on cs_wallet, so nothing new can be
+    // queued until we return; the rebuilt index and the now-empty queue are
+    // consistent.
     m_queue.drain();
 
     // Re-publish the per-view cursor Resets AFTER the drain so they survive it;
@@ -497,8 +498,6 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
         m_worker_parked = false;
         m_intake_cv.notify_all();
     }
-
-    return built;
 }
 
 void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
@@ -620,7 +619,7 @@ void WalletTxStore::applyChainTipRefresh()
     // Caller holds cs_main (EXCLUSIVE_LOCKS_REQUIRED). Acquire cs_wallet (recursive
     // — re-entrant if SetBestChain already holds it) for mapWallet + updateStatus,
     // then cs_store. Canonical cs_main -> cs_wallet -> cs_store. cs_main mutually
-    // excludes this from reloadAndSnapshot (which holds cs_main on the Qt thread),
+    // excludes this from prime (which holds cs_main on the Qt thread),
     // and the worker never needs cs_main/cs_wallet, so there is no deadlock with
     // the rebuild park protocol.
     AssertLockHeld(cs_main);   // fail fast on misuse (this runs off boost::signals2)

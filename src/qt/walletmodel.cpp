@@ -30,14 +30,30 @@ WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource&
          , cachedNumBlocks(0)
 {
     addressTableModel = new AddressTableModel(this);
-    // TransactionTableModel's ctor performs the initial load via
-    // txSource().reloadAndSnapshot(). The source's store-worker is already
-    // running (started in the WalletTxSource ctor, before this model was
-    // constructed), and its producers are already subscribed — reloadAndSnapshot
-    // quiesces the worker and rebuilds from the wallet, so any event enqueued in
-    // the window between source creation and this snapshot is superseded by the
-    // rebuild.
+
+    // Prime the node-side transaction store from the wallet BEFORE any windowed
+    // view (OverviewTxModel / DetailedTxModel) registers its cursor: those views
+    // register against the store's records and fetch only the slice they show, so
+    // the store must already hold the scanned wallet for them to have anything to
+    // serve. The store-worker is already running (started in the WalletTxSource
+    // ctor, before this model was constructed) and its producers are already
+    // subscribed — prime() quiesces the worker and rebuilds from the wallet, so
+    // any event enqueued in the window between source creation and this prime is
+    // superseded by the rebuild. Unlike the old bootstrap, prime() returns
+    // nothing: the full transaction list never crosses the interface boundary
+    // (windowed-model: drop the O(wallet) snapshot; the views fetch windows).
+    txSource().prime(optionsModel->getLimitTxnDisplay(),
+                     optionsModel->getLimitTxnDateTime());
+
+    // Stateless per-row formatter shared by the windowed views (holds no replica).
     transactionTableModel = new TransactionTableModel(this);
+
+    // Re-prime when the datetime-display cutoff option changes: prime() re-scans
+    // under the option and pushes each registered view a Reset, so the windowed
+    // views re-filter. (The old full-replica TransactionTableModel handled this
+    // via its own refreshWallet connection, which is gone with the replica.)
+    connect(optionsModel, &OptionsModel::LimitTxnDisplayChanged, this,
+            &WalletModel::reloadTransactionView);
 
     // Drain the producer→GUI event stream at a steady cadence. 500ms is
     // imperceptible for transaction-list updates while still giving the
@@ -181,39 +197,22 @@ void WalletModel::drainEventQueue()
              static_cast<unsigned long long>(events.front().seqno),
              static_cast<unsigned long long>(events.back().seqno));
 
-    // Detect a chain-tip advance in the batch so the consumer-side
-    // post-processing (per-row confirmation refresh, balance recompute) runs
-    // only when a block actually moved — not on every wallet-tx burst within
-    // a single block.
-    bool chain_tip_advanced = false;
+    // Cache the pushed tip height (GUI-thread-owned) so the windowed views can
+    // derive live confirmation counts on read — no cs_main, no reach-through to
+    // core state; the wallet model is self-contained for the process split.
+    // Last tip event in the batch wins.
     for (const auto& ev : events) {
         if (const auto* tip = std::get_if<GRC::ChainTipChangedPayload>(&ev.payload)) {
-            chain_tip_advanced = true;
-            // Cache the pushed tip height (GUI-thread-owned) so the transaction
-            // table can derive live confirmation counts on read — no cs_main, no
-            // reach-through to core state, wallet model self-contained for the
-            // eventual process split. Last tip event in the batch wins.
             cachedNumBlocks = tip->height;
         }
     }
 
-    if (transactionTableModel) {
-        transactionTableModel->applyEventBatch(events);
-
-        // Note this is subtly different than the below. If a resync is being
-        // done on a wallet that already has transactions, the
-        // numTransactionsChanged will not be emitted after the wallet is
-        // loaded because the size() does not change. See the comments in the
-        // header file.
-        emit transactionUpdated();
-
-        // Equivalent of the work pollBalanceChanged used to do when it
-        // observed nBestHeight != cachedNumBlocks: refresh per-row
-        // confirmation status. Driven by the event payload now.
-        if (chain_tip_advanced) {
-            transactionTableModel->updateConfirmations();
-        }
-    }
+    // General "wallet transactions changed" pulse (OverviewPage refreshes its
+    // recent list on it). The windowed views (OverviewTxModel / DetailedTxModel)
+    // and the new-transaction balloon consume the event batch directly through
+    // walletEventsDrained below; per-row confirmation refresh is likewise driven
+    // by each view's own ChainTipChanged handling, not a full-replica model.
+    emit transactionUpdated();
 
     // Fan the same batch out to the per-view windowed consumers (OverviewTxModel),
     // which filter to their own viewId. The queue is drained exactly once, here.
@@ -256,6 +255,19 @@ void WalletModel::requestEventDrainSoon()
     }
     m_event_drain_requested = true;
     QTimer::singleShot(0, this, &WalletModel::drainEventQueue);
+}
+
+void WalletModel::reloadTransactionView()
+{
+    // The datetime-display cutoff option changed. Re-prime the node-side store
+    // under the new option: prime() re-scans the wallet, re-arms every registered
+    // view cursor and pushes each a Reset, so the windowed views (Overview /
+    // Detailed) re-filter to the new cutoff on their next drain. Kick that drain
+    // now rather than waiting up to MODEL_EVENT_DRAIN_INTERVAL for the periodic
+    // tick so the change is reflected promptly.
+    txSource().prime(optionsModel->getLimitTxnDisplay(),
+                     optionsModel->getLimitTxnDateTime());
+    requestEventDrainSoon();
 }
 
 void WalletModel::updateAddressBook(const QString &address, const QString &label, bool isMine, int status)

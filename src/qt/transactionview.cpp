@@ -304,7 +304,7 @@ public:
                 || static_cast<std::size_t>(index.row()) >= m_rows.size()) {
             return QVariant();
         }
-        return m_ttm->formatRole(const_cast<TransactionRecord*>(&m_rows[index.row()]),
+        return m_ttm->formatRole(&m_rows[index.row()],
                                  index.column(), role);
     }
 private:
@@ -593,15 +593,12 @@ void TransactionView::dateRangeChanged()
     applyFilter();
 }
 
-void TransactionView::focusTransaction(const QModelIndex &idx)
+void TransactionView::focusTransaction(const uint256& hash)
 {
     if(!m_detailedModel)
         return;
-    // The incoming index belongs to the TransactionTableModel (OverviewPage emits
-    // one mapped through indexForTxid). There is no proxy source-mapping anymore;
-    // bridge to this view by transaction id, the identity shared across cursors.
-    uint256 hash;
-    hash.SetHex(idx.data(TransactionTableModel::TxIDRole).toString().toStdString());
+    // OverviewPage emits the clicked tx id (the identity shared across cursors);
+    // resolve it to a row in this view through its own windowed cursor.
     const QModelIndex targetIdx = m_detailedModel->indexForTxid(hash);
     if(!targetIdx.isValid())
         return;

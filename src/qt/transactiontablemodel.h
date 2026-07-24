@@ -1,20 +1,28 @@
 #ifndef BITCOIN_QT_TRANSACTIONTABLEMODEL_H
 #define BITCOIN_QT_TRANSACTIONTABLEMODEL_H
 
-#include "interfaces/wallet_tx_channel.h"
-
-#include <QAbstractTableModel>
+#include <QObject>
+#include <QModelIndex>
 #include <QStringList>
+#include <QVariant>
 
-#include <vector>
-
-class TransactionTablePriv;
 class TransactionRecord;
 class WalletModel;
 
-/** UI model for the transaction table of a wallet.
- */
-class TransactionTableModel : public QAbstractTableModel
+//! Shared transaction-row formatter for the wallet's windowed transaction views.
+//!
+//! This is no longer a table model over a full transaction replica. The windowed
+//! consumers (OverviewTxModel / VIEW_OVERVIEW and DetailedTxModel / VIEW_DETAILED)
+//! hold only the served/viewport slice they display and fetch it through the
+//! producer's cursor + getRows; they render each of their own records through
+//! formatRole() here so the column/role formatting lives in exactly one place.
+//! Because no view holds the full history any more, nothing ships the whole
+//! wallet across the interface boundary (the O(wallet) reloadAndSnapshot bootstrap
+//! is gone).
+//!
+//! It keeps the ColumnIndex / RoleIndex enums the consumers key on, and the
+//! stateless formatRole() + its helpers; it holds no per-row state.
+class TransactionTableModel : public QObject
 {
     Q_OBJECT
 public:
@@ -55,39 +63,20 @@ public:
         StatusRole
     };
 
-    int rowCount(const QModelIndex &parent) const;
-    int columnCount(const QModelIndex &parent) const;
-    QVariant data(const QModelIndex &index, int role) const;
-    //! Role-formatting core (factored out of data()): render \p role for an
-    //! arbitrary \p rec at \p column (a ColumnIndex). data() calls it for this
-    //! model's rows; the per-view windowed consumers (OverviewTxModel, PR3) call
-    //! it for their own served records, so the formatters live in exactly one
-    //! place. \p rec may be any record, not necessarily in this model's replica.
-    QVariant formatRole(TransactionRecord *rec, int column, int role) const;
+    //! Render \p role for \p rec at \p column (a ColumnIndex). The windowed
+    //! consumers call it for their own served records; it reads \p rec only and
+    //! keeps no state, so it is safe to call from any consumer for any record.
+    QVariant formatRole(const TransactionRecord *rec, int column, int role) const;
+
+    //! The shared column set for the windowed views: DetailedTxModel and the CSV
+    //! export delegate their columnCount()/headerData() here so the column
+    //! definitions live in one place.
+    int columnCount(const QModelIndex& parent = QModelIndex()) const;
     QVariant headerData(int section, Qt::Orientation orientation, int role) const;
-    QModelIndex index(int row, int column, const QModelIndex & parent = QModelIndex()) const;
-
-    //! First replica row matching tx \p hash, as a model index, or an invalid
-    //! index. Maps a per-view consumer's clicked row (OverviewTxModel, PR3) back
-    //! to a TransactionTableModel index for the detailed-view click-through.
-    QModelIndex indexForTxid(const uint256& hash) const;
-
-    //!
-    //! \brief Consume a batch of producer-side wallet events drained from
-    //! WalletModel's WalletEventQueue. Inserts/removes rows from the cached
-    //! list without taking cs_main or cs_wallet — payloads are already
-    //! decomposed at the producer side under the locks that were held there.
-    //!
-    //! Status updates (TxUpdated) do not mutate rows directly; status fields
-    //! refresh lazily on read via TransactionTableModel::data() / the existing
-    //! updateConfirmations() flow.
-    //!
-    void applyEventBatch(const std::vector<GRC::WalletEvent>& events);
 
 private:
     WalletModel *walletModel;
     QStringList columns;
-    TransactionTablePriv *priv;
 
     QString lookupAddress(const std::string &address, bool tooltip) const;
     QVariant addressColor(const TransactionRecord *wtx) const;
@@ -100,14 +89,6 @@ private:
     QString formatTxTypeExplanation(const TransactionRecord *rec) const;
     QVariant txStatusDecoration(const TransactionRecord *wtx) const;
     QVariant txAddressDecoration(const TransactionRecord *wtx) const;
-
-public slots:
-    void refreshWallet();
-    void updateConfirmations();
-    void updateDisplayUnit();
-
-    friend class TransactionTablePriv;
 };
 
 #endif // BITCOIN_QT_TRANSACTIONTABLEMODEL_H
-

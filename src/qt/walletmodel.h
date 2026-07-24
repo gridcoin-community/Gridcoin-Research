@@ -260,6 +260,12 @@ public slots:
      * subscriber. */
     void drainEventQueue();
 
+    //! Re-prime the node-side store under the current datetime-display cutoff
+    //! option and kick a drain so the Reset each view cursor receives is applied
+    //! promptly. Wired to OptionsModel::LimitTxnDisplayChanged; the windowed
+    //! views re-filter off the Resets prime() pushes.
+    void reloadTransactionView();
+
 signals:
     // Transaction updated. This is necessary because on a resync from zero with an existing wallet.
     // the numTransactionsChanged signal will not be emitted, and therefore the overpage transaction list

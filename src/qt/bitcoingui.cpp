@@ -879,9 +879,11 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         setEncryptionStatus(walletModel->getEncryptionStatus());
         connect(walletModel, &WalletModel::encryptionStatusChanged, this, &BitcoinGUI::setEncryptionStatus);
 
-        // Balloon pop-up for new transaction
-        connect(walletModel->getTransactionTableModel(), &TransactionTableModel::rowsInserted,
-                this, &BitcoinGUI::incomingTransaction);
+        // Balloon pop-up for new transactions: driven off the drained wallet-event
+        // stream (VIEW_FULL RowsInserted records), not a full-replica model row
+        // insertion — the GUI holds no full transaction replica.
+        connect(walletModel, &WalletModel::walletEventsDrained,
+                this, &BitcoinGUI::processDrainedTransactions);
 
         // Ask for passphrase if needed
         connect(walletModel, &WalletModel::requireUnlock, this, &BitcoinGUI::unlockWallet);
@@ -1315,38 +1317,46 @@ void BitcoinGUI::closeEvent(QCloseEvent *event)
 }
 
 
-void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int end)
+void BitcoinGUI::processDrainedTransactions(const std::vector<GRC::WalletEvent>& events)
 {
     if(!walletModel || !clientModel)
         return;
-    TransactionTableModel *ttm = walletModel->getTransactionTableModel();
-    qint64 amount = ttm->index(start, TransactionTableModel::Amount, parent)
-                    .data(Qt::EditRole).toULongLong();
 
-    // On new transaction, make an info balloon
-    // Unless the initial block download is in progress OR transaction notification
-    // is disabled, to prevent balloon-spam.
-    if(!(clientModel->inInitialBlockDownload() || walletModel->getOptionsModel()->getDisableTrxNotifications()))
+    // Make an info balloon per new wallet transaction — unless the initial block
+    // download is in progress OR transaction notifications are disabled, to
+    // prevent balloon-spam.
+    if(clientModel->inInitialBlockDownload() || walletModel->getOptionsModel()->getDisableTrxNotifications())
+        return;
+
+    TransactionTableModel *ttm = walletModel->getTransactionTableModel();
+    if(!ttm)
+        return;
+
+    const int unit = walletModel->getOptionsModel()->getDisplayUnit();
+    for(const GRC::WalletEvent& ev : events)
     {
-        QString date = ttm->index(start, TransactionTableModel::Date, parent)
-                        .data().toString();
-        QString type = ttm->index(start, TransactionTableModel::Type, parent)
-                        .data().toString();
-        QString address = ttm->index(start, TransactionTableModel::ToAddress, parent)
-                        .data().toString();
-        QIcon icon = qvariant_cast<QIcon>(ttm->index(start,
-                            TransactionTableModel::ToAddress, parent)
-                        .data(Qt::DecorationRole));
+        // Only the native unfiltered VIEW_FULL stream, and one balloon per new tx
+        // (its first, representative part) — matching the old rowsInserted path.
+        const auto* ins = std::get_if<GRC::RowsInsertedPayload>(&ev.payload);
+        if(!ins || ins->viewId != GRC::VIEW_FULL || ins->records.empty())
+            continue;
+
+        const TransactionRecord& rec = ins->records.front();
+        const qint64 amount   = ttm->formatRole(&rec, TransactionTableModel::Amount, Qt::EditRole).toLongLong();
+        const QString date    = ttm->formatRole(&rec, TransactionTableModel::Date, Qt::DisplayRole).toString();
+        const QString type    = ttm->formatRole(&rec, TransactionTableModel::Type, Qt::DisplayRole).toString();
+        const QString address = ttm->formatRole(&rec, TransactionTableModel::ToAddress, Qt::DisplayRole).toString();
+        const QIcon icon      = qvariant_cast<QIcon>(ttm->formatRole(&rec, TransactionTableModel::ToAddress, Qt::DecorationRole));
 
         notificator->notify(Notificator::Information,
-                            (amount)<0 ? tr("Sent transaction") :
-                                         tr("Incoming transaction"),
+                            (amount) < 0 ? tr("Sent transaction") :
+                                           tr("Incoming transaction"),
                               tr("Date: %1\n"
                                  "Amount: %2\n"
                                  "Type: %3\n"
                                  "Address: %4")
                               .arg(date,
-                                   BitcoinUnits::formatWithUnit(walletModel->getOptionsModel()->getDisplayUnit(), amount, true),
+                                   BitcoinUnits::formatWithUnit(unit, amount, true),
                                    type,
                                    address),
                               icon);

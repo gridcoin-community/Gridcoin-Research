@@ -1,6 +1,8 @@
 #ifndef BITCOIN_QT_OVERVIEWPAGE_H
 #define BITCOIN_QT_OVERVIEWPAGE_H
 
+#include "uint256.h"
+
 #include <QWidget>
 #include <memory>
 
@@ -41,7 +43,11 @@ public slots:
     void showHideMRCToolButton();
 
 signals:
-    void transactionClicked(const QModelIndex &index);
+    //! Carries the clicked recent-transaction's id (not a model index): the
+    //! detailed view re-resolves it to a row through its own windowed cursor
+    //! (TransactionView::focusTransaction -> DetailedTxModel::indexForTxid), so
+    //! no full-replica TransactionTableModel index is needed.
+    void transactionClicked(const uint256& hash);
     void pollLabelClicked();
 
 protected:

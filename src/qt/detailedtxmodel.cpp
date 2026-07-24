@@ -75,6 +75,9 @@ DetailedTxModel::DetailedTxModel(WalletModel* walletModel, QObject* parent)
 
     connect(m_walletModel, &WalletModel::walletEventsDrained,
             this, &DetailedTxModel::applyEventBatch);
+
+    connect(m_walletModel->getOptionsModel(), &OptionsModel::displayUnitChanged,
+            this, &DetailedTxModel::updateDisplayUnit);
 }
 
 DetailedTxModel::~DetailedTxModel()
@@ -85,6 +88,19 @@ DetailedTxModel::~DetailedTxModel()
     // out — outlives this model by the teardown-ordering contract (bitcoin.cpp).
     if (m_walletModel)
         m_walletModel->txSource().unregisterView(GRC::VIEW_DETAILED);
+}
+
+void DetailedTxModel::updateDisplayUnit()
+{
+    // Only the Amount column formatting depends on the unit; the cached records
+    // are unchanged. Re-emit dataChanged over the whole Amount column — Qt
+    // repaints only the visible rows, and off-window placeholder rows carry no
+    // amount, so this is one signal regardless of table size.
+    const int rows = rowCount();
+    if (rows > 0) {
+        emit dataChanged(index(0, TransactionTableModel::Amount),
+                         index(rows - 1, TransactionTableModel::Amount));
+    }
 }
 
 int DetailedTxModel::rowCount(const QModelIndex& parent) const
@@ -109,10 +125,9 @@ QVariant DetailedTxModel::data(const QModelIndex& index, int role) const
     if (!rec) {
         return QVariant();
     }
-    // Reuse the TransactionTableModel formatters. const_cast: formatRole takes a
-    // non-const record (legacy getTxID()/describe() are non-const) but does not
-    // mutate it; the pointer is valid only within this call (m_cache.at contract).
-    return m_ttm->formatRole(const_cast<TransactionRecord*>(rec), index.column(), role);
+    // Reuse the TransactionTableModel stateless formatters; the pointer is valid
+    // only within this call (m_cache.at contract).
+    return m_ttm->formatRole(rec, index.column(), role);
 }
 
 QVariant DetailedTxModel::headerData(int section, Qt::Orientation orientation, int role) const
