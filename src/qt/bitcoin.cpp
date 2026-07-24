@@ -73,6 +73,7 @@
 #include <QLocale>
 #include <QTranslator>
 #include "qt/splashscreen.h"
+#include "qt/syntheticcoinsource.h"
 #include <QLibraryInfo>
 #include <QProcess>
 
@@ -180,6 +181,10 @@ static void SetupUIArgs(ArgsManager& argsman)
     argsman.AddArg("-style", "Specify GUI style for Qt to use on Windows and MacOS (default: fusion)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
     argsman.AddArg("-suppressnetworkgraph", "Suppress network graph (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-devsyntheticcoins=<n>[:<groups>]",
+                   "DEV ONLY: substitute a synthetic coin-control source with <n> coins over "
+                   "<groups> address groups (default groups: 3) for windowed-model testing",
                    ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
     argsman.AddArg("-showorphans", "Include stale (orphaned) coinstake transactions in the transaction list",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -1416,8 +1421,24 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // the initial wallet scan runs lazily on WalletModel's
                 // one-shot load thread at first dialog open, and the store
                 // stays warm (but silent) between dialog opens.
-                std::shared_ptr<interfaces::WalletCoinSource> wallet_coin_source =
-                    interface_init->makeWalletCoinSource();
+                std::shared_ptr<interfaces::WalletCoinSource> wallet_coin_source;
+                const std::string synthetic_coins = gArgs.GetArg("-devsyntheticcoins", "");
+                if (!synthetic_coins.empty()) {
+                    // DEV HARNESS: the #3183 acceptance-gate substitution — the
+                    // real store/views/queue over synthetic records at the
+                    // requested scale (see qt/syntheticcoinsource.h).
+                    int synth_total = 0;
+                    int synth_groups = 3;
+                    const std::size_t colon = synthetic_coins.find(":");
+                    synth_total = std::atoi(synthetic_coins.substr(0, colon).c_str());
+                    if (colon != std::string::npos) {
+                        synth_groups = std::atoi(synthetic_coins.substr(colon + 1).c_str());
+                    }
+                    wallet_coin_source =
+                        std::make_shared<SyntheticCoinSource>(synth_total, synth_groups);
+                } else {
+                    wallet_coin_source = interface_init->makeWalletCoinSource();
+                }
                 if (!wallet_coin_source) {
                     throw std::runtime_error("wallet coin source unavailable after init");
                 }

@@ -842,4 +842,57 @@ CoinGroupsResult WalletCoinStore::reloadAndSnapshot()
     return result;
 }
 
+void WalletCoinStore::seedSynthetic(std::vector<CoinRecord> records, int tip_height)
+{
+    // The reloadAndSnapshot install sequence without the wallet scan (this
+    // store has no wallet): park the worker, swap the table, rebuild the
+    // identity maps and views, discard superseded events, publish Resets.
+    {
+        WAIT_LOCK(cs_intake, ilock);
+        m_rebuilding = true;
+        m_intake_cv.notify_all();
+        while (m_started && !m_worker_parked) {
+            m_idle_cv.wait(ilock);
+        }
+        m_intake.clear();
+    }
+
+    m_tip_height.store(tip_height, std::memory_order_relaxed);
+
+    std::vector<CoinViewDelta> resets;
+    {
+        LOCK(cs_store);
+        m_records = std::move(records);
+        m_by_outpoint.clear();
+        m_by_hash.clear();
+        for (std::size_t i = 0; i < m_records.size(); ++i) {
+            m_by_outpoint.emplace(m_records[i].outpoint, i);
+            m_by_hash.emplace(m_records[i].outpoint.hash, i);
+        }
+        m_pending.clear();
+        for (auto it = m_selected.begin(); it != m_selected.end();) {
+            if (m_by_outpoint.count(*it) == 0) {
+                it = m_selected.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        resets = m_views.rebuild(m_records.size());
+        reapplyMirrorAggregates();
+    }
+
+    m_queue.drain();
+
+    {
+        LOCK(cs_store);
+        emitDeltas(resets);
+    }
+
+    {
+        LOCK(cs_intake);
+        m_rebuilding = false;
+    }
+    m_intake_cv.notify_all();
+}
+
 } // namespace GRC

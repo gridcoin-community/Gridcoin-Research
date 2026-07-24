@@ -166,6 +166,14 @@ public:
     //! off the paint path. Returns the address-ordered group directory.
     CoinGroupsResult reloadAndSnapshot();
 
+    //! DEV HARNESS ONLY (-devsyntheticcoins): install a synthetic record
+    //! snapshot on a null-wallet store — the reloadAndSnapshot install steps
+    //! (park worker, swap, rebuild views, discard queue, publish Resets)
+    //! without the wallet scan or wallet locks. Lets the real model/view
+    //! stack be exercised at pathological scale (the #3183 500k-child expand
+    //! acceptance gate) with every windowing/reconciliation semantic intact.
+    void seedSynthetic(std::vector<CoinRecord> records, int tip_height);
+
     //! Decompose one wallet transaction into its currently-available coin
     //! records, reproducing CWallet::AvailableCoins's listCoins conditions
     //! (final, trusted, mature, depth >= 0, unspent, mine, above the minimum

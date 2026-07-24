@@ -218,6 +218,22 @@ private:
     //! Pending viewport ranges per scope ("" = flat), coalesced by the timer.
     std::map<std::string, std::pair<int, int>> m_pending_fetch;
     bool m_applying_events{false};
+    //! Nonzero while ANY of this model's structural brackets (reset,
+    //! release-remove, fetchMore-insert, event-driven cache brackets) is
+    //! open. Qt machinery (and QAbstractItemModelTester) can synchronously
+    //! probe canFetchMore and invoke fetchMore from inside a bracket's
+    //! signal dispatch; realizing a group there nests an insert bracket
+    //! inside the open one — an aborting invariant violation (caught twice
+    //! by the tester runs: collapse-remove and sort-reset). canFetchMore
+    //! answers false while nonzero; the suppressed realization happens
+    //! later via the normal expand/viewport paths.
+    int m_structure_locked{0};
+
+    struct StructureLock {
+        int& counter;
+        explicit StructureLock(int& c) : counter(c) { ++counter; }
+        ~StructureLock() { --counter; }
+    };
     //! Drained tip height: the confirmations column renders serve-time depth
     //! from block_height so a tip advance repaints without refetching rows.
     int m_tip_height{0};

@@ -18,13 +18,31 @@ CoinSelectionView::CoinSelectionView(QWidget* parent)
     setAllColumnsShowFocus(true);
     setSelectionBehavior(QAbstractItemView::SelectRows);
 
-    // Any expansion change moves rows into/out of the viewport.
-    connect(this, &QTreeView::expanded, this, [this](const QModelIndex&) { reportViewport(); });
-    connect(this, &QTreeView::collapsed, this, [this](const QModelIndex& idx) {
-        if (auto* m = qobject_cast<CoinSelectionModel*>(model())) {
-            m->releaseGroup(idx);
-        }
+    // Any expansion change moves rows into/out of the viewport. The expanded
+    // signal fires BEFORE QTreeView's deferred branch layout runs, so a
+    // same-turn viewport walk sees pre-layout geometry and fetches nothing —
+    // the freshly visible rows would sit blank until the first scroll (found
+    // by the 500k synthetic acceptance run). Schedule a second report after
+    // the layout has settled.
+    connect(this, &QTreeView::expanded, this, [this](const QModelIndex&) {
         reportViewport();
+        QTimer::singleShot(150, this, [this]() { reportViewport(); });
+    });
+    connect(this, &QTreeView::collapsed, this, [this](const QModelIndex& idx) {
+        // DEFER the un-realize: collapsed() is emitted from inside
+        // QTreeView's collapse handling, and mutating the model
+        // (beginRemoveRows) re-entrantly from that dispatch overlaps
+        // structural-change windows — QAbstractItemModelTester aborts on
+        // changeInFlight != None (found by the 2000:5 tester run). A
+        // persistent index survives any intervening directory re-slots.
+        const QPersistentModelIndex pidx(idx);
+        QTimer::singleShot(0, this, [this, pidx]() {
+            if (!pidx.isValid()) return;
+            if (auto* m = qobject_cast<CoinSelectionModel*>(model())) {
+                m->releaseGroup(pidx);
+            }
+            reportViewport();
+        });
     });
 }
 

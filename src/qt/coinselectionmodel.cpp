@@ -11,6 +11,7 @@
 #include "qt/walletmodel.h"
 
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QTimer>
 
 #include <algorithm>
@@ -50,18 +51,20 @@ struct CoinCacheSink : public GRC::WindowCacheSink {
         return m->groupIndexByAddress(scope);
     }
 
-    void beginReset() override { m->beginResetModel(); }
-    void endReset() override { m->endResetModel(); }
+    void beginReset() override { ++m->m_structure_locked; m->beginResetModel(); }
+    void endReset() override { m->endResetModel(); --m->m_structure_locked; }
     void beginInsert(int first, int count) override
     {
+        ++m->m_structure_locked;
         m->beginInsertRows(parentIndex(), first, first + count - 1);
     }
-    void endInsert() override { m->endInsertRows(); }
+    void endInsert() override { m->endInsertRows(); --m->m_structure_locked; }
     void beginRemove(int first, int count) override
     {
+        ++m->m_structure_locked;
         m->beginRemoveRows(parentIndex(), first, first + count - 1);
     }
-    void endRemove() override { m->endRemoveRows(); }
+    void endRemove() override { m->endRemoveRows(); --m->m_structure_locked; }
     void dataChanged(int first, int count) override
     {
         const QModelIndex parent = parentIndex();
@@ -204,6 +207,9 @@ bool CoinSelectionModel::hasChildren(const QModelIndex& parent) const
 
 bool CoinSelectionModel::canFetchMore(const QModelIndex& parent) const
 {
+    // No realization while any structural bracket is open (see
+    // m_structure_locked).
+    if (m_structure_locked > 0) return false;
     if (!parent.isValid() || m_mode != GRC::CoinViewMode::Tree || parent.internalId() != 0) {
         return false;
     }
@@ -216,6 +222,9 @@ void CoinSelectionModel::fetchMore(const QModelIndex& parent)
     if (!canFetchMore(parent)) return;
     const std::string address = m_directory[static_cast<std::size_t>(parent.row())].address;
 
+    QElapsedTimer expand_timer;
+    expand_timer.start();
+
     GRC::CoinRowsResult result = m_source.getGroupRows(m_view_id, address, 0, kInitialWindow);
 
     GroupSlot& slot = m_groups[address];
@@ -226,12 +235,27 @@ void CoinSelectionModel::fetchMore(const QModelIndex& parent)
         // render as placeholders until the viewport-driven fetches fill them.
         // QTreeView materializes a view item per row here (its own cost —
         // measured by the synthetic acceptance gate), but data() stays pure.
+        StructureLock lock(m_structure_locked);
         beginInsertRows(parent, 0, result.total_accepted - 1);
         slot.cache.seedInitial(std::move(result.records), 0, result.total_accepted,
                                result.epoch, result.high_water);
         endInsertRows();
     } else {
         slot.cache.seedInitial({}, 0, 0, result.epoch, result.high_water);
+    }
+
+    // Acceptance-gate instrumentation (#3183): model-side realization cost
+    // now, and the full expand pipeline — including QTreeView's per-row view
+    // item layout, which runs after this returns inside the expand handling —
+    // when control returns to the event loop.
+    if (result.total_accepted >= 10000) {
+        const int realized = result.total_accepted;
+        GUILogPrintf("CoinSelectionModel::fetchMore: realized %d virtual rows in %lld ms (model side)",
+                     realized, static_cast<long long>(expand_timer.elapsed()));
+        QTimer::singleShot(0, this, [expand_timer, realized]() {
+            GUILogPrintf("CoinSelectionModel::fetchMore: expand pipeline for %d rows settled after %lld ms (full, incl. view layout)",
+                         realized, static_cast<long long>(expand_timer.elapsed()));
+        });
     }
 }
 
@@ -247,6 +271,7 @@ void CoinSelectionModel::releaseGroup(const QModelIndex& group_index)
     // cleanly. Checkbox truth lives in coinControl, so nothing is lost.
     const int total = it->second.cache.total();
     if (total > 0) {
+        StructureLock lock(m_structure_locked);
         beginRemoveRows(group_index, 0, total - 1);
         m_groups.erase(it);
         endRemoveRows();
@@ -526,6 +551,7 @@ void CoinSelectionModel::setDisplayMode(GRC::CoinViewMode mode)
 
 void CoinSelectionModel::reseedFromSource()
 {
+    StructureLock lock(m_structure_locked);
     beginResetModel();
     m_groups.clear();
     m_dir_row.clear();
@@ -653,6 +679,7 @@ void CoinSelectionModel::applyCoinEventBatch(const std::vector<GRC::WalletCoinEv
         if (const auto* p = std::get_if<GRC::CoinGroupsInsertedPayload>(&ev.payload)) {
             if (p->view_id != m_view_id || m_mode != GRC::CoinViewMode::Tree) continue;
             const int pos = std::min(p->position, static_cast<int>(m_directory.size()));
+            StructureLock lock(m_structure_locked);
             beginInsertRows(QModelIndex(), pos, pos + static_cast<int>(p->groups.size()) - 1);
             m_directory.insert(m_directory.begin() + pos, p->groups.begin(), p->groups.end());
             rebuildDirRows(pos);
@@ -671,6 +698,7 @@ void CoinSelectionModel::applyCoinEventBatch(const std::vector<GRC::WalletCoinEv
             for (int i = 0; i < p->count; ++i) {
                 m_groups.erase(m_directory[static_cast<std::size_t>(p->position + i)].address);
             }
+            StructureLock lock(m_structure_locked);
             beginRemoveRows(QModelIndex(), p->position, p->position + p->count - 1);
             m_directory.erase(m_directory.begin() + p->position,
                               m_directory.begin() + p->position + p->count);
@@ -726,6 +754,7 @@ void CoinSelectionModel::onVisibleIndexes(const QList<QModelIndex>& visible)
 {
     // Bucket visible child/flat rows per scope; group headers need no fetch
     // (the directory is materialized).
+    std::map<std::string, std::pair<int, int>> report;
     for (const QModelIndex& idx : visible) {
         if (!idx.isValid()) continue;
         std::string scope;
@@ -737,13 +766,23 @@ void CoinSelectionModel::onVisibleIndexes(const QList<QModelIndex>& visible)
             if (!address) continue;
             scope = *address;
         }
-        auto it = m_pending_fetch.find(scope);
-        if (it == m_pending_fetch.end()) {
-            m_pending_fetch.emplace(scope, std::make_pair(idx.row(), idx.row()));
+        auto it = report.find(scope);
+        if (it == report.end()) {
+            report.emplace(scope, std::make_pair(idx.row(), idx.row()));
         } else {
             it->second.first = std::min(it->second.first, idx.row());
             it->second.second = std::max(it->second.second, idx.row());
         }
+    }
+
+    // REPLACE the pending range per scope — never merge across reports: a
+    // scrollbar drag emits a stream of reports at wildly different offsets,
+    // and a min/max merge would produce a range far beyond kMaxFetch whose
+    // clamped fetch fills rows the user already scrolled past, leaving the
+    // resting viewport blank forever (found by the 500k synthetic run). The
+    // debounce timer slides to the end of the drag; the LAST viewport wins.
+    for (const auto& entry : report) {
+        m_pending_fetch[entry.first] = entry.second;
     }
     if (!m_pending_fetch.empty()) {
         m_fetch_timer->start(kDebounceMs);
@@ -758,6 +797,10 @@ void CoinSelectionModel::onFetchTimeout()
         const int first = std::max(0, entry.second.first - kInitialWindow);
         const int count = std::min(kMaxFetch,
                                    entry.second.second - first + 1 + kInitialWindow);
+        GUILogPrint(GUILogCategory::VERBOSE,
+                    "CoinSelectionModel::onFetchTimeout: scope=%s visible=[%d, %d] fetch=[%d, %d)",
+                    entry.first.empty() ? "<flat>" : entry.first,
+                    entry.second.first, entry.second.second, first, first + count);
         fetchScope(entry.first, first, count);
     }
 }
@@ -772,7 +815,12 @@ void CoinSelectionModel::fetchScope(const std::string& scope, int first, int cou
         sink = m_flat_sink.get();
     } else {
         auto it = m_groups.find(scope);
-        if (it == m_groups.end()) return;
+        if (it == m_groups.end()) {
+            GUILogPrint(GUILogCategory::VERBOSE,
+                        "CoinSelectionModel::fetchScope: scope %s not realized — dropping fetch",
+                        scope);
+            return;
+        }
         cache = &it->second.cache;
         sink = it->second.sink.get();
     }
@@ -789,13 +837,27 @@ void CoinSelectionModel::fetchScope(const std::string& scope, int first, int cou
         ? m_source.getRows(m_view_id, first, count)
         : m_source.getGroupRows(m_view_id, scope, first, count);
 
+    const std::size_t fetched = result.records.size();
     if (!cache->fillContent(*sink, first, std::move(result.records),
                             result.epoch, result.high_water)) {
+        GUILogPrintf("CoinSelectionModel::fetchScope: REJECTED fill scope=%s first=%d count=%d "
+                     "fetched=%u (fetch epoch=%llu hw=%llu vs cache epoch=%llu seqno=%llu total=%d)",
+                     scope.empty() ? "<flat>" : scope, first, count,
+                     static_cast<unsigned>(fetched),
+                     static_cast<unsigned long long>(result.epoch),
+                     static_cast<unsigned long long>(result.high_water),
+                     static_cast<unsigned long long>(cache->epoch()),
+                     static_cast<unsigned long long>(cache->structuralSeqno()),
+                     cache->total());
         auto it = m_pending_fetch.find(scope);
         if (it == m_pending_fetch.end()) {
             m_pending_fetch.emplace(scope, std::make_pair(first, first + count - 1));
         }
         m_fetch_timer->start(kDebounceMs);
+    } else {
+        GUILogPrint(GUILogCategory::VERBOSE,
+                    "CoinSelectionModel::fetchScope: filled scope=%s [%d, %d)",
+                    scope.empty() ? "<flat>" : scope, first, first + count);
     }
 }
 
