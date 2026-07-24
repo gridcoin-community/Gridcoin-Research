@@ -53,6 +53,11 @@ void SplitCoinStakeOutput(CMutableTransaction& mtxCoinstake, CBlock &blocknew, i
                           bool &fEnableStakeSplit, bool &fEnableSideStaking,
                           int64_t &nMinStakeSplitValue, double &dEfficiency) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+//! \brief Efficiency-optimal post-stake UTXO size (equation (27)) for the current network
+//! difficulty, from -stakingefficiency and -minstakesplitvalue (with their clamps and floors),
+//! independent of whether -enablestakesplit is set. Out-params receive the effective minimum
+//! stake split value (in Halfords) and the efficiency.
+int64_t GetOptimalStakeSplitValue(int64_t& nMinStakeSplitValue, double& dEfficiency) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 bool CreateMRCRewards(CMutableTransaction& mtxCoinbase, CMutableTransaction& mtxCoinstake,

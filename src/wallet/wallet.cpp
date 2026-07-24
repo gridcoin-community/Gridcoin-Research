@@ -3250,7 +3250,8 @@ bool CWallet::FundTransaction(CTransaction& tx, int64_t& nFeeRet, int& nChangePo
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins_in,
                                 CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
-                                const CCoinControl* coinControl, bool change_back_to_input_address)
+                                const CCoinControl* coinControl, bool change_back_to_input_address,
+                                int64_t nEnforcedMinFee)
 {
 
     int64_t nValueOut = 0;
@@ -3285,7 +3286,10 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
         // txdb must be opened before the mapWallet lock
         CTxDB txdb("r");
         {
-            nFeeRet = nTransactionFee;
+            // The caller can enforce a fee above the normal size-based fee (e.g. splitunspent's
+            // per-piece fee). The while loop below only ever raises nFeeRet, so the enforced
+            // minimum is preserved.
+            nFeeRet = max(nTransactionFee, nEnforcedMinFee);
             while (true)
             {
                 CMutableTransaction mtx;
@@ -3569,10 +3573,12 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins,
-    CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address)
+    CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address,
+    int64_t nEnforcedMinFee)
 {
     int nChangePosRet = -1;
-    return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl, change_back_to_input_address);
+    return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl, change_back_to_input_address,
+                             nEnforcedMinFee);
 }
 
 

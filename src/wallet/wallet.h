@@ -403,12 +403,15 @@ public:
                            bool change_back_to_input_address = false);
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
                            int64_t& nFeeRet, const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false);
+    //! nEnforcedMinFee, when nonzero, sets a fee floor above the normal size-based fee
+    //! (e.g. splitunspent's per-piece fee). The fee can still rise above it if required.
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
-                           const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false);
+                           const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,
+                           int64_t nEnforcedMinFee = 0);
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl = nullptr,
-                           bool change_back_to_input_address = false);
+                           bool change_back_to_input_address = false, int64_t nEnforcedMinFee = 0);
     bool CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet,
                            const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false);
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);

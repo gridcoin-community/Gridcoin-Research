@@ -6,6 +6,7 @@
 #include "chainparams.h"
 #include "init.h"
 #include "main.h"
+#include "miner.h"
 #include "net_processing.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
@@ -1103,34 +1104,44 @@ static const RPCHelpMan splitunspent_help{
     "sent back to the same address. Any remainder is returned to the same address as change, so the\n"
     "entire balance stays on the address. This is the inverse of consolidateunspent.\n"
     "\n"
-    "Exactly one of piece_size and piece_count must be provided (nonzero); pass 0 for the one not used.\n"
+    "At most one of piece_size and piece_count may be provided (nonzero); pass 0 for the one not used.\n"
     "With piece_size, the balance is split into as many pieces of that value as fit after the fee.\n"
-    "With piece_count, the balance less the fee is divided into that many equal pieces. In both modes\n"
-    "a small additional change UTXO may be created holding the remainder.\n"
+    "With piece_count, the balance less the fee is divided into that many equal pieces. With neither,\n"
+    "pieces are sized to the efficiency-optimal stake output value for the current network difficulty,\n"
+    "the same size stake splitting (-enablestakesplit) would produce. In all modes a small additional\n"
+    "change UTXO may be created holding the remainder.\n"
     "\n"
-    "The fee is paid once for the whole transaction and taken from the remainder, never from the pieces.\n"
-    "Pieces must be at least 0.01 GRC. The address must hold no more UTXOs than the single-transaction\n"
-    "input limit (see consolidateunspent to reduce the UTXO count first).",
+    "Pieces must be at least the stake-split minimum: the greater of -minstakesplitvalue and 800 GRC,\n"
+    "applied whether or not stake splitting is enabled. The staker never splits below this size, so\n"
+    "smaller pieces only bloat the UTXO set. The fee is the greater of the normal size-based fee and\n"
+    "one transaction fee (-paytxfee, default 0.001 GRC) per piece, the same total as splitting the\n"
+    "pieces off one at a time; it is taken from the remainder, never from the pieces. At most 599\n"
+    "pieces are created per call, one less than the consolidation input limit, so a split plus its\n"
+    "change output remains reversible by a single consolidateunspent. The address must hold no more\n"
+    "UTXOs than the single-transaction input limit (see consolidateunspent to reduce the UTXO count\n"
+    "first).",
     {
         {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
             "The Gridcoin address whose UTXOs will be split. Pieces and change return to this address."},
         {"piece_size", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
-            "Target value of each piece. 0 (or omitted) means unset; use piece_count instead."},
+            "Target value of each piece. 0 (or omitted) means unset; use piece_count or the optimal-size default."},
         {"piece_count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-            "Number of pieces to create. 0 (or omitted) means unset; use piece_size instead."},
+            "Number of pieces to create. 0 (or omitted) means unset; use piece_size or the optimal-size default."},
     },
     RPCResult{RPCResult::Type::OBJ, "", "",
         {
-            {RPCResult::Type::BOOL, "result", "True if a split transaction was created."},
+            {RPCResult::Type::BOOL, "result", "True if a split transaction was created; false with only "
+                                              "utxos_swept when there is nothing to split."},
             {RPCResult::Type::NUM, "utxos_swept", "Number of UTXOs consumed as inputs."},
-            {RPCResult::Type::NUM, "pieces_created", "Number of uniform pieces created."},
-            {RPCResult::Type::STR_AMOUNT, "piece_value", "Value of each piece."},
-            {RPCResult::Type::STR_AMOUNT, "change_value", "Remainder returned to the address as change."},
-            {RPCResult::Type::STR_AMOUNT, "fee", "Fee paid for the whole transaction."},
-            {RPCResult::Type::STR_HEX, "txid", "Transaction id."},
+            {RPCResult::Type::NUM, "pieces_created", /*optional=*/true, "Number of uniform pieces created."},
+            {RPCResult::Type::STR_AMOUNT, "piece_value", /*optional=*/true, "Value of each piece."},
+            {RPCResult::Type::STR_AMOUNT, "change_value", /*optional=*/true, "Remainder returned to the address as change."},
+            {RPCResult::Type::STR_AMOUNT, "fee", /*optional=*/true, "Fee paid for the whole transaction."},
+            {RPCResult::Type::STR_HEX, "txid", /*optional=*/true, "Transaction id."},
         }},
     RPCExamples{
-        HelpExampleCli("splitunspent", "\"<address>\" 100") +
+        HelpExampleCli("splitunspent", "\"<address>\"") +
+        HelpExampleCli("splitunspent", "\"<address>\" 1000") +
         HelpExampleCli("splitunspent", "\"<address>\" 0 10") +
         HelpExampleRpc("splitunspent", "\"<address>\", 0, 10")},
 };
@@ -1162,19 +1173,13 @@ UniValue splitunspent(const UniValue& params)
 
     if (nPieceCount < 0)
     {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "piece_count must be positive.");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "piece_count cannot be negative.");
     }
 
-    if ((nPieceSize != 0) == (nPieceCount != 0))
+    if (nPieceSize != 0 && nPieceCount != 0)
     {
         throw JSONRPCError(RPC_INVALID_PARAMETER,
-                           "Exactly one of piece_size and piece_count must be provided (nonzero).");
-    }
-
-    if (nPieceSize != 0 && nPieceSize < CENT)
-    {
-        throw JSONRPCError(RPC_INVALID_PARAMETER,
-                           strprintf("piece_size must be at least %s GRC.", FormatMoney(CENT)));
+                           "At most one of piece_size and piece_count may be provided (nonzero).");
     }
 
     CScript scriptDestPubKey;
@@ -1184,6 +1189,31 @@ UniValue splitunspent(const UniValue& params)
 
     // Have to lock both main and wallet.
     LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // The stake-split minimum and the efficiency-optimal stake output size for current network
+    // conditions. These honor -minstakesplitvalue and -stakingefficiency (with their floors and
+    // clamps) whether or not stake splitting is enabled.
+    int64_t nMinPieceSize = 0;
+    double dEfficiency = 0;
+    const int64_t nOptimalPieceSize = GetOptimalStakeSplitValue(nMinPieceSize, dEfficiency);
+
+    // With neither piece_size nor piece_count given, split at the optimal size.
+    const bool fOptimalSizeMode = (nPieceSize == 0 && nPieceCount == 0);
+
+    if (fOptimalSizeMode)
+    {
+        nPieceSize = nOptimalPieceSize;
+    }
+    else if (nPieceSize != 0 && nPieceSize < nMinPieceSize)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           strprintf("piece_size must be at least %s GRC, the greater of -minstakesplitvalue and "
+                                     "the stake-split minimum of %s GRC. The staker never splits UTXOs below this "
+                                     "size; smaller pieces only bloat the UTXO set. Omit both piece_size and "
+                                     "piece_count to split at the current efficiency-optimal size of %s GRC.",
+                                     FormatMoney(nMinPieceSize), FormatMoney(MIN_STAKE_SPLIT_VALUE_GRC * COIN),
+                                     FormatMoney(nOptimalPieceSize)));
+    }
 
     // Get the current UTXO's. The defaults exclude immature and currently staking coins.
     pwalletMain->AvailableCoins(vecInputs, false, nullptr, false);
@@ -1263,9 +1293,12 @@ UniValue splitunspent(const UniValue& params)
     const int64_t nBytesPerOutput = 34;
 
     // The maximum number of pieces that fit in a standard transaction, holding back a 5000 byte safety
-    // margin and one output slot for the change output.
+    // margin and one output slot for the change output, and capped at one less than the consolidation
+    // input limit so that the pieces plus the change output remain reversible by a single
+    // consolidateunspent.
     const int64_t nMaxPieces =
-        ((int64_t) MAX_STANDARD_TX_SIZE - 5000 - nBaseOverhead - (int64_t) nBytesInputs) / nBytesPerOutput - 1;
+        std::min(((int64_t) MAX_STANDARD_TX_SIZE - 5000 - nBaseOverhead - (int64_t) nBytesInputs) / nBytesPerOutput - 1,
+                 (int64_t) GetMaxInputsForConsolidationTxn() - 1);
 
     if (nMaxPieces < 1)
     {
@@ -1287,6 +1320,13 @@ UniValue splitunspent(const UniValue& params)
         return std::max(nMinFee, nFee);
     };
 
+    // Fee for a split into nOutputs pieces: the greater of the size-based fee for the whole transaction
+    // and one transaction fee per piece, the same total fee as splitting each piece off with its own
+    // transaction, so batching carries no fee discount.
+    const auto FeeForPieces = [&](int64_t nOutputs) {
+        return std::max(FeeForOutputs(nOutputs), nOutputs * nTransactionFee);
+    };
+
     // One extra fee tier is deliberately left in the change so that if CreateTransaction internally
     // raises the fee by a tier, the change absorbs it rather than going negative and aborting.
     const int64_t nFeeSlack = nTransactionFee;
@@ -1300,19 +1340,28 @@ UniValue splitunspent(const UniValue& params)
         // clamp must be applied in BOTH passes.
         nPieces = std::min(nAmount / nPieceSize, nMaxPieces);
 
-        nFeeRequired = FeeForOutputs(nPieces);
+        nFeeRequired = FeeForPieces(nPieces);
 
         nPieces = std::min((nAmount - nFeeRequired - nFeeSlack) / nPieceSize, nMaxPieces);
 
         if (nPieces < 1)
         {
+            if (fOptimalSizeMode)
+            {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                                   strprintf("The spendable balance on the address (%s) is already at or below the "
+                                             "efficiency-optimal UTXO size of %s GRC for current network conditions. "
+                                             "There is nothing to split.",
+                                             FormatMoney(nAmount), FormatMoney(nPieceSize)));
+            }
+
             throw JSONRPCError(RPC_INVALID_PARAMETER,
                                strprintf("The spendable balance on the address (%s) is too small to create one piece "
                                          "of %s after the fee.", FormatMoney(nAmount), FormatMoney(nPieceSize)));
         }
 
         // Recompute with the final (equal or smaller) piece count. The fee only shrinks here.
-        nFeeRequired = FeeForOutputs(nPieces);
+        nFeeRequired = FeeForPieces(nPieces);
     }
     else
     {
@@ -1322,20 +1371,32 @@ UniValue splitunspent(const UniValue& params)
         if (nPieces > nMaxPieces)
         {
             throw JSONRPCError(RPC_INVALID_PARAMETER,
-                               strprintf("piece_count %" PRId64 " exceeds the maximum of %" PRId64 " pieces that fit "
-                                         "in a single transaction with these inputs.", nPieces, nMaxPieces));
+                               strprintf("piece_count %" PRId64 " exceeds the maximum of %" PRId64 " pieces for a "
+                                         "single split with these inputs. The count is limited by the standard "
+                                         "transaction size and capped at one less than the consolidation input "
+                                         "limit, so that the pieces plus the change output remain reversible by a "
+                                         "single consolidateunspent.", nPieces, nMaxPieces));
         }
 
-        nFeeRequired = FeeForOutputs(nPieces);
+        nFeeRequired = FeeForPieces(nPieces);
+
+        if (nAmount <= nFeeRequired + nFeeSlack)
+        {
+            throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS,
+                               strprintf("The spendable balance on the address (%s) does not cover the transaction "
+                                         "fee (%s).", FormatMoney(nAmount), FormatMoney(nFeeRequired + nFeeSlack)));
+        }
 
         nPieceSize = (nAmount - nFeeRequired - nFeeSlack) / nPieces;
 
-        if (nPieceSize < CENT)
+        if (nPieceSize < nMinPieceSize)
         {
             throw JSONRPCError(RPC_INVALID_PARAMETER,
                                strprintf("Splitting the spendable balance on the address (%s) into %" PRId64 " pieces "
-                                         "results in pieces below the minimum of %s GRC.",
-                                         FormatMoney(nAmount), nPieces, FormatMoney(CENT)));
+                                         "results in pieces below the minimum piece size of %s GRC. The largest "
+                                         "viable piece_count is %" PRId64 ".",
+                                         FormatMoney(nAmount), nPieces, FormatMoney(nMinPieceSize),
+                                         (nAmount - nFeeRequired - nFeeSlack) / nMinPieceSize));
         }
     }
 
@@ -1353,7 +1414,11 @@ UniValue splitunspent(const UniValue& params)
     // Send the change (remainder plus fee slack) back to the same address.
     coinControl.destChange = SplitAddress;
 
-    if (!pwalletMain->CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRequired, &coinControl))
+    // The per-piece fee is enforced as a fee floor; CreateTransaction can still raise the fee
+    // above it if the size-based fee requires, with the slack left in the change absorbing it.
+    if (!pwalletMain->CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRequired, &coinControl,
+                                        /*change_back_to_input_address=*/false,
+                                        /*nEnforcedMinFee=*/nPieces * nTransactionFee))
     {
         throw JSONRPCError(RPC_WALLET_ERROR, "Error: Transaction creation failed.");
     }
