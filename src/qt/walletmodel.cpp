@@ -14,7 +14,7 @@
 #include <cassert>
 
 WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource& tx_source,
-                         CWallet* core_wallet, OptionsModel* optionsModel, QObject* parent)
+                         OptionsModel* optionsModel, QObject* parent)
          : QObject(parent)
          , m_wallet(wallet)
          , m_tx_source(tx_source)
@@ -37,7 +37,7 @@ WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource&
     // quiesces the worker and rebuilds from the wallet, so any event enqueued in
     // the window between source creation and this snapshot is superseded by the
     // rebuild.
-    transactionTableModel = new TransactionTableModel(core_wallet, this);
+    transactionTableModel = new TransactionTableModel(this);
 
     // Drain the producer→GUI event stream at a steady cadence. 500ms is
     // imperceptible for transaction-list updates while still giving the

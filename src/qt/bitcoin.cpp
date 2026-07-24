@@ -681,7 +681,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 }
 
                 ClientModel clientModel(*node, *staking_status, &optionsModel);
-                WalletModel walletModel(*wallet, *wallet_tx_source, pwalletMain, &optionsModel);
+                WalletModel walletModel(*wallet, *wallet_tx_source, &optionsModel);
                 ResearcherModel researcherModel(*researcher_context);
                 MRCModel mrcModel(*mrc, &walletModel, &clientModel, &researcherModel);
                 VotingModel votingModel(*voting_manager, *researcher_context, clientModel, optionsModel, walletModel);

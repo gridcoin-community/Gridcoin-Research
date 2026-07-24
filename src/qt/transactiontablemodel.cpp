@@ -39,13 +39,11 @@ static int column_alignments[] = {
 class TransactionTablePriv
 {
 public:
-    TransactionTablePriv(CWallet *wallet, WalletModel *walletModel, TransactionTableModel *parent):
-            wallet(wallet),
+    TransactionTablePriv(WalletModel *walletModel, TransactionTableModel *parent):
             walletModel(walletModel),
             parent(parent)
     {
     }
-    CWallet *wallet;
     WalletModel *walletModel;
     TransactionTableModel *parent;
 
@@ -218,11 +216,10 @@ public:
 
 };
 
-TransactionTableModel::TransactionTableModel(CWallet* wallet, WalletModel *parent):
+TransactionTableModel::TransactionTableModel(WalletModel *parent):
         QAbstractTableModel(parent),
-        wallet(wallet),
         walletModel(parent),
-        priv(new TransactionTablePriv(wallet, walletModel, this))
+        priv(new TransactionTablePriv(walletModel, this))
 {
     columns << QString() << tr("Date") << tr("Type") << tr("Address") << tr("Amount");
 

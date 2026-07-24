@@ -14,7 +14,6 @@
 class OptionsModel;
 class AddressTableModel;
 class TransactionTableModel;
-class CWallet;
 class CKeyID;
 class CPubKey;
 class COutPoint;
@@ -43,12 +42,12 @@ public:
     //! boundary (Phase 1c-i); the windowed tx-table store/event-queue
     //! machinery is reached through the interfaces::WalletTxSource boundary
     //! (Phase 1c-ii), which the model does not own — it is created node-side
-    //! (interfaces::Init::makeWalletTxSource) and must outlive the model. The
-    //! raw CWallet* leg now feeds only the address-table and
-    //! transaction-table sub-model constructors, which migrate in a later
-    //! phase — do not add new uses.
+    //! (interfaces::Init::makeWalletTxSource) and must outlive the model. No
+    //! raw CWallet* leg remains: every core interaction crosses one of the two
+    //! interface boundaries, so the model carries nothing that would prevent it
+    //! running in a separate process from the wallet (Phase 2).
     explicit WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource& tx_source,
-                         CWallet* core_wallet, OptionsModel* optionsModel,
+                         OptionsModel* optionsModel,
                          QObject* parent = nullptr);
     ~WalletModel();
 
