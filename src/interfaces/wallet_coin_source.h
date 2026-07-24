@@ -48,9 +48,11 @@ class WalletCoinSource
 public:
     virtual ~WalletCoinSource() = default;
 
-    //! Register a per-view cursor with a display mode and sort. The first
-    //! registration on a cold source triggers the initial wallet scan (see
-    //! reloadAndSnapshot). Re-registering an existing view_id replaces it and
+    //! Register a per-view cursor with a display mode and sort. Registration
+    //! over a not-yet-loaded store is valid and yields empty scopes until
+    //! reloadAndSnapshot's Reset arrives — consumers run the initial scan off
+    //! the paint path (typically a one-shot load thread) and render a loading
+    //! state meanwhile. Re-registering an existing view_id replaces it and
     //! pushes a CoinReset. \p view_id is one of the GRC::VIEW_COIN_*
     //! identifiers; \p sort_column is a GRC::CoinSortColumn.
     virtual void registerView(int view_id, GRC::CoinViewMode mode,
@@ -135,6 +137,11 @@ public:
     //! Pull up to \p max_batch pending events in seqno order. Destructive;
     //! called ONLY by the single WalletModel drain point (see class comment).
     virtual std::vector<GRC::WalletCoinEvent> drainEvents(std::size_t max_batch) = 0;
+
+    //! True (once) after a bulk wallet mutation pass (rescan / reaccept)
+    //! bypassed per-tx notifications. The drain point polls this and
+    //! schedules reloadAndSnapshot off the paint path.
+    virtual bool consumeNeedsResync() = 0;
 
     //! GUI up-channel: an address-book entry changed. Labeling an own address
     //! flips IsChange for its outputs, so beyond re-snapshotting labels this

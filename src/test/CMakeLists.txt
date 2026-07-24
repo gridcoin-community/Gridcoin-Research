@@ -101,6 +101,11 @@ add_executable(test_gridcoin
     # reach them at all. This one drives the real coinstake NotAccepted -> flip-in
     # path against pwalletMain and a mock chain (#3257).
     qt_wallettxstore_chain_tests.cpp
+    # Coin-store worker / double-queue (src/wallet/walletcoinstore.cpp) unit
+    # suite (#3183): upsert diffing, suppress-when-unwatched, the validated
+    # selection mirror, and the value-filter parity semantics. Core lives in
+    # gridcoin_util, so only the suite is listed here (GUI-OFF).
+    qt_walletcoinstore_tests.cpp
     # Transport helpers (src/ipc/process.cpp). Also Cap'n Proto-free. Needed here
     # because on WIN32 handshake.cpp's WriteFileAtomic calls MakeOwnerOnlyDacl /
     # ApplyOwnerOnlyDacl (defined at process.cpp:587,607) to create the cookie with

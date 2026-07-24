@@ -268,7 +268,9 @@ add_library(gridcoin_util STATIC
     wallet/txfilter.cpp
     wallet/txorder.cpp
     wallet/wallet.cpp
+    wallet/wallet_coin_source.cpp
     wallet/wallet_tx_source.cpp
+    wallet/walletcoinstore.cpp
     wallet/walletdb.cpp
     wallet/wallettxstore.cpp
     wallet/walletutil.cpp

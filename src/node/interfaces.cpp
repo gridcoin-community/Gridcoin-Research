@@ -21,6 +21,7 @@
 #include "interfaces/staking.h"
 #include "interfaces/voting.h"
 #include "interfaces/wallet.h"
+#include "interfaces/wallet_coin_source.h"
 #include "interfaces/wallet_tx_source.h"
 #include "chain.h"
 #include "net.h"
@@ -521,6 +522,11 @@ public:
     std::shared_ptr<WalletTxSource> makeWalletTxSource() override
     {
         return pwalletMain ? MakeWalletTxSource(pwalletMain) : nullptr;
+    }
+
+    std::shared_ptr<WalletCoinSource> makeWalletCoinSource() override
+    {
+        return pwalletMain ? MakeWalletCoinSource(pwalletMain) : nullptr;
     }
 };
 
