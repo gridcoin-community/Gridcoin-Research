@@ -12,6 +12,7 @@
 #include <ipc/capnp/node.capnp.proxy-types.h>
 #include <ipc/capnp/staking.capnp.proxy-types.h>
 #include <ipc/capnp/wallet.capnp.proxy-types.h>
+#include <ipc/capnp/wallet_tx_source.capnp.proxy-types.h>
 
 #include <ipc/capnp/init.capnp.proxy.h>
 
@@ -25,6 +26,8 @@
 #include <mp/type-decay.h>
 #include <mp/type-interface.h>
 #include <mp/type-number.h>
+// makeWalletTxSource returns a std::shared_ptr<WalletTxSource> capability.
+#include <mp/type-pointer.h>
 #include <mp/type-string.h>
 #include <mp/type-struct.h>
 #include <mp/type-threadmap.h>
