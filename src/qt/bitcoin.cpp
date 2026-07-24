@@ -31,6 +31,9 @@
 #include "interfaces/wallet_tx_source.h"
 #include "init.h"
 #include "node/shutdown.h"
+#ifdef ENABLE_MULTIPROCESS
+#include "ipc/connect.h"
+#endif
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
 #include "txdb.h"
@@ -592,21 +595,69 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
         GUILogPrintf("Starting Gridcoin");
 
-        if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
+        // Process topology (doc/multiprocess_design.md). The monolithic build
+        // runs core init in this process (ThreadAppInit2 -> AppInit2) and wraps
+        // the in-process core with a local Init. The multiprocess build
+        // (-multiprocess) runs no core here: it connects to a separately-started
+        // gridcoinresearchd, which runs the core and serves the interfaces over
+        // IPC, and drives the models through that remote Init.
+        const bool multiprocess = gArgs.GetBoolArg("-multiprocess", false);
+
+        // Owns the interface factory the models below consume core state through
+        // -- the local in-process Init in the monolith, the remote node's Init
+        // in the multiprocess build. `interface_init` points at whichever is in
+        // use; its owner (declared here) outlives every model constructed below.
+        std::unique_ptr<interfaces::Init> local_init;
+#ifdef ENABLE_MULTIPROCESS
+        std::optional<ipc::GuiConnection> node_connection;
+#endif
+        interfaces::Init* interface_init = nullptr;
+
+        if (multiprocess)
         {
-                GUILogPrintf("Error; NewThread(ThreadAppInit2) failed");
+#ifdef ENABLE_MULTIPROCESS
+            // MakeIpc needs an Init even for a connect-only client (it is the
+            // Init this process would serve if it listened, which the GUI never
+            // does); the local one wraps globals and is cheap. It must outlive
+            // node_connection, so it is declared first.
+            local_init = interfaces::MakeGridcoinInit();
+            std::string ipc_error;
+            node_connection = ipc::ConnectToNode(GetDataDir(), *local_init, ipc_error);
+            if (!node_connection)
+            {
+                ThreadSafeMessageBox(strprintf("Could not connect to the Gridcoin daemon: %s\n", ipc_error),
+                        "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+                QMessageBox::critical(nullptr, PACKAGE_NAME,
+                        QObject::tr("Could not connect to the Gridcoin daemon:\n%1").arg(QString::fromStdString(ipc_error)));
                 return EXIT_FAILURE;
+            }
+            interface_init = node_connection->init.get();
+#else
+            ThreadSafeMessageBox("This build was compiled without multiprocess (IPC) support.\n",
+                    "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+            QMessageBox::critical(nullptr, PACKAGE_NAME,
+                    QObject::tr("This build was compiled without multiprocess (IPC) support."));
+            return EXIT_FAILURE;
+#endif
         }
         else
         {
+            if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
+            {
+                GUILogPrintf("Error; NewThread(ThreadAppInit2) failed");
+                return EXIT_FAILURE;
+            }
             // The monolithic-build interface implementations that the models
             // consume core state through (doc/multiprocess_design.md). Created
             // here, before the readiness wait, so the GUI polls
             // interface_init->isCoreReady() rather than the raw
             // bGridcoinCoreInitComplete global; it outlives every model
             // constructed below.
-            std::unique_ptr<interfaces::Init> interface_init = interfaces::MakeGridcoinInit();
+            local_init = interfaces::MakeGridcoinInit();
+            interface_init = local_init.get();
+        }
 
+        {
              //10-31-2015
             while (!interface_init->isCoreReady())
             {
@@ -766,9 +817,16 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 window.setPSGTPoolContext(nullptr);
                 guiref = nullptr;
             }
-            // Shutdown the core and its threads, but don't exit Bitcoin-Qt here
-            GUILogPrintf("Main calling Shutdown...");
-            Shutdown(nullptr);
+            // Shut down the core and its threads (but don't exit Bitcoin-Qt
+            // here). Only in the monolithic build: there the core runs in this
+            // process. In the multiprocess build the core lives in the daemon
+            // and manages its own lifetime; the GUI merely drops its connection
+            // (node_connection's destructor) as the stack unwinds.
+            if (!multiprocess)
+            {
+                GUILogPrintf("Main calling Shutdown...");
+                Shutdown(nullptr);
+            }
         }
 
     }

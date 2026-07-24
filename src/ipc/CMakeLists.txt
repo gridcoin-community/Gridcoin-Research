@@ -25,6 +25,7 @@ add_library(gridcoin_ipc STATIC EXCLUDE_FROM_ALL
     interfaces.cpp
     handshake.cpp
     serve_init.cpp
+    connect.cpp
     capnp/protocol.cpp
 )
 
