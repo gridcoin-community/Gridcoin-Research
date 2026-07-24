@@ -28,6 +28,7 @@
 #include "interfaces/ipc.h"
 #include "ipc/handshake.h"
 #include "ipc/serve_init.h"
+#include <atomic>
 #include <memory>
 #endif
 
@@ -37,6 +38,11 @@
 #include <stdexcept>
 
 extern bool fQtActive;
+// Set true at the end of core init. The GUI sets it via ThreadAppInit2; the
+// daemon runs AppInit2 directly, so it sets it here (below) -- otherwise a
+// multiprocess GUI's isCoreReady() poll, served from this process, never
+// returns true and the GUI hangs on the splash.
+extern std::atomic<bool> bGridcoinCoreInitComplete;
 
 #if HAVE_DECL_FORK
 
@@ -299,6 +305,11 @@ bool AppInit(int argc, char* argv[])
     }
 
     if (fRet) {
+        // Core init succeeded. ThreadAppInit2 (the GUI's init wrapper) sets this
+        // for the monolith; the daemon calls AppInit2 directly, so set it here so
+        // a multiprocess GUI's isCoreReady() (served from this process) returns
+        // true once the core is up.
+        bGridcoinCoreInitComplete = true;
 #ifdef ENABLE_MULTIPROCESS
         // Multiprocess (RFC #2937): after core init, optionally listen on the
         // AF_UNIX socket and serve the interfaces::Init to an attached GUI. The
