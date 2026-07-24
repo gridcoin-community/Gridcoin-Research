@@ -123,7 +123,14 @@ public:
             const int bind_errno = errno;
             ::umask(old_umask);
             if (rc == 0) {
-                ::chmod(path.string().c_str(), 0600); // belt-and-suspenders
+                // Belt-and-suspenders after the umask above. Fail closed: if the
+                // socket cannot be confirmed 0600, refuse to serve rather than
+                // leave the wallet IPC socket potentially accessible.
+                if (::chmod(path.string().c_str(), 0600) != 0) {
+                    const int chmod_errno = errno;
+                    ::close(fd);
+                    throw std::system_error(chmod_errno, std::system_category());
+                }
                 return fd;
             }
             ::close(fd);

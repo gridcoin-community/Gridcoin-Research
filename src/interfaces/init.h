@@ -32,7 +32,7 @@ class WalletTxSource;
 //! snapshot; crosses the IPC boundary.
 struct BuildInfo
 {
-    std::string git_commit;      //!< BUILD_GIT_COMMIT (may carry a -dirty suffix).
+    std::string git_commit;      //!< FormatFullVersion(): client version + git commit (with a -dirty suffix when the tree is modified).
     std::string built_at;        //!< Build timestamp (informational, About dialog).
     uint32_t schema_major = 0;   //!< Cap'n Proto schema major (wire compatibility).
     uint32_t schema_minor = 0;

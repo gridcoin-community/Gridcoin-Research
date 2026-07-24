@@ -141,7 +141,9 @@ interfaces::NodeIdentity WriteIdentity(const fs::path& dir)
     interfaces::NodeIdentity id;
     id.node_id = node_id;
     id.network = Params().NetworkIDString();
-    id.datadir = GetDataDir().string();
+    // Record the directory this identity file actually lives in (the caller's
+    // dir), not the process-global GetDataDir(), so the two cannot diverge.
+    id.datadir = dir.string();
     id.genesis_hash = Params().GetConsensus().hashGenesisBlock.ToString();
 
     UniValue obj(UniValue::VOBJ);
