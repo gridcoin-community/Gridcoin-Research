@@ -3,12 +3,14 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 // GUI-OFF unit coverage for the Qt-free wallet event queue
-// (src/wallet/wallet_event_queue.{h,cpp}), the MPSC intake the producer-side
-// WalletTxStore uses to hand position-stamped events to the consumer. The queue
-// has zero Qt dependencies, so it compiles into the GUI-OFF test binary
-// directly. These exercise the drain/ordering semantics and the multi-producer
-// seqno density contract the eventual multiprocess consumer relies on.
+// (src/wallet/wallet_event_queue.h, a header-only template shared by the tx
+// and coin channels), the MPSC intake the producer-side stores use to hand
+// position-stamped events to the consumer. The queue has zero Qt dependencies,
+// so it compiles into the GUI-OFF test binary directly. These exercise the
+// drain/ordering semantics and the multi-producer seqno density contract the
+// eventual multiprocess consumer relies on.
 
+#include <interfaces/wallet_coin_source.h> // compile pin for the coin-channel boundary header
 #include <wallet/wallet_event_queue.h>
 
 #include <boost/test/unit_test.hpp>
@@ -109,6 +111,34 @@ BOOST_AUTO_TEST_CASE(drainPartialBatch)
     BOOST_CHECK_EQUAL(rest.size(), static_cast<std::size_t>(7));
     BOOST_CHECK_EQUAL(rest[0].seqno, static_cast<uint64_t>(3));
     BOOST_CHECK_EQUAL(rest[6].seqno, static_cast<uint64_t>(9));
+}
+
+BOOST_AUTO_TEST_CASE(coinChannelAliasInstantiates)
+{
+    // The coin channel's instantiation of the shared template
+    // (issue #3183): push/drain/clear round-trip with coin payloads, and
+    // clear() preserving seqno monotonicity (required by the coin channel's
+    // reseed-from-high-water reconciliation).
+    GRC::WalletCoinEventQueue q;
+
+    q.push(GRC::CoinDepthRefreshPayload{2771000});
+    q.push(GRC::CoinRowsRemovedPayload{GRC::VIEW_COIN_CONTROL, 0, "", 0, 1, {}});
+
+    auto batch = q.drain();
+    BOOST_CHECK_EQUAL(batch.size(), static_cast<std::size_t>(2));
+    BOOST_CHECK(std::holds_alternative<GRC::CoinDepthRefreshPayload>(batch[0].payload));
+    BOOST_CHECK(std::holds_alternative<GRC::CoinRowsRemovedPayload>(batch[1].payload));
+    BOOST_CHECK_EQUAL(batch[0].seqno, static_cast<uint64_t>(0));
+    BOOST_CHECK_EQUAL(batch[1].seqno, static_cast<uint64_t>(1));
+
+    q.push(GRC::CoinResetPayload{GRC::VIEW_COIN_CONTROL, 1});
+    BOOST_CHECK_EQUAL(q.size(), static_cast<std::size_t>(1));
+    q.clear();
+    BOOST_CHECK_EQUAL(q.size(), static_cast<std::size_t>(0));
+
+    // Seqnos continue past both the drain and the clear.
+    const uint64_t next = q.push(GRC::CoinDepthRefreshPayload{2771001});
+    BOOST_CHECK_EQUAL(next, static_cast<uint64_t>(3));
 }
 
 BOOST_AUTO_TEST_CASE(multiProducerSeqnosAreUniqueAndDense)
