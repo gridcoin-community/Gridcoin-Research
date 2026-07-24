@@ -451,7 +451,11 @@ int main(int argc, char *argv[])
     // but that is too late.
     fs::path dataDir = GetDataDir();
 
-    if (!LockDirectory(dataDir, ".lock", false)) {
+    // In multiprocess mode the core runs in a separate gridcoinresearchd, which
+    // owns the datadir and already holds this lock; the GUI runs no core, so it
+    // must not contend for the lock (it would always fail against the running
+    // daemon). The short-circuit skips LockDirectory entirely in that mode.
+    if (!gArgs.GetBoolArg("-multiprocess", false) && !LockDirectory(dataDir, ".lock", false)) {
         std::string str = strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running "
                                       "and using that directory."),
                                     dataDir, PACKAGE_NAME);
