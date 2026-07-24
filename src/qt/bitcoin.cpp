@@ -29,6 +29,7 @@
 #include "interfaces/staking.h"
 #include "interfaces/voting.h"
 #include "interfaces/wallet.h"
+#include "interfaces/wallet_coin_source.h"
 #include "interfaces/wallet_tx_source.h"
 #include "init.h"
 #include "node/shutdown.h"
@@ -1410,6 +1411,16 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 if (!wallet_tx_source) {
                     throw std::runtime_error("wallet tx source unavailable after init");
                 }
+                // The windowed coin-control source (#3183): same ownership and
+                // teardown contract as the tx source. Construction is cheap —
+                // the initial wallet scan runs lazily on WalletModel's
+                // one-shot load thread at first dialog open, and the store
+                // stays warm (but silent) between dialog opens.
+                std::shared_ptr<interfaces::WalletCoinSource> wallet_coin_source =
+                    interface_init->makeWalletCoinSource();
+                if (!wallet_coin_source) {
+                    throw std::runtime_error("wallet coin source unavailable after init");
+                }
                 // The Manual Research Claim interface over the node's wallet
                 // (Phase 1d-i). Owned here so it outlives the MRCModel that
                 // drives it.
@@ -1443,7 +1454,8 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 }
 
                 ClientModel clientModel(*node, *staking_status, &optionsModel);
-                WalletModel walletModel(*wallet, *wallet_tx_source, &optionsModel);
+                WalletModel walletModel(*wallet, *wallet_tx_source, *wallet_coin_source,
+                                        &optionsModel);
                 ResearcherModel researcherModel(*researcher_context);
                 MRCModel mrcModel(*mrc, &walletModel, &clientModel, &researcherModel);
                 VotingModel votingModel(*voting_manager, *researcher_context, clientModel, optionsModel, walletModel);

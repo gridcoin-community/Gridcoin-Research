@@ -37,6 +37,8 @@ add_library(gridcoinqt STATIC
     clientmodel.cpp
     coincontroldialog.cpp
     coincontroltreewidget.cpp
+    coinselectionmodel.cpp
+    coinselectionview.cpp
     consolidateunspentdialog.cpp
     consolidateunspentwizard.cpp
     consolidateunspentwizardselectdestinationpage.cpp

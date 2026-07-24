@@ -3,13 +3,15 @@
 
 #include <QObject>
 #include <map>
+#include <thread>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "interfaces/wallet.h"
-#include "qt/notificationlifetime.h"
+#include "interfaces/wallet_coin_source.h"
 #include "interfaces/wallet_tx_source.h"
+#include "qt/notificationlifetime.h"
 #include "support/allocators/secure.h" /* for SecureString */
 
 class OptionsModel;
@@ -42,12 +44,15 @@ public:
     //! The query/command surface goes through the interfaces::Wallet
     //! boundary (Phase 1c-i); the windowed tx-table store/event-queue
     //! machinery is reached through the interfaces::WalletTxSource boundary
-    //! (Phase 1c-ii), which the model does not own — it is created node-side
-    //! (interfaces::Init::makeWalletTxSource) and must outlive the model. No
-    //! raw CWallet* leg remains: every core interaction crosses one of the two
-    //! interface boundaries, so the model carries nothing that would prevent it
-    //! running in a separate process from the wallet (Phase 2).
+    //! (Phase 1c-ii) and the windowed coin-control store through
+    //! interfaces::WalletCoinSource (#3183) — neither is owned by the model:
+    //! both are created node-side (interfaces::Init::makeWalletTxSource /
+    //! makeWalletCoinSource) and must outlive it. No raw CWallet* leg remains:
+    //! every core interaction crosses one of the three interface boundaries, so
+    //! the model carries nothing that would prevent it running in a separate
+    //! process from the wallet (Phase 2).
     explicit WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource& tx_source,
+                         interfaces::WalletCoinSource& coin_source,
                          OptionsModel* optionsModel,
                          QObject* parent = nullptr);
     ~WalletModel();
@@ -187,6 +192,26 @@ public:
     //!
     interfaces::WalletTxSource& txSource() { return m_tx_source; }
 
+    //! The windowed coin-control boundary (#3183). Same ownership contract as
+    //! txSource(): created node-side (interfaces::Init::makeWalletCoinSource)
+    //! and outlives this model.
+    interfaces::WalletCoinSource& coinSource() { return m_coin_source; }
+
+    //! Drain the coin-channel event queue and fan the batch out via
+    //! coinEventsDrained. THE single drain point for the coin channel:
+    //! drainEvents is destructive, and the consolidate-wizard flow can have
+    //! two live coin views — per-consumer drain timers would steal each
+    //! other's events. Driven by the periodic tick; also called synchronously
+    //! by CoinSelectionModel's fetch/sort paths.
+    void drainCoinEventQueue();
+
+    //! Run the coin store's initial wallet scan (reloadAndSnapshot) on a
+    //! one-shot load thread — never the GUI thread: the scan holds
+    //! cs_main + cs_wallet and is O(wallet). Idempotent unless \p force
+    //! (the bulk-resync path). Completion arrives as the store's CoinReset
+    //! through the normal drain.
+    void ensureCoinSourceLoaded(bool force = false);
+
     //! Kick an immediate (next-event-loop-turn) event-queue drain, so a
     //! user-initiated cursor change (a windowed-view filter/sort) is reflected
     //! without waiting for the periodic drain tick (windowed-model PR4-fix D).
@@ -200,6 +225,16 @@ private:
     //! source is created node-side (interfaces::Init::makeWalletTxSource) and
     //! outlives this model; the model only drives it.
     interfaces::WalletTxSource& m_tx_source;
+
+    //! The windowed coin-control boundary (#3183). Not owned (see coinSource()).
+    interfaces::WalletCoinSource& m_coin_source;
+
+    //! One-shot coin-store load thread (see ensureCoinSourceLoaded); joined in
+    //! the destructor.
+    std::thread m_coin_load_thread;
+    bool m_coin_load_started = false;
+    //! Reentrancy guard for drainCoinEventQueue (mirrors m_draining).
+    bool m_coin_draining = false;
 
     // Wallet has an options model for wallet-specific options
     // (transaction fee, for example)
@@ -289,6 +324,11 @@ signals:
     //! to the per-view consumers, which filter to their own viewId. Same-thread
     //! (DirectConnection), so the const-ref is passed without a copy.
     void walletEventsDrained(const std::vector<GRC::WalletEvent>& events);
+
+    //! One drained coin-channel batch, fanned out to the coin-selection
+    //! consumers (which filter by their view id). Emitted only from
+    //! drainCoinEventQueue — the coin queue is drained exactly once, there.
+    void coinEventsDrained(const std::vector<GRC::WalletCoinEvent>& events);
 
     // Signal that balance in wallet changed
     void balanceChanged(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);

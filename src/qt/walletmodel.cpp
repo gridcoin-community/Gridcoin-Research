@@ -15,10 +15,12 @@
 #include <string>
 
 WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource& tx_source,
+                         interfaces::WalletCoinSource& coin_source,
                          OptionsModel* optionsModel, QObject* parent)
          : QObject(parent)
          , m_wallet(wallet)
          , m_tx_source(tx_source)
+         , m_coin_source(coin_source)
          , optionsModel(optionsModel)
          , addressTableModel(nullptr)
          , transactionTableModel(nullptr)
@@ -74,6 +76,12 @@ WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource&
 WalletModel::~WalletModel()
 {
     unsubscribeFromCoreSignals();
+
+    // The one-shot coin-store load thread holds only node-side locks; join it
+    // so it never outlives the model that launched it.
+    if (m_coin_load_thread.joinable()) {
+        m_coin_load_thread.join();
+    }
 }
 
 qint64 WalletModel::getBalance() const
@@ -240,6 +248,9 @@ void WalletModel::drainEventQueue()
         // Fan the same batch out to the per-view windowed consumers (OverviewTxModel),
         // which filter to their own viewId. The queue is drained exactly once, here.
         emit walletEventsDrained(events);
+
+        // The coin channel drains on the same tick (its own queue, own guard).
+        drainCoinEventQueue();
 
         // Balance and number of transactions might have changed.
         checkBalanceChanged();
@@ -643,4 +654,49 @@ std::vector<interfaces::WalletOutput> WalletModel::getOutputs(const std::vector<
 std::map<std::string, std::vector<interfaces::WalletOutput>> WalletModel::listCoins() const
 {
     return m_wallet.listCoins();
+}
+
+void WalletModel::drainCoinEventQueue()
+{
+    // Single drain point for the coin channel (drainEvents is destructive and
+    // the consolidate-wizard flow can have two live coin views). Reentrancy
+    // guard mirrors m_draining: the coin-selection fetch/sort paths call this
+    // synchronously and applying a Reset can re-enter.
+    if (m_coin_draining) {
+        return;
+    }
+    m_coin_draining = true;
+    struct CoinDrainGuard { bool& f; ~CoinDrainGuard() { f = false; } } drain_guard{m_coin_draining};
+
+    auto events = m_coin_source.drainEvents(MODEL_EVENT_DRAIN_MAX_BATCH);
+    if (!events.empty()) {
+        emit coinEventsDrained(events);
+    }
+
+    // A rescan/reaccept bypassed per-tx notifications: rebuild the coin store
+    // off the paint path (the flag is one-shot).
+    if (m_coin_source.consumeNeedsResync()) {
+        ensureCoinSourceLoaded(/*force=*/true);
+    }
+}
+
+void WalletModel::ensureCoinSourceLoaded(bool force)
+{
+    if (m_coin_load_started && !force) {
+        return;
+    }
+    // A previous load still in flight: join it first (bounded by the scan
+    // itself; the force path only fires from the rare bulk-resync flag).
+    if (m_coin_load_thread.joinable()) {
+        m_coin_load_thread.join();
+    }
+    m_coin_load_started = true;
+
+    interfaces::WalletCoinSource* source = &m_coin_source;
+    m_coin_load_thread = std::thread([source] {
+        // O(wallet) scan under cs_main + cs_wallet -- the reason this runs on
+        // a one-shot thread and never the GUI thread. Completion arrives as
+        // the CoinReset the reload publishes, through the normal drain.
+        source->reloadAndSnapshot();
+    });
 }
