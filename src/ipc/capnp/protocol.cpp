@@ -52,10 +52,27 @@ public:
         assert(!m_loop);
     }
 
-    std::unique_ptr<interfaces::Init> connect(int fd, const char* exe_name) override
+    std::unique_ptr<interfaces::Init> connect(int fd, const char* exe_name,
+                                              std::function<void()> on_disconnect) override
     {
         startLoop(exe_name);
-        return mp::ConnectStream<messages::Init>(*m_loop, mp::MakeStream(*m_loop, fd));
+        auto client = mp::ConnectStream<messages::Init>(*m_loop, mp::MakeStream(*m_loop, fd));
+        if (on_disconnect && client) {
+            // Register a caller-facing disconnect handler ALONGSIDE ConnectStream's
+            // own (which logs and frees the Connection). Connection::onDisconnect
+            // accumulates handlers and defers each to the EventLoop task set, so
+            // both run as independent tasks; ours only forwards a notification and
+            // never touches the Connection, so it stays safe even after the
+            // internal handler frees it. Registered under m_loop->sync() because
+            // Connection state is owned by the event-loop thread.
+            m_loop->sync([&] {
+                if (client->m_context.connection) {
+                    client->m_context.connection->onDisconnect(
+                        [on_disconnect = std::move(on_disconnect)]() mutable { on_disconnect(); });
+                }
+            });
+        }
+        return client;
     }
 
     void listen(int listen_fd, const char* exe_name, interfaces::Init& init) override

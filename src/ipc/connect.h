@@ -8,6 +8,7 @@
 #include "fs.h"
 #include "interfaces/ipc.h"
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -43,10 +44,14 @@ struct GuiConnection {
 //! sets \p error_out to a human-readable reason. \p local_init is the GUI's own
 //! Init, which MakeIpc requires (the Init this process would serve if it
 //! listened; a connect-only GUI never does) and which must outlive the returned
-//! connection.
+//! connection. If \p on_disconnect is set it is invoked (on the IPC event-loop
+//! thread) when the node drops the connection unexpectedly (crash / SIGKILL, or
+//! a stop that raced the shutdown handshake) — the GUI uses it to quit cleanly
+//! rather than fault on the next call to a now-dead proxy.
 std::optional<GuiConnection> ConnectToNode(const fs::path& data_dir,
                                            interfaces::Init& local_init,
-                                           std::string& error_out);
+                                           std::string& error_out,
+                                           std::function<void()> on_disconnect = {});
 
 } // namespace ipc
 

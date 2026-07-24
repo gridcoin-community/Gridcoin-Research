@@ -49,8 +49,18 @@ OverviewTxModel::~OverviewTxModel()
     // the node-side store stops maintaining a per-view index for a consumer that
     // is gone (Phase 1c-ii-c). m_walletModel — and the WalletTxSource it hands
     // out — outlives this model by the teardown-ordering contract (bitcoin.cpp).
-    if (m_walletModel)
-        m_walletModel->txSource().unregisterView(GRC::VIEW_OVERVIEW);
+    if (m_walletModel) {
+        try {
+            m_walletModel->txSource().unregisterView(GRC::VIEW_OVERVIEW);
+        } catch (const std::exception&) {
+            // Multiprocess teardown after the node connection dropped: the remote
+            // cursor died with the core, so this proxy call throws "IPC client
+            // method called after disconnect." Swallow — a destructor must not
+            // propagate, and there is nothing left to unregister. The disconnect
+            // hook (bitcoin.cpp) already logged the lost connection and drove the
+            // quit that is running this teardown.
+        }
+    }
 }
 
 int OverviewTxModel::rowCount(const QModelIndex& parent) const

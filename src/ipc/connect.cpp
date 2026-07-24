@@ -16,7 +16,8 @@ namespace ipc {
 
 std::optional<GuiConnection> ConnectToNode(const fs::path& data_dir,
                                            interfaces::Init& local_init,
-                                           std::string& error_out)
+                                           std::string& error_out,
+                                           std::function<void()> on_disconnect)
 {
     // 1. The node writes a fresh cookie on every startup; its absence means no
     //    node is running on this datadir, so there is nothing to dial.
@@ -37,7 +38,7 @@ std::optional<GuiConnection> ConnectToNode(const fs::path& data_dir,
     //    resolved from GetDataDir() inside connectAddress).
     std::string address = "unix";
     try {
-        conn.init = conn.ipc->connectAddress(address);
+        conn.init = conn.ipc->connectAddress(address, std::move(on_disconnect));
     } catch (const std::exception& e) {
         error_out = strprintf("could not connect to the daemon on %s: %s", address, e.what());
         return std::nullopt;

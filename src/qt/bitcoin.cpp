@@ -626,7 +626,27 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             // node_connection, so it is declared first.
             local_init = interfaces::MakeGridcoinInit();
             std::string ipc_error;
-            node_connection = ipc::ConnectToNode(GetDataDir(), *local_init, ipc_error);
+            node_connection = ipc::ConnectToNode(GetDataDir(), *local_init, ipc_error,
+                /*on_disconnect=*/[] {
+                    // Fires on the IPC event-loop thread when the daemon vanishes
+                    // without a clean shutdown message (crash / SIGKILL, or a stop
+                    // that raced the handshake). Post a graceful quit to the Qt
+                    // main thread — the same path as a core-initiated shutdown
+                    // (QueueShutdown) — so the GUI tears down cleanly instead of
+                    // faulting on the next call to a now-dead proxy. requestQuit()
+                    // is idempotent, so a duplicate (e.g. a drain that also failed)
+                    // is harmless.
+                    GUILogPrintf("IPC: lost connection to the Gridcoin daemon; closing the GUI");
+                    // Guard the instance(): a disconnect that races the GUI's own
+                    // shutdown (local teardown normally cancels this handler first,
+                    // but the connection delete is async) could arrive after the
+                    // QCoreApplication is gone.
+                    if (QCoreApplication* qapp = QCoreApplication::instance()) {
+                        QMetaObject::invokeMethod(qapp,
+                                                  [] { BitcoinGUI::requestQuit(); },
+                                                  Qt::QueuedConnection);
+                    }
+                });
             if (!node_connection)
             {
                 // One dialog: this runs after ThreadSafeMessageBox_connect, so a
