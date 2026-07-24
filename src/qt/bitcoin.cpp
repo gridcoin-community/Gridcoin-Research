@@ -734,19 +734,27 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 if (!gui_archive_running.compare_exchange_strong(expected, true)) {
                     return;  // a previous archive pass is still running
                 }
-                std::thread([] {
-                    RenameThread("gui-log-archive");
-                    try {
-                        fs::path plogfile_out;
-                        LogInstance().archive(false, plogfile_out);
-                    } catch (const std::exception& e) {
-                        // A throw here would terminate the detached thread (and the
-                        // process); contain it. The logger is left valid (the file is
-                        // reopened before the cleanup step); the next tick retries.
-                        GUILogPrintf("WARNING: GUI log archive pass failed: %s", e.what());
-                    }
+                try {
+                    std::thread([] {
+                        RenameThread("gui-log-archive");
+                        try {
+                            fs::path plogfile_out;
+                            LogInstance().archive(false, plogfile_out);
+                        } catch (const std::exception& e) {
+                            // A throw here would terminate the detached thread (and the
+                            // process); contain it. The logger is left valid (the file is
+                            // reopened before the cleanup step); the next tick retries.
+                            GUILogPrintf("WARNING: GUI log archive pass failed: %s", e.what());
+                        }
+                        gui_archive_running = false;
+                    }).detach();
+                } catch (const std::exception& e) {
+                    // std::thread construction can throw (e.g. resource exhaustion).
+                    // Reset the guard so a later tick can retry, and don't let it
+                    // escape the Qt slot (which would abort the GUI).
+                    GUILogPrintf("WARNING: could not start GUI log archive thread: %s", e.what());
                     gui_archive_running = false;
-                }).detach();
+                }
             });
             logArchiveTimer->start(300000);  // 5 minutes, matching the node's schedule
 #else

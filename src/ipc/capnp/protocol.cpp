@@ -46,6 +46,21 @@ void IpcLogFn(mp::LogMessage message)
     }
 }
 
+//! Invoke a caller-supplied disconnect callback with a guard. It runs on the
+//! event-loop thread, so a throw would unwind through libmultiprocess's task set
+//! and terminate the process; contain and log it instead.
+void InvokeDisconnectCb(const std::function<void()>& cb)
+{
+    if (!cb) return;
+    try {
+        cb();
+    } catch (const std::exception& e) {
+        LogPrintf("ipc: disconnect callback threw: %s\n", e.what());
+    } catch (...) {
+        LogPrintf("ipc: disconnect callback threw a non-standard exception\n");
+    }
+}
+
 class CapnpProtocol : public Protocol
 {
 public:
@@ -72,14 +87,14 @@ public:
             m_loop->sync([&] {
                 if (client->m_context.connection) {
                     client->m_context.connection->onDisconnect(
-                        [on_disconnect = std::move(on_disconnect)]() mutable { on_disconnect(); });
+                        [on_disconnect = std::move(on_disconnect)]() mutable { InvokeDisconnectCb(on_disconnect); });
                 } else {
                     // Early-disconnect race: the peer dropped between ConnectStream()
                     // and here, so libmultiprocess cleanup already nulled the
                     // connection and the onDisconnect above would never register.
                     // Notify now (on the event-loop thread, same as the handler would
                     // run) so the caller still learns the connection is gone.
-                    on_disconnect();
+                    InvokeDisconnectCb(on_disconnect);
                 }
             });
         }
