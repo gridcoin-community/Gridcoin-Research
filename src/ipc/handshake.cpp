@@ -45,7 +45,9 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
     tmp += ".tmp";
     const std::string tmp_str = tmp.string();
 
-    int fd = ::open(tmp_str.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    // O_CLOEXEC: don't leak this fd into any exec'd child. O_NOFOLLOW: the temp
+    // path must not be a pre-planted symlink (this holds secrets: the cookie).
+    int fd = ::open(tmp_str.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0600);
     if (fd == -1) {
         throw std::system_error(errno, std::system_category(), "open " + tmp_str);
     }

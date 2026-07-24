@@ -59,7 +59,7 @@ fs::path ParseAddress(std::string& address, const fs::path& data_dir, struct soc
 //! fd, or -1 with \p out_errno set on failure (caller decides how to react).
 int TryConnect(const struct sockaddr_un& addr, int& out_errno)
 {
-    int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    int fd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd == -1) {
         out_errno = errno;
         return -1;
@@ -93,10 +93,14 @@ public:
         struct sockaddr_un addr;
         const fs::path path = ParseAddress(address, data_dir, addr);
 
-        // Socket directory 0700 (design section 4.3).
+        // Socket directory 0700 (design section 4.3). Fail closed: if we cannot
+        // restrict the directory, refuse to listen rather than expose the socket
+        // in a world-accessible directory.
         if (path.has_parent_path()) {
             fs::create_directories(path.parent_path());
-            ::chmod(path.parent_path().string().c_str(), 0700);
+            if (::chmod(path.parent_path().string().c_str(), 0700) != 0) {
+                throw std::system_error(errno, std::system_category());
+            }
         }
 
         // Try to bind; only if the path already exists (EADDRINUSE) do we probe it.
@@ -107,7 +111,7 @@ public:
         // node just bound. (A residual race with a live-but-backlog-full listener
         // remains; a lock file is the future hardening.)
         for (int attempt = 0; attempt < 2; ++attempt) {
-            int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+            int fd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
             if (fd == -1) {
                 throw std::system_error(errno, std::system_category());
             }

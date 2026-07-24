@@ -354,7 +354,7 @@ if(ENABLE_DAEMON)
     # serve the GUI over the socket. gridcoin_ipc is EXCLUDE_FROM_ALL, so listing it
     # here is what pulls it into the build for this configuration.
     if(ENABLE_MULTIPROCESS)
-        target_link_libraries(gridcoinresearchd PUBLIC gridcoin_ipc)
+        target_link_libraries(gridcoinresearchd PRIVATE gridcoin_ipc)
     endif()
 
     # Link gridcoinresearchd to gridcoin_util AND all of gridcoin_util's
