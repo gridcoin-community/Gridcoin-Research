@@ -75,6 +75,9 @@ DetailedTxModel::DetailedTxModel(WalletModel* walletModel, QObject* parent)
 
     connect(m_walletModel, &WalletModel::walletEventsDrained,
             this, &DetailedTxModel::applyEventBatch);
+
+    connect(m_walletModel->getOptionsModel(), &OptionsModel::displayUnitChanged,
+            this, &DetailedTxModel::updateDisplayUnit);
 }
 
 DetailedTxModel::~DetailedTxModel()
@@ -85,6 +88,19 @@ DetailedTxModel::~DetailedTxModel()
     // out — outlives this model by the teardown-ordering contract (bitcoin.cpp).
     if (m_walletModel)
         m_walletModel->txSource().unregisterView(GRC::VIEW_DETAILED);
+}
+
+void DetailedTxModel::updateDisplayUnit()
+{
+    // Only the Amount column formatting depends on the unit; the cached records
+    // are unchanged. Re-emit dataChanged over the whole Amount column — Qt
+    // repaints only the visible rows, and off-window placeholder rows carry no
+    // amount, so this is one signal regardless of table size.
+    const int rows = rowCount();
+    if (rows > 0) {
+        emit dataChanged(index(0, TransactionTableModel::Amount),
+                         index(rows - 1, TransactionTableModel::Amount));
+    }
 }
 
 int DetailedTxModel::rowCount(const QModelIndex& parent) const

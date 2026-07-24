@@ -109,6 +109,14 @@ public slots:
     //! fetches the range + a margin into the cache.
     void onViewportChanged(int firstVisible, int lastVisible);
 
+    //! The BTC/mBTC/... display unit changed. The Amount column is rendered live
+    //! through formatRole (which reads the current unit), so the cached records
+    //! stay valid — only the on-screen formatting is stale. Re-emit dataChanged
+    //! over the Amount column so the view repaints it. Wired to
+    //! OptionsModel::displayUnitChanged (the old full-replica TransactionTableModel
+    //! carried this; it moved here with the windowed views, PR #3226).
+    void updateDisplayUnit();
+
 signals:
     //! Emitted after a structural Reset has been applied to the cache (sort/filter/
     //! reload) — TransactionView restores the resort anchor on it.
