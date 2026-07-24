@@ -208,9 +208,17 @@ public:
     //! Run the coin store's initial wallet scan (reloadAndSnapshot) on a
     //! one-shot load thread — never the GUI thread: the scan holds
     //! cs_main + cs_wallet and is O(wallet). Idempotent unless \p force
-    //! (the bulk-resync path). Completion arrives as the store's CoinReset
-    //! through the normal drain.
+    //! (the bulk-resync path). Completion is drained and then announced via
+    //! coinSourceLoadFinished().
     void ensureCoinSourceLoaded(bool force = false);
+
+    //! True once a coin-store scan has completed and been drained. A consumer
+    //! attaching to a warm store (a dialog reopen) is not loading and needs no
+    //! signal; one attaching to a cold store waits for
+    //! coinSourceLoadFinished(). Distinguishing the two is what keeps the
+    //! registration Reset — published against a not-yet-scanned store — from
+    //! being mistaken for the load completing.
+    bool isCoinSourceLoaded() const { return m_coin_load_complete; }
 
     //! Kick an immediate (next-event-loop-turn) event-queue drain, so a
     //! user-initiated cursor change (a windowed-view filter/sort) is reflected
@@ -233,6 +241,13 @@ private:
     //! the destructor.
     std::thread m_coin_load_thread;
     bool m_coin_load_started = false;
+    //! Set on the GUI thread when a completed scan has been drained (see
+    //! isCoinSourceLoaded).
+    bool m_coin_load_complete = false;
+    //! A scan is running: further requests must not join it on the GUI thread.
+    bool m_coin_load_in_flight = false;
+    //! A resync was requested mid-scan; run one more pass when it finishes.
+    bool m_coin_reload_pending = false;
     //! Reentrancy guard for drainCoinEventQueue (mirrors m_draining).
     bool m_coin_draining = false;
 
@@ -329,6 +344,11 @@ signals:
     //! consumers (which filter by their view id). Emitted only from
     //! drainCoinEventQueue — the coin queue is drained exactly once, there.
     void coinEventsDrained(const std::vector<GRC::WalletCoinEvent>& events);
+
+    //! The coin store's wallet scan finished and its Reset has been drained,
+    //! so the consumers' caches hold the scanned wallet. Emitted on the GUI
+    //! thread; consumers clear their loading state here.
+    void coinSourceLoadFinished();
 
     // Signal that balance in wallet changed
     void balanceChanged(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);

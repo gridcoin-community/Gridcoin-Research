@@ -231,15 +231,26 @@ private:
     void reapplyMirrorAggregates() EXCLUSIVE_LOCKS_REQUIRED(cs_store);
 
     //! Mirror mutation core shared by the bulk operations: toggle \p absidx
-    //! and record the outpoint delta. Caller holds cs_store.
+    //! and record the outpoint delta. The aggregate update is quiet and the
+    //! record's group is recorded in \p touched; the caller emits ONE
+    //! coalesced GroupChange per touched group when its pass finishes (a
+    //! per-record emit here would push one identical event per coin — see
+    //! CoinViews::applySelectionQuiet). Caller holds cs_store.
     void toggleLocked(std::size_t absidx, bool selected,
-                      CoinBulkSelectionResult& result) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+                      CoinBulkSelectionResult& result,
+                      std::set<std::string>& touched) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! Emit the coalesced GroupChange for every group a bulk pass touched.
+    //! Caller holds cs_store.
+    void emitTouchedGroups(const std::set<std::string>& touched)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_store);
 
     //! One step of applyValueFilter's cap pass (a member rather than a lambda
     //! so the thread-safety analyzer can see the held lock — it does not
     //! propagate capabilities into lambda bodies).
     void capPassLocked(std::size_t absidx, uint32_t max_inputs, uint32_t& kept,
-                       CoinBulkSelectionResult& result) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+                       CoinBulkSelectionResult& result,
+                       std::set<std::string>& touched) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
 
     //! CoinViews projector over m_records[i]. Invoked through the core's
     //! std::function indirection, which the thread-safety analyzer cannot see

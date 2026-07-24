@@ -10,6 +10,7 @@
 #include <QList>
 #include <QMenu>
 #include <QModelIndex>
+#include <QPersistentModelIndex>
 #include <QPoint>
 #include <QString>
 
@@ -67,7 +68,11 @@ private:
     Qt::SortOrder sortOrder;
 
     QMenu *contextMenu;
-    QModelIndex contextMenuIndex;
+    //! PERSISTENT: the menu runs its own nested event loop, in which the drain
+    //! timer keeps firing — a reset or a group removal while the menu is open
+    //! would leave a plain QModelIndex naming a row that no longer exists, and
+    //! the copy actions would read past the directory.
+    QPersistentModelIndex contextMenuIndex;
     QAction *copyTransactionHashAction;
 
     std::pair<QString, QString> m_consolidationAddress;
@@ -76,6 +81,9 @@ private:
     bool m_fSubtractFeeFromAmount = false;
 
     void showHideConsolidationReadyToSend();
+    //! The still-valid row the context menu was opened on (invalid if the
+    //! model dropped it while the menu was open) — see contextMenuIndex.
+    QModelIndex contextMenuTarget() const;
     //! Expand tree groups that are partially selected (bounded — the legacy
     //! auto-expand parity, capped so a pathological wallet cannot realize
     //! half a million rows in one shot).

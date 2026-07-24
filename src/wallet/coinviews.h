@@ -147,6 +147,21 @@ public:
     //! never moves a directory row: selected_* are not parent sort keys).
     std::vector<CoinViewDelta> applySelection(std::size_t absidx, bool selected);
 
+    //! Aggregate-only form of applySelection: updates the group counters and
+    //! returns nothing. The bulk paths (selectGroup / selectAll /
+    //! applyValueFilter / the mirror restores) toggle thousands of records
+    //! against a handful of groups, and every one of those toggles would
+    //! otherwise emit an identical GroupChange for the same directory row —
+    //! half a million redundant events for one click on a pathological group.
+    //! They call this per record and coalesce ONE groupTouchDeltas() per
+    //! touched group at the end.
+    void applySelectionQuiet(std::size_t absidx, bool selected);
+
+    //! One in-place GroupChange per tree view for \p address — the coalesced
+    //! refresh the bulk selection paths emit after their applySelectionQuiet
+    //! passes. Empty for an unknown group (it died mid-pass).
+    std::vector<CoinViewDelta> groupTouchDeltas(const std::string& address) const;
+
     // ---- reads (positional, absidx out) ---------------------------------
 
     //! Flat-scope slice for a view: absolute indices [first, first+count) in

@@ -213,8 +213,17 @@ void CoinControlDialog::expandPartiallySelected()
         const QModelIndex idx = m_selection_model->index(i, CoinSelectionModel::COLUMN_CHECKBOX);
         const Qt::CheckState state = idx.data(Qt::CheckStateRole).value<Qt::CheckState>();
         if (state != Qt::PartiallyChecked) continue;
+
+        // Charge the budget BEFORE expanding: expand() realizes the whole
+        // group in one call, so checking afterwards would let a single
+        // half-million-child group blow the cap it exists to enforce. The
+        // group's child count is the server-side aggregate — no realization
+        // needed to read it.
+        const int children = m_selection_model->groupOutputCount(i);
+        if (children > budget) break;
+        budget -= children;
+
         ui->treeView->expand(idx.siblingAtColumn(0));
-        budget -= m_selection_model->rowCount(idx.siblingAtColumn(0));
     }
 }
 
@@ -377,6 +386,8 @@ void CoinControlDialog::buttonConsolidateClicked()
 // context menu
 void CoinControlDialog::showMenu(const QPoint &point)
 {
+    if (!m_selection_model) return;
+
     const QModelIndex index = ui->treeView->indexAt(point);
     if (index.isValid())
     {
@@ -392,28 +403,45 @@ void CoinControlDialog::showMenu(const QPoint &point)
     }
 }
 
+// The row the context menu was opened on, or an invalid index if the model
+// dropped it while the menu's nested event loop ran (a drain can reset or
+// remove rows under an open menu). Every copy action goes through this.
+QModelIndex CoinControlDialog::contextMenuTarget() const
+{
+    if (!m_selection_model || !contextMenuIndex.isValid()) return QModelIndex();
+    return QModelIndex(contextMenuIndex);
+}
+
 // context menu action: copy amount
 void CoinControlDialog::copyAmount()
 {
-    QApplication::clipboard()->setText(m_selection_model->amountTextAt(contextMenuIndex));
+    const QModelIndex index = contextMenuTarget();
+    if (!index.isValid()) return;
+    QApplication::clipboard()->setText(m_selection_model->amountTextAt(index));
 }
 
 // context menu action: copy label
 void CoinControlDialog::copyLabel()
 {
-    QApplication::clipboard()->setText(m_selection_model->labelAt(contextMenuIndex));
+    const QModelIndex index = contextMenuTarget();
+    if (!index.isValid()) return;
+    QApplication::clipboard()->setText(m_selection_model->labelAt(index));
 }
 
 // context menu action: copy address
 void CoinControlDialog::copyAddress()
 {
-    QApplication::clipboard()->setText(m_selection_model->addressAt(contextMenuIndex));
+    const QModelIndex index = contextMenuTarget();
+    if (!index.isValid()) return;
+    QApplication::clipboard()->setText(m_selection_model->addressAt(index));
 }
 
 // context menu action: copy transaction id
 void CoinControlDialog::copyTransactionHash()
 {
-    QApplication::clipboard()->setText(m_selection_model->txHashTextAt(contextMenuIndex));
+    const QModelIndex index = contextMenuTarget();
+    if (!index.isValid()) return;
+    QApplication::clipboard()->setText(m_selection_model->txHashTextAt(index));
 }
 
 // copy label "Quantity" to clipboard

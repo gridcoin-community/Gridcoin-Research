@@ -13,6 +13,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -140,11 +141,17 @@ public:
     //! aggregates — the consolidation address pickers.
     std::vector<GRC::CoinGroupInfo> groupDirectory() const;
 
+    //! How many children a directory row has, from the server-side aggregate
+    //! — i.e. WITHOUT realizing the group (rowCount() reports 0 until the
+    //! branch is realized). 0 for an out-of-range row or in flat mode.
+    int groupOutputCount(int directory_row) const;
+
 signals:
     //! A user-driven selection mutation went through (toggle / select-all /
     //! value filter) — the dialog refreshes the summary labels.
     void selectionChanged();
-    //! The first snapshot arrived (isLoading() flipped false).
+    //! The store's wallet scan completed and was applied (isLoading() flipped
+    //! false).
     void loadingFinished();
 
 public slots:
@@ -160,6 +167,8 @@ public slots:
 
 private slots:
     void onFetchTimeout();
+    //! WalletModel announcing a completed (and drained) coin-store scan.
+    void onCoinSourceLoadFinished();
 
 private:
     struct GroupSlot {
@@ -174,6 +183,13 @@ private:
 
     //! Root/parent index helpers for the sink adapters.
     QModelIndex groupIndexByAddress(const std::string& address) const;
+
+    //! The directory entry a group index names, or nullptr when the row is out
+    //! of range. Indexes reach the accessors from places Qt does not validate
+    //! for us — a context menu holds one across its own nested event loop, in
+    //! which a drain can shrink the directory — so every directory read goes
+    //! through this instead of subscripting m_directory directly.
+    const GRC::CoinGroupInfo* groupAt(const QModelIndex& index) const;
 
     //! Reseed everything from the source (a Reset arrived, or first load).
     void reseedFromSource();
@@ -199,6 +215,9 @@ private:
     interfaces::WalletCoinControl* m_coin_control;
     const int m_view_id;
     GRC::CoinViewMode m_mode{GRC::CoinViewMode::Tree};
+    //! A requested display mode, applied inside the next reset bracket (the
+    //! mode decides the model's whole row structure — see setDisplayMode).
+    std::optional<GRC::CoinViewMode> m_pending_mode;
     bool m_loading{true};
 
     //! TREE mode: the materialized directory (aggregates for parent rows) and

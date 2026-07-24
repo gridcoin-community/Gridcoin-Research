@@ -103,11 +103,31 @@ CoinSelectionModel::CoinSelectionModel(WalletModel* wallet_model,
     connect(m_wallet_model, &WalletModel::coinEventsDrained,
             this, &CoinSelectionModel::applyCoinEventBatch);
 
+    // Loading state tracks the STORE's scan, not the first Reset this model
+    // sees: on a cold store the registration Reset above is published against
+    // an empty table and arrives long before the scan finishes. Attaching to
+    // an already-scanned store (a dialog reopen) is not loading at all.
+    m_loading = !m_wallet_model->isCoinSourceLoaded();
+    if (m_loading) {
+        connect(m_wallet_model, &WalletModel::coinSourceLoadFinished,
+                this, &CoinSelectionModel::onCoinSourceLoadFinished);
+    }
+
     m_wallet_model->ensureCoinSourceLoaded();
 
     // A warm store (dialog reopen) already delivered its Reset into the
     // queue; pull it through now so the first paint has data.
     m_wallet_model->drainCoinEventQueue();
+}
+
+void CoinSelectionModel::onCoinSourceLoadFinished()
+{
+    // WalletModel drained the reload's Reset before emitting, so the caches
+    // already hold the scanned wallet — consumers can render and the dialog
+    // can run its auto-expand pass against a populated directory.
+    if (!m_loading) return;
+    m_loading = false;
+    emit loadingFinished();
 }
 
 CoinSelectionModel::~CoinSelectionModel()
@@ -146,6 +166,13 @@ QModelIndex CoinSelectionModel::groupIndexByAddress(const std::string& address) 
     const int row = rowForAddress(address);
     if (row < 0) return QModelIndex();
     return createIndex(row, 0, quintptr(0));
+}
+
+const GRC::CoinGroupInfo* CoinSelectionModel::groupAt(const QModelIndex& index) const
+{
+    if (!isGroup(index)) return nullptr;
+    if (index.row() < 0 || index.row() >= static_cast<int>(m_directory.size())) return nullptr;
+    return &m_directory[static_cast<std::size_t>(index.row())];
 }
 
 // ---- QAbstractItemModel structure ---------------------------------------
@@ -261,8 +288,9 @@ void CoinSelectionModel::fetchMore(const QModelIndex& parent)
 
 void CoinSelectionModel::releaseGroup(const QModelIndex& group_index)
 {
-    if (!isGroup(group_index)) return;
-    const std::string address = m_directory[static_cast<std::size_t>(group_index.row())].address;
+    const GRC::CoinGroupInfo* g = groupAt(group_index);
+    if (!g) return;
+    const std::string address = g->address;
     auto it = m_groups.find(address);
     if (it == m_groups.end()) return;
 
@@ -310,8 +338,9 @@ QVariant CoinSelectionModel::data(const QModelIndex& index, int role) const
         : static_cast<int>(BitcoinUnits::BTC);
 
     if (isGroup(index)) {
-        if (index.row() >= static_cast<int>(m_directory.size())) return QVariant();
-        const GRC::CoinGroupInfo& g = m_directory[static_cast<std::size_t>(index.row())];
+        const GRC::CoinGroupInfo* gp = groupAt(index);
+        if (!gp) return QVariant();
+        const GRC::CoinGroupInfo& g = *gp;
 
         if (role == Qt::CheckStateRole && index.column() == COLUMN_CHECKBOX) {
             if (g.selected_count == 0) return Qt::Unchecked;
@@ -422,7 +451,9 @@ bool CoinSelectionModel::setData(const QModelIndex& index, const QVariant& value
     const bool desired = (value.value<Qt::CheckState>() != Qt::Unchecked);
 
     if (isGroup(index)) {
-        const std::string address = m_directory[static_cast<std::size_t>(index.row())].address;
+        const GRC::CoinGroupInfo* gp = groupAt(index);
+        if (!gp) return false;
+        const std::string address = gp->address;
         applyDeltaToCoinControl(m_source.selectGroup(address, desired));
 
         // Refresh the parent aggregates from the authoritative source result
@@ -512,6 +543,12 @@ void CoinSelectionModel::refreshDirectoryAggregates()
     GRC::CoinGroupsResult result =
         m_source.getGroups(m_view_id, 0, static_cast<int>(m_directory.size()));
     for (std::size_t i = 0; i < result.groups.size() && i < m_directory.size(); ++i) {
+        // Only refresh rows whose address still matches: a producer re-slot
+        // between the bulk op and this refetch would otherwise write one
+        // group's aggregates onto another's row (the CoinGroupsChanged
+        // handler's discipline). Mismatches are corrected by the reslot's own
+        // Remove+Insert events.
+        if (m_directory[i].address != result.groups[i].address) continue;
         m_directory[i] = result.groups[i];
     }
     emit QAbstractItemModel::dataChanged(
@@ -534,16 +571,27 @@ void CoinSelectionModel::sort(int column, Qt::SortOrder order)
     if (column == COLUMN_CHECKBOX) return;
     const int sort_column = column - 1; // the static_assert-pinned mirror offset
     m_source.setViewSort(m_view_id, sort_column, order == Qt::DescendingOrder ? 1 : 0);
-    // Pull the Reset through immediately so the header click feels
-    // synchronous (the drain applies it via reseedFromSource).
+
+    // Reseed HERE rather than waiting for the store's Reset to come back
+    // through the drain: the drain is capped at one batch and is a no-op while
+    // another drain is in progress, so a backlog would leave the header click
+    // unreflected. The Reset still arrives later and reseeds again — the
+    // duplicate is harmless (idempotent), an unapplied one is not.
+    reseedFromSource();
     m_wallet_model->drainCoinEventQueue();
 }
 
 void CoinSelectionModel::setDisplayMode(GRC::CoinViewMode mode)
 {
     if (mode == m_mode) return;
-    m_mode = mode;
     m_source.setViewMode(m_view_id, mode);
+
+    // m_mode decides rowCount()/index() shape for the WHOLE model, so it may
+    // only move inside a reset bracket — reseedFromSource() owns one, and the
+    // flip has to land inside it (see the sort() note on why waiting for the
+    // store's Reset is not safe).
+    m_pending_mode = mode;
+    reseedFromSource();
     m_wallet_model->drainCoinEventQueue();
 }
 
@@ -553,6 +601,12 @@ void CoinSelectionModel::reseedFromSource()
 {
     StructureLock lock(m_structure_locked);
     beginResetModel();
+    // A pending display-mode switch takes effect inside this bracket — see
+    // setDisplayMode().
+    if (m_pending_mode) {
+        m_mode = *m_pending_mode;
+        m_pending_mode.reset();
+    }
     m_groups.clear();
     m_dir_row.clear();
     m_addr_id.clear();
@@ -574,11 +628,6 @@ void CoinSelectionModel::reseedFromSource()
                            result.epoch, result.high_water);
     }
     endResetModel();
-
-    if (m_loading) {
-        m_loading = false;
-        emit loadingFinished();
-    }
 }
 
 void CoinSelectionModel::applyCoinEventBatch(const std::vector<GRC::WalletCoinEvent>& events)
@@ -586,6 +635,12 @@ void CoinSelectionModel::applyCoinEventBatch(const std::vector<GRC::WalletCoinEv
     if (m_applying_events) return;
     m_applying_events = true;
     struct Guard { bool& f; ~Guard() { f = false; } } guard{m_applying_events};
+
+    // Removal events prune coinControl, so a batch can change the selection
+    // many times over. Signal ONCE at the end: each emission drives the
+    // dialog's summary recompute (a node-side pass over the whole selection),
+    // and a full removal batch would otherwise trigger a thousand of them.
+    bool selection_changed = false;
 
     for (const GRC::WalletCoinEvent& ev : events) {
         if (const auto* p = std::get_if<GRC::CoinDepthRefreshPayload>(&ev.payload)) {
@@ -621,6 +676,7 @@ void CoinSelectionModel::applyCoinEventBatch(const std::vector<GRC::WalletCoinEv
             // reseeded past this event still needs the coinControl prune).
             for (const COutPoint& outpoint : p->outpoints) {
                 m_coin_control->UnSelect(outpoint);
+                selection_changed = true;
             }
             if (p->scope.empty()) {
                 if (m_mode == GRC::CoinViewMode::Flat) {
@@ -632,7 +688,6 @@ void CoinSelectionModel::applyCoinEventBatch(const std::vector<GRC::WalletCoinEv
                     it->second.cache.applyRemove(*it->second.sink, ev.seqno, p->position, p->count);
                 }
             }
-            emit selectionChanged();
             continue;
         }
 
@@ -678,6 +733,9 @@ void CoinSelectionModel::applyCoinEventBatch(const std::vector<GRC::WalletCoinEv
 
         if (const auto* p = std::get_if<GRC::CoinGroupsInsertedPayload>(&ev.payload)) {
             if (p->view_id != m_view_id || m_mode != GRC::CoinViewMode::Tree) continue;
+            // An empty payload would make the bracket below (first, first - 1),
+            // which is an invalid range rather than a no-op.
+            if (p->groups.empty()) continue;
             const int pos = std::min(p->position, static_cast<int>(m_directory.size()));
             StructureLock lock(m_structure_locked);
             beginInsertRows(QModelIndex(), pos, pos + static_cast<int>(p->groups.size()) - 1);
@@ -727,6 +785,10 @@ void CoinSelectionModel::applyCoinEventBatch(const std::vector<GRC::WalletCoinEv
                 createIndex(p->first + p->count - 1, COLUMN_AMOUNT, quintptr(0)));
             continue;
         }
+    }
+
+    if (selection_changed) {
+        emit selectionChanged();
     }
 }
 
@@ -792,7 +854,7 @@ void CoinSelectionModel::onVisibleIndexes(const QList<QModelIndex>& visible)
 void CoinSelectionModel::onFetchTimeout()
 {
     auto pending = std::move(m_pending_fetch);
-    m_pending_fetch.clear();
+    m_pending_fetch.clear(); // std::map's moved-from state is unspecified.
     for (const auto& entry : pending) {
         const int first = std::max(0, entry.second.first - kInitialWindow);
         const int count = std::min(kMaxFetch,
@@ -874,7 +936,8 @@ bool CoinSelectionModel::outpointAt(const QModelIndex& index, COutPoint& out) co
 QString CoinSelectionModel::addressAt(const QModelIndex& index) const
 {
     if (isGroup(index)) {
-        return QString::fromStdString(m_directory[static_cast<std::size_t>(index.row())].address);
+        const GRC::CoinGroupInfo* g = groupAt(index);
+        return g ? QString::fromStdString(g->address) : QString();
     }
     const GRC::CoinRecord* rec = recordAt(index);
     if (!rec) return QString();
@@ -889,8 +952,9 @@ QString CoinSelectionModel::addressAt(const QModelIndex& index) const
 QString CoinSelectionModel::labelAt(const QModelIndex& index) const
 {
     if (isGroup(index)) {
-        const GRC::CoinGroupInfo& g = m_directory[static_cast<std::size_t>(index.row())];
-        return g.label.empty() ? tr("(no label)") : QString::fromStdString(g.label);
+        const GRC::CoinGroupInfo* g = groupAt(index);
+        if (!g) return QString();
+        return g->label.empty() ? tr("(no label)") : QString::fromStdString(g->label);
     }
     const GRC::CoinRecord* rec = recordAt(index);
     if (!rec) return QString();
@@ -913,4 +977,11 @@ QString CoinSelectionModel::txHashTextAt(const QModelIndex& index) const
 std::vector<GRC::CoinGroupInfo> CoinSelectionModel::groupDirectory() const
 {
     return m_source.getGroupDirectory();
+}
+
+int CoinSelectionModel::groupOutputCount(int directory_row) const
+{
+    if (m_mode != GRC::CoinViewMode::Tree) return 0;
+    if (directory_row < 0 || directory_row >= static_cast<int>(m_directory.size())) return 0;
+    return m_directory[static_cast<std::size_t>(directory_row)].output_count;
 }

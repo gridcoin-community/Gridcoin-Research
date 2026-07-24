@@ -594,7 +594,7 @@ std::vector<CoinViewDelta> CoinViews::applyUpdate(std::size_t absidx,
     return out;
 }
 
-std::vector<CoinViewDelta> CoinViews::applySelection(std::size_t absidx, bool selected)
+void CoinViews::applySelectionQuiet(std::size_t absidx, bool selected)
 {
     assert(absidx < m_count);
     const CoinRecord& r = m_records(absidx);
@@ -609,18 +609,30 @@ std::vector<CoinViewDelta> CoinViews::applySelection(std::size_t absidx, bool se
         g.selected_count -= 1;
         g.selected_amount -= r.amount;
     }
+}
 
+std::vector<CoinViewDelta> CoinViews::groupTouchDeltas(const std::string& address) const
+{
     // Selection never moves a directory row (selected_* are not parent sort
     // keys) — an in-place GroupChange refreshes the tristate rendering.
     std::vector<CoinViewDelta> out;
-    for (auto& [view_id, v] : m_views) {
+    if (m_groups.count(address) == 0) return out;
+
+    for (const auto& [view_id, v] : m_views) {
         if (v.mode != CoinViewMode::Tree) continue;
-        const std::size_t gpos = findGroup(v, r.group_address);
-        assert(gpos != npos);
+        const std::size_t gpos = findGroup(v, address);
+        if (gpos == npos) continue;
         out.push_back({view_id, CoinViewDelta::GroupChange, std::string(),
                        static_cast<int>(gpos), 1});
     }
     return out;
+}
+
+std::vector<CoinViewDelta> CoinViews::applySelection(std::size_t absidx, bool selected)
+{
+    assert(absidx < m_count);
+    applySelectionQuiet(absidx, selected);
+    return groupTouchDeltas(m_records(absidx).group_address);
 }
 
 void CoinViews::shiftDown(std::size_t absidx)

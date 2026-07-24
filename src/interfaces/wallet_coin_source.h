@@ -143,11 +143,14 @@ public:
     //! schedules reloadAndSnapshot off the paint path.
     virtual bool consumeNeedsResync() = 0;
 
-    //! GUI up-channel: an address-book entry changed. Labeling an own address
-    //! flips IsChange for its outputs, so beyond re-snapshotting labels this
-    //! re-walks the affected records' grouping and emits regroup deltas.
-    //! Called on the GUI thread; the implementation may take cs_main +
-    //! cs_wallet (the worker thread never does).
+    //! GUI up-channel: an address-book entry changed. Beyond re-snapshotting
+    //! the label, this can regroup coins — labeling an own address flips
+    //! IsChange for its outputs, so change chains re-walk to a different
+    //! ancestor. Called on the GUI thread, so the implementation MUST NOT run
+    //! the O(wallet) re-decomposition inline (that would hold cs_main across a
+    //! full wallet walk on the paint path): the label refresh goes through the
+    //! store's intake queue and the regroup is deferred to the resync the
+    //! drain path schedules off-thread.
     virtual void noteAddressBookChanged(const std::string& address,
                                         const std::string& label) = 0;
 };
