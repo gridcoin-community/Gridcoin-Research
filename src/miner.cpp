@@ -1707,9 +1707,11 @@ void StakeMiner(CWallet *pwallet)
 // to retry on transient failure (no stake found, etc). Refuses on non-mockable
 // chains so it cannot be invoked from network code paths.
 //
-// The pipeline mirrors StakeMiner's inner body. Refactoring StakeMiner to call
-// this helper itself is a follow-up — for now the duplication is intentional
-// to keep the mainnet/testnet staking path untouched.
+// The pipeline mirrors StakeMiner's inner body, including the stake-split and
+// sidestake step, so regtest blocks carry the same coinstake output layout.
+// Refactoring StakeMiner to call this helper itself is still a follow-up — for
+// now the duplication is intentional to keep the mainnet/testnet staking path
+// untouched, at the cost of having to keep the two pipelines in step by hand.
 bool TryMineRegtestBlock(CWallet* pwallet,
                          CBlock& blocknew_out,
                          std::string& err,
@@ -1785,7 +1787,34 @@ bool TryMineRegtestBlock(CWallet* pwallet,
 
     AddSuperblockContractOrVote(mtxCoinbase, StakeBlock.nTime);
 
+    // Copy back coinbase AFTER CreateMRCRewards and AddSuperblockContractOrVote
     StakeBlock.vtx[0] = CTransaction(mtxCoinbase);
+
+    // Mirror StakeMiner's split/sidestake step so regtest blocks carry the same coinstake output
+    // layout as mainnet and testnet -- stake splits, sidestakes, then the MRC region. Must run
+    // after CreateMRCRewards: nReward has the staker's cut of the MRC fees added to it there,
+    // and SplitCoinStakeOutput treats vout[i >= 2] as the MRC region to save and re-append.
+    //
+    // Both inputs are off by default (-enablestakesplit defaults false and the sidestake
+    // registry is empty on a clean chain), so this is a no-op unless a test opts in --
+    // SplitCoinStakeOutput early-returns in that case anyway.
+    int64_t nMinStakeSplitValue = 0;
+    double dEfficiency = 0;
+    int64_t nDesiredStakeOutputValue = 0;
+
+    bool fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency,
+                                                          nDesiredStakeOutputValue);
+
+    bool fEnableSideStaking = !GRC::GetSideStakeRegistry()
+                                   .ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, false)
+                                   .empty();
+
+    if (fEnableStakeSplit || fEnableSideStaking) {
+        SplitCoinStakeOutput(mtxCoinstake, StakeBlock, nReward, fEnableStakeSplit,
+                             fEnableSideStaking, nMinStakeSplitValue, dEfficiency);
+    }
+
+    // Copy back coinstake AFTER SplitCoinStakeOutput
     StakeBlock.vtx[1] = CTransaction(mtxCoinstake);
 
     if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) {
