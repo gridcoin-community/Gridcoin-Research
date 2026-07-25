@@ -292,12 +292,13 @@ if(ENABLE_UPNP)
 endif()
 
 if(ENABLE_MULTIPROCESS)
-    # The IPC transport is pathname AF_UNIX sockets with POSIX close-on-exec /
-    # umask semantics (src/ipc/); it is a Unix-only feature. Fail with a clear
-    # message rather than a confusing compile error if it is enabled on Windows.
-    if(WIN32)
-        message(FATAL_ERROR "ENABLE_MULTIPROCESS is not supported on Windows (it requires POSIX AF_UNIX sockets).")
-    endif()
+    # The IPC transport is pathname AF_UNIX sockets (src/ipc/). AF_UNIX is not
+    # POSIX-only: Windows 10 1803+ provides it via <afunix.h> with the same
+    # sockaddr_un layout, so the same transport builds on both platforms. The
+    # Windows port swaps the POSIX socket/close-on-exec/permission primitives for
+    # their winsock equivalents (WSASocketW / handle-inherit flags / NTFS ACLs)
+    # in src/ipc/process.cpp and fences the unused fork/spawn paths in the
+    # libmultiprocess subtree; both platforms are driven by this one switch.
 
     # Cap'n Proto provides the serialization runtime and the capnp / capnpc-c++
     # code generators; libmultiprocess provides the proxy runtime and the mpgen

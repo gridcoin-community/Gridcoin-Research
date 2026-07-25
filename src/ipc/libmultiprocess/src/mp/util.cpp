@@ -15,10 +15,17 @@
 #include <sstream>
 #include <string>
 #include <sys/types.h>
+#ifndef WIN32
+// POSIX process-spawning / socketpair machinery. Gridcoin uses a connect-only
+// IPC model (the GUI connects to an already-running node; nothing is ever
+// spawned), so none of the fork/exec/socketpair/waitpid path below is reached
+// on any platform -- on Windows these headers do not exist, so fence them out
+// and provide throwing stubs for the public entry points (see below).
 #include <spawn.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#endif
 #include <system_error>
 #include <thread> // NOLINT(misc-include-cleaner) // IWYU pragma: keep
 #include <unistd.h>
@@ -33,9 +40,13 @@
 #include <pthread_np.h>
 #endif // HAVE_PTHREAD_GETTHREADID_NP
 
-extern "C" char **environ; // NOLINT(readability-redundant-declaration)
+#ifndef WIN32
+extern "C" char **environ; // NOLINT(readability-redundant-declaration) // only used by StartProcess (POSIX spawn path)
+#endif
 
 namespace mp {
+
+#ifndef WIN32
 namespace {
 
 std::vector<char*> MakeArgv(const std::vector<std::string>& args)
@@ -61,6 +72,7 @@ size_t MaxFd()
 }
 
 } // namespace
+#endif // !WIN32
 
 std::string ThreadName(const char* exe_name)
 {
@@ -117,6 +129,21 @@ std::string LogEscape(const kj::StringTree& string, size_t max_size)
     return result;
 }
 
+#ifdef WIN32
+// Connect-only IPC: Gridcoin never spawns a child, so these never run. Provide
+// stubs that link and fail loudly if the spawn path is ever entered on Windows.
+[[noreturn]] static void ThrowSpawnUnsupported(const char* fn)
+{
+    throw std::runtime_error(std::string(fn) +
+        " is not supported on Windows: the multiprocess build uses a connect-only "
+        "model (the GUI connects to an already-running node) and never spawns.");
+}
+
+std::tuple<ProcessId, SocketId> SpawnProcess(SpawnConnectInfoToArgsFn&&)
+{
+    ThrowSpawnUnsupported("mp::SpawnProcess");
+}
+#else
 std::tuple<ProcessId, SocketId> SpawnProcess(SpawnConnectInfoToArgsFn&& connect_info_to_args)
 {
     auto fds{SocketPair()};
@@ -173,7 +200,11 @@ std::tuple<ProcessId, SocketId> SpawnProcess(SpawnConnectInfoToArgsFn&& connect_
     }
     return {pid, fds[1]};
 }
+#endif // WIN32
 
+// Portable: parses the socket id the parent passed on the command line. Gridcoin
+// does not use the spawn path, but this contains no platform code, so it stays
+// unconditional.
 SocketId StartSpawned(const SpawnConnectInfo& connect_info)
 {
     try {
@@ -184,6 +215,11 @@ SocketId StartSpawned(const SpawnConnectInfo& connect_info)
     }
 }
 
+#ifdef WIN32
+std::array<SocketId, 2> SocketPair() { ThrowSpawnUnsupported("mp::SocketPair"); }
+ProcessId StartProcess(const std::vector<std::string>&) { ThrowSpawnUnsupported("mp::StartProcess"); }
+int WaitProcess(ProcessId) { ThrowSpawnUnsupported("mp::WaitProcess"); }
+#else
 std::array<SocketId, 2> SocketPair()
 {
     int pair[2];
@@ -211,5 +247,6 @@ int WaitProcess(ProcessId pid)
     }
     return status;
 }
+#endif // WIN32
 
 } // namespace mp
