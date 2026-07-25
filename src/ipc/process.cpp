@@ -129,7 +129,13 @@ void EnsureWinsock() {} // no-op on POSIX
 int MakeCloexecStreamSocket()
 {
 #ifdef WIN32
-    SOCKET s = ::WSASocketW(AF_UNIX, SOCK_STREAM, 0, nullptr, 0, WSA_FLAG_NO_HANDLE_INHERIT);
+    // WSA_FLAG_OVERLAPPED is required: libmultiprocess drives these sockets with
+    // kj's IOCP async backend (overlapped AcceptEx / WSARecv). Without it kj cannot
+    // post an async accept, so the daemon never accepts and clients get
+    // WSAECONNREFUSED even though node.sock exists and listen() succeeded.
+    // WSA_FLAG_NO_HANDLE_INHERIT is the close-on-exec equivalent.
+    SOCKET s = ::WSASocketW(AF_UNIX, SOCK_STREAM, 0, nullptr, 0,
+                            WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
     return s == INVALID_SOCKET ? -1 : static_cast<int>(s);
 #elif defined(SOCK_CLOEXEC)
     return ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
