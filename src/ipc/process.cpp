@@ -24,6 +24,7 @@
 // winsock2.h must precede afunix.h/ws2tcpip.h. AF_UNIX for Windows lives in
 // <afunix.h> (Windows 10 1803+); sockaddr_un has the same sun_family/sun_path
 // layout ParseAddress relies on.
+#include <mutex>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <afunix.h>
@@ -76,6 +77,23 @@ void CloseSocket(int fd) { SOCKET s = static_cast<SOCKET>(fd); closesocket(s); }
 #ifdef WIN32
 int LastSocketError() { return ::WSAGetLastError(); }
 
+//! Initialize winsock once before the first IPC socket call. The daemon already
+//! calls WSAStartup for its P2P stack (net.cpp), but the -multiprocess GUI
+//! process connects to the node without necessarily starting that stack, so the
+//! IPC layer initializes winsock itself. WSAStartup is reference-counted, so this
+//! composes safely with net.cpp's call; a process-lifetime init needs no cleanup.
+void EnsureWinsock()
+{
+    static std::once_flag once;
+    std::call_once(once, [] {
+        WSADATA wsadata;
+        const int ret = ::WSAStartup(MAKEWORD(2, 2), &wsadata);
+        if (ret != 0) {
+            throw std::system_error(ret, std::system_category(), "WSAStartup");
+        }
+    });
+}
+
 //! Translate a winsock error into a std::error_code whose comparison against
 //! std::errc still works: interfaces.cpp classifies a connect failure as
 //! connection_refused / no_such_file_or_directory / not_a_directory to detect a
@@ -100,6 +118,7 @@ std::error_code SocketErrorCode(int err)
 #else
 int LastSocketError() { return errno; }
 std::error_code SocketErrorCode(int err) { return std::error_code(err, std::system_category()); }
+void EnsureWinsock() {} // no-op on POSIX
 #endif
 
 //! Create an AF_UNIX SOCK_STREAM socket that is not inherited by child processes,
@@ -151,6 +170,7 @@ class ProcessImpl : public Process
 public:
     int connect(const fs::path& data_dir, std::string& address) override
     {
+        EnsureWinsock();
         struct sockaddr_un addr;
         ParseAddress(address, data_dir, addr);
         int connect_errno = 0;
@@ -163,6 +183,7 @@ public:
 
     int bind(const fs::path& data_dir, std::string& address) override
     {
+        EnsureWinsock();
         struct sockaddr_un addr;
         const fs::path path = ParseAddress(address, data_dir, addr);
 
