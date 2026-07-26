@@ -102,6 +102,13 @@ struct ScraperConvergenceSnapshot
     std::vector<std::string> included_scrapers;
     std::vector<std::string> excluded_scrapers;
     std::vector<std::string> scrapers_not_publishing;
+    //! Most recent non-Log scraper event the core emitted (scrapereventtypes and
+    //! ChangeType carried as their int values), or -1/-1 when none has fired
+    //! since node startup. Lets the GUI initialize the scraper status icon at
+    //! connect time rather than waiting for the next event (matters when the GUI
+    //! attaches to an already-running node in -multiprocess mode).
+    int current_event_type = -1;
+    int current_event_status = -1;
 };
 
 //! Result of the GitHub "latest release" check the About dialog runs. Value

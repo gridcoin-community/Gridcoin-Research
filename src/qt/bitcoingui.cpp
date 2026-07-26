@@ -809,9 +809,27 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
 
         setMinerStatus(false, 0.0, 0.0, 0.0);
         connect(clientModel, &ClientModel::minerStatusChanged, this, &BitcoinGUI::setMinerStatus);
+        // Hydrate the miner status from the core's current staking state now that
+        // the signal is connected. Otherwise the fields sit at the false/0 default
+        // until the next MinerStatusChanged push -- which, when the GUI attaches to
+        // an already-running node (-multiprocess), may be a long way off.
+        clientModel->refreshMinerStatus();
 
-        // Start with out-of-sync message for scraper/NN.
-        updateScraperIcon((int)scrapereventtypes::OutOfSync, CT_UPDATING);
+        // Initialize the scraper icon from the core's current scraper status. We
+        // subscribe to future NotifyScraperEvent pushes below, but the last event
+        // may have fired before we connected (e.g. attaching to an already-
+        // converged node in -multiprocess mode), so hydrate now rather than
+        // leaving the icon on a stale out-of-sync default.
+        int scraper_event_type = (int)scrapereventtypes::OutOfSync;
+        int scraper_event_status = CT_UPDATING;
+        {
+            const interfaces::ScraperConvergenceSnapshot snapshot = clientModel->getScraperConvergenceSnapshot();
+            if (snapshot.current_event_type >= 0) {
+                scraper_event_type = snapshot.current_event_type;
+                scraper_event_status = snapshot.current_event_status;
+            }
+        }
+        updateScraperIcon(scraper_event_type, scraper_event_status);
         connect(clientModel, &ClientModel::updateScraperStatus, this, &BitcoinGUI::updateScraperIcon);
 
         // Report errors from network/worker thread
