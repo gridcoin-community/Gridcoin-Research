@@ -200,7 +200,8 @@ std::string ComputeIdentityToken(const std::vector<unsigned char>& wallet_uuid)
 }
 
 HandshakeResult ClientHandshake(interfaces::Init& init, const std::string& cookie,
-                                const std::string& local_network)
+                                const std::string& local_network,
+                                const interfaces::BuildInfo& local)
 {
     HandshakeResult result;
     try {
@@ -213,7 +214,6 @@ HandshakeResult ClientHandshake(interfaces::Init& init, const std::string& cooki
         // Fetch build + identity once, up front: a second getIdentity() call would
         // be a redundant round-trip and could, in principle, race a divergent value.
         const interfaces::BuildInfo remote = init.getBuildInfo();
-        const interfaces::BuildInfo local = GetLocalBuildInfo();
         const interfaces::NodeIdentity ident = init.getIdentity();
 
         if (remote.schema_major != local.schema_major) {

@@ -33,6 +33,7 @@
 #include "node/shutdown.h"
 #ifdef ENABLE_MULTIPROCESS
 #include "ipc/connect.h"
+#include "ipc/handshake.h"
 #endif
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
@@ -58,6 +59,9 @@
 #include <thread>
 
 #include <QMessageBox>
+#include <QCryptographicHash>
+#include <QPushButton>
+#include <QSettings>
 #include <QGridLayout>
 #include <QDebug>
 #include <QTextCodec>
@@ -131,6 +135,15 @@ static void SetupUIArgs(ArgsManager& argsman)
                    ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
     argsman.AddArg("-showorphans", "Include stale (orphaned) coinstake transactions in the transaction list",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-autotrustidentity",
+                   "In -multiprocess mode, silently re-bind when the daemon's wallet identity changes "
+                   "for this data directory instead of prompting -- for instances where the wallet is "
+                   "swapped deliberately, and for headless/scripted starts (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-nobuildwarn",
+                   "In -multiprocess mode, suppress the warning logged when the GUI and daemon were "
+                   "built from different commits (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
     argsman.AddArg("-guilogfile=<file>",
                    "In -multiprocess mode the GUI runs as a separate process from the node and MUST NOT "
                    "share the node's debug log file (the node rotates it by rename, which would orphan the "
@@ -268,6 +281,101 @@ static void QuitOnDaemonConnectionLost(const char* reason)
     if (QCoreApplication* qapp = QCoreApplication::instance()) {
         QMetaObject::invokeMethod(qapp, [] { BitcoinGUI::requestQuit(); }, Qt::QueuedConnection);
     }
+}
+
+//! QSettings key under which the GUI remembers the node identity token it bound to
+//! for this data directory. Keyed by a hash of the canonical datadir so no path is
+//! stored; the datadir is the rendezvous point the GUI and node already share.
+static QString NodeIdentitySettingsKey()
+{
+    fs::path dir;
+    try {
+        dir = fs::canonical(GetDataDir());
+    } catch (const std::exception&) {
+        dir = GetDataDir(); // canonical() can throw (permissions); a stable raw path still works
+    }
+    const std::string s = dir.string();
+    const QByteArray h = QCryptographicHash::hash(QByteArray(s.data(), static_cast<int>(s.size())),
+                                                  QCryptographicHash::Sha256)
+                             .toHex();
+    return QStringLiteral("ipc/identity/") + QString::fromLatin1(h);
+}
+
+//! GUI-side identity binding + soft-warnings after a successful handshake
+//! (Phase-2 design section 4.2/4.3). The wire compatibility (schema/protocol/
+//! network) was already verified in ClientHandshake; here we confirm the node is
+//! serving the same wallet the GUI bound to for this datadir, and surface any
+//! mixed-build warning. Returns false only when the GUI must exit (a wallet change
+//! the user declined). -autotrustidentity turns the prompt into a silent rebind
+//! for instances that swap wallets deliberately (and for headless/scripted starts).
+static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
+{
+    QSettings settings;
+    const QString key = NodeIdentitySettingsKey();
+    const QString reported = QString::fromStdString(hs.remote_ident.identity_token);
+    const QString stored = settings.value(key).toString();
+
+    const auto persist = [&](const QString& token) {
+        settings.setValue(key, token);
+        settings.sync();
+        if (settings.status() != QSettings::NoError) {
+            GUILogPrintf("IPC: WARNING: could not persist the node-identity binding "
+                         "(QSettings status %d); the wallet-swap guard is disabled this session",
+                         static_cast<int>(settings.status()));
+        }
+    };
+
+    switch (ipc::CheckIdentityBinding(reported.toStdString(), stored.toStdString())) {
+    case ipc::BindOutcome::Match:
+        break;
+    case ipc::BindOutcome::UnavailableFresh:
+        GUILogPrintf("IPC: the daemon reported no wallet identity (binding unavailable); "
+                     "proceeding without the wallet-swap guard");
+        break;
+    case ipc::BindOutcome::FirstSeen:
+        GUILogPrintf("IPC: bound to the daemon's wallet identity for this data directory");
+        persist(reported);
+        break;
+    case ipc::BindOutcome::Mismatch:
+    case ipc::BindOutcome::UnavailableStored: {
+        if (gArgs.GetBoolArg("-autotrustidentity", false)) {
+            GUILogPrintf("IPC: the daemon's wallet identity changed; -autotrustidentity set -> "
+                         "re-binding to the new wallet without prompting");
+            persist(reported);
+            break;
+        }
+        QMessageBox box(QMessageBox::Warning, PACKAGE_NAME,
+                        QObject::tr("The wallet in this data directory appears to have changed since "
+                                    "you last connected to the Gridcoin daemon from here (it may have "
+                                    "been replaced or restored).\n\nTrust this wallet and remember it, "
+                                    "or quit?"));
+        QPushButton* trust = box.addButton(QObject::tr("Trust this wallet"), QMessageBox::AcceptRole);
+        QPushButton* quit = box.addButton(QObject::tr("Quit"), QMessageBox::RejectRole);
+        box.setDefaultButton(quit);
+        box.exec();
+        if (box.clickedButton() == trust) {
+            GUILogPrintf("IPC: user trusted the changed wallet identity -> re-binding");
+            persist(reported);
+            break;
+        }
+        GUILogPrintf("IPC: user declined the changed wallet identity -> quitting "
+                     "(relaunch with -autotrustidentity to accept it non-interactively)");
+        return false;
+    }
+    }
+
+    // Soft (non-fatal) findings.
+    for (const ipc::SoftWarn w : hs.soft) {
+        if (w == ipc::SoftWarn::GuiOlderMinor) {
+            GUILogPrintf("IPC: the daemon speaks a newer IPC schema minor than this GUI "
+                         "(forward-compatible; some newer features may be unavailable)");
+        } else if (w == ipc::SoftWarn::GitCommitMismatch && !gArgs.GetBoolArg("-nobuildwarn", false)) {
+            GUILogPrintf("IPC: WARNING: the GUI (%s) and daemon (%s) were built from different "
+                         "commits; mixed builds can behave unexpectedly",
+                         ipc::GetLocalBuildInfo().git_commit, hs.remote_build.git_commit);
+        }
+    }
+    return true;
 }
 
 //! QApplication subclass that contains exceptions escaping Qt event handlers.
@@ -830,6 +938,15 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 return EXIT_FAILURE;
             }
             interface_init = node_connection->init.get();
+
+            // GUI-side identity binding + soft-warnings: confirm the daemon serves
+            // the same wallet the GUI bound to for this datadir (prompt / rebind on
+            // change), and surface a mixed-build warning. Exits if a wallet change
+            // is declined.
+            if (!ResolveNodeIdentity(node_connection->handshake))
+            {
+                return EXIT_FAILURE;
+            }
 
             // The multiprocess GUI logs to its own file (set up in main() before
             // this function) but, unlike the node, runs no core scheduler to rotate

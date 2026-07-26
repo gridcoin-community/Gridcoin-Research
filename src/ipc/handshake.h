@@ -78,8 +78,12 @@ struct HandshakeResult {
 //! mismatch, GUI older minor) are returned in \p soft, not failures. The identity
 //! token is returned in \p remote_ident for the caller's GUI-side binding step
 //! (CheckIdentityBinding) -- this function does not judge it.
+//! \p local defaults to this build's GetLocalBuildInfo(); it is a parameter only
+//! so tests can drive every comparison branch (e.g. GUI-newer-minor) regardless
+//! of the compiled-in schema constants.
 HandshakeResult ClientHandshake(interfaces::Init& init, const std::string& cookie,
-                                const std::string& local_network);
+                                const std::string& local_network,
+                                const interfaces::BuildInfo& local = GetLocalBuildInfo());
 
 //! Outcome of comparing a node's reported identity token against the GUI's stored
 //! expectation for this datadir.

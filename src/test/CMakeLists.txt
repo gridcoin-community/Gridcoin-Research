@@ -89,6 +89,13 @@ add_executable(test_gridcoin
     # null-wallet-safe getRowDetail early-returns. Core lives in gridcoin_util,
     # so only the suite is listed here (GUI-OFF).
     qt_wallettxstore_tests.cpp
+    # Multiprocess connect-handshake logic (src/ipc/handshake.cpp): identity-token
+    # hashing, the ClientHandshake matching policy, and CheckIdentityBinding. The
+    # TU has no Cap'n Proto / libmultiprocess dependency, so it compiles into the
+    # ordinary (non-multiprocess) test binary directly -- these unit tests run in
+    # every CI config, not just the multiprocess job.
+    ${CMAKE_SOURCE_DIR}/src/ipc/handshake.cpp
+    ipc_handshake_tests.cpp
     random_tests.cpp
     rpc_tests.cpp
     rpchelpman_tests.cpp
