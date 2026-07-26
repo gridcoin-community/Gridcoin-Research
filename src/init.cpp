@@ -289,6 +289,13 @@ void Shutdown(void* parg)
         // stake miner above too, so this is the first point at which no thread -- net,
         // RPC, or miner -- can still touch either. Reset the peer manager before the
         // connection manager it is associated with (PR 8a).
+        //
+        // Defensive/idiomatic unregister before destruction (issue #3125 C8; see
+        // the comment on the Unregister block further below): in the current
+        // teardown order this is a no-op -- UnregisterBackgroundSignalScheduler()
+        // earlier in Shutdown() already disconnected every subscriber -- and the
+        // operative safety invariant is the thread joins described above.
+        if (g_peerman) UnregisterValidationInterface(g_peerman.get());
         if (g_peerman) g_peerman.reset();
         if (g_connman) g_connman.reset();
 
@@ -2122,6 +2129,15 @@ bool AppInit2(ThreadHandlerPtr threads)
     // whose inputs get spent are evicted on mempool admission (fast) and on
     // block connection (authoritative).
     RegisterValidationInterface(&g_psgt_pool);
+
+    // Subscribe the peer manager so the new-tip inventory relay (moved out of
+    // AcceptBlock) hangs off UpdatedBlockTip like Bitcoin's net_processing --
+    // the PeerManager-as-subscriber half of workstream B3 (#3030), issue
+    // #3125 C8. g_peerman was constructed in Step 12 above; note StartNode is
+    // already running, so a block accepted from a live peer before this point
+    // no longer relays (the pre-move AcceptBlock loop did) -- a sub-second
+    // window, registration cannot precede the scheduler wiring above.
+    RegisterValidationInterface(g_peerman.get());
 
     // Three-layer PSGT pool notification (#2910), the -pollnotify pattern:
     // the pool fires this hook outside its lock for every mutation; it fans

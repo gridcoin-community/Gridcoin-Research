@@ -1655,6 +1655,37 @@ public:
         // be consolidated onto PeerManager.
     }
 
+    void UpdatedBlockTip(const CBlockIndex* pindexNew, const CBlockIndex* /*pindexFork*/,
+                         bool /*fInitialDownload*/) override EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        // Relay inventory, but don't relay old inventory during initial block
+        // download (moved verbatim from AcceptBlock, issue #3125 C8; the
+        // per-node nStartingHeight heuristic below is the historical IBD
+        // suppressor, so no fInitialDownload gate is added).
+        //
+        // Defensive best-chain guard. SetBestChain now emits UpdatedBlockTip only
+        // when the tip actually advanced -- it reports pindexBest and skips the
+        // emission on its trust-regression reorg-back path (issues #3145, #3125
+        // C8) -- so pindexNew is the best chain here. The guard stays as cheap
+        // insurance against a future emitter that fires on a non-advancing tip
+        // (relaying that inv would advertise a non-best block).
+        if (pindexNew == nullptr || pindexNew->GetBlockHash() != hashBestChain) return;
+
+        int nBlockEstimate = Params().Checkpoints().GetHeight();
+
+        // Iterate under the already-held cs_main (issue #2558 PR 9c); read the
+        // cs_main-guarded height into a local so the callback stays lock-clean.
+        const int nBestHeightLocal = nBestHeight;
+        const CInv inv(MSG_BLOCK, pindexNew->GetBlockHash());
+        if (g_connman)
+        {
+            g_connman->ForEachNodeUnderLock([&](CNode* pnode) {
+                if (nBestHeightLocal > (pnode->nStartingHeight != -1 ? pnode->nStartingHeight - 2000 : nBlockEstimate))
+                    pnode->PushInventory(inv);
+            });
+        }
+    }
+
     bool Misbehaving(const CAddress& addr, int howmuch) override
     {
         if (addr.IsLocal())

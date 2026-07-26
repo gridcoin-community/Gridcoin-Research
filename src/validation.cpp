@@ -1512,22 +1512,11 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
     if (!AddToBlockIndex(block, nFile, nBlockPos, hashProof))
         return error("%s: AddToBlockIndex failed", __func__);
 
-    // Relay inventory, but don't relay old inventory during initial block download
-    int nBlockEstimate = Params().Checkpoints().GetHeight();
-    if (hashBestChain == hash)
-    {
-        // Iterate under the already-held cs_main (issue #2558 PR 9c); read the
-        // cs_main-guarded height into a local so the callback stays lock-clean.
-        const int nBestHeightLocal = nBestHeight;
-        const CInv inv(MSG_BLOCK, hash);
-        if (g_connman)
-        {
-            g_connman->ForEachNodeUnderLock([&](CNode* pnode) {
-                if (nBestHeightLocal > (pnode->nStartingHeight != -1 ? pnode->nStartingHeight - 2000 : nBlockEstimate))
-                    pnode->PushInventory(inv);
-            });
-        }
-    }
+    // The new-tip inventory relay that lived here moved to
+    // PeerManagerImpl::UpdatedBlockTip, driven by the signal SetBestChain
+    // emits under the same cs_main hold (issue #3125 C8) -- including its
+    // best-chain gate, which suppressed relay when SetBestChain reorganized
+    // back to the previous tip.
 
     return true;
 }

@@ -525,15 +525,15 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     //
     // pfork captures the fork point of this forward reorg to pindexNew, threaded
     // out for the UpdatedBlockTip emission below (issue #3104). The reorg-back
-    // call, if it runs, overwrites pfork so the emission describes the reorg
-    // that actually produced the final tip (issue #3145). On that path the
-    // externally visible tip is unchanged (the tip itself would be the minimal
-    // fork point); the back-leg common ancestor passed instead is always a
-    // non-null ancestor of the reported tip, so a fork-point-dependent
-    // subscriber at worst revisits blocks already on the main chain.
+    // call, if it runs, leaves pfork untouched: the tip did not advance on that
+    // path, so the UpdatedBlockTip emission below is skipped entirely (see there)
+    // and pfork is never read.
     const CBlockIndex* pfork = nullptr;
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew, &pfork);
 
+    // Whether the forward reorg to pindexNew regressed chain trust and was rolled
+    // back to origBestIndex. On that path the externally visible tip is unchanged.
+    bool reorged_back = false;
     if (previous_chain_trust > g_chain_trust.Best()) {
         LogPrintf("INFO: %s: Reorganize caused lower chain trust than before. Reorganizing back.", __func__);
 
@@ -543,7 +543,8 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
             return error("%s: Fatal Error while reading original best block", __func__);
         }
 
-        success = ReorganizeChain(txdb, cnt_dis, cnt_con, origBlock, origBestIndex, &pfork);
+        success = ReorganizeChain(txdb, cnt_dis, cnt_con, origBlock, origBestIndex);
+        reorged_back = true;
     }
 
     if (!success) {
@@ -596,26 +597,30 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     }
     #endif
 
-    // Notify the validation-signal layer that the chain tip advanced. The UI
-    // bridge registered in init.cpp re-emits uiInterface.NotifyBlocksChanged()
-    // for the Qt models, so GUI block notifications now flow through the
-    // validation interface (issue #3030, workstream B3).
+    // Notify the validation-signal layer that the chain tip advanced, but only
+    // when it actually did. Two subscribers consume this (issue #3030 B3): the UI
+    // bridge in init.cpp, which re-emits uiInterface.NotifyBlocksChanged() from
+    // the reported index's height/time for the Qt models; and the PeerManager
+    // (issue #3125 C8), which relays the new-tip inventory moved out of
+    // AcceptBlock.
     //
-    // pindexFork is the true reorg fork point: the last common ancestor
-    // (pcommon) computed in ReorganizeChain and threaded up here via pfork. It
-    // is the previous tip for a trivial single-block extension and the deeper
-    // common ancestor for a multi-block reorg -- unlike origBestIndex, which
-    // would be wrong for any non-trivial reorg. nullptr only when connecting the
-    // genesis block. This resolves the #3080 stopgap so fork-point-dependent
-    // subscribers (e.g. the deferred PeerManager) receive correct semantics
-    // (issue #3104).
+    // Report pindexBest, not pindexNew: after a trust-regression reorg-back the
+    // final tip is origBestIndex, and pindexNew would name the abandoned block --
+    // mis-reporting the GUI height and advertising a non-best block (issues #3145,
+    // #3125 C8). On the advance path pindexBest == pindexNew.
     //
-    // The tip is reported as pindexBest rather than pindexNew: the
-    // trust-regression reorg-back above can leave the final tip at
-    // origBestIndex, and pindexNew would then name the abandoned block (issue
-    // #3145). On the normal path pindexBest == pindexNew after a successful
-    // reorganize, so this is equivalent.
-    GetMainSignals().UpdatedBlockTip(pindexBest, pfork, fIsInitialDownload);
+    // Emit only when the tip advanced. On the reorg-back path the tip is
+    // unchanged, so there is no update to report: skipping the emission is what
+    // suppresses the PeerManager relay there (the behavior AcceptBlock's old
+    // best-chain gate provided) and spares the GUI a redundant notification.
+    //
+    // pfork is the true reorg fork point (the last common ancestor computed in
+    // ReorganizeChain, issue #3104): the previous tip for a trivial extension, the
+    // deeper common ancestor for a multi-block reorg. nullptr only when connecting
+    // the genesis block.
+    if (!reorged_back) {
+        GetMainSignals().UpdatedBlockTip(pindexBest, pfork, fIsInitialDownload);
+    }
 
     return GridcoinServices();
 }

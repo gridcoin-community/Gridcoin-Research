@@ -6,6 +6,8 @@
 #define BITCOIN_NET_PROCESSING_H
 
 #include "net.h"
+#include "sync.h"
+#include "validationinterface.h"
 
 #include <memory>
 
@@ -13,6 +15,11 @@ class CTransaction;
 class CConnman;
 class CScheduler;
 class BanMan;
+
+//! Declared in chain.h; redeclared here for the UpdatedBlockTip lock
+//! annotation (the gridcoin/staking/chain_trust.h idiom) without pulling the
+//! chain-state header into the net layer.
+extern CCriticalSection cs_main;
 
 // Relay a transaction to peers, caching its serialized form in mapRelay so it
 // can be served from the getdata loop (moved from net.h, issue #2558 PR 2b).
@@ -34,8 +41,11 @@ void RelayPSGT(const uint256& revision_hash);
 //! peer-misbehavior tracking moved onto it in PR 8b (was the free
 //! GetMisbehaviorAddr/MisbehavingAddr/ClearMisbehaviorForSubnet of PR 2c).
 //! ThreadMessageHandler drives it through g_peerman; CConnman gains a
-//! NetEventsInterface* in PR 8c.
-class PeerManager : public NetEventsInterface
+//! NetEventsInterface* in PR 8c. It is additionally a CValidationInterface
+//! subscriber (registered in init.cpp) so relay work hangs off validation
+//! signals like Bitcoin's net_processing (issue #3125 C8, the
+//! PeerManager-as-subscriber half of #3030 workstream B3).
+class PeerManager : public NetEventsInterface, public CValidationInterface
 {
 public:
     static std::unique_ptr<PeerManager> make(CConnman& connman, BanMan* banman);
@@ -43,6 +53,13 @@ public:
 
     //! Start the recurring scheduled tasks (shell in PR 8a; populated later).
     virtual void StartScheduledTasks(CScheduler& scheduler) = 0;
+
+    //! CValidationInterface: relay the new best-block inventory to peers
+    //! (moved from AcceptBlock, issue #3125 C8). Redeclared public here --
+    //! the base declares it protected -- so tests can drive the handler
+    //! through g_peerman directly (the node/psgt_pool.h pattern).
+    virtual void UpdatedBlockTip(const CBlockIndex* pindexNew, const CBlockIndex* pindexFork,
+                                 bool fInitialDownload) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) = 0;
 
     //! Score misbehavior against an address; returns true if it triggered a ban.
     //! The per-address score, its linear decay, and the ban escalation moved
