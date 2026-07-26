@@ -148,7 +148,23 @@ GUI, close it or `SIGTERM` it as above.
   different `-datadir`, or (Windows) is running as a different user. Start the daemon
   first and confirm `IPC: serving …` appears in its `debug.log`.
 - **Version/schema mismatch on connect.** The GUI and daemon are different builds.
-  Use matching `gridcoinresearch` / `gridcoinresearchd` binaries.
+  Use matching `gridcoinresearch` / `gridcoinresearchd` binaries. If only the commit
+  differs (not the schema), the GUI still connects and just logs a mixed-build
+  warning; suppress it per instance with `-nobuildwarn`.
+- **"The wallet in this data directory appears to have changed…"** The GUI binds, per
+  data directory, to the wallet the daemon is serving (a per-wallet identity kept in
+  `wallet.dat`). It shows this prompt when a *different* wallet answers — e.g. you
+  replaced or restored `wallet.dat`. Choose **Trust this wallet** to accept and
+  remember the new one, or **Quit**. The check is chain-independent: a resync,
+  re-genesis, or blockchain reset does **not** trigger it. For instances where you
+  swap wallets deliberately (or start the GUI unattended), pass `-autotrustidentity`
+  to re-bind silently instead of prompting. Note: the daemon itself always serves
+  whatever `wallet.dat` is in its datadir — this prompt only stops the *GUI* from
+  silently showing you a different wallet.
+- **First multiprocess-capable load rewrites `wallet.dat`.** The one-time wallet
+  identity (a random tag, not key material) is written on first load. If your
+  `wallet.dat` is a symlink (e.g. shared across instances), back up the symlink
+  *target*.
 - **The GUI won't share a log with the node.** In `-multiprocess` mode the GUI uses
   `debug_gui.log`; set `-guilogfile` to a distinct path if you have overridden the
   node's `-debuglogfile`.
