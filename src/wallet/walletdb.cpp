@@ -471,7 +471,15 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         {
             std::vector<unsigned char> vchUuid;
             ssValue >> vchUuid;
-            pwallet->LoadWalletUuid(vchUuid);
+            // The UUID is always exactly 16 bytes; reject any other size (a
+            // corrupted record) rather than binding to garbage. Treated as absent,
+            // so LoadWallet re-mints a fresh one.
+            if (vchUuid.size() == 16) {
+                pwallet->LoadWalletUuid(vchUuid);
+            } else {
+                LogPrintf("%s: WARNING: ignoring walletuuid record of unexpected size %u",
+                          __func__, static_cast<unsigned>(vchUuid.size()));
+            }
         }
         else if (strType == "seedphrase" || strType == "cseedphrase")
         {

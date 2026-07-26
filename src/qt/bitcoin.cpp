@@ -317,6 +317,10 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
     const QString stored = settings.value(key).toString();
 
     const auto persist = [&](const QString& token) {
+        // Never persist an empty token: that would erase the binding and silently
+        // disable the wallet-swap guard. (Only Mismatch/FirstSeen persist, and both
+        // have a non-empty reported token; this is a defensive backstop.)
+        if (token.isEmpty()) return;
         settings.setValue(key, token);
         settings.sync();
         if (settings.status() != QSettings::NoError) {
@@ -325,6 +329,8 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
                          static_cast<int>(settings.status()));
         }
     };
+
+    const bool autotrust = gArgs.GetBoolArg("-autotrustidentity", false);
 
     switch (ipc::CheckIdentityBinding(reported.toStdString(), stored.toStdString())) {
     case ipc::BindOutcome::Match:
@@ -337,9 +343,9 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
         GUILogPrintf("IPC: bound to the daemon's wallet identity for this data directory");
         persist(reported);
         break;
-    case ipc::BindOutcome::Mismatch:
-    case ipc::BindOutcome::UnavailableStored: {
-        if (gArgs.GetBoolArg("-autotrustidentity", false)) {
+    case ipc::BindOutcome::Mismatch: {
+        // A different (non-empty) wallet identity than the one bound here.
+        if (autotrust) {
             GUILogPrintf("IPC: the daemon's wallet identity changed; -autotrustidentity set -> "
                          "re-binding to the new wallet without prompting");
             persist(reported);
@@ -361,6 +367,33 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
         }
         GUILogPrintf("IPC: user declined the changed wallet identity -> quitting "
                      "(relaunch with -autotrustidentity to accept it non-interactively)");
+        return false;
+    }
+    case ipc::BindOutcome::UnavailableStored: {
+        // The daemon reports NO wallet identity though a binding exists here (a
+        // downgrade signal -- e.g. the node's UUID could not be minted). Never
+        // erase the existing binding by persisting empty; keep it armed so a later
+        // real token is still checked. Do not silently auto-trust this away, even
+        // under -autotrustidentity (that flag accepts a *changed* wallet, not the
+        // loss of the identity we bound to).
+        if (autotrust) {
+            GUILogPrintf("IPC: the daemon reports no wallet identity though a binding exists; "
+                         "-autotrustidentity set -> proceeding, keeping the existing binding");
+            break;
+        }
+        QMessageBox box(QMessageBox::Warning, PACKAGE_NAME,
+                        QObject::tr("The Gridcoin daemon is no longer reporting a wallet identity, "
+                                    "though this front end was bound to one for this data directory. "
+                                    "Proceed this time (the existing binding is kept), or quit?"));
+        QPushButton* proceed = box.addButton(QObject::tr("Proceed"), QMessageBox::AcceptRole);
+        QPushButton* quit = box.addButton(QObject::tr("Quit"), QMessageBox::RejectRole);
+        box.setDefaultButton(quit);
+        box.exec();
+        if (box.clickedButton() == proceed) {
+            GUILogPrintf("IPC: user proceeded past the missing wallet identity -> keeping the binding");
+            break;
+        }
+        GUILogPrintf("IPC: user declined the missing wallet identity -> quitting");
         return false;
     }
     }
