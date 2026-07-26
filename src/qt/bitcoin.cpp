@@ -282,9 +282,18 @@ public:
         try {
             return QApplication::notify(receiver, event);
         } catch (std::exception& e) {
+            // Route IPC-disconnect exceptions to the silent quit rather than the
+            // modal fatal-error path. Detect them two ways so we do not depend
+            // solely on libmultiprocess's exact raise text:
+            //   (a) that raise text ("... interrupted/called after disconnect"), and
+            //   (b) the connection already being known lost -- once on_disconnect
+            //       (or a prior notify()) has latched g_daemon_connection_lost, the
+            //       GUI is tearing down and further proxy calls will keep throwing,
+            //       so any event-handler exception in that state is disconnect fallout.
             const std::string msg{e.what()};
-            if (msg.find("interrupted by disconnect") != std::string::npos ||
-                msg.find("called after disconnect") != std::string::npos) {
+            if (g_daemon_connection_lost.load()
+                || msg.find("interrupted by disconnect") != std::string::npos
+                || msg.find("called after disconnect") != std::string::npos) {
                 QuitOnDaemonConnectionLost("a GUI call was interrupted by the daemon disconnecting");
                 return true;
             }

@@ -24,6 +24,7 @@
 // winsock2.h must precede afunix.h/ws2tcpip.h. AF_UNIX for Windows lives in
 // <afunix.h> (Windows 10 1803+); sockaddr_un has the same sun_family/sun_path
 // layout ParseAddress relies on.
+#include <climits>
 #include <mutex>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -136,7 +137,18 @@ int MakeCloexecStreamSocket()
     // WSA_FLAG_NO_HANDLE_INHERIT is the close-on-exec equivalent.
     SOCKET s = ::WSASocketW(AF_UNIX, SOCK_STREAM, 0, nullptr, 0,
                             WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
-    return s == INVALID_SOCKET ? -1 : static_cast<int>(s);
+    if (s == INVALID_SOCKET) return -1;
+    // The descriptor is carried as int (libmultiprocess SocketId) across the
+    // transport. Windows AF_UNIX handles fit in the low 32 bits in practice, but
+    // guard the assumption: a value that would not round-trip through int is
+    // unusable, so fail loudly here rather than silently truncate to a bogus
+    // (possibly negative, non-INVALID) fd downstream.
+    if (s > static_cast<SOCKET>(INT_MAX)) {
+        closesocket(s);
+        ::WSASetLastError(WSAEMFILE);
+        return -1;
+    }
+    return static_cast<int>(s);
 #elif defined(SOCK_CLOEXEC)
     return ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
 #else
