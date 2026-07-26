@@ -87,6 +87,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # These builds pass USE_CCACHE=true; cache ~/.cache/ccache so the source
+      # compile (the part not covered by the depends cache below) is reused across
+      # runs. Keyed per host triplet so the static and win64 caches stay separate.
+      - name: Configure Ccache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ccache
+          key: ccache-mp-${{ matrix.host }}-${{ github.sha }}
+          restore-keys: ccache-mp-${{ matrix.host }}-
+
       # Cache the depends tree (Qt/boost/Cap'n Proto etc.). MULTIPROCESS=1 builds
       # extra packages (native_capnp, capnp), so the key is distinct from the
       # monolithic production cache.
