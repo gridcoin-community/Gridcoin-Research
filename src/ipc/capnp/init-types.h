@@ -17,6 +17,7 @@
 #include <ipc/capnp/voting.capnp.proxy-types.h>
 #include <ipc/capnp/researcher.capnp.proxy-types.h>
 #include <ipc/capnp/psgt.capnp.proxy-types.h>
+#include <ipc/capnp/sidestake.capnp.proxy-types.h>
 
 #include <ipc/capnp/init.capnp.proxy.h>
 
