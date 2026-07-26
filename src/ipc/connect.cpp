@@ -4,6 +4,7 @@
 
 #include "ipc/connect.h"
 
+#include "chainparams.h"
 #include "ipc/handshake.h"
 #include "interfaces/init.h"
 #include "interfaces/ipc.h"
@@ -48,13 +49,16 @@ std::optional<GuiConnection> ConnectToNode(const fs::path& data_dir,
         return std::nullopt;
     }
 
-    // 3. Authenticate with the cookie and verify schema/protocol compatibility.
-    //    (Identity binding and the git-commit soft-warn are layered on GUI-side.)
-    std::string auth_error;
-    if (!ClientAuthenticateAndCheck(*conn.init, *cookie, auth_error)) {
-        error_out = auth_error;
+    // 3. Authenticate, verify compatibility (schema/protocol/network), and fetch
+    //    the node's build + identity. Identity *binding* (vs the GUI's stored
+    //    expectation) and the git_commit soft-warn banner are the caller's
+    //    GUI-side steps, driven off conn.handshake.
+    HandshakeResult hr = ClientHandshake(*conn.init, *cookie, Params().NetworkIDString());
+    if (!hr.ok) {
+        error_out = hr.error;
         return std::nullopt;
     }
+    conn.handshake = std::move(hr);
 
     return conn;
 }

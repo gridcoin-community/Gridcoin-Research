@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace ipc {
 
@@ -18,9 +19,16 @@ namespace ipc {
 //! the connect handshake (doc/multiprocess_design.md section 4.2). Bump the minor
 //! for additive schema changes, the major for breaking ones (which also require a
 //! transition release); bump protocol for transport/handshake changes.
-constexpr uint32_t IPC_SCHEMA_MAJOR = 1;
+//!
+//! Major 2: the NodeIdentity model was re-based onto the wallet UUID (former
+//! node_id/datadir/genesis_hash retired), a breaking wire change.
+constexpr uint32_t IPC_SCHEMA_MAJOR = 2;
 constexpr uint32_t IPC_SCHEMA_MINOR = 0;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
+
+//! Domain-separation tag hashed into the node identity token. Bump the suffix if
+//! the token *algorithm* ever changes (independent of the capnp schema version).
+constexpr char IDENTITY_TOKEN_DOMAIN[] = "gridcoin-node-identity-v1";
 
 //! This process's build fingerprint (git commit, build time, schema/protocol
 //! versions) for the handshake build-info exchange.
@@ -38,24 +46,55 @@ std::string WriteCookie(const fs::path& dir);
 //! file is absent (the node is not running -- do not dial).
 std::optional<std::string> ReadCookie(const fs::path& dir);
 
-//! Node side: load the persistent per-datadir node_id from
-//! <dir>/node_identity.json (generating a new UUID on first run), then rewrite
-//! the file with the current network / datadir / genesis and return the identity.
-interfaces::NodeIdentity WriteIdentity(const fs::path& dir);
+//! Compute the node identity token: HEX(SHA256(domain-tag ‖ LE32(len) ‖ uuid)).
+//! Deterministic in \p wallet_uuid; returns "" (identity unavailable) when the
+//! UUID is empty. The raw UUID never crosses the wire -- only this hash does.
+std::string ComputeIdentityToken(const std::vector<unsigned char>& wallet_uuid);
 
-//! GUI side: read <dir>/node_identity.json. Returns nullopt when absent or
-//! malformed.
-std::optional<interfaces::NodeIdentity> ReadIdentity(const fs::path& dir);
+//! Soft (non-fatal) handshake findings surfaced to the GUI.
+enum class SoftWarn {
+    GitCommitMismatch, //!< GUI and node built from different commits (banner).
+    GuiOlderMinor,     //!< GUI schema_minor < node: forward-compatible (log-only).
+};
 
-//! GUI side: run the authentication + build-info compatibility half of the
-//! connect handshake (design section 4.3 steps 5-6) against a freshly-connected
-//! remote Init. Calls authenticate(\p cookie) then getBuildInfo() and compares
-//! versions against this build. Returns true on success; on failure returns false
-//! and sets \p error_out to a human-readable reason. Hard-fail conditions: wrong
-//! cookie, schema_major mismatch (incompatible wire format), protocol_version
-//! mismatch, and the GUI's schema_minor being newer than the node's. (The
-//! identity binding and the git_commit soft-warn are handled GUI-side.)
-bool ClientAuthenticateAndCheck(interfaces::Init& init, const std::string& cookie, std::string& error_out);
+//! Result of the connect handshake. On ok==false the connection must be rejected
+//! and \p error shown/logged. On ok==true \p remote_build / \p remote_ident are
+//! valid and \p soft carries any non-fatal findings.
+struct HandshakeResult {
+    bool ok = false;
+    std::string error;
+    interfaces::BuildInfo remote_build;
+    interfaces::NodeIdentity remote_ident;
+    std::vector<SoftWarn> soft;
+};
+
+//! GUI side: the authentication + compatibility half of the connect handshake
+//! (design section 4.3). Against a freshly-connected remote Init, calls
+//! authenticate(cookie), getBuildInfo() and getIdentity() -- all inside one
+//! try/catch, so an IPC throw (daemon vanished mid-handshake) becomes a clean
+//! ok==false rather than an escaping exception. Hard-fail (ok==false) on: wrong
+//! cookie, schema_major mismatch, protocol_version mismatch, GUI schema_minor >
+//! node's, and a network mismatch vs \p local_network. Soft findings (git_commit
+//! mismatch, GUI older minor) are returned in \p soft, not failures. The identity
+//! token is returned in \p remote_ident for the caller's GUI-side binding step
+//! (CheckIdentityBinding) -- this function does not judge it.
+HandshakeResult ClientHandshake(interfaces::Init& init, const std::string& cookie,
+                                const std::string& local_network);
+
+//! Outcome of comparing a node's reported identity token against the GUI's stored
+//! expectation for this datadir.
+enum class BindOutcome {
+    FirstSeen,         //!< No stored token: persist \p reported and proceed.
+    Match,             //!< Stored == reported: proceed.
+    Mismatch,          //!< Stored != reported: prompt / -autotrustidentity / exit.
+    UnavailableFresh,  //!< Reported empty, nothing stored: proceed unbound (log once).
+    UnavailableStored, //!< Reported empty but a token was stored: treat as a mismatch
+                       //!< (a downgrade signal -- never silently skip).
+};
+
+//! Pure comparison of a reported token against a stored one. No I/O; the caller
+//! owns the QSettings read/write and the prompt. See BindOutcome.
+BindOutcome CheckIdentityBinding(const std::string& reported_token, const std::string& stored_token);
 
 } // namespace ipc
 

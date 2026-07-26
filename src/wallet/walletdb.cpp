@@ -467,6 +467,12 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
         }
+        else if (strType == "walletuuid")
+        {
+            std::vector<unsigned char> vchUuid;
+            ssValue >> vchUuid;
+            pwallet->LoadWalletUuid(vchUuid);
+        }
         else if (strType == "seedphrase" || strType == "cseedphrase")
         {
             CSeedPhraseData seed_phrase;
@@ -812,7 +818,7 @@ bool CWalletDB::Recover(CDBEnv& dbenv, std::string filename, bool fOnlyKeys)
             string strType, strErr;
             bool fReadOK = ReadKeyValue(&dummyWallet, ssKey, ssValue,
                                         wss, strType, strErr);
-            if (!IsKeyType(strType) && strType != "hdchain")
+            if (!IsKeyType(strType) && strType != "hdchain" && strType != "walletuuid")
                 continue;
             if (!fReadOK)
             {
@@ -840,6 +846,12 @@ bool CWalletDB::WriteHDChain(const CHDChain& chain)
 {
     nWalletDBUpdated++;
     return Write(std::string("hdchain"), chain);
+}
+
+bool CWalletDB::WriteWalletUuid(const std::vector<unsigned char>& uuid)
+{
+    nWalletDBUpdated++;
+    return Write(std::string("walletuuid"), uuid);
 }
 
 bool CWalletDB::WriteSeedPhrase(const CSeedPhraseData& data)

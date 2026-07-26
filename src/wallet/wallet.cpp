@@ -3758,6 +3758,24 @@ DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
         fFirstRunRet = !vchDefaultKey.IsValid();
     }
 
+    // Mint a persistent per-wallet UUID on first load if absent, for the
+    // multiprocess identity handshake (fingerprints *which wallet* a node serves).
+    // Skipped on mockable chains (regtest), whose wallet DB is not persisted -- a
+    // fresh UUID every restart would false-trip the GUI's identity binding. Not
+    // secret, not key-derived; a write failure just leaves it empty (identity is
+    // then reported as "unavailable" and the GUI skips binding).
+    if (m_wallet_uuid.empty() && !Params().IsMockableChain())
+    {
+        std::vector<unsigned char> uuid(16);
+        GetStrongRandBytes(uuid);
+        if (CWalletDB(strWalletFile).WriteWalletUuid(uuid)) {
+            m_wallet_uuid = std::move(uuid);
+        } else {
+            LogPrintf("%s: WARNING: could not persist wallet UUID; multiprocess "
+                      "identity binding is disabled for this wallet", __func__);
+        }
+    }
+
     NewThread(ThreadFlushWalletDB, &strWalletFile);
 
     LogPrintf("LoadWallet: started wallet flush thread.");
