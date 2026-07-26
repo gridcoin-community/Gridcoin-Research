@@ -246,6 +246,56 @@ static void handleRunawayException(std::exception *e)
     exit(1);
 }
 
+//! Latch so the graceful-quit path (and its log line) fires only once even if
+//! many proxy calls fail in quick succession while the connection tears down.
+static std::atomic<bool> g_daemon_connection_lost{false};
+
+//! Post a graceful, popup-free GUI quit to the Qt main thread when the node
+//! connection is lost -- the same path a core-initiated shutdown takes
+//! (QueueShutdown / requestQuit). Deliberately NO modal dialog: a modal would
+//! hang an unattended or remote GUI. Idempotent and safe if the QCoreApplication
+//! is already gone.
+static void QuitOnDaemonConnectionLost(const char* reason)
+{
+    if (g_daemon_connection_lost.exchange(true)) return;
+    GUILogPrintf("IPC: %s; closing the GUI", reason);
+    if (QCoreApplication* qapp = QCoreApplication::instance()) {
+        QMetaObject::invokeMethod(qapp, [] { BitcoinGUI::requestQuit(); }, Qt::QueuedConnection);
+    }
+}
+
+//! QApplication subclass that contains exceptions escaping Qt event handlers.
+//! In -multiprocess mode the GUI polls the node with synchronous proxy calls from
+//! timers/slots; if the daemon vanishes mid-call, libmultiprocess raises "IPC
+//! client method call interrupted/called after disconnect", which must not
+//! propagate through Qt (Qt forbids exceptions crossing the event loop -- it is
+//! undefined behavior). Treat that as the node going away and route to the same
+//! silent quit as the on_disconnect callback; any genuine exception still goes to
+//! handleRunawayException, exactly as the outer try/catch around exec() does.
+class GridcoinApplication : public QApplication
+{
+public:
+    using QApplication::QApplication;
+
+    bool notify(QObject* receiver, QEvent* event) override
+    {
+        try {
+            return QApplication::notify(receiver, event);
+        } catch (std::exception& e) {
+            const std::string msg{e.what()};
+            if (msg.find("interrupted by disconnect") != std::string::npos ||
+                msg.find("called after disconnect") != std::string::npos) {
+                QuitOnDaemonConnectionLost("a GUI call was interrupted by the daemon disconnecting");
+                return true;
+            }
+            handleRunawayException(&e);
+        } catch (...) {
+            handleRunawayException(nullptr);
+        }
+        return false;
+    }
+};
+
 #ifndef BITCOIN_QT_TEST
 int main(int argc, char *argv[])
 {
@@ -306,7 +356,7 @@ int main(int argc, char *argv[])
     Q_INIT_RESOURCE(bitcoin_locale);
 
     RegisterMetaTypes();
-    QApplication app(argc, argv);
+    GridcoinApplication app(argc, argv);
 
 #if defined(WIN32) && defined(QT_GUI)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -686,22 +736,13 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 /*on_disconnect=*/[] {
                     // Fires on the IPC event-loop thread when the daemon vanishes
                     // without a clean shutdown message (crash / SIGKILL, or a stop
-                    // that raced the handshake). Post a graceful quit to the Qt
-                    // main thread — the same path as a core-initiated shutdown
-                    // (QueueShutdown) — so the GUI tears down cleanly instead of
-                    // faulting on the next call to a now-dead proxy. requestQuit()
-                    // is idempotent, so a duplicate (e.g. a drain that also failed)
-                    // is harmless.
-                    GUILogPrintf("IPC: lost connection to the Gridcoin daemon; closing the GUI");
-                    // Guard the instance(): a disconnect that races the GUI's own
-                    // shutdown (local teardown normally cancels this handler first,
-                    // but the connection delete is async) could arrive after the
-                    // QCoreApplication is gone.
-                    if (QCoreApplication* qapp = QCoreApplication::instance()) {
-                        QMetaObject::invokeMethod(qapp,
-                                                  [] { BitcoinGUI::requestQuit(); },
-                                                  Qt::QueuedConnection);
-                    }
+                    // that raced the handshake). Route to the shared graceful-quit
+                    // path (same as a core-initiated shutdown) so the GUI tears down
+                    // cleanly instead of faulting on the next call to a now-dead
+                    // proxy. Shares the once-latch with GridcoinApplication::notify(),
+                    // so whichever detects the loss first wins and the other is a
+                    // no-op; safe if the QCoreApplication is already gone.
+                    QuitOnDaemonConnectionLost("lost connection to the Gridcoin daemon");
                 });
             if (!node_connection)
             {
