@@ -13,14 +13,32 @@ endif()
 include("cmake/compat_find.cmake")
 
 find_package(Threads REQUIRED)
-find_package(CapnProto 0.9 QUIET NO_MODULE)
- if(NOT CapnProto_FOUND)
+# Embedding guard (Gridcoin): when the parent project has already imported Cap'n
+# Proto (Gridcoin's top-level CMakeLists calls find_package(CapnProto) before
+# adding this subtree), skip the redundant find_package here. Some system Cap'n
+# Proto CMake configs are not idempotent -- notably the pkg-config fallback in
+# Debian/Ubuntu's capnp 1.0.x config (_capnp_import_pkg_config_target) calls
+# add_library() unguarded, so a second find_package fails with "cannot create
+# imported target CapnProto::capnp because another target with the same name
+# already exists".
+#
+# The found and minimum-version requirements are enforced below regardless of
+# which side imported Cap'n Proto: the imported target's existence is the
+# authoritative "found" signal, and the 0.9 floor is re-checked against the
+# inherited CapnProto_VERSION so guarding never silently weakens it.
+if(NOT TARGET CapnProto::capnp)
+  find_package(CapnProto 0.9 QUIET NO_MODULE)
+endif()
+ if(NOT TARGET CapnProto::capnp)
    message(FATAL_ERROR
      "Cap'n Proto is required but was not found.\n"
      "To resolve, choose one of the following:\n"
      "  - Install Cap'n Proto (version 1.0+ recommended)\n"
      "  - For Bitcoin Core compilation build with -DENABLE_IPC=OFF to disable multiprocess support\n"
    )
+ endif()
+ if(DEFINED CapnProto_VERSION AND CapnProto_VERSION VERSION_LESS 0.9)
+   message(FATAL_ERROR "Cap'n Proto 0.9 or newer is required, but version ${CapnProto_VERSION} was found.")
  endif()
 
 # Cap'n Proto compatibility checks
