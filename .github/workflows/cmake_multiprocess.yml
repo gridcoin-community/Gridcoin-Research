@@ -95,13 +95,24 @@ jobs:
           key: ubuntu-24.04-depends-mp-${{ matrix.host }}-${{ hashFiles('depends/packages/*', 'depends/Makefile', 'depends/qt.include') }}
 
       # build_targets configures win64 with CMAKE_CROSSCOMPILING_EMULATOR=wine, so
-      # ctest runs the .exe suites under Wine.
-      - name: Install Wine (Windows test execution)
+      # ctest runs the .exe suites under Wine. Mirror the monolithic Windows job's
+      # proven Wine setup (WINEARCH + overrides + wineboot --init) so build_targets'
+      # ctest finds a properly-initialized 64-bit prefix — without it, fs_tests'
+      # fstream read-back comes up empty under an uninitialized prefix and the
+      # gridcoin_tests suite fails (the build itself is fine).
+      - name: Install Wine + init prefix (Windows test execution)
         if: matrix.target == 'win64'
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
           sudo apt-get install -y wine-stable wine64 wine32
+          export WINEARCH=win64
+          wineboot --init || true
+          {
+            echo "WINEARCH=win64"
+            echo "WINEDLLOVERRIDES=mscoree,mshtml="
+            echo "QT_QPA_PLATFORM=offscreen"
+          } >> "$GITHUB_ENV"
 
       - name: Build + Test (multiprocess)
         run: |
