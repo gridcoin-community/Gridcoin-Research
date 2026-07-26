@@ -328,11 +328,32 @@ extern "C" void GuiTerminationSignalHandler(int)
     const ssize_t rc = ::write(g_signal_pipe[1], &byte, 1);
     (void)rc; // best-effort; nothing safe to do on failure inside a signal handler
 }
+//! Set O_NONBLOCK + FD_CLOEXEC on one end of the self-pipe. Returns false on any
+//! fcntl failure.
+static bool SetSelfPipeFdFlags(int fd)
+{
+    const int fl = ::fcntl(fd, F_GETFL, 0);
+    if (fl == -1 || ::fcntl(fd, F_SETFL, fl | O_NONBLOCK) == -1) return false;
+    const int fdfl = ::fcntl(fd, F_GETFD, 0);
+    if (fdfl == -1 || ::fcntl(fd, F_SETFD, fdfl | FD_CLOEXEC) == -1) return false;
+    return true;
+}
 static void InstallGuiTerminationHandler(QCoreApplication& app)
 {
-    if (::pipe2(g_signal_pipe, O_CLOEXEC | O_NONBLOCK) != 0) {
+    // pipe() + fcntl() rather than pipe2(O_CLOEXEC | O_NONBLOCK): pipe2() is
+    // Linux/BSD-only and absent on macOS. Set non-blocking and close-on-exec on
+    // both ends explicitly for portability.
+    if (::pipe(g_signal_pipe) != 0) {
         GUILogPrintf("IPC: could not install the GUI termination-signal handler "
-                     "(pipe2 failed); SIGTERM/SIGINT will hard-terminate the GUI");
+                     "(pipe failed); SIGTERM/SIGINT will hard-terminate the GUI");
+        return;
+    }
+    if (!SetSelfPipeFdFlags(g_signal_pipe[0]) || !SetSelfPipeFdFlags(g_signal_pipe[1])) {
+        GUILogPrintf("IPC: could not install the GUI termination-signal handler "
+                     "(fcntl failed); SIGTERM/SIGINT will hard-terminate the GUI");
+        ::close(g_signal_pipe[0]);
+        ::close(g_signal_pipe[1]);
+        g_signal_pipe[0] = g_signal_pipe[1] = -1;
         return;
     }
     auto* notifier = new QSocketNotifier(g_signal_pipe[0], QSocketNotifier::Read, &app);
