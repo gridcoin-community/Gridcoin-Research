@@ -6,8 +6,10 @@
 #include "key_io.h"
 #include "main.h"
 #include "primitives/transaction.h"
+#include "rpc/blockchain.h"
 #include "rpc/protocol.h"
 #include "rpc/server.h"
+#include "test/test_gridcoin.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 
@@ -370,6 +372,154 @@ double LabelGroupAmount(const UniValue& rows, const std::string& label)
     }
     return 0.0;
 }
+
+//! How many times `txid` appears in the txids array of the row for `addr`. One transaction
+//! must contribute its hash at most once even when it pays the address through several
+//! outputs -- the tally coalesces per destination.
+size_t TxidCountForAddress(const UniValue& rows, const std::string& addr, const uint256& txid)
+{
+    size_t count = 0;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (rows[i]["address"].get_str() != addr) continue;
+        const UniValue& txids = rows[i]["txids"];
+        for (size_t j = 0; j < txids.size(); ++j) {
+            if (txids[j].get_str() == txid.GetHex()) ++count;
+        }
+    }
+    return count;
+}
+
+//! A two-block mock main chain so an injected wallet tx can report a real confirmation count.
+//! TestingSetup selects CBaseChainParams::MAIN, so Params().IsMockableChain() is false and
+//! CMerkleTx::GetBlocksToMaturity() demands nCoinbaseMaturity + 10 confirmations before a
+//! coinstake counts -- a mempool tx (depth 0) can never satisfy that.
+//!
+//! Depth is pindexBest->nHeight - pindex->nHeight + 1, so a tx confirmed in `deep` is 151
+//! blocks deep (mature) and one confirmed in `tip` is 1 block deep (immature). Pinning
+//! deep->nHeight is load-bearing: maturity needs 150 - h + 1 >= 110, i.e. h <= 41.
+struct MockChain
+{
+    CBlockIndex* saved_best;
+    uint256 hash_deep;
+    uint256 hash_tip;
+    CBlockIndex* deep;
+    CBlockIndex* tip;
+
+    MockChain()
+    {
+        LOCK(cs_main);
+        saved_best = pindexBest;
+        hash_deep = InsecureRand256();
+        hash_tip = InsecureRand256();
+        // InsertBlockIndex points phashBlock at the mapBlockIndex key, so teardown is a plain
+        // erase -- the index itself comes from BlockIndexPool and is never deleted.
+        deep = GRC::MockBlockIndex::InsertBlockIndex(hash_deep);
+        tip = GRC::MockBlockIndex::InsertBlockIndex(hash_tip);
+        deep->nHeight = 0;
+        tip->nHeight = nCoinbaseMaturity + 50;
+        deep->pnext = tip;   // what CBlockIndex::IsInMainChain() tests
+        tip->pprev = deep;
+        pindexBest = tip;
+    }
+
+    ~MockChain()
+    {
+        LOCK(cs_main);
+        pindexBest = saved_best;
+        deep->pnext = nullptr;
+        tip->pprev = nullptr;
+        mapBlockIndex.erase(hash_deep);
+        mapBlockIndex.erase(hash_tip);
+    }
+};
+
+//! Inject a wallet tx confirmed in `block_hash`. Unlike InjectMempoolTx these never enter the
+//! mempool, so EraseWalletTx is the matching teardown.
+void InjectConfirmedTx(const CTransaction& tx, const uint256& block_hash)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWalletTx wtx(pwalletMain, tx);
+    wtx.SetTxState(TxStateConfirmed{block_hash, 0});
+    pwalletMain->mapWallet[tx.GetHash()] = wtx;
+}
+
+void EraseWalletTx(const CTransaction& tx)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    pwalletMain->mapWallet.erase(tx.GetHash());
+}
+
+//! The script CreateCoinStake emits: a bare public key, even when the staked UTXO was P2PKH.
+//! getreceivedbyaddress used to compare raw scriptPubKeys against a P2PKH script it built
+//! itself, so it could never match one of these.
+CScript P2PK(const CKey& key)
+{
+    CScript script;
+    script << key.GetPubKey() << OP_CHECKSIG;
+    return script;
+}
+
+CScript P2PKH(const CTxDestination& dest)
+{
+    CScript script;
+    script.SetDestination(dest);
+    return script;
+}
+
+//! A coinstake as CTransaction::IsCoinStake() defines it: a non-null prevout, an empty vout[0]
+//! marker, and at least two outputs.
+CTransaction MakeCoinstake(const COutPoint& stake_in, const std::vector<CTxOut>& outs)
+{
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = stake_in;
+
+    CTxOut empty;
+    empty.SetEmpty();
+    mtx.vout.push_back(empty);
+    for (auto const& out : outs) {
+        mtx.vout.push_back(out);
+    }
+
+    CTransaction tx(mtx);
+    assert(tx.IsCoinStake());
+    return tx;
+}
+
+//! One-output tx paying `dest` P2PKH with no vins, so IsFromMe() is false -- a payment
+//! arriving from outside the wallet, but confirmed rather than in the mempool.
+CTransaction ConfirmedFundingTx(const CTxDestination& dest, int64_t nValue)
+{
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = nValue;
+    mtx.vout[0].scriptPubKey.SetDestination(dest);
+    return CTransaction(mtx);
+}
+
+//! An owned key plus its destination and encoded address.
+struct OwnedKey
+{
+    CKey key;
+    CTxDestination dest;
+    std::string addr;
+
+    OwnedKey()
+    {
+        key.MakeNewKey(false);
+        BOOST_REQUIRE(pwalletMain->AddKey(key));
+        dest = CTxDestination(key.GetPubKey().GetID());
+        addr = EncodeDestination(dest);
+    }
+};
+
+double ReceivedByAddress(const std::string& addr, int nMinDepth)
+{
+    UniValue args(UniValue::VARR);
+    args.push_back(addr);
+    args.push_back(UniValue(nMinDepth));
+    return getreceivedbyaddress(args).get_real();
+}
 } // namespace
 
 // The label tally counts only outputs the wallet owns (a labeled send-to address that
@@ -591,6 +741,234 @@ BOOST_AUTO_TEST_CASE(listreceived_includeempty_ignores_unbooked_keys_without_rec
     withoutEmpty.push_back(UniValue(0));
     rows = listreceivedbyaddress(withoutEmpty);
     BOOST_CHECK_EQUAL(CountRowsForAddress(rows, addrE), 0u);
+}
+
+// Issue #3189. A coinstake this wallet staked returns the staked principal AND mints the
+// reward, so its split outputs must be counted net of the principal -- crediting them at face
+// value would report coins we already owned as income. Also pins the P2PK regression: the old
+// raw-scriptPubKey match in getreceivedbyaddress could never see a coinstake output.
+BOOST_AUTO_TEST_CASE(coinstake_tally_nets_the_staked_principal)
+{
+    MockChain chain;
+    OwnedKey k;
+
+    // 100 GRC arrives from outside, P2PKH.
+    CTransaction funding = ConfirmedFundingTx(k.dest, 100 * COIN);
+    InjectConfirmedTx(funding, chain.hash_deep);
+
+    // We stake it. The 110 across the two split outputs is principal 100 + reward 10, and both
+    // carry vout[1]'s script (P2PK), which is how a split is told from a sidestake.
+    CTransaction coinstake = MakeCoinstake(
+        COutPoint(funding.GetHash(), 0),
+        {CTxOut(60 * COIN, P2PK(k.key)), CTxOut(50 * COIN, P2PK(k.key))});
+    InjectConfirmedTx(coinstake, chain.hash_deep);
+
+    // 100 funding + 10 net reward. Face-value counting would say 210; the pre-fix code, which
+    // skipped coinstakes AND could not match a P2PK script, said 100.
+    BOOST_CHECK_EQUAL(ReceivedByAddress(k.addr, 0), 110.0);
+
+    // listreceivedbyaddress agrees, on a single row.
+    UniValue byAddrArgs(UniValue::VARR);
+    byAddrArgs.push_back(UniValue(0));
+    UniValue rows = listreceivedbyaddress(byAddrArgs);
+    BOOST_CHECK_EQUAL(CountRowsForAddress(rows, k.addr), 1u);
+    BOOST_CHECK_EQUAL(RowAmountForAddress(rows, k.addr), 110.0);
+
+    EraseWalletTx(coinstake);
+    EraseWalletTx(funding);
+}
+
+// A voluntary sidestake back to the staking address is built with SetDestination (P2PKH) while
+// the coinstake output is P2PK, so SplitCoinStakeOutput's script-equality self-sidestake guard
+// never fires and one coinstake pays the same destination through two different scripts. Both
+// extract to the same CKeyID, so the tally must coalesce them onto one row -- and contribute
+// the transaction's txid exactly once.
+BOOST_AUTO_TEST_CASE(coinstake_self_sidestake_coalesces_onto_one_row)
+{
+    MockChain chain;
+    OwnedKey k;
+
+    CTransaction funding = ConfirmedFundingTx(k.dest, 55 * COIN);
+    InjectConfirmedTx(funding, chain.hash_deep);
+
+    // Split output 60 (principal 55 + reward 5) plus a 5 GRC sidestake back to ourselves.
+    CTransaction coinstake = MakeCoinstake(
+        COutPoint(funding.GetHash(), 0),
+        {CTxOut(60 * COIN, P2PK(k.key)), CTxOut(5 * COIN, P2PKH(k.dest))});
+    InjectConfirmedTx(coinstake, chain.hash_deep);
+
+    // 55 funding + (60 - 55) net reward + 5 sidestake.
+    BOOST_CHECK_EQUAL(ReceivedByAddress(k.addr, 0), 65.0);
+
+    UniValue byAddrArgs(UniValue::VARR);
+    byAddrArgs.push_back(UniValue(0));
+    UniValue rows = listreceivedbyaddress(byAddrArgs);
+    BOOST_CHECK_EQUAL(CountRowsForAddress(rows, k.addr), 1u);
+    BOOST_CHECK_EQUAL(RowAmountForAddress(rows, k.addr), 65.0);
+    BOOST_CHECK_EQUAL(TxidCountForAddress(rows, k.addr, coinstake.GetHash()), 1u);
+
+    EraseWalletTx(coinstake);
+    EraseWalletTx(funding);
+}
+
+// The receipts issue #3189 is really about: a sidestake or MRC payout paid to us from a
+// coinstake somebody ELSE staked. Nothing is netted -- we supplied no principal -- so the
+// output counts at face value. Minted value is never change, so the address gets a row even
+// with no address book entry.
+BOOST_AUTO_TEST_CASE(coinstake_sidestake_from_foreign_staker_is_counted)
+{
+    MockChain chain;
+
+    UniValue byAddrArgs(UniValue::VARR);
+    byAddrArgs.push_back(UniValue(0));
+    UniValue byLabelArgs(UniValue::VARR);
+    byLabelArgs.push_back(UniValue(0));
+    byLabelArgs.push_back(UniValue(true));
+
+    const double defaultGroupBefore = LabelGroupAmount(listreceivedbylabel(byLabelArgs), "");
+
+    // Owned, deliberately NOT added to the address book.
+    OwnedKey s;
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE_EQUAL(pwalletMain->mapAddressBook.count(s.dest), 0u);
+    }
+
+    // A stranger's key funds and receives the stake; the prevout is not in our wallet.
+    CKey foreign_key;
+    foreign_key.MakeNewKey(false);
+
+    CTransaction coinstake = MakeCoinstake(
+        COutPoint(InsecureRand256(), 0),
+        {CTxOut(100 * COIN, P2PK(foreign_key)), CTxOut(5 * COIN, P2PKH(s.dest))});
+    InjectConfirmedTx(coinstake, chain.hash_deep);
+
+    BOOST_CHECK_EQUAL(ReceivedByAddress(s.addr, 0), 5.0);
+
+    UniValue rows = listreceivedbyaddress(byAddrArgs);
+    BOOST_CHECK_EQUAL(CountRowsForAddress(rows, s.addr), 1u);
+    BOOST_CHECK_EQUAL(RowAmountForAddress(rows, s.addr), 5.0);
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (rows[i]["address"].get_str() == s.addr) {
+            BOOST_CHECK_EQUAL(rows[i]["account"].get_str(), "");
+        }
+    }
+
+    BOOST_CHECK_EQUAL(LabelGroupAmount(listreceivedbylabel(byLabelArgs), ""),
+                      defaultGroupBefore + 5.0);
+
+    EraseWalletTx(coinstake);
+}
+
+// CWallet::GetDebit resolves the staked input through mapWallet, so a wallet restored without
+// a full rescan (or a key imported after the fact) reports a principal of 0 while still owning
+// vout[1]. Netting against 0 would book the WHOLE staked principal as income, which is worse
+// than the bug being fixed -- so the split group is dropped instead. Receipts in the same
+// transaction that need no netting still count.
+BOOST_AUTO_TEST_CASE(coinstake_omits_reward_when_the_staked_input_is_unknown)
+{
+    MockChain chain;
+    OwnedKey k;
+
+    // Same shape as the self-sidestake case, but the funding transaction is never added to
+    // mapWallet, so GetDebit() is 0.
+    CTransaction coinstake = MakeCoinstake(
+        COutPoint(InsecureRand256(), 0),
+        {CTxOut(110 * COIN, P2PK(k.key)), CTxOut(5 * COIN, P2PKH(k.dest))});
+    InjectConfirmedTx(coinstake, chain.hash_deep);
+
+    // Only the sidestake: the 110 split group is omitted, not credited at face value.
+    BOOST_CHECK_EQUAL(ReceivedByAddress(k.addr, 0), 5.0);
+
+    EraseWalletTx(coinstake);
+}
+
+// Generated value counts only once mature, the rule GetAccountBalance and AvailableCoins
+// already apply -- a receivedby* total must not include coins getbalance refuses to count.
+// The pinned quantity is the +10 reward delta: the ordinary funding receipt is not generated,
+// so GetBlocksToMaturity() returns 0 for it and the maturity gate never touches it.
+BOOST_AUTO_TEST_CASE(immature_coinstake_is_not_tallied)
+{
+    MockChain chain;
+    OwnedKey k;
+
+    CTransaction funding = ConfirmedFundingTx(k.dest, 100 * COIN);
+    InjectConfirmedTx(funding, chain.hash_deep);
+
+    CTransaction coinstake = MakeCoinstake(
+        COutPoint(funding.GetHash(), 0),
+        {CTxOut(60 * COIN, P2PK(k.key)), CTxOut(50 * COIN, P2PK(k.key))});
+
+    // Confirmed in the tip: 1 block deep, so 109 blocks short of maturity.
+    InjectConfirmedTx(coinstake, chain.hash_tip);
+    BOOST_CHECK_EQUAL(ReceivedByAddress(k.addr, 0), 100.0);
+
+    // Same coinstake, now buried deep enough to have matured.
+    InjectConfirmedTx(coinstake, chain.hash_deep);
+    BOOST_CHECK_EQUAL(ReceivedByAddress(k.addr, 0), 110.0);
+
+    EraseWalletTx(coinstake);
+    EraseWalletTx(funding);
+}
+
+// All six RPCs run off the one shared helper, so the address, label and account views of the
+// same coinstake receipt must agree.
+BOOST_AUTO_TEST_CASE(coinstake_label_and_account_tallies_agree_with_address)
+{
+    MockChain chain;
+    OwnedKey k;
+    setlabel(ArgArray({k.addr, "stakelabel"}));
+
+    CTransaction funding = ConfirmedFundingTx(k.dest, 100 * COIN);
+    InjectConfirmedTx(funding, chain.hash_deep);
+
+    CTransaction coinstake = MakeCoinstake(
+        COutPoint(funding.GetHash(), 0),
+        {CTxOut(60 * COIN, P2PK(k.key)), CTxOut(50 * COIN, P2PK(k.key))});
+    InjectConfirmedTx(coinstake, chain.hash_deep);
+
+    const double byAddress = ReceivedByAddress(k.addr, 0);
+    BOOST_CHECK_EQUAL(byAddress, 110.0);
+
+    UniValue glArgs(UniValue::VARR);
+    glArgs.push_back("stakelabel");
+    glArgs.push_back(UniValue(0));
+    BOOST_CHECK_EQUAL(getreceivedbylabel(glArgs).get_real(), byAddress);
+
+    UniValue byLabelArgs(UniValue::VARR);
+    byLabelArgs.push_back(UniValue(0));
+    byLabelArgs.push_back(UniValue(true));
+    BOOST_CHECK_EQUAL(LabelGroupAmount(listreceivedbylabel(byLabelArgs), "stakelabel"), byAddress);
+
+    EraseWalletTx(coinstake);
+    EraseWalletTx(funding);
+}
+
+// The shared helper walks vout from index 1 for coinstakes (vout[0] is the empty marker) and
+// from 0 for everything else. This pins the ordinary case: a single-output payment lives at
+// vout[0], so a from-1 loop bound would silently zero every plain receipt.
+BOOST_AUTO_TEST_CASE(plain_receipt_at_vout0_still_counts)
+{
+    MockChain chain;
+    OwnedKey k;
+    setlabel(ArgArray({k.addr, "vout0label"}));
+
+    CTransaction funding = ConfirmedFundingTx(k.dest, 7 * COIN);
+    BOOST_REQUIRE(!funding.IsCoinStake());
+    InjectConfirmedTx(funding, chain.hash_deep);
+
+    BOOST_CHECK_EQUAL(ReceivedByAddress(k.addr, 0), 7.0);
+
+    UniValue glArgs(UniValue::VARR);
+    glArgs.push_back("vout0label");
+    glArgs.push_back(UniValue(0));
+    BOOST_CHECK_EQUAL(getreceivedbylabel(glArgs).get_real(), 7.0);
+
+    UniValue byAddrArgs(UniValue::VARR);
+    byAddrArgs.push_back(UniValue(0));
+    BOOST_CHECK_EQUAL(RowAmountForAddress(listreceivedbyaddress(byAddrArgs), k.addr), 7.0);
+
+    EraseWalletTx(funding);
 }
 
 // migratelabels backfills purpose on entries that loaded as "unknown" (owned -> "receive"),
