@@ -391,9 +391,21 @@ versioned-refetch revision (`SideStakeSnapshot::local_revision`, design §4.4).
 `entries`, `localRevision`, `addLocal`, `setAllocation`, `setDescription`,
 `deleteLocal`, `handleRwSettingsUpdated`, `handleMandatorySideStakeChanged`.
 
-**This interface is served only in the monolithic build.** There is no
-`sidestake.capnp`, and `init.capnp`'s `Init` has no `makeSideStakeManager`
-method, so on this branch an IPC client **cannot** reach it (§10).
+**Not served over the IPC wire on this branch.** There is no `sidestake.capnp`, and
+`init.capnp`'s `Init` has no `makeSideStakeManager` method. The bundled MP GUI's
+sidestake table is nonetheless populated because `OptionsModel` (and its
+`SideStakeTableModel`) is still constructed from a **local, in-GUI-process**
+`SideStakeManager` — `bitcoin.cpp` mints it via `gui_init = MakeGridcoinInit();
+gui_init->makeSideStakeManager()` — a deliberately un-migrated Phase-2 piece (the
+`bitcoin.cpp` comment: *"Phase 2 will hand this out from the single process Init
+instead of a locally-minted one"*). That local manager reads the **GUI process's own**
+`SideStakeRegistry`, which reflects the settings-based *local* sidestakes in the shared
+datadir but **not** contract-derived *mandatory* sidestakes or any registry state that
+requires core block sync. So an alternative front end cannot obtain the node's full
+sidestake state through `interfaces::` today; use `Node::executeRpcConsoleCommand` (the
+sidestake RPCs) for the authoritative node-side view. **A follow-up migrates the
+core-state-owned parts of `OptionsModel` (sidestake included) onto the remote node Init
+over IPC** — see §10, gap 1.
 
 ---
 
@@ -648,13 +660,23 @@ foreign client is a real undertaking:
 
 Reported honestly so nobody designs against a contract that is not there yet:
 
-1. **`SideStakeManager` is not reachable over IPC.** It is a full member of the
-   C++ `Init` interface (`makeSideStakeManager`), is wrapped by `ServeInit`, and
-   works in the monolith — but there is **no `sidestake.capnp`** and **no
-   `makeSideStakeManager` in `init.capnp`**. Over the IPC seam it simply does not
-   exist on this branch. A front end that needs sidestake management must fall
-   back to `Node::executeRpcConsoleCommand` (the sidestake RPCs) until the schema
-   is added.
+1. **`SideStakeManager` is not on the IPC wire, and the MP GUI's sidestake table
+   runs on a local fallback.** `makeSideStakeManager` is a full member of the C++
+   `Init` interface and is wrapped by `ServeInit`, but there is **no
+   `sidestake.capnp`** and **no `makeSideStakeManager` in `init.capnp`**, so it is
+   not served over IPC. The bundled MP GUI still shows a sidestake table because
+   `OptionsModel` is constructed from a **local, in-GUI-process** `SideStakeManager`
+   (`bitcoin.cpp`: `gui_init = MakeGridcoinInit()`), reading the GUI process's own
+   registry — settings-based local sidestakes only, **not** contract-derived
+   mandatory sidestakes or core-synced state. This is a real gap, not just a missing
+   schema: the whole of `OptionsModel` that reads/writes *core-owned* state (the
+   sidestake registry, and any node rw-settings) currently runs against GUI-local
+   globals rather than the node. **A follow-up migrates the core-state-owned parts
+   of `OptionsModel` onto the remote node Init over IPC** (which requires adding
+   `sidestake.capnp` + `makeSideStakeManager @13` to `init.capnp`, and restructuring
+   GUI startup so `OptionsModel` is wired from the remote Init). Until then, use
+   `Node::executeRpcConsoleCommand` (the sidestake RPCs) for the authoritative
+   node-side view.
 2. **The peer-identity check is documented but unimplemented.** Design §4.3
    step 4 (`SO_PEERCRED` / `LOCAL_PEERCRED` / `SIO_AF_UNIX_GETPEERPID`) is called
    "best-effort defense-in-depth," but neither `ConnectToNode`/`ClientHandshake`
