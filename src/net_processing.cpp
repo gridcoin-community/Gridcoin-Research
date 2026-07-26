@@ -1663,11 +1663,12 @@ public:
         // per-node nStartingHeight heuristic below is the historical IBD
         // suppressor, so no fInitialDownload gate is added).
         //
-        // The best-chain gate is load-bearing, not redundant: SetBestChain's
-        // trust-regression path reorganizes back to the previous tip yet still
-        // emits UpdatedBlockTip with the losing block as pindexNew, and
-        // relaying that inv would advertise a non-best block. AcceptBlock's
-        // pre-move code suppressed exactly that case via the same comparison.
+        // Defensive best-chain guard. SetBestChain now emits UpdatedBlockTip only
+        // when the tip actually advanced -- it reports pindexBest and skips the
+        // emission on its trust-regression reorg-back path (issues #3145, #3125
+        // C8) -- so pindexNew is the best chain here. The guard stays as cheap
+        // insurance against a future emitter that fires on a non-advancing tip
+        // (relaying that inv would advertise a non-best block).
         if (pindexNew == nullptr || pindexNew->GetBlockHash() != hashBestChain) return;
 
         int nBlockEstimate = Params().Checkpoints().GetHeight();
