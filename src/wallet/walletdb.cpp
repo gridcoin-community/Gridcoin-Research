@@ -567,11 +567,11 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 
     LogPrintf("nFileVersion = %d", wss.nFileVersion);
 
-    // Validate wallet file version is in expected range
-    if (wss.nFileVersion > wallet::FEATURE_LATEST) {
-        LogPrintf("WARNING: Wallet file version %d exceeds latest wallet feature version %d",
-                  wss.nFileVersion, wallet::FEATURE_LATEST);
-        LogPrintf("This may indicate version mismatch or corrupted wallet file");
+    // A wallet last written by a newer client is not corruption; genuine
+    // incompatibility is governed by the "minversion" check above.
+    if (wss.nFileVersion > CLIENT_VERSION) {
+        LogPrintf("Wallet file version %d was last written by a newer client (this client: %d)",
+                  wss.nFileVersion, CLIENT_VERSION);
     }
 
     LogPrintf("Keys: %u plaintext, %u encrypted, %u w/ metadata, %u total",
