@@ -11,6 +11,7 @@
 #include "interfaces/wallet.h"
 #include "key_io.h"
 #include "node/ui_interface.h"
+#include "gridcoin/scraper/fwd.h"
 #include "sync.h"
 #include "util.h"
 #include "wallet/wallet.h"
@@ -361,6 +362,40 @@ BOOST_AUTO_TEST_CASE(node_value_queries_are_safe_in_empty_environment)
 
     // Pure conversion: the difficulty-1 compact target maps to ~1.0.
     BOOST_CHECK_CLOSE(node->getBlockDifficulty(0x1d00ffff), 1.0, 0.1);
+}
+
+BOOST_AUTO_TEST_CASE(node_caches_last_scraper_event_for_icon_hydration)
+{
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+
+    // A non-Log scraper event is remembered and surfaces on the convergence
+    // snapshot, so a GUI that connects after the event fired (e.g. the
+    // -multiprocess GUI attaching to an already-running node) can initialize its
+    // status icon to the current state instead of a stale default. Each check
+    // follows an explicit emission, so suite order does not matter.
+    uiInterface.NotifyScraperEvent(scrapereventtypes::Convergence, CT_NEW, {});
+    {
+        const interfaces::ScraperConvergenceSnapshot snapshot = node->getScraperConvergenceSnapshot();
+        BOOST_CHECK_EQUAL(snapshot.current_event_type, (int)scrapereventtypes::Convergence);
+        BOOST_CHECK_EQUAL(snapshot.current_event_status, (int)CT_NEW);
+    }
+
+    // Log events carry console text rather than an icon state and must not
+    // overwrite the cached status.
+    uiInterface.NotifyScraperEvent(scrapereventtypes::Log, CT_NEW, "a scraper log line");
+    {
+        const interfaces::ScraperConvergenceSnapshot snapshot = node->getScraperConvergenceSnapshot();
+        BOOST_CHECK_EQUAL(snapshot.current_event_type, (int)scrapereventtypes::Convergence);
+        BOOST_CHECK_EQUAL(snapshot.current_event_status, (int)CT_NEW);
+    }
+
+    // A later non-Log event replaces the cached status.
+    uiInterface.NotifyScraperEvent(scrapereventtypes::Sleep, CT_UPDATED, {});
+    {
+        const interfaces::ScraperConvergenceSnapshot snapshot = node->getScraperConvergenceSnapshot();
+        BOOST_CHECK_EQUAL(snapshot.current_event_type, (int)scrapereventtypes::Sleep);
+        BOOST_CHECK_EQUAL(snapshot.current_event_status, (int)CT_UPDATED);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(staking_status_wraps_miner_status)

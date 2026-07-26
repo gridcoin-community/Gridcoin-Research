@@ -152,6 +152,8 @@ struct ScraperConvergenceSnapshot $Proxy.wrap("interfaces::ScraperConvergenceSna
     includedScrapers @2 :List(Text) $Proxy.name("included_scrapers");
     excludedScrapers @3 :List(Text) $Proxy.name("excluded_scrapers");
     scrapersNotPublishing @4 :List(Text) $Proxy.name("scrapers_not_publishing");
+    currentEventType @5 :Int32 $Proxy.name("current_event_type");
+    currentEventStatus @6 :Int32 $Proxy.name("current_event_status");
 }
 
 struct LatestVersionInfo $Proxy.wrap("interfaces::LatestVersionInfo") {

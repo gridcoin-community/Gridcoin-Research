@@ -7,6 +7,7 @@
 #ifndef BITCOIN_NODE_UI_INTERFACE_H
 #define BITCOIN_NODE_UI_INTERFACE_H
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -157,6 +158,23 @@ public:
      * @note called with lock cs_ConvergedScraperStatsCache held.
      */
     ADD_SIGNALS_DECL_WRAPPER(NotifyScraperEvent, void, const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message);
+
+    //! Snapshot of the most recent non-Log scraper event, so a UI that connects
+    //! after the event was emitted -- notably the -multiprocess GUI attaching to
+    //! an already-running node whose scraper already converged -- can initialize
+    //! its status icon to the current state instead of a stale default. Written
+    //! from the scraper thread inside NotifyScraperEvent, read from the GUI/IPC
+    //! thread through a single std::atomic -- no external locks. Returns false
+    //! (leaving the args untouched) when no non-Log event has been emitted since
+    //! node startup.
+    bool GetLastScraperEvent(int& event_type, int& status) const;
+
+private:
+    //! (event_type << 16) | (status & 0xFFFF) of the last non-Log scraper event,
+    //! or kNoScraperEvent when none has been emitted. scrapereventtypes and
+    //! ChangeType are small enums, so they pack losslessly into 32 bits.
+    static constexpr uint32_t kNoScraperEvent = 0xFFFFFFFFu;
+    std::atomic<uint32_t> m_last_scraper_event{kNoScraperEvent};
 };
 
 /** Show warning message **/
