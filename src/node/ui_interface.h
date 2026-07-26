@@ -164,8 +164,9 @@ public:
     //! an already-running node whose scraper already converged -- can initialize
     //! its status icon to the current state instead of a stale default. Written
     //! from the scraper thread inside NotifyScraperEvent, read from the GUI/IPC
-    //! thread; lock-free. Returns false (leaving the args untouched) when no
-    //! non-Log event has been emitted since node startup.
+    //! thread through a single std::atomic -- no external locks. Returns false
+    //! (leaving the args untouched) when no non-Log event has been emitted since
+    //! node startup.
     bool GetLastScraperEvent(int& event_type, int& status) const;
 
 private:
