@@ -33,10 +33,14 @@ struct FdGuard
     ~FdGuard()
     {
         if (fd == -1) return;
-        // compat.h closesocket(): close() on POSIX, closesocket() on Windows.
-        // Takes a SOCKET& (it zeroes the handle), so pass an lvalue.
+#ifdef WIN32
+        // compat.h closesocket() -> myclosesocket() -> the winsock closesocket();
+        // it takes a SOCKET& (zeroes the handle), so pass an lvalue.
         SOCKET s = static_cast<SOCKET>(fd);
         closesocket(s);
+#else
+        ::close(fd);
+#endif
     }
     void release() { fd = -1; }
 };

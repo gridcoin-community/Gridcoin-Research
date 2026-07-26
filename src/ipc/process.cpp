@@ -71,10 +71,18 @@ fs::path ParseAddress(std::string& address, const fs::path& data_dir, struct soc
 //! descriptors as int (SocketId); on Windows a SOCKET is uintptr_t but AF_UNIX
 //! handles fit in the low 32 bits, so int is used here and converted only at the
 //! winsock boundary. INVALID_SOCKET is represented as -1 in int space.
-// compat.h provides a cross-platform SOCKET type and closesocket() macro
-// (myclosesocket: real closesocket() on Windows, close() on POSIX). It takes a
-// SOCKET& lvalue, so hand it one rather than an rvalue cast.
-void CloseSocket(int fd) { SOCKET s = static_cast<SOCKET>(fd); closesocket(s); }
+// Close an IPC socket descriptor with explicit per-platform dispatch: ::close()
+// on POSIX; on Windows compat.h's closesocket() macro (myclosesocket -> the
+// winsock closesocket(), which takes a SOCKET& lvalue, so hand it one).
+void CloseSocket(int fd)
+{
+#ifdef WIN32
+    SOCKET s = static_cast<SOCKET>(fd);
+    closesocket(s);
+#else
+    ::close(fd);
+#endif
+}
 #ifdef WIN32
 int LastSocketError() { return ::WSAGetLastError(); }
 
