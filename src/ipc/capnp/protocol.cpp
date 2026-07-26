@@ -21,7 +21,11 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#ifndef WIN32
 #include <sys/socket.h>
+#else
+#include <winsock2.h>
+#endif
 #include <system_error>
 #include <thread>
 #include <typeindex>
@@ -105,7 +109,11 @@ public:
     {
         startLoop(exe_name);
         if (::listen(listen_fd, /*backlog=*/5) != 0) {
+#ifdef WIN32
+            throw std::system_error(::WSAGetLastError(), std::system_category());
+#else
             throw std::system_error(errno, std::system_category());
+#endif
         }
         // Cap at a single simultaneous connection: the served Init (and its
         // authentication state) is shared, and the v1 model is exactly one GUI.

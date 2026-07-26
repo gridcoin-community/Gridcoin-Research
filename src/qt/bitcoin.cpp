@@ -48,6 +48,12 @@
 #include "decoration.h"
 
 #include <atomic>
+#ifndef WIN32
+#include <QSocketNotifier>
+#include <fcntl.h>
+#include <signal.h>
+#include <unistd.h>
+#endif
 #include <stdexcept>
 #include <thread>
 
@@ -246,6 +252,126 @@ static void handleRunawayException(std::exception *e)
     exit(1);
 }
 
+//! Latch so the graceful-quit path (and its log line) fires only once even if
+//! many proxy calls fail in quick succession while the connection tears down.
+static std::atomic<bool> g_daemon_connection_lost{false};
+
+//! Post a graceful, popup-free GUI quit to the Qt main thread when the node
+//! connection is lost -- the same path a core-initiated shutdown takes
+//! (QueueShutdown / requestQuit). Deliberately NO modal dialog: a modal would
+//! hang an unattended or remote GUI. Idempotent and safe if the QCoreApplication
+//! is already gone.
+static void QuitOnDaemonConnectionLost(const char* reason)
+{
+    if (g_daemon_connection_lost.exchange(true)) return;
+    GUILogPrintf("IPC: %s; closing the GUI", reason);
+    if (QCoreApplication* qapp = QCoreApplication::instance()) {
+        QMetaObject::invokeMethod(qapp, [] { BitcoinGUI::requestQuit(); }, Qt::QueuedConnection);
+    }
+}
+
+//! QApplication subclass that contains exceptions escaping Qt event handlers.
+//! In -multiprocess mode the GUI polls the node with synchronous proxy calls from
+//! timers/slots; if the daemon vanishes mid-call, libmultiprocess raises "IPC
+//! client method call interrupted/called after disconnect", which must not
+//! propagate through Qt (Qt forbids exceptions crossing the event loop -- it is
+//! undefined behavior). Treat that as the node going away and route to the same
+//! silent quit as the on_disconnect callback; any genuine exception still goes to
+//! handleRunawayException, exactly as the outer try/catch around exec() does.
+class GridcoinApplication : public QApplication
+{
+public:
+    using QApplication::QApplication;
+
+    bool notify(QObject* receiver, QEvent* event) override
+    {
+        try {
+            return QApplication::notify(receiver, event);
+        } catch (std::exception& e) {
+            // Route IPC-disconnect exceptions to the silent quit rather than the
+            // modal fatal-error path. Detect them two ways so we do not depend
+            // solely on libmultiprocess's exact raise text:
+            //   (a) that raise text ("... interrupted/called after disconnect"), and
+            //   (b) the connection already being known lost -- once on_disconnect
+            //       (or a prior notify()) has latched g_daemon_connection_lost, the
+            //       GUI is tearing down and further proxy calls will keep throwing,
+            //       so any event-handler exception in that state is disconnect fallout.
+            const std::string msg{e.what()};
+            if (g_daemon_connection_lost.load()
+                || msg.find("interrupted by disconnect") != std::string::npos
+                || msg.find("called after disconnect") != std::string::npos) {
+                QuitOnDaemonConnectionLost("a GUI call was interrupted by the daemon disconnecting");
+                return true;
+            }
+            handleRunawayException(&e);
+        } catch (...) {
+            handleRunawayException(nullptr);
+        }
+        return false;
+    }
+};
+
+#ifndef WIN32
+//! Self-pipe so a Unix termination signal can reach the Qt event loop. The signal
+//! handler is async-signal-safe -- it only write()s one byte -- and a
+//! QSocketNotifier on the read end fires on the Qt main thread and requests a
+//! graceful quit (the same path QueueShutdown / on_disconnect use). This is only
+//! needed in the -multiprocess GUI: the monolithic GUI runs the core in-process
+//! and inherits init.cpp's HandleSIGTERM. Without it a SIGTERM/SIGINT -- e.g.
+//! `kill(1)`, or the wallet control script stopping a split instance's GUI while
+//! its core keeps running under systemd -- hits the default disposition and
+//! hard-terminates the GUI with no teardown or final log flush.
+static int g_signal_pipe[2] = {-1, -1};
+extern "C" void GuiTerminationSignalHandler(int)
+{
+    const char byte = 0;
+    const ssize_t rc = ::write(g_signal_pipe[1], &byte, 1);
+    (void)rc; // best-effort; nothing safe to do on failure inside a signal handler
+}
+//! Set O_NONBLOCK + FD_CLOEXEC on one end of the self-pipe. Returns false on any
+//! fcntl failure.
+static bool SetSelfPipeFdFlags(int fd)
+{
+    const int fl = ::fcntl(fd, F_GETFL, 0);
+    if (fl == -1 || ::fcntl(fd, F_SETFL, fl | O_NONBLOCK) == -1) return false;
+    const int fdfl = ::fcntl(fd, F_GETFD, 0);
+    if (fdfl == -1 || ::fcntl(fd, F_SETFD, fdfl | FD_CLOEXEC) == -1) return false;
+    return true;
+}
+static void InstallGuiTerminationHandler(QCoreApplication& app)
+{
+    // pipe() + fcntl() rather than pipe2(O_CLOEXEC | O_NONBLOCK): pipe2() is
+    // Linux/BSD-only and absent on macOS. Set non-blocking and close-on-exec on
+    // both ends explicitly for portability.
+    if (::pipe(g_signal_pipe) != 0) {
+        GUILogPrintf("IPC: could not install the GUI termination-signal handler "
+                     "(pipe failed); SIGTERM/SIGINT will hard-terminate the GUI");
+        return;
+    }
+    if (!SetSelfPipeFdFlags(g_signal_pipe[0]) || !SetSelfPipeFdFlags(g_signal_pipe[1])) {
+        GUILogPrintf("IPC: could not install the GUI termination-signal handler "
+                     "(fcntl failed); SIGTERM/SIGINT will hard-terminate the GUI");
+        ::close(g_signal_pipe[0]);
+        ::close(g_signal_pipe[1]);
+        g_signal_pipe[0] = g_signal_pipe[1] = -1;
+        return;
+    }
+    auto* notifier = new QSocketNotifier(g_signal_pipe[0], QSocketNotifier::Read, &app);
+    QObject::connect(notifier, &QSocketNotifier::activated, &app, [] {
+        char buf;
+        while (::read(g_signal_pipe[0], &buf, 1) > 0) { /* drain */ }
+        GUILogPrintf("IPC: received a termination signal; closing the GUI");
+        BitcoinGUI::requestQuit();
+    });
+    struct sigaction sa = {};
+    sa.sa_handler = GuiTerminationSignalHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    ::sigaction(SIGTERM, &sa, nullptr);
+    ::sigaction(SIGINT, &sa, nullptr);
+}
+#endif // !WIN32
+
 #ifndef BITCOIN_QT_TEST
 int main(int argc, char *argv[])
 {
@@ -306,7 +432,7 @@ int main(int argc, char *argv[])
     Q_INIT_RESOURCE(bitcoin_locale);
 
     RegisterMetaTypes();
-    QApplication app(argc, argv);
+    GridcoinApplication app(argc, argv);
 
 #if defined(WIN32) && defined(QT_GUI)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -686,22 +812,13 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 /*on_disconnect=*/[] {
                     // Fires on the IPC event-loop thread when the daemon vanishes
                     // without a clean shutdown message (crash / SIGKILL, or a stop
-                    // that raced the handshake). Post a graceful quit to the Qt
-                    // main thread — the same path as a core-initiated shutdown
-                    // (QueueShutdown) — so the GUI tears down cleanly instead of
-                    // faulting on the next call to a now-dead proxy. requestQuit()
-                    // is idempotent, so a duplicate (e.g. a drain that also failed)
-                    // is harmless.
-                    GUILogPrintf("IPC: lost connection to the Gridcoin daemon; closing the GUI");
-                    // Guard the instance(): a disconnect that races the GUI's own
-                    // shutdown (local teardown normally cancels this handler first,
-                    // but the connection delete is async) could arrive after the
-                    // QCoreApplication is gone.
-                    if (QCoreApplication* qapp = QCoreApplication::instance()) {
-                        QMetaObject::invokeMethod(qapp,
-                                                  [] { BitcoinGUI::requestQuit(); },
-                                                  Qt::QueuedConnection);
-                    }
+                    // that raced the handshake). Route to the shared graceful-quit
+                    // path (same as a core-initiated shutdown) so the GUI tears down
+                    // cleanly instead of faulting on the next call to a now-dead
+                    // proxy. Shares the once-latch with GridcoinApplication::notify(),
+                    // so whichever detects the loss first wins and the other is a
+                    // no-op; safe if the QCoreApplication is already gone.
+                    QuitOnDaemonConnectionLost("lost connection to the Gridcoin daemon");
                 });
             if (!node_connection)
             {
@@ -911,6 +1028,14 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // Regenerate startup link, to fix links to old versions
                 GUIUtil::SetStartOnSystemStartup(optionsModel.getStartAtStartup(), optionsModel.getStartMin());
 
+#ifndef WIN32
+                // In the split (-multiprocess) build the GUI runs no in-process
+                // core, so it lacks init.cpp's SIGTERM/SIGINT handler. Install one
+                // here so `kill`/the wallet control script can stop the GUI
+                // gracefully while the systemd core keeps running. (Windows uses
+                // WM_CLOSE via WinShutdownMonitor; the monolith uses the core's.)
+                if (multiprocess) InstallGuiTerminationHandler(app);
+#endif
                 app.exec();
 
                 // Stop the GUI-process-local URI-listener thread now that the

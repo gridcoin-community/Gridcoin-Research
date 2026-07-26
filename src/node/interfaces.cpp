@@ -412,12 +412,12 @@ public:
 
     std::unique_ptr<Handler> handleRwSettingsUpdated(RwSettingsUpdatedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(std::move(fn)));
+        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(interfaces::GuardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleInitShutdown(InitShutdownFn fn) override
     {
-        return MakeSignalHandler(uiInterface.QueueShutdown_connect(std::move(fn)));
+        return MakeSignalHandler(uiInterface.QueueShutdown_connect(interfaces::GuardNotify(std::move(fn))));
     }
 
     ScraperConvergenceSnapshot getScraperConvergenceSnapshot() override
@@ -441,37 +441,37 @@ public:
 
     std::unique_ptr<Handler> handleNotifyBlocksChanged(NotifyBlocksChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(std::move(fn)));
+        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(interfaces::GuardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleNotifyNumConnectionsChanged(NotifyNumConnectionsChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyNumConnectionsChanged_connect(std::move(fn)));
+        return MakeSignalHandler(uiInterface.NotifyNumConnectionsChanged_connect(interfaces::GuardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleBannedListChanged(BannedListChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.BannedListChanged_connect(std::move(fn)));
+        return MakeSignalHandler(uiInterface.BannedListChanged_connect(interfaces::GuardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleNotifyAlertChanged(NotifyAlertChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyAlertChanged_connect(std::move(fn)));
+        return MakeSignalHandler(uiInterface.NotifyAlertChanged_connect(interfaces::GuardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleMinerStatusChanged(MinerStatusChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.MinerStatusChanged_connect(std::move(fn)));
+        return MakeSignalHandler(uiInterface.MinerStatusChanged_connect(interfaces::GuardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handlePSGTPoolChanged(PSGTPoolChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.PSGTPoolChanged_connect(std::move(fn)));
+        return MakeSignalHandler(uiInterface.PSGTPoolChanged_connect(interfaces::GuardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleNotifyScraperEvent(NotifyScraperEventFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyScraperEvent_connect(std::move(fn)));
+        return MakeSignalHandler(uiInterface.NotifyScraperEvent_connect(interfaces::GuardNotify(std::move(fn))));
     }
 };
 

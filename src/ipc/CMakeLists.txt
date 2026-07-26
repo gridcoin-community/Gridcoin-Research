@@ -14,6 +14,17 @@ if(NOT WITH_EXTERNAL_LIBMULTIPROCESS)
     add_libmultiprocess(libmultiprocess)
 endif()
 
+# Do NOT put this directory (src/ipc) on the header search path. On Windows,
+# mingw's <pthread.h> does `#include <process.h>` (the CRT threading header);
+# with src/ipc on the search path that angle-bracket include resolves to our
+# ipc/process.h instead, which drags fs.h/<fstream> into the middle of libstdc++'s
+# gthreads bootstrap and shatters <ios>/<istream> (seekdir/__gthread errors) in
+# every generated proxy TU. Our own sources include "ipc/..." (resolved via src/)
+# and the generated proxies include "ipc/capnp/..." (resolved via the build tree),
+# so the current directory is never needed on the include path here. (The
+# libmultiprocess subtree is unaffected: its current dir is src/ipc/libmultiprocess.)
+set(CMAKE_INCLUDE_CURRENT_DIR OFF)
+
 # The IPC layer: the hand-written transport (process/protocol/interfaces) plus the
 # generated Cap'n Proto proxy layer. target_capnp_sources runs mpgen on each
 # .capnp, generating the raw capnp types (.capnp.h/.c++) and the ProxyClient/
@@ -63,3 +74,16 @@ target_compile_features(gridcoin_ipc PUBLIC cxx_std_20)
 target_link_libraries(gridcoin_ipc PUBLIC
     gridcoin_util
 )
+
+# On Windows the transport uses winsock (AF_UNIX via <afunix.h>: WSAStartup,
+# WSASocketW, closesocket, WSAGetLastError) and libmultiprocess's kj-async pulls
+# in the IOCP backend. ws2_32/wsock32 already arrive transitively through
+# gridcoin_util's WIN32 block; list ws2_32 here too so the IPC layer's socket
+# dependency is self-documenting, and add mswsock (AcceptEx/ConnectEx) for the
+# kj-async Win32 async I/O backend.
+if(WIN32)
+    target_link_libraries(gridcoin_ipc PUBLIC
+        ws2_32
+        mswsock
+    )
+endif()

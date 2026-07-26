@@ -14,7 +14,11 @@
 #include <string>
 #include <system_error>
 #include <typeindex>
+#ifndef WIN32
 #include <unistd.h>
+#else
+#include <winsock2.h> // closesocket
+#endif
 #include <utility>
 
 namespace ipc {
@@ -26,7 +30,18 @@ namespace {
 struct FdGuard
 {
     int fd;
-    ~FdGuard() { if (fd != -1) ::close(fd); }
+    ~FdGuard()
+    {
+        if (fd == -1) return;
+#ifdef WIN32
+        // compat.h closesocket() -> myclosesocket() -> the winsock closesocket();
+        // it takes a SOCKET& (zeroes the handle), so pass an lvalue.
+        SOCKET s = static_cast<SOCKET>(fd);
+        closesocket(s);
+#else
+        ::close(fd);
+#endif
+    }
     void release() { fd = -1; }
 };
 

@@ -19,7 +19,19 @@
 #include <fstream>
 #include <sys/stat.h>
 #include <system_error>
+#ifndef WIN32
 #include <unistd.h>
+#else
+#include <io.h>     // _wsopen_s / _write / _commit / _close
+#include <share.h>  // _SH_DENYRW
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h> // MoveFileExW
+#endif
 
 namespace ipc {
 namespace {
@@ -39,6 +51,56 @@ std::optional<std::string> ReadFile(const fs::path& path)
 //! created with mode 0600 from the start (no umask window that could expose the
 //! secret cookie), the write is verified, and any failure throws so the caller
 //! knows the file does not hold what it expects.
+#ifdef WIN32
+//! Windows port of the atomic cookie writer. Same guarantees as the POSIX path,
+//! mapped to winsock/CRT: _O_NOINHERIT for close-on-exec, _SH_DENYRW for an
+//! exclusive open, _commit() for fsync, and MoveFileExW(REPLACE_EXISTING) for the
+//! atomic replace (boost::filesystem::rename's overwrite behaviour on Windows is
+//! version-dependent, so do not rely on it). There is no chmod: the file inherits
+//! the per-user, owner-only datadir ACL. O_NOFOLLOW has no direct analogue, but
+//! the secret only needs protecting from *other* users, which that ACL provides.
+//! On-device (W4): validated -- the cookie handshake round-trips (daemon writes it
+//! fresh each start, GUI reads and authenticates) and the file inherits the
+//! owner-only datadir NTFS ACL (owner + SYSTEM + Administrators, per icacls).
+void WriteFileAtomic(const fs::path& path, const std::string& contents)
+{
+    fs::path tmp = path;
+    tmp += ".tmp";
+    const std::string tmp_str = tmp.string();
+
+    int fd = -1;
+    const errno_t oerr = ::_wsopen_s(&fd, tmp.wstring().c_str(),
+                                     _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY | _O_NOINHERIT,
+                                     _SH_DENYRW, _S_IREAD | _S_IWRITE);
+    if (oerr != 0 || fd == -1) {
+        throw std::system_error(oerr ? oerr : errno, std::generic_category(), "open " + tmp_str);
+    }
+    size_t written = 0;
+    while (written < contents.size()) {
+        const int n = ::_write(fd, contents.data() + written,
+                               static_cast<unsigned int>(contents.size() - written));
+        if (n < 0) {
+            const int e = errno;
+            ::_close(fd);
+            throw std::system_error(e, std::generic_category(), "write " + tmp_str);
+        }
+        written += static_cast<size_t>(n);
+    }
+    if (::_commit(fd) != 0) { // flush to disk (fsync equivalent)
+        const int e = errno;
+        ::_close(fd);
+        throw std::system_error(e, std::generic_category(), "commit " + tmp_str);
+    }
+    if (::_close(fd) != 0) {
+        throw std::system_error(errno, std::generic_category(), "close " + tmp_str);
+    }
+    if (!::MoveFileExW(tmp.wstring().c_str(), path.wstring().c_str(),
+                       MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
+                                "MoveFileEx " + tmp_str + " -> " + path.string());
+    }
+}
+#else
 void WriteFileAtomic(const fs::path& path, const std::string& contents)
 {
     fs::path tmp = path;
@@ -71,6 +133,7 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
     }
     fs::rename(tmp, path); // throws (boost::filesystem) on failure
 }
+#endif
 
 //! 16 strong random bytes as hex -- a per-datadir node identifier.
 std::string GenerateNodeId()

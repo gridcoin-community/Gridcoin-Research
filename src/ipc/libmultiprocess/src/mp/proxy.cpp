@@ -28,6 +28,25 @@
 #include <kj/memory.h>
 #include <kj/string.h>
 #include <cstdint>
+#ifdef WIN32
+#include <system_error>
+// The Windows wakeup writer below needs SOCKET / send / SOCKET_ERROR /
+// WSAGetLastError from <winsock2.h>. Define NOGDI first so windows.h does not
+// pull in <wingdi.h>, whose `#define ERROR 0` would otherwise clobber the
+// KJ_LOG(ERROR, ...) calls in this file; WIN32_LEAN_AND_MEAN/NOMINMAX trim the
+// rest of the Win32 surface. (proxy.cpp includes no other windows header, so
+// these take effect here.)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef NOGDI
+#define NOGDI
+#endif
+#include <winsock2.h>
+#endif
 #include <map>
 #include <memory>
 #include <optional>
@@ -249,6 +268,36 @@ void EventLoop::addAsyncCleanup(std::function<void()> fn)
     startAsyncThread();
 }
 
+#ifdef WIN32
+namespace {
+//! Windows counterpart of kj::FdOutputStream for the EventLoop wakeup. kj's
+//! two-way pipe on Windows is socket-backed: the write end exposes a SOCKET via
+//! getWin32Handle() (getFd() returns none, so kj::FdOutputStream cannot wrap it).
+//! post()/EventLoopRef::reset() write a single wakeup byte through this; send() is
+//! the Windows equivalent of the ::write that FdOutputStream performs on POSIX.
+class Win32SocketOutputStream : public kj::OutputStream
+{
+public:
+    explicit Win32SocketOutputStream(SOCKET sock) : m_sock(sock) {}
+    void write(const void* buffer, size_t size) override
+    {
+        auto* data{static_cast<const char*>(buffer)};
+        while (size > 0) {
+            const int n{::send(m_sock, data, static_cast<int>(size), 0)};
+            if (n == SOCKET_ERROR) {
+                throw std::system_error(::WSAGetLastError(), std::system_category(),
+                                        "EventLoop wakeup send");
+            }
+            data += n;
+            size -= static_cast<size_t>(n);
+        }
+    }
+private:
+    SOCKET m_sock;
+};
+} // namespace
+#endif // WIN32
+
 EventLoop::EventLoop(const char* exe_name, LogOptions log_opts, void* context)
     : m_exe_name(exe_name),
       m_io_context(kj::setupAsyncIo()),
@@ -261,6 +310,11 @@ EventLoop::EventLoop(const char* exe_name, LogOptions log_opts, void* context)
     m_post_stream = kj::mv(pipe.ends[1]);
     KJ_IF_MAYBE(fd, m_post_stream->getFd()) {
         m_post_writer = kj::heap<kj::FdOutputStream>(*fd);
+#ifdef WIN32
+    } else KJ_IF_MAYBE(handle, m_post_stream->getWin32Handle()) {
+        // Windows: the pipe end is a SOCKET, not a POSIX fd (see above).
+        m_post_writer = kj::heap<Win32SocketOutputStream>(reinterpret_cast<SOCKET>(*handle));
+#endif
     } else {
         throw std::logic_error("Could not get file descriptor for new pipe.");
     }
