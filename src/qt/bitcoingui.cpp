@@ -63,6 +63,8 @@
 #include <QIcon>
 #include <QTabWidget>
 #include <QVBoxLayout>
+#include <QFrame>
+#include <QHBoxLayout>
 #include <QToolBar>
 #include <QToolButton>
 #include <QStatusBar>
@@ -209,7 +211,32 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
     centralWidget->addWidget(votingPage);
     centralWidget->addWidget(psgtPoolPage);
 
-    setCentralWidget(centralWidget);
+    // Dismissible warning banner above the page stack (multiprocess mixed-build
+    // warning; hidden until showBuildMismatchWarning()). Wrap the stack + banner
+    // in a container so the banner reflows the pages rather than overlaying them.
+    m_build_warning_banner = new QFrame(this);
+    m_build_warning_banner->setObjectName("buildWarningBanner");
+    m_build_warning_banner->setStyleSheet(
+        "#buildWarningBanner { background-color: #8a6d3b; }"
+        "#buildWarningBanner QLabel { color: white; }");
+    m_build_warning_banner->setVisible(false);
+    QHBoxLayout *bannerLayout = new QHBoxLayout(m_build_warning_banner);
+    bannerLayout->setContentsMargins(8, 4, 8, 4);
+    m_build_warning_label = new QLabel(m_build_warning_banner);
+    m_build_warning_label->setWordWrap(true);
+    QToolButton *bannerDismiss = new QToolButton(m_build_warning_banner);
+    bannerDismiss->setText(tr("Dismiss"));
+    connect(bannerDismiss, &QToolButton::clicked, m_build_warning_banner, &QWidget::hide);
+    bannerLayout->addWidget(m_build_warning_label, 1);
+    bannerLayout->addWidget(bannerDismiss, 0);
+
+    QWidget *centralContainer = new QWidget(this);
+    QVBoxLayout *centralContainerLayout = new QVBoxLayout(centralContainer);
+    centralContainerLayout->setContentsMargins(0, 0, 0, 0);
+    centralContainerLayout->setSpacing(0);
+    centralContainerLayout->addWidget(m_build_warning_banner);
+    centralContainerLayout->addWidget(centralWidget);
+    setCentralWidget(centralContainer);
 
     // Create sync overlay — sits on top of the central widget and blocks
     // interaction until the wallet is in sync (or the user dismisses it).
@@ -767,6 +794,15 @@ void BitcoinGUI::createToolBars()
     statusBar()->addPermanentWidget(frameBlocks);
 
     addToolBarBreak(Qt::TopToolBarArea);
+}
+
+void BitcoinGUI::showBuildMismatchWarning(const QString& gui_commit, const QString& node_commit)
+{
+    if (!m_build_warning_banner || !m_build_warning_label) return;
+    m_build_warning_label->setText(tr("The GUI (%1) and the Gridcoin daemon (%2) were built from "
+                                      "different commits. Mixed builds can behave unexpectedly.")
+                                       .arg(gui_commit, node_commit));
+    m_build_warning_banner->setVisible(true);
 }
 
 void BitcoinGUI::setClientModel(ClientModel *clientModel)

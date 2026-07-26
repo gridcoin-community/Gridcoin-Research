@@ -983,6 +983,22 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 return EXIT_FAILURE;
             }
 
+            // Mixed-build (git_commit) soft-warning: a dismissible banner in the
+            // main window. The handshake already logged it; -nobuildwarn suppresses
+            // both. window is constructed above, so the banner is set before show().
+            if (!gArgs.GetBoolArg("-nobuildwarn", false))
+            {
+                for (const ipc::SoftWarn w : node_connection->handshake.soft)
+                {
+                    if (w == ipc::SoftWarn::GitCommitMismatch)
+                    {
+                        window.showBuildMismatchWarning(
+                            QString::fromStdString(ipc::GetLocalBuildInfo().git_commit),
+                            QString::fromStdString(node_connection->handshake.remote_build.git_commit));
+                    }
+                }
+            }
+
             // The multiprocess GUI logs to its own file (set up in main() before
             // this function) but, unlike the node, runs no core scheduler to rotate
             // it. Drive the same daily-archive check the node schedules in
