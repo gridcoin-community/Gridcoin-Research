@@ -8,11 +8,11 @@ Each RPC's bucket + fingerprint baseline is a **column on its `vRPCCommands[]` r
 - **presence** on every registered RPC (the row's `heritage_<bucket>` parses to a known bucket; classify-at-birth is also compiler-enforced by the required constructor field);
 - **surface-fingerprint drift** on `pure-upstream`, `mixed` & `removed-upstream` -- `fp` = `sha256("ARGS:" + args[in RPCHelpMan declaration order] + "|KEYS:" + sorted(result pushKV keys, gathered by cycle-safe recursive descent through called result-builder helpers))[:12]`. A mismatch means the input/output surface changed; re-confirm the bucket and update the row + this doc. `pure-gridcoin` is not fingerprinted (`heritage_fp` empty), and any fingerprinted RPC whose output isn't literal-key-trackable -- a dynamically-keyed object, or a positional array of scalars -- uses `heritage_fp` `manual` (drift reviewed by hand).
 
-## Tally (213)
+## Tally (214)
 - pure-upstream (backport-safe): **14**
 - mixed (careful porting): **58**
 - removed-upstream (frozen fork, deleted from current upstream): **16**
-- pure-gridcoin (no current upstream analogue): **125**
+- pure-gridcoin (no current upstream analogue): **126**
 
 ## pure-upstream -- backport-safe (fingerprint-tracked)
 | RPC | file | args | result-keys | fp |
@@ -228,6 +228,7 @@ Upstream-derived RPCs that current upstream has **removed** (legacy/BDB-wallet s
 | `setaccount` | src/wallet/rpcwallet.cpp |
 | `showblock` | src/rpc/blockchain.cpp |
 | `signpsgtinpool` | src/rpc/psgt.cpp |
+| `splitunspent` | src/rpc/rawtransaction.cpp |
 | `stakelimit` | src/wallet/rpcwallet.cpp |
 | `submitpsgt` | src/rpc/psgt.cpp |
 | `superblockage` | src/rpc/blockchain.cpp |

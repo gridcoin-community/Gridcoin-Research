@@ -440,6 +440,7 @@ static const CRPCCommand vRPCCommands[] =
     { "setlabel", &setlabel, cat_wallet, &setlabel_helpman, heritage_pure_upstream, "737f242a3755" },
     { "sethdseed",               &sethdseed,               cat_wallet, &sethdseed_helpman, heritage_removed_upstream, "dab6675cb642" },
     { "settxfee",                &settxfee,                cat_wallet, &settxfee_helpman, heritage_removed_upstream, "468a6a9ff691" },
+    { "splitunspent",            &splitunspent,            cat_wallet, &splitunspent_helpman, heritage_pure_gridcoin, "" },
     { "stakelimit",              &stakelimit,              cat_wallet, &stakelimit_helpman, heritage_pure_gridcoin, "" },
     { "signmessage",             &signmessage,             cat_wallet, &signmessage_helpman, heritage_mixed, "6b1488c62c48" },
     { "signrawtransaction",      &signrawtransaction,      cat_wallet, &signrawtransaction_helpman, heritage_removed_upstream, "d75693d24eec" },

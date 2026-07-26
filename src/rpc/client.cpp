@@ -198,6 +198,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sweepuncoveredcoins"    , 1 },
     { "sweepuncoveredcoins"    , 2 },
     { "sethdseed"              , 0 },
+    { "splitunspent"           , 1 },
+    { "splitunspent"           , 2 },
     { "stakelimit"             , 0 },
     { "signrawtransaction"              , 1 },
     { "signrawtransaction"              , 2 },

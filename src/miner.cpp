@@ -1453,6 +1453,38 @@ bool IsMiningAllowed(CWallet *pwallet)
     return g_miner_status.StakingEnabled();
 }
 
+// Returns the efficiency-optimal post-stake UTXO size for the current network difficulty,
+// reading -stakingefficiency and -minstakesplitvalue (with their clamps and floors) from the
+// config regardless of whether -enablestakesplit is set. The effective minimum stake split
+// value (in Halfords) and efficiency are returned in the out-params.
+int64_t GetOptimalStakeSplitValue(int64_t& nMinStakeSplitValue, double& dEfficiency) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    // Pull efficiency for UTXO staking from config, but constrain to the interval [0.75, 0.98]. Use default of 0.90.
+    dEfficiency = (double)gArgs.GetArg("-stakingefficiency", 90) / 100;
+    if (dEfficiency > 0.98)
+        dEfficiency = 0.98;
+    else if (dEfficiency < 0.75)
+        dEfficiency = 0.75;
+
+    // Pull Minimum Post Stake UTXO Split Value from config or command line parameter.
+    // Default to 800 and do not allow it to be specified below 800 GRC.
+    nMinStakeSplitValue = max(gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC)
+                          * COIN;
+
+    // For the definition of the constant G, please see
+    // https://docs.google.com/document/d/1OyuTwdJx1Ax2YZ42WYkGn_UieN0uY13BTlA5G5IAN00/edit?usp=sharing
+    // Refer to page 5 for G. This link is a draft of an upcoming bluepaper section.
+    const double G = 9942.2056;
+
+    // Desired UTXO size post stake based on the efficiency and difficulty, but do not allow to go below
+    // the MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
+    // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
+    // equation (27) on page 10 as a reference for the below formula.
+    int64_t nDesiredStakeOutputValue = G * GRC::GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
+
+    return max(nMinStakeSplitValue, nDesiredStakeOutputValue);
+}
+
 // This function parses the config file for the directives for stake splitting. It is used
 // in StakeMiner for the miner loop and also called by rpc getstakinginfo.
 bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -1464,33 +1496,10 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
     // If stake output splitting is enabled, determine efficiency and minimum stake split value.
     if (fEnableStakeSplit)
     {
-        // Pull efficiency for UTXO staking from config, but constrain to the interval [0.75, 0.98]. Use default of 0.90.
-        dEfficiency = (double)gArgs.GetArg("-stakingefficiency", 90) / 100;
-        if (dEfficiency > 0.98)
-            dEfficiency = 0.98;
-        else if (dEfficiency < 0.75)
-            dEfficiency = 0.75;
+        nDesiredStakeOutputValue = GetOptimalStakeSplitValue(nMinStakeSplitValue, dEfficiency);
 
         LogPrint(BCLog::LogFlags::MINER, "StakeMiner: dEfficiency = %f", dEfficiency);
-
-        // Pull Minimum Post Stake UTXO Split Value from config or command line parameter.
-        // Default to 800 and do not allow it to be specified below 800 GRC.
-        nMinStakeSplitValue = max(gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC)
-                              * COIN;
-
         LogPrint(BCLog::LogFlags::MINER, "StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));
-
-        // For the definition of the constant G, please see
-        // https://docs.google.com/document/d/1OyuTwdJx1Ax2YZ42WYkGn_UieN0uY13BTlA5G5IAN00/edit?usp=sharing
-        // Refer to page 5 for G. This link is a draft of an upcoming bluepaper section.
-        const double G = 9942.2056;
-
-        // Desired UTXO size post stake based on passed in efficiency and difficulty, but do not allow to go below
-        // passed in MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
-        // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
-        // equation (27) on page 10 as a reference for the below formula.
-        nDesiredStakeOutputValue = G * GRC::GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
-        nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
     }
 
     return fEnableStakeSplit;
