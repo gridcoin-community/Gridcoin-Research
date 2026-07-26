@@ -283,6 +283,7 @@ static void QuitOnDaemonConnectionLost(const char* reason)
     }
 }
 
+#ifdef ENABLE_MULTIPROCESS
 //! QSettings key under which the GUI remembers the node identity token it bound to
 //! for this data directory. Keyed by a hash of the canonical datadir so no path is
 //! stored; the datadir is the rendezvous point the GUI and node already share.
@@ -377,6 +378,7 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
     }
     return true;
 }
+#endif // ENABLE_MULTIPROCESS
 
 //! QApplication subclass that contains exceptions escaping Qt event handlers.
 //! In -multiprocess mode the GUI polls the node with synchronous proxy calls from
