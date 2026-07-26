@@ -88,6 +88,8 @@ After you build with this script with the appropriate target
 
 Please refer to [Link](cmake-options.md) (cmake-options.md) for a list of cmake configuration options.
 
+To build the **split GUI/node (multiprocess)** variant — where the GUI and daemon run as separate processes that communicate over IPC — add `-DENABLE_MULTIPROCESS=ON` to a native build, or build the depends tree with `MULTIPROCESS=1` for a static/Windows build. See [multiprocess.md](multiprocess.md) for building **and running** in multiprocess mode (including the Windows requirement that the daemon run as the same user as the GUI).
+
 Developers may want to use -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache to have ccache cache
 the compilation at the ccache level. In many instances it is required to do an rm -rf of the build directory, and this will speed up
 repeated compilations.
@@ -258,6 +260,7 @@ If you are familiar with the legacy Autotools build system (`./configure`), this
 | **Release Build** | *(default + strip)* | `-DCMAKE_BUILD_TYPE=Release` |
 | **GUI** | `--with-gui` | `-DENABLE_GUI=ON` |
 | **No GUI** | `--without-gui` | `-DENABLE_GUI=OFF` |
+| **Multiprocess (split GUI/node)** | *(n/a)* | `-DENABLE_MULTIPROCESS=ON` (see [multiprocess.md](multiprocess.md)) |
 | **UPnP** | `--with-miniupnpc` | `-DENABLE_UPNP=ON` |
 | **QR Code** | `--with-qrencode` | `-DENABLE_QRENCODE=ON` |
 | **Tests** | `--enable-tests` | `-DENABLE_TESTS=ON` |
