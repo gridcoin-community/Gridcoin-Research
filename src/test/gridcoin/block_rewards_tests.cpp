@@ -5,9 +5,11 @@
 #include <boost/test/unit_test.hpp>
 
 #include "amount.h"
+#include "chainparams.h"
 #include "gridcoin/consensus/block_rewards.h"
 #include "gridcoin/sidestake.h"
 #include "key.h"
+#include "key_io.h"
 #include "script.h"
 #include "validation.h"
 
@@ -580,6 +582,40 @@ BOOST_AUTO_TEST_CASE(construct_appends_sidestake_outputs)
 
     BOOST_CHECK_EQUAL(mtx.vout.size(), 4u); // empty + coinstake + 2 sidestakes
     BOOST_CHECK_EQUAL(allocated, (alloc1 * total_owed).ToCAmount() + (alloc2 * total_owed).ToCAmount());
+}
+
+// FoundationSideStakeAddress() is consumed by the miner, which pays the MRC foundation fee to it
+// (CreateMRCRewards), and by the validator, which requires the foundation output to match it
+// (BlockRewardRules). It must therefore resolve to a real destination on every chain.
+//
+// Regtest used to fall through to the mainnet branch, because OnTestnet() is false there. The
+// mainnet address is a P2SH under mainnet's base58 prefixes (62/85), and regtest's match
+// testnet's (111/196), so the decode failed and the function returned CNoDestination.
+BOOST_AUTO_TEST_CASE(foundation_sidestake_address_resolves_on_every_chain)
+{
+    // The whole process shares chain params, so restore them however this case leaves.
+    struct ParamsRestorer {
+        std::string chain;
+        ParamsRestorer() : chain(Params().NetworkIDString()) {}
+        ~ParamsRestorer() { SelectParams(chain); }
+    } restorer;
+
+    SelectParams(CBaseChainParams::MAIN);
+    BOOST_CHECK(IsValidDestination(FoundationSideStakeAddress()));
+    BOOST_CHECK_EQUAL(EncodeDestination(FoundationSideStakeAddress()),
+                      "bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2");
+
+    SelectParams(CBaseChainParams::TESTNET);
+    BOOST_CHECK(IsValidDestination(FoundationSideStakeAddress()));
+    BOOST_CHECK_EQUAL(EncodeDestination(FoundationSideStakeAddress()),
+                      "mfiy9sc2QEZZCK3WMUMZjNfrdRA6gXzRhr");
+
+    // The regression: this was CNoDestination, so an MRC foundation output on regtest would be
+    // paid to an undecodable destination.
+    SelectParams(CBaseChainParams::REGTEST);
+    BOOST_CHECK(IsValidDestination(FoundationSideStakeAddress()));
+    BOOST_CHECK_EQUAL(EncodeDestination(FoundationSideStakeAddress()),
+                      "mfiy9sc2QEZZCK3WMUMZjNfrdRA6gXzRhr");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

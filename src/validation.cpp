@@ -639,8 +639,11 @@ Fraction FoundationSideStakeAllocation()
 CTxDestination FoundationSideStakeAddress() {
     CTxDestination foundation_address;
 
-    // If on testnet set foundation destination address to test wallet address
-    if (OnTestnet()) {
+    // If on testnet set foundation destination address to test wallet address. Regtest uses it
+    // too: OnTestnet() is false there, and the mainnet address below would be decoded under
+    // regtest's base58 prefixes -- which match testnet's (111/196), not mainnet's (62/85) -- so
+    // it would fail to decode and yield CNoDestination. The testnet address decodes on both.
+    if (OnTestnet() || Params().IsMockableChain()) {
         foundation_address = DecodeDestination("mfiy9sc2QEZZCK3WMUMZjNfrdRA6gXzRhr");
 
         return foundation_address;
