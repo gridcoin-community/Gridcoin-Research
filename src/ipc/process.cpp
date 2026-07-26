@@ -101,8 +101,9 @@ void EnsureWinsock()
 //! not-running daemon, and libstdc++'s system_category() does not map the WSA
 //! range. Map the connect-relevant codes to their POSIX errc; keep the raw code
 //! under system_category() otherwise so the message is still meaningful.
-//! TODO(win-mp W4): confirm on-device which WSA/Win32 code Windows AF_UNIX
-//! actually returns for a missing vs. unlistened socket path.
+//! On-device (W4): a missing socket path returns WSAECONNREFUSED (-> connection_refused,
+//! the clean no-daemon fallback, confirmed live). The unlistened case (a stale socket
+//! file with no listener) is still mapped generically -- not yet separately exercised.
 std::error_code SocketErrorCode(int err)
 {
     switch (err) {
@@ -210,8 +211,11 @@ public:
         // listen rather than expose the socket in a world-accessible directory.
         // Windows has no chmod/umask for AF_UNIX; the socket instead inherits the
         // NTFS ACL of the per-user-profile data directory (owner-only by default) --
-        // the same reliance Bitcoin Core has on the datadir ACL. Explicit DACLs are
-        // a hardening follow-up (design decision 3 / Windows hardening).
+        // the same reliance Bitcoin Core has on the datadir ACL. Confirmed on-device
+        // (icacls): node.sock and ipc.cookie grant only the owner, SYSTEM and
+        // Administrators -- no Everyone/Users/Authenticated-Users -- so an
+        // unprivileged local user cannot read the cookie. Explicit DACLs remain a
+        // possible hardening follow-up (design decision 3 / Windows hardening).
         if (path.has_parent_path()) {
             fs::create_directories(path.parent_path());
 #ifndef WIN32

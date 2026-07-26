@@ -59,7 +59,9 @@ std::optional<std::string> ReadFile(const fs::path& path)
 //! version-dependent, so do not rely on it). There is no chmod: the file inherits
 //! the per-user, owner-only datadir ACL. O_NOFOLLOW has no direct analogue, but
 //! the secret only needs protecting from *other* users, which that ACL provides.
-//! TODO(win-mp W4): validate the exclusive-open / replace semantics on-device.
+//! On-device (W4): validated -- the cookie handshake round-trips (daemon writes it
+//! fresh each start, GUI reads and authenticates) and the file inherits the
+//! owner-only datadir NTFS ACL (owner + SYSTEM + Administrators, per icacls).
 void WriteFileAtomic(const fs::path& path, const std::string& contents)
 {
     fs::path tmp = path;
