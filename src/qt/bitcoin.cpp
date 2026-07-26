@@ -48,6 +48,12 @@
 #include "decoration.h"
 
 #include <atomic>
+#ifndef WIN32
+#include <QSocketNotifier>
+#include <fcntl.h>
+#include <signal.h>
+#include <unistd.h>
+#endif
 #include <stdexcept>
 #include <thread>
 
@@ -304,6 +310,46 @@ public:
         return false;
     }
 };
+
+#ifndef WIN32
+//! Self-pipe so a Unix termination signal can reach the Qt event loop. The signal
+//! handler is async-signal-safe -- it only write()s one byte -- and a
+//! QSocketNotifier on the read end fires on the Qt main thread and requests a
+//! graceful quit (the same path QueueShutdown / on_disconnect use). This is only
+//! needed in the -multiprocess GUI: the monolithic GUI runs the core in-process
+//! and inherits init.cpp's HandleSIGTERM. Without it a SIGTERM/SIGINT -- e.g.
+//! `kill(1)`, or the wallet control script stopping a split instance's GUI while
+//! its core keeps running under systemd -- hits the default disposition and
+//! hard-terminates the GUI with no teardown or final log flush.
+static int g_signal_pipe[2] = {-1, -1};
+extern "C" void GuiTerminationSignalHandler(int)
+{
+    const char byte = 0;
+    const ssize_t rc = ::write(g_signal_pipe[1], &byte, 1);
+    (void)rc; // best-effort; nothing safe to do on failure inside a signal handler
+}
+static void InstallGuiTerminationHandler(QCoreApplication& app)
+{
+    if (::pipe2(g_signal_pipe, O_CLOEXEC | O_NONBLOCK) != 0) {
+        GUILogPrintf("IPC: could not install the GUI termination-signal handler "
+                     "(pipe2 failed); SIGTERM/SIGINT will hard-terminate the GUI");
+        return;
+    }
+    auto* notifier = new QSocketNotifier(g_signal_pipe[0], QSocketNotifier::Read, &app);
+    QObject::connect(notifier, &QSocketNotifier::activated, &app, [] {
+        char buf;
+        while (::read(g_signal_pipe[0], &buf, 1) > 0) { /* drain */ }
+        GUILogPrintf("IPC: received a termination signal; closing the GUI");
+        BitcoinGUI::requestQuit();
+    });
+    struct sigaction sa = {};
+    sa.sa_handler = GuiTerminationSignalHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    ::sigaction(SIGTERM, &sa, nullptr);
+    ::sigaction(SIGINT, &sa, nullptr);
+}
+#endif // !WIN32
 
 #ifndef BITCOIN_QT_TEST
 int main(int argc, char *argv[])
@@ -961,6 +1007,14 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // Regenerate startup link, to fix links to old versions
                 GUIUtil::SetStartOnSystemStartup(optionsModel.getStartAtStartup(), optionsModel.getStartMin());
 
+#ifndef WIN32
+                // In the split (-multiprocess) build the GUI runs no in-process
+                // core, so it lacks init.cpp's SIGTERM/SIGINT handler. Install one
+                // here so `kill`/the wallet control script can stop the GUI
+                // gracefully while the systemd core keeps running. (Windows uses
+                // WM_CLOSE via WinShutdownMonitor; the monolith uses the core's.)
+                if (multiprocess) InstallGuiTerminationHandler(app);
+#endif
                 app.exec();
 
                 // Stop the GUI-process-local URI-listener thread now that the
