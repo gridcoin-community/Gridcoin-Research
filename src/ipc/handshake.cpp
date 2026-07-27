@@ -259,7 +259,7 @@ HandshakeResult ClientHandshake(interfaces::Init& init, const std::string& cooki
         // identity token: this is a hard failure, not a graceful degrade.
         result.ok = false;
         result.soft.clear();
-        result.error = strprintf("lost connection to the daemon during the handshake: %s", e.what());
+        result.error = strprintf("Lost connection to the daemon during the handshake: %s", e.what());
         return result;
     }
 }

@@ -96,6 +96,11 @@ add_executable(test_gridcoin
     # every CI config, not just the multiprocess job.
     ${CMAKE_SOURCE_DIR}/src/ipc/handshake.cpp
     ipc_handshake_tests.cpp
+    # Serve-side handshake gating (src/ipc/serve_init.cpp): ServeInit refuses to
+    # serve anything until authenticate() succeeds. Also Cap'n Proto-free, so it
+    # compiles into the ordinary test binary alongside handshake.cpp.
+    ${CMAKE_SOURCE_DIR}/src/ipc/serve_init.cpp
+    ipc_serve_init_tests.cpp
     random_tests.cpp
     rpc_tests.cpp
     rpchelpman_tests.cpp

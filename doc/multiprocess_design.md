@@ -153,7 +153,7 @@ sequence in §4.3), the build-info exchange compares:
 | `schema_major` | Hard fail (incompatible wire format) |
 | `schema_minor` | GUI > node: refuse. GUI < node: soft (log-only) |
 | `protocol_version` | Hard fail outside the compatible range |
-| `git_commit` | Soft warning (logged; suppress per instance with `-nobuildwarn`). A dismissible in-window banner is the intended surface (follow-up) |
+| `git_commit` | Soft warning: logged and shown as a dismissible in-window banner (`BitcoinGUI::showBuildMismatchWarning`), suppressible per instance with `-nobuildwarn` |
 | `built_at` | Informational (About dialog) |
 
 Dev builds with dirty trees carry a `-dirty` suffix in `git_commit` (from

@@ -149,8 +149,8 @@ GUI, close it or `SIGTERM` it as above.
   first and confirm `IPC: serving …` appears in its `debug.log`.
 - **Version/schema mismatch on connect.** The GUI and daemon are different builds.
   Use matching `gridcoinresearch` / `gridcoinresearchd` binaries. If only the commit
-  differs (not the schema), the GUI still connects and just logs a mixed-build
-  warning; suppress it per instance with `-nobuildwarn`.
+  differs (not the schema), the GUI still connects and shows a dismissible mixed-build
+  warning banner (also logged); suppress it per instance with `-nobuildwarn`.
 - **"The wallet in this data directory appears to have changed…"** The GUI binds, per
   data directory, to the wallet the daemon is serving (a per-wallet identity kept in
   `wallet.dat`). It shows this prompt when a *different* wallet answers — e.g. you

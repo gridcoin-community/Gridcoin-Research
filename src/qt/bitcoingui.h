@@ -44,6 +44,7 @@ class SyncOverlay;
 class UpdateDialog;
 
 QT_BEGIN_NAMESPACE
+class QFrame;
 class QLabel;
 class QLineEdit;
 class QTableView;
@@ -75,6 +76,11 @@ public:
         functionality.
     */
     void setWalletModel(WalletModel *walletModel);
+
+    //! Show a dismissible banner warning that the GUI and daemon were built from
+    //! different commits (the multiprocess mixed-build soft-warning). Safe to call
+    //! before the window is shown; a no-op if the banner widgets are absent.
+    void showBuildMismatchWarning(const QString& gui_commit, const QString& node_commit);
 
     /** Provide the PSGT pool interface (Phase 1d-v) to the PSGT pool page and the
         multisign dialog. Set before setWalletModel(), which builds the page's
@@ -132,6 +138,11 @@ private:
     VotingModel *votingModel;
 
     QStackedWidget *centralWidget;
+
+    //! Dismissible warning banner shown above the page stack (multiprocess
+    //! mixed-build warning). Hidden until showBuildMismatchWarning().
+    QFrame *m_build_warning_banner = nullptr;
+    QLabel *m_build_warning_label = nullptr;
 
     OverviewPage *overviewPage;
     FavoritesPage *addressBookPage;

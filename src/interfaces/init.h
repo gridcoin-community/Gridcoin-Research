@@ -41,7 +41,8 @@ struct BuildInfo
 
 //! The node's identity, reported over IPC (post-auth) so the GUI can confirm it is
 //! still managing the same wallet it bound to before. identity_token =
-//! SHA256(domain-tag ‖ wallet_uuid); it changes iff the wallet is replaced, and is
+//! HEX(SHA256(domain-tag ‖ LE32(len) ‖ wallet_uuid)) (see ipc::ComputeIdentityToken);
+//! it changes iff the wallet is replaced, and is
 //! deliberately independent of chain state and datadir path (a chain reset / resync
 //! must NOT change it). An empty token means "unavailable" (mockable chain, or the
 //! wallet UUID could not be minted). The GUI persists the token per datadir on
@@ -51,7 +52,7 @@ struct BuildInfo
 //! crosses IPC.
 struct NodeIdentity
 {
-    std::string identity_token; //!< SHA256(tag ‖ wallet_uuid), hex; empty = unavailable.
+    std::string identity_token; //!< HEX(SHA256(tag ‖ LE32(len) ‖ wallet_uuid)); empty = unavailable.
     std::string network;        //!< Chain name ("main" / "test" / "regtest").
 };
 
