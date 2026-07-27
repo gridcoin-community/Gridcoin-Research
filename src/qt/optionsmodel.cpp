@@ -98,28 +98,18 @@ void OptionsModel::Init()
     pollExpireNotification = 8.0;
     walletStylesheet = "dark";
 
-    // language is read HERE (not in readNodeSettings) because it feeds -lang for
-    // the Qt translator, which is installed before the datadir is finalized -- so
-    // it stays a global (not per-node) setting. Every other Qt-only preference is
-    // per-node and read later, in readNodeSettings(), once GetDataDir() is known.
+    // language is a GUI-local (not per-node) preference used by the options dialog;
+    // captured here for the model. Every other Qt-only preference is per-node and
+    // read later, in readNodeSettings(), once GetDataDir() is known.
+    //
+    // NOTE: -lang / -datadir are NOT SoftSet here. They must be in gArgs *before*
+    // the Qt translator is installed and the Intro datadir dialog runs -- and, in
+    // the multiprocess build, before the node connection this model's m_node is
+    // sourced from even exists (this model is now constructed *after* that connect).
+    // So that pre-Intro SoftSet moved to EarlyReadGuiLangAndDatadir() in
+    // bitcoin.cpp main(), which runs well ahead of this constructor. This model
+    // keeps only the `language` member read for its own use.
     language = settings.value("language", "").toString();
-
-    // Language stays GUI-local (the core does not read -lang): apply it into this
-    // process's own args for the Qt translator.
-    if (!language.isEmpty()) {
-        gArgs.SoftSetArg("-lang", language.toStdString());
-    }
-    // DataDir is restart-only and remains a next-launch copy here; the Phase-2
-    // spawn handshake will own the authoritative datadir in the split build.
-    if (settings.contains("dataDir") && dataDir != GUIUtil::getDefaultDataDirectory()) {
-        // Use ShortPathString to get an 8.3 short path on Windows when the path contains characters
-        // outside the system code page. gArgs is a narrow-string store, and fs::path::string() would
-        // corrupt non-codepage characters via code page narrowing.
-        std::string datadir_narrow = fsbridge::ShortPathString(GUIUtil::qstringToBoostPath(settings.value("dataDir").toString()));
-        if (!datadir_narrow.empty()) {
-            gArgs.SoftSetArg("-datadir", datadir_narrow);
-        }
-    }
 
     m_sidestake_model = new SideStakeTableModel(m_sidestake_manager, this);
 }
