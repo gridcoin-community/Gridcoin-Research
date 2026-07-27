@@ -970,10 +970,24 @@ int main(int argc, char *argv[])
     }
     catch (const std::exception& e)
     {
-        GUILogPrintf("IPC: lost the daemon connection during GUI startup: %s", e.what());
-        QMessageBox::critical(nullptr, PACKAGE_NAME,
-                QObject::tr("Lost connection to the Gridcoin daemon during startup:\n%1")
-                    .arg(QString::fromStdString(e.what())));
+        // In the split build the wrapped calls are IPC round-trips, so a throw here
+        // is almost always the daemon dropping after the connect; in the monolith
+        // they are in-process, so report a generic startup error instead of a
+        // misleading "lost the daemon connection".
+        if (multiprocess)
+        {
+            GUILogPrintf("IPC: lost the daemon connection during GUI startup: %s", e.what());
+            QMessageBox::critical(nullptr, PACKAGE_NAME,
+                    QObject::tr("Lost connection to the Gridcoin daemon during startup:\n%1")
+                        .arg(QString::fromStdString(e.what())));
+        }
+        else
+        {
+            GUILogPrintf("Error during GUI startup: %s", e.what());
+            QMessageBox::critical(nullptr, PACKAGE_NAME,
+                    QObject::tr("An error occurred during startup:\n%1")
+                        .arg(QString::fromStdString(e.what())));
+        }
         return EXIT_FAILURE;
     }
 
