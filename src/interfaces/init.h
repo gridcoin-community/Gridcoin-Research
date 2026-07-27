@@ -39,17 +39,20 @@ struct BuildInfo
     uint32_t protocol_version = 0;
 };
 
-//! The node's per-datadir identity. The GUI persists the expected node_id +
-//! network on first successful connect and hard-fails on every later launch when
-//! a different node_id answers at the same socket path (a moved datadir, a
-//! -reindex rotation, or a foreign node squatting the socket). See
-//! doc/multiprocess_design.md section 4.2. Value snapshot; crosses IPC.
+//! The node's identity, reported over IPC (post-auth) so the GUI can confirm it is
+//! still managing the same wallet it bound to before. identity_token =
+//! SHA256(domain-tag ‖ wallet_uuid); it changes iff the wallet is replaced, and is
+//! deliberately independent of chain state and datadir path (a chain reset / resync
+//! must NOT change it). An empty token means "unavailable" (mockable chain, or the
+//! wallet UUID could not be minted). The GUI persists the token per datadir on
+//! first connect and prompts — or, with -autotrustidentity, silently rebinds — when
+//! it changes. network is a separate binary guard against attaching a GUI to a node
+//! on a different chain. See doc/multiprocess_design.md section 4.2. Value snapshot;
+//! crosses IPC.
 struct NodeIdentity
 {
-    std::string node_id;      //!< Random per-datadir UUID (from node_identity.json).
-    std::string network;      //!< Chain name ("main" / "test" / "regtest").
-    std::string datadir;      //!< Canonical datadir path.
-    std::string genesis_hash; //!< Genesis block hash, hex.
+    std::string identity_token; //!< SHA256(tag ‖ wallet_uuid), hex; empty = unavailable.
+    std::string network;        //!< Chain name ("main" / "test" / "regtest").
 };
 
 //! Per-process bootstrap interface: hands out the other interfaces. In the

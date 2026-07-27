@@ -467,6 +467,20 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
         }
+        else if (strType == "walletuuid")
+        {
+            std::vector<unsigned char> vchUuid;
+            ssValue >> vchUuid;
+            // The UUID is always exactly 16 bytes; reject any other size (a
+            // corrupted record) rather than binding to garbage. Treated as absent,
+            // so LoadWallet re-mints a fresh one.
+            if (vchUuid.size() == 16) {
+                pwallet->LoadWalletUuid(vchUuid);
+            } else {
+                LogPrintf("%s: WARNING: ignoring walletuuid record of unexpected size %u",
+                          __func__, static_cast<unsigned>(vchUuid.size()));
+            }
+        }
         else if (strType == "seedphrase" || strType == "cseedphrase")
         {
             CSeedPhraseData seed_phrase;
@@ -812,7 +826,7 @@ bool CWalletDB::Recover(CDBEnv& dbenv, std::string filename, bool fOnlyKeys)
             string strType, strErr;
             bool fReadOK = ReadKeyValue(&dummyWallet, ssKey, ssValue,
                                         wss, strType, strErr);
-            if (!IsKeyType(strType) && strType != "hdchain")
+            if (!IsKeyType(strType) && strType != "hdchain" && strType != "walletuuid")
                 continue;
             if (!fReadOK)
             {
@@ -840,6 +854,12 @@ bool CWalletDB::WriteHDChain(const CHDChain& chain)
 {
     nWalletDBUpdated++;
     return Write(std::string("hdchain"), chain);
+}
+
+bool CWalletDB::WriteWalletUuid(const std::vector<unsigned char>& uuid)
+{
+    nWalletDBUpdated++;
+    return Write(std::string("walletuuid"), uuid);
 }
 
 bool CWalletDB::WriteSeedPhrase(const CSeedPhraseData& data)

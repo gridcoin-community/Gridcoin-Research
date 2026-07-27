@@ -130,6 +130,12 @@ private:
     /* the HD chain data model (external chain counters) */
     CHDChain hdChain;
 
+    //! Random per-wallet identity tag (16 bytes), minted once and persisted in
+    //! wallet.dat as the "walletuuid" record. Used by the multiprocess handshake
+    //! to fingerprint *which wallet* a node is serving (independent of chain state
+    //! or datadir path). Not secret, not key-derived. Empty until loaded/minted.
+    std::vector<unsigned char> m_wallet_uuid;
+
     /* the seed phrase record for a phrase-backed HD hierarchy */
     CSeedPhraseData m_seed_phrase_data GUARDED_BY(cs_wallet);
 
@@ -568,6 +574,15 @@ public:
     /* Set the HD chain model (chain child index counters) */
     bool SetHDChain(const CHDChain& chain, bool memonly);
     const CHDChain& GetHDChain() { return hdChain; }
+
+    //! Load the persisted wallet UUID (called by CWalletDB during LoadWallet). No
+    //! disk write.
+    void LoadWalletUuid(const std::vector<unsigned char>& uuid) { m_wallet_uuid = uuid; }
+
+    //! The per-wallet identity tag (16 bytes), or empty if none has been minted
+    //! (e.g. a mockable-chain wallet, or a write failure at mint time). Immutable
+    //! after load; safe to read without cs_wallet.
+    std::vector<unsigned char> GetWalletUuid() const { return m_wallet_uuid; }
 
     /* Load the seed phrase record during wallet db load (memory only) */
     bool LoadSeedPhraseData(const CSeedPhraseData& data, bool crypted);

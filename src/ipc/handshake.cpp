@@ -4,17 +4,16 @@
 
 #include "ipc/handshake.h"
 
-#include "chainparams.h"
 #include "clientversion.h"
+#include "crypto/sha256.h"
 #include "random.h"
 #include "tinyformat.h"
-#include "util.h"
 #include "util/strencodings.h"
-
-#include <univalue.h>
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <exception>
 #include <fcntl.h>
 #include <fstream>
 #include <sys/stat.h>
@@ -36,7 +35,6 @@
 namespace ipc {
 namespace {
 const char* const COOKIE_FILE = "ipc.cookie";
-const char* const IDENTITY_FILE = "node_identity.json";
 
 //! Read an entire file into a string; nullopt if it cannot be opened.
 std::optional<std::string> ReadFile(const fs::path& path)
@@ -134,14 +132,6 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
     fs::rename(tmp, path); // throws (boost::filesystem) on failure
 }
 #endif
-
-//! 16 strong random bytes as hex -- a per-datadir node identifier.
-std::string GenerateNodeId()
-{
-    std::array<unsigned char, 16> buf{};
-    GetStrongRandBytes(buf);
-    return HexStr(buf);
-}
 } // namespace
 
 interfaces::BuildInfo GetLocalBuildInfo()
@@ -185,90 +175,105 @@ std::optional<std::string> ReadCookie(const fs::path& dir)
     return contents;
 }
 
-interfaces::NodeIdentity WriteIdentity(const fs::path& dir)
+std::string ComputeIdentityToken(const std::vector<unsigned char>& wallet_uuid)
 {
-    const fs::path path = dir / IDENTITY_FILE;
+    if (wallet_uuid.empty()) return std::string();
 
-    // Preserve the existing per-datadir node_id across restarts (the GUI binds to
-    // it); generate one only on first run.
-    std::string node_id;
-    if (auto existing = ReadFile(path)) {
-        UniValue obj;
-        if (obj.read(*existing) && obj.isObject() && obj.exists("node_id") && obj["node_id"].isStr()) {
-            node_id = obj["node_id"].get_str();
+    CSHA256 hasher;
+    // Domain tag (exclude the trailing NUL of the string literal).
+    hasher.Write(reinterpret_cast<const unsigned char*>(IDENTITY_TOKEN_DOMAIN),
+                 sizeof(IDENTITY_TOKEN_DOMAIN) - 1);
+    // Length-prefix the UUID (LE32) so the tag/UUID boundary is unambiguous.
+    const uint32_t len = static_cast<uint32_t>(wallet_uuid.size());
+    const unsigned char len_le[4] = {
+        static_cast<unsigned char>(len & 0xff),
+        static_cast<unsigned char>((len >> 8) & 0xff),
+        static_cast<unsigned char>((len >> 16) & 0xff),
+        static_cast<unsigned char>((len >> 24) & 0xff),
+    };
+    hasher.Write(len_le, sizeof(len_le));
+    hasher.Write(wallet_uuid.data(), wallet_uuid.size());
+
+    std::array<unsigned char, CSHA256::OUTPUT_SIZE> out{};
+    hasher.Finalize(out.data());
+    return HexStr(out);
+}
+
+HandshakeResult ClientHandshake(interfaces::Init& init, const std::string& cookie,
+                                const std::string& local_network,
+                                const interfaces::BuildInfo& local)
+{
+    HandshakeResult result;
+    try {
+        if (!init.authenticate(cookie)) {
+            result.error = "The node rejected the authentication cookie. It may have restarted "
+                           "since the cookie was written; try reconnecting.";
+            return result;
         }
-        // A malformed/non-string node_id falls through to a freshly generated one.
+
+        // Fetch build + identity once, up front: a second getIdentity() call would
+        // be a redundant round-trip and could, in principle, race a divergent value.
+        const interfaces::BuildInfo remote = init.getBuildInfo();
+        const interfaces::NodeIdentity ident = init.getIdentity();
+
+        if (remote.schema_major != local.schema_major) {
+            result.error = strprintf("Incompatible IPC schema: this GUI speaks schema major %u but "
+                                     "the node speaks %u. Use matching builds of gridcoinresearch "
+                                     "and gridcoinresearchd.",
+                                     local.schema_major, remote.schema_major);
+            return result;
+        }
+        if (remote.protocol_version != local.protocol_version) {
+            result.error = strprintf("Incompatible IPC protocol version: GUI %u, node %u.",
+                                     local.protocol_version, remote.protocol_version);
+            return result;
+        }
+        if (local.schema_minor > remote.schema_minor) {
+            result.error = strprintf("This GUI is newer than the node (IPC schema minor GUI %u > "
+                                     "node %u). Update the node.",
+                                     local.schema_minor, remote.schema_minor);
+            return result;
+        }
+        if (ident.network != local_network) {
+            result.error = strprintf("This GUI is configured for the '%s' network but the daemon is "
+                                     "running '%s'.",
+                                     local_network, ident.network);
+            return result;
+        }
+
+        // Soft findings (non-fatal). GUI schema_minor < node is forward-compatible
+        // (log-only); a git_commit mismatch is the mixed-build banner.
+        if (local.schema_minor < remote.schema_minor) {
+            result.soft.push_back(SoftWarn::GuiOlderMinor);
+        }
+        if (remote.git_commit != local.git_commit) {
+            result.soft.push_back(SoftWarn::GitCommitMismatch);
+        }
+
+        result.remote_build = remote;
+        result.remote_ident = ident;
+        result.ok = true;
+        return result;
+    } catch (const std::exception& e) {
+        // An IPC call threw (daemon vanished mid-handshake). Distinct from an empty
+        // identity token: this is a hard failure, not a graceful degrade.
+        result.ok = false;
+        result.soft.clear();
+        result.error = strprintf("lost connection to the daemon during the handshake: %s", e.what());
+        return result;
     }
-    if (node_id.empty()) node_id = GenerateNodeId();
-
-    interfaces::NodeIdentity id;
-    id.node_id = node_id;
-    id.network = Params().NetworkIDString();
-    // Record the directory this identity file actually lives in (the caller's
-    // dir), not the process-global GetDataDir(), so the two cannot diverge.
-    id.datadir = dir.string();
-    id.genesis_hash = Params().GetConsensus().hashGenesisBlock.ToString();
-
-    UniValue obj(UniValue::VOBJ);
-    obj.pushKV("node_id", id.node_id);
-    obj.pushKV("network", id.network);
-    obj.pushKV("datadir", id.datadir);
-    obj.pushKV("genesis_hash", id.genesis_hash);
-    WriteFileAtomic(path, obj.write(2) + "\n");
-    return id;
 }
 
-std::optional<interfaces::NodeIdentity> ReadIdentity(const fs::path& dir)
+BindOutcome CheckIdentityBinding(const std::string& reported_token, const std::string& stored_token)
 {
-    auto contents = ReadFile(dir / IDENTITY_FILE);
-    if (!contents) return std::nullopt;
-    UniValue obj;
-    if (!obj.read(*contents) || !obj.isObject()) return std::nullopt;
-
-    // Guard each field with isStr(): UniValue::get_str() throws on a non-string,
-    // but a malformed file must yield nullopt (the documented contract), not an
-    // exception the GUI caller may not catch.
-    interfaces::NodeIdentity id;
-    if (obj.exists("node_id") && obj["node_id"].isStr()) id.node_id = obj["node_id"].get_str();
-    if (obj.exists("network") && obj["network"].isStr()) id.network = obj["network"].get_str();
-    if (obj.exists("datadir") && obj["datadir"].isStr()) id.datadir = obj["datadir"].get_str();
-    if (obj.exists("genesis_hash") && obj["genesis_hash"].isStr()) id.genesis_hash = obj["genesis_hash"].get_str();
-    if (id.node_id.empty()) return std::nullopt;
-    return id;
-}
-
-bool ClientAuthenticateAndCheck(interfaces::Init& init, const std::string& cookie, std::string& error_out)
-{
-    if (!init.authenticate(cookie)) {
-        error_out = "The node rejected the authentication cookie. It may have restarted since the "
-                    "cookie was written; try reconnecting.";
-        return false;
+    if (reported_token.empty()) {
+        // Empty reported token = identity unavailable. If we already have a stored
+        // token this is a downgrade signal -- treat it as a mismatch, never a
+        // silent skip (an attacker could force the node to report empty).
+        return stored_token.empty() ? BindOutcome::UnavailableFresh : BindOutcome::UnavailableStored;
     }
-
-    const interfaces::BuildInfo remote = init.getBuildInfo();
-    const interfaces::BuildInfo local = GetLocalBuildInfo();
-
-    if (remote.schema_major != local.schema_major) {
-        error_out = strprintf("Incompatible IPC schema: this GUI speaks schema major %u but the node "
-                              "speaks %u. Use matching builds of gridcoinresearch and "
-                              "gridcoinresearchd.",
-                              local.schema_major, remote.schema_major);
-        return false;
-    }
-    if (remote.protocol_version != local.protocol_version) {
-        error_out = strprintf("Incompatible IPC protocol version: GUI %u, node %u.",
-                              local.protocol_version, remote.protocol_version);
-        return false;
-    }
-    if (local.schema_minor > remote.schema_minor) {
-        error_out = strprintf("This GUI is newer than the node (IPC schema minor GUI %u > node %u). "
-                              "Update the node.",
-                              local.schema_minor, remote.schema_minor);
-        return false;
-    }
-    // GUI schema_minor < node: forward-compatible, accepted. A git_commit
-    // mismatch is a dismissible soft-warn handled GUI-side, not a failure here.
-    return true;
+    if (stored_token.empty()) return BindOutcome::FirstSeen;
+    return reported_token == stored_token ? BindOutcome::Match : BindOutcome::Mismatch;
 }
 
 } // namespace ipc

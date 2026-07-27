@@ -290,6 +290,7 @@ public:
 
     //! write the hdchain model (external chain child index counter)
     bool WriteHDChain(const CHDChain& chain);
+    bool WriteWalletUuid(const std::vector<unsigned char>& uuid);
 
     //! write the seed phrase record with a plaintext blob (unencrypted wallet)
     bool WriteSeedPhrase(const CSeedPhraseData& data);

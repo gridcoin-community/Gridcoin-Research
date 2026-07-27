@@ -115,14 +115,26 @@ build node-emitted strings are English and only GUI-owned strings are translated
 
 ### 4.2 Matching policy (Stage 2)
 
-The node writes `<datadir>/<network>/node_identity.json` (random per-datadir UUID,
-network, canonical datadir, genesis hash). The GUI persists the expected
-`node_id` + `network` (QSettings) on first successful connect and, on every later
-launch, hard-fails when a *different* `node_id` answers at the same socket path —
-that is what catches a moved datadir, a `-reindex` identity rotation, or a foreign
-node squatting the socket. The comparison is between the stored expectation and the
-identity the node reports over IPC, never merely between the json file and the node
-that wrote it.
+The node reports its identity over IPC (post-authentication) as
+`{identity_token, network}`, where `identity_token = SHA256(domain-tag ‖ wallet_uuid)`
+and `wallet_uuid` is a random 16-byte tag minted once into `wallet.dat` (the
+`"walletuuid"` record; skipped on mockable chains, whose DB is not persisted).
+Identity thus fingerprints *which wallet* the node serves, deliberately independent
+of chain state and datadir path: a chain reset / re-genesis / resync does **not**
+change it, but replacing the wallet in the same datadir does. The GUI persists the
+token (QSettings, keyed by a hash of the canonical datadir — no path is stored) on
+first successful connect and, on every later launch, hard-fails when a *different*
+token answers — prompting "Trust this wallet / Quit" (Quit exits; Trust re-binds).
+`-autotrustidentity` turns the prompt into a silent re-bind + log, for instances that
+swap wallets deliberately and for headless/scripted starts. An empty token (mockable
+chain, or the UUID could not be minted) means "unavailable": the GUI proceeds unbound
+unless a token was already stored, which is treated as a change, never a silent skip.
+The comparison is always between the GUI's stored expectation and the token the node
+reports over the authenticated IPC channel.
+
+The identity binding guards the GUI against *misattribution* (silently showing a
+different wallet's balances); it is not a core-level control — the daemon loads
+whatever `wallet.dat` is in its datadir regardless.
 
 Both binaries embed `git_commit / built_at / schema_major / schema_minor /
 protocol_version` at compile time. The commit fingerprint builds on the existing
@@ -136,15 +148,17 @@ sequence in §4.3), the build-info exchange compares:
 
 | Field | Mismatch policy |
 |---|---|
-| `node_id` / `network` | Hard fail with explanatory dialog |
+| `identity_token` | Prompt "Trust this wallet / Quit" (re-bind or exit); `-autotrustidentity` silently re-binds. Empty-but-stored = treated as a change |
+| `network` | Hard fail with explanatory dialog |
 | `schema_major` | Hard fail (incompatible wire format) |
-| `schema_minor` | GUI > node: refuse. GUI < node: soft warn |
+| `schema_minor` | GUI > node: refuse. GUI < node: soft (log-only) |
 | `protocol_version` | Hard fail outside the compatible range |
-| `git_commit` | Soft-warn banner, dismissible, keyed by the commit-hash pair |
+| `git_commit` | Soft warning (logged; suppress per instance with `-nobuildwarn`). A dismissible in-window banner is the intended surface (follow-up) |
 | `built_at` | Informational (About dialog) |
 
-Dev builds with dirty trees get an explicit `dirty-<parent_commit>-<diff_hash>` identity;
-the banner simply triggers more often. Schema evolution: additive changes bump minor;
+Dev builds with dirty trees carry a `-dirty` suffix in `git_commit` (from
+`FormatFullVersion()`), so the soft warning simply triggers more often. Schema
+evolution: additive changes bump minor;
 breaking changes (field reorder/renumber/removal) require a major bump and a
 one-version transition release where the node speaks both — CI enforces via a
 schema-diff lint against the previous release tag.
@@ -175,15 +189,18 @@ schema-diff lint against the previous release tag.
 
 The connect-time sequence, in order (steps 1–7 add ~5–10 ms to startup):
 
-1. GUI reads `node_identity.json` → expected `node_id`, `network`
+1. GUI reads its stored identity expectation (QSettings, keyed by the canonical datadir)
 2. GUI reads `ipc.cookie` (absent cookie ⇒ node not running, do not dial)
 3. `connect(node.sock)`
 4. Peer-identity check (`SO_PEERCRED` / `LOCAL_PEERCRED` /
    `SIO_AF_UNIX_GETPEERPID`; best-effort defense-in-depth per the
    authentication layers listed earlier in this section) → hard fail on mismatch
 5. `Init::authenticate(cookie)` → hard fail on mismatch
-6. `Init::getBuildInfo()` → schema/protocol/commit comparison per §4.2
-7. `Init::getIdentity()` → compare against the stored expectation per §4.2
+6. `Init::getBuildInfo()` → schema/protocol comparison per §4.2
+7. `Init::getIdentity()` → network hard-fail + compare `identity_token` against the
+   stored expectation per §4.2 (prompt / `-autotrustidentity` re-bind). Fetched
+   together with step 6 in one guarded round-trip; an IPC throw here is a clean
+   failure, distinct from an empty token
 8. `Init::makeNode()` / `makeWallet()` / … → proceed
 
 Authentication (step 5) precedes every other exchange — build and identity

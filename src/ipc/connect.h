@@ -7,6 +7,7 @@
 
 #include "fs.h"
 #include "interfaces/ipc.h"
+#include "ipc/handshake.h" // HandshakeResult (build/identity/soft-warnings)
 
 #include <functional>
 #include <memory>
@@ -26,6 +27,10 @@ namespace ipc {
 struct GuiConnection {
     std::unique_ptr<interfaces::Ipc> ipc;
     std::unique_ptr<interfaces::Init> init;
+    //! The successful handshake's build fingerprint, node identity token, and any
+    //! soft (non-fatal) findings -- consumed GUI-side for identity binding and the
+    //! mixed-build banner.
+    HandshakeResult handshake;
 };
 
 //! GUI side: perform the connect handshake against a node listening on
@@ -37,8 +42,8 @@ struct GuiConnection {
 //!      removed at shutdown, so a stale one may outlive a stopped node; that is
 //!      harmless -- connectAddress in step 2 then simply fails with no listener;
 //!   2. MakeIpc + connectAddress("unix") to obtain the remote Init;
-//!   3. ClientAuthenticateAndCheck -- authenticate with the cookie and verify
-//!      schema/protocol compatibility.
+//!   3. ClientHandshake -- authenticate with the cookie and verify
+//!      schema/protocol/network compatibility (result stashed in .handshake).
 //!
 //! On success returns the connection. On any failure returns std::nullopt and
 //! sets \p error_out to a human-readable reason. \p local_init is the GUI's own

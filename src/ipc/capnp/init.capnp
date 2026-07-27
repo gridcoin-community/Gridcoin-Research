@@ -53,9 +53,12 @@ struct BuildInfo $Proxy.wrap("interfaces::BuildInfo") {
     protocolVersion @4 :UInt32 $Proxy.name("protocol_version");
 }
 
+# Ordinals renumbered under the schema-major 2 bump (identity model re-based onto
+# the wallet UUID; former nodeId/datadir/genesisHash retired). Cap'n Proto requires
+# consecutive ordinals from 0, so @0/@1 are reused (both Text) rather than left as
+# gaps; safe because nothing persists this struct (live IPC only) and a stale peer
+# hard-fails on schema_major before reading it.
 struct NodeIdentity $Proxy.wrap("interfaces::NodeIdentity") {
-    nodeId @0 :Text $Proxy.name("node_id");
+    identityToken @0 :Text $Proxy.name("identity_token");
     network @1 :Text;
-    datadir @2 :Text;
-    genesisHash @3 :Text $Proxy.name("genesis_hash");
 }

@@ -28,6 +28,7 @@
 #include "interfaces/ipc.h"
 #include "ipc/handshake.h"
 #include "ipc/serve_init.h"
+#include "wallet/wallet.h" // pwalletMain / CWallet::GetWalletUuid for the identity token
 #include <atomic>
 #include <memory>
 #endif
@@ -319,7 +320,14 @@ bool AppInit(int argc, char* argv[])
         if (gArgs.GetBoolArg("-multiprocess", false)) {
             try {
                 std::string cookie = ipc::WriteCookie(GetDataDir());
-                interfaces::NodeIdentity identity = ipc::WriteIdentity(GetDataDir());
+                interfaces::NodeIdentity identity;
+                identity.network = Params().NetworkIDString();
+                // Fingerprint the wallet this node serves. Empty when there is no
+                // wallet, or its UUID could not be minted (e.g. a mockable chain) --
+                // the GUI then treats identity as "unavailable".
+                if (pwalletMain) {
+                    identity.identity_token = ipc::ComputeIdentityToken(pwalletMain->GetWalletUuid());
+                }
                 serve_init = ipc::MakeServeInit(interfaces::MakeGridcoinInit(),
                                                 std::move(cookie), std::move(identity));
                 ipc = interfaces::MakeIpc("gridcoinresearchd", *serve_init);
