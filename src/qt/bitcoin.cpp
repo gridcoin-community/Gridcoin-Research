@@ -114,7 +114,50 @@ static void RegisterMetaTypes()
     qRegisterMetaType<uint32_t>("uint32_t");
 }
 
-int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel, interfaces::Node& gui_node);
+int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel,
+                    interfaces::Node& gui_node, interfaces::Init* interface_init,
+                    const QString& mismatch_gui_commit, const QString& mismatch_node_commit);
+
+//! Early, deliberately LIMITED local settings read — run in main() BEFORE the Qt
+//! translator is installed and BEFORE the Intro data-directory dialog.
+//!
+//! Exactly two GUI-client-scoped preferences must be in gArgs this early:
+//!   -lang    : the Qt translator (installed right after) reads it; it is a
+//!              GUI-only setting the core never reads.
+//!   -datadir : the Intro dialog's default and GetDataDir() resolution need it.
+//!
+//! Both are read straight from the GUI's own QSettings (Gridcoin-Qt.conf) — no
+//! node, no IPC, no core. This is intentionally NOT the full OptionsModel: in the
+//! multiprocess build OptionsModel is constructed LATER, after the node connection,
+//! because its core-state references (m_node / m_sidestake_manager) are bound to
+//! the *remote* Init — which cannot exist yet here, since the datadir it connects
+//! on is only chosen by the Intro dialog that this read precedes. So we read only
+//! these two GUI-local args now and defer everything else (all core-state settings
+//! included) to that later OptionsModel. Its QSettings-backed GUI-local prefs are
+//! unaffected by where it is constructed.
+static void EarlyReadGuiLangAndDatadir()
+{
+    QSettings settings;
+
+    // -lang: GUI-local; SoftSet so an explicit command-line / conf -lang still wins.
+    const QString language = settings.value("language", "").toString();
+    if (!language.isEmpty()) {
+        gArgs.SoftSetArg("-lang", language.toStdString());
+    }
+
+    // -datadir: a non-default datadir configured in the GUI becomes the default for
+    // the Intro dialog / GetDataDir(). ShortPathString yields an 8.3 path on Windows
+    // for characters outside the system code page (gArgs is a narrow-string store).
+    const QString configured_datadir = settings.value("dataDir").toString();
+    if (!configured_datadir.isEmpty()
+            && configured_datadir != GUIUtil::getDefaultDataDirectory()) {
+        const std::string datadir_narrow =
+            fsbridge::ShortPathString(GUIUtil::qstringToBoostPath(configured_datadir));
+        if (!datadir_narrow.empty()) {
+            gArgs.SoftSetArg("-datadir", datadir_narrow);
+        }
+    }
+}
 
 static void SetupUIArgs(ArgsManager& argsman)
 {
@@ -646,31 +689,15 @@ int main(int argc, char *argv[])
     // Install global event filter that suppresses help context question mark
     app.installEventFilter(new GUIUtil::WindowContextHelpButtonHintFilter(&app));
 
-    // The sidestake registry interface backs the OptionsModel's sidestake table
-    // model (Phase 1d-ii). Created here, before optionsModel, so it outlives it
-    // (reverse destruction order). It wraps the global registry, so it needs no
-    // node/wallet; Phase 2 will hand this out from the single process Init
-    // instead of a locally-minted one.
-    std::unique_ptr<interfaces::Init> gui_init = interfaces::MakeGridcoinInit();
-    std::unique_ptr<interfaces::SideStakeManager> sidestake_manager = gui_init->makeSideStakeManager();
-    // Settings command/query surface for OptionsModel. Minted here (like the
-    // sidestake manager) so it outlives optionsModel; Phase 2 hands this out from
-    // the single process Init. The node wraps globals and reads them at call time,
-    // so it is safe to construct before core init -- OptionsModel only reads/writes
-    // settings through it later (dialog open, migrateCoreSettings()).
-    std::unique_ptr<interfaces::Node> gui_node = gui_init->makeNode();
-
-#if defined(WIN32)
-    // Install global event filter for processing Windows session related Windows
-    // messages (WM_QUERYENDSESSION and WM_ENDSESSION). Placed after gui_node so
-    // the monitor can request shutdown through the node interface; installing it
-    // here (still well before app.exec()) is soon enough to catch session-end.
-    app.installNativeEventFilter(new WinShutdownMonitor(*gui_node));
-#endif
-
-    // Load the optionsModel. This has to be loaded before the translations, because the language selection is
-    // a setting that can be stored in options.
-    OptionsModel optionsModel(*gui_node, *sidestake_manager);
+    // Early LIMITED local read of the two pre-Intro GUI-local args (-lang, -datadir)
+    // straight from QSettings -- see EarlyReadGuiLangAndDatadir(). The translator
+    // (installed just below) needs -lang, and the Intro datadir dialog needs
+    // -datadir. The full OptionsModel is deliberately NOT built here: in the split
+    // build its core-state references (m_node / m_sidestake_manager) are bound to
+    // the remote node's Init, which cannot exist until the datadir is chosen (by
+    // Intro, below) and the connection is made -- so OptionsModel is constructed
+    // later, after that connect (search "OptionsModel optionsModel").
+    EarlyReadGuiLangAndDatadir();
 
     // Get desired locale (e.g. "de_DE") from command line or use system locale
     QString lang_territory = QString::fromStdString(gArgs.GetArg("-lang", QLocale::system().name().toStdString()));
@@ -775,16 +802,9 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    // The datadir is now finalized (network selected, -datadir resolved), so the
-    // per-node QSettings group is known: read the GUI preferences that are keyed
-    // per node. OptionsModel's constructor (Init) ran earlier -- before the
-    // datadir was chosen -- so it deliberately deferred these until now.
-    optionsModel.readNodeSettings();
-
-    // Now that the config file, network selection and read-write settings file
-    // are loaded, migrate any proxy / UPnP / reservebalance / update-check values
-    // the user had in Gridcoin-Qt.conf into the core read-write settings (one-time).
-    optionsModel.migrateCoreSettings();
+    // NOTE: OptionsModel is not constructed yet (see below, after the node
+    // connection), so optionsModel.readNodeSettings() / migrateCoreSettings() are
+    // deferred to right after that construction rather than run here.
 
 #ifdef ENABLE_MULTIPROCESS
     // In -multiprocess mode the GUI and the node are separate processes sharing a
@@ -847,8 +867,119 @@ int main(int argc, char *argv[])
         }
     }
 
+    // --- Process Init: local monolith, or the remote node over IPC -------------
+    // gui_node is a LOCAL node used ONLY for the GUI's own shutdown wiring
+    // (WinShutdownMonitor + StartGridcoinQt's handleInitShutdown). It stays local
+    // deliberately: routing handleInitShutdown over IPC would turn a daemon stop
+    // into a core->GUI "shutdown-imminent" push, which is out of scope -- the split
+    // GUI quits on the socket disconnect (#3227), not on a remote notification.
+    // local_init also backs MakeIpc (a connect-only client still needs an Init) and
+    // IS the interface_init in the monolithic build.
+    std::unique_ptr<interfaces::Init> local_init = interfaces::MakeGridcoinInit();
+    std::unique_ptr<interfaces::Node> gui_node = local_init->makeNode();
+
+#if defined(WIN32)
+    // Windows session-end (WM_QUERYENDSESSION/WM_ENDSESSION) -> request shutdown
+    // through the LOCAL node (see gui_node note above). Installed well before
+    // app.exec(), soon enough to catch session-end.
+    app.installNativeEventFilter(new WinShutdownMonitor(*gui_node));
+#endif
+
+    // interface_init is the Init the data models consume core state through: the
+    // remote node's in the split build, the local one in the monolith. OptionsModel
+    // is built from it too (its m_node / m_sidestake_manager), so its core-state
+    // getters/setters reach the daemon over IPC in the split build; OptionsModel's
+    // QSettings-backed GUI-local prefs are unaffected by that.
+    interfaces::Init* interface_init = local_init.get();
+    QString mismatch_gui_commit, mismatch_node_commit;
+    const bool multiprocess = gArgs.GetBoolArg("-multiprocess", false);
+#ifdef ENABLE_MULTIPROCESS
+    std::optional<ipc::GuiConnection> node_connection;
+    if (multiprocess)
+    {
+        // Connect to the separately-started daemon (moved here from StartGridcoinQt
+        // so OptionsModel can be built from the remote Init). Logging is up
+        // (InitLogging above), so failures land in the GUI log file.
+        std::string ipc_error;
+        node_connection = ipc::ConnectToNode(GetDataDir(), *local_init, ipc_error,
+            /*on_disconnect=*/[] {
+                QuitOnDaemonConnectionLost("lost connection to the Gridcoin daemon");
+            });
+        if (!node_connection)
+        {
+            GUILogPrintf("IPC: could not connect to the Gridcoin daemon: %s", ipc_error);
+            QMessageBox::critical(nullptr, PACKAGE_NAME,
+                    QObject::tr("Could not connect to the Gridcoin daemon:\n%1").arg(QString::fromStdString(ipc_error)));
+            return EXIT_FAILURE;
+        }
+        interface_init = node_connection->init.get();
+
+        // GUI-side identity binding (prompt / -autotrustidentity / exit). Needs
+        // only QSettings -- no main window -- so it runs here. The git_commit
+        // mixed-build banner needs the window, so its data is handed to
+        // StartGridcoinQt (which shows it) rather than acted on here.
+        if (!ResolveNodeIdentity(node_connection->handshake))
+        {
+            return EXIT_FAILURE;
+        }
+        if (!gArgs.GetBoolArg("-nobuildwarn", false))
+        {
+            for (const ipc::SoftWarn w : node_connection->handshake.soft)
+            {
+                if (w == ipc::SoftWarn::GitCommitMismatch)
+                {
+                    mismatch_gui_commit = QString::fromStdString(ipc::GetLocalBuildInfo().git_commit);
+                    mismatch_node_commit = QString::fromStdString(node_connection->handshake.remote_build.git_commit);
+                }
+            }
+        }
+    }
+#else
+    if (multiprocess)
+    {
+        GUILogPrintf("IPC: -multiprocess requested but this build has no multiprocess (IPC) support");
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+                QObject::tr("This build was compiled without multiprocess (IPC) support."));
+        return EXIT_FAILURE;
+    }
+#endif
+
+    // Build OptionsModel from interface_init (the REMOTE node's Init in the split
+    // build): its core-state node + sidestake manager go over IPC to the daemon.
+    // Its QSettings-backed GUI-local preferences are read exactly as before. The
+    // makeX / migrateCoreSettings calls are IPC round-trips in the split build; if
+    // the daemon drops here (after a successful connect) libmultiprocess throws, and
+    // main() has no enclosing try (unlike StartGridcoinQt, which the models used to
+    // live inside), so wrap them and exit gracefully rather than std::terminate.
+    // optionsModel is heap-allocated only so it can be declared before the try and
+    // outlive it for the StartGridcoinQt call below.
+    std::unique_ptr<interfaces::SideStakeManager> sidestake_manager;
+    std::unique_ptr<interfaces::Node> options_node;
+    std::unique_ptr<OptionsModel> optionsModel;
+    try
+    {
+        sidestake_manager = interface_init->makeSideStakeManager();
+        options_node = interface_init->makeNode();
+        optionsModel = std::make_unique<OptionsModel>(*options_node, *sidestake_manager);
+        // Per-node QSettings prefs (the datadir is finalized now) + the one-time
+        // migration of proxy / UPnP / reservebalance / etc. from Gridcoin-Qt.conf
+        // into the core read-write settings (the daemon's, over IPC, in the split
+        // build).
+        optionsModel->readNodeSettings();
+        optionsModel->migrateCoreSettings();
+    }
+    catch (const std::exception& e)
+    {
+        GUILogPrintf("IPC: lost the daemon connection during GUI startup: %s", e.what());
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+                QObject::tr("Lost connection to the Gridcoin daemon during startup:\n%1")
+                    .arg(QString::fromStdString(e.what())));
+        return EXIT_FAILURE;
+    }
+
     /** Start Qt as normal before it was moved into this function **/
-    StartGridcoinQt(argc, argv, app, optionsModel, *gui_node);
+    StartGridcoinQt(argc, argv, app, *optionsModel, *gui_node, interface_init,
+                    mismatch_gui_commit, mismatch_node_commit);
 
     // We received a request to remove blockchain data so client user can start to sync from 0
     if (fResetBlockchainRequest)
@@ -875,7 +1006,9 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 }
 
-int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel, interfaces::Node& gui_node)
+int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel,
+                    interfaces::Node& gui_node, interfaces::Init* interface_init,
+                    const QString& mismatch_gui_commit, const QString& mismatch_node_commit)
 {
     // Set global boolean to indicate intended presence of GUI to core.
     fQtActive = true;
@@ -891,12 +1024,14 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     uiInterface.Translate_connect(Translate);
 
     // Core-initiated shutdown (RPC stop / SIGTERM / low-disk abort) -> quit the
-    // GUI. Routed through the node interface rather than a raw
-    // uiInterface.QueueShutdown_connect so Phase 2 can deliver it over IPC. The
-    // returned Handler is kept only to keep the subscription alive (RAII): it
-    // must outlive app.exec(), so it lives for this function's scope. gui_node
-    // (main()'s early node) outlives this call. Wired here, before AppInit2, so a
-    // shutdown requested during core init still reaches the GUI.
+    // GUI, via the node interface's QueueShutdown bridge. gui_node is deliberately
+    // the LOCAL node (main()'s local_init), NOT the remote one: in the split build
+    // the GUI quits on the socket disconnect (#3227), and delivering the daemon's
+    // shutdown over IPC would be the descoped core->GUI "shutdown-imminent" push.
+    // So in the monolith this fires on real core shutdown; in the split build it is
+    // dormant (the local node's QueueShutdown never fires) and the disconnect hook
+    // drives the quit. The returned Handler is kept only to keep the subscription
+    // alive (RAII) for this function's scope; gui_node outlives this call.
     [[maybe_unused]] std::unique_ptr<interfaces::Handler> shutdown_handler =
         gui_node.handleInitShutdown(QueueShutdown);
 
@@ -932,71 +1067,17 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         // IPC, and drives the models through that remote Init.
         const bool multiprocess = gArgs.GetBoolArg("-multiprocess", false);
 
-        // Owns the interface factory the models below consume core state through
-        // -- the local in-process Init in the monolith, the remote node's Init
-        // in the multiprocess build. `interface_init` points at whichever is in
-        // use; its owner (declared here) outlives every model constructed below.
-        std::unique_ptr<interfaces::Init> local_init;
-#ifdef ENABLE_MULTIPROCESS
-        std::optional<ipc::GuiConnection> node_connection;
-#endif
-        interfaces::Init* interface_init = nullptr;
-
         if (multiprocess)
         {
-#ifdef ENABLE_MULTIPROCESS
-            // MakeIpc needs an Init even for a connect-only client (it is the
-            // Init this process would serve if it listened, which the GUI never
-            // does); the local one wraps globals and is cheap. It must outlive
-            // node_connection, so it is declared first.
-            local_init = interfaces::MakeGridcoinInit();
-            std::string ipc_error;
-            node_connection = ipc::ConnectToNode(GetDataDir(), *local_init, ipc_error,
-                /*on_disconnect=*/[] {
-                    // Fires on the IPC event-loop thread when the daemon vanishes
-                    // without a clean shutdown message (crash / SIGKILL, or a stop
-                    // that raced the handshake). Route to the shared graceful-quit
-                    // path (same as a core-initiated shutdown) so the GUI tears down
-                    // cleanly instead of faulting on the next call to a now-dead
-                    // proxy. Shares the once-latch with GridcoinApplication::notify(),
-                    // so whichever detects the loss first wins and the other is a
-                    // no-op; safe if the QCoreApplication is already gone.
-                    QuitOnDaemonConnectionLost("lost connection to the Gridcoin daemon");
-                });
-            if (!node_connection)
+            // The connect + GUI-side identity binding already ran in main() (so
+            // OptionsModel could be built from the remote node's Init, which is
+            // `interface_init` here). What remains needs the main window / event
+            // loop: surface the mixed-build banner (empty commit strings = nothing
+            // to warn about, or -nobuildwarn), and start the GUI's own log-archive
+            // timer.
+            if (!mismatch_gui_commit.isEmpty())
             {
-                // One dialog: this runs after ThreadSafeMessageBox_connect, so a
-                // uiInterface message box here would double up with the direct one.
-                GUILogPrintf("IPC: could not connect to the Gridcoin daemon: %s", ipc_error);
-                QMessageBox::critical(nullptr, PACKAGE_NAME,
-                        QObject::tr("Could not connect to the Gridcoin daemon:\n%1").arg(QString::fromStdString(ipc_error)));
-                return EXIT_FAILURE;
-            }
-            interface_init = node_connection->init.get();
-
-            // GUI-side identity binding + soft-warnings: confirm the daemon serves
-            // the same wallet the GUI bound to for this datadir (prompt / rebind on
-            // change), and surface a mixed-build warning. Exits if a wallet change
-            // is declined.
-            if (!ResolveNodeIdentity(node_connection->handshake))
-            {
-                return EXIT_FAILURE;
-            }
-
-            // Mixed-build (git_commit) soft-warning: a dismissible banner in the
-            // main window. The handshake already logged it; -nobuildwarn suppresses
-            // both. window is constructed above, so the banner is set before show().
-            if (!gArgs.GetBoolArg("-nobuildwarn", false))
-            {
-                for (const ipc::SoftWarn w : node_connection->handshake.soft)
-                {
-                    if (w == ipc::SoftWarn::GitCommitMismatch)
-                    {
-                        window.showBuildMismatchWarning(
-                            QString::fromStdString(ipc::GetLocalBuildInfo().git_commit),
-                            QString::fromStdString(node_connection->handshake.remote_build.git_commit));
-                    }
-                }
+                window.showBuildMismatchWarning(mismatch_gui_commit, mismatch_node_commit);
             }
 
             // The multiprocess GUI logs to its own file (set up in main() before
@@ -1042,28 +1123,17 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 }
             });
             logArchiveTimer->start(300000);  // 5 minutes, matching the node's schedule
-#else
-            GUILogPrintf("IPC: -multiprocess requested but this build has no multiprocess (IPC) support");
-            QMessageBox::critical(nullptr, PACKAGE_NAME,
-                    QObject::tr("This build was compiled without multiprocess (IPC) support."));
-            return EXIT_FAILURE;
-#endif
         }
         else
         {
+            // Monolithic build: run core init in this process. interface_init (the
+            // local Init created in main()) is already set; just start the init
+            // thread. The readiness wait below polls interface_init->isCoreReady().
             if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
             {
                 GUILogPrintf("Error; NewThread(ThreadAppInit2) failed");
                 return EXIT_FAILURE;
             }
-            // The monolithic-build interface implementations that the models
-            // consume core state through (doc/multiprocess_design.md). Created
-            // here, before the readiness wait, so the GUI polls
-            // interface_init->isCoreReady() rather than the raw
-            // bGridcoinCoreInitComplete global; it outlives every model
-            // constructed below.
-            local_init = interfaces::MakeGridcoinInit();
-            interface_init = local_init.get();
         }
 
         {
@@ -1238,7 +1308,8 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             // here). Only in the monolithic build: there the core runs in this
             // process. In the multiprocess build the core lives in the daemon
             // and manages its own lifetime; the GUI merely drops its connection
-            // (node_connection's destructor) as the stack unwinds.
+            // when main() unwinds after this returns (node_connection now lives in
+            // main(), so it and the interfaces built from it outlive this call).
             if (!multiprocess)
             {
                 GUILogPrintf("Main calling Shutdown...");
