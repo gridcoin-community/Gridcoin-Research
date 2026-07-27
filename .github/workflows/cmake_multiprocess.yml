@@ -1,0 +1,163 @@
+name: CMake Multiprocess Builds
+
+# Builds the opt-in multiprocess variant (ENABLE_MULTIPROCESS=ON, RFC #2937) on a
+# representative subset of targets. The monolithic matrix never sets the flag, so
+# the entire MP build surface — Cap'n Proto, the vendored libmultiprocess subtree,
+# the generated capnp proxies, and the AF_UNIX/winsock IPC transport — is
+# otherwise untested in CI. (Case in point: the capnp double-find_package configure
+# failure fixed in #3235 slipped through every green job because none built MP.)
+#
+# Jobs are chosen to span the DISTINCT build surfaces, not every platform:
+#   - Linux Native  — amd64, system apt Cap'n Proto (Debian/Ubuntu pkg-config
+#                     fallback config — the exact class #3235 addressed).
+#   - Linux Static  — depends-built Cap'n Proto (the release path).
+#   - Windows Cross — depends Cap'n Proto + the winsock/afunix transport (#3234;
+#                     no other CI covers it). Build + link only: the MP binary is
+#                     not runnable under Wine (see below), so build_targets.sh skips
+#                     ctest for MP win64. The monolithic win64 job in
+#                     cmake_production.yml still runs the full suite under Wine.
+#   - Linux ARMhf   — 32-bit, emulated-native (the ODROID-XU4 environment where
+#                     the MP build was first exercised on armv7l).
+#
+# All four call build_targets.sh with ENABLE_MULTIPROCESS=true, which installs
+# Cap'n Proto (install_deps 4th arg), passes MULTIPROCESS=1 to depends, sets
+# -DENABLE_MULTIPROCESS=ON and builds. The three Linux jobs also run ctest
+# (compile + link + test_gridcoin); win64 is build + link only because the MP
+# runtime (kj event loop + socket/wakeup-pipe IPC) trips Wine's incomplete
+# emulation while running fine on native Windows. The monolithic matrix in the
+# other workflows is left untouched.
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - "v*"
+      - "5.*"
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: RelWithDebInfo
+
+jobs:
+  # ----------------------------------------------------------------------
+  # Linux Native (amd64) — system apt Cap'n Proto (pkg-config-fallback config)
+  # ----------------------------------------------------------------------
+  mp-linux-native:
+    name: MP Linux Native (System Qt6)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure Ccache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ccache
+          key: ccache-mp-native-${{ github.sha }}
+          restore-keys: ccache-mp-native-
+
+      - name: Build + Test (multiprocess)
+        run: |
+          chmod +x install_dependencies.sh build_targets.sh
+          ./build_targets.sh \
+            TARGET=native \
+            BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            USE_CCACHE=true \
+            ENABLE_MULTIPROCESS=true
+
+  # ----------------------------------------------------------------------
+  # Depends builds — Linux Static + Windows Cross (depends-built Cap'n Proto)
+  # ----------------------------------------------------------------------
+  mp-depends:
+    name: MP ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux Static (Depends)
+            target: depends
+            host: x86_64-pc-linux-gnu
+          - name: Windows Cross-Compile
+            target: win64
+            host: x86_64-w64-mingw32
+    steps:
+      - uses: actions/checkout@v5
+
+      # These builds pass USE_CCACHE=true; cache ~/.cache/ccache so the source
+      # compile (the part not covered by the depends cache below) is reused across
+      # runs. Keyed per host triplet so the static and win64 caches stay separate.
+      - name: Configure Ccache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ccache
+          key: ccache-mp-${{ matrix.host }}-${{ github.sha }}
+          restore-keys: ccache-mp-${{ matrix.host }}-
+
+      # Cache the depends tree (Qt/boost/Cap'n Proto etc.). MULTIPROCESS=1 builds
+      # extra packages (native_capnp, capnp), so the key is distinct from the
+      # monolithic production cache.
+      - name: Cache Depends (multiprocess)
+        uses: actions/cache@v5
+        with:
+          path: |
+            depends/built
+            depends/work
+            depends/${{ matrix.host }}
+            depends/sdk-sources
+          key: ubuntu-24.04-depends-mp-${{ matrix.host }}-${{ hashFiles('depends/packages/*', 'depends/Makefile', 'depends/qt.include') }}
+
+      # No Wine setup for MP win64: build_targets.sh skips ctest when
+      # ENABLE_MULTIPROCESS=true because the multiprocess binary is not runnable
+      # under Wine (the Cap'n Proto/libmultiprocess kj event loop and its socket +
+      # wakeup-pipe machinery trip Wine's incomplete emulation — it either hangs on
+      # the event-loop pipe or the fsbridge Unicode fstream read-back comes up
+      # empty). The same MP binary runs correctly on native Windows, so this is a
+      # Wine limitation, not a build/code defect. This job is therefore build + link
+      # coverage for the Windows MP surface; the monolithic win64 job in
+      # cmake_production.yml still runs the full test suite under Wine.
+      - name: Build + Test (multiprocess)
+        run: |
+          chmod +x install_dependencies.sh build_targets.sh
+          ./build_targets.sh \
+            TARGET=${{ matrix.target }} \
+            BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            USE_CCACHE=true \
+            ENABLE_MULTIPROCESS=true
+
+  # ----------------------------------------------------------------------
+  # Linux ARMhf — 32-bit, emulated-native (the ODROID-XU4 environment).
+  # Runs the standard native build_targets path inside a linux/arm/v7 container
+  # via binfmt/QEMU — the same "everything is armhf" model as the odroid, which
+  # sidesteps the host/target Cap'n Proto generator split a cross build needs.
+  # Slower than the cross jobs (full build under emulation); zero errors on the
+  # odroid, so this is regression coverage for the 32-bit MP surface.
+  # ----------------------------------------------------------------------
+  mp-linux-armhf:
+    name: MP Linux ARMhf (emulated native)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/arm/v7
+
+      - name: Build + Test (multiprocess, armhf container)
+        run: |
+          docker run --rm --platform linux/arm/v7 \
+            -v "${{ github.workspace }}":/mnt/host_source:ro \
+            ubuntu:24.04 \
+            /bin/bash -c ' \
+              export DEBIAN_FRONTEND=noninteractive && \
+              apt-get update && apt-get install -y sudo which git ca-certificates && \
+              mkdir -p /work && cp -r /mnt/host_source/. /work && cd /work && \
+              chmod +x install_dependencies.sh build_targets.sh && \
+              ./build_targets.sh \
+                TARGET=native \
+                BUILD_TYPE=${{ env.BUILD_TYPE }} \
+                ENABLE_MULTIPROCESS=true'
