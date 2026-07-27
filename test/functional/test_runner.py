@@ -348,9 +348,16 @@ def main():
 #     (util.py: 'Predicate <x> not true after <n> {attempts|seconds}') -- emitted
 #     ONLY by a wait_until()/wait_until_stopped() timeout (a node too slow to reach
 #     a state / shut down), never by assert_equal or other assertions.
+#   - "Failed to listen on any port": the node aborted init because it could not
+#     bind its P2P port -- another (leftover or concurrent) node transiently held
+#     it ("Gridcoin is probably already running"). Ports are re-derived per run,
+#     so a retry lands on a free port. Purely environmental: a real assertion/logic
+#     failure never emits this, and a genuinely stuck port would fail every attempt
+#     (reported red, never masked).
 RETRY_SIGNATURES = (
     "Unable to connect to gridcoinresearchd after",
     "not true after",
+    "Failed to listen on any port",
 )
 
 def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=False, args=None, combined_logs_len=0, failfast=False, attempts=1, use_term_control):
