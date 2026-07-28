@@ -105,7 +105,7 @@ public:
         return client;
     }
 
-    void listen(int listen_fd, const char* exe_name, interfaces::Init& init) override
+    void listen(int listen_fd, const char* exe_name, interfaces::MakeServeInitFn make_init) override
     {
         startLoop(exe_name);
         if (::listen(listen_fd, /*backlog=*/5) != 0) {
@@ -115,11 +115,21 @@ public:
             throw std::system_error(errno, std::system_category());
 #endif
         }
-        // Cap at a single simultaneous connection: the served Init (and its
-        // authentication state) is shared, and the v1 model is exactly one GUI.
-        // This prevents a second peer from riding an already-authenticated session
-        // (see ServeInit). Per-connection auth would lift this cap later.
-        mp::ListenConnections<messages::Init>(*m_loop, listen_fd, init, /*max_connections=*/1);
+        // Per-connection authentication: build a FRESH Init for each accepted
+        // connection via make_init (which also runs the peer-credential check and
+        // returns null to reject a connection before serving). Each connection
+        // therefore authenticates on its own -- a new peer cannot ride an earlier
+        // peer's authenticated session. The single simultaneous-connection cap
+        // remains the v1 "one GUI" model; it is no longer load-bearing for auth.
+        // InitImpl (interfaces::Init) is specified explicitly: it cannot be deduced
+        // from the lambda, which converts to the std::function<...> parameter only
+        // once the parameter type is known.
+        mp::ListenConnectionsFactory<messages::Init, interfaces::Init>(
+            *m_loop, listen_fd,
+            [make_init = std::move(make_init)](int peer_fd) -> std::shared_ptr<interfaces::Init> {
+                return make_init(peer_fd); // unique_ptr -> shared_ptr; null => reject
+            },
+            /*max_connections=*/1);
     }
 
     void disconnectIncoming() override

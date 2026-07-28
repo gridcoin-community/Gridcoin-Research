@@ -16,7 +16,6 @@
 namespace ipc {
 
 std::optional<GuiConnection> ConnectToNode(const fs::path& data_dir,
-                                           interfaces::Init& local_init,
                                            std::string& error_out,
                                            std::function<void()> on_disconnect)
 {
@@ -30,10 +29,9 @@ std::optional<GuiConnection> ConnectToNode(const fs::path& data_dir,
     }
 
     GuiConnection conn;
-    // MakeIpc requires the Init this process would serve when listening; a
-    // connect-only GUI never listens, but the reference must stay valid for the
-    // Ipc's lifetime -- local_init (owned by the caller) provides it.
-    conn.ipc = interfaces::MakeIpc("gridcoinresearch", local_init);
+    // A connect-only GUI never listens, so it serves no Init: pass an empty
+    // serve-init factory (MakeIpc only ever calls it on the listen path).
+    conn.ipc = interfaces::MakeIpc("gridcoinresearch", {});
 
     // 2. Connect to the node's default socket (<data_dir>/<network>/node.sock,
     //    resolved from GetDataDir() inside connectAddress).

@@ -6,6 +6,7 @@
 #define GRIDCOIN_IPC_PROTOCOL_H
 
 #include "interfaces/init.h"
+#include "interfaces/ipc.h"
 
 #include <functional>
 #include <memory>
@@ -31,9 +32,11 @@ public:
     virtual std::unique_ptr<interfaces::Init> connect(int fd, const char* exe_name,
                                                       std::function<void()> on_disconnect = {}) = 0;
 
-    //! Listen for connections on \p listen_fd, accept them, and serve \p init on
-    //! each. Non-blocking; I/O runs on a background thread.
-    virtual void listen(int listen_fd, const char* exe_name, interfaces::Init& init) = 0;
+    //! Listen for connections on \p listen_fd and, for each accepted connection,
+    //! build a fresh Init via \p make_init and serve it (per-connection auth).
+    //! \p make_init returns null to reject a connection before serving.
+    //! Non-blocking; I/O runs on a background thread.
+    virtual void listen(int listen_fd, const char* exe_name, interfaces::MakeServeInitFn make_init) = 0;
 
     //! Disconnect any incoming connections that are still connected.
     virtual void disconnectIncoming() = 0;

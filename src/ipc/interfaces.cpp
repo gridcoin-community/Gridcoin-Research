@@ -48,8 +48,8 @@ struct FdGuard
 class IpcImpl : public interfaces::Ipc
 {
 public:
-    IpcImpl(const char* exe_name, interfaces::Init& init)
-        : m_exe_name(exe_name), m_init(init),
+    IpcImpl(const char* exe_name, interfaces::MakeServeInitFn make_init)
+        : m_exe_name(exe_name), m_make_init(std::move(make_init)),
           m_protocol(ipc::capnp::MakeCapnpProtocol()), m_process(ipc::MakeProcess())
     {
     }
@@ -87,7 +87,7 @@ public:
     {
         int fd = m_process->bind(GetDataDir(), address);
         FdGuard guard{fd};
-        m_protocol->listen(fd, m_exe_name, m_init);
+        m_protocol->listen(fd, m_exe_name, m_make_init);
         guard.release(); // the protocol/listener now owns the fd
     }
 
@@ -101,7 +101,7 @@ public:
     Context& context() override { return m_protocol->context(); }
 
     const char* m_exe_name;
-    interfaces::Init& m_init;
+    interfaces::MakeServeInitFn m_make_init;
     std::unique_ptr<Protocol> m_protocol;
     std::unique_ptr<Process> m_process;
 };
@@ -109,8 +109,8 @@ public:
 } // namespace ipc
 
 namespace interfaces {
-std::unique_ptr<Ipc> MakeIpc(const char* exe_name, Init& init)
+std::unique_ptr<Ipc> MakeIpc(const char* exe_name, MakeServeInitFn make_serve_init)
 {
-    return std::make_unique<ipc::IpcImpl>(exe_name, init);
+    return std::make_unique<ipc::IpcImpl>(exe_name, std::move(make_serve_init));
 }
 } // namespace interfaces

@@ -66,4 +66,27 @@ BOOST_AUTO_TEST_CASE(serve_init_getbuildinfo_is_this_builds_info)
     BOOST_CHECK_EQUAL(serve->getBuildInfo().schema_major, ipc::IPC_SCHEMA_MAJOR);
 }
 
+// Per-connection auth (Phase 3): the node builds a FRESH ServeInit for each
+// accepted connection (make_serve_init factory), so authentication is per
+// instance. A second connection -- a distinct ServeInit -- starts gated even
+// after an earlier one authenticated; auth can never leak across connections.
+BOOST_AUTO_TEST_CASE(serve_init_authentication_is_per_instance)
+{
+    interfaces::NodeIdentity id;
+    id.network = "main";
+
+    // First "connection": authenticate it.
+    auto first = ipc::MakeServeInit(std::make_unique<StubInit>(), "cookie", id);
+    BOOST_CHECK(first->authenticate("cookie"));
+    BOOST_CHECK(first->isCoreReady());
+
+    // Second "connection" (a fresh ServeInit) is independently gated: it must
+    // present the cookie itself; the first instance's auth does not carry over.
+    auto second = ipc::MakeServeInit(std::make_unique<StubInit>(), "cookie", id);
+    BOOST_CHECK_THROW(second->getBuildInfo(), std::exception);
+    BOOST_CHECK_THROW(second->isCoreReady(), std::exception);
+    BOOST_CHECK(second->authenticate("cookie"));
+    BOOST_CHECK(second->isCoreReady());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

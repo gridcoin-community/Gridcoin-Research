@@ -17,6 +17,15 @@ struct Context;
 namespace interfaces {
 class Init;
 
+//! Factory that builds the per-connection Init a listening process serves to each
+//! accepted client. Called once per accepted connection with the accepted
+//! socket's fd (\p peer_fd; -1 if unavailable). Returning nullptr REJECTS the
+//! connection before it is served (e.g. an OS peer-credential mismatch). A fresh
+//! Init per connection is what keeps authentication per-connection -- a new peer
+//! cannot ride an earlier peer's authenticated session. A connect-only process
+//! (the GUI) never listens and may pass an empty factory.
+using MakeServeInitFn = std::function<std::unique_ptr<Init>(int peer_fd)>;
+
 //! Interprocess-communication (IPC) helper. Establishes a connection between a
 //! controlling process (the GUI) and a controlled process (the node). When a
 //! connection is established the controlled process exposes its interfaces::Init,
@@ -65,9 +74,10 @@ protected:
 };
 
 //! Return an implementation of the Ipc interface. \p exe_name is this process's
-//! role name (used for the socket filename and thread names); \p init is the
-//! Init this process serves when listening.
-std::unique_ptr<Ipc> MakeIpc(const char* exe_name, Init& init);
+//! role name (used for the socket filename and thread names); \p make_serve_init
+//! builds the per-connection Init this process serves when listening (a
+//! connect-only process never listens and may pass an empty factory).
+std::unique_ptr<Ipc> MakeIpc(const char* exe_name, MakeServeInitFn make_serve_init);
 } // namespace interfaces
 
 #endif // GRIDCOIN_INTERFACES_IPC_H

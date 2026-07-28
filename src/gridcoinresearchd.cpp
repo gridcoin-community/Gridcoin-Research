@@ -27,6 +27,7 @@
 #include "interfaces/init.h"
 #include "interfaces/ipc.h"
 #include "ipc/handshake.h"
+#include "ipc/peercred.h"
 #include "ipc/serve_init.h"
 #include "wallet/wallet.h" // pwalletMain / CWallet::GetWalletUuid for the identity token
 #include <atomic>
@@ -313,9 +314,9 @@ bool AppInit(int argc, char* argv[])
         bGridcoinCoreInitComplete = true;
 #ifdef ENABLE_MULTIPROCESS
         // Multiprocess (RFC #2937): after core init, optionally listen on the
-        // AF_UNIX socket and serve the interfaces::Init to an attached GUI. The
-        // serving Init + Ipc live for the run, torn down after the wait loop.
-        std::unique_ptr<interfaces::Init> serve_init;
+        // AF_UNIX socket and serve a fresh interfaces::Init to each attached GUI.
+        // Per-connection auth: a new ServeInit is built per connection; the Ipc
+        // lives for the run, torn down after the wait loop.
         std::unique_ptr<interfaces::Ipc> ipc;
         if (gArgs.GetBoolArg("-multiprocess", false)) {
             try {
@@ -328,9 +329,19 @@ bool AppInit(int argc, char* argv[])
                 if (pwalletMain) {
                     identity.identity_token = ipc::ComputeIdentityToken(pwalletMain->GetWalletUuid());
                 }
-                serve_init = ipc::MakeServeInit(interfaces::MakeGridcoinInit(),
-                                                std::move(cookie), std::move(identity));
-                ipc = interfaces::MakeIpc("gridcoinresearchd", *serve_init);
+                // Per-connection auth (RFC #2937 §4.3 hardening): build a FRESH
+                // ServeInit for EACH accepted connection, so every client must
+                // present the cookie itself -- no shared, sticky authentication.
+                // Reject a foreign OS user before serving (CheckPeerCredentials:
+                // SO_PEERCRED / getpeereid; Windows leans on the datadir ACL).
+                // cookie + identity are captured by value and copied into each
+                // ServeInit.
+                auto make_serve_init = [cookie = std::move(cookie), identity = std::move(identity)]
+                    (int peer_fd) -> std::unique_ptr<interfaces::Init> {
+                        if (!ipc::CheckPeerCredentials(peer_fd)) return nullptr;
+                        return ipc::MakeServeInit(interfaces::MakeGridcoinInit(), cookie, identity);
+                    };
+                ipc = interfaces::MakeIpc("gridcoinresearchd", std::move(make_serve_init));
                 std::string address = "unix";
                 ipc->listenAddress(address);
                 LogPrintf("IPC: serving GUI connections on %s\n", address);
