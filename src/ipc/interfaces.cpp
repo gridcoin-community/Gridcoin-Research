@@ -11,6 +11,7 @@
 
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <typeindex>
@@ -85,6 +86,13 @@ public:
 
     void listenAddress(std::string& address) override
     {
+        // A connect-only Ipc is built with an empty serve-init factory (the GUI).
+        // Fail fast here rather than let the empty std::function throw
+        // std::bad_function_call deep in the async accept path on first connect.
+        if (!m_make_init) {
+            throw std::logic_error("Ipc::listenAddress() called without a serve-init factory "
+                                   "(this process is connect-only)");
+        }
         int fd = m_process->bind(GetDataDir(), address);
         FdGuard guard{fd};
         m_protocol->listen(fd, m_exe_name, m_make_init);
