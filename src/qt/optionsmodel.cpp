@@ -380,9 +380,16 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             }
             break;
         case LimitTxnDisplay:
-            fLimitTxnDisplay = value.toBool();
-            settings.setValue(GUIUtil::nodeSettingsKey("fLimitTxnDisplay"), fLimitTxnDisplay);
-            emit LimitTxnDisplayChanged(fLimitTxnDisplay);
+            // The Options dialog commits every mapped field on OK, so setData() runs
+            // for this option on every commit; guarding on an actual change stops a
+            // full transaction-model reload from being re-triggered when the setting
+            // did not move (slow with a far-back limit date and many transactions).
+            if (fLimitTxnDisplay != value.toBool())
+            {
+                fLimitTxnDisplay = value.toBool();
+                settings.setValue(GUIUtil::nodeSettingsKey("fLimitTxnDisplay"), fLimitTxnDisplay);
+                emit LimitTxnDisplayChanged(fLimitTxnDisplay);
+            }
             break;
         case MaskValues:
             fMaskValues = value.toBool();
@@ -390,8 +397,20 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             emit MaskValuesChanged(fMaskValues);
             break;
         case LimitTxnDate:
-            limitTxnDate = value.toDate();
-            settings.setValue(GUIUtil::nodeSettingsKey("limitTxnDate"), limitTxnDate);
+            // A changed limit date only affects the displayed set while limiting is
+            // active, so persist it and drive a reload (via LimitTxnDisplayChanged,
+            // whose slot re-reads the date just stored) only then. Previously this
+            // case emitted nothing, so a date edit did not take effect until some
+            // unrelated reload.
+            if (limitTxnDate != value.toDate())
+            {
+                limitTxnDate = value.toDate();
+                settings.setValue(GUIUtil::nodeSettingsKey("limitTxnDate"), limitTxnDate);
+                if (fLimitTxnDisplay)
+                {
+                    emit LimitTxnDisplayChanged(fLimitTxnDisplay);
+                }
+            }
             break;
         case PollExpireNotification:
             pollExpireNotification = value.toDouble();
