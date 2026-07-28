@@ -159,4 +159,14 @@ target_link_libraries(test_gridcoin PRIVATE
     ZLIB::ZLIB
 )
 
+# Wire-level IPC handshake test (ipc_wire_handshake_tests.cpp): drives
+# ClientHandshake against a served ServeInit over a REAL Cap'n Proto socketpair.
+# It needs the actual transport (gridcoin_ipc + the generated capnp proxies), so
+# it only builds under ENABLE_MULTIPROCESS. Linking gridcoin_ipc propagates C++20
+# and the capnp/kj headers to test_gridcoin in multiprocess builds.
+if(ENABLE_MULTIPROCESS)
+    target_sources(test_gridcoin PRIVATE ipc_wire_handshake_tests.cpp)
+    target_link_libraries(test_gridcoin PRIVATE gridcoin_ipc)
+endif()
+
 add_test(NAME gridcoin_tests COMMAND test_gridcoin)
