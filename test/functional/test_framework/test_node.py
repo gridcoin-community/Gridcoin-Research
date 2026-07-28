@@ -258,8 +258,17 @@ class TestNode():
         last_failure = None
         for _ in range(poll_per_s * self.rpc_timeout):
             if self.process.poll() is not None:
+                # Surface the node's own stderr in the error so the failure REASON
+                # (e.g. a transient P2P port-bind collision -- "Failed to listen on
+                # any port") lands in the test's captured stderr. Otherwise it lives
+                # only in the node stderr file / combined log, invisible to the
+                # test_runner RETRY_SIGNATURES match, so the flake can never retry.
+                self.stderr.seek(0)
+                node_stderr = self.stderr.read().decode('utf-8', 'replace').strip()
                 raise FailedToStartError(self._node_msg(
-                    'gridcoinresearchd exited with status {} during initialization'.format(self.process.returncode)))
+                    'gridcoinresearchd exited with status {} during initialization{}'.format(
+                        self.process.returncode,
+                        '\n' + node_stderr if node_stderr else '')))
             try:
                 rpc = get_rpc_proxy(
                     rpc_url(self.datadir, self.index, self.chain, self.rpchost),
