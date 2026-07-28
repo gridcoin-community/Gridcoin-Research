@@ -65,6 +65,32 @@ void AboutDialog::setModel(ClientModel *model)
     }
 }
 
+void AboutDialog::setIpcConnectionInfo(const GuiIpcInfo& info)
+{
+    // In the monolithic build the GUI and node share one process, so there is no
+    // IPC connection to describe -- hide the section.
+    if (!info.active) {
+        ui->ipcInfoLabel->hide();
+        return;
+    }
+
+    const QString identity = info.node_identity.isEmpty() ? tr("unavailable") : info.node_identity;
+
+    // <b>/<br> make QLabel auto-detect rich text. Captions are translated; the
+    // values (versions, schema, socket path, identity) are shown verbatim.
+    const QString text =
+        tr("<b>Multiprocess connection</b>") + QStringLiteral("<br>") +
+        tr("GUI version: %1").arg(info.gui_version) + QStringLiteral("<br>") +
+        tr("Node version: %1").arg(info.node_version) + QStringLiteral("<br>") +
+        tr("Node built: %1").arg(info.node_built_at) + QStringLiteral("<br>") +
+        tr("IPC schema %1, protocol %2").arg(info.ipc_schema, info.ipc_protocol) + QStringLiteral("<br>") +
+        tr("Node identity: %1 (%2)").arg(identity, info.network) + QStringLiteral("<br>") +
+        tr("Socket: %1").arg(info.socket_path);
+
+    ui->ipcInfoLabel->setText(text);
+    ui->ipcInfoLabel->show();
+}
+
 AboutDialog::~AboutDialog()
 {
     delete ui;

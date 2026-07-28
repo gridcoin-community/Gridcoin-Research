@@ -8,6 +8,7 @@
 #include <QTimer>
 
 #include "bitcoingui.h"
+#include "guiipcinfo.h"
 #include "chainparams.h"
 #include "chainparamsbase.h"
 #include "clientmodel.h"
@@ -116,7 +117,7 @@ static void RegisterMetaTypes()
 
 int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel,
                     interfaces::Node& gui_node, interfaces::Init* interface_init,
-                    const QString& mismatch_gui_commit, const QString& mismatch_node_commit);
+                    const GuiIpcInfo& ipc_info);
 
 //! Early, deliberately LIMITED local settings read — run in main() BEFORE the Qt
 //! translator is installed and BEFORE the Intro data-directory dialog.
@@ -891,7 +892,7 @@ int main(int argc, char *argv[])
     // getters/setters reach the daemon over IPC in the split build; OptionsModel's
     // QSettings-backed GUI-local prefs are unaffected by that.
     interfaces::Init* interface_init = local_init.get();
-    QString mismatch_gui_commit, mismatch_node_commit;
+    GuiIpcInfo ipc_info;
     const bool multiprocess = gArgs.GetBoolArg("-multiprocess", false);
 #ifdef ENABLE_MULTIPROCESS
     std::optional<ipc::GuiConnection> node_connection;
@@ -922,14 +923,28 @@ int main(int argc, char *argv[])
         {
             return EXIT_FAILURE;
         }
+        // Gather the IPC connection facts for the About dialog (and the mixed-build
+        // banner). This is the -multiprocess split build, so the section is active.
+        const interfaces::BuildInfo local_build = ipc::GetLocalBuildInfo();
+        const interfaces::BuildInfo& node_build = node_connection->handshake.remote_build;
+        const interfaces::NodeIdentity& node_ident = node_connection->handshake.remote_ident;
+        ipc_info.active = true;
+        ipc_info.gui_version = QString::fromStdString(local_build.git_commit);
+        ipc_info.node_version = QString::fromStdString(node_build.git_commit);
+        ipc_info.node_built_at = QString::fromStdString(node_build.built_at);
+        ipc_info.ipc_schema = QStringLiteral("%1.%2").arg(node_build.schema_major).arg(node_build.schema_minor);
+        ipc_info.ipc_protocol = QString::number(node_build.protocol_version);
+        ipc_info.socket_path = QString::fromStdString((GetDataDir() / "node.sock").string());
+        // Raw token (empty = unavailable); the dialog renders the empty case.
+        ipc_info.node_identity = QString::fromStdString(node_ident.identity_token);
+        ipc_info.network = QString::fromStdString(node_ident.network);
         if (!gArgs.GetBoolArg("-nobuildwarn", false))
         {
             for (const ipc::SoftWarn w : node_connection->handshake.soft)
             {
                 if (w == ipc::SoftWarn::GitCommitMismatch)
                 {
-                    mismatch_gui_commit = QString::fromStdString(ipc::GetLocalBuildInfo().git_commit);
-                    mismatch_node_commit = QString::fromStdString(node_connection->handshake.remote_build.git_commit);
+                    ipc_info.git_commit_mismatch = true;
                 }
             }
         }
@@ -992,8 +1007,7 @@ int main(int argc, char *argv[])
     }
 
     /** Start Qt as normal before it was moved into this function **/
-    StartGridcoinQt(argc, argv, app, *optionsModel, *gui_node, interface_init,
-                    mismatch_gui_commit, mismatch_node_commit);
+    StartGridcoinQt(argc, argv, app, *optionsModel, *gui_node, interface_init, ipc_info);
 
     // We received a request to remove blockchain data so client user can start to sync from 0
     if (fResetBlockchainRequest)
@@ -1022,7 +1036,7 @@ int main(int argc, char *argv[])
 
 int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel,
                     interfaces::Node& gui_node, interfaces::Init* interface_init,
-                    const QString& mismatch_gui_commit, const QString& mismatch_node_commit)
+                    const GuiIpcInfo& ipc_info)
 {
     // Set global boolean to indicate intended presence of GUI to core.
     fQtActive = true;
@@ -1089,10 +1103,12 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             // loop: surface the mixed-build banner (empty commit strings = nothing
             // to warn about, or -nobuildwarn), and start the GUI's own log-archive
             // timer.
-            if (!mismatch_gui_commit.isEmpty())
+            if (ipc_info.git_commit_mismatch)
             {
-                window.showBuildMismatchWarning(mismatch_gui_commit, mismatch_node_commit);
+                window.showBuildMismatchWarning(ipc_info.gui_version, ipc_info.node_version);
             }
+            // Populate the About dialog's multiprocess connection section.
+            window.setIpcConnectionInfo(ipc_info);
 
             // The multiprocess GUI logs to its own file (set up in main() before
             // this function) but, unlike the node, runs no core scheduler to rotate

@@ -86,6 +86,25 @@
       </layout>
      </item>
      <item>
+      <widget class="QLabel" name="ipcInfoLabel">
+       <property name="visible">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string notr="true"/>
+       </property>
+       <property name="textFormat">
+        <enum>Qt::RichText</enum>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="textInteractionFlags">
+        <set>Qt::TextSelectableByMouse</set>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QLabel" name="copyrightLabel">
        <property name="cursor">
         <cursorShape>IBeamCursor</cursorShape>
