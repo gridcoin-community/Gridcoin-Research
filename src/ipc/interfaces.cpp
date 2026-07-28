@@ -11,6 +11,7 @@
 
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <typeindex>
@@ -48,8 +49,8 @@ struct FdGuard
 class IpcImpl : public interfaces::Ipc
 {
 public:
-    IpcImpl(const char* exe_name, interfaces::Init& init)
-        : m_exe_name(exe_name), m_init(init),
+    IpcImpl(const char* exe_name, interfaces::MakeServeInitFn make_init)
+        : m_exe_name(exe_name), m_make_init(std::move(make_init)),
           m_protocol(ipc::capnp::MakeCapnpProtocol()), m_process(ipc::MakeProcess())
     {
     }
@@ -85,9 +86,16 @@ public:
 
     void listenAddress(std::string& address) override
     {
+        // A connect-only Ipc is built with an empty serve-init factory (the GUI).
+        // Fail fast here rather than let the empty std::function throw
+        // std::bad_function_call deep in the async accept path on first connect.
+        if (!m_make_init) {
+            throw std::logic_error("Ipc::listenAddress() called without a serve-init factory "
+                                   "(this process is connect-only)");
+        }
         int fd = m_process->bind(GetDataDir(), address);
         FdGuard guard{fd};
-        m_protocol->listen(fd, m_exe_name, m_init);
+        m_protocol->listen(fd, m_exe_name, m_make_init);
         guard.release(); // the protocol/listener now owns the fd
     }
 
@@ -101,7 +109,7 @@ public:
     Context& context() override { return m_protocol->context(); }
 
     const char* m_exe_name;
-    interfaces::Init& m_init;
+    interfaces::MakeServeInitFn m_make_init;
     std::unique_ptr<Protocol> m_protocol;
     std::unique_ptr<Process> m_process;
 };
@@ -109,8 +117,8 @@ public:
 } // namespace ipc
 
 namespace interfaces {
-std::unique_ptr<Ipc> MakeIpc(const char* exe_name, Init& init)
+std::unique_ptr<Ipc> MakeIpc(const char* exe_name, MakeServeInitFn make_serve_init)
 {
-    return std::make_unique<ipc::IpcImpl>(exe_name, init);
+    return std::make_unique<ipc::IpcImpl>(exe_name, std::move(make_serve_init));
 }
 } // namespace interfaces

@@ -873,8 +873,8 @@ int main(int argc, char *argv[])
     // deliberately: routing handleInitShutdown over IPC would turn a daemon stop
     // into a core->GUI "shutdown-imminent" push, which is out of scope -- the split
     // GUI quits on the socket disconnect (#3227), not on a remote notification.
-    // local_init also backs MakeIpc (a connect-only client still needs an Init) and
-    // IS the interface_init in the monolithic build.
+    // local_init IS the interface_init in the monolithic build (and provides the
+    // LOCAL gui_node above).
     std::unique_ptr<interfaces::Init> local_init = interfaces::MakeGridcoinInit();
     std::unique_ptr<interfaces::Node> gui_node = local_init->makeNode();
 
@@ -901,7 +901,7 @@ int main(int argc, char *argv[])
         // so OptionsModel can be built from the remote Init). Logging is up
         // (InitLogging above), so failures land in the GUI log file.
         std::string ipc_error;
-        node_connection = ipc::ConnectToNode(GetDataDir(), *local_init, ipc_error,
+        node_connection = ipc::ConnectToNode(GetDataDir(), ipc_error,
             /*on_disconnect=*/[] {
                 QuitOnDaemonConnectionLost("lost connection to the Gridcoin daemon");
             });

@@ -929,6 +929,79 @@ void ListenConnections(EventLoop& loop, SocketId fd, InitImpl& init, std::option
     });
 }
 
+//! Factory variants of _Serve/_Listen/ListenConnections for per-connection
+//! serving (Gridcoin): instead of sharing one long-lived Init across every
+//! connection, construct a FRESH, owned InitImpl per accepted connection via
+//! make_init(peer_fd). Auth state then lives per-connection -- a new peer must
+//! authenticate on its own and cannot ride an earlier peer's session -- and the
+//! Init is destroyed when the connection is. make_init may return nullptr to
+//! REJECT a connection before serving (e.g. an OS peer-credential mismatch): the
+//! stream is dropped and the listener re-arms without counting it. peer_fd is the
+//! accepted socket's fd (kj exposes it via getFd(); -1 when unavailable).
+
+//! Owned-init variant of _Serve: the ProxyServer co-owns `init` (real deleter),
+//! so the per-connection Init is freed when the connection is destroyed.
+template <typename InitInterface, typename InitImpl, typename OnDisconnect>
+void _ServeOwned(EventLoop& loop, kj::Own<kj::AsyncIoStream>&& stream, std::shared_ptr<InitImpl> init, OnDisconnect&& on_disconnect)
+{
+    loop.m_incoming_connections.emplace_front(loop, kj::mv(stream), [init = std::move(init)](Connection& connection) {
+        return kj::heap<ProxyServer<InitInterface>>(init, connection);
+    });
+    auto it = loop.m_incoming_connections.begin();
+    MP_LOG(loop, Log::Info) << "IPC server: socket connected.";
+    if (loop.testing_hook_connected) loop.testing_hook_connected();
+    it->onDisconnect([&loop, it, on_disconnect = std::forward<OnDisconnect>(on_disconnect)]() mutable {
+        MP_LOG(loop, Log::Info) << "IPC server: socket disconnected.";
+        loop.m_incoming_connections.erase(it);
+        on_disconnect();
+        if (loop.testing_hook_disconnected) loop.testing_hook_disconnected();
+    });
+}
+
+template <typename InitInterface, typename InitImpl>
+void _ListenFactory(const std::shared_ptr<Listener>& listener, EventLoop& loop,
+                    std::function<std::shared_ptr<InitImpl>(int)> make_init)
+{
+    if (listener->atCapacity()) return;
+
+    auto* receiver = listener->m_receiver.get();
+    loop.m_task_set->add(receiver->accept().then(
+        [&loop, make_init, listener](kj::Own<kj::AsyncIoStream>&& stream) {
+            int peer_fd = -1;
+            KJ_IF_MAYBE(fd, stream->getFd()) { peer_fd = *fd; }
+            std::shared_ptr<InitImpl> init = make_init(peer_fd);
+            if (init) {
+                ++listener->m_active_connections;
+                _ServeOwned<InitInterface>(loop, kj::mv(stream), std::move(init),
+                    [&loop, make_init, listener] {
+                        const bool resume_accept{listener->atCapacity()};
+                        assert(listener->m_active_connections > 0);
+                        --listener->m_active_connections;
+                        if (resume_accept) _ListenFactory<InitInterface>(listener, loop, make_init);
+                    });
+            } else {
+                MP_LOG(loop, Log::Info) << "IPC server: connection rejected before serving.";
+                // stream dropped here => socket closed; the connection is never
+                // counted, so only the re-arm below applies (no double-arm).
+            }
+            _ListenFactory<InitInterface>(listener, loop, make_init);
+        }));
+}
+
+//! Factory variant of ListenConnections (see _ListenFactory).
+template <typename InitInterface, typename InitImpl>
+void ListenConnectionsFactory(EventLoop& loop, SocketId fd,
+                              std::function<std::shared_ptr<InitImpl>(int)> make_init,
+                              std::optional<size_t> max_connections = std::nullopt)
+{
+    loop.sync([&]() {
+        auto listener{std::make_shared<Listener>(
+            loop.m_io_context.lowLevelProvider->wrapListenSocketFd(fd, kj::LowLevelAsyncIoProvider::TAKE_OWNERSHIP),
+            max_connections)};
+        _ListenFactory<InitInterface>(listener, loop, std::move(make_init));
+    });
+}
+
 extern thread_local ThreadContext g_thread_context; // NOLINT(bitcoin-nontrivial-threadlocal)
 // Silence nonstandard bitcoin tidy error "Variable with non-trivial destructor
 // cannot be thread_local" which should not be a problem on modern platforms, and
