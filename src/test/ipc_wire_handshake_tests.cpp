@@ -30,6 +30,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <cstdlib> // mkdtemp
 #include <cstring>
 #include <memory>
 #include <string>
