@@ -736,8 +736,15 @@ int main(int argc, char *argv[])
 
     // Now that settings and translations are available, ask user for data directory
     bool did_show_intro = false;
-    // Gracefully exit if the user cancels
-    if (!Intro::showIfNeeded(did_show_intro)) return EXIT_SUCCESS;
+    // In -multiprocess the core (a separate gridcoinresearchd) owns the datadir --
+    // the node.sock the GUI connects to lives in it -- so datadir selection is a
+    // core-setup concern, not a GUI first-run concern. Skip the Intro chooser here;
+    // the GUI takes the datadir from -datadir/default and connects. A missing
+    // node.sock then yields the existing "could not connect to the daemon" error
+    // rather than a chooser that could pick a datadir the core is not serving.
+    if (!gArgs.GetBoolArg("-multiprocess", false) && !Intro::showIfNeeded(did_show_intro)) {
+        return EXIT_SUCCESS;
+    }
 
     // Not currently useful.
     std::string error_msg;
