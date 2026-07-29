@@ -11,6 +11,16 @@ populates (never from argv), and sends `walletpassphrase <pass> <timeout> true`
 whenever it sees a fresh core instance. Python 3 stdlib only.
 """
 
+import argparse
+import base64
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
+
+
 def parse_conf(text):
     """Parse a gridcoin.conf-style key=value blob. '#' comments, last wins."""
     conf = {}
@@ -36,12 +46,6 @@ def resolve_connection(conf, args):
     if not port:
         raise ValueError("rpcport must be set (gridcoin.conf or --rpcport)")
     return {"host": str(host), "port": int(port), "user": str(user), "password": str(password)}
-
-
-import base64
-import json
-import urllib.request
-import urllib.error
 
 
 class RpcError(Exception):
@@ -91,14 +95,8 @@ def run_once(client, passphrase, timeout, prev_uptime):
     return cur_uptime
 
 
-import argparse
-import os
-import sys
-import time
-
-
 def read_passphrase(path):
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf8") as f:
         pw = f.read()
     pw = pw.rstrip("\n")
     if not pw:
@@ -114,7 +112,7 @@ def _load_conf(args):
     else:
         return {}
     try:
-        with open(conf_path, "r") as f:
+        with open(conf_path, "r", encoding="utf8") as f:
             return parse_conf(f.read())
     except OSError:
         return {}

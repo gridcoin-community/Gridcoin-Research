@@ -27,7 +27,9 @@ class TestConfig(unittest.TestCase):
 
     def test_resolve_connection_args_override_conf(self):
         conf = {"rpcuser": "alice", "rpcpassword": "s3cret", "rpcport": "15715"}
-        a = Args(); a.rpcport = 25715; a.rpcconnect = "10.0.0.2"
+        a = Args()
+        a.rpcport = 25715
+        a.rpcconnect = "10.0.0.2"
         c = au.resolve_connection(conf, a)
         self.assertEqual(c["port"], 25715)
         self.assertEqual(c["host"], "10.0.0.2")
