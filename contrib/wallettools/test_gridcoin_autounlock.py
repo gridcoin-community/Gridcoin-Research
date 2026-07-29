@@ -39,5 +39,57 @@ class TestConfig(unittest.TestCase):
             au.resolve_connection({"rpcuser": "a", "rpcpassword": "b"}, Args())
 
 
+class FakeClient:
+    """Records calls; returns queued getinfo responses."""
+    def __init__(self, uptimes):
+        self._uptimes = list(uptimes)
+        self.calls = []
+
+    def call(self, method, params):
+        self.calls.append((method, params))
+        if method == "getinfo":
+            if not self._uptimes:
+                raise au.RpcError("unreachable")
+            return {"uptime": self._uptimes.pop(0)}
+        if method == "walletpassphrase":
+            return None
+        raise AssertionError("unexpected method " + method)
+
+
+class TestUnlockDecision(unittest.TestCase):
+    def test_should_unlock_first_contact(self):
+        self.assertTrue(au.should_unlock(None, 5))
+
+    def test_should_not_unlock_while_uptime_grows(self):
+        self.assertFalse(au.should_unlock(100, 200))
+
+    def test_should_unlock_when_uptime_resets(self):
+        self.assertTrue(au.should_unlock(200, 5))  # new instance
+
+    def test_run_once_unlocks_stake_only_on_first_contact(self):
+        c = FakeClient([42])
+        new = au.run_once(c, "s3cret", 99999999, None)
+        self.assertEqual(new, 42)
+        self.assertIn(("walletpassphrase", ["s3cret", 99999999, True]), c.calls)
+
+    def test_run_once_no_unlock_when_uptime_grows(self):
+        c = FakeClient([200])
+        new = au.run_once(c, "s3cret", 99999999, 100)
+        self.assertEqual(new, 200)
+        self.assertNotIn("walletpassphrase", [m for m, _ in c.calls])
+
+    def test_run_once_reunlocks_after_restart(self):
+        c = FakeClient([5])
+        new = au.run_once(c, "s3cret", 99999999, 200)
+        self.assertEqual(new, 5)
+        self.assertIn(("walletpassphrase", ["s3cret", 99999999, True]), c.calls)
+
+    def test_run_once_keeps_baseline_when_unreachable(self):
+        c = FakeClient([])  # getinfo raises RpcError
+        new = au.run_once(c, "s3cret", 99999999, 100)
+        self.assertEqual(new, 100)  # unchanged; no unlock attempted
+        self.assertNotIn("walletpassphrase", [m for m, _ in c.calls])
+
+
 if __name__ == "__main__":
     unittest.main()
