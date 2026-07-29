@@ -33,7 +33,8 @@ void HardenProcess()
     // longer grant privileges via setuid/setgid bits or file capabilities, for
     // this process and every descendant. The daemon never needs to gain
     // privileges, so this closes a whole class of local escalation.
-    if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
+    const bool no_new_privs = prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == 0;
+    if (!no_new_privs) {
         LogPrintf("HardenProcess: warning: PR_SET_NO_NEW_PRIVS failed: %s", std::strerror(errno));
     }
 
@@ -51,7 +52,8 @@ void HardenProcess()
             ++dropped;
         }
     }
-    LogPrintf("HardenProcess: NO_NEW_PRIVS set; dropped %d bounding-set capabilities "
-              "(0 is expected for an unprivileged launch).", dropped);
+    LogPrintf("HardenProcess: NO_NEW_PRIVS %s; dropped %d bounding-set capabilities "
+              "(0 is expected for an unprivileged launch).",
+              no_new_privs ? "set" : "NOT set (see warning above)", dropped);
 #endif // __linux__
 }
