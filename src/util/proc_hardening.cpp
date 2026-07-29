@@ -40,16 +40,23 @@ void HardenProcess()
 
     // Drop the capability bounding set so neither this process nor its children
     // can ever acquire these capabilities, even by executing a setuid-root
-    // helper. PR_CAPBSET_DROP requires CAP_SETPCAP, so this only has an effect
-    // when the daemon was started privileged; for an already-unprivileged launch
-    // each drop returns EPERM and is a harmless no-op. PR_CAPBSET_READ returns
-    // -1 (EINVAL) once cap exceeds the highest capability the running kernel
-    // knows, which terminates the loop without needing CAP_LAST_CAP at build
-    // time.
+    // helper. Dropping needs CAP_SETPCAP, so it only bites when the daemon was
+    // started privileged; an already-unprivileged launch gets EPERM on the first
+    // real drop and we stop there (the systemd unit's CapabilityBoundingSet= is
+    // the authoritative drop in that case). PR_CAPBSET_READ returns 1 if the cap
+    // is in the set, 0 if already absent, and -1 (EINVAL) once cap exceeds the
+    // highest capability the running kernel knows -- which ends the loop without
+    // needing CAP_LAST_CAP at build time. Only count caps we actually removed
+    // (drop also "succeeds" for an already-absent cap, which would over-report).
     int dropped = 0;
-    for (int cap = 0; prctl(PR_CAPBSET_READ, cap, 0, 0, 0) >= 0; ++cap) {
+    for (int cap = 0;; ++cap) {
+        const int present = prctl(PR_CAPBSET_READ, cap, 0, 0, 0);
+        if (present < 0) break;      // past the last capability the kernel knows
+        if (present == 0) continue;  // already not in the bounding set
         if (prctl(PR_CAPBSET_DROP, cap, 0, 0, 0) == 0) {
             ++dropped;
+        } else if (errno == EPERM) {
+            break;                   // no CAP_SETPCAP -> cannot drop any; stop
         }
     }
     LogPrintf("HardenProcess: NO_NEW_PRIVS %s; dropped %d bounding-set capabilities "
