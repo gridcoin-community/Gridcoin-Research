@@ -94,6 +94,24 @@ class TestUnlockDecision(unittest.TestCase):
         self.assertEqual(new, 100)  # unchanged; no unlock attempted
         self.assertNotIn("walletpassphrase", [m for m, _ in c.calls])
 
+    def test_run_once_survives_walletpassphrase_error(self):
+        class FailingUnlockClient:
+            def __init__(self):
+                self.calls = []
+
+            def call(self, method, params):
+                self.calls.append(method)
+                if method == "getinfo":
+                    return {"uptime": 5}
+                if method == "walletpassphrase":
+                    raise au.RpcError("Error: Wallet is already unlocked.")
+                raise AssertionError("unexpected method " + method)
+
+        c = FailingUnlockClient()
+        new = au.run_once(c, "s3cret", 99999999, None)  # first contact -> attempts unlock
+        self.assertEqual(new, 5)                    # baseline recorded, did not crash
+        self.assertIn("walletpassphrase", c.calls)  # it did attempt the unlock
+
 
 class TestCli(unittest.TestCase):
     def test_read_passphrase_strips_trailing_newline(self):

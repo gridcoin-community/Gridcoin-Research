@@ -91,8 +91,15 @@ def run_once(client, passphrase, timeout, prev_uptime):
         return prev_uptime  # core down or RPC not bound yet; try again next poll
     cur_uptime = int(info.get("uptime", 0))
     if should_unlock(prev_uptime, cur_uptime):
-        client.call("walletpassphrase", [passphrase, timeout, True])  # stake-only
-    return cur_uptime
+        try:
+            client.call("walletpassphrase", [passphrase, timeout, True])  # stake-only
+        except RpcError as e:
+            # Never crash the resident helper on a walletpassphrase error. The most
+            # common one is "wallet already unlocked" when the helper (not the core)
+            # restarts while the wallet is still unlocked -- benign. Others (wrong
+            # passphrase, unencrypted wallet) are logged but must not kill the loop.
+            sys.stderr.write("gridcoin_autounlock: walletpassphrase failed: %s\n" % e)
+    return cur_uptime  # record this instance either way; do not retry-storm it
 
 
 def read_passphrase(path):
@@ -128,7 +135,8 @@ def build_arg_parser():
     p.add_argument("--rpcconnect", default=None)
     p.add_argument("--rpcport", type=int, default=None)
     p.add_argument("--rpcuser", default=None)
-    p.add_argument("--rpcpassword", default=None)
+    p.add_argument("--rpcpassword", default=None,
+                   help="RPC password (visible in the process list; prefer setting it in gridcoin.conf).")
     p.add_argument("--timeout", type=int, default=99999999,
                    help="walletpassphrase timeout seconds (node clamps > 100000000).")
     p.add_argument("--interval", type=int, default=20, help="Poll interval seconds.")
