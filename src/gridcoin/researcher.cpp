@@ -1273,6 +1273,21 @@ void Researcher::Reload()
 
 void Researcher::Reload(MiningProjectMap projects, GRC::BeaconError beacon_error)
 {
+    // Honor non-cruncher mode on every reload path -- crucially the per-block
+    // auto-refresh (Refresh() -> this 2-arg overload), not just the no-arg
+    // Reload() used at startup / by resetcpids / switchMode. Without this, a
+    // non-cruncher wallet that still has cached BOINC projects (m_projects) has
+    // its CPID re-detected on the next block, reasserting a CPID the user opted
+    // out of. On a long-lived -multiprocess daemon that stale CPID then persists
+    // indefinitely (a fresh monolith process would re-run Initialize()->Reload()
+    // and self-heal); it was the root cause of a spurious "approaching the accrual
+    // limit" warning on a magnitude-0 non-cruncher. Pass log=false: this runs on
+    // every block.
+    if (ConfiguredForNoncruncherMode(false)) {
+        StoreResearcher(Researcher()); // Non-cruncher
+        return;
+    }
+
     const std::set<std::string> team_whitelist = GetTeamWhitelist();
 
     if (team_whitelist.empty()) {
@@ -1436,7 +1451,14 @@ std::optional<CAmount> Researcher::AccrualNearLimit() const
 
     const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
 
-    return Tally::AccrualNearLimit(*cpid, now, pindexBest);
+    // A magnitude-0 CPID (e.g. a non-cruncher that still holds a beacon) has
+    // MaxReward() == 0, so NearRewardLimit() computes to 0. A 0 threshold is not a
+    // real "approaching the accrual cap" signal -- an account with no accrual rate
+    // can never approach a cap -- so report no limit (nullopt) rather than a
+    // degenerate 0 that a consumer's (accrual >= threshold) test would read as
+    // "at the limit" when the accrual is also 0. See ResearcherModel::formatAccrual.
+    const CAmount threshold = Tally::AccrualNearLimit(*cpid, now, pindexBest);
+    return threshold > 0 ? std::optional<CAmount>(threshold) : std::nullopt;
 }
 
 ResearcherStatus Researcher::Status() const

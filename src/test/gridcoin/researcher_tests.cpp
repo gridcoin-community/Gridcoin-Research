@@ -780,6 +780,35 @@ BOOST_AUTO_TEST_CASE(it_converts_a_configured_email_address_to_lowercase)
     gArgs.ForceSetArg("email", "");
 }
 
+BOOST_AUTO_TEST_CASE(the_auto_refresh_reload_honors_noncruncher_mode)
+{
+    // Regression: the per-block auto-refresh path (Refresh() -> the 2-arg Reload)
+    // must honor non-cruncher mode, not just the no-arg Reload() used at startup /
+    // by resetcpids / switchMode. Otherwise a non-cruncher wallet re-detects a CPID
+    // it opted out of on the next block; on a long-lived -multiprocess daemon that
+    // stale CPID then persists until a core restart or resetcpids (a fresh monolith
+    // process self-heals via Initialize() -> the no-arg Reload()).
+    gArgs.ForceSetArg("forcecpid", "f5d8234352e5a5ae3915debba7258294");
+
+    // Sanity: with non-cruncher mode OFF, the 2-arg Reload adopts the forced CPID.
+    // This proves the fixture really forces a CPID, so the check below is meaningful
+    // rather than passing trivially.
+    gArgs.ForceSetArg("noncruncher", "0");
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
+    BOOST_CHECK(GRC::Researcher::Get()->Id().Which() == GRC::MiningId::Kind::CPID);
+
+    // With non-cruncher mode ON, the same 2-arg Reload must resolve to NONCRUNCHER.
+    gArgs.ForceSetArg("noncruncher", "1");
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
+    BOOST_CHECK(GRC::Researcher::Get()->Id() == GRC::MiningId::ForNoncruncher());
+
+    // Clean up: the researcher is already NONCRUNCHER from the check above; clear
+    // the test args without another Reload (which would parse the now-empty
+    // -forcecpid and log a benign "invalid CPID" error).
+    gArgs.ForceSetArg("forcecpid", "");
+    gArgs.ForceSetArg("noncruncher", "0");
+}
+
 BOOST_AUTO_TEST_CASE(it_provides_access_to_a_global_researcher_singleton)
 {
     GRC::ResearcherPtr researcher(GRC::Researcher::Get());

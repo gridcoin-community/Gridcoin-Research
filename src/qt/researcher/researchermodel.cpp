@@ -276,7 +276,11 @@ QString ResearcherModel::formatAccrual(const int display_unit, bool& near_limit)
     const CAmount accrual = m_snapshot.accrual;
     const std::optional<CAmount> near_limit_accrual = m_snapshot.accrual_near_limit;
 
-    near_limit = near_limit_accrual && accrual >= *near_limit_accrual;
+    // Defence in depth: the node should already send nullopt when there is no
+    // real accrual cap (see Researcher::AccrualNearLimit), but guard against a
+    // non-positive threshold here too so a 0 threshold never reads as "at the
+    // limit" for a 0 accrual.
+    near_limit = near_limit_accrual && *near_limit_accrual > 0 && accrual >= *near_limit_accrual;
 
     if (outOfSync()) {
         return "...";
