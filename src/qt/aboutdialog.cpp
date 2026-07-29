@@ -74,18 +74,22 @@ void AboutDialog::setIpcConnectionInfo(const GuiIpcInfo& info)
         return;
     }
 
-    const QString identity = info.node_identity.isEmpty() ? tr("unavailable") : info.node_identity;
+    // The label is Qt::RichText, so every interpolated value must be HTML-escaped
+    // before insertion: the node-sourced strings (versions, build date, identity,
+    // network) arrive over IPC from the daemon and must not be able to inject
+    // markup, and a benign '&' or '<' in a local value (e.g. a data-dir path in
+    // the socket) would otherwise break rendering. Captions are our own literals.
+    const QString identity = info.node_identity.isEmpty()
+        ? tr("unavailable") : info.node_identity.toHtmlEscaped();
 
-    // <b>/<br> make QLabel auto-detect rich text. Captions are translated; the
-    // values (versions, schema, socket path, identity) are shown verbatim.
     const QString text =
         tr("<b>Multiprocess connection</b>") + QStringLiteral("<br>") +
-        tr("GUI version: %1").arg(info.gui_version) + QStringLiteral("<br>") +
-        tr("Node version: %1").arg(info.node_version) + QStringLiteral("<br>") +
-        tr("Node built: %1").arg(info.node_built_at) + QStringLiteral("<br>") +
-        tr("IPC schema %1, protocol %2").arg(info.ipc_schema, info.ipc_protocol) + QStringLiteral("<br>") +
-        tr("Node identity: %1 (%2)").arg(identity, info.network) + QStringLiteral("<br>") +
-        tr("Socket: %1").arg(info.socket_path);
+        tr("GUI version: %1").arg(info.gui_version.toHtmlEscaped()) + QStringLiteral("<br>") +
+        tr("Node version: %1").arg(info.node_version.toHtmlEscaped()) + QStringLiteral("<br>") +
+        tr("Node built: %1").arg(info.node_built_at.toHtmlEscaped()) + QStringLiteral("<br>") +
+        tr("IPC schema %1, protocol %2").arg(info.ipc_schema.toHtmlEscaped(), info.ipc_protocol.toHtmlEscaped()) + QStringLiteral("<br>") +
+        tr("Node identity: %1 (%2)").arg(identity, info.network.toHtmlEscaped()) + QStringLiteral("<br>") +
+        tr("Socket: %1").arg(info.socket_path.toHtmlEscaped());
 
     ui->ipcInfoLabel->setText(text);
     ui->ipcInfoLabel->show();

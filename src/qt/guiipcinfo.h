@@ -24,7 +24,8 @@ struct GuiIpcInfo
     QString ipc_schema;                //!< Negotiated IPC schema, "major.minor".
     QString ipc_protocol;              //!< Negotiated IPC protocol version.
     QString socket_path;               //!< The AF_UNIX socket the GUI connected on.
-    QString node_identity;             //!< The node's identity token (or "unavailable").
+    QString node_identity;             //!< The node's raw identity token; empty means unavailable
+                                       //!< (the About dialog substitutes an "unavailable" label).
     QString network;                   //!< The node's chain network ("main"/"test"/...).
 };
 

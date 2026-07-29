@@ -934,7 +934,7 @@ int main(int argc, char *argv[])
         ipc_info.node_built_at = QString::fromStdString(node_build.built_at);
         ipc_info.ipc_schema = QStringLiteral("%1.%2").arg(node_build.schema_major).arg(node_build.schema_minor);
         ipc_info.ipc_protocol = QString::number(node_build.protocol_version);
-        ipc_info.socket_path = QString::fromStdString((GetDataDir() / "node.sock").string());
+        ipc_info.socket_path = GUIUtil::boostPathToQString(GetDataDir() / "node.sock");
         // Raw token (empty = unavailable); the dialog renders the empty case.
         ipc_info.node_identity = QString::fromStdString(node_ident.identity_token);
         ipc_info.network = QString::fromStdString(node_ident.network);
