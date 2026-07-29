@@ -1,4 +1,6 @@
 import unittest
+import os
+import tempfile
 import gridcoin_autounlock as au
 
 
@@ -89,6 +91,32 @@ class TestUnlockDecision(unittest.TestCase):
         new = au.run_once(c, "s3cret", 99999999, 100)
         self.assertEqual(new, 100)  # unchanged; no unlock attempted
         self.assertNotIn("walletpassphrase", [m for m, _ in c.calls])
+
+
+class TestCli(unittest.TestCase):
+    def test_read_passphrase_strips_trailing_newline(self):
+        with tempfile.NamedTemporaryFile("w", delete=False) as f:
+            f.write("hunter2\n")
+            path = f.name
+        try:
+            self.assertEqual(au.read_passphrase(path), "hunter2")
+        finally:
+            os.unlink(path)
+
+    def test_read_passphrase_rejects_empty(self):
+        with tempfile.NamedTemporaryFile("w", delete=False) as f:
+            f.write("\n")
+            path = f.name
+        try:
+            with self.assertRaises(ValueError):
+                au.read_passphrase(path)
+        finally:
+            os.unlink(path)
+
+    def test_arg_parser_requires_passphrase_file(self):
+        p = au.build_arg_parser()
+        with self.assertRaises(SystemExit):
+            p.parse_args([])  # --passphrase-file is required
 
 
 if __name__ == "__main__":

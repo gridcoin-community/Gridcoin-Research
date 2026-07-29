@@ -89,3 +89,67 @@ def run_once(client, passphrase, timeout, prev_uptime):
     if should_unlock(prev_uptime, cur_uptime):
         client.call("walletpassphrase", [passphrase, timeout, True])  # stake-only
     return cur_uptime
+
+
+import argparse
+import os
+import sys
+import time
+
+
+def read_passphrase(path):
+    with open(path, "r") as f:
+        pw = f.read()
+    pw = pw.rstrip("\n")
+    if not pw:
+        raise ValueError("passphrase file %s is empty" % path)
+    return pw
+
+
+def _load_conf(args):
+    if args.conf:
+        conf_path = args.conf
+    elif args.datadir:
+        conf_path = os.path.join(args.datadir, "gridcoin.conf")
+    else:
+        return {}
+    try:
+        with open(conf_path, "r") as f:
+            return parse_conf(f.read())
+    except OSError:
+        return {}
+
+
+def build_arg_parser():
+    p = argparse.ArgumentParser(description="Stake-only Gridcoin wallet autounlock helper.")
+    p.add_argument("--datadir", help="Datadir containing gridcoin.conf.")
+    p.add_argument("--conf", help="Explicit path to gridcoin.conf (overrides --datadir).")
+    p.add_argument("--passphrase-file", required=True, dest="passphrase_file",
+                   help="File the platform credential store populates with the wallet passphrase. "
+                        "Never pass the passphrase on the command line.")
+    p.add_argument("--rpcconnect", default=None)
+    p.add_argument("--rpcport", type=int, default=None)
+    p.add_argument("--rpcuser", default=None)
+    p.add_argument("--rpcpassword", default=None)
+    p.add_argument("--timeout", type=int, default=99999999,
+                   help="walletpassphrase timeout seconds (node clamps > 100000000).")
+    p.add_argument("--interval", type=int, default=20, help="Poll interval seconds.")
+    p.add_argument("--once", action="store_true", help="Poll once and exit (testing / one-shot).")
+    return p
+
+
+def main(argv=None):
+    args = build_arg_parser().parse_args(argv)
+    passphrase = read_passphrase(args.passphrase_file)
+    conn = resolve_connection(_load_conf(args), args)
+    client = RpcClient(conn)
+    prev_uptime = None
+    while True:
+        prev_uptime = run_once(client, passphrase, args.timeout, prev_uptime)
+        if args.once:
+            return 0
+        time.sleep(args.interval)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
