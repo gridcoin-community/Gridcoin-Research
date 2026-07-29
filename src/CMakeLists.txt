@@ -240,6 +240,7 @@ add_library(gridcoin_util STATIC
     uint256.cpp
     util.cpp
     util/bip32.cpp
+    util/proc_hardening.cpp
     util/settings.cpp
     util/sock.cpp
     util/strencodings.cpp

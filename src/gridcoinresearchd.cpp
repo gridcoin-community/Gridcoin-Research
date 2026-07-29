@@ -10,6 +10,7 @@
 #include "chainparams.h"
 #include "chainparamsbase.h"
 #include "util.h"
+#include <util/proc_hardening.h>
 #include <util/syserror.h>
 #include "util/threadnames.h"
 #include <util/tokenpipe.h>
@@ -230,6 +231,15 @@ bool AppInit(int argc, char* argv[])
         gArgs.SoftSetBoolArg("-server", true);
         // Initialize logging as early as possible.
         InitLogging();
+
+        // Best-effort in-process privilege hardening (Linux): NO_NEW_PRIVS +
+        // capability-bounding-set drop, inherited across the daemonizing fork
+        // below. Defence-in-depth secondary to the hardened systemd unit; a
+        // no-op on non-Linux. Runs for the daemon / -multiprocess node only,
+        // never the GUI process.
+        if (gArgs.GetBoolArg("-nonewprivs", DEFAULT_NO_NEW_PRIVS)) {
+            HardenProcess();
+        }
 
         // Check to see if the user requested to reset blockchain data -- We allow reset blockchain data on testnet.
         if (gArgs.IsArgSet("-resetblockchaindata"))

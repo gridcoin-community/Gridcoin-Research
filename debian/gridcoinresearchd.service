@@ -56,26 +56,66 @@ StateDirectoryMode=0710
 
 # Hardening measures
 ####################
+# This mirrors the profile proven on the maintainer's mainnet multiprocess
+# node. In the -multiprocess split the GUI connects to this daemon over an
+# AF_UNIX socket (node.sock) plus cookie in the datadir, both created 0600 and
+# owned by User= above. Do NOT add DynamicUser=/PrivateUsers= (the uid remap
+# would stop the GUI opening the socket/cookie) or PrivateNetwork= (kills the
+# P2P/RPC network).
 
 # Provide a private /tmp and /var/tmp.
 PrivateTmp=true
-
-# Mount /usr, /boot/ and /etc read-only for the process.
-ProtectSystem=full
-
-# Deny access to /home, /root and /run/user
-ProtectHome=true
-
-# Disallow the process and all of its children to gain
-# new privileges through execve().
-NoNewPrivileges=true
 
 # Use a new /dev namespace only populated with API pseudo devices
 # such as /dev/null, /dev/zero and /dev/random.
 PrivateDevices=true
 
+# Mount the whole filesystem read-only except the service's own StateDirectory
+# (/var/lib/gridcoinresearchd -- the datadir, where the IPC socket + cookie also
+# live) and RuntimeDirectory. Stronger than ProtectSystem=full.
+ProtectSystem=strict
+
+# Deny access to /home, /root and /run/user (the datadir is under /var/lib).
+ProtectHome=true
+
+# Disallow the process and all of its children from gaining new privileges
+# through execve(). Matches the in-process -nonewprivs default; both is fine.
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+
+# The service runs unprivileged and needs no capabilities; drop the whole
+# bounding set (systemd counterpart to the in-process capability-bounding-set
+# drop under -nonewprivs).
+CapabilityBoundingSet=
+
 # Deny the creation of writable and executable memory mappings.
 MemoryDenyWriteExecute=true
+
+# Namespace / kernel-surface restrictions the daemon never needs.
+RestrictRealtime=true
+LockPersonality=true
+RestrictNamespaces=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+UMask=0077
+
+# Syscall allow-list. @system-service covers a typical long-running daemon
+# (fork for -daemonwait, socket/sendmsg/recvmsg, file I/O, ...); a denied call
+# returns EPERM rather than raising SIGSYS, so a stray syscall does not crash
+# the process. This is the maintained, declarative equivalent of an in-process
+# seccomp sandbox (which was deliberately not added -- see doc/multiprocess.md).
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+
+# AF_UNIX for the GUI IPC socket; AF_INET/AF_INET6 for the node; AF_NETLINK for
+# getaddrinfo()/interface enumeration (omitting it breaks DNS / local-address
+# discovery).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 
 [Install]
 WantedBy=multi-user.target
