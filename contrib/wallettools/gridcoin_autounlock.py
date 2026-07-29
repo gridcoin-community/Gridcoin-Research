@@ -6,7 +6,8 @@
 
 External autounlock engine for the Linux systemd service and the Windows
 scheduled task (see doc/multiprocess.md). Reads RPC connection details from
-gridcoin.conf, takes the passphrase from a file the platform credential store
+the config file (gridcoinresearch.conf, or gridcoin.conf), takes the passphrase
+from a file the platform credential store
 populates (never from argv), and sends `walletpassphrase <pass> <timeout> true`
 whenever it sees a fresh core instance. Python 3 stdlib only.
 """
@@ -22,13 +23,15 @@ import urllib.request
 
 
 def parse_conf(text):
-    """Parse a gridcoin.conf-style key=value blob. '#' comments, last wins."""
+    """Parse a Gridcoin config blob, matching the core parser (GetConfigOptions):
+    strip an inline '#' comment (everything from the first '#', which also drops
+    full-line comments), then key=value with whitespace trimmed; last value wins.
+    (The core disallows '#' in rpcpassword, so stripping from the first '#' is safe.)
+    """
     conf = {}
     for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" not in line:
+        line = raw.split("#", 1)[0].strip()
+        if not line or "=" not in line:
             continue
         key, _, value = line.partition("=")
         conf[key.strip()] = value.strip()
@@ -42,9 +45,9 @@ def resolve_connection(conf, args):
     host = getattr(args, "rpcconnect", None) or conf.get("rpcconnect") or "127.0.0.1"
     port = getattr(args, "rpcport", None) or conf.get("rpcport")
     if not user or not password:
-        raise ValueError("rpcuser and rpcpassword must be set (gridcoin.conf or --rpcuser/--rpcpassword)")
+        raise ValueError("rpcuser and rpcpassword must be set (in the config file or via --rpcuser/--rpcpassword)")
     if not port:
-        raise ValueError("rpcport must be set (gridcoin.conf or --rpcport)")
+        raise ValueError("rpcport must be set (in the config file or via --rpcport)")
     return {"host": str(host), "port": int(port), "user": str(user), "password": str(password)}
 
 
@@ -67,6 +70,16 @@ class RpcClient:
         try:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 payload = json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            # Gridcoin returns application-level JSON-RPC errors with an HTTP 500/401/
+            # etc status. Parse the body so the real message (e.g. "already unlocked",
+            # bad credentials) surfaces instead of a bare "HTTP Error 500". (HTTPError
+            # is a URLError subclass, so this except must precede the URLError one.)
+            try:
+                err = json.loads(e.read().decode()).get("error")
+            except (ValueError, OSError):
+                err = None
+            raise RpcError(str(err) if err else str(e))
         except (urllib.error.URLError, OSError, ValueError) as e:
             raise RpcError(str(e))
         if payload.get("error"):
@@ -105,7 +118,7 @@ def run_once(client, passphrase, timeout, prev_uptime):
 def read_passphrase(path):
     with open(path, "r", encoding="utf8") as f:
         pw = f.read()
-    pw = pw.rstrip("\n")
+    pw = pw.rstrip("\r\n")  # strip trailing CR/LF (Windows credential files are CRLF)
     if not pw:
         raise ValueError("passphrase file %s is empty" % path)
     return pw
@@ -113,22 +126,31 @@ def read_passphrase(path):
 
 def _load_conf(args):
     if args.conf:
-        conf_path = args.conf
+        candidates = [args.conf]
     elif args.datadir:
-        conf_path = os.path.join(args.datadir, "gridcoin.conf")
+        # Core default is gridcoinresearch.conf (GRIDCOIN_CONF_FILENAME); gridcoin.conf
+        # is a common packaging alias. Prefer the default, then fall back to the alias.
+        candidates = [os.path.join(args.datadir, "gridcoinresearch.conf"),
+                      os.path.join(args.datadir, "gridcoin.conf")]
     else:
         return {}
-    try:
-        with open(conf_path, "r", encoding="utf8") as f:
-            return parse_conf(f.read())
-    except OSError:
-        return {}
+    for conf_path in candidates:
+        try:
+            with open(conf_path, "r", encoding="utf8") as f:
+                return parse_conf(f.read())
+        except OSError:
+            continue
+    return {}
 
 
 def build_arg_parser():
     p = argparse.ArgumentParser(description="Stake-only Gridcoin wallet autounlock helper.")
-    p.add_argument("--datadir", help="Datadir containing gridcoin.conf.")
-    p.add_argument("--conf", help="Explicit path to gridcoin.conf (overrides --datadir).")
+    p.add_argument("--datadir",
+                   help="Data directory containing gridcoinresearch.conf (or gridcoin.conf) -- the "
+                        "main configuration file, alongside the wallet database and the blockchain.")
+    p.add_argument("--conf",
+                   help="Explicit path to the configuration file (overrides the --datadir lookup of "
+                        "gridcoinresearch.conf / gridcoin.conf).")
     p.add_argument("--passphrase-file", required=True, dest="passphrase_file",
                    help="File the platform credential store populates with the wallet passphrase. "
                         "Never pass the passphrase on the command line.")
@@ -136,7 +158,7 @@ def build_arg_parser():
     p.add_argument("--rpcport", type=int, default=None)
     p.add_argument("--rpcuser", default=None)
     p.add_argument("--rpcpassword", default=None,
-                   help="RPC password (visible in the process list; prefer setting it in gridcoin.conf).")
+                   help="RPC password (visible in the process list; prefer setting it in the config file).")
     p.add_argument("--timeout", type=int, default=99999999,
                    help="walletpassphrase timeout seconds (node clamps > 100000000).")
     p.add_argument("--interval", type=int, default=20, help="Poll interval seconds.")

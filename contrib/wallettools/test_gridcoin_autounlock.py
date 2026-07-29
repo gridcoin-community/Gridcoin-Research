@@ -9,6 +9,8 @@ class Args:  # minimal stand-in for argparse.Namespace
     rpcport = None
     rpcuser = None
     rpcpassword = None
+    conf = None
+    datadir = None
 
 
 class TestConfig(unittest.TestCase):
@@ -17,6 +19,12 @@ class TestConfig(unittest.TestCase):
         conf = au.parse_conf(text)
         self.assertEqual(conf["rpcuser"], "alice")
         self.assertEqual(conf["rpcpassword"], "s3cret")
+        self.assertEqual(conf["rpcport"], "15715")
+
+    def test_parse_conf_strips_inline_comments(self):
+        # Core (GetConfigOptions) strips from the first '#', inline comments included.
+        conf = au.parse_conf("rpcuser=alice  # my user\nrpcport=15715 # the port\n")
+        self.assertEqual(conf["rpcuser"], "alice")
         self.assertEqual(conf["rpcport"], "15715")
 
     def test_resolve_connection_from_conf(self):
@@ -137,6 +145,47 @@ class TestCli(unittest.TestCase):
         p = au.build_arg_parser()
         with self.assertRaises(SystemExit):
             p.parse_args([])  # --passphrase-file is required
+
+    def test_load_conf_prefers_gridcoinresearch_conf(self):
+        import shutil
+        d = tempfile.mkdtemp()
+        try:
+            with open(os.path.join(d, "gridcoinresearch.conf"), "w", encoding="utf8") as f:
+                f.write("rpcuser=fromresearch\nrpcpassword=x\nrpcport=1\n")
+            with open(os.path.join(d, "gridcoin.conf"), "w", encoding="utf8") as f:
+                f.write("rpcuser=fromalias\nrpcpassword=x\nrpcport=1\n")
+            a = Args()
+            a.datadir = d
+            self.assertEqual(au._load_conf(a)["rpcuser"], "fromresearch")  # core default wins
+        finally:
+            shutil.rmtree(d)
+
+    def test_load_conf_falls_back_to_gridcoin_conf(self):
+        import shutil
+        d = tempfile.mkdtemp()
+        try:
+            with open(os.path.join(d, "gridcoin.conf"), "w", encoding="utf8") as f:
+                f.write("rpcuser=fromalias\nrpcpassword=x\nrpcport=1\n")
+            a = Args()
+            a.datadir = d
+            self.assertEqual(au._load_conf(a)["rpcuser"], "fromalias")  # alias used when default absent
+        finally:
+            shutil.rmtree(d)
+
+
+class TestRpcClient(unittest.TestCase):
+    def test_call_surfaces_httperror_json_body(self):
+        import io
+        import urllib.error
+        from unittest import mock
+        client = au.RpcClient({"host": "127.0.0.1", "port": 1, "user": "u", "password": "p"})
+        body = b'{"result": null, "error": {"code": -17, "message": "already unlocked"}}'
+        http_err = urllib.error.HTTPError("http://127.0.0.1:1/", 500,
+                                          "Internal Server Error", {}, io.BytesIO(body))
+        with mock.patch("urllib.request.urlopen", side_effect=http_err):
+            with self.assertRaises(au.RpcError) as ctx:
+                client.call("walletpassphrase", ["p", 60, True])
+        self.assertIn("already unlocked", str(ctx.exception))  # real message, not "HTTP Error 500"
 
 
 if __name__ == "__main__":
