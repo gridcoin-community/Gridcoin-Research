@@ -31,6 +31,7 @@
 #include "node/coherence.h"
 #include "node/mempool_persist.h"
 #include "node/psgt_pool.h"
+#include <util/proc_hardening.h>
 #include <util/string.h>
 #include <util/syserror.h>
 
@@ -474,6 +475,11 @@ void SetupServerArgs()
                                             " location. (default: %s)", GRIDCOIN_PID_FILENAME),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-datadir=<dir>", "Specify data directory", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-nonewprivs", strprintf("On Linux, set NO_NEW_PRIVS and drop the capability bounding set at "
+                                            "startup so the daemon and its children can never gain privileges "
+                                            "(e.g. via a setuid binary). Best-effort defence-in-depth; ignored on "
+                                            "other platforms (default: %u)", DEFAULT_NO_NEW_PRIVS),
+                   ArgsManager::ALLOW_BOOL, OptionsCategory::OPTIONS);
     argsman.AddArg("-wallet=<dir>", "Specify wallet file (within data directory)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-dbcache=<n>", strprintf("Set database cache size in megabytes (%d to %d, default: %d)",

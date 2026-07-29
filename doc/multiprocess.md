@@ -141,6 +141,56 @@ directory and socket permissions line up), then start the GUI with `-multiproces
 Stopping the service stops the node (a connected GUI then exits); to stop just the
 GUI, close it or `SIGTERM` it as above.
 
+### Hardening the service
+
+The snippet above is deliberately minimal. A fully hardened packaged unit ships at
+[`contrib/init/gridcoinresearchd.service`](../contrib/init/gridcoinresearchd.service);
+prefer it for real deployments. Beyond the usual `ProtectSystem=strict` /
+`ProtectHome` / `PrivateTmp` / `MemoryDenyWriteExecute` sandboxing it adds a syscall
+allow-list and an address-family restriction — the OS-maintained equivalent of an
+in-process seccomp sandbox:
+
+```ini
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+CapabilityBoundingSet=
+NoNewPrivileges=true
+```
+
+Multiprocess-specific gotchas when hardening the unit:
+
+- **Keep `AF_NETLINK`** in `RestrictAddressFamilies=`. It is needed for
+  `getaddrinfo()` / local interface enumeration; dropping it breaks DNS and
+  local-address discovery, not just the obvious `AF_UNIX`/`AF_INET*`.
+- **Do not use `DynamicUser=` or `PrivateUsers=`.** They remap the uid, and the
+  GUI could then no longer open the `0600` `node.sock` / `ipc.cookie` the daemon
+  creates in the datadir.
+- **Do not use `PrivateNetwork=`** — it severs the P2P/RPC network.
+- If the datadir lives under `/home` (a personal, non-packaged install), set
+  `ProtectHome=read-only` **plus** `ReadWritePaths=<datadir>` instead of
+  `ProtectHome=true`, or the daemon cannot write the datadir / create the socket.
+  The packaged unit uses `/var/lib/gridcoinresearchd` (a `StateDirectory=`), so it
+  keeps the stronger `ProtectHome=true`.
+
+For supervisors other than systemd (or launches with none), the daemon also applies
+a best-effort in-process hardening at startup: `-nonewprivs` (default on, Linux)
+sets `NO_NEW_PRIVS` and drops the capability bounding set, so the node and its
+children can never gain privileges via a setuid binary. It is a no-op on other
+platforms and secondary to the systemd sandbox above; disable with `-nonewprivs=0`.
+
+**Why no in-process seccomp syscall sandbox?** An internal seccomp-bpf filter was
+considered and deliberately not added. Bitcoin Core shipped one, had to exclude the
+GUI process from it (the Qt/display syscall surface is too large and volatile), and
+then [removed it entirely](https://github.com/bitcoin/bitcoin/pull/27896) as not
+worth maintaining versus externally-maintained sandboxing. A hand-rolled in-tree BPF
+policy is brittle — every glibc/kernel/library update can introduce a syscall the
+filter has not allow-listed, turning a benign call into a `SIGSYS` crash. The
+declarative `systemd` `SystemCallFilter=` above gets the same post-exploitation
+confinement (no `execve` of a shell, no new socket families for exfiltration, no
+`ptrace` into sibling processes) with the policy maintained by the OS instead of by
+this project.
+
 ## Troubleshooting
 
 - **"Could not connect to the Gridcoin daemon … node.sock: connection refused."**
