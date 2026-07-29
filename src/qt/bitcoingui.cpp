@@ -805,6 +805,11 @@ void BitcoinGUI::showBuildMismatchWarning(const QString& gui_commit, const QStri
     m_build_warning_banner->setVisible(true);
 }
 
+void BitcoinGUI::setIpcConnectionInfo(const GuiIpcInfo& info)
+{
+    m_ipc_info = info;
+}
+
 void BitcoinGUI::setClientModel(ClientModel *clientModel)
 {
     this->clientModel = clientModel;
@@ -1143,6 +1148,7 @@ void BitcoinGUI::aboutClicked()
 {
     AboutDialog dlg;
     dlg.setModel(clientModel);
+    dlg.setIpcConnectionInfo(m_ipc_info);
     dlg.exec();
 }
 

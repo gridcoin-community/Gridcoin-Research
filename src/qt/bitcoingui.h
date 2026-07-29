@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 #include "guiconstants.h"
+#include "guiipcinfo.h"
 #include "interfaces/wallet_tx_channel.h" // GRC::WalletEvent for processDrainedTransactions
 
 #ifdef Q_OS_MAC
@@ -82,6 +83,11 @@ public:
     //! before the window is shown; a no-op if the banner widgets are absent.
     void showBuildMismatchWarning(const QString& gui_commit, const QString& node_commit);
 
+    //! Provide the IPC connection facts for the About dialog's multiprocess
+    //! section (populated in main() from the connect handshake; inert in the
+    //! monolith build, where ipc_info.active is false).
+    void setIpcConnectionInfo(const GuiIpcInfo& info);
+
     /** Provide the PSGT pool interface (Phase 1d-v) to the PSGT pool page and the
         multisign dialog. Set before setWalletModel(), which builds the page's
         interface-backed table model. */
@@ -143,6 +149,10 @@ private:
     //! mixed-build warning). Hidden until showBuildMismatchWarning().
     QFrame *m_build_warning_banner = nullptr;
     QLabel *m_build_warning_label = nullptr;
+
+    //! IPC connection facts shown in the About dialog's multiprocess section
+    //! (setIpcConnectionInfo()). Inactive/empty in the monolith build.
+    GuiIpcInfo m_ipc_info;
 
     OverviewPage *overviewPage;
     FavoritesPage *addressBookPage;

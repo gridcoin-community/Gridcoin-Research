@@ -4,6 +4,8 @@
 #include <QDialog>
 #include <QFutureWatcher>
 
+#include "guiipcinfo.h"
+
 #include <string>
 
 namespace Ui {
@@ -22,6 +24,11 @@ public:
     ~AboutDialog();
 
     void setModel(ClientModel *model);
+
+    //! Populate the multiprocess connection section (GUI/node versions, IPC
+    //! schema/protocol, socket, node identity) from the connect handshake. Shows
+    //! it only when info.active (the -multiprocess split build); hidden otherwise.
+    void setIpcConnectionInfo(const GuiIpcInfo& info);
 private:
     //! Result of the off-thread GitHub version check (see
     //! handlePressVersionInfoButton). upgrade_type is carried as an int so the
