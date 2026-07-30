@@ -20,6 +20,7 @@ BCLog::LogFlags ToCoreFlag(GUILogCategory category)
     case GUILogCategory::VOTE:    return BCLog::LogFlags::VOTE;
     case GUILogCategory::SCRAPER: return BCLog::LogFlags::SCRAPER;
     case GUILogCategory::MISC:    return BCLog::LogFlags::MISC;
+    case GUILogCategory::IPC:     return BCLog::LogFlags::IPC;
     case GUILogCategory::VERBOSE: return BCLog::LogFlags::VERBOSE;
     case GUILogCategory::NOISY:   return BCLog::LogFlags::NOISY;
     }

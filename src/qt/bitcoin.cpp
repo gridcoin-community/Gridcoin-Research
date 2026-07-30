@@ -368,7 +368,7 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
         settings.setValue(key, token);
         settings.sync();
         if (settings.status() != QSettings::NoError) {
-            GUILogPrintf("IPC: WARNING: could not persist the node-identity binding "
+            GUILogPrintf("WARN: IPC: could not persist the node-identity binding "
                          "(QSettings status %d); the wallet-swap guard is disabled this session",
                          static_cast<int>(settings.status()));
         }
@@ -380,17 +380,18 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
     case ipc::BindOutcome::Match:
         break;
     case ipc::BindOutcome::UnavailableFresh:
-        GUILogPrintf("IPC: the daemon reported no wallet identity (binding unavailable); "
+        GUILogPrintf("WARN: IPC: the daemon reported no wallet identity (binding unavailable); "
                      "proceeding without the wallet-swap guard");
         break;
     case ipc::BindOutcome::FirstSeen:
-        GUILogPrintf("IPC: bound to the daemon's wallet identity for this data directory");
+        GUILogPrint(GUILogCategory::IPC,
+                    "IPC: bound to the daemon's wallet identity for this data directory");
         persist(reported);
         break;
     case ipc::BindOutcome::Mismatch: {
         // A different (non-empty) wallet identity than the one bound here.
         if (autotrust) {
-            GUILogPrintf("IPC: the daemon's wallet identity changed; -autotrustidentity set -> "
+            GUILogPrintf("WARN: IPC: the daemon's wallet identity changed; -autotrustidentity set -> "
                          "re-binding to the new wallet without prompting");
             persist(reported);
             break;
@@ -421,7 +422,7 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
         // under -autotrustidentity (that flag accepts a *changed* wallet, not the
         // loss of the identity we bound to).
         if (autotrust) {
-            GUILogPrintf("IPC: the daemon reports no wallet identity though a binding exists; "
+            GUILogPrintf("WARN: IPC: the daemon reports no wallet identity though a binding exists; "
                          "-autotrustidentity set -> proceeding, keeping the existing binding");
             break;
         }
@@ -445,10 +446,11 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
     // Soft (non-fatal) findings.
     for (const ipc::SoftWarn w : hs.soft) {
         if (w == ipc::SoftWarn::GuiOlderMinor) {
-            GUILogPrintf("IPC: the daemon speaks a newer IPC schema minor than this GUI "
-                         "(forward-compatible; some newer features may be unavailable)");
+            GUILogPrint(GUILogCategory::IPC,
+                        "IPC: the daemon speaks a newer IPC schema minor than this GUI "
+                        "(forward-compatible; some newer features may be unavailable)");
         } else if (w == ipc::SoftWarn::GitCommitMismatch && !gArgs.GetBoolArg("-nobuildwarn", false)) {
-            GUILogPrintf("IPC: WARNING: the GUI (%s) and daemon (%s) were built from different "
+            GUILogPrintf("WARN: IPC: the GUI (%s) and daemon (%s) were built from different "
                          "commits; mixed builds can behave unexpectedly",
                          ipc::GetLocalBuildInfo().git_commit, hs.remote_build.git_commit);
         }
@@ -531,12 +533,12 @@ static void InstallGuiTerminationHandler(QCoreApplication& app)
     // Linux/BSD-only and absent on macOS. Set non-blocking and close-on-exec on
     // both ends explicitly for portability.
     if (::pipe(g_signal_pipe) != 0) {
-        GUILogPrintf("IPC: could not install the GUI termination-signal handler "
+        GUILogPrintf("WARN: IPC: could not install the GUI termination-signal handler "
                      "(pipe failed); SIGTERM/SIGINT will hard-terminate the GUI");
         return;
     }
     if (!SetSelfPipeFdFlags(g_signal_pipe[0]) || !SetSelfPipeFdFlags(g_signal_pipe[1])) {
-        GUILogPrintf("IPC: could not install the GUI termination-signal handler "
+        GUILogPrintf("WARN: IPC: could not install the GUI termination-signal handler "
                      "(fcntl failed); SIGTERM/SIGINT will hard-terminate the GUI");
         ::close(g_signal_pipe[0]);
         ::close(g_signal_pipe[1]);
@@ -915,7 +917,7 @@ int main(int argc, char *argv[])
             });
         if (!node_connection)
         {
-            GUILogPrintf("IPC: could not connect to the Gridcoin daemon: %s", ipc_error);
+            GUIError("IPC: could not connect to the Gridcoin daemon: %s", ipc_error);
             QMessageBox::critical(nullptr, PACKAGE_NAME,
                     QObject::tr("Could not connect to the Gridcoin daemon:\n%1").arg(QString::fromStdString(ipc_error)));
             return EXIT_FAILURE;
@@ -959,7 +961,7 @@ int main(int argc, char *argv[])
 #else
     if (multiprocess)
     {
-        GUILogPrintf("IPC: -multiprocess requested but this build has no multiprocess (IPC) support");
+        GUIError("IPC: -multiprocess requested but this build has no multiprocess (IPC) support");
         QMessageBox::critical(nullptr, PACKAGE_NAME,
                 QObject::tr("This build was compiled without multiprocess (IPC) support."));
         return EXIT_FAILURE;
@@ -998,7 +1000,7 @@ int main(int argc, char *argv[])
         // misleading "lost the daemon connection".
         if (multiprocess)
         {
-            GUILogPrintf("IPC: lost the daemon connection during GUI startup: %s", e.what());
+            GUIError("IPC: lost the daemon connection during GUI startup: %s", e.what());
             QMessageBox::critical(nullptr, PACKAGE_NAME,
                     QObject::tr("Lost connection to the Gridcoin daemon during startup:\n%1")
                         .arg(QString::fromStdString(e.what())));

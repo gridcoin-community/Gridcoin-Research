@@ -156,7 +156,7 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::ADDRMAN, "addrman"},
     {BCLog::SELECTCOINS, "selectcoins"},
     {BCLog::REINDEX, "reindex"},
-    {BCLog::CMPCTBLOCK, "cmpctblock"},
+    {BCLog::IPC, "ipc"},
     {BCLog::RAND, "rand"},
     {BCLog::MISC, "misc"},
     {BCLog::PROXY, "proxy"},

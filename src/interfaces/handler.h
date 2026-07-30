@@ -37,7 +37,7 @@ std::unique_ptr<Handler> MakeSignalHandler(boost::signals2::connection connectio
 //! Return a Handler that runs a cleanup function on disconnect/destruction.
 std::unique_ptr<Handler> MakeCleanupHandler(std::function<void()> cleanup);
 
-//! Log (at the verbose category) that a one-way notification was dropped because
+//! Log (at the ipc category) that a one-way notification was dropped because
 //! the IPC client had already disconnected. Defined out of line so this header
 //! stays free of the logging dependency; used by GuardNotify below.
 void LogDroppedNotification(const char* what);

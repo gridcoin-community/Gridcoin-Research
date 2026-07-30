@@ -296,6 +296,14 @@ needs for debugging, while -debug=NOISY results in extensive debugging entries.
 The Qt code routes `qDebug()` output to `debug.log` under category "qt": run
 with `-debug=qt` to see it.
 
+Multiprocess (split GUI/node) IPC bookkeeping logs under category "ipc": run with
+`-debug=ipc` to see the per-request libmultiprocess traffic, proxy create/destroy
+and post-disconnect notices. That category carries informational traffic only --
+IPC warnings and errors are deliberately uncategorised (`LogPrintf("WARN: ...")`
+and `error(...)`) so they are always logged rather than hidden behind a debug
+switch. Note "ipc" occupies the bit Bitcoin Core assigns to "cmpctblock", which
+Gridcoin does not implement; see the comment on `BCLog::IPC` in `logging.h`.
+
 ### Testnet mode
 
 If you are testing multi-machine code that needs to operate across the internet,
