@@ -47,8 +47,9 @@ systemd oneshot keys RestartPreventExitStatus on it):
   2 -- unrecoverable; retrying cannot help (wrong passphrase, bad RPC
        credentials/HTTP 401, a foreign process holding the RPC port, or a
        loopback target whose owner cannot be verified on this platform)
-In the resident (default, non---once) mode the loop never exits on these; it
-logs and keeps polling so an admin can clear the condition without a restart.
+In the resident (default) mode -- i.e. without --once -- the loop never exits on
+these; it logs and keeps polling so an admin can clear the condition without a
+restart.
 """
 
 import argparse
