@@ -139,6 +139,10 @@ struct CTxMemPoolInfo
     size_t mrc_count{0};
     size_t beacon_count{0};
     size_t mandatory_sidestake_count{0};
+    //! Transactions this node originated that no peer has yet requested. A count
+    //! that stays non-zero across several blocks means the node's own traffic is
+    //! not reaching the network -- see the unbroadcast set below.
+    size_t unbroadcast_count{0};
 };
 
 class CTxMemPool
@@ -238,6 +242,20 @@ public:
     //! \brief Snapshot of the transactions still awaiting initial broadcast.
     std::set<uint256> GetUnbroadcast() const { LOCK(cs); return m_unbroadcast; }
 
+    //! \brief Whether \p hash is still awaiting initial broadcast -- i.e. this node
+    //! announced it but no peer has ever asked for it (net_processing drops the
+    //! entry the moment a getdata arrives). This is the only signal that
+    //! distinguishes "peers have not fetched my transaction" from "peers have it
+    //! and simply have not mined it", so it is worth answering per transaction and
+    //! not just as a count.
+    //!
+    //! Mirrors Core's CTxMemPool::IsUnbroadcastTx, with two deliberate differences:
+    //! the lock is taken internally, matching every other accessor in this file
+    //! (Core annotates EXCLUSIVE_LOCKS_REQUIRED because its pool members carry
+    //! GUARDED_BY; none here do), and membership uses count() rather than C++20
+    //! contains() because the project baseline is CMAKE_CXX_STANDARD 17.
+    bool IsUnbroadcastTx(const uint256& hash) const { LOCK(cs); return m_unbroadcast.count(hash) > 0; }
+
     //! \brief Whether the pool already holds an MRC for \p cpid. When it does and
     //! \p existing is non-null, the colliding transaction hash is written there.
     bool HasMRCForCpid(const GRC::Cpid& cpid, uint256* existing = nullptr) const
@@ -283,6 +301,7 @@ public:
         info.mrc_count = m_mrc_by_cpid.size();
         info.beacon_count = m_beacon_by_cpid.size();
         info.mandatory_sidestake_count = m_mandatory_sidestake_count;
+        info.unbroadcast_count = m_unbroadcast.size();
         return info;
     }
 
