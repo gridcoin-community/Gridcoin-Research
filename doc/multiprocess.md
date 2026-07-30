@@ -204,6 +204,10 @@ removed years ago as insecure); it uses only the standard
 `walletpassphrase <pass> <timeout> true` RPC via the
 [`gridcoin_autounlock.py`](../contrib/wallettools/gridcoin_autounlock.py) helper.
 
+The helper is Python 3 (standard library only). The daemon package *Recommends*
+`python3` rather than depending on it, so on a minimal install
+(`apt --no-install-recommends`) install it first: `sudo apt install python3`.
+
 Set it up once, then enable:
 
 ```bash
