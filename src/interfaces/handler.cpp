@@ -14,9 +14,9 @@ namespace interfaces {
 
 void LogDroppedNotification(const char* what)
 {
-    // Verbose category only: on a clean shutdown many peers drop at once, so this
-    // can fire repeatedly; it is expected, not an error. Surfaces with -debug=verbose.
-    LogPrint(BCLog::VERBOSE, "IPC: dropped a notification to a disconnected client: %s\n", what);
+    // IPC category only: on a clean shutdown many peers drop at once, so this can
+    // fire repeatedly; it is expected, not an error. Surfaces with -debug=ipc.
+    LogPrint(BCLog::LogFlags::IPC, "IPC: dropped a notification to a disconnected client: %s", what);
 }
 
 namespace {

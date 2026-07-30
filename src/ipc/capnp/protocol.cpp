@@ -34,17 +34,68 @@ namespace ipc {
 namespace capnp {
 namespace {
 
-//! Route libmultiprocess log messages into the Gridcoin log. This is high-volume
-//! bookkeeping (per-request send/recv, proxy create/destroy, post-disconnect
-//! "method called after disconnect" notices), so gate it behind the verbose
-//! category -- silent by default, surfaced with -debug=verbose. (Bitcoin Core
-//! gates this behind a dedicated BCLog::IPC category; Gridcoin's LogFlags bits are
-//! all allocated, so it rides the verbose category instead.) Raise-level messages
-//! are still turned into exceptions (mp's convention for a fatal protocol error);
-//! the message survives via the thrown exception if it goes uncaught.
+//! Route libmultiprocess log messages into the Gridcoin log, split by mp's own
+//! severity rather than lumped together.
+//!
+//! Trace/Debug/Info are high-volume bookkeeping (per-request send/recv, proxy
+//! create/destroy), so they go to the dedicated IPC category -- silent by
+//! default, surfaced with -debug=ipc. Warning and Error are real signal, and
+//! burying them in a debug category is how you lose the one message that
+//! mattered in a flood of bookkeeping, so they take the uncategorised WARN /
+//! ERROR forms and are always logged. Raise stays on the quiet category and is
+//! converted to an exception below -- see the case for why it must not be
+//! grouped with Error.
+//!
+//! The switch has no default so -Wswitch flags an mp::Log level that gained no
+//! mapping; the post-switch assert is the runtime backstop, mirroring
+//! ToCoreFlag() in qt/guilog.cpp. The backstop is doing the real work here --
+//! this target is not currently built with -Wall/-Wextra, so the compile-time
+//! half is aspirational. The fallback logs before it asserts, so the unhandled
+//! level is recorded whether or not asserts are live: dropping an mp message
+//! outright would be worse than misclassifying one.
+void LogIpcMessage(const mp::LogMessage& message)
+{
+    switch (message.level) {
+    case mp::Log::Trace:
+    case mp::Log::Debug:
+    case mp::Log::Info:
+        LogPrint(BCLog::LogFlags::IPC, "ipc: %s", message.message);
+        return;
+    case mp::Log::Warning:
+        LogPrintf("WARN: ipc: %s", message.message);
+        return;
+    case mp::Log::Error:
+        error("ipc: %s", message.message);
+        return;
+    case mp::Log::Raise:
+        // Deliberately quiet, and NOT grouped with Error. Raise is mp's "turn
+        // this into an exception" level -- IpcLogFn does exactly that below, so
+        // the throw is the signal and this line is only belt-and-braces. It is
+        // not reserved for fatal faults: the dominant Raise in practice is
+        // "IPC client method called after disconnect." (proxy-types.h:721/772),
+        // which fires whenever a one-way notification races a GUI close.
+        // interfaces::GuardNotify swallows that by design and logs its own gated
+        // line, so promoting Raise to error() would stamp an ERROR into the
+        // daemon log for every ordinary GUI shutdown, across every notification
+        // forwarder -- the exact noise this category exists to remove.
+        LogPrint(BCLog::LogFlags::IPC, "ipc: %s", message.message);
+        return;
+    }
+
+    // Log BEFORE asserting. This target compiles with -DNDEBUG followed by
+    // -UNDEBUG, so asserts are live and would abort the process before the
+    // diagnostic was ever written -- leaving no record of the level that went
+    // unhandled, which is the opposite of the intent. In this order the message
+    // survives in both build configurations.
+    LogPrintf("WARN: ipc: (unhandled mp log level %d) %s",
+              static_cast<int>(message.level), message.message);
+    assert(false && "unhandled mp::Log level");
+}
+
 void IpcLogFn(mp::LogMessage message)
 {
-    LogPrint(BCLog::VERBOSE, "ipc: %s\n", message.message);
+    LogIpcMessage(message);
+
     if (message.level == mp::Log::Raise) {
         throw std::runtime_error(message.message);
     }
@@ -59,9 +110,9 @@ void InvokeDisconnectCb(const std::function<void()>& cb)
     try {
         cb();
     } catch (const std::exception& e) {
-        LogPrintf("ipc: disconnect callback threw: %s\n", e.what());
+        error("ipc: disconnect callback threw: %s", e.what());
     } catch (...) {
-        LogPrintf("ipc: disconnect callback threw a non-standard exception\n");
+        error("ipc: disconnect callback threw a non-standard exception");
     }
 }
 

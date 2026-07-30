@@ -26,7 +26,7 @@ bool CheckPeerCredentials(int peer_fd)
     return true;
 #else
     if (peer_fd < 0) {
-        LogPrintf("IPC: WARNING: no peer fd available; skipping peer-credential check\n");
+        LogPrintf("WARN: %s: no peer fd available; skipping peer-credential check", __func__);
         return true;
     }
 
@@ -38,11 +38,11 @@ bool CheckPeerCredentials(int peer_fd)
     struct ucred cred;
     socklen_t len = sizeof(cred);
     if (::getsockopt(peer_fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0) {
-        LogPrintf("IPC: WARNING: SO_PEERCRED failed (errno %d); skipping peer-credential check\n", errno);
+        LogPrintf("WARN: %s: SO_PEERCRED failed (errno %d); skipping peer-credential check", __func__, errno);
         return true;
     }
     if (len != sizeof(cred)) {
-        LogPrintf("IPC: WARNING: SO_PEERCRED returned an unexpected size; skipping peer-credential check\n");
+        LogPrintf("WARN: %s: SO_PEERCRED returned an unexpected size; skipping peer-credential check", __func__);
         return true;
     }
     peer_uid = cred.uid;
@@ -50,15 +50,14 @@ bool CheckPeerCredentials(int peer_fd)
     // *BSD / macOS.
     gid_t peer_gid;
     if (::getpeereid(peer_fd, &peer_uid, &peer_gid) != 0) {
-        LogPrintf("IPC: WARNING: getpeereid failed (errno %d); skipping peer-credential check\n", errno);
+        LogPrintf("WARN: %s: getpeereid failed (errno %d); skipping peer-credential check", __func__, errno);
         return true;
     }
 #endif
 
     if (peer_uid != self_uid) {
-        LogPrintf("IPC: rejecting connection: peer uid %d does not match serving uid %d\n",
-                  static_cast<int>(peer_uid), static_cast<int>(self_uid));
-        return false;
+        return error("%s: rejecting IPC connection: peer uid %d does not match serving uid %d",
+                     __func__, static_cast<int>(peer_uid), static_cast<int>(self_uid));
     }
     return true;
 #endif // WIN32

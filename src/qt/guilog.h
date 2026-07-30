@@ -35,6 +35,7 @@ enum class GUILogCategory {
     VOTE,
     SCRAPER,
     MISC,
+    IPC,
     VERBOSE,
     NOISY,
 };
