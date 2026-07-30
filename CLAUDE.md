@@ -152,7 +152,7 @@ Every `vRPCCommands[]` row in `src/rpc/server.cpp` carries a **mandatory heritag
 
 ## PR Title Prefixes
 
-Use component prefixes: `accrual`, `build`, `consensus`, `contract`, `doc`, `gui`/`qt`, `mining`, `net`/`p2p`, `refactor`, `researcher`, `rpc`, `scraper`, `staking`, `superblock`, `test`/`qa`/`ci`, `voting`, `wallet`, `whitelist`
+Use component prefixes: `accrual`, `build`, `consensus`, `contract`, `doc`, `gui`/`qt`, `ipc`, `mempool`, `mining`, `net`/`p2p`, `refactor`, `researcher`, `rpc`, `scraper`, `staking`, `superblock`, `test`/`qa`/`ci`, `voting`, `wallet`, `whitelist`
 
 ## Key Documentation
 
