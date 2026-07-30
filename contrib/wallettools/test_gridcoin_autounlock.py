@@ -311,8 +311,9 @@ class ErrClient:
     """getinfo succeeds (fresh instance); walletpassphrase raises a coded RpcError."""
     loopback = False
 
-    def __init__(self, code):
+    def __init__(self, code, http_status=None):
         self._code = code
+        self._http = http_status
         self.calls = []
 
     def call(self, method, params):
@@ -320,8 +321,22 @@ class ErrClient:
         if method == "getinfo":
             return {"uptime": 5}
         if method == "walletpassphrase":
-            raise au.RpcError("boom", code=self._code)
+            raise au.RpcError("boom", code=self._code, http_status=self._http)
         raise AssertionError("unexpected method " + method)
+
+
+class Getinfo401Client:
+    """getinfo itself fails auth (HTTP 401) -- wrong rpcuser/rpcpassword."""
+    loopback = False
+
+    def __init__(self):
+        self.calls = []
+
+    def call(self, method, params):
+        self.calls.append(method)
+        if method == "getinfo":
+            raise au.RpcError("unauthorized", http_status=401)
+        raise AssertionError("should not reach " + method)
 
 
 class TestWalletpassphraseErrors(unittest.TestCase):
@@ -344,6 +359,19 @@ class TestWalletpassphraseErrors(unittest.TestCase):
     def test_unknown_error_is_transient(self):
         c = ErrClient(None)  # transport / unknown -> retry may help
         self.assertEqual(au.run_once(c, "pw", 60, None), (5, au.EXIT_TRANSIENT))
+
+    def test_walletpassphrase_http_401_is_unrecoverable(self):
+        # 401 has no JSON-RPC code (code=None) but must NOT fall through to transient.
+        c = ErrClient(None, http_status=401)
+        self.assertEqual(au.run_once(c, "pw", 60, None), (5, au.EXIT_UNRECOVERABLE))
+
+    def test_getinfo_http_401_is_unrecoverable(self):
+        # Bad rpcuser/rpcpassword surface on the getinfo probe first; that must be
+        # unrecoverable (park), not transient (retry forever), and send no passphrase.
+        c = Getinfo401Client()
+        new, code = au.run_once(c, "pw", 60, None)
+        self.assertEqual(code, au.EXIT_UNRECOVERABLE)
+        self.assertNotIn("walletpassphrase", c.calls)
 
     def test_helper_never_crashes_on_walletpassphrase_error(self):
         for code in (au.RPC_WALLET_ALREADY_UNLOCKED, au.RPC_WALLET_PASSPHRASE_INCORRECT,
@@ -455,6 +483,14 @@ class TestRpcClient(unittest.TestCase):
     def test_loopback_flag_off_remote_host(self):
         c = au.RpcClient({"host": "10.0.0.2", "port": 1, "user": "u", "password": "p"})
         self.assertFalse(c.loopback)
+
+    def test_ipv6_literal_host_is_bracketed_in_url(self):
+        c = au.RpcClient({"host": "::1", "port": 15715, "user": "u", "password": "p"})
+        self.assertEqual(c._url, "http://[::1]:15715/")
+
+    def test_ipv4_host_url_unbracketed(self):
+        c = au.RpcClient({"host": "127.0.0.1", "port": 15715, "user": "u", "password": "p"})
+        self.assertEqual(c._url, "http://127.0.0.1:15715/")
 
     def test_httperror_json_body_yields_code_and_message(self):
         body = b'{"result": null, "error": {"code": -17, "message": "already unlocked"}}'

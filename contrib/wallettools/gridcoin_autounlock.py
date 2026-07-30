@@ -243,7 +243,11 @@ class RpcClient:
     def __init__(self, conn, allow_unverified=False):
         self.host = conn["host"]
         self.port = conn["port"]
-        self._url = "http://%s:%d/" % (self.host, self.port)
+        # Bracket an IPv6 literal host so the URL is valid: http://[::1]:port/,
+        # not the ambiguous http://::1:port/. is_loopback() accepts ::1, so an
+        # IPv6 loopback target would otherwise fail every poll.
+        url_host = "[%s]" % self.host if (":" in self.host and not self.host.startswith("[")) else self.host
+        self._url = "http://%s:%d/" % (url_host, self.port)
         token = base64.b64encode(("%s:%s" % (conn["user"], conn["password"])).encode()).decode()
         self._auth = "Basic " + token
         register_secret(token)  # so an accidental echo of the auth header is scrubbed
@@ -336,7 +340,13 @@ def run_once(client, passphrase, timeout, prev_uptime):
 
     try:
         info = client.call("getinfo", [])
-    except RpcError:
+    except RpcError as e:
+        if e.http_status == 401:
+            # Wrong rpcuser/rpcpassword: retrying with the same credentials cannot
+            # help, so this is unrecoverable (the oneshot then parks in "failed").
+            warn("RPC rejected the credentials (HTTP 401): rpcuser/rpcpassword are "
+                 "wrong -- retrying cannot fix this")
+            return prev_uptime, EXIT_UNRECOVERABLE
         return prev_uptime, EXIT_TRANSIENT  # core down or RPC not bound yet
     if not isinstance(info, dict):
         return prev_uptime, EXIT_TRANSIENT
@@ -350,6 +360,9 @@ def run_once(client, passphrase, timeout, prev_uptime):
     try:
         client.call("walletpassphrase", [passphrase, timeout, True])  # stake-only
     except RpcError as e:
+        if e.http_status == 401:
+            warn("RPC rejected the credentials (HTTP 401) -- retrying cannot fix this")
+            return cur_uptime, EXIT_UNRECOVERABLE
         code = e.code
         if code == RPC_WALLET_ALREADY_UNLOCKED:
             # -17 is thrown before the stake-only flag is assigned, so the wallet
