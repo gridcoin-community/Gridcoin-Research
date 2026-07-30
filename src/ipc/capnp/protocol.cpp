@@ -50,8 +50,9 @@ namespace {
 //! mapping; the post-switch assert is the runtime backstop, mirroring
 //! ToCoreFlag() in qt/guilog.cpp. The backstop is doing the real work here --
 //! this target is not currently built with -Wall/-Wextra, so the compile-time
-//! half is aspirational. It still logs rather than returning silently: dropping
-//! an mp message outright would be worse than misclassifying one.
+//! half is aspirational. The fallback logs before it asserts, so the unhandled
+//! level is recorded whether or not asserts are live: dropping an mp message
+//! outright would be worse than misclassifying one.
 void LogIpcMessage(const mp::LogMessage& message)
 {
     switch (message.level) {
@@ -81,9 +82,14 @@ void LogIpcMessage(const mp::LogMessage& message)
         return;
     }
 
-    assert(false && "unhandled mp::Log level");
+    // Log BEFORE asserting. This target compiles with -DNDEBUG followed by
+    // -UNDEBUG, so asserts are live and would abort the process before the
+    // diagnostic was ever written -- leaving no record of the level that went
+    // unhandled, which is the opposite of the intent. In this order the message
+    // survives in both build configurations.
     LogPrintf("WARN: ipc: (unhandled mp log level %d) %s",
               static_cast<int>(message.level), message.message);
+    assert(false && "unhandled mp::Log level");
 }
 
 void IpcLogFn(mp::LogMessage message)
