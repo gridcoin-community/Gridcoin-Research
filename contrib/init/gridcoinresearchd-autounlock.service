@@ -42,6 +42,17 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
+# RemainAfterExit keeps the unit "active (exited)" after the single unlock, so an
+# operator sees success -- a bare oneshot goes "inactive (dead)" on a clean exit,
+# which reads like failure. The trade-off (noted in review): with
+# LoadCredentialEncrypted= below, systemd keeps the decrypted passphrase in the
+# per-unit credentials tmpfs for the unit's active lifetime (~ the core's uptime)
+# instead of tearing it down right after the unlock. Kept deliberately: that file
+# is ramfs (never swapped), mode 0400, owned by THIS service's user -- the same
+# user that runs the core, which already holds the passphrase in its own memory
+# the whole time the wallet is unlocked (readable by that uid via ptrace). So the
+# credential file does not materially widen the attack surface, while the clear
+# "active (exited)" status is worth keeping. Matches the mainnet-validated prototype.
 RemainAfterExit=yes
 User=gridcoin
 Group=gridcoin
