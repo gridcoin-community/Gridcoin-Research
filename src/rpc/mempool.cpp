@@ -74,7 +74,7 @@ static const RPCHelpMan getrawmempool_help{
                         {RPCResult::Type::STR, "mrc_cpid", /*optional=*/true, "CPID of the MRC contract (MRC transactions only)."},
                         {RPCResult::Type::STR_AMOUNT, "mrc_fee", /*optional=*/true, "Fee burned by the MRC contract (MRC transactions only)."},
                         {RPCResult::Type::STR, "beacon_cpid", /*optional=*/true, "CPID of the beacon advertisement (beacon transactions only)."},
-                        {RPCResult::Type::BOOL, "unbroadcast", "True while this node originated the transaction and no peer has requested it yet. Stays true across blocks when the node's own traffic is not reaching the network."},
+                        {RPCResult::Type::BOOL, "unbroadcast", "Whether this transaction is currently unbroadcast: this node announced it and no peer has requested it yet. It does not by itself establish why -- a value that persists across several blocks is a reason to investigate relay, not proof of a particular cause."},
                     }},
             }},
     },
@@ -123,7 +123,7 @@ static const RPCHelpMan getmempoolentry_help{
             {RPCResult::Type::STR, "mrc_cpid", /*optional=*/true, "CPID of the MRC contract (MRC transactions only)."},
             {RPCResult::Type::STR_AMOUNT, "mrc_fee", /*optional=*/true, "Fee burned by the MRC contract (MRC transactions only)."},
             {RPCResult::Type::STR, "beacon_cpid", /*optional=*/true, "CPID of the beacon advertisement (beacon transactions only)."},
-            {RPCResult::Type::BOOL, "unbroadcast", "True while this node originated the transaction and no peer has requested it yet. Stays true across blocks when the node's own traffic is not reaching the network."},
+            {RPCResult::Type::BOOL, "unbroadcast", "Whether this transaction is currently unbroadcast: this node announced it and no peer has requested it yet. It does not by itself establish why -- a value that persists across several blocks is a reason to investigate relay, not proof of a particular cause."},
         }},
     RPCExamples{
         HelpExampleCli("getmempoolentry", "\"mytxid\"") +

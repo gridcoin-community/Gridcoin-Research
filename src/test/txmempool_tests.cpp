@@ -328,7 +328,7 @@ BOOST_AUTO_TEST_CASE(rpc_mempool_reports_unbroadcast)
     BOOST_CHECK_EQUAL(getmempoolentry(eparams)["unbroadcast"].get_bool(), false);
     BOOST_CHECK(!mempool.IsUnbroadcastTx(tx.GetHash()));
 
-    // Marking it as locally originated flips both surfaces.
+    // Marking it as locally originated flips all three surfaces.
     mempool.AddUnbroadcast(tx.GetHash());
     BOOST_CHECK_EQUAL(getmempoolinfo(UniValue(UniValue::VARR))["unbroadcastcount"].get_int(), 1);
     BOOST_CHECK_EQUAL(getrawmempool(vparams)[txid]["unbroadcast"].get_bool(), true);
@@ -340,6 +340,7 @@ BOOST_AUTO_TEST_CASE(rpc_mempool_reports_unbroadcast)
     mempool.RemoveUnbroadcast(tx.GetHash());
     BOOST_CHECK_EQUAL(getmempoolinfo(UniValue(UniValue::VARR))["unbroadcastcount"].get_int(), 0);
     BOOST_CHECK_EQUAL(getrawmempool(vparams)[txid]["unbroadcast"].get_bool(), false);
+    BOOST_CHECK_EQUAL(getmempoolentry(eparams)["unbroadcast"].get_bool(), false);
     BOOST_CHECK(!mempool.IsUnbroadcastTx(tx.GetHash()));
 
     // The predicate is false for a hash that is not in the pool at all, rather
