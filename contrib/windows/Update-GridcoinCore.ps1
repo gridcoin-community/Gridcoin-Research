@@ -78,6 +78,11 @@ function Get-RunningCore {
 # stopping the core, so a permission problem aborts without leaving it stopped.
 if ($NewBinariesDir) {
     if (-not (Test-Path -LiteralPath $NewBinariesDir)) { throw "NewBinariesDir '$NewBinariesDir' not found." }
+    # Refuse a no-op "upgrade" that stops+restarts on the old binaries: the new dir
+    # must actually contain the core exe.
+    if (-not (Test-Path -LiteralPath (Join-Path $NewBinariesDir 'gridcoinresearchd.exe'))) {
+        throw "NewBinariesDir '$NewBinariesDir' does not contain gridcoinresearchd.exe; refusing a no-op upgrade."
+    }
     $probe = Join-Path $coreDir ('.grc-update-write-probe-' + [guid]::NewGuid().ToString('N'))
     try {
         [System.IO.File]::WriteAllText($probe, '')

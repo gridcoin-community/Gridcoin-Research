@@ -8,10 +8,12 @@
     core that Core-Start is running on the same datadir. With -CreateShortcut it
     instead writes a per-user Start-Menu shortcut with the same arguments.
 
-    Single-user by design (not a bug to fix): the core's node.sock/ipc.cookie are
-    owner-only NTFS-ACL'd (#3234) and a per-connection SO_PEERCRED/peer-UID check
-    (#3242) enforces same-user, so only the wallet user can attach. A DIFFERENT
-    Windows user gets "could not connect to the daemon" -- that is the ACL working.
+    Single-user by design (not a bug to fix): on Windows the core's node.sock /
+    ipc.cookie are created owner-only (NTFS ACL, #3234), so only the wallet user can
+    open them and attach a GUI. (The SO_PEERCRED/peer-UID check, #3242, is a Linux
+    mechanism -- AF_UNIX on Windows exposes no peer-credential API, so the NTFS ACL
+    is the enforcement here.) A DIFFERENT Windows user gets "could not connect to
+    the daemon" -- that is the access control working, not a bug.
 
     If no core is running, the GUI shows the same connect-failure dialog (the
     datadir chooser is suppressed in -multiprocess, Plan 1); it will not start a
@@ -31,6 +33,10 @@ if (-not (Test-Path -LiteralPath $GuiPath)) {
     throw "gridcoinresearch.exe not found at '$GuiPath'. Pass -GuiPath explicitly."
 }
 $GuiPath = (Resolve-Path -LiteralPath $GuiPath).Path
+
+if ($DataDir -match '"') {
+    throw "-DataDir must not contain a double-quote character."
+}
 
 # One arg string reused for both the direct launch and the shortcut.
 $ddQuoted = '"' + $DataDir + '"'

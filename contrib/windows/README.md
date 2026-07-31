@@ -33,11 +33,13 @@ The core then autostarts on every boot. To upgrade:
 ## Two things to know
 
 **Run-as the wallet user, never SYSTEM.** The IPC socket (`node.sock`) and cookie
-(`ipc.cookie`) are created **owner-only** in the datadir, and a per-connection
-peer-UID check enforces same-user. A SYSTEM-owned core would lock the wallet user's
-own GUI out. This also means **only that Windows user can attach a GUI** — a
-*different* user running `gridcoinresearch.exe -multiprocess` gets *"could not
-connect to the daemon"*. **That is the access control working, not a bug.**
+(`ipc.cookie`) are created **owner-only** in the datadir (NTFS ACL), so on Windows
+only that user can open them. (The Linux `SO_PEERCRED`/peer-UID check has no Windows
+equivalent — AF_UNIX on Windows exposes no peer credentials — so the ACL is the
+enforcement here.) A SYSTEM-owned core would lock the wallet user's own GUI out.
+This also means **only that Windows user can attach a GUI** — a *different* user
+running `gridcoinresearch.exe -multiprocess` gets *"could not connect to the
+daemon"*. **That is the access control working, not a bug.**
 
 **Graceful stop = start the Core-Stop task.** To stop the core, *start* the
 `Core-Stop` task (`Start-ScheduledTask … Core-Stop`) — it runs `gridcoinresearchd
