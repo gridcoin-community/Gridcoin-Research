@@ -131,7 +131,12 @@ bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive, MemPoolRemovalR
 {
     // NOTE: `reason` is threaded through (including into the recursive call below)
     // as groundwork for a future TransactionRemovedFromMempool validation signal.
-    // No subscriber consumes it yet, so it has no observable effect today.
+    // remove() still does not emit that signal, so this parameter continues to have
+    // no observable effect. The signal itself is no longer inert: the cancel RPC
+    // (cancelunbroadcasttransaction) emits it explicitly after calling remove(), and
+    // CWallet consumes it. Emitting from here instead would fire on every caller --
+    // block connection, conflicts, reorgs -- which is a far broader behavioural
+    // change than that RPC needed, so it was deliberately left to the caller.
 
     // Remove transaction from memory pool
     {

@@ -4249,6 +4249,44 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
 }
 
 // ppcoin: disable transaction (only for coinstake)
+unsigned int CWallet::ReleaseTransactionInputs(const CTransaction& tx, CWalletDB* pwalletdb)
+{
+    AssertLockHeld(cs_wallet);
+
+    unsigned int released = 0;
+
+    // Same reversal BlockDisconnected performs for a transaction that has left the
+    // chain: clear the parents' spent bits so the coins become selectable again.
+    for (const auto& txin : tx.vin) {
+        auto parent_it = mapWallet.find(txin.prevout.hash);
+        if (parent_it == mapWallet.end()) continue;
+
+        CWalletTx& parent_wtx = parent_it->second;
+
+        if (txin.prevout.n >= parent_wtx.vout.size()) {
+            LogPrintf("WARN: %s: invalid prevout.n %u for parent tx %s", __func__,
+                      txin.prevout.n, txin.prevout.hash.ToString());
+            continue;
+        }
+
+        if (IsMine(parent_wtx.vout[txin.prevout.n]) == ISMINE_NO) continue;
+
+        // Only act on outputs actually marked spent. MarkUnspent self-guards, so
+        // without this the count would report outputs it did not change and every
+        // parent would be rewritten to disk regardless. IsSpent also reports false
+        // for a vfSpent vector shorter than vout, which is the same "nothing to
+        // release" case; the bounds check above keeps it from throwing.
+        if (!parent_wtx.IsSpent(txin.prevout.n)) continue;
+
+        parent_wtx.MarkUnspent(txin.prevout.n);
+        parent_wtx.MarkDirty();
+        if (pwalletdb) parent_wtx.WriteToDisk(pwalletdb);
+        ++released;
+    }
+
+    return released;
+}
+
 void CWallet::DisableTransaction(const CTransaction &tx)
 {
     if (!tx.IsCoinStake() || !IsFromMe(tx))
@@ -4600,10 +4638,12 @@ bool CWallet::IsAbandoned(const uint256& txid) const
     return inactive && inactive->m_abandoned;
 }
 
-bool CWallet::AbandonTransaction(const uint256& txid)
+bool CWallet::AbandonTransaction(const uint256& txid, unsigned int* inputs_released)
 {
     AssertLockHeld(cs_main);
     LOCK(cs_wallet);
+
+    if (inputs_released) *inputs_released = 0;
 
     auto it = mapWallet.find(txid);
     if (it == mapWallet.end()) {
@@ -4687,6 +4727,16 @@ bool CWallet::AbandonTransaction(const uint256& txid)
                 }
             }
         }
+
+        // Clearing mapTxSpends is only half the reversal: coin selection reads the
+        // parents' vfSpent bits, so without this the inputs of an abandoned
+        // transaction stay locked and the balance stays depressed until
+        // FixSpentCoins runs at startup or via repairwallet. Done per transaction
+        // inside the cascade so descendants release their inputs too. Note that
+        // ReleaseTransactionInputs only mutates existing mapWallet entries and never
+        // inserts or erases, so cur_wtx and the loop's iterators stay valid.
+        const unsigned int released = ReleaseTransactionInputs(cur_wtx, pwalletdb.get());
+        if (inputs_released) *inputs_released += released;
     }
 
     return true;

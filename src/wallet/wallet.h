@@ -369,7 +369,13 @@ public:
      *  already holds it may still call this.
      *  Requires cs_main because the NotifyTransactionChanged signal handler
      *  reads mapBlockIndex / pindexBest via decomposeTransaction. */
-    bool AbandonTransaction(const uint256& txid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    //! Abandon an unconfirmed transaction that is not in the mempool, along with any
+    //! wallet descendants, and release the inputs each of them consumed.
+    //!
+    //! \p inputs_released, when supplied, receives the number of this wallet's
+    //! outputs made spendable again across the whole cascade.
+    bool AbandonTransaction(const uint256& txid, unsigned int* inputs_released = nullptr)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     /** @deprecated Use SyncTransaction or BlockConnected/TransactionAddedToMempool instead.
      *  Public compatibility wrapper with the legacy signature. */
@@ -542,6 +548,22 @@ public:
 
     void FixSpentCoins(int& nMismatchSpent, int64_t& nBalanceInQuestion, bool fCheckOnly = false);
     void DisableTransaction(const CTransaction &tx);
+
+    //! Clear the spent bits on the parent outputs \p tx consumed, so the coins are
+    //! selectable again. Returns how many of this wallet's outputs were released.
+    //!
+    //! Abandoning a transaction erases its mapTxSpends rows but does not touch the
+    //! parents' vfSpent bits -- and it is vfSpent, not mapTxSpends, that gates
+    //! AvailableCoins and GetAvailableCredit. Without this the coins stay locked and
+    //! the balance stays depressed until FixSpentCoins runs at startup or via
+    //! repairwallet, which is what made abandontransaction's promise that inputs
+    //! "can be respent" untrue. Mirrors the reversal BlockDisconnected performs.
+    //!
+    //! \p pwalletdb may be null for a wallet that is not file-backed. Takes the
+    //! caller's database session rather than opening its own, so a cascade writes
+    //! through one handle.
+    unsigned int ReleaseTransactionInputs(const CTransaction& tx, CWalletDB* pwalletdb)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
 
     //!
     //! \brief Get the time that the wallet last created a backup.

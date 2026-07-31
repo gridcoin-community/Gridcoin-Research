@@ -350,6 +350,71 @@ BOOST_AUTO_TEST_CASE(rpc_mempool_reports_unbroadcast)
     mempool.clear();
 }
 
+BOOST_AUTO_TEST_CASE(cancel_unbroadcast_transaction_gate)
+{
+    // cancelunbroadcasttransaction is only safe because of its gate: a transaction
+    // no peer has fetched can be dropped locally, whereas one that is propagating
+    // would simply be re-announced back. Each refusal path is therefore the
+    // security-relevant part of the RPC, not an afterthought.
+    CTxOut out;
+    out.nValue = 5150;
+    const CTransaction parent = MakeTx({}, {}, {out});
+
+    UniValue p(UniValue::VARR);
+    p.push_back(UniValue(parent.GetHash().ToString()));
+
+    mempool.clear();
+
+    // Not in the mempool at all.
+    BOOST_CHECK_THROW(cancelunbroadcasttransaction(p), UniValue);
+
+    // In the mempool but propagating (never marked unbroadcast, or a peer already
+    // fetched it) -- must refuse, since local removal would not cancel anything.
+    mempool.addUnchecked(parent.GetHash(), MakeEntry(parent));
+    BOOST_CHECK(!mempool.IsUnbroadcastTx(parent.GetHash()));
+    BOOST_CHECK_THROW(cancelunbroadcasttransaction(p), UniValue);
+    BOOST_CHECK(mempool.exists(parent.GetHash()));   // refusal must not remove it
+
+    // Unbroadcast, but another pooled transaction spends it -- refuse rather than
+    // cascade, because a child can have propagated even when its parent did not.
+    mempool.AddUnbroadcast(parent.GetHash());
+    CTxIn spend;
+    spend.prevout = COutPoint(parent.GetHash(), 0);
+    CTxOut child_out;
+    child_out.nValue = 5100;
+    const CTransaction child = MakeTx({}, {spend}, {child_out});
+    mempool.addUnchecked(child.GetHash(), MakeEntry(child));
+    BOOST_CHECK_THROW(cancelunbroadcasttransaction(p), UniValue);
+    BOOST_CHECK(mempool.exists(parent.GetHash()));
+    BOOST_CHECK(mempool.exists(child.GetHash()));
+
+    // With the descendant gone and the parent still unbroadcast, it cancels: the
+    // entry leaves the pool and the unbroadcast set with it.
+    mempool.remove(child);
+    BOOST_CHECK(mempool.IsUnbroadcastTx(parent.GetHash()));
+    const UniValue res = cancelunbroadcasttransaction(p);
+    BOOST_CHECK_EQUAL(res["txid"].get_str(), parent.GetHash().ToString());
+    BOOST_CHECK(!mempool.exists(parent.GetHash()));
+    BOOST_CHECK(!mempool.IsUnbroadcastTx(parent.GetHash()));
+    BOOST_CHECK_EQUAL(mempool.GetUnbroadcast().size(), 0U);
+
+    // The result reports both wallet effects. Neither fires here: the transaction
+    // was never added to pwalletMain, so there is nothing to abandon and no parent
+    // outputs to release. The fields must still be present and well-typed -- a
+    // caller distinguishes "not my transaction" from "cancelled and inputs freed"
+    // by reading them.
+    BOOST_CHECK(res.exists("wallet_abandoned"));
+    BOOST_CHECK(res.exists("inputs_released"));
+    BOOST_CHECK_EQUAL(res["wallet_abandoned"].get_bool(), false);
+    BOOST_CHECK_EQUAL(res["inputs_released"].get_int(), 0);
+
+    // Cancelling twice is not silently idempotent -- the second call reports that
+    // the transaction is no longer in the pool.
+    BOOST_CHECK_THROW(cancelunbroadcasttransaction(p), UniValue);
+
+    mempool.clear();
+}
+
 // ---------------------------------------------------------------------------
 // Phase 4 (#3029): bounded size + eviction
 // ---------------------------------------------------------------------------

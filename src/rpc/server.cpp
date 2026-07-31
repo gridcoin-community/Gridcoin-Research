@@ -373,6 +373,7 @@ static const CRPCCommand vRPCCommands[] =
     { "addredeemscript",         &addredeemscript,         cat_wallet, &addredeemscript_helpman, heritage_removed_upstream, "c9e4350b4a75" },
     { "backupwallet",            &backupwallet,            cat_wallet, &backupwallet_helpman, heritage_mixed, "658099c7930f" },
     { "burn",                    &burn,                    cat_wallet, &burn_helpman, heritage_pure_gridcoin, "" },
+    { "cancelunbroadcasttransaction", &cancelunbroadcasttransaction, cat_wallet, &cancelunbroadcasttransaction_helpman, heritage_pure_gridcoin, "" },
     { "checkwallet",             &checkwallet,             cat_wallet, &checkwallet_helpman, heritage_pure_gridcoin, "" },
     { "claimhtlc",              &claimhtlc,               cat_wallet, &claimhtlc_helpman, heritage_pure_gridcoin, "" },
     { "createhtlc",             &createhtlc,              cat_wallet, &createhtlc_helpman, heritage_pure_gridcoin, "" },
