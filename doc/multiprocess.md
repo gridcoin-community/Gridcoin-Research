@@ -191,6 +191,55 @@ confinement (no `execve` of a shell, no new socket families for exfiltration, no
 `ptrace` into sibling processes) with the policy maintained by the OS instead of by
 this project.
 
+### Unattended stake-only autounlock (Linux)
+
+An encrypted wallet must be unlocked after every start before it can stake, and
+there is no native way to supply a passphrase at daemon startup. A packaged install
+ships an **opt-in** companion unit,
+[`contrib/init/gridcoinresearchd-autounlock.service`](../contrib/init/gridcoinresearchd-autounlock.service),
+that keeps the wallet unlocked **for staking only**, with the passphrase held
+host/TPM-bound in `systemd-creds` — never in a file the daemon reads, the unit, or
+on a command line. It stays **external** to the wallet (the in-wallet auto-unlock was
+removed years ago as insecure); it uses only the standard
+`walletpassphrase <pass> <timeout> true` RPC via the
+[`gridcoin_autounlock.py`](../contrib/wallettools/gridcoin_autounlock.py) helper.
+
+The helper is Python 3 (standard library only). The daemon package *Recommends*
+`python3` rather than depending on it, so on a minimal install
+(`apt --no-install-recommends`) install it first: `sudo apt install python3`.
+
+Set it up once, then enable:
+
+```bash
+# Encrypt the wallet passphrase, bound to this host (and its TPM, if present):
+printf '%s' 'YOUR-WALLET-PASSPHRASE' | sudo systemd-creds encrypt \
+    --name=wallet-passphrase - /etc/gridcoin/wallet-passphrase.cred
+sudo chown gridcoin:gridcoin /etc/gridcoin/wallet-passphrase.cred
+sudo chmod 0400 /etc/gridcoin/wallet-passphrase.cred
+
+sudo systemctl enable --now gridcoinresearchd-autounlock.service
+```
+
+`systemctl enable` links the unit into `gridcoinresearchd.service.wants/`, so it runs
+whenever the core starts (boot, restart, deploy) without modifying the core unit;
+`BindsTo=` re-triggers it on every core restart. It runs as `gridcoin`, unlocks
+stake-only (`walletpassphrase … true`, which still permits staking **and** automatic
+beacon renewal but blocks spends), and exits — a `Type=oneshot`, not a resident poll.
+A rejected passphrase, bad RPC credentials, or an unverifiable RPC listener park the
+unit in `failed` (`RestartPreventExitStatus=2`) where they are visible, rather than
+looping silently over a locked wallet.
+
+**Security model.** Only a principal that can already run as the `gridcoin` user on
+this host can recover the passphrase — the same bar as reading the wallet's own files.
+Before sending anything, the helper verifies (via `/proc/net/tcp{,6}`) that the RPC
+listener is owned by its own uid, so credentials are never handed to a local process
+that squatted the RPC port during startup; because the core uses `-daemonwait`, the
+port is already bound and served by the time the unit is ordered `After=` it, so this
+gate is defence in depth. While unlocked, the passphrase lives in the core's memory
+(unavoidable for unattended staking). Rotating the passphrase (or `rpcpassword`)
+requires `systemctl restart gridcoinresearchd-autounlock.service`, as the credential
+is read at unit start.
+
 ## Troubleshooting
 
 - **"Could not connect to the Gridcoin daemon … node.sock: connection refused."**

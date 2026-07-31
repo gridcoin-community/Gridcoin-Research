@@ -1,3 +1,5 @@
 usr/bin/gridcoinresearchd
 usr/share/man/man1/gridcoinresearchd.1
 usr/share/bash-completion/completions/gridcoinresearchd
+usr/lib/systemd/system/gridcoinresearchd-autounlock.service
+usr/share/gridcoin/gridcoin_autounlock.py

@@ -51,7 +51,8 @@ Depends:
  ${misc:Depends},
  adduser
 Recommends:
- bash-completion
+ bash-completion,
+ python3
 Description: Gridcoin Research daemon
  Gridcoin is a proof-of-stake cryptocurrency that rewards BOINC
  (Berkeley Open Infrastructure for Network Computing) participants

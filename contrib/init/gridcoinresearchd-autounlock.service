@@ -1,0 +1,124 @@
+# Opt-in stake-only wallet autounlock, companion to gridcoinresearchd.service.
+#
+# It is not recommended to modify this file in-place, because it will be
+# overwritten during package upgrades. Use `systemctl edit` for local changes.
+#
+# This is a SEPARATE unit rather than an ExecStartPost= on the core, deliberately:
+# a non-zero ExecStartPost= would SIGTERM the core (combined with the core's
+# Restart=on-failure, a restart loop on a live staking wallet), a hanging one
+# would wedge the core in "activating" under its TimeoutStartSec=infinity, and it
+# would put the unlock on the boot-critical path. A separate unit keeps a failed
+# unlock from ever touching the core, and gives a hand-runnable re-unlock with
+# real retry. The core unit is never modified: the [Install] WantedBy= below only
+# creates gridcoinresearchd.service.wants/, leaving its hardening untouched.
+#
+# SETUP (opt-in). Encrypt the wallet passphrase once, host/TPM-bound, then enable:
+#
+#   printf '%s' 'YOUR-WALLET-PASSPHRASE' | sudo systemd-creds encrypt \
+#       --name=wallet-passphrase - /etc/gridcoin/wallet-passphrase.cred
+#   sudo chown gridcoin:gridcoin /etc/gridcoin/wallet-passphrase.cred
+#   sudo chmod 0400 /etc/gridcoin/wallet-passphrase.cred
+#   sudo systemctl enable --now gridcoinresearchd-autounlock.service
+#
+# systemd decrypts it to $CREDENTIALS_DIRECTORY/wallet-passphrase (0400, readable
+# only by this service) at start. The passphrase is NEVER stored here or on argv.
+# Rotating the passphrase requires `systemctl restart` (the credential is read at
+# unit start). See doc/multiprocess.md for the full rationale.
+
+[Unit]
+Description=Gridcoin wallet stake-only autounlock
+Documentation=https://github.com/gridcoin-community/Gridcoin-Research/blob/development/doc/multiprocess.md
+After=gridcoinresearchd.service
+BindsTo=gridcoinresearchd.service
+
+# NO start rate limit, deliberately. The limit counts EVERY start of this unit,
+# including the fully successful ones each core start triggers via WantedBy=; a
+# deploy/restart cycle (or a core crash-loop) would exhaust the default burst and
+# leave the core healthy with the wallet silently locked, refusing later starts
+# until `systemctl reset-failed`. Set to 0 (not merely omitted, which inherits the
+# 5-in-10s default) to disable the class. Retries are bounded by exit-status
+# classification instead -- see RestartPreventExitStatus= below.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+# RemainAfterExit keeps the unit "active (exited)" after the single unlock, so an
+# operator sees success -- a bare oneshot goes "inactive (dead)" on a clean exit,
+# which reads like failure. The trade-off (noted in review): with
+# LoadCredentialEncrypted= below, systemd keeps the decrypted passphrase in the
+# per-unit credentials tmpfs for the unit's active lifetime (~ the core's uptime)
+# instead of tearing it down right after the unlock. Kept deliberately: that file
+# is ramfs (never swapped), mode 0400, owned by THIS service's user -- the same
+# user that runs the core, which already holds the passphrase in its own memory
+# the whole time the wallet is unlocked (readable by that uid via ptrace). So the
+# credential file does not materially widen the attack surface, while the clear
+# "active (exited)" status is worth keeping. Matches the mainnet-validated prototype.
+RemainAfterExit=yes
+User=gridcoin
+Group=gridcoin
+
+# Host/TPM-bound wallet passphrase, decrypted to %d/wallet-passphrase at runtime.
+LoadCredentialEncrypted=wallet-passphrase:/etc/gridcoin/wallet-passphrase.cred
+
+# --once: a single unlock attempt driven by systemd's own lifecycle. The core
+# uses -daemonwait, so by the time this unit is ordered After= it, the RPC port
+# is already bound and served -- the helper's listener-ownership gate then only
+# has to confirm the owner (defence in depth). The helper reads rpcuser/rpcpassword
+# /rpcport from the same config the core uses.
+ExecStart=/usr/bin/python3 /usr/share/gridcoin/gridcoin_autounlock.py \
+          --conf=/etc/gridcoin/gridcoin.conf \
+          --passphrase-file=%d/wallet-passphrase \
+          --once
+
+# The helper exits 2 for failures no retry can fix (rejected passphrase -14,
+# rejected parameter -8, HTTP 401 bad RPC credentials, a foreign or unverifiable
+# RPC listener); park those in "failed" where they are visible instead of looping.
+# Exit 1 (transient: core still coming up, RPC momentarily unreachable) retries.
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=2
+
+# Finite, unlike the core (TimeoutStartSec=infinity). The helper's --once worst
+# case is one /proc read plus a getinfo and a walletpassphrase call, each bounded
+# by its 10s HTTP timeout, so two minutes is generous headroom.
+TimeoutStartSec=120
+
+# --- Hardening (mirrors the core unit; tighter where possible -- this helper only
+# opens one loopback TCP socket and reads /etc + the credential). ---
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictNamespaces=true
+MemoryDenyWriteExecute=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+CapabilityBoundingSet=
+UMask=0077
+
+# AF_INET/AF_INET6 for the loopback RPC socket; AF_UNIX and AF_NETLINK are what
+# glibc's resolver / interface enumeration reach for. @system-service keeps
+# socket/sendmsg/recvmsg; a denied call returns EPERM rather than SIGSYS.
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+# Belt-and-braces around the passphrase POST: the helper already builds a
+# proxy-free urllib opener, but these pin it at the kernel level -- an http_proxy
+# in the manager environment cannot divert the request, and only loopback is
+# reachable at all, regardless of what the code does.
+Environment=no_proxy=*
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=gridcoinresearchd.service
