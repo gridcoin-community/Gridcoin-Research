@@ -1,0 +1,164 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    Register the Gridcoin multiprocess core as background Scheduled Tasks on Windows.
+
+.DESCRIPTION
+    Registers two discrete, single-purpose tasks under the \Gridcoin\ folder, both
+    run-as the wallet user (never SYSTEM -- the IPC node.sock/ipc.cookie are
+    owner-only NTFS-ACL'd and a SYSTEM core would lock the user's own GUI out):
+
+      Core-Start : boot trigger -> gridcoinresearchd.exe -datadir=<dd> -multiprocess
+                   (with crash restart, the systemd Restart=on-failure analogue).
+      Core-Stop  : gridcoinresearchd.exe -datadir=<dd> stop  (a GRACEFUL RPC stop
+                   that flushes BDB/LevelDB). Runnable on-demand, and best-effort
+                   on the OS-shutdown event (see the SHUTDOWN note).
+
+    SEMANTICS GOTCHA: to stop the core you START the Core-Stop task. NEVER
+    Stop-ScheduledTask the Core-Start task -- Task Scheduler's stop is a hard
+    TerminateProcess (no flush = possible DB corruption).
+
+    SHUTDOWN: the Kernel-General EventID-13 trigger on Core-Stop is BEST-EFFORT
+    only -- Windows does not block shutdown for a scheduled task, so the flush may
+    be cut short. The reliable clean-shutdown primitive is a Group Policy
+    Computer -> Shutdown script (Windows runs it synchronously, bounded by the GP
+    script timeout). Set that up and validate on real hardware; see the README.
+
+    Autounlock (opt-in, DPAPI) is a SEPARATE task added by Set-GridcoinAutounlock.ps1
+    (Plan 5); it is not registered here.
+
+.NOTES
+    Registering a run-as-user task with a stored password typically requires an
+    ELEVATED PowerShell, and the account must hold "Log on as a batch job".
+#>
+[CmdletBinding()]
+param(
+    # Path to gridcoinresearchd.exe. Default: alongside this script's parent (the
+    # install layout is ...\GridcoinResearch\gridcoinresearchd.exe with scripts in
+    # ...\GridcoinResearch\windows\).
+    [string]$CorePath = (Join-Path $PSScriptRoot '..\gridcoinresearchd.exe'),
+
+    # The datadir the core owns (node.sock lives in it). Baked into both the task
+    # and the GUI shortcut so the GUI attaches to the datadir the core is serving.
+    # REQUIRED when -TaskUser is not the current user (see the guard below).
+    [string]$DataDir,
+
+    # The account the tasks run as. Default: the invoking interactive user.
+    # DOMAIN\user or .\user form. "Install as admin, run as walletholder" is
+    # supported by passing -TaskUser explicitly (then -DataDir is also required).
+    [string]$TaskUser = "$env:USERDOMAIN\$env:USERNAME",
+
+    # The TaskUser's *login* password (NOT the wallet passphrase). Required so the
+    # tasks can run at boot with no interactive logon (LogonType=Password). Prompted
+    # securely if omitted.
+    [System.Security.SecureString]$TaskPassword,
+
+    [string]$TaskFolder = 'Gridcoin'
+)
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+if (-not (Test-Path -LiteralPath $CorePath)) {
+    throw "gridcoinresearchd.exe not found at '$CorePath'. Pass -CorePath explicitly."
+}
+$CorePath = (Resolve-Path -LiteralPath $CorePath).Path
+
+# The default datadir (%APPDATA%) is evaluated in the INSTALLER's context. If a
+# different TaskUser was given (install-as-admin, run-as-walletholder), that path
+# points at the installer's profile -- which the TaskUser usually cannot read, so
+# the core would abort or silently build a second, unused datadir. Require an
+# explicit -DataDir in that case.
+$currentUser = "$env:USERDOMAIN\$env:USERNAME"
+if (-not $PSBoundParameters.ContainsKey('DataDir')) {
+    if ($PSBoundParameters.ContainsKey('TaskUser') -and ($TaskUser -ne $currentUser)) {
+        throw "You specified -TaskUser '$TaskUser' (not the current user '$currentUser'), so the " +
+              "default datadir (this user's %APPDATA%) would be wrong. Pass -DataDir explicitly, e.g. " +
+              "-DataDir 'C:\Users\<walletholder>\AppData\Roaming\GridcoinResearch'."
+    }
+    $DataDir = Join-Path $env:APPDATA 'GridcoinResearch'
+}
+if ($DataDir -match '"') {
+    throw "-DataDir must not contain a double-quote character."
+}
+
+if (-not $TaskPassword) {
+    $cred = Get-Credential -UserName $TaskUser `
+        -Message "Enter the Windows password for '$TaskUser' (the account the Gridcoin core will run as). This is NOT the wallet passphrase."
+    $TaskUser = $cred.UserName
+    $TaskPassword = $cred.Password
+}
+
+# Register-ScheduledTask -Password requires the plaintext. NOTE: PtrToStringBSTR
+# materializes a managed System.String, whose contents live on the heap until GC
+# and cannot be zeroed in PS 5.1 (Register-ScheduledTask has no SecureString form);
+# we minimize the BSTR lifetime (ZeroFreeBSTR) but the String residue is
+# unavoidable and equivalent to any -Password cmdlet.
+$plainPw = $null
+$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($TaskPassword)
+try {
+    $plainPw = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+
+    $ddQuoted = '"' + $DataDir + '"'
+    $startAction = New-ScheduledTaskAction -Execute $CorePath -Argument "-datadir=$ddQuoted -multiprocess"
+    $stopAction  = New-ScheduledTaskAction -Execute $CorePath -Argument "-datadir=$ddQuoted stop"
+
+    # Core-Start: long-running headless daemon, no execution-time limit, restart on
+    # crash (3 tries, 1 min apart) -- the systemd Restart=on-failure analogue. A
+    # graceful stop exits 0 (success) so it is NOT auto-restarted; only a crash is.
+    $startSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew `
+        -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+
+    # Core-Stop: a short-lived action; no restart (a failed stop must not loop).
+    $stopSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -MultipleInstances IgnoreNew
+
+    $startTrigger = New-ScheduledTaskTrigger -AtStartup
+
+    Register-ScheduledTask -TaskPath "\$TaskFolder\" -TaskName 'Core-Start' -Force `
+        -Action $startAction -Trigger $startTrigger -Settings $startSettings `
+        -User $TaskUser -Password $plainPw -RunLevel Limited `
+        -Description 'Start the Gridcoin multiprocess core at boot (run-as the wallet user).' | Out-Null
+
+    # Core-Stop: register first with no trigger, then attach the OS-shutdown event
+    # trigger via XML (New-ScheduledTaskTrigger has no event-trigger form).
+    Register-ScheduledTask -TaskPath "\$TaskFolder\" -TaskName 'Core-Stop' -Force `
+        -Action $stopAction -Settings $stopSettings `
+        -User $TaskUser -Password $plainPw -RunLevel Limited `
+        -Description 'Graceful RPC stop of the Gridcoin core (on-demand; best-effort OS-shutdown). Start this task to stop the core; never hard-kill Core-Start.' | Out-Null
+
+    # System log, Microsoft-Windows-Kernel-General EventID 13 == shutdown initiated.
+    # BEST-EFFORT only (see the SHUTDOWN note above): the OS does not wait for it.
+    $evtXml = @'
+<QueryList><Query Id="0" Path="System"><Select Path="System">*[System[Provider[@Name='Microsoft-Windows-Kernel-General'] and EventID=13]]</Select></Query></QueryList>
+'@
+    $eventTrigger = New-CimInstance -CimClass (
+        Get-CimClass -Namespace 'Root/Microsoft/Windows/TaskScheduler' -ClassName 'MSFT_TaskEventTrigger'
+    ) -ClientOnly
+    $eventTrigger.Enabled = $true
+    $eventTrigger.Subscription = $evtXml
+
+    $stopTask = Get-ScheduledTask -TaskPath "\$TaskFolder\" -TaskName 'Core-Stop'
+    $stopTask.Triggers = @($eventTrigger)
+    Set-ScheduledTask -InputObject $stopTask -User $TaskUser -Password $plainPw | Out-Null
+}
+catch {
+    throw "Failed to register the Gridcoin tasks: $($_.Exception.Message)`n" +
+          "Registering a run-as-user task with a stored password usually needs an ELEVATED " +
+          "PowerShell (Run as administrator), and '$TaskUser' must hold the 'Log on as a batch job' " +
+          "right. Re-run elevated; see contrib/windows/README.md."
+}
+finally {
+    $plainPw = $null
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+}
+
+Write-Host "Registered \$TaskFolder\Core-Start (boot) and \$TaskFolder\Core-Stop (on-demand + best-effort OS-shutdown), run-as $TaskUser." -ForegroundColor Green
+Write-Host ""
+Write-Host "  Start the core now :  Start-ScheduledTask -TaskPath '\$TaskFolder\' -TaskName 'Core-Start'"
+Write-Host "  Stop the core      :  Start-ScheduledTask -TaskPath '\$TaskFolder\' -TaskName 'Core-Stop'   (graceful; do NOT Stop-ScheduledTask Core-Start)"
+Write-Host "  Attach the GUI     :  .\Start-GridcoinGui.ps1 -DataDir '$DataDir'"
+Write-Host ""
+Write-Host "  For a reliable flush on OS shutdown, also configure a Group Policy" -ForegroundColor Yellow
+Write-Host "  Computer -> Shutdown script that starts the Core-Stop task (see README)." -ForegroundColor Yellow
