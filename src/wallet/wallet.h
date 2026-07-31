@@ -371,6 +371,19 @@ public:
      *  reads mapBlockIndex / pindexBest via decomposeTransaction. */
     bool AbandonTransaction(const uint256& txid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+    //! Release the parent outputs a transaction consumed, so they are spendable again.
+    //!
+    //! AbandonTransaction erases the tx's mapTxSpends rows but does not touch the
+    //! parents' vfSpent bits, and it is vfSpent -- not mapTxSpends -- that gates
+    //! AvailableCoins and GetAvailableCredit. Abandoning alone therefore leaves the
+    //! inputs unspendable and the balance depressed until FixSpentCoins runs at
+    //! startup or via repairwallet. Callers that abandon a transaction which will
+    //! provably never confirm call this to complete the reversal immediately.
+    //!
+    //! Only outputs belonging to this wallet are touched. Returns the number
+    //! released. Mirrors the spent-mark reversal in BlockDisconnected.
+    unsigned int ReleaseTransactionInputs(const CTransaction& tx);
+
     /** @deprecated Use SyncTransaction or BlockConnected/TransactionAddedToMempool instead.
      *  Public compatibility wrapper with the legacy signature. */
     bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock,

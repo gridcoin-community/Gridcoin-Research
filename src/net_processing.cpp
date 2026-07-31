@@ -83,6 +83,17 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash)
     RelayTransaction(tx, hash, ss);
 }
 
+void RemoveFromRelayMemory(const uint256& hash)
+{
+    LOCK(cs_mapRelay);
+
+    // The matching vRelayExpiration entry is deliberately left in place. It is a
+    // deque kept in expiry order, so erasing from the middle would be linear and
+    // buys nothing: when the entry falls due, the sweep in RelayTransaction erases
+    // an already-absent key, which is a harmless no-op.
+    mapRelay.erase(CInv(MSG_TX, hash));
+}
+
 void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataStream& ss)
 {
     CInv inv(MSG_TX, hash);

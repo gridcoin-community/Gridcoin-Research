@@ -4249,6 +4249,38 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
 }
 
 // ppcoin: disable transaction (only for coinstake)
+unsigned int CWallet::ReleaseTransactionInputs(const CTransaction& tx)
+{
+    LOCK(cs_wallet);
+
+    CWalletDB walletdb(strWalletFile);
+    unsigned int released = 0;
+
+    // Same reversal BlockDisconnected performs for a transaction that has left the
+    // chain: clear the parents' spent bits so the coins become selectable again.
+    for (const auto& txin : tx.vin) {
+        auto parent_it = mapWallet.find(txin.prevout.hash);
+        if (parent_it == mapWallet.end()) continue;
+
+        CWalletTx& parent_wtx = parent_it->second;
+
+        if (txin.prevout.n >= parent_wtx.vout.size()) {
+            LogPrintf("WARN: %s: invalid prevout.n %d for parent tx %s", __func__,
+                      txin.prevout.n, txin.prevout.hash.ToString());
+            continue;
+        }
+
+        if (IsMine(parent_wtx.vout[txin.prevout.n]) == ISMINE_NO) continue;
+
+        parent_wtx.MarkUnspent(txin.prevout.n);
+        parent_wtx.MarkDirty();
+        parent_wtx.WriteToDisk(&walletdb);
+        ++released;
+    }
+
+    return released;
+}
+
 void CWallet::DisableTransaction(const CTransaction &tx)
 {
     if (!tx.IsCoinStake() || !IsFromMe(tx))

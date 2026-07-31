@@ -26,6 +26,16 @@ extern CCriticalSection cs_main;
 void RelayTransaction(const CTransaction& tx, const uint256& hash);
 void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataStream& ss);
 
+//! Drop a transaction's cached serialization from relay memory.
+//!
+//! The getdata loop serves from mapRelay *before* consulting the mempool, and
+//! entries linger there for 15 minutes with expiry as their only removal path.
+//! Removing a transaction from the mempool therefore does not stop this node
+//! from handing it out: a peer whose getdata is still queued would be served
+//! the cached copy. Callers that cancel a transaction outright must purge it
+//! here as well, or the cancellation only appears to have taken effect.
+void RemoveFromRelayMemory(const uint256& hash);
+
 //! Re-announce the node's own transactions still awaiting initial broadcast.
 //! Intended to be driven periodically by the scheduler (never from SendMessages;
 //! see the definition for the lock-order rationale).

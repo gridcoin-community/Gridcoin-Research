@@ -12,6 +12,7 @@
 #include "rpc/util.h"
 #include "init.h"
 #include "miner.h"
+#include "net_processing.h"
 #include "streams.h"
 #include "util.h"
 #include "gridcoin/backup.h"
@@ -2889,6 +2890,136 @@ UniValue abandontransaction(const UniValue& params)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not eligible for abandonment");
 
     return NullUniValue;
+}
+
+static const RPCHelpMan cancelunbroadcasttransaction_help{
+    "cancelunbroadcasttransaction",
+    "Cancel a transaction that no peer has requested from this node yet.\n"
+    "\nDrops the transaction from the mempool and from relay memory, abandons it in\n"
+    "the wallet, and releases the inputs it consumed so they can be spent again.\n"
+    "\nOnly permitted while the transaction is still unbroadcast -- this node announced\n"
+    "it and no peer has requested it (the 'unbroadcast' field of getmempoolentry).\n"
+    "Once a peer has fetched the transaction, dropping it here accomplishes nothing:\n"
+    "peers hold it and re-announce it straight back.\n"
+    "\nThat gate is a strong signal, not a proof. It records that no peer has asked US\n"
+    "for the transaction, which is not the same as the transaction never having reached\n"
+    "the network -- a peer that already has it will never ask. In particular a\n"
+    "transaction submitted with sendrawtransaction is marked unbroadcast even if it is\n"
+    "already circulating. Confirm with getrawmempool on another node when it matters.\n"
+    "\nRefuses if any other pooled transaction spends this one. Cancel those first;\n"
+    "removing a parent while its children remain would leave them unspendable in the\n"
+    "pool, and a child may have propagated even when its parent did not. Wallet\n"
+    "descendants that are not in the mempool are not checked, but are abandoned along\n"
+    "with this transaction.",
+    {
+        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id to cancel."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "txid", "The cancelled transaction id."},
+            {RPCResult::Type::BOOL, "wallet_abandoned", "Whether the wallet entry was marked abandoned. False when the transaction is not one of this wallet's."},
+            {RPCResult::Type::NUM, "inputs_released", "How many of this wallet's outputs the transaction had consumed were marked spendable again."},
+        }},
+    RPCExamples{
+        HelpExampleCli("cancelunbroadcasttransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") +
+        HelpExampleRpc("cancelunbroadcasttransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")},
+};
+const RPCHelpMan& cancelunbroadcasttransaction_helpman() { return cancelunbroadcasttransaction_help; }
+
+UniValue cancelunbroadcasttransaction(const UniValue& params)
+{
+    const uint256 hash = uint256S(params[0].get_str());
+
+    // cs_main before cs_wallet (AbandonTransaction asserts cs_main and takes
+    // cs_wallet); mempool.cs is taken inside the pool accessors below.
+    LOCK(cs_main);
+
+    CTransaction tx;
+
+    // The gate and the removal must be atomic with respect to the pool. The
+    // unbroadcast flag is cleared by net_processing the instant a peer's getdata
+    // arrives (net_processing.cpp), and every pool accessor here takes and releases
+    // mempool.cs on its own -- so checking and then removing under separate
+    // acquisitions leaves a window in which the transaction starts propagating
+    // between the two, and the removal lands on a transaction the gate would have
+    // rejected. Hold cs across the whole decision; it is recursive, so the accessors
+    // below re-enter it. Released before the wallet work: the signal below reaches
+    // CWallet and taking cs_wallet under mempool.cs would introduce a new ordering.
+    {
+        LOCK(mempool.cs);
+
+        if (!mempool.lookup(hash, tx)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not in mempool");
+        }
+
+        if (!mempool.IsUnbroadcastTx(hash)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                "Transaction is propagating: at least one peer has already requested it, so "
+                "removing it here would not cancel it -- peers hold it and would re-announce "
+                "it. Only a still-unbroadcast transaction can be cancelled.");
+        }
+
+        // Refuse rather than cascade. A recursive removal could drop a child that HAS
+        // propagated (a peer can hold a child whose parent it never fetched), which
+        // would silently exceed what the unbroadcast gate authorises.
+        for (unsigned int i = 0; i < tx.vout.size(); ++i) {
+            const auto it = mempool.mapNextTx.find(COutPoint(hash, i));
+            if (it != mempool.mapNextTx.end()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf(
+                    "Transaction %s in the mempool spends output %u of this one. Cancel "
+                    "the descendants first.", it->second.ptx->GetHash().ToString(), i));
+            }
+        }
+
+        mempool.remove(tx, /*fRecursive=*/false, MemPoolRemovalReason::UNKNOWN);
+    }
+
+    // Removing it from the pool is not enough to stop serving it. The getdata loop
+    // answers from relay memory first and only falls back to the mempool, and those
+    // cached entries live 15 minutes with expiry as their only removal path. An
+    // unbroadcast transaction is by definition one already announced to peers, so
+    // their getdata requests are still queued and staggered; without this purge the
+    // node would hand out the "cancelled" transaction to each of them in turn.
+    RemoveFromRelayMemory(hash);
+
+    // Tell subscribers the transaction left the pool. This is what makes the
+    // AbandonTransaction below possible: CWallet::isInMempool() reads cached wallet
+    // state rather than querying the pool, and AbandonTransaction refuses while that
+    // state says in-mempool. CWallet::TransactionRemovedFromMempool maps UNKNOWN to
+    // TxStateInactive{false} -- inactive but NOT abandoned, deliberately leaving the
+    // abandoned flag for the user-initiated call below. The signal is delivered
+    // synchronously (CMainSignals::TransactionRemovedFromMempool invokes the slot
+    // inline), so the state is updated before the next statement runs.
+    GetMainSignals().TransactionRemovedFromMempool(MakeTransactionRef(tx),
+                                                   MemPoolRemovalReason::UNKNOWN);
+
+    bool abandoned = false;
+    unsigned int released = 0;
+
+    if (pwalletMain) {
+        abandoned = pwalletMain->AbandonTransaction(hash);
+
+        // Abandoning is not by itself enough to make the coins spendable again.
+        // AbandonTransaction clears the mapTxSpends rows but leaves the parents'
+        // vfSpent bits set, and it is vfSpent that AvailableCoins consults -- so
+        // without this the inputs stay locked and the balance stays depressed until
+        // FixSpentCoins runs at startup or via repairwallet. Releasing them here is
+        // what lets a replacement transaction be built immediately, which is the
+        // entire point of cancelling. Gated on the abandon having succeeded, so a
+        // transaction that is not this wallet's leaves wallet state untouched.
+        if (abandoned) {
+            released = pwalletMain->ReleaseTransactionInputs(tx);
+        }
+    }
+
+    LogPrintf("WARN: %s: cancelled unbroadcast transaction %s (wallet_abandoned=%d, "
+              "inputs_released=%u)", __func__, hash.ToString(), abandoned, released);
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("txid", hash.GetHex());
+    result.pushKV("wallet_abandoned", abandoned);
+    result.pushKV("inputs_released", (uint64_t)released);
+    return result;
 }
 
 static const RPCHelpMan getrawwallettransaction_help{
