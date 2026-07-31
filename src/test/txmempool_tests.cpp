@@ -300,6 +300,56 @@ BOOST_AUTO_TEST_CASE(rpc_mempool_diagnostics)
     mempool.clear();
 }
 
+BOOST_AUTO_TEST_CASE(rpc_mempool_reports_unbroadcast)
+{
+    // The unbroadcast flag is the only signal distinguishing "no peer has fetched
+    // my transaction" from "peers have it and simply have not mined it". It is
+    // reported both as an aggregate (getmempoolinfo.unbroadcastcount) and per entry
+    // (getrawmempool verbose / getmempoolentry); both mirror upstream fields of the
+    // same names, added by Core in a7ebe48b94.
+    // MakePlainTx is declared further down the file; build the equivalent here
+    // from MakeTx, which is in scope.
+    CTxOut vout;
+    vout.nValue = 4242;
+    const CTransaction tx = MakeTx({}, {}, {vout});
+    const std::string txid = tx.GetHash().ToString();
+
+    mempool.clear();
+    mempool.addUnchecked(tx.GetHash(), MakeEntry(tx));
+
+    UniValue vparams(UniValue::VARR);
+    vparams.push_back(UniValue(true));
+    UniValue eparams(UniValue::VARR);
+    eparams.push_back(UniValue(txid));
+
+    // A pooled tx that this node did not originate is not unbroadcast.
+    BOOST_CHECK_EQUAL(getmempoolinfo(UniValue(UniValue::VARR))["unbroadcastcount"].get_int(), 0);
+    BOOST_CHECK_EQUAL(getrawmempool(vparams)[txid]["unbroadcast"].get_bool(), false);
+    BOOST_CHECK_EQUAL(getmempoolentry(eparams)["unbroadcast"].get_bool(), false);
+    BOOST_CHECK(!mempool.IsUnbroadcastTx(tx.GetHash()));
+
+    // Marking it as locally originated flips all three surfaces.
+    mempool.AddUnbroadcast(tx.GetHash());
+    BOOST_CHECK_EQUAL(getmempoolinfo(UniValue(UniValue::VARR))["unbroadcastcount"].get_int(), 1);
+    BOOST_CHECK_EQUAL(getrawmempool(vparams)[txid]["unbroadcast"].get_bool(), true);
+    BOOST_CHECK_EQUAL(getmempoolentry(eparams)["unbroadcast"].get_bool(), true);
+    BOOST_CHECK(mempool.IsUnbroadcastTx(tx.GetHash()));
+
+    // A peer requesting the tx clears it -- this is the transition that says the
+    // transaction is actually propagating.
+    mempool.RemoveUnbroadcast(tx.GetHash());
+    BOOST_CHECK_EQUAL(getmempoolinfo(UniValue(UniValue::VARR))["unbroadcastcount"].get_int(), 0);
+    BOOST_CHECK_EQUAL(getrawmempool(vparams)[txid]["unbroadcast"].get_bool(), false);
+    BOOST_CHECK_EQUAL(getmempoolentry(eparams)["unbroadcast"].get_bool(), false);
+    BOOST_CHECK(!mempool.IsUnbroadcastTx(tx.GetHash()));
+
+    // The predicate is false for a hash that is not in the pool at all, rather
+    // than throwing or reporting stale membership.
+    BOOST_CHECK(!mempool.IsUnbroadcastTx(uint256()));
+
+    mempool.clear();
+}
+
 // ---------------------------------------------------------------------------
 // Phase 4 (#3029): bounded size + eviction
 // ---------------------------------------------------------------------------

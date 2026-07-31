@@ -13,7 +13,11 @@
 #include <univalue.h>
 
 //! Render a mempool entry's cached metadata as a JSON object.
-static UniValue MempoolEntryToJSON(const CTxMemPoolEntry& entry)
+//!
+//! Takes \p hash as well as the entry because the unbroadcast flag is pool state,
+//! not entry state -- the entry itself does not know whether a peer has asked for
+//! it. Callers hold mempool.cs; IsUnbroadcastTx re-enters that recursive lock.
+static UniValue MempoolEntryToJSON(const uint256& hash, const CTxMemPoolEntry& entry)
 {
     UniValue obj(UniValue::VOBJ);
 
@@ -36,6 +40,8 @@ static UniValue MempoolEntryToJSON(const CTxMemPoolEntry& entry)
     if (entry.HasBeacon()) {
         obj.pushKV("beacon_cpid", entry.GetBeaconCpid().ToString());
     }
+
+    obj.pushKV("unbroadcast", mempool.IsUnbroadcastTx(hash));
 
     return obj;
 }
@@ -68,6 +74,7 @@ static const RPCHelpMan getrawmempool_help{
                         {RPCResult::Type::STR, "mrc_cpid", /*optional=*/true, "CPID of the MRC contract (MRC transactions only)."},
                         {RPCResult::Type::STR_AMOUNT, "mrc_fee", /*optional=*/true, "Fee burned by the MRC contract (MRC transactions only)."},
                         {RPCResult::Type::STR, "beacon_cpid", /*optional=*/true, "CPID of the beacon advertisement (beacon transactions only)."},
+                        {RPCResult::Type::BOOL, "unbroadcast", "Whether this transaction is currently unbroadcast: this node announced it and no peer has requested it yet. It does not by itself establish why -- a value that persists across several blocks is a reason to investigate relay, not proof of a particular cause."},
                     }},
             }},
     },
@@ -93,7 +100,7 @@ UniValue getrawmempool(const UniValue& params)
 
     UniValue obj(UniValue::VOBJ);
     for (const auto& [hash, entry] : mempool.mapTx) {
-        obj.pushKV(hash.ToString(), MempoolEntryToJSON(entry));
+        obj.pushKV(hash.ToString(), MempoolEntryToJSON(hash, entry));
     }
     return obj;
 }
@@ -116,6 +123,7 @@ static const RPCHelpMan getmempoolentry_help{
             {RPCResult::Type::STR, "mrc_cpid", /*optional=*/true, "CPID of the MRC contract (MRC transactions only)."},
             {RPCResult::Type::STR_AMOUNT, "mrc_fee", /*optional=*/true, "Fee burned by the MRC contract (MRC transactions only)."},
             {RPCResult::Type::STR, "beacon_cpid", /*optional=*/true, "CPID of the beacon advertisement (beacon transactions only)."},
+            {RPCResult::Type::BOOL, "unbroadcast", "Whether this transaction is currently unbroadcast: this node announced it and no peer has requested it yet. It does not by itself establish why -- a value that persists across several blocks is a reason to investigate relay, not proof of a particular cause."},
         }},
     RPCExamples{
         HelpExampleCli("getmempoolentry", "\"mytxid\"") +
@@ -134,7 +142,7 @@ UniValue getmempoolentry(const UniValue& params)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not in mempool");
     }
 
-    return MempoolEntryToJSON(it->second);
+    return MempoolEntryToJSON(hash, it->second);
 }
 
 static const RPCHelpMan getmempoolinfo_help{
@@ -150,6 +158,7 @@ static const RPCHelpMan getmempoolinfo_help{
             {RPCResult::Type::NUM, "mrc_count", "Number of MRC contract transactions in the pool."},
             {RPCResult::Type::NUM, "beacon_count", "Number of distinct CPIDs with a pending beacon advertisement in the pool (duplicate same-CPID advertisements collapse to one)."},
             {RPCResult::Type::NUM, "mandatory_sidestake_count", "Number of mandatory sidestake transactions in the pool."},
+            {RPCResult::Type::NUM, "unbroadcastcount", "Current number of transactions that haven't passed initial broadcast yet."},
         }},
     RPCExamples{
         HelpExampleCli("getmempoolinfo", "") +
@@ -169,6 +178,7 @@ UniValue getmempoolinfo(const UniValue& params)
     obj.pushKV("mrc_count", (int64_t)info.mrc_count);
     obj.pushKV("beacon_count", (int64_t)info.beacon_count);
     obj.pushKV("mandatory_sidestake_count", (int64_t)info.mandatory_sidestake_count);
+    obj.pushKV("unbroadcastcount", (int64_t)info.unbroadcast_count);
 
     return obj;
 }
