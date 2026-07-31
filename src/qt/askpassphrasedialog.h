@@ -30,11 +30,18 @@ public:
 
     void setModel(WalletModel *model);
 
+    //! In the -multiprocess split build the wallet lives in a separate core
+    //! process, so encrypting it does not restart via this GUI (closing the GUI
+    //! leaves the core running). Set from BitcoinGUI (GuiIpcInfo::active) before
+    //! exec() so the Encrypt-completion message can guide the user accordingly.
+    void setMultiprocess(bool multiprocess) { m_multiprocess = multiprocess; }
+
 private:
     Ui::AskPassphraseDialog *ui;
     Mode mode;
     WalletModel *model;
     bool fCapsLock;
+    bool m_multiprocess{false};
 
 private slots:
     void textChanged();

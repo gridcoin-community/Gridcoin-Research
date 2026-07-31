@@ -112,21 +112,60 @@ void AskPassphraseDialog::accept()
         if(retval == QMessageBox::Yes) {
             if(newpass1 == newpass2) {
                 if(model->setWalletEncrypted(newpass1)) {
-                    QMessageBox::warning(this, tr("Wallet encrypted"),
-                                         "<qt>" +
-                                         tr("Gridcoin will close now to finish the encryption process. "
-                                         "Remember that encrypting your wallet cannot fully protect "
-                                         "your coins from being stolen by malware infecting your computer.") +
-                                         "<br><br><b>" +
-                                         tr("IMPORTANT: Any previous backups you have made of your wallet file "
-                                         "should be replaced with the newly generated, encrypted wallet file. "
-                                         "For security reasons, previous backups of the unencrypted wallet file "
-                                         "will become useless as soon as you start using the new, encrypted wallet.") +
-                                         "</b></qt>");
-                    // The wallet must restart to finish encryption; route the
-                    // shutdown through BitcoinGUI::requestQuit() so it can't be
-                    // vetoed by minimize-on-close on Qt6 (issue #2995).
-                    BitcoinGUI::requestQuit();
+                    // Earlier backups of the pre-encryption wallet are not merely useless
+                    // once the new wallet is in use -- they remain a security risk, because
+                    // they still contain the UNENCRYPTED private keys. This includes the
+                    // automatic backups written to the walletbackups folder. Shown in both
+                    // the monolithic and multiprocess cases (most users do not know this).
+                    const QString backupWarning = "<b>" +
+                                                  tr("IMPORTANT: Any earlier backups of your wallet file are not just "
+                                                     "useless once you use the new encrypted wallet, they are a security "
+                                                     "risk. They still contain your UNENCRYPTED private keys, so anyone who "
+                                                     "obtains one can take your coins even after the live wallet is encrypted. "
+                                                     "This includes the automatic backups Gridcoin writes to the "
+                                                     "\"walletbackups\" folder. After making a fresh backup of the new "
+                                                     "encrypted wallet, securely delete every backup taken before encryption, "
+                                                     "including those in \"walletbackups\".") +
+                                                  "</b>";
+
+                    if (!m_multiprocess) {
+                        // Monolithic: node + wallet + GUI are one process, so restarting the
+                        // application performs the clean reload that finishes the encryption.
+                        QMessageBox::warning(this, tr("Wallet encrypted"),
+                                             "<qt>" +
+                                                 tr("Gridcoin will close now to finish the encryption process. "
+                                                    "Remember that encrypting your wallet cannot fully protect "
+                                                    "your coins from being stolen by malware infecting your computer.") +
+                                                 "<br><br>" + backupWarning + "</qt>");
+                        // The wallet must restart to finish encryption; route the
+                        // shutdown through BitcoinGUI::requestQuit() so it can't be
+                        // vetoed by minimize-on-close on Qt6 (issue #2995).
+                        BitcoinGUI::requestQuit();
+                    } else {
+                        // Multiprocess: the wallet lives in the separate core process, which
+                        // keeps running -- closing this GUI would NOT restart it. The on-disk
+                        // encryption is already complete (the wallet database was rewritten and
+                        // the keypool regenerated in the core); the core just needs a restart to
+                        // drop the pre-encryption database state it still holds in memory and
+                        // reload cleanly. Deliberately no requestQuit() here.
+                        QMessageBox::warning(this, tr("Wallet encrypted - restart the core to finish"),
+                                             "<qt>" +
+                                                 tr("Your wallet is now fully encrypted and has been locked.") +
+                                                 "<br><br>" +
+                                                 tr("You are running in multiprocess mode, so the wallet lives in the "
+                                                    "separate Gridcoin core process, which is still running. To finish the "
+                                                    "encryption cleanly, restart the core process now (the running "
+                                                    "<code>gridcoinresearchd</code>). The encryption on disk is already "
+                                                    "complete; the restart is only so the core drops the pre-encryption "
+                                                    "database state it still holds in memory and reloads the encrypted "
+                                                    "wallet fresh.") +
+                                                 "<br><br>" +
+                                                 tr("Note: closing this window will not restart the core. Only "
+                                                    "stopping and starting the core process does that; stopping it "
+                                                    "will also close this window, so reopen the wallet once the core "
+                                                    "is back up.") +
+                                                 "<br><br>" + backupWarning + "</qt>");
+                    }
                 }
                 else {
                     QMessageBox::critical(this, tr("Wallet encryption failed"),
