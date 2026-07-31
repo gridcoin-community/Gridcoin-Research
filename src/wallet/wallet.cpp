@@ -4249,11 +4249,10 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
 }
 
 // ppcoin: disable transaction (only for coinstake)
-unsigned int CWallet::ReleaseTransactionInputs(const CTransaction& tx)
+unsigned int CWallet::ReleaseTransactionInputs(const CTransaction& tx, CWalletDB* pwalletdb)
 {
-    LOCK(cs_wallet);
+    AssertLockHeld(cs_wallet);
 
-    CWalletDB walletdb(strWalletFile);
     unsigned int released = 0;
 
     // Same reversal BlockDisconnected performs for a transaction that has left the
@@ -4281,7 +4280,7 @@ unsigned int CWallet::ReleaseTransactionInputs(const CTransaction& tx)
 
         parent_wtx.MarkUnspent(txin.prevout.n);
         parent_wtx.MarkDirty();
-        parent_wtx.WriteToDisk(&walletdb);
+        if (pwalletdb) parent_wtx.WriteToDisk(pwalletdb);
         ++released;
     }
 
@@ -4639,10 +4638,12 @@ bool CWallet::IsAbandoned(const uint256& txid) const
     return inactive && inactive->m_abandoned;
 }
 
-bool CWallet::AbandonTransaction(const uint256& txid)
+bool CWallet::AbandonTransaction(const uint256& txid, unsigned int* inputs_released)
 {
     AssertLockHeld(cs_main);
     LOCK(cs_wallet);
+
+    if (inputs_released) *inputs_released = 0;
 
     auto it = mapWallet.find(txid);
     if (it == mapWallet.end()) {
@@ -4726,6 +4727,16 @@ bool CWallet::AbandonTransaction(const uint256& txid)
                 }
             }
         }
+
+        // Clearing mapTxSpends is only half the reversal: coin selection reads the
+        // parents' vfSpent bits, so without this the inputs of an abandoned
+        // transaction stay locked and the balance stays depressed until
+        // FixSpentCoins runs at startup or via repairwallet. Done per transaction
+        // inside the cascade so descendants release their inputs too. Note that
+        // ReleaseTransactionInputs only mutates existing mapWallet entries and never
+        // inserts or erases, so cur_wtx and the loop's iterators stay valid.
+        const unsigned int released = ReleaseTransactionInputs(cur_wtx, pwalletdb.get());
+        if (inputs_released) *inputs_released += released;
     }
 
     return true;

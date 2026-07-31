@@ -2025,6 +2025,83 @@ BOOST_AUTO_TEST_CASE(txstate_serialized_block_hash_helpers)
 }
 
 // ---------------------------------------------------------------------------
+// AbandonTransaction: releasing the inputs of the abandoned transaction
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_releases_inputs)
+{
+    // Abandoning is supposed to "allow their inputs to be respent", but clearing
+    // mapTxSpends alone does not do that: coin selection reads the PARENT's vfSpent
+    // bits (AvailableCoins -> CWalletTx::IsSpent), so leaving them set keeps the
+    // coins unspendable and the balance depressed until FixSpentCoins runs at
+    // startup or via repairwallet.
+    CWallet test_wallet;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_REQUIRE(test_wallet.AddKey(key));
+    }
+
+    // Parent pays us on output 0; output 1 is not ours.
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(2);
+    parent_mtx.vout[0].nValue = 50 * COIN;
+    parent_mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    parent_mtx.vout[1].nValue = 30 * COIN;
+    const CTransaction parent_tx(parent_mtx);
+    const uint256 parent_hash = parent_tx.GetHash();
+
+    // Spender consumes both, so the "not ours" input is exercised alongside ours.
+    CMutableTransaction spend_mtx;
+    spend_mtx.vin.resize(2);
+    spend_mtx.vin[0].prevout = COutPoint(parent_hash, 0);
+    spend_mtx.vin[1].prevout = COutPoint(parent_hash, 1);
+    spend_mtx.vout.resize(1);
+    spend_mtx.vout[0].nValue = 79 * COIN;
+    const CTransaction spend_tx(spend_mtx);
+    const uint256 spend_hash = spend_tx.GetHash();
+
+    {
+        LOCK2(cs_main, test_wallet.cs_wallet);
+
+        CWalletTx parent_wtx(&test_wallet, parent_tx);
+        parent_wtx.SetTxState(TxStateConfirmed(uint256S("0xbeef"), 2));
+        parent_wtx.vfSpent.resize(2, true);       // both outputs consumed by spend_tx
+        test_wallet.mapWallet[parent_hash] = parent_wtx;
+
+        CWalletTx spend_wtx(&test_wallet, spend_tx);
+        spend_wtx.SetTxState(TxStateInactive{false});
+        test_wallet.mapWallet[spend_hash] = spend_wtx;
+
+        test_wallet.mapTxSpends.insert(std::make_pair(COutPoint(parent_hash, 0), spend_hash));
+        test_wallet.mapTxSpends.insert(std::make_pair(COutPoint(parent_hash, 1), spend_hash));
+
+        BOOST_REQUIRE(test_wallet.mapWallet[parent_hash].IsSpent(0));
+        BOOST_REQUIRE(test_wallet.mapWallet[parent_hash].IsSpent(1));
+
+        unsigned int released = 0;
+        BOOST_CHECK(test_wallet.AbandonTransaction(spend_hash, &released));
+
+        // Our output is spendable again; the count reports only outputs that were
+        // both ours and actually marked spent, so output 1 is excluded.
+        BOOST_CHECK(!test_wallet.mapWallet[parent_hash].IsSpent(0));
+        BOOST_CHECK_EQUAL(released, 1U);
+
+        // Abandoning again releases nothing further -- it is already abandoned, and
+        // the count must not accumulate on a repeat call.
+        unsigned int again = 99;
+        BOOST_CHECK(test_wallet.AbandonTransaction(spend_hash, &again));
+        BOOST_CHECK_EQUAL(again, 0U);
+
+        // The out-parameter is optional; the one-argument form still compiles and
+        // runs for every existing caller.
+        BOOST_CHECK(test_wallet.AbandonTransaction(spend_hash));
+    }
+}
+
+// ---------------------------------------------------------------------------
 // AbandonTransaction: cascading to child transactions
 // ---------------------------------------------------------------------------
 

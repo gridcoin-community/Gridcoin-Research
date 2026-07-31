@@ -2997,19 +2997,9 @@ UniValue cancelunbroadcasttransaction(const UniValue& params)
     unsigned int released = 0;
 
     if (pwalletMain) {
-        abandoned = pwalletMain->AbandonTransaction(hash);
-
-        // Abandoning is not by itself enough to make the coins spendable again.
-        // AbandonTransaction clears the mapTxSpends rows but leaves the parents'
-        // vfSpent bits set, and it is vfSpent that AvailableCoins consults -- so
-        // without this the inputs stay locked and the balance stays depressed until
-        // FixSpentCoins runs at startup or via repairwallet. Releasing them here is
-        // what lets a replacement transaction be built immediately, which is the
-        // entire point of cancelling. Gated on the abandon having succeeded, so a
-        // transaction that is not this wallet's leaves wallet state untouched.
-        if (abandoned) {
-            released = pwalletMain->ReleaseTransactionInputs(tx);
-        }
+        // Abandoning releases the inputs, which is what lets a replacement be built
+        // immediately -- the entire point of cancelling.
+        abandoned = pwalletMain->AbandonTransaction(hash, &released);
     }
 
     LogPrintf("WARN: %s: cancelled unbroadcast transaction %s (wallet_abandoned=%d, "
