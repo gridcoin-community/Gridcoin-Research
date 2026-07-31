@@ -119,13 +119,13 @@ void AskPassphraseDialog::accept()
                     // the monolithic and multiprocess cases (most users do not know this).
                     const QString backupWarning = "<b>" +
                                                   tr("IMPORTANT: Any earlier backups of your wallet file are not just "
-                                                     "useless once you use the new encrypted wallet, they are a security "
+                                                     "useless once you use the new encrypted wallet; they are a security "
                                                      "risk. They still contain your UNENCRYPTED private keys, so anyone who "
                                                      "obtains one can take your coins even after the live wallet is encrypted. "
-                                                     "This includes the automatic backups Gridcoin writes to the "
-                                                     "\"walletbackups\" folder. After making a fresh backup of the new "
-                                                     "encrypted wallet, securely delete every backup taken before encryption, "
-                                                     "including those in \"walletbackups\".") +
+                                                     "This includes the automatic backups Gridcoin writes to the wallet backups "
+                                                     "directory (\"walletbackups\" by default, or the directory set by -backupdir). "
+                                                     "After making a fresh backup of the new encrypted wallet, securely delete "
+                                                     "every backup taken before encryption, including those in that directory.") +
                                                   "</b>";
 
                     if (!m_multiprocess) {
