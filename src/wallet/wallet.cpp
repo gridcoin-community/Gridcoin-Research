@@ -4265,12 +4265,19 @@ unsigned int CWallet::ReleaseTransactionInputs(const CTransaction& tx)
         CWalletTx& parent_wtx = parent_it->second;
 
         if (txin.prevout.n >= parent_wtx.vout.size()) {
-            LogPrintf("WARN: %s: invalid prevout.n %d for parent tx %s", __func__,
+            LogPrintf("WARN: %s: invalid prevout.n %u for parent tx %s", __func__,
                       txin.prevout.n, txin.prevout.hash.ToString());
             continue;
         }
 
         if (IsMine(parent_wtx.vout[txin.prevout.n]) == ISMINE_NO) continue;
+
+        // Only act on outputs actually marked spent. MarkUnspent self-guards, so
+        // without this the count would report outputs it did not change and every
+        // parent would be rewritten to disk regardless. IsSpent also reports false
+        // for a vfSpent vector shorter than vout, which is the same "nothing to
+        // release" case; the bounds check above keeps it from throwing.
+        if (!parent_wtx.IsSpent(txin.prevout.n)) continue;
 
         parent_wtx.MarkUnspent(txin.prevout.n);
         parent_wtx.MarkDirty();
