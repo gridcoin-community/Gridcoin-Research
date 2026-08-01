@@ -40,6 +40,15 @@ bool fConfChange;
 unsigned int nDerivationMethodIndex;
 extern std::atomic<int64_t> g_nTimeBestReceived;
 
+// Moved from main.cpp (issue #3125 C9); declared in wallet.h.
+// This is changed to MIN_TX_FEE * 10 for block version 11 (CTransaction::CURRENT_VERSION 2).
+// Note that this is an early init value and will result in overpayment of the fee per kbyte
+// if this code is run on a wallet prior to the v11 mandatory switchover unless a manual value
+// of -paytxfee is specified as an argument.
+int64_t nTransactionFee = MIN_TX_FEE * 10;
+int64_t nReserveBalance = 0;
+int64_t nMinimumInputValue = 0;
+
 const uint32_t BIP32_HARDENED_KEY_LIMIT = 0x80000000;
 
 namespace {

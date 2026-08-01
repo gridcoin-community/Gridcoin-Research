@@ -83,28 +83,16 @@ extern int64_t GetCoinYearReward(int64_t nTime);
 // Orphan block storage managed by g_orphan_blocks (node/orphan_blocks.h)
 
 
-// Constant stuff for coinbase transactions we create:
-CScript COINBASE_FLAGS;
-
-// Settings
-// This is changed to MIN_TX_FEE * 10 for block version 11 (CTransaction::CURRENT_VERSION 2).
-// Note that this is an early init value and will result in overpayment of the fee per kbyte
-// if this code is run on a wallet prior to the v11 mandatory switchover unless a manual value
-// of -paytxfee is specified as an argument.
-int64_t nTransactionFee = MIN_TX_FEE * 10;
-int64_t nReserveBalance = 0;
-int64_t nMinimumInputValue = 0;
+// COINBASE_FLAGS moved to miner.{h,cpp}; the wallet settings
+// (nTransactionFee, nReserveBalance, nMinimumInputValue) to
+// wallet/wallet.{h,cpp}; the mining status variables (cs_msMiningErrors,
+// msMiningErrors) to gridcoin/researcher.{h,cpp}; and fUseFastIndex to
+// primitives/block.{h,cpp} (issue #3125 C9).
 
 // Gridcoin - Rob Halford
 
 bool fQtActive = false;
 std::atomic<bool> bGridcoinCoreInitComplete{false};
-
-// Mining status variables
-CCriticalSection cs_msMiningErrors;
-std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
-
-bool fUseFastIndex = false;
 
 // End of Gridcoin Global vars
 
