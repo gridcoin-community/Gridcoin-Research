@@ -89,10 +89,8 @@ extern int64_t GetCoinYearReward(int64_t nTime);
 // msMiningErrors) to gridcoin/researcher.{h,cpp}; and fUseFastIndex to
 // primitives/block.{h,cpp} (issue #3125 C9).
 
-// Gridcoin - Rob Halford
-
-bool fQtActive = false;
-std::atomic<bool> bGridcoinCoreInitComplete{false};
+// The node-lifecycle flags (fQtActive, bGridcoinCoreInitComplete) moved to
+// init.{h,cpp} (issue #3125 C9).
 
 // End of Gridcoin Global vars
 

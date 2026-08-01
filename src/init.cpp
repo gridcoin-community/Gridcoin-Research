@@ -58,8 +58,12 @@ extern void ThreadAppInit2(void* parg);
 
 using namespace std;
 CWallet* pwalletMain;
-extern bool fQtActive;
-extern std::atomic<bool> bGridcoinCoreInitComplete;
+
+// Node-lifecycle flags (moved from main.cpp, issue #3125 C9; declared in
+// init.h).
+bool fQtActive = false;
+std::atomic<bool> bGridcoinCoreInitComplete{false};
+
 extern bool fConfChange;
 extern bool fEnforceCanonical;
 extern unsigned int nDerivationMethodIndex;

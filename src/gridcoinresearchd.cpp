@@ -40,13 +40,6 @@
 #include <stdio.h>
 #include <stdexcept>
 
-extern bool fQtActive;
-// Set true at the end of core init. The GUI sets it via ThreadAppInit2; the
-// daemon runs AppInit2 directly, so it sets it here (below) -- otherwise a
-// multiprocess GUI's isCoreReady() poll, served from this process, never
-// returns true and the GUI hangs on the splash.
-extern std::atomic<bool> bGridcoinCoreInitComplete;
-
 #if HAVE_DECL_FORK
 
 /** Custom implementation of daemon(). This implements the same order of operations as glibc.

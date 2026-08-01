@@ -28,7 +28,6 @@ extern bool fExplorer;
 extern unsigned int nScraperSleep;
 extern unsigned int nActiveBeforeSB;
 extern std::atomic<bool> fScraperActive;
-extern bool fQtActive;
 
 void Scraper(bool bSingleShot = false);
 void ScraperSubscriber();
@@ -666,9 +665,8 @@ void SchedulePollNotifications(CScheduler& scheduler)
 std::unique_ptr<Upgrade> g_UpdateChecker;
 bool fResetBlockchainRequest = false;
 
-// fQtActive lives in main.cpp; declared extern here so RebuildBeaconRegistry
-// can suppress the GUI popup in daemon mode.
-extern bool fQtActive;
+// fQtActive (init.h, included above) lets RebuildBeaconRegistry suppress the
+// GUI popup in daemon mode.
 
 // -----------------------------------------------------------------------------
 // Functions
