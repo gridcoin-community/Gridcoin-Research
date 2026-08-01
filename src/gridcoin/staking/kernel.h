@@ -9,6 +9,11 @@
 #include "amount.h"
 #include "main.h"
 
+//! Gridcoin minimum/maximum stake age. Defined in
+//! gridcoin/staking/kernel.cpp (moved from main.cpp, issue #3125 C9).
+extern unsigned int nStakeMinAge;
+extern unsigned int nStakeMaxAge;
+
 namespace GRC {
 // To decrease granularity of timestamp
 // Supposed to be 2^n-1

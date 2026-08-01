@@ -46,6 +46,7 @@ using namespace std;
 extern int nMaxConnections;
 int MAX_OUTBOUND_CONNECTIONS = 8;
 int PEER_TIMEOUT = 45;
+unsigned int nNodeLifespan; // -addrlifespan, set in AppInit2 (moved from main.cpp, issue #3125 C9)
 
 #ifdef USE_UPNP
 void ThreadMapPort2(void* parg);

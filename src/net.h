@@ -39,6 +39,9 @@ static const int PING_INTERVAL = 2 * 60;
 static const int TIMEOUT_INTERVAL = 20 * 60;
 extern int MAX_OUTBOUND_CONNECTIONS;
 extern int PEER_TIMEOUT;
+//! Peer-address lifespan in days (-addrlifespan): addresses older than this
+//! are not relayed. Defined in net.cpp (moved from main.cpp, issue #3125 C9).
+extern unsigned int nNodeLifespan;
 
 typedef int64_t NodeId;
 

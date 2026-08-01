@@ -62,7 +62,6 @@ extern bool fQtActive;
 extern std::atomic<bool> bGridcoinCoreInitComplete;
 extern bool fConfChange;
 extern bool fEnforceCanonical;
-extern unsigned int nNodeLifespan;
 extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
 extern bool fUseFastIndex;

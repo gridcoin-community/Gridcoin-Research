@@ -64,10 +64,17 @@ typedef std::optional<Claim> ClaimOption;
 // (issue #3125 C9).
 
 extern CScript COINBASE_FLAGS;
+
+// nNodeLifespan is declared in net.h and strMessageMagic in util.h, both
+// included above (issue #3125 C9).
+
+// -- Compatibility declarations: delete as the remaining main.h includers
+// -- are repointed (#3125 C9). Verbatim duplicates of the canonical
+// -- declarations in gridcoin/staking/kernel.h, which is NOT part of this
+// -- header's re-include set (kernel.h itself still includes main.h).
 extern unsigned int nStakeMinAge;
 extern unsigned int nStakeMaxAge;
-extern unsigned int nNodeLifespan;
-extern const std::string strMessageMagic;
+// -- End compatibility declarations.
 // Orphan block storage is managed by g_orphan_blocks in node/orphan_blocks.h
 
 // Settings
@@ -98,7 +105,7 @@ class CTxIndex;
 // LoadExternalBlockFile) and LoadBlockIndex live in node/blockstorage.h,
 // included above (issue #3125, workstream C5).
 void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-double CoinToDouble(double surrogate);
+// CoinToDouble is declared in util.h, included above (issue #3125 C9).
 
 // ProcessMessages / SendMessages moved to net_processing.h (issue #2558 PR 2a).
 
