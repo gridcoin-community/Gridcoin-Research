@@ -1819,6 +1819,10 @@ void BitcoinGUI::encryptWallet()
     AskPassphraseDialog dlg(AskPassphraseDialog::Encrypt, this);
 
     dlg.setModel(walletModel);
+    // GuiIpcInfo::active is true only in the -multiprocess split build, where the
+    // wallet lives in a separate core process; the dialog uses it to guide the
+    // user to restart the core (this GUI closing would not) after encryption.
+    dlg.setMultiprocess(m_ipc_info.active);
     dlg.exec();
 
     setEncryptionStatus(walletModel->getEncryptionStatus());
