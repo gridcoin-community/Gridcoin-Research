@@ -116,6 +116,16 @@ try {
 
     $startTrigger = New-ScheduledTaskTrigger -AtStartup
 
+    # Ensure the task folder exists first: Register-ScheduledTask -TaskPath does not
+    # reliably create a missing folder on all Windows versions (best-effort -- if
+    # this fails, Register may still create it or surface the clear error below).
+    try {
+        $svc = New-Object -ComObject 'Schedule.Service'
+        $svc.Connect()
+        try { $null = $svc.GetFolder("\$TaskFolder") }
+        catch { $null = $svc.GetFolder('\').CreateFolder($TaskFolder) }
+    } catch { }
+
     Register-ScheduledTask -TaskPath "\$TaskFolder\" -TaskName 'Core-Start' -Force `
         -Action $startAction -Trigger $startTrigger -Settings $startSettings `
         -User $TaskUser -Password $plainPw -RunLevel Limited `

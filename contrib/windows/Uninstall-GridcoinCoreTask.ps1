@@ -27,18 +27,20 @@ foreach ($name in 'Core-Start', 'Core-Stop') {
     }
 }
 
-# Remove the folder only if it is now empty (leaves \Gridcoin alone if the
-# Autounlock task or anything else still lives there). Schedule.Service COM API,
-# since the ScheduledTasks module has no Remove-ScheduledTaskFolder.
+# Remove the folder only if it is now empty (leaves \Gridcoin alone if the Plan-5
+# Autounlock task or anything else still lives there). Enumerate via the COM folder
+# object -- Get-ScheduledTask's -TaskPath does not reliably support wildcards, and a
+# false "empty" result would wrongly delete the folder and its remaining tasks.
 try {
-    $remaining = Get-ScheduledTask -TaskPath "\$TaskFolder\*" -ErrorAction SilentlyContinue
-    if (-not $remaining) {
-        $service = New-Object -ComObject 'Schedule.Service'
-        $service.Connect()
+    $service = New-Object -ComObject 'Schedule.Service'
+    $service.Connect()
+    $folder = $service.GetFolder("\$TaskFolder")
+    $remaining = @($folder.GetTasks(1))   # 1 = TASK_ENUM_HIDDEN (count hidden too)
+    if ($remaining.Count -eq 0) {
         $service.GetFolder('\').DeleteFolder($TaskFolder, 0)
         Write-Host "Removed empty task folder \$TaskFolder"
     } else {
-        Write-Host "Task folder \$TaskFolder still has other tasks; left in place."
+        Write-Host "Task folder \$TaskFolder still has $($remaining.Count) task(s); left in place."
     }
 } catch {
     Write-Host "Task folder \$TaskFolder not removed ($($_.Exception.Message)); left in place."
