@@ -10,6 +10,9 @@ Multiprocess mode is **opt-in at both build time and run time**:
   [Building with multiprocess support](#building-with-multiprocess-support) below).
 - Each process must be started with the `-multiprocess` flag.
 
+To run the core as an **unattended background service** (boot autostart + optional stake-only
+autounlock) on Linux or Windows, see [running-unattended.md](running-unattended.md).
+
 For the internal architecture, see [multiprocess_design.md](multiprocess_design.md).
 
 ## Why run split?
@@ -242,8 +245,10 @@ is read at unit start.
 
 ### Unattended stake-only autounlock (Windows)
 
-The Windows equivalent is a pair of PowerShell scripts in
-[`contrib/windows/`](../contrib/windows/) (no Python needed). Run **as the wallet user**:
+The Windows equivalent is a pair of PowerShell scripts (no Python needed) that the installer
+bundles into `…\GridcoinResearch\windows\` (source: [`contrib/windows/`](../contrib/windows/)).
+Run **as the wallet user, from an elevated console** (DPAPI needs an interactive logon — it fails
+over a remote/SSH session):
 
 ```powershell
 .\Set-GridcoinAutounlock.ps1 -DataDir "$env:APPDATA\GridcoinResearch"

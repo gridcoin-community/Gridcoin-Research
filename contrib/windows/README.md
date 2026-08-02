@@ -2,7 +2,13 @@
 
 PowerShell scripts to run the split **multiprocess** Gridcoin core as a background
 Scheduled Task on Windows, stop it gracefully, upgrade a locked exe, and launch the
-GUI. See [`doc/multiprocess.md`](../../doc/multiprocess.md) for the split-mode model.
+GUI. See [`doc/multiprocess.md`](../../doc/multiprocess.md) for the split-mode model,
+and [`doc/running-unattended.md`](../../doc/running-unattended.md) for the step-by-step
+walkthrough.
+
+The Windows installer **bundles these scripts** into `…\GridcoinResearch\windows\`; run
+them from there in an **elevated** PowerShell. (In a source checkout they live here in
+`contrib/windows/`.)
 
 | Script | Purpose |
 |---|---|
