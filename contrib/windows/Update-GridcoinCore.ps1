@@ -26,7 +26,9 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$CorePath = (Join-Path $PSScriptRoot '..\gridcoinresearchd.exe'),
+    # Default resolved below across both layouts (installer daemon\ subfolder, or a build
+    # tree with the exe one level up). An explicit -CorePath is honored as-is.
+    [string]$CorePath,
 
     # Optional: a directory containing the new gridcoinresearch*.exe to copy over
     # the installed ones once the lock is released. Omit if the caller replaces the
@@ -41,8 +43,16 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+if (-not $CorePath) {
+    $CorePath = @(
+        (Join-Path $PSScriptRoot '..\daemon\gridcoinresearchd.exe'),   # NSIS installer layout
+        (Join-Path $PSScriptRoot '..\gridcoinresearchd.exe')           # exe alongside the scripts' parent
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if (-not $CorePath) { $CorePath = (Join-Path $PSScriptRoot '..\daemon\gridcoinresearchd.exe') }
+}
 if (-not (Test-Path -LiteralPath $CorePath)) {
-    throw "gridcoinresearchd.exe not found at '$CorePath'. Pass -CorePath explicitly."
+    throw "gridcoinresearchd.exe not found at '$CorePath'. Pass -CorePath explicitly (installer layout: " +
+          "...\GridcoinResearch\daemon\gridcoinresearchd.exe, with these scripts in ...\GridcoinResearch\windows\)."
 }
 $CorePath = (Resolve-Path -LiteralPath $CorePath).Path
 $coreDir = Split-Path -Parent $CorePath

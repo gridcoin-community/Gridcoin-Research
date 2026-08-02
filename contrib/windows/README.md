@@ -84,12 +84,16 @@ the Windows analogue of the Linux `gridcoinresearchd-autounlock.service` (system
 `LoadCredentialEncrypted`); the security contract mirrors
 [`contrib/wallettools/gridcoin_autounlock.py`](../wallettools/gridcoin_autounlock.py).
 
-Enable it **as the wallet user** (elevated if task registration requires it):
+Enable it **as the wallet user, from an elevated console** (Run as administrator):
 
 ```powershell
 .\Set-GridcoinAutounlock.ps1 -DataDir "$env:APPDATA\GridcoinResearch"
 # Prompts: the WALLET passphrase (twice), then the account's Windows LOGIN password.
 ```
+
+Run it **at the machine's own console, not over SSH/PSRemoting**: DPAPI CurrentUser encryption
+needs an interactive or batch logon and fails over a network logon (no master key). Elevation is
+needed because the resident task carries a boot trigger.
 
 What it does:
 

@@ -19,8 +19,12 @@
     See contrib/windows/README.md and doc/multiprocess.md.
 
 .NOTES
-    Registering a run-as task with a stored login password typically needs an ELEVATED
-    PowerShell and the "Log on as a batch job" right for the account.
+    Run this at an ELEVATED console (Run as administrator). Two reasons: registering the
+    resident run-as task with a stored login password needs elevation and the "Log on as a
+    batch job" right for the account; and DPAPI CurrentUser encryption requires an
+    interactive or batch logon -- it FAILS over a network logon (a key-based SSH / PSRemoting
+    session), where the user's master key is not available. So enable autounlock from the
+    machine's own console, not remotely.
 #>
 [CmdletBinding()]
 param(
@@ -223,6 +227,15 @@ catch {
 finally {
     $plainPw = $null
     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+}
+
+# Verify the task actually registered. Register-ScheduledTask can emit a NON-terminating
+# "Access is denied" and continue -- a boot-triggered run-as task needs an elevated shell --
+# so confirm rather than report false success (the DPAPI blob was still written above).
+if (-not (Get-ScheduledTask -TaskPath "\$TaskFolder\" -TaskName 'Autounlock' -ErrorAction SilentlyContinue)) {
+    throw "Task \$TaskFolder\Autounlock was not registered (likely 'Access is denied'). This needs an " +
+          "ELEVATED PowerShell (Run as administrator) and the 'Log on as a batch job' right for '$TaskUser'. " +
+          "The DPAPI blob at $CredPath was written; re-run elevated to register the task, or -Remove to undo."
 }
 
 Write-Host "Registered \$TaskFolder\Autounlock (resident, run-as $TaskUser)." -ForegroundColor Green
