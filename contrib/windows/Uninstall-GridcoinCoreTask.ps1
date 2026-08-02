@@ -8,8 +8,9 @@
     empty) \Gridcoin task folder. Tolerant of already-absent tasks (idempotent).
 
     Does NOT remove the opt-in autounlock task (\Gridcoin\Autounlock) -- that is
-    owned by Set-GridcoinAutounlock.ps1 / its uninstall (Plan 5). It also does not
-    stop a running core; run the Core-Stop task first if you want a graceful stop.
+    owned by Set-GridcoinAutounlock.ps1 (remove it with `Set-GridcoinAutounlock.ps1
+    -Remove`). It also does not stop a running core; run the Core-Stop task first if
+    you want a graceful stop.
 #>
 [CmdletBinding()]
 param([string]$TaskFolder = 'Gridcoin')

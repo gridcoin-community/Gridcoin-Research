@@ -240,6 +240,26 @@ gate is defence in depth. While unlocked, the passphrase lives in the core's mem
 requires `systemctl restart gridcoinresearchd-autounlock.service`, as the credential
 is read at unit start.
 
+### Unattended stake-only autounlock (Windows)
+
+The Windows equivalent is a pair of PowerShell scripts in
+[`contrib/windows/`](../contrib/windows/) (no Python needed). Run **as the wallet user**:
+
+```powershell
+.\Set-GridcoinAutounlock.ps1 -DataDir "$env:APPDATA\GridcoinResearch"
+```
+
+It prompts for the wallet passphrase (twice) and the account's login password, encrypts the
+passphrase with **DPAPI (CurrentUser)** to an owner-only `<datadir>\autounlock\passphrase.cred`
+(decryptable only by that account on that machine), and registers a resident
+`\Gridcoin\Autounlock` task that runs `Invoke-GridcoinAutounlock.ps1`. The helper waits for the
+core, unlocks **stake-only**, and self-heals across restarts. Its security contract mirrors the
+Linux helper: a **native listener-ownership gate** (`Get-NetTCPConnection` → owning-PID → owner
+SID) refuses to send credentials unless our own account owns every LISTEN socket on the RPC
+port, closing the same startup-squat race. Because DPAPI CurrentUser is per-account, the task
+must run as the account that ran setup. Remove with `.\Set-GridcoinAutounlock.ps1 -Remove`. See
+[`contrib/windows/README.md`](../contrib/windows/README.md).
+
 ## Troubleshooting
 
 - **"Could not connect to the Gridcoin daemon … node.sock: connection refused."**
