@@ -277,21 +277,29 @@ function Invoke-GridcoinRpc([string]$url, [string]$auth, [string]$method, [objec
     catch [System.Net.WebException] {
         $r = $_.Exception.Response
         if ($null -ne $r) {
-            $status = [int]([System.Net.HttpWebResponse]$r).StatusCode
-            if ($status -eq 401) {
-                return @{ Ok = $false; Code = $null; Http = 401; Msg = 'HTTP 401 Unauthorized: rpcuser/rpcpassword rejected by the daemon' }
-            }
-            # Gridcoin returns JSON-RPC errors with HTTP 500 and the error object in the body.
-            $eo = $null
+            # Always close the error response: HttpWebResponse holds the connection until closed,
+            # and the resident loop can hit repeated HTTP errors -- unclosed responses would leak
+            # handles and exhaust the per-endpoint connection pool. The returns below still run
+            # this finally before the function returns.
             try {
-                $er = New-Object IO.StreamReader($r.GetResponseStream())
-                try { $eb = $er.ReadToEnd() } finally { $er.Close() }
-                $eo = (Get-Prop ($eb | ConvertFrom-Json) 'error')
-            } catch { $eo = $null }
-            if ($eo) {
-                return @{ Ok = $false; Code = (Get-Prop $eo 'code'); Http = $status; Msg = [string](Get-Prop $eo 'message') }
+                $status = [int]([System.Net.HttpWebResponse]$r).StatusCode
+                if ($status -eq 401) {
+                    return @{ Ok = $false; Code = $null; Http = 401; Msg = 'HTTP 401 Unauthorized: rpcuser/rpcpassword rejected by the daemon' }
+                }
+                # Gridcoin returns JSON-RPC errors with HTTP 500 and the error object in the body.
+                $eo = $null
+                try {
+                    $er = New-Object IO.StreamReader($r.GetResponseStream())
+                    try { $eb = $er.ReadToEnd() } finally { $er.Close() }
+                    $eo = (Get-Prop ($eb | ConvertFrom-Json) 'error')
+                } catch { $eo = $null }
+                if ($eo) {
+                    return @{ Ok = $false; Code = (Get-Prop $eo 'code'); Http = $status; Msg = [string](Get-Prop $eo 'message') }
+                }
+                return @{ Ok = $false; Code = $null; Http = $status; Msg = ("HTTP {0} error" -f $status) }
+            } finally {
+                $r.Close()
             }
-            return @{ Ok = $false; Code = $null; Http = $status; Msg = ("HTTP {0} error" -f $status) }
         }
         # Transport-level (connection refused, timeout): no JSON-RPC code; retry may help.
         return @{ Ok = $false; Code = $null; Http = $null; Msg = [string]$_.Exception.Message }
