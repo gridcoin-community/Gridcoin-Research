@@ -84,6 +84,9 @@ Section -Main SEC0000
     SetOutPath $INSTDIR\doc
     File /oname=COPYING.txt @CPACK_RESOURCE_FILE_LICENSE@
     File /oname=CHANGELOG.md @CPACK_RESOURCE_FILE_CHANGELOG@
+    SetOutPath $INSTDIR\windows
+    File @CPACK_TEMPORARY_DIRECTORY@\daemon\windows\*.ps1
+    File @CPACK_TEMPORARY_DIRECTORY@\daemon\windows\README.md
     SetOutPath $INSTDIR
     WriteRegStr HKLM "${REGKEY}\Components" Main 1
 SectionEnd
@@ -130,6 +133,7 @@ Section /o -un.Main UNSEC0000
     Delete /REBOOTOK $INSTDIR\${GRIDCOIN_GUI_NAME}
     RMDir /r /REBOOTOK $INSTDIR\daemon
     RMDir /r /REBOOTOK $INSTDIR\doc
+    RMDir /r /REBOOTOK $INSTDIR\windows
     DeleteRegValue HKLM "${REGKEY}\Components" Main
 SectionEnd
 
