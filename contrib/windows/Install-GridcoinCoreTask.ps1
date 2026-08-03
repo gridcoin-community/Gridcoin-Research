@@ -33,10 +33,10 @@
 #>
 [CmdletBinding()]
 param(
-    # Path to gridcoinresearchd.exe. Default: alongside this script's parent (the
-    # install layout is ...\GridcoinResearch\gridcoinresearchd.exe with scripts in
-    # ...\GridcoinResearch\windows\).
-    [string]$CorePath = (Join-Path $PSScriptRoot '..\gridcoinresearchd.exe'),
+    # Path to gridcoinresearchd.exe. Default: resolved below across both known layouts --
+    # the NSIS installer's ...\GridcoinResearch\daemon\gridcoinresearchd.exe (scripts in
+    # ...\GridcoinResearch\windows\), and a build tree where the exe sits one level up.
+    [string]$CorePath,
 
     # The datadir the core owns (node.sock lives in it). Baked into both the task
     # and the GUI shortcut so the GUI attaches to the datadir the core is serving.
@@ -59,8 +59,18 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# Resolve the default core path across both layouts (installer daemon\ subfolder first,
+# then a build tree with the exe one level up). An explicit -CorePath is honored as-is.
+if (-not $CorePath) {
+    $CorePath = @(
+        (Join-Path $PSScriptRoot '..\daemon\gridcoinresearchd.exe'),   # NSIS installer layout
+        (Join-Path $PSScriptRoot '..\gridcoinresearchd.exe')           # exe alongside the scripts' parent
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if (-not $CorePath) { $CorePath = (Join-Path $PSScriptRoot '..\daemon\gridcoinresearchd.exe') }
+}
 if (-not (Test-Path -LiteralPath $CorePath)) {
-    throw "gridcoinresearchd.exe not found at '$CorePath'. Pass -CorePath explicitly."
+    throw "gridcoinresearchd.exe not found at '$CorePath'. Pass -CorePath explicitly (installer layout: " +
+          "...\GridcoinResearch\daemon\gridcoinresearchd.exe, with these scripts in ...\GridcoinResearch\windows\)."
 }
 $CorePath = (Resolve-Path -LiteralPath $CorePath).Path
 
@@ -162,6 +172,18 @@ catch {
 finally {
     $plainPw = $null
     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+}
+
+# Verify both tasks actually registered. Register-ScheduledTask can emit a NON-terminating
+# "Access is denied" (0x80070005) -- a boot-triggered task needs an elevated shell, whereas
+# the on-demand Core-Stop registers without it -- and continue, so confirm rather than trust
+# that we reached here. Otherwise a half-registered install reports false success.
+foreach ($name in 'Core-Start', 'Core-Stop') {
+    if (-not (Get-ScheduledTask -TaskPath "\$TaskFolder\" -TaskName $name -ErrorAction SilentlyContinue)) {
+        throw "Task \$TaskFolder\$name was not registered (likely 'Access is denied'). A boot-triggered " +
+              "run-as task needs an ELEVATED PowerShell (Run as administrator) and the 'Log on as a batch " +
+              "job' right for '$TaskUser'. Re-run elevated; see contrib/windows/README.md."
+    }
 }
 
 Write-Host "Registered \$TaskFolder\Core-Start (boot) and \$TaskFolder\Core-Stop (on-demand + best-effort OS-shutdown), run-as $TaskUser." -ForegroundColor Green

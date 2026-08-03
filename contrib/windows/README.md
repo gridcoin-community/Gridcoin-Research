@@ -2,7 +2,13 @@
 
 PowerShell scripts to run the split **multiprocess** Gridcoin core as a background
 Scheduled Task on Windows, stop it gracefully, upgrade a locked exe, and launch the
-GUI. See [`doc/multiprocess.md`](../../doc/multiprocess.md) for the split-mode model.
+GUI. See [`doc/multiprocess.md`](../../doc/multiprocess.md) for the split-mode model,
+and [`doc/running-unattended.md`](../../doc/running-unattended.md) for the step-by-step
+walkthrough.
+
+The Windows installer **bundles these scripts** into `…\GridcoinResearch\windows\`; run
+them from there in an **elevated** PowerShell. (In a source checkout they live here in
+`contrib/windows/`.)
 
 | Script | Purpose |
 |---|---|
@@ -10,8 +16,10 @@ GUI. See [`doc/multiprocess.md`](../../doc/multiprocess.md) for the split-mode m
 | `Uninstall-GridcoinCoreTask.ps1` | Remove them. |
 | `Update-GridcoinCore.ps1` | Graceful upgrade engine for the locked-exe problem. |
 | `Start-GridcoinGui.ps1` | Launch the `-multiprocess` GUI (or drop a Start-Menu shortcut with `-CreateShortcut`). |
+| `Set-GridcoinAutounlock.ps1` | **Opt-in**: enable/remove stake-only autounlock (DPAPI secret + resident task). |
+| `Invoke-GridcoinAutounlock.ps1` | The resident autounlock helper the task runs (not called directly). |
 
-Opt-in **autounlock** (DPAPI, stake-only) is separate — `Set-GridcoinAutounlock.ps1` (future).
+Autounlock is **opt-in** and independent of the core tasks — see [Autounlock](#autounlock-opt-in-stake-only-dpapi) below.
 
 ## Quick start
 
@@ -72,12 +80,62 @@ validation list.
 analogue of the Linux unit's `Restart=on-failure`. A *graceful* stop exits 0 and is
 not restarted; only a crash (non-zero exit) triggers a restart.
 
+## Autounlock (opt-in, stake-only, DPAPI)
+
+Unattended **staking** on an encrypted wallet needs the wallet unlocked after every boot
+or restart. This is opt-in and deliberately **external** to the wallet (the in-wallet
+auto-unlock was removed years ago as insecure): the passphrase lives in the OS credential
+store, and the wallet is unlocked over RPC **for staking only** — never for spending. It is
+the Windows analogue of the Linux `gridcoinresearchd-autounlock.service` (systemd
+`LoadCredentialEncrypted`); the security contract mirrors
+[`contrib/wallettools/gridcoin_autounlock.py`](../wallettools/gridcoin_autounlock.py).
+
+Enable it **as the wallet user, from an elevated console** (Run as administrator):
+
+```powershell
+.\Set-GridcoinAutounlock.ps1 -DataDir "$env:APPDATA\GridcoinResearch"
+# Prompts: the WALLET passphrase (twice), then the account's Windows LOGIN password.
+```
+
+Run it **at the machine's own console, not over SSH/PSRemoting**: DPAPI CurrentUser encryption
+needs an interactive or batch logon and fails over a network logon (no master key). Elevation is
+needed because the resident task carries a boot trigger.
+
+What it does:
+
+- **Secret at rest = DPAPI (CurrentUser).** The passphrase is encrypted with
+  `CryptProtectData` and written to `<datadir>\autounlock\passphrase.cred` — decryptable
+  only by **that Windows account on that machine**, and additionally locked owner-only by
+  NTFS ACL. It is never stored in the wallet, on a command line, or in a log. Because DPAPI
+  CurrentUser is per-account, the task **must run as the same user that ran setup** — the
+  script refuses a mismatched `-TaskUser`.
+- **Registers `\Gridcoin\Autounlock`**, a resident task (run-as the wallet user) that runs
+  `Invoke-GridcoinAutounlock.ps1`: it waits for the core, unlocks **stake-only**
+  (`walletpassphrase … true`), and **self-heals** — it re-unlocks after each core restart.
+- **Native listener-ownership gate.** Before any credential goes on the wire it verifies
+  that our own SID owns every LISTEN socket on the RPC port (`Get-NetTCPConnection` →
+  `Win32_Process` owner SID). The RPC port is unbound for minutes during core startup and an
+  unprivileged loopback port can be squatted by a local account first; a **foreign or
+  unverifiable owner makes it refuse** and log — that is the gate working, not a bug.
+
+A running log (redacted — no secrets) is at `<datadir>\autounlock\autounlock.log`. To
+remove everything:
+
+```powershell
+.\Set-GridcoinAutounlock.ps1 -Remove   # unregister the task and delete the DPAPI blob
+```
+
+Note: a `-17 already unlocked` in the log means the wallet was unlocked by another path
+(e.g. a GUI unlock) and the **staking-only restriction was not re-asserted** — it may be
+spendable until the next restart.
+
 ## Status
 
-New scripts, validated by PowerShell parse-check + inspection; full runtime
-validation on Windows (install → reboot → autostart → upgrade → GUI attach →
-shutdown-flush → different-user connection-refused) is pending on the test box.
-Known items to confirm there: the shutdown-flush mechanism (above); that
-stored-password task registration requires an **elevated** shell and the "Log on as
-a batch job" right for the run-as account; and Microsoft/AzureAD-account principal
-forms.
+Validated by PowerShell parse-check + inspection; full runtime validation on Windows is
+pending on the test box. Core tasks: install → reboot → autostart → upgrade → GUI attach →
+shutdown-flush → different-user connection-refused. Autounlock: enable → **DPAPI decrypt
+inside the batch-logon task** (the primary unknown) → cold stake-only unlock → foreign-listener
+refused → self-heal on restart → remove. Known items to confirm there: the shutdown-flush
+mechanism (above); that stored-password task registration requires an **elevated** shell and
+the "Log on as a batch job" right for the run-as account; and Microsoft/AzureAD-account
+principal forms.

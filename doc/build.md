@@ -88,7 +88,7 @@ After you build with this script with the appropriate target
 
 Please refer to [Link](cmake-options.md) (cmake-options.md) for a list of cmake configuration options.
 
-To build the **split GUI/node (multiprocess)** variant — where the GUI and daemon run as separate processes that communicate over IPC — add `-DENABLE_MULTIPROCESS=ON` to a native build, or build the depends tree with `MULTIPROCESS=1` for a static/Windows build. See [multiprocess.md](multiprocess.md) for building **and running** in multiprocess mode (including the Windows requirement that the daemon run as the same user as the GUI).
+To build the **split GUI/node (multiprocess)** variant — where the GUI and daemon run as separate processes that communicate over IPC — add `-DENABLE_MULTIPROCESS=ON` to a native build, or build the depends tree with `MULTIPROCESS=1` for a static/Windows build. See [multiprocess.md](multiprocess.md) for building **and running** in multiprocess mode (including the Windows requirement that the daemon run as the same user as the GUI), and [running-unattended.md](running-unattended.md) for running the core as a **background service that stakes unattended** (Linux systemd / Windows Task Scheduler, with optional stake-only autounlock).
 
 Developers may want to use -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache to have ccache cache
 the compilation at the ccache level. In many instances it is required to do an rm -rf of the build directory, and this will speed up
