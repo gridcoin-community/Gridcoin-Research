@@ -748,6 +748,22 @@ int main(int argc, char *argv[])
         return EXIT_SUCCESS;
     }
 
+    // Fail with a clear message if the data directory cannot be accessed or created
+    // (wrong permissions, or a -datadir this user cannot read -- e.g. pointing the GUI
+    // at another user's datadir). GetDataDirPath now returns an empty path on such
+    // failures instead of throwing; without this check the process would abort silently
+    // in the config read below, before any window or dialog exists.
+    if (GetDataDir(/*fNetSpecific=*/true).empty()) {
+        const std::string dd = gArgs.GetArg("-datadir", "");
+        ThreadSafeMessageBox(strprintf("Error: cannot access the data directory %s.\n",
+                                       dd.empty() ? std::string("(default location)") : dd),
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+                QObject::tr("Error: Cannot access the data directory. Check that it exists and that you "
+                            "have permission to read and write it."));
+        return EXIT_FAILURE;
+    }
+
     // Not currently useful.
     std::string error_msg;
 
@@ -778,6 +794,19 @@ int main(int argc, char *argv[])
     // instance writing into an already running Gridcoin instance's logs. This is checked in init too,
     // but that is too late.
     fs::path dataDir = GetDataDir();
+
+    // Now that the actual chain is selected, re-verify the (network-specific) datadir is
+    // usable -- the earlier check ran under mainnet. An empty path means it could not be
+    // accessed/created; bail cleanly rather than LockDirectory("") in the CWD below.
+    if (dataDir.empty()) {
+        ThreadSafeMessageBox(strprintf("Error: cannot access the data directory %s.\n",
+                                       gArgs.GetArg("-datadir", "").empty() ? std::string("(default location)") : gArgs.GetArg("-datadir", "")),
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+                QObject::tr("Error: Cannot access the data directory. Check that it exists and that you "
+                            "have permission to read and write it."));
+        return EXIT_FAILURE;
+    }
 
     // In multiprocess mode the core runs in a separate gridcoinresearchd, which
     // owns the datadir and already holds this lock; the GUI runs no core, so it
