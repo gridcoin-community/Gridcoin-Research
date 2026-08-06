@@ -24,6 +24,11 @@
     Computer -> Shutdown script (Windows runs it synchronously, bounded by the GP
     script timeout). Set that up and validate on real hardware; see the README.
 
+    It also adds an inbound Windows Firewall rule for the daemon (skip with
+    -SkipFirewallRule): the headless core gets no interactive firewall prompt, and in
+    multiprocess mode the core -- not the GUI -- does the P2P, so without a rule the node
+    is outbound-only. Uninstall-GridcoinCoreTask.ps1 removes it.
+
     Autounlock (opt-in, DPAPI) is a SEPARATE task added by Set-GridcoinAutounlock.ps1
     (Plan 5); it is not registered here.
 
@@ -53,7 +58,20 @@ param(
     # securely if omitted.
     [System.Security.SecureString]$TaskPassword,
 
-    [string]$TaskFolder = 'Gridcoin'
+    [string]$TaskFolder = 'Gridcoin',
+
+    # Skip creating the inbound Windows Firewall rule for the daemon. By default this script
+    # adds one: the headless core (gridcoinresearchd.exe) never triggers the interactive
+    # firewall prompt the GUI gets on first run, so without a rule Windows silently blocks
+    # inbound P2P and the node cannot accept incoming peers (outbound still works). In
+    # multiprocess mode the *core* does the P2P, not the GUI, so the GUI's own rule does not
+    # cover it. Pass -SkipFirewallRule if you manage the firewall separately.
+    [switch]$SkipFirewallRule,
+
+    # Firewall profiles the inbound rule applies to. Public is excluded by default (a P2P
+    # listener open on untrusted networks is a deliberate choice); add 'Public' to include it.
+    [ValidateSet('Domain', 'Private', 'Public')]
+    [string[]]$FirewallProfile = @('Domain', 'Private')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -183,6 +201,27 @@ foreach ($name in 'Core-Start', 'Core-Stop') {
         throw "Task \$TaskFolder\$name was not registered (likely 'Access is denied'). A boot-triggered " +
               "run-as task needs an ELEVATED PowerShell (Run as administrator) and the 'Log on as a batch " +
               "job' right for '$TaskUser'. Re-run elevated; see contrib/windows/README.md."
+    }
+}
+
+# Inbound firewall rule for the daemon. The headless core never gets the interactive prompt
+# the GUI does, and in multiprocess mode the core (not the GUI) does the P2P -- so without
+# this rule Windows silently blocks inbound and the node is outbound-only. Program-based (like
+# the GUI's own auto-created rule) so it is port-independent (mainnet/testnet). Non-fatal: the
+# tasks are already registered, so a firewall failure warns rather than aborting.
+$fwName = 'Gridcoin multiprocess core (gridcoinresearchd)'
+if ($SkipFirewallRule) {
+    Write-Host "Skipped the inbound firewall rule (-SkipFirewallRule). The core will be outbound-only until you add one for '$CorePath'." -ForegroundColor Yellow
+} else {
+    try {
+        Get-NetFirewallRule -DisplayName $fwName -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+        New-NetFirewallRule -DisplayName $fwName -Direction Inbound -Action Allow -Program $CorePath `
+            -Protocol TCP -Profile $FirewallProfile -Enabled True `
+            -Description 'Allow inbound P2P connections to the Gridcoin multiprocess core (gridcoinresearchd.exe). Created at task setup because the headless core gets no interactive firewall prompt.' | Out-Null
+        Write-Host "Added inbound firewall rule '$fwName' for $CorePath (profiles: $($FirewallProfile -join ', '))." -ForegroundColor Green
+    } catch {
+        Write-Host ("WARNING: could not add the inbound firewall rule ($($_.Exception.Message)). The core will be " +
+                    "outbound-only until you add an inbound rule for '$CorePath' (needs an elevated shell).") -ForegroundColor Yellow
     }
 }
 

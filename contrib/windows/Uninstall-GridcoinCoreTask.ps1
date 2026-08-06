@@ -4,8 +4,9 @@
     Remove the Gridcoin core Scheduled Tasks registered by Install-GridcoinCoreTask.ps1.
 
 .DESCRIPTION
-    Unregisters \Gridcoin\Core-Start and \Gridcoin\Core-Stop and removes the (now
-    empty) \Gridcoin task folder. Tolerant of already-absent tasks (idempotent).
+    Unregisters \Gridcoin\Core-Start and \Gridcoin\Core-Stop, removes the inbound
+    firewall rule Install-GridcoinCoreTask.ps1 created for the daemon, and removes the
+    (now empty) \Gridcoin task folder. Tolerant of already-absent items (idempotent).
 
     Does NOT remove the opt-in autounlock task (\Gridcoin\Autounlock) -- that is
     owned by Set-GridcoinAutounlock.ps1 (remove it with `Set-GridcoinAutounlock.ps1
@@ -26,6 +27,19 @@ foreach ($name in 'Core-Start', 'Core-Stop') {
     } else {
         Write-Host "\$TaskFolder\$name not present (ok)"
     }
+}
+
+# Remove the inbound firewall rule Install-GridcoinCoreTask.ps1 added for the daemon (idempotent).
+try {
+    $fw = @(Get-NetFirewallRule -DisplayName 'Gridcoin multiprocess core (gridcoinresearchd)' -ErrorAction SilentlyContinue)
+    if ($fw.Count -gt 0) {
+        $fw | Remove-NetFirewallRule
+        Write-Host "Removed the daemon inbound firewall rule."
+    } else {
+        Write-Host "Daemon inbound firewall rule not present (ok)."
+    }
+} catch {
+    Write-Host "Could not remove the daemon firewall rule ($($_.Exception.Message)); left in place."
 }
 
 # Remove the folder only if it is now empty (leaves \Gridcoin alone if the Plan-5

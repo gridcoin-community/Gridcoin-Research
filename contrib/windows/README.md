@@ -56,6 +56,20 @@ daemon"*. **That is the access control working, not a bug.**
 flush, which risks database corruption. Shutdown, upgrade, and manual stop all go
 through the one `Core-Stop` task.
 
+## Firewall (inbound P2P)
+
+`Install-GridcoinCoreTask.ps1` adds an **inbound firewall rule for the daemon**
+(`gridcoinresearchd.exe`). The headless core never triggers the interactive firewall
+prompt the GUI gets on first run, and in multiprocess mode the **core**, not the GUI,
+does the P2P — so without a rule Windows silently blocks inbound and the node is
+outbound-only (it still syncs and stakes, just can't accept incoming peers). The rule is
+program-based on the **Domain** and **Private** profiles (Public is excluded; add it with
+`-FirewallProfile Domain,Private,Public`). Because it is program-based (any TCP to the
+daemon), if you also set `rpcallowip` — which makes the RPC listener bind to all
+interfaces instead of localhost — the RPC port becomes reachable through this rule too;
+RPC stays credential-protected, but be aware. Pass `-SkipFirewallRule` to manage the
+firewall yourself; `Uninstall-GridcoinCoreTask.ps1` removes the rule.
+
 ## Graceful stop on OS shutdown
 
 The `Core-Stop` task carries a best-effort OS-shutdown trigger (Kernel-General
