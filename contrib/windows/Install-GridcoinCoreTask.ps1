@@ -11,18 +11,20 @@
       Core-Start : boot trigger -> gridcoinresearchd.exe -datadir=<dd> -multiprocess
                    (with crash restart, the systemd Restart=on-failure analogue).
       Core-Stop  : gridcoinresearchd.exe -datadir=<dd> stop  (a GRACEFUL RPC stop
-                   that flushes BDB/LevelDB). Runnable on-demand, and best-effort
-                   on the OS-shutdown event (see the SHUTDOWN note).
+                   that flushes BDB/LevelDB). ON-DEMAND only -- used by manual stops
+                   and by Update-GridcoinCore.ps1's upgrade engine.
 
     SEMANTICS GOTCHA: to stop the core you START the Core-Stop task. NEVER
     Stop-ScheduledTask the Core-Start task -- Task Scheduler's stop is a hard
     TerminateProcess (no flush = possible DB corruption).
 
-    SHUTDOWN: the Kernel-General EventID-13 trigger on Core-Stop is BEST-EFFORT
-    only -- Windows does not block shutdown for a scheduled task, so the flush may
-    be cut short. The reliable clean-shutdown primitive is a Group Policy
-    Computer -> Shutdown script (Windows runs it synchronously, bounded by the GP
-    script timeout). Set that up and validate on real hardware; see the README.
+    SHUTDOWN: Core-Stop carries NO OS-shutdown trigger. A scheduled task cannot make
+    Windows wait, so an event-triggered stop is best-effort and gets cut short mid-flush
+    (confirmed on-device). The reliable clean-shutdown primitive is a Group Policy
+    Computer -> Shutdown script, which Windows runs synchronously and WAITS for (bounded
+    by "Maximum wait time for Group Policy scripts", default 600s). Configure it with
+    Set-GridcoinShutdownFlush.ps1 (opt-in). Having both a shutdown trigger AND the GP
+    script would double-stop and race, so we ship only the GP-script path.
 
     It also adds an inbound Windows Firewall rule for the daemon (skip with
     -SkipFirewallRule): the headless core gets no interactive firewall prompt, and in
@@ -159,27 +161,15 @@ try {
         -User $TaskUser -Password $plainPw -RunLevel Limited `
         -Description 'Start the Gridcoin multiprocess core at boot (run-as the wallet user).' | Out-Null
 
-    # Core-Stop: register first with no trigger, then attach the OS-shutdown event
-    # trigger via XML (New-ScheduledTaskTrigger has no event-trigger form).
+    # Core-Stop: on-demand only, NO trigger. It carries no OS-shutdown (EventID-13)
+    # trigger on purpose -- a scheduled task can't make Windows wait, so that path is
+    # best-effort and gets cut short mid-flush. The reliable OS-shutdown flush is a Group
+    # Policy Computer -> Shutdown script (Set-GridcoinShutdownFlush.ps1); shipping both
+    # would double-stop and race. Core-Stop remains for manual stops and Update-GridcoinCore.
     Register-ScheduledTask -TaskPath "\$TaskFolder\" -TaskName 'Core-Stop' -Force `
         -Action $stopAction -Settings $stopSettings `
         -User $TaskUser -Password $plainPw -RunLevel Limited `
-        -Description 'Graceful RPC stop of the Gridcoin core (on-demand; best-effort OS-shutdown). Start this task to stop the core; never hard-kill Core-Start.' | Out-Null
-
-    # System log, Microsoft-Windows-Kernel-General EventID 13 == shutdown initiated.
-    # BEST-EFFORT only (see the SHUTDOWN note above): the OS does not wait for it.
-    $evtXml = @'
-<QueryList><Query Id="0" Path="System"><Select Path="System">*[System[Provider[@Name='Microsoft-Windows-Kernel-General'] and EventID=13]]</Select></Query></QueryList>
-'@
-    $eventTrigger = New-CimInstance -CimClass (
-        Get-CimClass -Namespace 'Root/Microsoft/Windows/TaskScheduler' -ClassName 'MSFT_TaskEventTrigger'
-    ) -ClientOnly
-    $eventTrigger.Enabled = $true
-    $eventTrigger.Subscription = $evtXml
-
-    $stopTask = Get-ScheduledTask -TaskPath "\$TaskFolder\" -TaskName 'Core-Stop'
-    $stopTask.Triggers = @($eventTrigger)
-    Set-ScheduledTask -InputObject $stopTask -User $TaskUser -Password $plainPw | Out-Null
+        -Description 'Graceful RPC stop of the Gridcoin core (on-demand; used by manual stops and Update-GridcoinCore). Start this task to stop the core; never hard-kill Core-Start. For a clean OS-shutdown flush use Set-GridcoinShutdownFlush.ps1.' | Out-Null
 }
 catch {
     throw "Failed to register the Gridcoin tasks: $($_.Exception.Message)`n" +
@@ -225,11 +215,11 @@ if ($SkipFirewallRule) {
     }
 }
 
-Write-Host "Registered \$TaskFolder\Core-Start (boot) and \$TaskFolder\Core-Stop (on-demand + best-effort OS-shutdown), run-as $TaskUser." -ForegroundColor Green
+Write-Host "Registered \$TaskFolder\Core-Start (boot) and \$TaskFolder\Core-Stop (on-demand), run-as $TaskUser." -ForegroundColor Green
 Write-Host ""
 Write-Host "  Start the core now :  Start-ScheduledTask -TaskPath '\$TaskFolder\' -TaskName 'Core-Start'"
 Write-Host "  Stop the core      :  Start-ScheduledTask -TaskPath '\$TaskFolder\' -TaskName 'Core-Stop'   (graceful; do NOT Stop-ScheduledTask Core-Start)"
 Write-Host "  Attach the GUI     :  .\Start-GridcoinGui.ps1 -DataDir '$DataDir'"
 Write-Host ""
-Write-Host "  For a reliable flush on OS shutdown, also configure a Group Policy" -ForegroundColor Yellow
-Write-Host "  Computer -> Shutdown script that starts the Core-Stop task (see README)." -ForegroundColor Yellow
+Write-Host "  For a clean database flush on OS shutdown, also run (once):" -ForegroundColor Yellow
+Write-Host "     .\Set-GridcoinShutdownFlush.ps1 -DataDir '$DataDir'   (configures a Group Policy shutdown script)" -ForegroundColor Yellow

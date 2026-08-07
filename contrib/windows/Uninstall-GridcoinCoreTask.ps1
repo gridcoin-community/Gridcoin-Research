@@ -8,10 +8,10 @@
     firewall rule Install-GridcoinCoreTask.ps1 created for the daemon, and removes the
     (now empty) \Gridcoin task folder. Tolerant of already-absent items (idempotent).
 
-    Does NOT remove the opt-in autounlock task (\Gridcoin\Autounlock) -- that is
-    owned by Set-GridcoinAutounlock.ps1 (remove it with `Set-GridcoinAutounlock.ps1
-    -Remove`). It also does not stop a running core; run the Core-Stop task first if
-    you want a graceful stop.
+    Does NOT remove the opt-in autounlock task (\Gridcoin\Autounlock) -- that is owned by
+    Set-GridcoinAutounlock.ps1 (`-Remove`) -- nor the opt-in shutdown-flush Group Policy
+    script -- owned by Set-GridcoinShutdownFlush.ps1 (`-Remove`). It also does not stop a
+    running core; run the Core-Stop task first if you want a graceful stop.
 #>
 [CmdletBinding()]
 param([string]$TaskFolder = 'Gridcoin')
