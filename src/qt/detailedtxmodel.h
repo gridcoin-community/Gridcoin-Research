@@ -134,6 +134,12 @@ private:
     //! rejection — a worker push raced the read — re-arm a bounded retry.
     void fetchWindow(int first, int count);
 
+    //! Log a structural delta the cache REJECTED (as opposed to correctly skipping
+    //! as already-reflected). A rejection means this replica and the producer
+    //! cursor have diverged and the delta's row is lost until the next Reset; it
+    //! should be unreachable, and used to leave no trace at all.
+    void noteRejected(const char* what, int first, int count, GRC::ApplyResult result);
+
     //! Forwarders so the nested CacheSink drives our QAbstractItemModel row signals
     //! from within a DetailedTxModel member (avoids any protected-base access
     //! subtlety, and keeps the begin/end bracket ownership in the cache).

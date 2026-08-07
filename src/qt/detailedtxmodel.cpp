@@ -326,6 +326,25 @@ void DetailedTxModel::sinkDataChanged(int first, int count)
     emit dataChanged(index(first, 0), index(first + count - 1, lastCol));
 }
 
+void DetailedTxModel::noteRejected(const char* what, int first, int count,
+                                   GRC::ApplyResult result)
+{
+    // Applied is the normal case; AlreadyReflected is the routine PR4-fix B skip on
+    // a reset refetch. Rejected means the delta did not fit this replica's virtual
+    // table — the producer cursor and the consumer have diverged, and the row it
+    // carried is simply lost until the next Reset rebuilds the view. That used to
+    // be swallowed (every call site discarded the bool), so a divergence left no
+    // trace anywhere (#3257 review). It should be unreachable; if it ever fires,
+    // this line is the only evidence there will be.
+    if (result != GRC::ApplyResult::Rejected) {
+        return;
+    }
+    GUILogPrintf("WARNING: DetailedTxModel: rejected %s delta at %d count %d "
+                 "(rows=%d, cached [%d,%d)) — view diverged from the producer cursor",
+                 what, first, count, m_cache.total(), m_cache.cacheFirst(),
+                 m_cache.cacheFirst() + m_cache.cacheSize());
+}
+
 void DetailedTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& events)
 {
     interfaces::WalletTxSource& store = m_walletModel->txSource();
@@ -343,7 +362,8 @@ void DetailedTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                 // raced this Reset (PR4-fix B, via RowsResult atomicity).
                 GRC::RowsResult r = store.getRows(GRC::VIEW_DETAILED, 0, kInitialWindow);
                 if (m_cache.applyReset(m_sink, seqno, std::move(r.records), 0,
-                                       r.total_accepted, r.epoch, r.high_water)) {
+                                       r.total_accepted, r.epoch, r.high_water)
+                        == GRC::ApplyResult::Applied) {
                     // The pre-Reset viewport range is meaningless against the rebuilt
                     // (possibly resized) table; reset it to the top — where a model
                     // reset scrolls the view — so the re-armed fetch targets a valid
@@ -361,17 +381,20 @@ void DetailedTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                 // payload carries the inserted records; the cache gates on seqno,
                 // forwards begin/endInsertRows (before/after growing total) and either
                 // splices into the slice or shifts the cache base.
-                m_cache.applyInsert(m_sink, seqno, payload.position, payload.records);
+                noteRejected("insert", payload.position, static_cast<int>(payload.records.size()),
+                             m_cache.applyInsert(m_sink, seqno, payload.position, payload.records));
             } else if constexpr (std::is_same_v<P, GRC::RowsRemovedPayload>) {
                 if (payload.viewId != GRC::VIEW_DETAILED) return;
-                m_cache.applyRemove(m_sink, seqno, payload.position, payload.count);
+                noteRejected("remove", payload.position, payload.count,
+                             m_cache.applyRemove(m_sink, seqno, payload.position, payload.count));
             } else if constexpr (std::is_same_v<P, GRC::RowsChangedPayload>) {
                 if (payload.viewId != GRC::VIEW_DETAILED) return;
                 if (seqno <= m_cache.structuralSeqno()) return;   // skip the wasted getRows
                 // A Change carries no records (no reorder); refetch the changed slice.
                 const std::vector<TransactionRecord> fresh =
                     store.getRows(GRC::VIEW_DETAILED, payload.first, payload.count).records;
-                m_cache.applyChange(m_sink, seqno, payload.first, payload.count, fresh);
+                noteRejected("change", payload.first, payload.count,
+                             m_cache.applyChange(m_sink, seqno, payload.first, payload.count, fresh));
             }
             // RowCountChanged / ChainTipChanged / VIEW_FULL / VIEW_OVERVIEW are not
             // consumed here (the detailed view's cap stays unlimited).

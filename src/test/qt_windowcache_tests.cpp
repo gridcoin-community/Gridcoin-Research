@@ -28,6 +28,13 @@
 
 using namespace GRC;
 
+// Shorthands for the structural apply* outcome. Named so the negative cases state
+// WHICH kind of non-application they expect: a routine seqno-gate skip, or a
+// rejection meaning the replica has diverged from the producer cursor.
+constexpr ApplyResult APPLIED   = ApplyResult::Applied;
+constexpr ApplyResult REFLECTED = ApplyResult::AlreadyReflected;
+constexpr ApplyResult REJECTED  = ApplyResult::Rejected;
+
 namespace {
 
 //! A synthetic record carrying just an identity, so a splice/shift bug shows up
@@ -127,7 +134,7 @@ BOOST_AUTO_TEST_CASE(insert_before_window_shifts_base_only)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(10, 10), 10, 30, 1, 5);
 
-    BOOST_CHECK(c.applyInsert(s, /*seqno*/6, /*pos*/3, recs({100, 101})));
+    BOOST_CHECK(c.applyInsert(s, /*seqno*/6, /*pos*/3, recs({100, 101})) == APPLIED);
     BOOST_CHECK_EQUAL(c.total(), 32);
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 6u);
     // slice content unchanged, base shifted +2.
@@ -148,7 +155,7 @@ BOOST_AUTO_TEST_CASE(insert_inside_window_splices)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(10, 10), 10, 30, 1, 5);
 
-    BOOST_CHECK(c.applyInsert(s, 6, /*pos*/13, recs({100, 101})));
+    BOOST_CHECK(c.applyInsert(s, 6, /*pos*/13, recs({100, 101})) == APPLIED);
     BOOST_CHECK_EQUAL(c.total(), 32);
     check_slice(c, 10, {10, 11, 12, 100, 101, 13, 14, 15, 16, 17, 18, 19});
 }
@@ -161,7 +168,7 @@ BOOST_AUTO_TEST_CASE(insert_at_window_top_splices_no_flash)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(10, 10), 10, 30, 1, 5);
 
-    BOOST_CHECK(c.applyInsert(s, 6, /*pos*/10, recs({100})));
+    BOOST_CHECK(c.applyInsert(s, 6, /*pos*/10, recs({100})) == APPLIED);
     check_slice(c, 10, {100, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19});
     BOOST_CHECK_EQUAL(c.total(), 31);
 }
@@ -172,7 +179,7 @@ BOOST_AUTO_TEST_CASE(insert_at_window_end_appends)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(10, 10), 10, 30, 1, 5);   // slice covers abs [10,20)
 
-    BOOST_CHECK(c.applyInsert(s, 6, /*pos*/20, recs({200})));   // pos == base+len
+    BOOST_CHECK(c.applyInsert(s, 6, /*pos*/20, recs({200})) == APPLIED);   // pos == base+len
     check_slice(c, 10, {10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 200});
     BOOST_CHECK_EQUAL(c.total(), 31);
 }
@@ -183,7 +190,7 @@ BOOST_AUTO_TEST_CASE(insert_after_window_changes_total_only)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(10, 10), 10, 30, 1, 5);
 
-    BOOST_CHECK(c.applyInsert(s, 6, /*pos*/25, recs({300})));   // pos > base+len
+    BOOST_CHECK(c.applyInsert(s, 6, /*pos*/25, recs({300})) == APPLIED);   // pos > base+len
     check_slice(c, 10, {10, 11, 12, 13, 14, 15, 16, 17, 18, 19});
     BOOST_CHECK_EQUAL(c.total(), 31);
     BOOST_CHECK_EQUAL(s.ops[0].kind, "beginInsert");
@@ -196,9 +203,9 @@ BOOST_AUTO_TEST_CASE(insert_empty_or_out_of_range_is_noop)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(10, 10), 10, 30, 1, 5);
 
-    BOOST_CHECK(!c.applyInsert(s, 6, 5, recs({})));     // empty
-    BOOST_CHECK(!c.applyInsert(s, 6, -1, recs({1})));   // pos < 0
-    BOOST_CHECK(!c.applyInsert(s, 6, 31, recs({1})));   // pos > total
+    BOOST_CHECK(c.applyInsert(s, 6, 5, recs({})) == REJECTED);     // empty
+    BOOST_CHECK(c.applyInsert(s, 6, -1, recs({1})) == REJECTED);   // pos < 0
+    BOOST_CHECK(c.applyInsert(s, 6, 31, recs({1})) == REJECTED);   // pos > total
     BOOST_CHECK_EQUAL(c.total(), 30);
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 5u);
     BOOST_CHECK(s.ops.empty());
@@ -212,7 +219,7 @@ BOOST_AUTO_TEST_CASE(remove_before_window)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(10, 10), 10, 30, 1, 5);
 
-    BOOST_CHECK(c.applyRemove(s, 6, /*pos*/3, /*count*/2));   // [3,5) entirely before
+    BOOST_CHECK(c.applyRemove(s, 6, /*pos*/3, /*count*/2) == APPLIED);   // [3,5) entirely before
     BOOST_CHECK_EQUAL(c.total(), 28);
     check_slice(c, 8, {10, 11, 12, 13, 14, 15, 16, 17, 18, 19});
     BOOST_CHECK_EQUAL(s.ops[0].kind, "beginRemove");
@@ -225,7 +232,7 @@ BOOST_AUTO_TEST_CASE(remove_front_overlap)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(5, 10), 5, 30, 1, 5);   // abs [5,15) ids 5..14
 
-    BOOST_CHECK(c.applyRemove(s, 6, /*pos*/3, /*count*/4));   // [3,7) -> drops ids 5,6
+    BOOST_CHECK(c.applyRemove(s, 6, /*pos*/3, /*count*/4) == APPLIED);   // [3,7) -> drops ids 5,6
     BOOST_CHECK_EQUAL(c.total(), 26);
     check_slice(c, 3, {7, 8, 9, 10, 11, 12, 13, 14});
 }
@@ -236,7 +243,7 @@ BOOST_AUTO_TEST_CASE(remove_strictly_inside)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(5, 10), 5, 30, 1, 5);
 
-    BOOST_CHECK(c.applyRemove(s, 6, /*pos*/8, /*count*/3));   // [8,11) -> drops ids 8,9,10
+    BOOST_CHECK(c.applyRemove(s, 6, /*pos*/8, /*count*/3) == APPLIED);   // [8,11) -> drops ids 8,9,10
     BOOST_CHECK_EQUAL(c.total(), 27);
     check_slice(c, 5, {5, 6, 7, 11, 12, 13, 14});
 }
@@ -247,7 +254,7 @@ BOOST_AUTO_TEST_CASE(remove_back_overlap)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(5, 10), 5, 30, 1, 5);
 
-    BOOST_CHECK(c.applyRemove(s, 6, /*pos*/12, /*count*/5));   // [12,17) -> drops ids 12,13,14
+    BOOST_CHECK(c.applyRemove(s, 6, /*pos*/12, /*count*/5) == APPLIED);   // [12,17) -> drops ids 12,13,14
     BOOST_CHECK_EQUAL(c.total(), 25);
     check_slice(c, 5, {5, 6, 7, 8, 9, 10, 11});
 }
@@ -258,7 +265,7 @@ BOOST_AUTO_TEST_CASE(remove_spans_whole_cache)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(5, 10), 5, 30, 1, 5);
 
-    BOOST_CHECK(c.applyRemove(s, 6, /*pos*/2, /*count*/20));   // [2,22) -> drops all cached
+    BOOST_CHECK(c.applyRemove(s, 6, /*pos*/2, /*count*/20) == APPLIED);   // [2,22) -> drops all cached
     BOOST_CHECK_EQUAL(c.total(), 10);
     BOOST_CHECK_EQUAL(c.cacheFirst(), 2);
     BOOST_CHECK_EQUAL(c.cacheSize(), 0);
@@ -271,7 +278,7 @@ BOOST_AUTO_TEST_CASE(remove_after_window)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(5, 10), 5, 30, 1, 5);
 
-    BOOST_CHECK(c.applyRemove(s, 6, /*pos*/20, /*count*/3));   // entirely after
+    BOOST_CHECK(c.applyRemove(s, 6, /*pos*/20, /*count*/3) == APPLIED);   // entirely after
     BOOST_CHECK_EQUAL(c.total(), 27);
     check_slice(c, 5, {5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
 }
@@ -282,9 +289,9 @@ BOOST_AUTO_TEST_CASE(remove_out_of_range_is_noop)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(5, 10), 5, 30, 1, 5);
 
-    BOOST_CHECK(!c.applyRemove(s, 6, 0, 0));     // count 0
-    BOOST_CHECK(!c.applyRemove(s, 6, -1, 2));    // pos < 0
-    BOOST_CHECK(!c.applyRemove(s, 6, 29, 5));    // pos+count > total
+    BOOST_CHECK(c.applyRemove(s, 6, 0, 0) == REJECTED);     // count 0
+    BOOST_CHECK(c.applyRemove(s, 6, -1, 2) == REJECTED);    // pos < 0
+    BOOST_CHECK(c.applyRemove(s, 6, 29, 5) == REJECTED);    // pos+count > total
     BOOST_CHECK_EQUAL(c.total(), 30);
     BOOST_CHECK(s.ops.empty());
 }
@@ -297,7 +304,7 @@ BOOST_AUTO_TEST_CASE(change_refreshes_in_cache_overlap)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(5, 10), 5, 30, 1, 5);
 
-    BOOST_CHECK(c.applyChange(s, 6, /*pos*/7, /*count*/2, recs({77, 88})));
+    BOOST_CHECK(c.applyChange(s, 6, /*pos*/7, /*count*/2, recs({77, 88})) == APPLIED);
     check_slice(c, 5, {5, 6, 77, 88, 9, 10, 11, 12, 13, 14});
     BOOST_CHECK_EQUAL(c.total(), 30);   // no size change
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 6u);
@@ -315,7 +322,7 @@ BOOST_AUTO_TEST_CASE(change_partial_overlap_clips_to_cache)
     c.seedInitial(seq(5, 10), 5, 30, 1, 5);
 
     // Change abs [3,8): only [5,8) is in cache -> rows 5,6,7 get fresh[2..4].
-    BOOST_CHECK(c.applyChange(s, 6, /*pos*/3, /*count*/5, recs({30, 40, 50, 60, 70})));
+    BOOST_CHECK(c.applyChange(s, 6, /*pos*/3, /*count*/5, recs({30, 40, 50, 60, 70})) == APPLIED);
     check_slice(c, 5, {50, 60, 70, 8, 9, 10, 11, 12, 13, 14});
     BOOST_REQUIRE_EQUAL(s.ops.size(), 1u);
     BOOST_CHECK_EQUAL(s.ops[0].first, 5);
@@ -328,7 +335,7 @@ BOOST_AUTO_TEST_CASE(change_fully_off_window_no_signal)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(5, 10), 5, 30, 1, 5);
 
-    BOOST_CHECK(c.applyChange(s, 6, /*pos*/20, /*count*/2, recs({1, 2})));
+    BOOST_CHECK(c.applyChange(s, 6, /*pos*/20, /*count*/2, recs({1, 2})) == APPLIED);
     check_slice(c, 5, {5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 6u);   // seqno still advances
     BOOST_CHECK(s.ops.empty());                   // but no dataChanged (nothing visible)
@@ -342,15 +349,15 @@ BOOST_AUTO_TEST_CASE(structural_seqno_gate_skips_already_reflected)
     RecSink s; s.cache = &c;
     c.seedInitial(seq(0, 5), 0, 5, 1, /*high_water*/10);
 
-    BOOST_CHECK(!c.applyInsert(s, /*seqno*/10, 0, recs({99})));   // == high-water: skip
-    BOOST_CHECK(!c.applyInsert(s, /*seqno*/9, 0, recs({99})));    // <  high-water: skip
-    BOOST_CHECK(!c.applyRemove(s, 10, 0, 1));
-    BOOST_CHECK(!c.applyChange(s, 10, 0, 1, recs({1})));
+    BOOST_CHECK(c.applyInsert(s, /*seqno*/10, 0, recs({99})) == REFLECTED);   // == high-water: skip
+    BOOST_CHECK(c.applyInsert(s, /*seqno*/9, 0, recs({99})) == REFLECTED);    // <  high-water: skip
+    BOOST_CHECK(c.applyRemove(s, 10, 0, 1) == REFLECTED);
+    BOOST_CHECK(c.applyChange(s, 10, 0, 1, recs({1})) == REFLECTED);
     BOOST_CHECK_EQUAL(c.total(), 5);
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 10u);
     BOOST_CHECK(s.ops.empty());
 
-    BOOST_CHECK(c.applyInsert(s, /*seqno*/11, 0, recs({99})));    // > high-water: apply
+    BOOST_CHECK(c.applyInsert(s, /*seqno*/11, 0, recs({99})) == APPLIED);    // > high-water: apply
     BOOST_CHECK_EQUAL(c.total(), 6);
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 11u);
 }
@@ -362,11 +369,11 @@ BOOST_AUTO_TEST_CASE(reset_skips_stale_and_takes_max_baseline)
     c.seedInitial(seq(0, 5), 0, 5, 1, /*high_water*/10);
 
     // A Reset whose seqno is already reflected is skipped.
-    BOOST_CHECK(!c.applyReset(s, /*seqno*/10, seq(0, 3), 0, 3, /*epoch*/2, /*hw*/10));
+    BOOST_CHECK(c.applyReset(s, /*seqno*/10, seq(0, 3), 0, 3, /*epoch*/2, /*hw*/10) == REFLECTED);
     BOOST_CHECK_EQUAL(c.total(), 5);
 
     // A live Reset: new geometry; baseline = max(high_water, seqno).
-    BOOST_CHECK(c.applyReset(s, /*seqno*/12, seq(100, 4), 0, 20, /*epoch*/2, /*hw*/15));
+    BOOST_CHECK(c.applyReset(s, /*seqno*/12, seq(100, 4), 0, 20, /*epoch*/2, /*hw*/15) == APPLIED);
     BOOST_CHECK_EQUAL(c.total(), 20);
     BOOST_CHECK_EQUAL(c.epoch(), 2u);
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 15u);   // hw(15) > seqno(12)
@@ -432,7 +439,7 @@ BOOST_AUTO_TEST_CASE(structural_delta_applies_after_a_content_fill)
     s.clear();
 
     // insert before the window: base shifts, total grows, seqno advances.
-    BOOST_CHECK(c.applyInsert(s, /*seqno*/11, /*pos*/40, recs({900, 901})));
+    BOOST_CHECK(c.applyInsert(s, /*seqno*/11, /*pos*/40, recs({900, 901})) == APPLIED);
     BOOST_CHECK_EQUAL(c.total(), 102);
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 11u);
     check_slice(c, 52, {50, 51, 52, 53, 54});
@@ -468,7 +475,7 @@ BOOST_AUTO_TEST_CASE(change_short_fresh_refreshes_what_it_has_and_advances_seqno
     RecSink s; s.cache = &c;
     c.seedInitial(seq(5, 10), 5, 30, 1, 5);
 
-    BOOST_CHECK(c.applyChange(s, 6, /*pos*/7, /*count*/3, recs({77})));   // only 1 of 3
+    BOOST_CHECK(c.applyChange(s, 6, /*pos*/7, /*count*/3, recs({77})) == APPLIED);   // only 1 of 3
     check_slice(c, 5, {5, 6, 77, 8, 9, 10, 11, 12, 13, 14});             // 8,9 unchanged
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 6u);                          // advanced regardless
     BOOST_REQUIRE_EQUAL(s.ops.size(), 1u);
@@ -491,25 +498,25 @@ BOOST_AUTO_TEST_CASE(consumer_routing_scenario)
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 10u);
 
     // RowsInserted at the top (a fresh tx): payload carries the record.
-    BOOST_CHECK(c.applyInsert(s, 11, /*pos*/0, recs({100})));
+    BOOST_CHECK(c.applyInsert(s, 11, /*pos*/0, recs({100})) == APPLIED);
     BOOST_CHECK_EQUAL(c.total(), 51);
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 11u);
     check_slice(c, 0, {100, 0, 1, 2, 3, 4});
 
     // RowsRemoved off-window (below the cache): total shrinks, window unchanged.
-    BOOST_CHECK(c.applyRemove(s, 12, /*pos*/40, /*count*/2));
+    BOOST_CHECK(c.applyRemove(s, 12, /*pos*/40, /*count*/2) == APPLIED);
     BOOST_CHECK_EQUAL(c.total(), 49);
     check_slice(c, 0, {100, 0, 1, 2, 3, 4});
 
     // RowsChanged in-window: the consumer fetched `fresh`; refresh row 2.
-    BOOST_CHECK(c.applyChange(s, 13, /*pos*/2, /*count*/1, recs({222})));
+    BOOST_CHECK(c.applyChange(s, 13, /*pos*/2, /*count*/1, recs({222})) == APPLIED);
     check_slice(c, 0, {100, 0, 222, 2, 3, 4});
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 13u);
 
     // Stale / duplicate deltas (seqno <= structural): skipped, no signals.
     s.clear();
-    BOOST_CHECK(!c.applyInsert(s, 13, 0, recs({999})));
-    BOOST_CHECK(!c.applyRemove(s, 5, 0, 1));
+    BOOST_CHECK(c.applyInsert(s, 13, 0, recs({999})) == REFLECTED);
+    BOOST_CHECK(c.applyRemove(s, 5, 0, 1) == REFLECTED);
     BOOST_CHECK_EQUAL(c.total(), 49);
     BOOST_CHECK(s.ops.empty());
 
@@ -527,7 +534,7 @@ BOOST_AUTO_TEST_CASE(consumer_routing_scenario)
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 13u); // content never advances the seqno
 
     // A structural Reset (sort/filter) with a fresh epoch: rebuild + new baseline.
-    BOOST_CHECK(c.applyReset(s, /*seqno*/14, seq(0, 5), 0, /*total*/49, /*epoch*/2, /*hw*/14));
+    BOOST_CHECK(c.applyReset(s, /*seqno*/14, seq(0, 5), 0, /*total*/49, /*epoch*/2, /*hw*/14) == APPLIED);
     BOOST_CHECK_EQUAL(c.epoch(), 2u);
     BOOST_CHECK_EQUAL(c.structuralSeqno(), 14u);
     check_slice(c, 0, {0, 1, 2, 3, 4});
