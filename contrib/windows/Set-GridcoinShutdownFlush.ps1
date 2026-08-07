@@ -157,22 +157,26 @@ if ($CorePath -match '%')   { throw "-CorePath must not contain a percent charac
 # SECURITY: the shutdown .cmd runs as SYSTEM and invokes $CorePath. If a standard user can
 # replace that exe, they gain SYSTEM code execution at shutdown (local privilege escalation).
 # Refuse unless the binary is writable only by privileged principals (e.g. under Program Files).
-function Test-NonAdminWritable([string]$p) {
-    try { $acl = Get-Acl -LiteralPath $p } catch { return $true }  # can't read the ACL -> treat as unsafe
+# Test ONLY the write/delete/own-change bits -- NOT the composite Modify/FullControl rights,
+# whose bit patterns overlap ReadAndExecute/Synchronize, so masking against them wrongly flags
+# read-only ACEs (e.g. the default Program Files "Users: ReadAndExecute, Synchronize" grant).
+function Get-NonAdminWriteAce([string]$p) {
+    try { $acl = Get-Acl -LiteralPath $p } catch { return 'its ACL could not be read' }
     $bad = @('S-1-5-32-545', 'S-1-5-11', 'S-1-1-0', 'S-1-5-4', 'S-1-5-32-546')  # Users, AuthUsers, Everyone, Interactive, Guests
-    $wmask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Modify, FullControl')
+    $wmask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
     foreach ($ace in $acl.Access) {
         if ($ace.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
         if (([int]$ace.FileSystemRights -band $wmask) -eq 0) { continue }
         $sid = try { $ace.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { '' }
-        if ($bad -contains $sid) { return $true }
+        if ($bad -contains $sid) { return "$($ace.IdentityReference) has '$($ace.FileSystemRights)'" }
     }
-    return $false
+    return $null
 }
-if (Test-NonAdminWritable $CorePath) {
-    throw "Refusing to wire a SYSTEM shutdown script to '$CorePath': a standard-user group can write it, which " +
-          "would let a non-admin replace the exe and gain SYSTEM code execution at shutdown. Install the core under " +
-          "an admin-only location (e.g. Program Files) and point -CorePath there."
+$offender = Get-NonAdminWriteAce $CorePath
+if ($offender) {
+    throw "Refusing to wire a SYSTEM shutdown script to '$CorePath': $offender, which would let a non-admin " +
+          "replace the exe and gain SYSTEM code execution at shutdown. Install the core under an admin-only " +
+          "location (e.g. Program Files) and point -CorePath there."
 }
 
 # The shutdown stop needs rpcuser/rpcpassword from the datadir conf. Warn if it's not there
