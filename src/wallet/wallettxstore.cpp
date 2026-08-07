@@ -341,46 +341,70 @@ void WalletTxStore::removeTransaction(const uint256& hash)
     removeLocked(hash);
 }
 
-void WalletTxStore::removeLocked(const uint256& hash)
+bool WalletTxStore::locateHashRange(const uint256& hash, std::size_t& minPos,
+                                    std::size_t& maxPos, std::size_t& count) const
 {
+    // Same-hash keys are contiguous under TxOrderLess (the hash tiebreaker
+    // clusters them), so min/max bound a single range. The erase in removeLocked
+    // depends on that; validate it at runtime rather than with an assert, since the
+    // deployed build is -DNDEBUG and a de-clustered index would erase a wider
+    // [minPos, maxPos] range that swallows foreign rows. The bounds check is
+    // ordered first and short-circuits, so the m_records[] subscripts below it
+    // never run out of range.
     auto range = m_by_hash.equal_range(hash);
     if (range.first == range.second) {
-        // Not present — filtered out at insert time, or never inserted. No-op,
-        // no event.
-        return;
+        return false;
     }
-
-    // Same-hash keys are contiguous under TxOrderLess (the hash tiebreaker
-    // clusters them), so min/max bound a single range.
-    std::size_t minPos = std::numeric_limits<std::size_t>::max();
-    std::size_t maxPos = 0;
+    minPos = std::numeric_limits<std::size_t>::max();
+    maxPos = 0;
     for (auto it = range.first; it != range.second; ++it) {
         if (it->second < minPos) minPos = it->second;
         if (it->second > maxPos) maxPos = it->second;
     }
-    const std::size_t count = maxPos - minPos + 1;
-    const std::size_t distance = static_cast<std::size_t>(std::distance(range.first, range.second));
+    count = maxPos - minPos + 1;
+    const std::size_t distance =
+        static_cast<std::size_t>(std::distance(range.first, range.second));
+    return maxPos < m_records.size()
+        && count == distance
+        && m_records[minPos].hash == hash
+        && m_records[maxPos].hash == hash;
+}
 
-    // The erase below relies on same-hash keys being a single contiguous run
-    // (guaranteed by TxOrderLess's hash tiebreaker). Validate at runtime, not
-    // via assert: the deployed build is -DNDEBUG, so an assert would vanish and
-    // a de-clustered index would erase a wider [minPos, maxPos] range that
-    // swallows foreign rows (heap/structure corruption). The bounds check is
-    // ordered first and short-circuits, so the m_records[] subscripts below it
-    // never run out of range. If the invariant is ever violated, bail without
-    // erasing or emitting — a stale row is a safe degradation; a wrong erase is
-    // not.
-    if (maxPos >= m_records.size()
-            || count != distance
-            || m_records[minPos].hash != hash
-            || m_records[maxPos].hash != hash) {
+bool WalletTxStore::removeLocked(const uint256& hash)
+{
+    std::size_t minPos = 0;
+    std::size_t maxPos = 0;
+    std::size_t count = 0;
+
+    if (!locateHashRange(hash, minPos, maxPos, count)) {
+        if (m_by_hash.find(hash) == m_by_hash.end()) {
+            // Not present — filtered out at insert time, or never inserted. No-op,
+            // no event. Report success: the caller's goal (this hash is gone) holds.
+            return true;
+        }
+        // The index disagrees with m_records. m_by_hash is derived purely from
+        // m_records, and m_records is kept in RecordOrder (which clusters a
+        // transaction's parts), so rebuilding it from the records restores the
+        // invariant by construction. Recover rather than bail: the old code
+        // returned here, and updateTransaction's remove+insert fallback then hit
+        // insertLocked's hash dedup on the still-present stale entries and
+        // returned too, so the transaction became permanently un-updatable,
+        // un-removable and un-reinsertable (#3257 review).
         LogPrintf("ERROR: %s: hash %s index non-contiguous/out-of-range "
-                  "(minPos=%u maxPos=%u count=%u distance=%u keys=%u) — skipping remove",
+                  "(minPos=%u maxPos=%u count=%u records=%u) — rebuilding the hash index",
                   __func__, hash.GetHex(),
                   static_cast<unsigned int>(minPos), static_cast<unsigned int>(maxPos),
-                  static_cast<unsigned int>(count), static_cast<unsigned int>(distance),
+                  static_cast<unsigned int>(count),
                   static_cast<unsigned int>(m_records.size()));
-        return;
+        rebuildIndex();
+        if (!locateHashRange(hash, minPos, maxPos, count)) {
+            if (m_by_hash.find(hash) == m_by_hash.end()) {
+                return true;   // the rebuild showed it was never really there
+            }
+            LogPrintf("ERROR: %s: hash %s still inconsistent after an index rebuild "
+                      "— skipping remove", __func__, hash.GetHex());
+            return false;
+        }
     }
 
     m_records.erase(m_records.begin() + minPos, m_records.begin() + maxPos + 1);
@@ -398,6 +422,7 @@ void WalletTxStore::removeLocked(const uint256& hash)
     for (auto& [viewId, cursor] : m_cursors) {
         emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStoreRemove(minPos, count));
     }
+    return true;
 }
 
 void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
@@ -585,7 +610,15 @@ void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
             || static_cast<std::size_t>(std::distance(range.first, range.second)) != stored
             || m_records[minPos].hash != hash
             || m_records[maxPos].hash != hash) {
-        removeLocked(hash);
+        if (!removeLocked(hash)) {
+            // The index could not be reconciled even after a rebuild. Do NOT fall
+            // through to insertLocked: its hash dedup would see the stale entries
+            // and return silently, dropping the update with no event and no
+            // volatility refresh — permanently, for this hash (#3257 review).
+            LogPrintf("ERROR: %s: hash %s could not be removed for the re-insert "
+                      "fallback — dropping this update", __func__, hash.GetHex());
+            return;
+        }
         insertLocked(std::move(records));
         return;
     }
@@ -682,6 +715,18 @@ void WalletTxStore::applyChainTipRefresh()
         // A tx's parts are contiguous in m_records; collect + sort their positions.
         std::vector<std::size_t> positions;
         for (auto it = range.first; it != range.second; ++it) {
+            // Bounds-check, as every other m_by_hash consumer in this file does.
+            // This one runs inline on the core thread for every volatile record on
+            // every block, and recomputeCacheAt below WRITES three parallel
+            // vectors at the same index — an unvalidated position here is a heap
+            // write, not just a bad read (#3257 review).
+            if (it->second >= m_records.size()) {
+                LogPrintf("ERROR: %s: hash %s maps to record %u of %u — skipping "
+                          "this part's refresh", __func__, hash.GetHex(),
+                          static_cast<unsigned int>(it->second),
+                          static_cast<unsigned int>(m_records.size()));
+                continue;
+            }
             positions.push_back(it->second);
         }
         std::sort(positions.begin(), positions.end());
@@ -722,6 +767,17 @@ void WalletTxStore::makeCursorProjectors(Cursor::FieldsFn& fields, Cursor::KeysF
 
 void WalletTxStore::recomputeCacheAt(std::size_t i)
 {
+    // The three vectors are maintained in lockstep, so this should be
+    // unreachable — but it WRITES, and every caller derives `i` from m_by_hash or
+    // from a cursor position, so validate rather than trust (#3257 review).
+    if (i >= m_records.size() || i >= m_fields_cache.size() || i >= m_keys_cache.size()) {
+        LogPrintf("ERROR: %s: index %u out of range (records=%u fields=%u keys=%u)",
+                  __func__, static_cast<unsigned int>(i),
+                  static_cast<unsigned int>(m_records.size()),
+                  static_cast<unsigned int>(m_fields_cache.size()),
+                  static_cast<unsigned int>(m_keys_cache.size()));
+        return;
+    }
     m_fields_cache[i] = projectFields(m_records[i]);
     m_keys_cache[i] = projectKeys(m_records[i]);
 }
@@ -736,6 +792,9 @@ void WalletTxStore::updateVolatileForHash(const uint256& hash)
     auto range = m_by_hash.equal_range(hash);
     bool volatile_now = false;
     for (auto it = range.first; it != range.second; ++it) {
+        if (it->second >= m_records.size()) {
+            continue;   // stale index entry; removeLocked logs and repairs it
+        }
         if (isVolatile(m_records[it->second])) {
             volatile_now = true;
             break;

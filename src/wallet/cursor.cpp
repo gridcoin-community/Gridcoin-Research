@@ -283,7 +283,15 @@ std::vector<CursorDelta> Cursor::setSort(int sort_column, int sort_order)
 
 std::vector<CursorDelta> Cursor::setFilter(const FilterSpec& filter, std::size_t n)
 {
+    // Preserve the served-window cap. limit_rows rides along in FilterSpec, but it
+    // is owned by setLimit (the view's own resize), not by the caller's filter —
+    // and a caller building a FilterSpec from the UI's filter controls leaves it at
+    // the -1 default, which would silently uncap the view. Latent today, since no
+    // view both filters and caps, but the two are independent knobs and the wire
+    // type should not couple them.
+    const int32_t cap_kept = m_filter.limit_rows;
     m_filter = filter;
+    m_filter.limit_rows = cap_kept;
     return rebuild(n);
 }
 
