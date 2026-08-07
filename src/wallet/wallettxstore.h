@@ -235,6 +235,22 @@ private:
         std::string ab_label;                   //!< AddressBook: its new label ("" if removed).
     };
 
+    //! Intake depth at which to start warning that the worker is not keeping up.
+    //! Far above any legitimate burst (a reorg or an IBD catch-up drains in
+    //! well under this), so a crossing means the worker is wedged or starved.
+    static constexpr std::size_t kIntakeBacklogWarn = 2000;
+
+    //! Warn (at doubling thresholds, so it cannot spam) when the intake queue is
+    //! growing without being drained. Caller holds cs_intake.
+    //!
+    //! The worker is the SOLE path by which a new transaction reaches m_records,
+    //! and its health is otherwise invisible: if it stops draining, producers keep
+    //! enqueuing successfully and the inline applyChainTipRefresh keeps refreshing
+    //! already-stored rows, so the only symptom is that no new row ever appears
+    //! again — with nothing in the log to say why (#3257). A backlog that keeps
+    //! growing is the one observable signature, so say it out loud.
+    void warnIfIntakeBacklogged() EXCLUSIVE_LOCKS_REQUIRED(cs_intake);
+
     //! Worker entry point: drain the intake queue and apply each item. Parks
     //! while m_rebuilding is set (acknowledging via m_worker_parked); exits on
     //! m_stop. Holds cs_intake only while waiting/dequeuing — never with cs_store.
@@ -351,6 +367,8 @@ private:
     bool m_stop GUARDED_BY(cs_intake){false};          //!< shutdown request (dtor)
     bool m_rebuilding GUARDED_BY(cs_intake){false};    //!< prime wants the worker parked
     bool m_worker_parked GUARDED_BY(cs_intake){false}; //!< worker has acknowledged the pause
+    //! Next intake depth at which to warn, doubled after each warning.
+    std::size_t m_intake_warn_at GUARDED_BY(cs_intake){kIntakeBacklogWarn};
     CConditionVariable m_intake_cv;  //!< worker waits for work / stop / resume
     CConditionVariable m_idle_cv;    //!< prime waits for m_worker_parked
     std::thread m_worker;

@@ -126,11 +126,25 @@ void WalletTxStore::start()
     m_worker = std::thread([this] { workerLoop(); });
 }
 
+void WalletTxStore::warnIfIntakeBacklogged()
+{
+    if (m_intake.size() < m_intake_warn_at) {
+        return;
+    }
+    LogPrintf("WARNING: %s: transaction-store intake backlog is %u items "
+              "(worker parked=%d, rebuild in progress=%d) — new transactions are "
+              "not reaching the GUI transaction views",
+              __func__, static_cast<unsigned int>(m_intake.size()),
+              static_cast<int>(m_worker_parked), static_cast<int>(m_rebuilding));
+    m_intake_warn_at *= 2;
+}
+
 void WalletTxStore::enqueueInsert(std::vector<TransactionRecord> records)
 {
     {
         LOCK(cs_intake);
         m_intake.push_back(IntakeItem{IntakeItem::Insert, std::move(records), uint256()});
+        warnIfIntakeBacklogged();
     }
     m_intake_cv.notify_one();
 }
@@ -140,6 +154,7 @@ void WalletTxStore::enqueueRemove(const uint256& hash)
     {
         LOCK(cs_intake);
         m_intake.push_back(IntakeItem{IntakeItem::Remove, {}, hash});
+        warnIfIntakeBacklogged();
     }
     m_intake_cv.notify_one();
 }
@@ -153,6 +168,7 @@ void WalletTxStore::enqueueUpsert(std::vector<TransactionRecord> records)
     {
         LOCK(cs_intake);
         m_intake.push_back(IntakeItem{IntakeItem::Update, std::move(records), hash, {}, {}});
+        warnIfIntakeBacklogged();
     }
     m_intake_cv.notify_one();
 }
@@ -162,6 +178,7 @@ void WalletTxStore::enqueueAddressBookChange(const std::string& address, const s
     {
         LOCK(cs_intake);
         m_intake.push_back(IntakeItem{IntakeItem::AddressBook, {}, uint256(), address, label});
+        warnIfIntakeBacklogged();
     }
     m_intake_cv.notify_one();
 }
@@ -405,6 +422,28 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
     // (insert/removeTransaction take only cs_store), so waiting for it here while
     // we hold both cannot deadlock. m_started guards the pre-start() first reload
     // (no worker yet → nothing to wait for).
+    //
+    // The park is released by an RAII guard, NOT by falling off the end of this
+    // function. m_rebuilding is the worker's wait predicate, so if anything below
+    // throws — and plenty can: decomposeTransaction calls GetCredit/GetDebit,
+    // which throw std::runtime_error outside MoneyRange, and updateStatus reaches
+    // GetGeneratedType, which hits the tx index and reads a block from disk — the
+    // worker would stay parked FOREVER. Producers would keep enqueuing
+    // successfully and m_intake would grow without bound, while the inline
+    // applyChainTipRefresh kept refreshing already-stored rows: the GUI would show
+    // existing transactions ripening normally and never show a new one again
+    // (#3257).
+    struct RebuildPark {
+        WalletTxStore& s;
+        ~RebuildPark()
+        {
+            LOCK(s.cs_intake);
+            s.m_rebuilding = false;
+            s.m_worker_parked = false;
+            s.m_intake_cv.notify_all();
+        }
+    } park_guard{*this};
+
     {
         WAIT_LOCK(cs_intake, ilock);
         m_rebuilding = true;
@@ -489,15 +528,10 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
         }
     }
 
-    // Release the store-worker (PR2.5): the rebuilt index is live, so resume
-    // draining. Producers remain blocked on cs_wallet until we return, so the
-    // worker has nothing to apply until the snapshot is installed.
-    {
-        LOCK(cs_intake);
-        m_rebuilding = false;
-        m_worker_parked = false;
-        m_intake_cv.notify_all();
-    }
+    // The store-worker is released by park_guard's destructor as this function
+    // returns (PR2.5): the rebuilt index is live, so it resumes draining.
+    // Producers remain blocked on cs_wallet until we return, so the worker has
+    // nothing to apply until the snapshot is installed.
 }
 
 void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
