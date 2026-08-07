@@ -66,8 +66,10 @@ $scriptsCse  = '[{42B5FAAE-6536-11D2-AE5A-0000F87571E3}{40B6664F-4972-11D1-A7CA-
 
 # --- scripts.ini helpers (UTF-16LE, the format gpedit writes) -------------------------
 function Read-IniLines([string]$path) {
-    if (Test-Path -LiteralPath $path) { return @(Get-Content -LiteralPath $path -Encoding Unicode) }
-    return @()
+    # The leading comma stops PowerShell from unrolling an empty/single-element array on
+    # return (which would surface as $null / a bare string at the call site).
+    if (Test-Path -LiteralPath $path) { return ,@(Get-Content -LiteralPath $path -Encoding Unicode) }
+    return ,@()
 }
 function Write-IniLines([string]$path, [string[]]$lines) {
     $dir = Split-Path -Parent $path
@@ -219,7 +221,7 @@ if (-not $already) {
     $has = $false
     foreach ($l in $lines) { if ($l -match '^\s*\[Shutdown\]\s*$') { $has = $true } }
     $list = New-Object System.Collections.Generic.List[string]
-    $list.AddRange([string[]]$lines)
+    if ($lines.Count -gt 0) { $list.AddRange([string[]]$lines) }  # $lines is empty on a fresh box
     if (-not $has) { $list.Add('[Shutdown]') }
     # Insert our two keys right after the [Shutdown] header (simplest correct placement).
     $out = New-Object System.Collections.Generic.List[string]
