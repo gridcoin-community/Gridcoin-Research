@@ -13,11 +13,14 @@
 
 #include <wallet/cursor.h>
 #include <interfaces/wallet_tx_filter.h>
+#include <tinyformat.h>
 
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -76,6 +79,87 @@ Rec active(int64_t time, const std::string& ssort = "") { Rec r; r.time = time; 
 // Count deltas of a given type.
 int countType(const std::vector<CursorDelta>& d, CursorDelta::Type t) {
     int n = 0; for (const auto& x : d) if (x.type == t) ++n; return n;
+}
+
+//! A served-window replica driven ONLY by the emitted deltas, holding stable row
+//! identities (the addr field) rather than absolute indices — exactly what a real
+//! consumer holds, since absolute indices renumber under it invisibly.
+//!
+//! Comparing this against the cursor's own served window is the contract the
+//! whole delta protocol exists to satisfy, and it is what the position-only
+//! assertions elsewhere in this suite cannot check: they verify WHERE a delta
+//! points, never WHICH row it carries.
+struct ServedReplica {
+    std::vector<std::string> ids;
+    bool bad = false;
+
+    void apply(const std::vector<CursorDelta>& deltas, const Cursor& cur, const Table& t)
+    {
+        for (const CursorDelta& d : deltas) {
+            switch (d.type) {
+            case CursorDelta::Reset:
+                ids = servedIds(cur, t);
+                break;
+            case CursorDelta::Insert: {
+                if (d.first < 0 || static_cast<std::size_t>(d.first) > ids.size()
+                        || d.rows.size() != static_cast<std::size_t>(d.count)) {
+                    bad = true;
+                    break;
+                }
+                std::vector<std::string> add;
+                for (std::size_t absidx : d.rows) {
+                    if (absidx >= t.rows.size()) { bad = true; break; }
+                    add.push_back(t.rows[absidx].addr);
+                }
+                if (bad) break;
+                ids.insert(ids.begin() + d.first, add.begin(), add.end());
+                break;
+            }
+            case CursorDelta::Remove:
+                if (d.first < 0 || d.count <= 0
+                        || static_cast<std::size_t>(d.first) + static_cast<std::size_t>(d.count)
+                               > ids.size()) {
+                    bad = true;
+                    break;
+                }
+                ids.erase(ids.begin() + d.first, ids.begin() + d.first + d.count);
+                break;
+            case CursorDelta::Change:
+                break;   // content-only; no structural effect
+            }
+        }
+    }
+
+    static std::vector<std::string> servedIds(const Cursor& cur, const Table& t)
+    {
+        std::vector<std::string> out;
+        for (std::size_t i = 0; i < cur.servedCount(); ++i) {
+            const std::size_t absidx = cur.viewIndex()[i];
+            out.push_back(absidx < t.rows.size() ? t.rows[absidx].addr : std::string("<oob>"));
+        }
+        return out;
+    }
+};
+
+void checkServedMatches(const Cursor& cur, const Table& t, const ServedReplica& rep)
+{
+    BOOST_CHECK_MESSAGE(!rep.bad, "a delta was unusable: bad position, wrong row count, "
+                                  "or an out-of-range record index");
+    const std::vector<std::string> served = ServedReplica::servedIds(cur, t);
+    BOOST_CHECK_EQUAL_COLLECTIONS(rep.ids.begin(), rep.ids.end(), served.begin(), served.end());
+}
+
+//! `n` accepted rows in strict time-DESC order, so view order == absolute order
+//! and each row is identified by addr "rNN".
+Table descendingTable(int n)
+{
+    Table t;
+    for (int i = 0; i < n; ++i) {
+        Rec r = active(1000 + (n - i));
+        r.addr = strprintf("r%02d", i);
+        t.rows.push_back(r);
+    }
+    return t;
 }
 
 } // anonymous namespace
@@ -514,6 +598,120 @@ BOOST_AUTO_TEST_CASE(position_of_multipart_same_key_distinct_rows)
     // rowForKey(idx<0) takes the MIN accepted position across the parts -> abs0, row 1.
     BOOST_CHECK_EQUAL(std::min({c.positionOf(0), c.positionOf(1), c.positionOf(2)}), 1u);
     BOOST_CHECK(c.positionOf(7) == NPOS);
+}
+
+// ---- delta payloads must name the row they were emitted for -----------------
+
+BOOST_AUTO_TEST_CASE(multipart_remove_promotions_carry_the_promoted_row)
+{
+    // Removing a multi-part transaction from a CAPPED view emits its deltas
+    // against successive intermediate states: each erased part can promote an
+    // off-window row into the last visible slot, and the served window can end up
+    // SHORTER than the cap. So neither the coordinate nor the record of an earlier
+    // delta survives the batch, and the store must not re-derive either afterwards
+    // (#3257 review).
+    //
+    // Two shapes, both reachable when a coinstake is orphaned out of the Overview:
+    //   n = 10: the accepted set ends BELOW the cap, so the promotion coordinate
+    //           emitted while it was still above the cap now points past the end.
+    //   n = 11: the accepted set stays at the cap, but the surviving absolute
+    //           indices are renumbered by the store's erase, so a record index
+    //           captured mid-batch names the wrong row unless it is renumbered too.
+    for (const int n : {10, 11}) {
+        Table t = descendingTable(n);
+        FilterSpec spec;
+        spec.limit_rows = 9;
+        Cursor c(1, spec, TXCOL_DATE, TXSORT_DESC, t.fields(), t.keys());
+
+        ServedReplica rep;
+        rep.apply(c.rebuild(t.rows.size()), c, t);
+        BOOST_REQUIRE_EQUAL(c.servedCount(), 9u);
+        checkServedMatches(c, t, rep);
+
+        // The store erases the transaction's parts from its record table BEFORE
+        // driving the cursors (WalletTxStore::removeLocked), so mirror that order.
+        t.rows.erase(t.rows.begin(), t.rows.begin() + 2);
+        rep.apply(c.applyStoreRemove(0, 2), c, t);
+
+        BOOST_CHECK_EQUAL(c.totalAccepted(), static_cast<std::size_t>(n - 2));
+        checkServedMatches(c, t, rep);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(multipart_remove_straddling_the_cap_names_no_doomed_row)
+{
+    // The nastiest shape: a transaction whose parts sit either side of the cap
+    // boundary — one served at the last visible slot, its sibling the first
+    // off-window row — AND at the end of the record table. Erasing the served part
+    // promotes the sibling into the window, and erasing the sibling then takes it
+    // straight back out; a delta naming that sibling names a record the store has
+    // already erased, which here is past the end of the shrunken table.
+    Table t = descendingTable(10);
+    FilterSpec spec;
+    spec.limit_rows = 9;
+    Cursor c(1, spec, TXCOL_DATE, TXSORT_DESC, t.fields(), t.keys());
+
+    ServedReplica rep;
+    rep.apply(c.rebuild(t.rows.size()), c, t);
+    BOOST_REQUIRE_EQUAL(c.servedCount(), 9u);
+    // View order == absolute order, so absolute 8 is the last served row and
+    // absolute 9 is the first off-window one.
+    BOOST_REQUIRE_EQUAL(c.viewIndex()[8], 8u);
+
+    t.rows.erase(t.rows.begin() + 8, t.rows.begin() + 10);
+    const auto deltas = c.applyStoreRemove(8, 2);
+    rep.apply(deltas, c, t);
+
+    BOOST_CHECK_EQUAL(c.totalAccepted(), 8u);
+    checkServedMatches(c, t, rep);
+    // Every record an Insert names must exist in the post-erase table.
+    for (const CursorDelta& d : deltas) {
+        if (d.type != CursorDelta::Insert) continue;
+        BOOST_CHECK_EQUAL(d.rows.size(), static_cast<std::size_t>(d.count));
+        for (const std::size_t absidx : d.rows) {
+            BOOST_CHECK_MESSAGE(absidx < t.rows.size(),
+                                "Insert delta names record " << absidx << " of " << t.rows.size());
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(multipart_insert_deltas_carry_distinct_rows_under_status_sort)
+{
+    // A two-part transaction whose parts sort in REVERSE absolute order: under a
+    // DESC status sort the trailing idx field of TransactionRecord's sortKey puts
+    // part idx 1 before part idx 0, so both Inserts land at the SAME slot. The two
+    // deltas must still carry different records — re-resolving the shared
+    // coordinate after the batch yielded the same row twice, duplicating one part
+    // and losing the other (the Overview half of #3101).
+    Table t;
+    t.rows = { active(900, "0000000300-0-0000000100-000") };
+    t.rows[0].addr = "seed";
+    FilterSpec spec;
+    Cursor c(1, spec, TXCOL_STATUS, TXSORT_DESC, t.fields(), t.keys());
+    ServedReplica rep;
+    rep.apply(c.rebuild(t.rows.size()), c, t);
+
+    // Two parts of one transaction at absolute [1, 3), same everything but idx.
+    Rec p0 = active(500, "0000000400-0-0000000200-000");
+    p0.addr = "part0";
+    Rec p1 = active(500, "0000000400-0-0000000200-001");
+    p1.addr = "part1";
+    t.rows.push_back(p0);
+    t.rows.push_back(p1);
+
+    const auto deltas = c.applyStoreInsert(1, 2);
+    rep.apply(deltas, c, t);
+
+    // Both parts are in the view, each named by exactly one delta.
+    BOOST_CHECK_EQUAL(c.totalAccepted(), 3u);
+    checkServedMatches(c, t, rep);
+    std::set<std::size_t> named;
+    for (const CursorDelta& d : deltas) {
+        if (d.type != CursorDelta::Insert) continue;
+        BOOST_CHECK_EQUAL(d.rows.size(), static_cast<std::size_t>(d.count));
+        for (std::size_t absidx : d.rows) named.insert(absidx);
+    }
+    BOOST_CHECK_EQUAL(named.size(), 2u);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

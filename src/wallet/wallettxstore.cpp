@@ -811,7 +811,15 @@ RowsResult WalletTxStore::getRows(int viewId, int first, int count)
         : std::min(served, begin + static_cast<std::size_t>(count));
     res.records.reserve(end - begin);
     for (std::size_t i = begin; i < end; ++i) {
-        res.records.push_back(m_records[cur.rowAt(i)]);
+        const std::size_t absidx = cur.rowAt(i);
+        if (absidx >= m_records.size()) {
+            LogPrintf("ERROR: %s: view %d served row %u maps to record %u of %u — skipping",
+                      __func__, viewId, static_cast<unsigned int>(i),
+                      static_cast<unsigned int>(absidx),
+                      static_cast<unsigned int>(m_records.size()));
+            continue;
+        }
+        res.records.push_back(m_records[absidx]);
     }
     return res;
 }
@@ -840,7 +848,15 @@ RowsResult WalletTxStore::getAllRows(int viewId)
     const std::size_t n = static_cast<std::size_t>(res.total_accepted);
     res.records.reserve(n);
     for (std::size_t i = 0; i < n; ++i) {
-        res.records.push_back(m_records[cur.rowAt(i)]);
+        const std::size_t absidx = cur.rowAt(i);
+        if (absidx >= m_records.size()) {
+            LogPrintf("ERROR: %s: view %d accepted row %u maps to record %u of %u — skipping",
+                      __func__, viewId, static_cast<unsigned int>(i),
+                      static_cast<unsigned int>(absidx),
+                      static_cast<unsigned int>(m_records.size()));
+            continue;
+        }
+        res.records.push_back(m_records[absidx]);
     }
     return res;
 }
@@ -921,7 +937,6 @@ WalletTxDetail WalletTxStore::getRowDetail(const uint256& hash, int idx)
 void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
                                      const std::vector<CursorDelta>& deltas)
 {
-    auto it = m_cursors.find(viewId);
     for (const CursorDelta& d : deltas) {
         // Record the seqno of every emitted event as the view's high-water (the
         // last one wins) so getRows can tell a consumer exactly what its refetch
@@ -932,12 +947,37 @@ void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
             m_view_seqno[viewId] = m_queue.push(GRC::RowsResetPayload{viewId, epoch, d.count});
             break;
         case CursorDelta::Insert: {
+            // Read the records the CURSOR stamped on the delta, NOT a re-resolution
+            // of d.first against the cursor's current view_index. A single apply*
+            // call emits its deltas against successive intermediate states, so by
+            // the time we get here d.first can name a different row — or none at
+            // all, when a later delta shrank the served window past it. That was a
+            // wrong-record payload on capped Status-sorted views and an
+            // out-of-bounds read on the promotion path (#3257 review, and the
+            // Overview half of #3101).
             std::vector<TransactionRecord> recs;
-            if (it != m_cursors.end()) {
-                recs.reserve(static_cast<std::size_t>(d.count));
-                for (int j = 0; j < d.count; ++j) {
-                    recs.push_back(m_records[it->second.rowAt(static_cast<std::size_t>(d.first + j))]);
+            recs.reserve(d.rows.size());
+            for (const std::size_t absidx : d.rows) {
+                if (absidx >= m_records.size()) {
+                    // Unreachable by construction: rows are captured from a live
+                    // view_index under the same cs_store hold that mutated
+                    // m_records. Log rather than assert — the deployed build is
+                    // -DNDEBUG — and skip, so a stale index degrades to a missing
+                    // row instead of a heap read.
+                    LogPrintf("ERROR: %s: view %d Insert delta at %d references record "
+                              "%u of %u — skipping",
+                              __func__, viewId, d.first,
+                              static_cast<unsigned int>(absidx),
+                              static_cast<unsigned int>(m_records.size()));
+                    continue;
                 }
+                recs.push_back(m_records[absidx]);
+            }
+            if (recs.size() != static_cast<std::size_t>(d.count)) {
+                LogPrintf("ERROR: %s: view %d Insert delta at %d carries %u of %d records "
+                          "— consumer replicas will diverge until the next reset",
+                          __func__, viewId, d.first,
+                          static_cast<unsigned int>(recs.size()), d.count);
             }
             m_view_seqno[viewId] = m_queue.push(GRC::RowsInsertedPayload{d.first, std::move(recs), viewId, epoch});
             break;
