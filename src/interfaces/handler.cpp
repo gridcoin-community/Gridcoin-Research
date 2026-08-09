@@ -8,15 +8,32 @@
 
 #include <boost/signals2/connection.hpp>
 
+#include <string>
 #include <utility>
 
 namespace interfaces {
 
 void LogDroppedNotification(const char* what)
 {
-    // IPC category only: on a clean shutdown many peers drop at once, so this can
-    // fire repeatedly; it is expected, not an error. Surfaces with -debug=ipc.
-    LogPrint(BCLog::LogFlags::IPC, "IPC: dropped a notification to a disconnected client: %s", what);
+    const std::string msg(what != nullptr ? what : "");
+
+    // The disconnect case is what this guard exists for: a notification to a client
+    // that is gone is a no-op by definition, and on a clean shutdown many drop at
+    // once, so it is expected rather than an error. Keep those to the IPC category
+    // (surfaces with -debug=ipc). The two texts below are what libmultiprocess
+    // raises through Gridcoin's IpcLogFn on a dead connection.
+    if (msg.find("called after disconnect") != std::string::npos
+        || msg.find("interrupted by disconnect") != std::string::npos) {
+        LogPrint(BCLog::LogFlags::IPC, "IPC: dropped a notification to a disconnected client: %s", msg);
+        return;
+    }
+
+    // Anything else is a genuine defect -- a logic error, a bad_alloc, a throwing
+    // callback body -- that this guard would otherwise hide. It must NOT be silent:
+    // log at the default level so a real bug cannot vanish in production merely
+    // because it happened to escape through a notification.
+    LogPrintf("WARN: %s: swallowed a non-disconnect exception from a notification callback: %s\n",
+              __func__, msg);
 }
 
 namespace {
