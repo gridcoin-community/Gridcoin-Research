@@ -229,6 +229,49 @@ std::size_t viewRowCount(WalletTxStore& store, int viewId)
     return store.getRows(viewId, 0, -1).records.size();
 }
 
+//! A wallet transaction that cannot be processed without throwing.
+//!
+//! Funds two MAX_MONEY outputs to `mine` in a mature block (each individually in
+//! range), then spends BOTH with one coinstake. CWallet::GetDebit sums per input
+//! and range-checks the running total, so the second input takes it past
+//! MAX_MONEY and it throws std::runtime_error. Both of the paths under test reach
+//! that: decomposeTransaction calls GetDebit() directly, and updateStatus reaches
+//! it via IsTrusted() -> IsFromMe() once the tx is at depth 1.
+//!
+//! \return the coinstake's hash. `funding_out` receives the funding tx hash so the
+//! caller can erase both.
+uint256 injectPoisonCoinstake(const CTxDestination& mine, const uint256& mature_block,
+                              const uint256& tip_block, uint256& funding_out)
+{
+    CMutableTransaction fund_mtx;
+    fund_mtx.vout.resize(2);
+    for (int i = 0; i < 2; ++i) {
+        fund_mtx.vout[i].nValue = MAX_MONEY;
+        fund_mtx.vout[i].scriptPubKey = P2PKH(mine);
+    }
+    const CTransaction fund(fund_mtx);
+    InjectConfirmedTx(fund, mature_block);
+    funding_out = fund.GetHash();
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(2);
+    mtx.vin[0].prevout = COutPoint(fund.GetHash(), 0);
+    mtx.vin[1].prevout = COutPoint(fund.GetHash(), 1);
+    CTxOut empty;
+    empty.SetEmpty();
+    mtx.vout.push_back(empty);
+    CTxOut ret;
+    ret.nValue = 50 * COIN;
+    ret.scriptPubKey = P2PKH(mine);
+    mtx.vout.push_back(ret);
+    mtx.vout.push_back(ret);
+
+    const CTransaction poison(mtx);
+    BOOST_REQUIRE(poison.IsCoinStake());
+    InjectConfirmedTx(poison, tip_block);
+    return poison.GetHash();
+}
+
 } // namespace
 
 BOOST_AUTO_TEST_SUITE(qt_wallettxstore_chain_tests)
@@ -338,34 +381,9 @@ BOOST_AUTO_TEST_CASE(oneUnrefreshableTxDoesNotFreezeTheRestOfTheWallet)
     OwnedKey mine;
     OwnedKey sidestake_dest;
 
-    // The poison transaction: a funding tx paying us two MAX_MONEY outputs (each
-    // individually in range), spent by a coinstake with two inputs — so GetDebit's
-    // running total leaves MoneyRange on the second input and throws.
-    CMutableTransaction fund_mtx;
-    fund_mtx.vout.resize(2);
-    for (int i = 0; i < 2; ++i) {
-        fund_mtx.vout[i].nValue = MAX_MONEY;
-        fund_mtx.vout[i].scriptPubKey = P2PKH(mine.dest);
-    }
-    const CTransaction fund(fund_mtx);
-    InjectConfirmedTx(fund, chain.hash_prev);   // deep/mature block
-
-    CMutableTransaction poison_mtx;
-    poison_mtx.vin.resize(2);
-    poison_mtx.vin[0].prevout = COutPoint(fund.GetHash(), 0);
-    poison_mtx.vin[1].prevout = COutPoint(fund.GetHash(), 1);
-    CTxOut empty;
-    empty.SetEmpty();
-    poison_mtx.vout.push_back(empty);
-    CTxOut ret;
-    ret.nValue = 50 * COIN;
-    ret.scriptPubKey = P2PKH(mine.dest);
-    poison_mtx.vout.push_back(ret);
-    poison_mtx.vout.push_back(ret);
-    const CTransaction poison(poison_mtx);
-    BOOST_REQUIRE(poison.IsCoinStake());
-    const uint256 poison_hash = poison.GetHash();
-    InjectConfirmedTx(poison, chain.hash_fresh);
+    uint256 fund_hash;
+    const uint256 poison_hash =
+        injectPoisonCoinstake(mine.dest, chain.hash_prev, chain.hash_fresh, fund_hash);
 
     WalletEventQueue q;
     WalletTxStore store(pwalletMain, q);
@@ -430,8 +448,65 @@ BOOST_AUTO_TEST_CASE(oneUnrefreshableTxDoesNotFreezeTheRestOfTheWallet)
     BOOST_CHECK_EQUAL(store.rowForKey(GRC::VIEW_DETAILED, poison_hash, 0), -1);
 
     EraseWalletTx(poison_hash);
-    EraseWalletTx(fund.GetHash());
+    EraseWalletTx(fund_hash);
     for (const uint256& h : good_hashes) EraseWalletTx(h);
+}
+
+//! prime()'s rescan can throw, and the intake worker must survive it.
+//!
+//! prime() quiesces the single intake worker (m_rebuilding = true) before
+//! rebuilding the store from mapWallet, and the worker's wait predicate is that
+//! flag. The rescan in between is not safe: decomposeTransaction calls GetCredit
+//! and GetDebit, which throw std::runtime_error outside MoneyRange, and
+//! updateStatus reaches GetGeneratedType, which hits the tx index and reads a
+//! block from disk.
+//!
+//! If the flag is cleared by falling off the end of the function, a throw leaves
+//! the worker parked FOREVER. Producers keep enqueuing successfully and m_intake
+//! grows without bound, while the inline applyChainTipRefresh keeps ripening rows
+//! already in the store — so the GUI shows existing transactions updating
+//! normally and never shows a new one again. Releasing the park from an RAII
+//! guard is what makes that unwind-safe, and this pins it (#3257).
+BOOST_AUTO_TEST_CASE(primeThatThrowsMidRescanStillReleasesTheIntakeWorker)
+{
+    PendingTipChain chain;
+    OwnedKey mine;
+    OwnedKey sidestake_dest;
+
+    uint256 fund_hash;
+    const uint256 poison_hash =
+        injectPoisonCoinstake(mine.dest, chain.hash_prev, chain.hash_fresh, fund_hash);
+    chain.connect();
+
+    WalletEventQueue q;
+    WalletTxStore store(pwalletMain, q);
+    registerProductionViews(store);
+    store.start();
+
+    // Premise: the rescan really does throw on this wallet. prime() has no
+    // try/catch by design — the guard exists to make the unwind safe, not to
+    // swallow it — so the exception is expected to reach the caller.
+    BOOST_CHECK_THROW(store.prime(false, 0), std::runtime_error);
+
+    // The worker must have been released on the way out. Drop the poison so the
+    // producer side is clean, then prove liveness the only way that counts: a new
+    // transaction enqueued AFTER the failed prime still has to reach the view.
+    EraseWalletTx(poison_hash);
+    EraseWalletTx(fund_hash);
+
+    const CTransaction good =
+        MakeCoinstake(mine.dest, 42 * COIN, sidestake_dest.dest, 1 * COIN);
+    const uint256 good_hash = good.GetHash();
+    InjectConfirmedTx(good, chain.hash_fresh);
+
+    store.enqueueInsert(producerRecordsFor(good_hash));
+    settle(q);
+
+    BOOST_CHECK_MESSAGE(store.rowForKey(GRC::VIEW_DETAILED, good_hash, 0) >= 0,
+                        "the intake worker never resumed after prime() threw — "
+                        "every later transaction would be invisible");
+
+    EraseWalletTx(good_hash);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
