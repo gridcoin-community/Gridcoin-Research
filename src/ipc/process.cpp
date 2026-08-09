@@ -414,16 +414,57 @@ public:
         // owner + SYSTEM + Administrators only), but nothing set or checked it, so
         // a -datadir on a shared volume, an inherited-permissive parent or a
         // non-ACL filesystem silently exposed the wallet IPC socket and the auth
-        // cookie. Both platforms now fail closed instead of assuming.
+        // cookie.
+        //
+        // Applied ON CREATION ONLY, on both platforms. See the comment below: an
+        // existing datadir's permissions belong to the operator, not to us.
         if (path.has_parent_path()) {
-            fs::create_directories(path.parent_path());
-#ifndef WIN32
-            if (::chmod(path.parent_path().string().c_str(), 0700) != 0) {
-                throw std::system_error(errno, std::system_category());
+            const fs::path parent = path.parent_path();
+
+            // Harden the datadir ONLY when we are the ones creating it. If it already
+            // exists its permissions are the operator's decision: an admin may have
+            // deliberately widened them (a shared group, a second account, a backup
+            // agent), and silently re-tightening on every start would undo that with
+            // no warning and no way to make it stick. So we warn about a permissive
+            // datadir but never change one we did not create.
+            //
+            // This is not a hole: the two things that actually matter -- the socket
+            // and the auth cookie -- are ours, recreated on every start, and are
+            // still created owner-only and fail closed below. A widened datadir makes
+            // the directory listable, not the cookie readable.
+            boost::system::error_code ec;
+            const bool created = fs::create_directories(parent, ec);
+            if (ec) {
+                throw std::system_error(ec.value(), std::system_category(),
+                                        "could not create the IPC socket directory " + parent.string());
             }
+
+            if (created) {
+#ifndef WIN32
+                if (::chmod(parent.string().c_str(), 0700) != 0) {
+                    throw std::system_error(errno, std::system_category());
+                }
 #else
-            ApplyOwnerOnlyDacl(path.parent_path(), /*inheritable=*/true);
+                ApplyOwnerOnlyDacl(parent, /*inheritable=*/true);
 #endif
+            } else {
+#ifndef WIN32
+                struct stat st;
+                if (::stat(parent.string().c_str(), &st) == 0 && (st.st_mode & (S_IRWXG | S_IRWXO)) != 0) {
+                    LogPrintf("WARN: %s: the data directory %s is accessible to other users (mode %03o). "
+                              "Leaving it as configured; the IPC socket and cookie inside it remain owner-only.",
+                              __func__, parent.string(), static_cast<unsigned>(st.st_mode & 07777));
+                }
+#else
+                try {
+                    VerifyOwnerOnlyDacl(parent, GetOwnerOnlyTrustees());
+                } catch (const std::exception&) {
+                    LogPrintf("WARN: %s: the data directory %s is not restricted to this account. "
+                              "Leaving it as configured; the IPC socket and cookie inside it remain owner-only.",
+                              __func__, parent.string());
+                }
+#endif
+            }
         }
 
         // Try to bind; only if the path already exists (EADDRINUSE) do we probe it.
