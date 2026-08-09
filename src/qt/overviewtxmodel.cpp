@@ -62,6 +62,10 @@ OverviewTxModel::~OverviewTxModel()
             // quit that is running this teardown. Log at verbose so a failure for
             // any OTHER reason is still observable.
             GUILogPrint(GUILogCategory::VERBOSE, "OverviewTxModel: unregisterView skipped: %s", e.what());
+        } catch (...) {
+            // A destructor must not propagate ANYTHING, not just std::exception --
+            // a non-standard throw escaping here would terminate during teardown.
+            GUILogPrint(GUILogCategory::VERBOSE, "OverviewTxModel: unregisterView skipped: non-standard exception");
         }
     }
 }
