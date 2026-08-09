@@ -4,9 +4,10 @@
     Remove the Gridcoin core Scheduled Tasks registered by Install-GridcoinCoreTask.ps1.
 
 .DESCRIPTION
-    Unregisters \Gridcoin\Core-Start and \Gridcoin\Core-Stop, removes the inbound
-    firewall rule Install-GridcoinCoreTask.ps1 created for the daemon, and removes the
-    (now empty) \Gridcoin task folder. Tolerant of already-absent items (idempotent).
+    Unregisters \Gridcoin\Core-Start and \Gridcoin\Core-Stop, removes the Core-Start retry
+    launcher (core-autostart.cmd) and the inbound firewall rule Install-GridcoinCoreTask.ps1
+    created for the daemon, and removes the (now empty) \Gridcoin task folder. Tolerant of
+    already-absent items (idempotent).
 
     Does NOT remove the opt-in autounlock task (\Gridcoin\Autounlock) -- that is owned by
     Set-GridcoinAutounlock.ps1 (`-Remove`) -- nor the opt-in shutdown-flush Group Policy
@@ -27,6 +28,13 @@ foreach ($name in 'Core-Start', 'Core-Stop') {
     } else {
         Write-Host "\$TaskFolder\$name not present (ok)"
     }
+}
+
+# Remove the Core-Start retry launcher Install-GridcoinCoreTask.ps1 generated (idempotent).
+$launcher = Join-Path $PSScriptRoot 'core-autostart.cmd'
+if (Test-Path -LiteralPath $launcher) {
+    Remove-Item -LiteralPath $launcher -Force
+    Write-Host "Removed the Core-Start launcher ($launcher)."
 }
 
 # Remove the inbound firewall rule Install-GridcoinCoreTask.ps1 added for the daemon (idempotent).
