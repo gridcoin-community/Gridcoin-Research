@@ -4,6 +4,7 @@
 
 #include "interfaces/wallet_tx_source.h"
 
+#include "interfaces/handler.h"
 #include "main.h"
 #include "node/ui_interface.h"
 #include "wallet/wallet.h"
@@ -168,20 +169,29 @@ void WalletTxSourceImpl::subscribe()
     // block a slot already executing on another thread. m_handlers.clear() in
     // the destructor still severs the subscriptions so no NEW emission is
     // dispatched; the weak_ptr guard covers the in-flight overlap.
+    // The weak_ptr guard above covers LIFETIME. GuardNotify covers ESCAPE: these two
+    // slots run on core threads, and NotifyBlocksChanged in particular is emitted
+    // from UINotificationBridge::UpdatedBlockTip, i.e. from inside SetBestChain. An
+    // exception escaping here does not merely lose a GUI refresh -- boost::signals2
+    // abandons the remaining slots for that emission, so a throw would skip the peer
+    // manager's UpdatedBlockTip and with it the new-tip inventory relay, and would
+    // then unwind out of block connection entirely. Nothing about a wallet-side view
+    // refresh should be able to do that, so contain it here (and log it: a
+    // non-disconnect throw is reported at the default level, see handler.h).
     std::weak_ptr<WalletTxSourceImpl> weak_self = weak_from_this();
 
     m_handlers.emplace_back(m_wallet->NotifyTransactionChanged.connect(
-        [weak_self](CWallet* wallet, const uint256& hash, ChangeType status) {
+        interfaces::GuardNotify([weak_self](CWallet* wallet, const uint256& hash, ChangeType status) {
             if (auto self = weak_self.lock()) {
                 self->onTransactionChanged(wallet, hash, status);
             }
-        }));
+        })));
     m_handlers.emplace_back(uiInterface.NotifyBlocksChanged_connect(
-        [weak_self](bool syncing, int height, int64_t best_time, uint32_t target_bits) {
+        interfaces::GuardNotify([weak_self](bool syncing, int height, int64_t best_time, uint32_t target_bits) {
             if (auto self = weak_self.lock()) {
                 self->onBlocksChanged(syncing, height, best_time, target_bits);
             }
-        }));
+        })));
 }
 
 void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& hash, ChangeType status)

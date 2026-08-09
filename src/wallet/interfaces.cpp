@@ -524,31 +524,41 @@ public:
                               const std::optional<WalletCoinControl>& coin_control,
                               int64_t accepted_fee) override;
 
+    // NOTE: like every other uiInterface forwarder (see node/interfaces.cpp and
+    // gridcoin/interfaces.cpp), these must be wrapped in GuardNotify. They are not
+    // merely GUI conveniences: CWallet emits them from inside state transitions that
+    // are only half-complete at the emission point. CWallet::SetAddressBookName, for
+    // example, updates mapAddressBook, emits NotifyAddressBookChanged, and only THEN
+    // writes the name to the wallet database -- so an unguarded throw here (in
+    // multiprocess, when the GUI has gone away) unwinds before the write and loses
+    // the label permanently. DelAddressBookName has the mirror-image hazard.
+    // boost::signals2 also stops calling the remaining slots once one throws, which
+    // would silently deprive the node-side WalletTxSource of the same notification.
     std::unique_ptr<Handler> handleStatusChanged(StatusChangedFn fn) override
     {
         return MakeSignalHandler(m_wallet->NotifyStatusChanged.connect(
-            [fn = std::move(fn)](CCryptoKeyStore*) { fn(); }));
+            interfaces::GuardNotify([fn = std::move(fn)](CCryptoKeyStore*) { fn(); })));
     }
 
     std::unique_ptr<Handler> handleAddressBookChanged(AddressBookChangedFn fn) override
     {
         return MakeSignalHandler(m_wallet->NotifyAddressBookChanged.connect(
-            [fn = std::move(fn)](CWallet*,
+            interfaces::GuardNotify([fn = std::move(fn)](CWallet*,
                                  const CTxDestination& address,
                                  const std::string& label,
                                  bool is_mine,
                                  const std::string& purpose,
                                  ChangeType status) {
                 fn(EncodeDestination(address), label, is_mine, purpose, status);
-            }));
+            })));
     }
 
     std::unique_ptr<Handler> handleTransactionChanged(TransactionChangedFn fn) override
     {
         return MakeSignalHandler(m_wallet->NotifyTransactionChanged.connect(
-            [fn = std::move(fn)](CWallet*, const uint256& tx_hash, ChangeType status) {
+            interfaces::GuardNotify([fn = std::move(fn)](CWallet*, const uint256& tx_hash, ChangeType status) {
                 fn(tx_hash, status);
-            }));
+            })));
     }
 
 private:
