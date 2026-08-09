@@ -1391,6 +1391,16 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("POOL pending/open retention configured at %d blocks", GetPendingPoolRetention());
 
     fs::path datadir = GetDataDir();
+
+    // GetDataDirPath returns an empty path when the data directory cannot be accessed or
+    // created (e.g. wrong permissions, or a -datadir this user cannot read). It no longer
+    // throws, so guard here rather than proceed with an empty path -- DirIsWritable("")
+    // and LockDirectory("") would otherwise silently operate in the current working
+    // directory, seeding a fresh datadir/wallet in the wrong place.
+    if (datadir.empty()) {
+        return InitError(_("Cannot access the data directory; check that it exists and that you have permission to read and write it."));
+    }
+
     fs::path walletFileName = gArgs.GetArg("-wallet", "wallet.dat");
 
     LogPrintf("INFO %s: DataDir = %s.", __func__, fsbridge::LongPathString(datadir));

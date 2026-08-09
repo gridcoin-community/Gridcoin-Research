@@ -330,10 +330,16 @@ const fs::path& ArgsManager::GetDataDirPath(bool net_specific) const
     // this function
     if (!path.empty()) return path;
 
+    // Filesystem access here must NOT throw. This runs during early startup (config
+    // reading), where a permission-denied or otherwise unusable data directory would
+    // otherwise escape as a filesystem_error and abort the process before any error can
+    // be shown to the user. Use the non-throwing (error_code) overloads and leave the
+    // cached path empty on failure so callers can report it cleanly.
+    boost::system::error_code ec;
     std::string datadir = GetArg("-datadir", "");
     if (!datadir.empty()) {
-        path = fs::system_complete(datadir);
-        if (!fs::is_directory(path)) {
+        path = fs::system_complete(datadir, ec);
+        if (ec || !fs::is_directory(path, ec)) {
             path = "";
             return path;
         }
@@ -343,10 +349,14 @@ const fs::path& ArgsManager::GetDataDirPath(bool net_specific) const
     if (net_specific)
         path /= BaseParams().DataDir();
 
-    if (fs::create_directories(path)) {
-        // This is the first run, create wallets subdirectory too
-        // Reserved for when we move wallets to a subdir like Bitcoin
-        //fs::create_directories(path / "wallets");
+    // On the first run this creates the datadir (and parents); a permission failure
+    // sets ec instead of throwing. (A wallets/ subdir was reserved here for a future
+    // Bitcoin-style move.)
+    fs::create_directories(path, ec);
+    if (ec && !fs::is_directory(path, ec)) {
+        // Could neither create nor find the data directory (e.g. no permission).
+        path = "";
+        return path;
     }
 
     path = StripRedundantLastElementsOfPath(path);
@@ -804,7 +814,11 @@ const fs::path &GetDataDir(bool fNetSpecific)
 bool CheckDataDirOption()
 {
     std::string datadir = gArgs.GetArg("-datadir", "");
-    return datadir.empty() || fs::is_directory(fs::system_complete(datadir));
+    if (datadir.empty()) return true;
+    // Non-throwing: a permission-denied -datadir must return false (invalid), not throw
+    // a filesystem_error out of startup.
+    boost::system::error_code ec;
+    return fs::is_directory(fs::system_complete(datadir, ec), ec);
 }
 
 fs::path GetConfigFile(const std::string& confPath)
