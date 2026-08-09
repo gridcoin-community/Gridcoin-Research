@@ -17,6 +17,9 @@
 #include "interfaces/wallet.h"
 #include "interfaces/wallet_tx_source.h"
 
+#include "logging.h"
+
+#include <atomic>
 #include <stdexcept>
 #include <utility>
 
@@ -41,6 +44,16 @@ public:
 
     bool authenticate(const std::string& cookie) override
     {
+        // Fail closed on an empty expected cookie. ConstantTimeEqual("", "") is
+        // true, so without this an empty m_cookie would authenticate EVERY peer.
+        // Not reachable today (WriteCookie always produces 64 hex chars), but this
+        // is the one place where getting it wrong is unauthenticated wallet access,
+        // so it is checked rather than assumed.
+        if (m_cookie.empty()) {
+            LogPrintf("ERROR: %s: refusing to authenticate: no IPC cookie is set", __func__);
+            return false;
+        }
+
         // Return whether THIS cookie is valid (the client checks the result), and
         // set the (per-connection) authenticated flag on success. Never cleared: a
         // later bad-cookie call on the same connection cannot de-authenticate it.
@@ -132,7 +145,12 @@ private:
     std::unique_ptr<interfaces::Init> m_inner;
     std::string m_cookie;
     interfaces::NodeIdentity m_identity;
-    bool m_authenticated{false};
+    //! Atomic because a single connection is served by more than one thread:
+    //! libmultiprocess dispatches each client thread's calls to its own server
+    //! worker, so authenticate() may write this from one worker while another
+    //! reads it in RequireAuth(). The transition is monotonic false->true, so the
+    //! plain bool was benign in practice, but it was still a formal data race.
+    std::atomic<bool> m_authenticated{false};
 };
 } // namespace
 
