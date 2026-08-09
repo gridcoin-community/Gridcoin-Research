@@ -106,9 +106,15 @@ Configuration → Windows Settings → Scripts → **Shutdown**, and add a `.cmd
 
 ## Crash recovery
 
-`Core-Start` is registered with restart-on-failure (3 tries, 1 minute apart) — the
-analogue of the Linux unit's `Restart=on-failure`. A *graceful* stop exits 0 and is
-not restarted; only a crash (non-zero exit) triggers a restart.
+`Core-Start` runs the core through a generated launcher (`core-autostart.cmd`) that
+retries **once, after a 2-minute wait**, if the daemon exits non-zero — the analogue of
+the Linux unit's `Restart=on-failure`. A *graceful* stop exits 0 and is not retried;
+only a non-zero exit is. Each attempt's stderr is captured to `core-start.err.log` in
+the datadir, so a recurrence is diagnosable.
+
+The retry deliberately lives in the launcher rather than in the task: Task Scheduler's
+own restart-on-failure does **not** fire on a program's non-zero exit (confirmed
+on-device), so the `-RestartCount` it used to be registered with never actually helped.
 
 ## Autounlock (opt-in, stake-only, DPAPI)
 
