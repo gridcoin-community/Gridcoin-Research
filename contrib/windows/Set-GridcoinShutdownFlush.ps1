@@ -111,6 +111,74 @@ function Bump-GptIni {
     Write-IniLines $gptIni $lines
 }
 
+# --- run-time State the shutdown engine reads -----------------------------------------
+# gpedit.msc writes this directly; a foreground gpupdate does NOT translate the local GPO's
+# scripts.ini into it, so we write it ourselves, matching gpedit's exact layout for a local
+# computer .cmd shutdown script (observed on Windows 11):
+#   State\...\Shutdown\<gpo>       GPO-ID=LocalGPO SOM-ID=Local FileSysPath=<...\Machine>
+#                                  DisplayName/GPOName='Local Group Policy' PSScriptOrder=<count>
+#   State\...\Shutdown\<gpo>\<n>   Script=<full .cmd path> Parameters='' ExecTime=0 (QWORD)
+$stateBase = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Group Policy\State\Machine\Scripts\Shutdown'
+
+function Read-RegString([string]$path, [string]$name) {
+    $i = Get-ItemProperty -LiteralPath $path -Name $name -EA SilentlyContinue
+    if ($i) { return [string]$i.$name }
+    return $null
+}
+# Index of the GPO subkey whose GPO-ID = LocalGPO, or (with -CreateIfMissing) the next free
+# index so we compose alongside any domain-GPO shutdown scripts instead of colliding.
+function Get-LocalGpoStateIndex([switch]$CreateIfMissing) {
+    $found = $null; $max = -1
+    if (Test-Path -LiteralPath $stateBase) {
+        foreach ($g in Get-ChildItem -LiteralPath $stateBase -EA SilentlyContinue) {
+            if ($g.PSChildName -notmatch '^\d+$') { continue }
+            $n = [int]$g.PSChildName; if ($n -gt $max) { $max = $n }
+            if ((Read-RegString $g.PSPath 'GPO-ID') -eq 'LocalGPO') { $found = $n }
+        }
+    }
+    if ($null -eq $found -and $CreateIfMissing) { return $max + 1 }
+    return $found
+}
+function Set-ShutdownScriptState([string]$cmdFullPath) {
+    $gKey = Join-Path $stateBase (Get-LocalGpoStateIndex -CreateIfMissing)
+    # Reuse our script index if our path is already registered, else take the next free one.
+    $scr = $null; $maxS = -1
+    if (Test-Path -LiteralPath $gKey) {
+        foreach ($s in Get-ChildItem -LiteralPath $gKey -EA SilentlyContinue) {
+            if ($s.PSChildName -notmatch '^\d+$') { continue }
+            $m = [int]$s.PSChildName; if ($m -gt $maxS) { $maxS = $m }
+            if ((Read-RegString $s.PSPath 'Script') -ieq $cmdFullPath) { $scr = $m }
+        }
+    }
+    if ($null -eq $scr) { $scr = $maxS + 1 }
+    $sKey = Join-Path $gKey $scr
+    New-Item -Path $gKey -Force | Out-Null
+    New-Item -Path $sKey -Force | Out-Null
+    New-ItemProperty -LiteralPath $gKey -Name 'GPO-ID'      -Value 'LocalGPO'           -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $gKey -Name 'SOM-ID'      -Value 'Local'              -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $gKey -Name 'FileSysPath' -Value $gpMachine           -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $gKey -Name 'DisplayName' -Value 'Local Group Policy' -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $gKey -Name 'GPOName'     -Value 'Local Group Policy' -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $sKey -Name 'Script'     -Value $cmdFullPath -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $sKey -Name 'Parameters' -Value ''           -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $sKey -Name 'ExecTime'   -Value 0            -PropertyType QWord  -Force | Out-Null
+    $count = @(Get-ChildItem -LiteralPath $gKey -EA SilentlyContinue | Where-Object { $_.PSChildName -match '^\d+$' }).Count
+    New-ItemProperty -LiteralPath $gKey -Name 'PSScriptOrder' -Value $count -PropertyType DWord -Force | Out-Null
+}
+function Remove-ShutdownScriptState([string]$cmdFullPath) {
+    $gi = Get-LocalGpoStateIndex
+    if ($null -eq $gi) { return }
+    $gKey = Join-Path $stateBase $gi
+    if (-not (Test-Path -LiteralPath $gKey)) { return }
+    foreach ($s in Get-ChildItem -LiteralPath $gKey -EA SilentlyContinue) {
+        if ($s.PSChildName -notmatch '^\d+$') { continue }
+        if ((Read-RegString $s.PSPath 'Script') -ieq $cmdFullPath) { Remove-Item -LiteralPath $s.PSPath -Recurse -Force -EA SilentlyContinue }
+    }
+    $remaining = @(Get-ChildItem -LiteralPath $gKey -EA SilentlyContinue | Where-Object { $_.PSChildName -match '^\d+$' })
+    if ($remaining.Count -eq 0) { Remove-Item -LiteralPath $gKey -Recurse -Force -EA SilentlyContinue }  # local GPO has no scripts left
+    else { New-ItemProperty -LiteralPath $gKey -Name 'PSScriptOrder' -Value $remaining.Count -PropertyType DWord -Force | Out-Null }
+}
+
 # --- -Remove ---------------------------------------------------------------------------
 if ($Remove) {
     $lines = Read-IniLines $scriptsIni
@@ -137,8 +205,8 @@ if ($Remove) {
         Write-Host "No local shutdown scripts.ini present (ok)."
     }
     if (Test-Path -LiteralPath $cmdPath) { Remove-Item -LiteralPath $cmdPath -Force; Write-Host "Deleted $cmdPath" }
-    & gpupdate.exe /target:computer /force | Out-Null
-    Write-Host "Done. Reboot to confirm the shutdown script no longer runs."
+    Remove-ShutdownScriptState $cmdPath
+    Write-Host "Removed the run-time shutdown-script state. Reboot to confirm it no longer runs."
     return
 }
 
@@ -158,19 +226,29 @@ if ($CorePath -match '%')   { throw "-CorePath must not contain a percent charac
 
 # SECURITY: the shutdown .cmd runs as SYSTEM and invokes $CorePath. If a standard user can
 # replace that exe, they gain SYSTEM code execution at shutdown (local privilege escalation).
-# Refuse unless the binary is writable only by privileged principals (e.g. under Program Files).
-# Test ONLY the write/delete/own-change bits -- NOT the composite Modify/FullControl rights,
-# whose bit patterns overlap ReadAndExecute/Synchronize, so masking against them wrongly flags
-# read-only ACEs (e.g. the default Program Files "Users: ReadAndExecute, Synchronize" grant).
+# Fail CLOSED: only privileged principals (SYSTEM, Administrators, TrustedInstaller) may hold
+# write/delete/ownership on the binary. ANY other principal with such rights -- a specific
+# user, a custom group -- or an ACE whose SID cannot be resolved is treated as a risk. Test
+# ONLY the write/delete/own-change bits, NOT the composite Modify/FullControl rights, whose
+# bit patterns overlap ReadAndExecute/Synchronize (masking those would wrongly flag the
+# read-only Program Files "Users: ReadAndExecute, Synchronize" ACE).
 function Get-NonAdminWriteAce([string]$p) {
     try { $acl = Get-Acl -LiteralPath $p } catch { return 'its ACL could not be read' }
-    $bad = @('S-1-5-32-545', 'S-1-5-11', 'S-1-1-0', 'S-1-5-4', 'S-1-5-32-546')  # Users, AuthUsers, Everyone, Interactive, Guests
+    $privileged = @(
+        'S-1-5-18',                                                        # SYSTEM
+        'S-1-5-32-544',                                                    # Administrators
+        'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'  # TrustedInstaller
+    )
     $wmask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
     foreach ($ace in $acl.Access) {
         if ($ace.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
         if (([int]$ace.FileSystemRights -band $wmask) -eq 0) { continue }
-        $sid = try { $ace.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { '' }
-        if ($bad -contains $sid) { return "$($ace.IdentityReference) has '$($ace.FileSystemRights)'" }
+        $idr = $ace.IdentityReference
+        $sid = $null
+        if ($idr -is [System.Security.Principal.SecurityIdentifier]) { $sid = $idr.Value }
+        else { try { $sid = $idr.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { $sid = $null } }
+        if ($null -eq $sid) { return "$idr (unresolvable SID) has '$($ace.FileSystemRights)'" }
+        if ($privileged -notcontains $sid) { return "$idr has '$($ace.FileSystemRights)'" }
     }
     return $null
 }
@@ -209,7 +287,7 @@ if (-not (Test-Path -LiteralPath $shutdownDir)) { New-Item -ItemType Directory -
 Set-Content -LiteralPath $cmdPath -Value $cmd -Encoding Ascii
 Write-Host "Wrote shutdown script: $cmdPath"
 
-# Wire it into the local machine shutdown scripts (append; don't clobber existing entries).
+# Wire it into the local machine shutdown scripts (add our entry; don't clobber existing ones).
 $lines = Read-IniLines $scriptsIni
 $cmds = Get-ShutdownCmds $lines
 $already = $false
@@ -217,7 +295,8 @@ foreach ($k in $cmds.Keys) { if ($cmds[$k] -ieq $cmdPath) { $already = $true } }
 if (-not $already) {
     $idx = 0
     if ($cmds.Count -gt 0) { $idx = ((($cmds.Keys) | Measure-Object -Maximum).Maximum) + 1 }
-    # Ensure a [Shutdown] section exists, then append our indexed entry at the end of it.
+    # Ensure a [Shutdown] section exists; our indexed entry is inserted right after its header
+    # (below). Index N is max-existing + 1, so ordering among entries is preserved regardless.
     $has = $false
     foreach ($l in $lines) { if ($l -match '^\s*\[Shutdown\]\s*$') { $has = $true } }
     $list = New-Object System.Collections.Generic.List[string]
@@ -239,25 +318,23 @@ if (-not $already) {
 }
 
 Bump-GptIni
-& gpupdate.exe /target:computer /force | Out-Null
+Set-ShutdownScriptState $cmdPath
 
-# Verify Group Policy populated the run-time state the shutdown engine reads.
-$stateKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Group Policy\State\Machine\Scripts\Shutdown'
+# Confirm the run-time state the shutdown engine reads is now present.
 $ok = $false
-if (Test-Path -LiteralPath $stateKey) {
-    Get-ChildItem -LiteralPath $stateKey -Recurse -EA SilentlyContinue | ForEach-Object {
-        $s = (Get-ItemProperty -LiteralPath $_.PSPath -Name Script -EA SilentlyContinue).Script
-        if ($s -and ($s -ieq $cmdPath -or $s -like '*GridcoinShutdownFlush.cmd')) { $ok = $true }
+if (Test-Path -LiteralPath $stateBase) {
+    Get-ChildItem -LiteralPath $stateBase -Recurse -EA SilentlyContinue | ForEach-Object {
+        if ((Read-RegString $_.PSPath 'Script') -ieq $cmdPath) { $ok = $true }
     }
 }
 Write-Host ""
 if ($ok) {
-    Write-Host "Group Policy registered the shutdown script (state confirmed)." -ForegroundColor Green
+    Write-Host "Registered the shutdown script (scripts.ini + gpt.ini + run-time state)." -ForegroundColor Green
 } else {
-    Write-Host "Wired into scripts.ini + gpt.ini, but the GP run-time state wasn't confirmed yet." -ForegroundColor Yellow
-    Write-Host "It often populates on the next boot; verify by rebooting (below). If a DOMAIN GPO sets" -ForegroundColor Yellow
-    Write-Host "'Turn off Local Group Policy Objects processing', deploy the .cmd via a domain GPO instead." -ForegroundColor Yellow
+    Write-Host "Wrote scripts.ini + gpt.ini, but could not confirm the run-time state key." -ForegroundColor Yellow
 }
+Write-Host "NOTE: if a DOMAIN GPO enables 'Turn off Local Group Policy Objects processing', this local"
+Write-Host "script is ignored at boot -- deploy the .cmd via a domain GPO instead (see README)."
 Write-Host ""
 Write-Host "VALIDATE: reboot once, then check the core's debug.log for a full graceful shutdown"
 Write-Host "sequence ('Shutdown: ... Final flush of wallet database ...') just before the restart."
