@@ -89,6 +89,11 @@ add_executable(test_gridcoin
     # null-wallet-safe getRowDetail early-returns. Core lives in gridcoin_util,
     # so only the suite is listed here (GUI-OFF).
     qt_wallettxstore_tests.cpp
+    # The WALLET-BACKED half of the same store: applyChainTipRefresh() and prime()
+    # need a live CWallet plus a chain tip, so the null-wallet suite above cannot
+    # reach them at all. This one drives the real coinstake NotAccepted -> flip-in
+    # path against pwalletMain and a mock chain (#3257).
+    qt_wallettxstore_chain_tests.cpp
     # Multiprocess connect-handshake logic (src/ipc/handshake.cpp): identity-token
     # hashing, the ClientHandshake matching policy, and CheckIdentityBinding. The
     # TU has no Cap'n Proto / libmultiprocess dependency, so it compiles into the
