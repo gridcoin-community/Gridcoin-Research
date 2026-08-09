@@ -15,6 +15,7 @@ them from there in an **elevated** PowerShell. (In a source checkout they live h
 | `Install-GridcoinCoreTask.ps1` | Register the **Core-Start** (boot) and **Core-Stop** (graceful) tasks, run-as the wallet user. |
 | `Uninstall-GridcoinCoreTask.ps1` | Remove them. |
 | `Update-GridcoinCore.ps1` | Graceful upgrade engine for the locked-exe problem. |
+| `Set-GridcoinShutdownFlush.ps1` | **Opt-in**: configure/remove a Group Policy shutdown script for a reliable DB flush on OS shutdown. |
 | `Start-GridcoinGui.ps1` | Launch the `-multiprocess` GUI (or drop a Start-Menu shortcut with `-CreateShortcut`). |
 | `Set-GridcoinAutounlock.ps1` | **Opt-in**: enable/remove stake-only autounlock (DPAPI secret + resident task). |
 | `Invoke-GridcoinAutounlock.ps1` | The resident autounlock helper the task runs (not called directly). |
@@ -56,23 +57,52 @@ daemon"*. **That is the access control working, not a bug.**
 flush, which risks database corruption. Shutdown, upgrade, and manual stop all go
 through the one `Core-Stop` task.
 
-## Graceful stop on OS shutdown
+## Firewall (inbound P2P)
 
-The `Core-Stop` task carries a best-effort OS-shutdown trigger (Kernel-General
-EventID 13), but **a scheduled task cannot reliably flush before shutdown**: Windows
-does not wait for an event-triggered task to finish, and the services it depends on
-are being torn down in that window, so the RPC `stop` will often be cut short
-mid-flush. For a **reliable** clean shutdown, configure a Group Policy **Computer →
-Shutdown** script — Windows runs shutdown scripts synchronously and waits for them
-(bounded by *Maximum wait time for Group Policy scripts*, default 600 s):
+`Install-GridcoinCoreTask.ps1` adds an **inbound firewall rule for the daemon**
+(`gridcoinresearchd.exe`). The headless core never triggers the interactive firewall
+prompt the GUI gets on first run, and in multiprocess mode the **core**, not the GUI,
+does the P2P — so without a rule Windows silently blocks inbound and the node is
+outbound-only (it still syncs and stakes, just can't accept incoming peers). The rule is
+program-based on the **Domain** and **Private** profiles (Public is excluded; add it with
+`-FirewallProfile Domain,Private,Public`). Because it is program-based (any TCP to the
+daemon), if you also set `rpcallowip` — which makes the RPC listener bind to all
+interfaces instead of localhost — the RPC port becomes reachable through this rule too;
+RPC stays credential-protected, but be aware. Pass `-SkipFirewallRule` to manage the
+firewall yourself; `Uninstall-GridcoinCoreTask.ps1` removes the rule.
 
-1. `gpedit.msc` → Computer Configuration → Windows Settings → Scripts → **Shutdown**.
-2. Add a script that starts the stop task and waits for the core to exit — e.g. a
-   `.cmd` running `schtasks /Run /TN "\Gridcoin\Core-Stop"` followed by a short loop
-   on `tasklist | findstr gridcoinresearchd` until it is gone.
+## Clean database flush on OS shutdown
 
-Confirming the exact wait-for-flush behavior on real hardware is the top item on the
-validation list.
+`Core-Stop` carries **no** OS-shutdown trigger. A scheduled task can't make Windows wait,
+so an event-triggered (EventID-13) stop is best-effort and gets cut short mid-flush —
+confirmed on real hardware, where reboots produced no logged graceful shutdown (the core
+was effectively hard-killed, and only recovered clean thanks to LevelDB's crash-resilience).
+BDB (the wallet) is less forgiving of a mid-write kill, so for a **guaranteed** flush use a
+Group Policy **Computer → Shutdown** script, which Windows runs **synchronously and waits
+for** (bounded by *Maximum wait time for Group Policy scripts*, default 600 s).
+
+Configure it (opt-in, elevated):
+
+```powershell
+.\Set-GridcoinShutdownFlush.ps1 -DataDir "$env:APPDATA\GridcoinResearch"   # -Remove to undo
+```
+
+It writes a small `.cmd` that runs the graceful RPC stop **as SYSTEM** (so it doesn't depend
+on the wallet user's session still being loaded late in shutdown) and waits for the core to
+exit, then wires it into the local machine shutdown scripts and runs `gpupdate`. **Validate
+by rebooting once** and confirming a full `Shutdown: … Final flush of wallet database …`
+sequence in `debug.log` just before the restart. (We deliberately don't *also* put a shutdown
+trigger on `Core-Stop` — the two would double-stop and race.)
+
+**Domains.** Local and domain-GPO shutdown scripts **stack** — all run at shutdown,
+additively, bounded collectively by the max-wait-time. But if a domain GPO enables **"Turn
+off Local Group Policy Objects processing,"** this *local* script is ignored; in that case
+deploy the same `.cmd` (graceful RPC stop + wait-for-exit) via a **domain GPO** instead.
+
+**Manual alternative** (if you'd rather not run the helper): `gpedit.msc` → Computer
+Configuration → Windows Settings → Scripts → **Shutdown**, and add a `.cmd` that runs
+`"…\daemon\gridcoinresearchd.exe" -datadir="…" stop` followed by a loop on
+`tasklist | find /i "gridcoinresearchd.exe"` until it's gone.
 
 ## Crash recovery
 

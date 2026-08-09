@@ -438,6 +438,7 @@ if(ENABLE_DAEMON)
                 "${CMAKE_SOURCE_DIR}/contrib/windows/Start-GridcoinGui.ps1"
                 "${CMAKE_SOURCE_DIR}/contrib/windows/Set-GridcoinAutounlock.ps1"
                 "${CMAKE_SOURCE_DIR}/contrib/windows/Invoke-GridcoinAutounlock.ps1"
+                "${CMAKE_SOURCE_DIR}/contrib/windows/Set-GridcoinShutdownFlush.ps1"
                 "${CMAKE_SOURCE_DIR}/contrib/windows/README.md"
                 COMPONENT daemon
                 DESTINATION windows

@@ -8,21 +8,29 @@
     run-as the wallet user (never SYSTEM -- the IPC node.sock/ipc.cookie are
     owner-only NTFS-ACL'd and a SYSTEM core would lock the user's own GUI out):
 
-      Core-Start : boot trigger -> gridcoinresearchd.exe -datadir=<dd> -multiprocess
-                   (with crash restart, the systemd Restart=on-failure analogue).
+      Core-Start : boot trigger -> a generated launcher (core-autostart.cmd) that runs
+                   gridcoinresearchd.exe -datadir=<dd> -multiprocess and retries once
+                   (after 2 min) on a non-zero exit -- the systemd Restart=on-failure analogue.
       Core-Stop  : gridcoinresearchd.exe -datadir=<dd> stop  (a GRACEFUL RPC stop
-                   that flushes BDB/LevelDB). Runnable on-demand, and best-effort
-                   on the OS-shutdown event (see the SHUTDOWN note).
+                   that flushes BDB/LevelDB). ON-DEMAND only -- used by manual stops
+                   and by Update-GridcoinCore.ps1's upgrade engine.
 
     SEMANTICS GOTCHA: to stop the core you START the Core-Stop task. NEVER
     Stop-ScheduledTask the Core-Start task -- Task Scheduler's stop is a hard
     TerminateProcess (no flush = possible DB corruption).
 
-    SHUTDOWN: the Kernel-General EventID-13 trigger on Core-Stop is BEST-EFFORT
-    only -- Windows does not block shutdown for a scheduled task, so the flush may
-    be cut short. The reliable clean-shutdown primitive is a Group Policy
-    Computer -> Shutdown script (Windows runs it synchronously, bounded by the GP
-    script timeout). Set that up and validate on real hardware; see the README.
+    SHUTDOWN: Core-Stop carries NO OS-shutdown trigger. A scheduled task cannot make
+    Windows wait, so an event-triggered stop is best-effort and gets cut short mid-flush
+    (confirmed on-device). The reliable clean-shutdown primitive is a Group Policy
+    Computer -> Shutdown script, which Windows runs synchronously and WAITS for (bounded
+    by "Maximum wait time for Group Policy scripts", default 600s). Configure it with
+    Set-GridcoinShutdownFlush.ps1 (opt-in). Having both a shutdown trigger AND the GP
+    script would double-stop and race, so we ship only the GP-script path.
+
+    It also adds an inbound Windows Firewall rule for the daemon (skip with
+    -SkipFirewallRule): the headless core gets no interactive firewall prompt, and in
+    multiprocess mode the core -- not the GUI -- does the P2P, so without a rule the node
+    is outbound-only. Uninstall-GridcoinCoreTask.ps1 removes it.
 
     Autounlock (opt-in, DPAPI) is a SEPARATE task added by Set-GridcoinAutounlock.ps1
     (Plan 5); it is not registered here.
@@ -53,7 +61,20 @@ param(
     # securely if omitted.
     [System.Security.SecureString]$TaskPassword,
 
-    [string]$TaskFolder = 'Gridcoin'
+    [string]$TaskFolder = 'Gridcoin',
+
+    # Skip creating the inbound Windows Firewall rule for the daemon. By default this script
+    # adds one: the headless core (gridcoinresearchd.exe) never triggers the interactive
+    # firewall prompt the GUI gets on first run, so without a rule Windows silently blocks
+    # inbound P2P and the node cannot accept incoming peers (outbound still works). In
+    # multiprocess mode the *core* does the P2P, not the GUI, so the GUI's own rule does not
+    # cover it. Pass -SkipFirewallRule if you manage the firewall separately.
+    [switch]$SkipFirewallRule,
+
+    # Firewall profiles the inbound rule applies to. Public is excluded by default (a P2P
+    # listener open on untrusted networks is a deliberate choice); add 'Public' to include it.
+    [ValidateSet('Domain', 'Private', 'Public')]
+    [string[]]$FirewallProfile = @('Domain', 'Private')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -110,15 +131,51 @@ try {
     $plainPw = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
 
     $ddQuoted = '"' + $DataDir + '"'
-    $startAction = New-ScheduledTaskAction -Execute $CorePath -Argument "-datadir=$ddQuoted -multiprocess"
+
+    # Core-Start runs through a generated launcher that retries ONCE (after a 2-minute wait) if
+    # the daemon exits non-zero -- covering the rare early-boot start failure seen on-device (the
+    # task fires but the daemon exits before it can even log). A clean start blocks until shutdown
+    # then exits 0 (no retry); the graceful GP-shutdown stop also exits 0. Each attempt's stderr is
+    # captured to core-start.err.log so any recurrence is diagnosable. The launcher lives in the
+    # install dir (not the datadir) so it is reachable at boot even before the user profile loads --
+    # and the 2-minute wait lets a not-yet-ready datadir/profile settle before the retry. (Task
+    # Scheduler's own restart-on-failure does NOT fire on a program's non-zero exit -- confirmed
+    # on-device -- so the retry must live here.) If the launcher is ever deleted, re-run this
+    # script to regenerate it. A crash or Core-Stop that lands inside the 2-minute wait is bounded
+    # and harmless: a graceful stop exits 0 (no retry) and OS shutdown tears down the waiting cmd.exe.
+    $launcher = Join-Path $PSScriptRoot 'core-autostart.cmd'
+    # cmd reads a batch file in the OEM codepage and treats % as expansion even inside quotes, so
+    # write the file as OEM (preserves a non-ASCII datadir under the user profile, which -Encoding
+    # Ascii would replace with '?') and escape any literal % as %%.
+    $coreB   = $CorePath -replace '%', '%%'
+    $ddB     = $DataDir  -replace '%', '%%'
+    $errLogB = (Join-Path $DataDir 'core-start.err.log') -replace '%', '%%'
+    $daemonCmd = '"' + $coreB + '" -datadir="' + $ddB + '" -multiprocess 2>>"' + $errLogB + '"'
+    Set-Content -LiteralPath $launcher -Encoding Oem -Value @(
+        '@echo off',
+        'rem Gridcoin Core-Start launcher (generated by Install-GridcoinCoreTask.ps1). Starts the',
+        'rem multiprocess core; on a non-zero exit, waits 2 minutes and retries once. A clean run',
+        'rem blocks until shutdown (exit 0 = no retry). Do not hand-edit -- re-run the installer.',
+        # Ensure the datadir exists first (as the wallet user, so the ACL is right): on a fresh
+        # install it may not exist yet, and cmd would fail the stderr redirect below -- never
+        # launching the daemon -- before the daemon could create it.
+        ('if not exist "' + $ddB + '" md "' + $ddB + '" 2>nul'),
+        $daemonCmd,
+        'if %ERRORLEVEL% EQU 0 goto end',
+        ('echo ==== attempt 1 failed exit %ERRORLEVEL% at %DATE% %TIME%, retrying in 2 min ==== >>"' + $errLogB + '"'),
+        'ping -n 121 127.0.0.1 >nul',
+        $daemonCmd,
+        ':end'
+    )
+
+    $startAction = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\cmd.exe" -Argument ('/c "' + $launcher + '"')
     $stopAction  = New-ScheduledTaskAction -Execute $CorePath -Argument "-datadir=$ddQuoted stop"
 
-    # Core-Start: long-running headless daemon, no execution-time limit, restart on
-    # crash (3 tries, 1 min apart) -- the systemd Restart=on-failure analogue. A
-    # graceful stop exits 0 (success) so it is NOT auto-restarted; only a crash is.
+    # Core-Start: long-running headless daemon, no execution-time limit. The start/crash
+    # retry lives in the launcher above (1 retry, 2-min wait), NOT here: Task Scheduler's
+    # restart-on-failure does not trigger on a program's non-zero exit (confirmed on-device).
     $startSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-        -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew `
-        -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+        -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
 
     # Core-Stop: a short-lived action; no restart (a failed stop must not loop).
     $stopSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
@@ -141,27 +198,15 @@ try {
         -User $TaskUser -Password $plainPw -RunLevel Limited `
         -Description 'Start the Gridcoin multiprocess core at boot (run-as the wallet user).' | Out-Null
 
-    # Core-Stop: register first with no trigger, then attach the OS-shutdown event
-    # trigger via XML (New-ScheduledTaskTrigger has no event-trigger form).
+    # Core-Stop: on-demand only, NO trigger. It carries no OS-shutdown (EventID-13)
+    # trigger on purpose -- a scheduled task can't make Windows wait, so that path is
+    # best-effort and gets cut short mid-flush. The reliable OS-shutdown flush is a Group
+    # Policy Computer -> Shutdown script (Set-GridcoinShutdownFlush.ps1); shipping both
+    # would double-stop and race. Core-Stop remains for manual stops and Update-GridcoinCore.
     Register-ScheduledTask -TaskPath "\$TaskFolder\" -TaskName 'Core-Stop' -Force `
         -Action $stopAction -Settings $stopSettings `
         -User $TaskUser -Password $plainPw -RunLevel Limited `
-        -Description 'Graceful RPC stop of the Gridcoin core (on-demand; best-effort OS-shutdown). Start this task to stop the core; never hard-kill Core-Start.' | Out-Null
-
-    # System log, Microsoft-Windows-Kernel-General EventID 13 == shutdown initiated.
-    # BEST-EFFORT only (see the SHUTDOWN note above): the OS does not wait for it.
-    $evtXml = @'
-<QueryList><Query Id="0" Path="System"><Select Path="System">*[System[Provider[@Name='Microsoft-Windows-Kernel-General'] and EventID=13]]</Select></Query></QueryList>
-'@
-    $eventTrigger = New-CimInstance -CimClass (
-        Get-CimClass -Namespace 'Root/Microsoft/Windows/TaskScheduler' -ClassName 'MSFT_TaskEventTrigger'
-    ) -ClientOnly
-    $eventTrigger.Enabled = $true
-    $eventTrigger.Subscription = $evtXml
-
-    $stopTask = Get-ScheduledTask -TaskPath "\$TaskFolder\" -TaskName 'Core-Stop'
-    $stopTask.Triggers = @($eventTrigger)
-    Set-ScheduledTask -InputObject $stopTask -User $TaskUser -Password $plainPw | Out-Null
+        -Description 'Graceful RPC stop of the Gridcoin core (on-demand; used by manual stops and Update-GridcoinCore). Start this task to stop the core; never hard-kill Core-Start. For a clean OS-shutdown flush use Set-GridcoinShutdownFlush.ps1.' | Out-Null
 }
 catch {
     throw "Failed to register the Gridcoin tasks: $($_.Exception.Message)`n" +
@@ -186,11 +231,32 @@ foreach ($name in 'Core-Start', 'Core-Stop') {
     }
 }
 
-Write-Host "Registered \$TaskFolder\Core-Start (boot) and \$TaskFolder\Core-Stop (on-demand + best-effort OS-shutdown), run-as $TaskUser." -ForegroundColor Green
+# Inbound firewall rule for the daemon. The headless core never gets the interactive prompt
+# the GUI does, and in multiprocess mode the core (not the GUI) does the P2P -- so without
+# this rule Windows silently blocks inbound and the node is outbound-only. Program-based (like
+# the GUI's own auto-created rule) so it is port-independent (mainnet/testnet). Non-fatal: the
+# tasks are already registered, so a firewall failure warns rather than aborting.
+$fwName = 'Gridcoin multiprocess core (gridcoinresearchd)'
+if ($SkipFirewallRule) {
+    Write-Host "Skipped the inbound firewall rule (-SkipFirewallRule). The core will be outbound-only until you add one for '$CorePath'." -ForegroundColor Yellow
+} else {
+    try {
+        Get-NetFirewallRule -DisplayName $fwName -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+        New-NetFirewallRule -DisplayName $fwName -Direction Inbound -Action Allow -Program $CorePath `
+            -Protocol TCP -Profile $FirewallProfile -Enabled True `
+            -Description 'Allow inbound P2P connections to the Gridcoin multiprocess core (gridcoinresearchd.exe). Created at task setup because the headless core gets no interactive firewall prompt.' | Out-Null
+        Write-Host "Added inbound firewall rule '$fwName' for $CorePath (profiles: $($FirewallProfile -join ', '))." -ForegroundColor Green
+    } catch {
+        Write-Host ("WARNING: could not add the inbound firewall rule ($($_.Exception.Message)). The core will be " +
+                    "outbound-only until you add an inbound rule for '$CorePath' (needs an elevated shell).") -ForegroundColor Yellow
+    }
+}
+
+Write-Host "Registered \$TaskFolder\Core-Start (boot, via a retry launcher) and \$TaskFolder\Core-Stop (on-demand), run-as $TaskUser." -ForegroundColor Green
 Write-Host ""
 Write-Host "  Start the core now :  Start-ScheduledTask -TaskPath '\$TaskFolder\' -TaskName 'Core-Start'"
 Write-Host "  Stop the core      :  Start-ScheduledTask -TaskPath '\$TaskFolder\' -TaskName 'Core-Stop'   (graceful; do NOT Stop-ScheduledTask Core-Start)"
 Write-Host "  Attach the GUI     :  .\Start-GridcoinGui.ps1 -DataDir '$DataDir'"
 Write-Host ""
-Write-Host "  For a reliable flush on OS shutdown, also configure a Group Policy" -ForegroundColor Yellow
-Write-Host "  Computer -> Shutdown script that starts the Core-Stop task (see README)." -ForegroundColor Yellow
+Write-Host "  For a clean database flush on OS shutdown, also run (once):" -ForegroundColor Yellow
+Write-Host "     .\Set-GridcoinShutdownFlush.ps1 -DataDir '$DataDir'   (configures a Group Policy shutdown script)" -ForegroundColor Yellow
