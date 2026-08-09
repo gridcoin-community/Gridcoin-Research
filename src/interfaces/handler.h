@@ -52,8 +52,15 @@ void LogDroppedNotification(const char* what);
 //! disconnect." at Log::Raise, which Gridcoin's IpcLogFn turns into a
 //! std::runtime_error -- and that would otherwise unwind into core threads such as
 //! ThreadMessageHandler / ProcessMessages. A notification to a client that is gone
-//! is a no-op by definition, so swallow it. In the monolithic build the wrapped
-//! callback does not throw, so the guard is inert.
+//! is a no-op by definition, so swallow it.
+//!
+//! It is NOT limited to that case, though, because it cannot be: the callback body
+//! is arbitrary. So the guard deliberately does not treat every exception alike --
+//! LogDroppedNotification keeps the disconnect case quiet (IPC category) and logs
+//! anything else at the default level, so a genuine defect that happens to escape
+//! through a notification stays visible instead of disappearing here. This matters
+//! in the monolithic build too, where no disconnect exception can occur and every
+//! throw reaching this guard is by definition a real bug.
 template <typename Fn>
 auto GuardNotify(Fn fn)
 {
