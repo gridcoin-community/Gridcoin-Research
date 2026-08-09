@@ -315,4 +315,123 @@ BOOST_AUTO_TEST_CASE(primeRebuildsCoinstakeRowsFromTheWallet)
     EraseWalletTx(cs_hash);
 }
 
+//! One transaction that cannot be refreshed must not stop the refresh of every
+//! other volatile transaction in the wallet.
+//!
+//! updateStatus() reaches IsTrusted() -> IsFromMe() -> GetDebit(), which throws
+//! std::runtime_error once the summed debit leaves MoneyRange. At depth 1 — which
+//! is exactly where a freshly staked block sits — that path is always taken, so a
+//! wallet holding such a transaction throws on every single chain-tip refresh.
+//!
+//! Unguarded, that exception unwinds the whole m_volatile loop, so every hash
+//! after it in iteration order is skipped. Those rows never leave NotAccepted,
+//! both production views mask inactive rows, and the staked blocks behind the
+//! poison record stay invisible until a prime() rebuilds the set — the #3257
+//! fingerprint. m_volatile is an unordered_set, so position is by bucket; this
+//! case seeds enough good transactions that some are guaranteed to sort behind
+//! the poison one whatever the bucket layout.
+BOOST_AUTO_TEST_CASE(oneUnrefreshableTxDoesNotFreezeTheRestOfTheWallet)
+{
+    constexpr int kGood = 20;
+
+    PendingTipChain chain;
+    OwnedKey mine;
+    OwnedKey sidestake_dest;
+
+    // The poison transaction: a funding tx paying us two MAX_MONEY outputs (each
+    // individually in range), spent by a coinstake with two inputs — so GetDebit's
+    // running total leaves MoneyRange on the second input and throws.
+    CMutableTransaction fund_mtx;
+    fund_mtx.vout.resize(2);
+    for (int i = 0; i < 2; ++i) {
+        fund_mtx.vout[i].nValue = MAX_MONEY;
+        fund_mtx.vout[i].scriptPubKey = P2PKH(mine.dest);
+    }
+    const CTransaction fund(fund_mtx);
+    InjectConfirmedTx(fund, chain.hash_prev);   // deep/mature block
+
+    CMutableTransaction poison_mtx;
+    poison_mtx.vin.resize(2);
+    poison_mtx.vin[0].prevout = COutPoint(fund.GetHash(), 0);
+    poison_mtx.vin[1].prevout = COutPoint(fund.GetHash(), 1);
+    CTxOut empty;
+    empty.SetEmpty();
+    poison_mtx.vout.push_back(empty);
+    CTxOut ret;
+    ret.nValue = 50 * COIN;
+    ret.scriptPubKey = P2PKH(mine.dest);
+    poison_mtx.vout.push_back(ret);
+    poison_mtx.vout.push_back(ret);
+    const CTransaction poison(poison_mtx);
+    BOOST_REQUIRE(poison.IsCoinStake());
+    const uint256 poison_hash = poison.GetHash();
+    InjectConfirmedTx(poison, chain.hash_fresh);
+
+    WalletEventQueue q;
+    WalletTxStore store(pwalletMain, q);
+    registerProductionViews(store);
+    store.start();
+
+    // The poison record goes in hand-built: decomposeTransaction would itself throw
+    // on this wallet tx, and what is under test is the REFRESH loop, not decompose.
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        TransactionRecord rec(poison_hash, pwalletMain->mapWallet[poison_hash].GetTxTime());
+        rec.type = TransactionRecord::Generated;
+        rec.idx = 0;
+        rec.vout = 1;
+        rec.status.status = TransactionStatus::NotAccepted;   // volatile, so it is refreshed
+        store.enqueueInsert({rec});
+    }
+
+    std::vector<uint256> good_hashes;
+    for (int i = 0; i < kGood; ++i) {
+        const CTransaction cs =
+            MakeCoinstake(mine.dest, (10 + i) * COIN, sidestake_dest.dest, 1 * COIN);
+        InjectConfirmedTx(cs, chain.hash_fresh);
+        good_hashes.push_back(cs.GetHash());
+        store.enqueueInsert(producerRecordsFor(cs.GetHash()));
+    }
+    settle(q);
+
+    // All masked while NotAccepted.
+    BOOST_CHECK_EQUAL(viewRowCount(store, GRC::VIEW_DETAILED), 0u);
+
+    chain.connect();
+
+    // Confirm the premise rather than assuming it: with the block connected the
+    // poison tx sits at depth 1, so IsTrusted() takes the IsFromMe() -> GetDebit()
+    // path and really does throw. Without this the whole case could pass vacuously.
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        const CWalletTx& pwtx = pwalletMain->mapWallet[poison_hash];
+        TransactionRecord probe(poison_hash, pwtx.GetTxTime());
+        probe.type = TransactionRecord::Generated;
+        probe.vout = 1;
+        BOOST_CHECK_THROW(probe.updateStatus(pwtx), std::runtime_error);
+    }
+
+    {
+        LOCK(cs_main);
+        store.applyChainTipRefresh();   // must not propagate
+    }
+
+    // Every good transaction must have flipped in, wherever the poison record
+    // landed in the bucket order. Two parts each (stake return + sidestake).
+    BOOST_CHECK_EQUAL(viewRowCount(store, GRC::VIEW_DETAILED),
+                      static_cast<std::size_t>(kGood) * 2u);
+    for (const uint256& h : good_hashes) {
+        BOOST_CHECK_MESSAGE(store.rowForKey(GRC::VIEW_DETAILED, h, 0) >= 0,
+                            "good coinstake " + h.GetHex() + " never reached the view");
+    }
+
+    // And the poison record is still masked — it threw, was skipped, and did not
+    // silently succeed. This is what keeps the assertions above meaningful.
+    BOOST_CHECK_EQUAL(store.rowForKey(GRC::VIEW_DETAILED, poison_hash, 0), -1);
+
+    EraseWalletTx(poison_hash);
+    EraseWalletTx(fund.GetHash());
+    for (const uint256& h : good_hashes) EraseWalletTx(h);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

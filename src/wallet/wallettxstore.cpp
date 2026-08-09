@@ -698,6 +698,10 @@ void WalletTxStore::applyChainTipRefresh()
     // Copy the set: updateVolatileForHash() mutates m_volatile as matured txs drop
     // out, and we must not iterate it while erasing.
     const std::vector<uint256> hashes(m_volatile.begin(), m_volatile.end());
+    LogPrint(BCLog::LogFlags::VERBOSE,
+             "applyChainTipRefresh: refreshing %u volatile transactions over %u records",
+             static_cast<unsigned int>(hashes.size()),
+             static_cast<unsigned int>(m_records.size()));
     for (const uint256& hash : hashes) {
         auto range = m_by_hash.equal_range(hash);
         if (range.first == range.second) {
@@ -736,14 +740,59 @@ void WalletTxStore::applyChainTipRefresh()
         // their old slots and break that precondition under a Status sort. Interleaving
         // keeps every untouched part at its consistent prior key/slot. Positions in
         // m_records are stable across the loop (status is not part of RecordOrder).
-        for (std::size_t p : positions) {
-            m_records[p].updateStatus(wtx);
-            recomputeCacheAt(p);
-            for (auto& [viewId, cursor] : m_cursors) {
-                emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStatusUpdate(p));
+        //
+        // Guarded per hash. updateStatus() reaches a long way for something running
+        // inline on the core thread: IsTrusted() and GetBlocksToMaturity() walk the
+        // wallet, and GetGeneratedType() goes to the tx index and reads a block from
+        // disk. Any of that can throw — GetCredit/GetDebit raise std::runtime_error
+        // outside MoneyRange, and the disk paths raise their own. Unguarded, one bad
+        // record aborts the whole loop, so every hash AFTER it in the iteration order
+        // is skipped — and not just once. m_volatile is an unordered_set, so a given
+        // hash's position is fixed by its bucket for as long as the bucket count
+        // holds: the same records get skipped block after block, and only a rehash
+        // or a prime() reshuffles which ones.
+        // Those rows would then never leave NotAccepted/Immature, and since both
+        // production views mask inactive rows, every staked block behind the poison
+        // record would stay invisible until a prime() rebuilt the volatile set.
+        // One unrefreshable transaction must not freeze status refresh for the rest
+        // of the wallet (#3257).
+        try {
+            for (std::size_t p : positions) {
+                // Status transition + per-view delta count. Together these split the
+                // "a staked block never appears" failure three ways in one line:
+                //   before == after == NotAccepted  -> updateStatus is not clearing it
+                //   status flips but 0 deltas       -> the cursor is not flipping it in
+                //   status flips and a delta fires  -> the loss is downstream (queue,
+                //                                      drain pump or the Qt consumer)
+                // VERBOSE, so it costs nothing unless a user is chasing this (#3257).
+                const int before = static_cast<int>(m_records[p].status.status);
+                m_records[p].updateStatus(wtx);
+                const int after = static_cast<int>(m_records[p].status.status);
+                recomputeCacheAt(p);
+                for (auto& [viewId, cursor] : m_cursors) {
+                    const std::vector<CursorDelta> deltas = cursor.applyStatusUpdate(p);
+                    LogPrint(BCLog::LogFlags::VERBOSE,
+                             "applyChainTipRefresh: %s part %d record %u status %d->%d "
+                             "view %d emitted %u deltas",
+                             hash.GetHex(), m_records[p].idx,
+                             static_cast<unsigned int>(p), before, after, viewId,
+                             static_cast<unsigned int>(deltas.size()));
+                    emitCursorDeltas(viewId, cursor.epoch(), deltas);
+                }
             }
+            updateVolatileForHash(hash);   // drops the hash once every part is terminal
+        } catch (const std::exception& e) {
+            // Default log level, not VERBOSE: this is the line that names the
+            // offending transaction, and it must be present in a user's ordinary
+            // debug.log without them having to reproduce under -debug=verbose.
+            LogPrintf("ERROR: %s: refreshing hash %s threw (%s) — skipping it this "
+                      "tip; the remaining %u volatile transactions still refresh",
+                      __func__, hash.GetHex(), e.what(),
+                      static_cast<unsigned int>(m_volatile.size()));
+        } catch (...) {
+            LogPrintf("ERROR: %s: refreshing hash %s threw a non-standard exception "
+                      "— skipping it this tip", __func__, hash.GetHex());
         }
-        updateVolatileForHash(hash);   // drops the hash once every part is terminal
     }
 }
 
