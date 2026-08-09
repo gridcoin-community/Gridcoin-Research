@@ -48,6 +48,122 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 # ---------------------------------------------------------------------------
+# Argument quoting for the registered task action.
+# ---------------------------------------------------------------------------
+# CommandLineToArgvW -- which powershell.exe uses to split the command line the task
+# hands it -- halves a run of backslashes that immediately precedes a closing quote and
+# treats the quote as escaped. So a -DataDir ending in '\' (including a bare drive root,
+# "D:\") swallows its closing quote and corrupts every argument after it: -CredPath,
+# -Interval and -Timeout all shift. Double the trailing run so the quote still closes.
+# Embedded double quotes are rejected outright instead (they have no legitimate use in
+# these paths), matching the sibling scripts.
+function Get-QuotedArg([string]$value) {
+    return '"' + ($value -replace '(\\+)$', '$1$1') + '"'
+}
+
+# Absolute, trailing-separator-free, case-folded form for comparing two paths.
+function Get-NormalizedPath([string]$p) {
+    return ([IO.Path]::GetFullPath($p)).TrimEnd('\').ToLowerInvariant()
+}
+
+# ---------------------------------------------------------------------------
+# SECURITY: writability of what the task will execute.
+# ---------------------------------------------------------------------------
+# The Autounlock task runs $HelperPath (via powershell.exe -File) AS THE WALLET USER, and
+# that user's DPAPI store is exactly what decrypts the passphrase blob. So anyone who can
+# replace the helper -- or any directory on the path to it -- has the passphrase handed to
+# them by our own task. Fail CLOSED unless every component is writable only by privileged
+# principals (SYSTEM, Administrators, TrustedInstaller) or by the wallet user itself, who
+# already holds the passphrase and is therefore not an escalation.
+#
+# This mirrors Get-NonAdminWriteVector / Get-NonAdminWriteVectorForPath in
+# Set-GridcoinShutdownFlush.ps1 (that script's script runs as SYSTEM, so it allows no user
+# SID at all). Test ONLY the write/delete/own-change bits, NOT the composite
+# Modify/FullControl rights, whose bit patterns overlap ReadAndExecute/Synchronize (masking
+# those would wrongly flag the read-only Program Files "Users: ReadAndExecute, Synchronize"
+# ACE).
+$script:PrivilegedSids = @(
+    'S-1-5-18',                                                        # SYSTEM
+    'S-1-5-32-544',                                                    # Administrators
+    'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'   # TrustedInstaller
+)
+#
+# The mask differs per object type, which matters: on a FILE, appending to it is enough to
+# change what runs, so AppendData counts. On a DIRECTORY, AppendData/CreateDirectories only
+# permits creating a NEW entry -- it cannot replace an existing child -- and every default
+# Windows volume root grants exactly that to Users ("BUILTIN\Users:(CI)(AD)",
+# "Authenticated Users:(AD)" on C:\), so folding it in would refuse every install on every
+# machine. What matters on a container is CreateFiles/Delete/DeleteSubdirectoriesAndFiles/
+# ChangePermissions/TakeOwnership.
+$script:FileWriteMask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
+$script:DirWriteMask = [int]([System.Security.AccessControl.FileSystemRights]'CreateFiles, WriteExtendedAttributes, WriteAttributes, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
+
+function Resolve-AceSid($idr) {
+    if ($null -eq $idr) { return $null }
+    if ($idr -is [System.Security.Principal.SecurityIdentifier]) { return $idr.Value }
+    try { return $idr.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { }
+    # Get-Acl surfaces some identities as a bare string (notably $acl.Owner), which has no
+    # Translate(). Resolve those through NTAccount -- otherwise EVERY path, including
+    # admin-owned ones, reports an unresolvable owner and this refuses on every machine.
+    try { return ([System.Security.Principal.NTAccount]([string]$idr)).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { return $null }
+}
+
+# Returns a description of the first non-privileged write vector found on $p, or $null if
+# it is safe. Checks THREE things, all of them ways to replace the script that a plain ACE
+# scan misses:
+#   1. an empty Access collection -- a NULL DACL grants everyone full control, so "no ACEs"
+#      must read as UNSAFE, not as "no offender";
+#   2. the OWNER -- an owner always holds implicit WRITE_DAC and can simply rewrite the
+#      DACL, so a non-privileged owner defeats any ACE check;
+#   3. Allow ACEs granting write/delete/ownership to a non-allowed principal.
+function Get-NonAdminWriteVector([string]$p, [string[]]$allowedSids) {
+    try { $acl = Get-Acl -LiteralPath $p } catch { return "the ACL of '$p' could not be read" }
+
+    $access = @($acl.Access)
+    if ($access.Count -eq 0) { return "'$p' has a NULL/empty DACL (everyone has full control)" }
+
+    # Ask for the owner AS A SID: $acl.Owner is a string, so translating it directly
+    # is unreliable (see Resolve-AceSid).
+    $ownerSid = $null
+    try { $ownerSid = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value } catch { }
+    if ($null -eq $ownerSid) { $ownerSid = Resolve-AceSid $acl.Owner }
+    if ($null -eq $ownerSid) { return "'$p' has an unresolvable owner ($($acl.Owner))" }
+    if ($allowedSids -notcontains $ownerSid) {
+        return "'$p' is owned by $($acl.Owner), who can rewrite its DACL at will"
+    }
+
+    $mask = if (Test-Path -LiteralPath $p -PathType Container) { $script:DirWriteMask } else { $script:FileWriteMask }
+    foreach ($ace in $access) {
+        if ($ace.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
+        # An inherit-only ACE grants nothing on THIS object; it is a template for children,
+        # where it shows up as a real (inherited) ACE -- and this walk checks those children
+        # in their own right. Not skipping it would flag every volume root, whose default
+        # "Authenticated Users:(OI)(CI)(IO)(M)" ACE is exactly that.
+        if (([int]$ace.PropagationFlags -band [int][System.Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0) { continue }
+        if (([int]$ace.FileSystemRights -band $mask) -eq 0) { continue }
+        $sid = Resolve-AceSid $ace.IdentityReference
+        if ($null -eq $sid) { return "'$p': $($ace.IdentityReference) (unresolvable SID) has '$($ace.FileSystemRights)'" }
+        if ($allowedSids -notcontains $sid) { return "'$p': $($ace.IdentityReference) has '$($ace.FileSystemRights)'" }
+    }
+    return $null
+}
+
+# Walk the script AND every ancestor directory: write access to a CONTAINING directory is
+# enough to delete and recreate the script, regardless of the script's own ACL, so checking
+# the file alone is not sufficient.
+function Get-NonAdminWriteVectorForPath([string]$p, [string[]]$allowedSids) {
+    $current = $p
+    while ($current) {
+        $vector = Get-NonAdminWriteVector $current $allowedSids
+        if ($vector) { return $vector }
+        $parent = Split-Path -Parent $current
+        if (-not $parent -or $parent -eq $current) { break }
+        $current = $parent
+    }
+    return $null
+}
+
+# ---------------------------------------------------------------------------
 # -Remove: unregister the task and delete the blob (idempotent).
 # ---------------------------------------------------------------------------
 if ($Remove) {
@@ -79,6 +195,15 @@ if ($Remove) {
         try { Remove-Item -LiteralPath $credDir -Force } catch { }
     }
     Write-Host "Autounlock removed. The core tasks (Core-Start / Core-Stop) are untouched."
+    Write-Host ""
+    # Two things -Remove does NOT do, both of which operators reasonably assume it does:
+    Write-Host "NOTE: a RUNNING wallet stays UNLOCKED -- removing the task and the blob does not relock it." -ForegroundColor Yellow
+    Write-Host "      Relock now with the core's own RPC, or stop the core:"
+    Write-Host "          Start-ScheduledTask -TaskPath '\$TaskFolder\' -TaskName 'Core-Stop'"
+    Write-Host "      (or, with the core running: & '<install>\daemon\gridcoinresearchd.exe' -datadir=`"$DataDir`" walletlock)"
+    Write-Host "NOTE: deleting the blob is an ordinary file delete, NOT a secure erase. The DPAPI-encrypted" -ForegroundColor Yellow
+    Write-Host "      bytes may survive in free space, backups, or Volume Shadow Copies. If the passphrase"
+    Write-Host "      itself may be compromised, change the wallet passphrase -- do not rely on this delete."
     return
 }
 
@@ -105,6 +230,58 @@ if ($taskSid -and ($taskSid -ne $mySid)) {
 if (-not $taskSid) {
     Write-Host ("Note: could not resolve '$TaskUser' to a SID to confirm it matches the current user. The " +
                 "DPAPI blob will only decrypt if the task runs as the same account that runs this setup.") -ForegroundColor Yellow
+}
+
+# ---------------------------------------------------------------------------
+# Validate the paths that get baked into the task's command line (see Get-QuotedArg).
+# ---------------------------------------------------------------------------
+if (-not $DataDir)          { throw "-DataDir must not be empty." }
+if ($DataDir -match '"')    { throw "-DataDir must not contain a double-quote character (it is baked into the task's command line)." }
+if ($CredPath -match '"')   { throw "-CredPath must not contain a double-quote character (it is baked into the task's command line)." }
+if ($HelperPath -match '"') { throw "-HelperPath must not contain a double-quote character (it is baked into the task's command line)." }
+
+# ---------------------------------------------------------------------------
+# The blob's PARENT directory gets a protected, owner-only DACL below (so the helper's
+# redacted log next to the blob is covered too, not just the blob). That is only safe for a
+# directory dedicated to autounlock: with -CredPath "$DataDir\passphrase.cred" the parent IS
+# the datadir, and we would strip inheritance from the whole wallet directory and lock every
+# other principal (a backup agent, a second admin) out of wallet.dat. Refuse that.
+# ---------------------------------------------------------------------------
+$credDir = Split-Path -Parent $CredPath
+if (-not $credDir) {
+    throw "-CredPath must include a directory, e.g. '...\GridcoinResearch\autounlock\passphrase.cred'."
+}
+if ((Get-NormalizedPath $credDir) -eq (Get-NormalizedPath $DataDir)) {
+    throw ("-CredPath '$CredPath' puts the blob directly in the datadir. This script applies a protected, " +
+           "owner-only ACL to the blob's PARENT directory, so that would re-ACL the entire datadir (wallet.dat " +
+           "included) and break inheritance on it. Use a dedicated subdirectory, e.g. " +
+           "'$(Join-Path $DataDir 'autounlock\passphrase.cred')'.")
+}
+if ((Test-Path -LiteralPath $credDir) -and
+    @(Get-ChildItem -LiteralPath $credDir -Force | Where-Object {
+        $_.Name -notin @('passphrase.cred', 'autounlock.log', 'autounlock.log.1') -and $_.FullName -ne $CredPath
+    }).Count -gt 0) {
+    Write-Host ("WARNING: '$credDir' holds files other than the autounlock blob/log. It is about to be locked " +
+                "owner-only with inheritance disabled, which will change access to everything in it. Use a " +
+                "dedicated directory for -CredPath if that is not what you want.") -ForegroundColor Yellow
+}
+
+# ---------------------------------------------------------------------------
+# SECURITY GATE: refuse to register a task that executes a replaceable script.
+# ---------------------------------------------------------------------------
+# Privileged principals plus the wallet user itself (the account this runs as, and the
+# account the task runs as -- already verified to be the same SID above). Anyone else with
+# write/delete/ownership anywhere on the path to the helper can swap it for their own script
+# and have OUR task run it as the wallet user, whose DPAPI store then hands over the wallet
+# passphrase. Fail closed before the operator is even asked for it.
+$allowedSids = $script:PrivilegedSids + @($mySid)
+$offender = Get-NonAdminWriteVectorForPath $HelperPath $allowedSids
+if ($offender) {
+    throw ("Refusing to register an autounlock task that runs '$HelperPath' -- $offender. Anyone who can " +
+           "replace that script (or anything on the path to it) gets it executed AS the wallet user, whose " +
+           "DPAPI store decrypts the stored wallet passphrase. Install these scripts under an admin-only " +
+           "location (e.g. Program Files), with every parent directory admin-owned, and re-run from there " +
+           "or pass -HelperPath pointing at such a copy.")
 }
 
 # ---------------------------------------------------------------------------
@@ -137,8 +314,8 @@ try {
 # ---------------------------------------------------------------------------
 # Write the blob and lock it to the current user (defense in depth; DPAPI already
 # user-binds it, but an owner-only ACL keeps other local users from even reading the blob).
+# $credDir was resolved and validated above (it must not be the datadir itself).
 # ---------------------------------------------------------------------------
-$credDir = Split-Path -Parent $CredPath
 if ($credDir -and -not (Test-Path -LiteralPath $credDir)) {
     New-Item -ItemType Directory -Path $credDir -Force | Out-Null
 }
@@ -185,9 +362,9 @@ if ($finalSid -and ($finalSid -ne $mySid)) {
            "run as the SAME user that runs this setup. Re-run this AS '$TaskUser' (elevated if needed).")
 }
 
-$ddQuoted = '"' + $DataDir + '"'
-$helperQuoted = '"' + $HelperPath + '"'
-$credQuoted = '"' + $CredPath + '"'
+$ddQuoted = Get-QuotedArg $DataDir
+$helperQuoted = Get-QuotedArg $HelperPath
+$credQuoted = Get-QuotedArg $CredPath
 $psArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File $helperQuoted -DataDir $ddQuoted -CredPath $credQuoted -Interval $Interval -Timeout $Timeout"
 
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
