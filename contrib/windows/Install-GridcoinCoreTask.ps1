@@ -112,12 +112,136 @@ if (-not $PSBoundParameters.ContainsKey('DataDir')) {
 if ($DataDir -match '"') {
     throw "-DataDir must not contain a double-quote character."
 }
+# A trailing backslash escapes the closing quote under CommandLineToArgvW (which both
+# powershell.exe and the daemon use to split their command lines), so -datadir="C:\dd\"
+# swallows the quote and corrupts every argument that follows it. It is also baked into the
+# generated .cmd, where cmd.exe applies yet another quoting pass. Reject it rather than try
+# to escape it correctly for both parsers at once.
+if ($DataDir -match '\\$') {
+    throw "-DataDir must not end with a backslash ('$DataDir'): a trailing backslash escapes the closing " +
+          "quote when the command line is parsed, corrupting the arguments after it. Drop the trailing " +
+          "backslash (and use a subdirectory rather than a bare drive root)."
+}
 
 if (-not $TaskPassword) {
     $cred = Get-Credential -UserName $TaskUser `
         -Message "Enter the Windows password for '$TaskUser' (the account the Gridcoin core will run as). This is NOT the wallet passphrase."
     $TaskUser = $cred.UserName
     $TaskPassword = $cred.Password
+}
+
+# ---------------------------------------------------------------------------
+# SECURITY: Core-Start executes the generated core-autostart.cmd (in this script's own
+# directory) as the wallet user, at boot, with no interactive session to notice. Anyone who
+# can replace that .cmd -- or anything on the path to it -- gets arbitrary code run as the
+# wallet user, which owns the wallet and (when autounlock is enabled) the DPAPI store that
+# decrypts the wallet passphrase. Fail CLOSED unless every component is writable only by
+# privileged principals or by the wallet user itself (who already owns the wallet, so that
+# is not an escalation).
+#
+# Mirrors Get-NonAdminWriteVector / Get-NonAdminWriteVectorForPath in
+# Set-GridcoinShutdownFlush.ps1 (whose script runs as SYSTEM and therefore allows no user
+# SID at all). Test ONLY the write/delete/own-change bits, NOT the composite
+# Modify/FullControl rights, whose bit patterns overlap ReadAndExecute/Synchronize (masking
+# those would wrongly flag the read-only Program Files "Users: ReadAndExecute, Synchronize"
+# ACE).
+$script:PrivilegedSids = @(
+    'S-1-5-18',                                                        # SYSTEM
+    'S-1-5-32-544',                                                    # Administrators
+    'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'   # TrustedInstaller
+)
+#
+# The mask differs per object type, which matters: on a FILE, appending to it is enough to
+# change what runs, so AppendData counts. On a DIRECTORY, AppendData/CreateDirectories only
+# permits creating a NEW entry -- it cannot replace an existing child -- and every default
+# Windows volume root grants exactly that to Users ("BUILTIN\Users:(CI)(AD)",
+# "Authenticated Users:(AD)" on C:\), so folding it in would refuse every install on every
+# machine. What matters on a container is CreateFiles/Delete/DeleteSubdirectoriesAndFiles/
+# ChangePermissions/TakeOwnership.
+$script:FileWriteMask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
+$script:DirWriteMask = [int]([System.Security.AccessControl.FileSystemRights]'CreateFiles, WriteExtendedAttributes, WriteAttributes, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
+
+function Resolve-AceSid($idr) {
+    if ($null -eq $idr) { return $null }
+    if ($idr -is [System.Security.Principal.SecurityIdentifier]) { return $idr.Value }
+    try { return $idr.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { }
+    # Get-Acl surfaces some identities as a bare string (notably $acl.Owner), which has no
+    # Translate(). Resolve those through NTAccount -- otherwise EVERY path, including
+    # admin-owned ones, reports an unresolvable owner and this refuses on every machine.
+    try { return ([System.Security.Principal.NTAccount]([string]$idr)).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { return $null }
+}
+
+# The first non-privileged write vector on $p, or $null if safe. Checks three things, all
+# ways to replace the launcher that a plain ACE scan misses: an empty Access collection (a
+# NULL DACL grants everyone full control, so "no ACEs" must read as UNSAFE); the OWNER (who
+# holds implicit WRITE_DAC and can rewrite the DACL at will); and Allow ACEs granting
+# write/delete/ownership to a principal outside $allowedSids.
+function Get-NonAdminWriteVector([string]$p, [string[]]$allowedSids) {
+    try { $acl = Get-Acl -LiteralPath $p } catch { return "the ACL of '$p' could not be read" }
+
+    $access = @($acl.Access)
+    if ($access.Count -eq 0) { return "'$p' has a NULL/empty DACL (everyone has full control)" }
+
+    # Ask for the owner AS A SID: $acl.Owner is a string, so translating it directly
+    # is unreliable (see Resolve-AceSid).
+    $ownerSid = $null
+    try { $ownerSid = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value } catch { }
+    if ($null -eq $ownerSid) { $ownerSid = Resolve-AceSid $acl.Owner }
+    if ($null -eq $ownerSid) { return "'$p' has an unresolvable owner ($($acl.Owner))" }
+    if ($allowedSids -notcontains $ownerSid) {
+        return "'$p' is owned by $($acl.Owner), who can rewrite its DACL at will"
+    }
+
+    $mask = if (Test-Path -LiteralPath $p -PathType Container) { $script:DirWriteMask } else { $script:FileWriteMask }
+    foreach ($ace in $access) {
+        if ($ace.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
+        # An inherit-only ACE grants nothing on THIS object; it is a template for children,
+        # where it shows up as a real (inherited) ACE -- and this walk checks those children
+        # in their own right. Not skipping it would flag every volume root, whose default
+        # "Authenticated Users:(OI)(CI)(IO)(M)" ACE is exactly that.
+        if (([int]$ace.PropagationFlags -band [int][System.Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0) { continue }
+        if (([int]$ace.FileSystemRights -band $mask) -eq 0) { continue }
+        $sid = Resolve-AceSid $ace.IdentityReference
+        if ($null -eq $sid) { return "'$p': $($ace.IdentityReference) (unresolvable SID) has '$($ace.FileSystemRights)'" }
+        if ($allowedSids -notcontains $sid) { return "'$p': $($ace.IdentityReference) has '$($ace.FileSystemRights)'" }
+    }
+    return $null
+}
+
+# Walk the launcher AND every ancestor directory: write access to a CONTAINING directory is
+# enough to delete and recreate the launcher whatever its own ACL says.
+function Get-NonAdminWriteVectorForPath([string]$p, [string[]]$allowedSids) {
+    $current = $p
+    while ($current) {
+        $vector = Get-NonAdminWriteVector $current $allowedSids
+        if ($vector) { return $vector }
+        $parent = Split-Path -Parent $current
+        if (-not $parent -or $parent -eq $current) { break }
+        $current = $parent
+    }
+    return $null
+}
+
+$taskSid = $null
+try {
+    $taskSid = (New-Object System.Security.Principal.NTAccount($TaskUser)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+} catch {
+    $taskSid = $null   # unresolvable: allow only the privileged principals (stricter)
+}
+$allowedSids = $script:PrivilegedSids
+if ($taskSid) { $allowedSids = $allowedSids + @($taskSid) }
+
+# On a first install the launcher does not exist yet, so walk its directory instead (a
+# missing file would otherwise read as "ACL could not be read").
+$guardTarget = Join-Path $PSScriptRoot 'core-autostart.cmd'
+if (-not (Test-Path -LiteralPath $guardTarget)) { $guardTarget = $PSScriptRoot }
+$offender = Get-NonAdminWriteVectorForPath $guardTarget $allowedSids
+if ($offender) {
+    throw "Refusing to register a boot task that runs '$(Join-Path $PSScriptRoot 'core-autostart.cmd')' -- " +
+          "$offender. Anyone who can replace that launcher gets code executed as '$TaskUser' at every boot, " +
+          "with the wallet (and, if autounlock is enabled, the DPAPI store holding the wallet passphrase) at " +
+          "its disposal. Install these scripts under an admin-only location (e.g. Program Files), with every " +
+          "parent directory admin-owned, and re-run from there."
 }
 
 # Register-ScheduledTask -Password requires the plaintext. NOTE: PtrToStringBSTR

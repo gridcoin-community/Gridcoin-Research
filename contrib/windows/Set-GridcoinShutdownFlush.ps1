@@ -237,11 +237,25 @@ $script:PrivilegedSids = @(
     'S-1-5-32-544',                                                    # Administrators
     'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'  # TrustedInstaller
 )
-$script:WriteMask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
+# Two masks, because the threat differs by object type and a single mask produces
+# false positives that would make this refuse on EVERY machine:
+#   * On the FILE, any write/delete/ownership right is enough to replace it.
+#   * On an ANCESTOR DIRECTORY, only rights that let you delete or re-permission
+#     that directory matter. Notably NOT AppendData/CreateFiles: being able to
+#     create a NEW entry in C:\ does not let you touch an existing subtree, and
+#     the default volume root really does carry 'Authenticated Users: AppendData'
+#     (verified on Windows 11), so including it would refuse everywhere.
+$script:FileWriteMask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete, ChangePermissions, TakeOwnership')
+$script:DirWriteMask  = [int]([System.Security.AccessControl.FileSystemRights]'Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
 
 function Resolve-AceSid($idr) {
+    if ($null -eq $idr) { return $null }
     if ($idr -is [System.Security.Principal.SecurityIdentifier]) { return $idr.Value }
-    try { return $idr.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { return $null }
+    try { return $idr.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { }
+    # Get-Acl surfaces some identities as a bare string (notably $acl.Owner), which has
+    # no Translate() -- resolve those through NTAccount rather than reporting them as
+    # unresolvable (which would fail closed on every path, including admin-owned ones).
+    try { return ([System.Security.Principal.NTAccount]([string]$idr)).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { return $null }
 }
 
 # Returns a description of the first non-privileged write vector found on $p, or
@@ -252,21 +266,30 @@ function Resolve-AceSid($idr) {
 #   2. the OWNER -- an owner always holds implicit WRITE_DAC and can simply rewrite
 #      the DACL, so a non-privileged owner defeats any ACE check;
 #   3. Allow ACEs granting write/delete/ownership to a non-privileged principal.
-function Get-NonAdminWriteVector([string]$p) {
+function Get-NonAdminWriteVector([string]$p, [bool]$IsDirectory) {
     try { $acl = Get-Acl -LiteralPath $p } catch { return "the ACL of '$p' could not be read" }
 
     $access = @($acl.Access)
     if ($access.Count -eq 0) { return "'$p' has a NULL/empty DACL (everyone has full control)" }
 
-    $ownerSid = Resolve-AceSid $acl.Owner
+    # Ask for the owner AS A SID: $acl.Owner is a string, so translating it directly
+    # is unreliable (see Resolve-AceSid).
+    $ownerSid = $null
+    try { $ownerSid = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value } catch { }
+    if ($null -eq $ownerSid) { $ownerSid = Resolve-AceSid $acl.Owner }
     if ($null -eq $ownerSid) { return "'$p' has an unresolvable owner ($($acl.Owner))" }
     if ($script:PrivilegedSids -notcontains $ownerSid) {
         return "'$p' is owned by $($acl.Owner), who can rewrite its DACL at will"
     }
 
+    $mask = if ($IsDirectory) { $script:DirWriteMask } else { $script:FileWriteMask }
     foreach ($ace in $access) {
         if ($ace.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
-        if (([int]$ace.FileSystemRights -band $script:WriteMask) -eq 0) { continue }
+        # InheritOnly ACEs do not grant anything on the object that carries them; they
+        # exist purely to be inherited by children. Judging them here would flag the
+        # default inheritable ACEs present on every volume root.
+        if (($ace.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0) { continue }
+        if (([int]$ace.FileSystemRights -band $mask) -eq 0) { continue }
         $sid = Resolve-AceSid $ace.IdentityReference
         if ($null -eq $sid) { return "'$p': $($ace.IdentityReference) (unresolvable SID) has '$($ace.FileSystemRights)'" }
         if ($script:PrivilegedSids -notcontains $sid) { return "'$p': $($ace.IdentityReference) has '$($ace.FileSystemRights)'" }
@@ -279,12 +302,14 @@ function Get-NonAdminWriteVector([string]$p) {
 # ACL, so checking the file alone is not sufficient.
 function Get-NonAdminWriteVectorForPath([string]$p) {
     $current = $p
+    $isDir = $false   # the leaf is the binary itself; every step above it is a directory
     while ($current) {
-        $vector = Get-NonAdminWriteVector $current
+        $vector = Get-NonAdminWriteVector $current $isDir
         if ($vector) { return $vector }
         $parent = Split-Path -Parent $current
         if (-not $parent -or $parent -eq $current) { break }
         $current = $parent
+        $isDir = $true
     }
     return $null
 }

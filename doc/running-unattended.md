@@ -42,13 +42,19 @@ gridcoinresearch -multiprocess
 Encrypt the wallet passphrase, bound to this host (and its TPM, if present), then enable the companion unit:
 
 ```bash
-printf '%s' 'YOUR-WALLET-PASSPHRASE' | sudo systemd-creds encrypt \
-    --name=wallet-passphrase - /etc/gridcoin/wallet-passphrase.cred
+systemd-ask-password 'Wallet passphrase:' \
+    | sudo systemd-creds encrypt --name=wallet-passphrase - /etc/gridcoin/wallet-passphrase.cred
 sudo chown gridcoin:gridcoin /etc/gridcoin/wallet-passphrase.cred
 sudo chmod 0400 /etc/gridcoin/wallet-passphrase.cred
 
 sudo systemctl enable --now gridcoinresearchd-autounlock.service
 ```
+
+> **Never put the passphrase in the command itself** (`printf '%s' 'MY-PASSPHRASE' | …`). Even though a shell
+> builtin keeps it out of `ps`, the whole command line is written to `~/.bash_history`, and to sudo's I/O log if
+> `log_input` is enabled. `systemd-ask-password` prompts for it, so it is never part of any command. Without
+> `systemd-ask-password`, use a shell prompt instead:
+> `read -rs -p 'Wallet passphrase: ' pw && printf '%s' "$pw" | sudo systemd-creds encrypt …; unset pw`.
 
 The autounlock unit runs whenever the core starts (boot, restart, upgrade), unlocks **stake-only**, and exits.
 A rejected passphrase or an unverifiable RPC listener leaves it `failed` (visible) rather than looping. Full
@@ -116,6 +122,12 @@ over a remote (SSH/PSRemoting) session:
 Start-ScheduledTask -TaskPath '\Gridcoin\' -TaskName 'Autounlock'
 ```
 
+> **Install location matters.** Both `Install-GridcoinCoreTask.ps1` and `Set-GridcoinAutounlock.ps1` refuse to
+> register a task if the script (or launcher) they will execute — or any directory above it — can be written,
+> deleted, or taken over by a local principal other than an administrator or the wallet user. Otherwise another
+> local user could swap the script and have your own task run it *as you*, handing over the passphrase. Keep the
+> install under `Program Files` (or another admin-owned location), not in a shared/temp folder.
+
 This encrypts the passphrase with **DPAPI (CurrentUser)** to an owner-only
 `…\GridcoinResearch\autounlock\passphrase.cred` and registers a resident task that unlocks **stake-only** and
 re-unlocks after each core restart. It refuses to send anything if a *foreign* process owns the RPC port (the
@@ -155,6 +167,13 @@ listener-ownership gate). Detail: [`../contrib/windows/README.md` →
 - **Windows:** `.\Set-GridcoinAutounlock.ps1 -Remove` (removes the task + deletes the DPAPI blob), and
   `.\Uninstall-GridcoinCoreTask.ps1` (removes Core-Start/Core-Stop).
 
+> Two things `-Remove` does **not** do. It does **not relock a running wallet** — the wallet stays unlocked
+> (stake-only) until the core is restarted or you issue `walletlock`; stop the core with
+> `Start-ScheduledTask -TaskPath '\Gridcoin\' -TaskName 'Core-Stop'` if you want it locked now. And deleting the
+> blob is an ordinary file delete, **not a secure erase**: the DPAPI-encrypted bytes may survive in free space,
+> backups, or Volume Shadow Copies. If you believe the passphrase itself is compromised, change the wallet
+> passphrase — do not rely on the delete.
+
 ## Troubleshooting
 
 - **GUI says "could not connect to the daemon."** The core isn't running, wasn't started with `-multiprocess`,
@@ -162,6 +181,11 @@ listener-ownership gate). Detail: [`../contrib/windows/README.md` →
   [`multiprocess.md` → *Troubleshooting*](multiprocess.md).
 - **Windows: "Access is denied" registering a task.** Use an **elevated** PowerShell; a boot-triggered task
   needs it, and the account needs the "Log on as a batch job" right.
+- **Autounlock refuses with "the config omits rpcport and does not select a chain unambiguously."** Set
+  `rpcport=` in the config file (or pass `--rpcport` / `-RpcPort`). The helper only assumes a default port when
+  the config clearly selects one chain — guessing the mainnet port on, say, a testnet node could send that
+  wallet's passphrase to a mainnet wallet listening on the same host. Note the helper reads only the config
+  file: if the chain is selected on the core's *command line* (`-testnet`), set `rpcport=` in the config as well.
 - **Autounlock log shows "REFUSING TO SEND CREDENTIALS."** A process owned by another user is listening on the
   RPC port — investigate before relying on autounlock; this is the gate working, not a bug.
 - **Autounlock log shows "-17 already unlocked."** The wallet was unlocked by another path (e.g. a GUI unlock)
