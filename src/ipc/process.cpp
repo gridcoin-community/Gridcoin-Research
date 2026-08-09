@@ -26,9 +26,11 @@
 // layout ParseAddress relies on.
 #include <climits>
 #include <mutex>
+#include <vector>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <afunix.h>
+#include <aclapi.h> // SetEntriesInAclW / Set|GetNamedSecurityInfoW (advapi32)
 #endif
 
 namespace ipc {
@@ -54,6 +56,16 @@ fs::path ParseAddress(std::string& address, const fs::path& data_dir, struct soc
         throw std::invalid_argument(strprintf("Unrecognized IPC address '%s'", address));
     }
 
+    // OPEN QUESTION (Windows, non-ASCII paths): sun_path is filled from
+    // path.string(), which on Windows is the *system code page* narrow form, while
+    // the cookie writer (handshake.cpp) uses path.wstring(). Microsoft's AF_UNIX
+    // documentation does not state which narrow encoding the kernel expects in
+    // sun_path (UTF-8 vs. the ANSI code page), and we have no on-device evidence
+    // either way, so the behaviour is deliberately left alone rather than guessed
+    // at: changing it blindly could break the ASCII path that is known to work.
+    // A datadir containing characters outside the system code page may therefore
+    // fail to bind/connect on Windows even once the cookie is readable; that needs
+    // an on-device experiment before any encoding change here.
     const std::string path_str = path.string();
     if (path_str.size() >= sizeof(addr.sun_path)) {
         throw std::invalid_argument(
@@ -103,6 +115,144 @@ void EnsureWinsock()
     });
 }
 
+//! The two trustees an IPC object's DACL may name: this process's token user
+//! ("me") and SYSTEM. SYSTEM is included because excluding it breaks backup,
+//! indexing and service scenarios while adding nothing -- SYSTEM can take
+//! ownership of any object regardless of its DACL, so denying it is theatre.
+//! Administrators are deliberately *not* included: an administrator can likewise
+//! take ownership at will, but leaving the group off keeps the ACL an accurate
+//! statement of intent (owner-only) rather than an invitation.
+struct OwnerOnlyTrustees
+{
+    std::vector<unsigned char> token_user; //!< TOKEN_USER header + the SID it points into
+    unsigned char system_sid[SECURITY_MAX_SID_SIZE];
+
+    PSID user() const
+    {
+        return reinterpret_cast<const TOKEN_USER*>(token_user.data())->User.Sid;
+    }
+    PSID system() const { return const_cast<unsigned char*>(system_sid); }
+};
+
+//! Resolve the process token user SID and the SYSTEM SID. Throws on failure --
+//! without both SIDs no DACL can be built, and silently skipping the DACL is the
+//! very hole this exists to close.
+OwnerOnlyTrustees GetOwnerOnlyTrustees()
+{
+    OwnerOnlyTrustees t{};
+
+    HANDLE token = nullptr;
+    if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token)) {
+        throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
+                                "OpenProcessToken");
+    }
+    // First call sizes the buffer (it fails with ERROR_INSUFFICIENT_BUFFER by design).
+    DWORD len = 0;
+    ::GetTokenInformation(token, TokenUser, nullptr, 0, &len);
+    t.token_user.resize(len ? len : 1);
+    if (!::GetTokenInformation(token, TokenUser, t.token_user.data(), len, &len)) {
+        const DWORD err = ::GetLastError();
+        ::CloseHandle(token);
+        throw std::system_error(static_cast<int>(err), std::system_category(),
+                                "GetTokenInformation(TokenUser)");
+    }
+    ::CloseHandle(token);
+
+    DWORD system_sid_size = sizeof(t.system_sid);
+    if (!::CreateWellKnownSid(WinLocalSystemSid, nullptr, t.system_sid, &system_sid_size)) {
+        throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
+                                "CreateWellKnownSid(WinLocalSystemSid)");
+    }
+    return t;
+}
+
+//! Build the two-ACE allow-only DACL for \p trustees. The caller owns the
+//! returned ACL and must LocalFree() it.
+PACL BuildOwnerOnlyDacl(const OwnerOnlyTrustees& trustees, bool inheritable)
+{
+    EXPLICIT_ACCESS_W ea[2] = {};
+    const PSID sids[2] = {trustees.user(), trustees.system()};
+    // On a directory the ACEs must be inheritable, so anything created inside
+    // (node.sock, ipc.cookie) is owner-only from creation rather than only after
+    // an after-the-fact SetNamedSecurityInfo -- that closes the create/protect
+    // window rather than merely narrowing it.
+    const DWORD inheritance = inheritable ? (CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE)
+                                          : NO_INHERITANCE;
+    for (int i = 0; i < 2; ++i) {
+        ea[i].grfAccessPermissions = GENERIC_ALL;
+        ea[i].grfAccessMode = SET_ACCESS;
+        ea[i].grfInheritance = inheritance;
+        ea[i].Trustee.pMultipleTrustee = nullptr;
+        ea[i].Trustee.MultipleTrusteeOperation = NO_MULTIPLE_TRUSTEE;
+        ea[i].Trustee.TrusteeForm = TRUSTEE_IS_SID;
+        ea[i].Trustee.TrusteeType = i == 0 ? TRUSTEE_IS_USER : TRUSTEE_IS_WELL_KNOWN_GROUP;
+        ea[i].Trustee.ptstrName = reinterpret_cast<LPWSTR>(sids[i]);
+    }
+
+    PACL dacl = nullptr;
+    const DWORD rc = ::SetEntriesInAclW(2, ea, nullptr, &dacl);
+    if (rc != ERROR_SUCCESS || dacl == nullptr) {
+        throw std::system_error(static_cast<int>(rc), std::system_category(), "SetEntriesInAcl");
+    }
+    return dacl;
+}
+
+//! Read \p path's DACL back and confirm it says what we just asked for: present,
+//! non-NULL, protected (no inherited ACEs), and every ACE an allow-ACE naming
+//! only one of \p trustees. This is the "verify" half of fail-closed: some
+//! filesystems (FAT/exFAT volumes, some network redirectors) accept a
+//! SetNamedSecurityInfo call and store nothing, which would otherwise leave the
+//! cookie world-readable while every call reported success.
+void VerifyOwnerOnlyDacl(const fs::path& path, const OwnerOnlyTrustees& trustees)
+{
+    std::wstring wpath = path.wstring();
+    PACL dacl = nullptr;
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    // DACL_SECURITY_INFORMATION only: PROTECTED_DACL_SECURITY_INFORMATION is a
+    // set-side flag and is rejected here. Whether the DACL is protected is read
+    // below from the descriptor's SE_DACL_PROTECTED control bit instead.
+    const DWORD rc = ::GetNamedSecurityInfoW(wpath.data(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
+                                             nullptr, nullptr, &dacl, nullptr, &sd);
+    if (rc != ERROR_SUCCESS) {
+        throw std::system_error(static_cast<int>(rc), std::system_category(),
+                                "GetNamedSecurityInfo " + path.string());
+    }
+
+    std::string failure;
+    SECURITY_DESCRIPTOR_CONTROL control{};
+    DWORD revision = 0;
+    if (!::GetSecurityDescriptorControl(sd, &control, &revision)) {
+        failure = "the security descriptor could not be read back";
+    } else if ((control & SE_DACL_PRESENT) == 0 || dacl == nullptr) {
+        // A NULL/absent DACL grants everyone full access -- the worst outcome.
+        failure = "it has no DACL (all users would have access)";
+    } else if ((control & SE_DACL_PROTECTED) == 0) {
+        failure = "its DACL is not protected (it still inherits ACEs from the parent)";
+    } else {
+        for (WORD i = 0; i < dacl->AceCount; ++i) {
+            void* ace = nullptr;
+            if (!::GetAce(dacl, i, &ace)) {
+                failure = "one of its ACEs could not be read back";
+                break;
+            }
+            const ACE_HEADER* header = static_cast<const ACE_HEADER*>(ace);
+            if (header->AceType != ACCESS_ALLOWED_ACE_TYPE) continue; // a deny ACE only narrows
+            PSID sid = &static_cast<ACCESS_ALLOWED_ACE*>(ace)->SidStart;
+            if (!::EqualSid(sid, trustees.user()) && !::EqualSid(sid, trustees.system())) {
+                failure = "its DACL grants access to a trustee other than the current user and SYSTEM";
+                break;
+            }
+        }
+    }
+    if (sd != nullptr) ::LocalFree(sd);
+    if (!failure.empty()) {
+        throw std::runtime_error(strprintf(
+            "Refusing to serve IPC: '%s' could not be restricted to the current user -- %s. "
+            "The data directory must live on an NTFS volume that supports access control.",
+            path.string(), failure));
+    }
+}
+
 //! Translate a winsock error into a std::error_code whose comparison against
 //! std::errc still works: interfaces.cpp classifies a connect failure as
 //! connection_refused / no_such_file_or_directory / not_a_directory to detect a
@@ -111,7 +261,9 @@ void EnsureWinsock()
 //! under system_category() otherwise so the message is still meaningful.
 //! On-device (W4): a missing socket path returns WSAECONNREFUSED (-> connection_refused,
 //! the clean no-daemon fallback, confirmed live). The unlistened case (a stale socket
-//! file with no listener) is still mapped generically -- not yet separately exercised.
+//! file with no listener) is still mapped generically -- not yet separately exercised,
+//! which is exactly why IsPossiblyStaleSocketBindError below does not gate stale-socket
+//! recovery on a single error code.
 std::error_code SocketErrorCode(int err)
 {
     switch (err) {
@@ -130,6 +282,43 @@ int LastSocketError() { return errno; }
 std::error_code SocketErrorCode(int err) { return std::error_code(err, std::system_category()); }
 void EnsureWinsock() {} // no-op on POSIX
 #endif
+
+//! Could this bind() failure be a leftover socket path from a crashed node, i.e.
+//! is it worth probing the path for a live listener before giving up?
+//!
+//! POSIX answers this unambiguously: bind() over an existing path is EADDRINUSE.
+//! Windows does not: AF_UNIX bind() there goes through the filesystem to create a
+//! reparse point over an existing name, and the failure surfaces as whichever of
+//! WSAEADDRINUSE / WSAEACCES / ERROR_FILE_EXISTS / ERROR_ALREADY_EXISTS /
+//! ERROR_ACCESS_DENIED the redirector hands back (see the SocketErrorCode note --
+//! this case is not separately exercised on-device). Gating recovery on
+//! address_in_use alone therefore risks a node that, after a single taskkill /F,
+//! never listens again on *any* subsequent start -- a permanent, one-log-line
+//! failure. Accepting the "exists"/"denied" family costs nothing: the caller
+//! still refuses to touch the path when the liveness probe finds a listener.
+bool IsPossiblyStaleSocketBindError(const std::error_code& ec)
+{
+#ifndef WIN32
+    return ec == std::errc::address_in_use;
+#else
+    if (ec == std::errc::address_in_use || ec == std::errc::file_exists ||
+        ec == std::errc::permission_denied) {
+        return true;
+    }
+    // Raw Win32/winsock codes SocketErrorCode leaves under system_category().
+    if (ec.category() == std::system_category()) {
+        switch (ec.value()) {
+        case ERROR_FILE_EXISTS:
+        case ERROR_ALREADY_EXISTS:
+        case ERROR_ACCESS_DENIED:
+        case ERROR_SHARING_VIOLATION:
+        case WSAEINVAL:
+            return true;
+        }
+    }
+    return false;
+#endif
+}
 
 //! Create an AF_UNIX SOCK_STREAM socket that is not inherited by child processes,
 //! so the IPC fd cannot leak into an exec'd child. POSIX uses SOCK_CLOEXEC
@@ -217,19 +406,23 @@ public:
         // Socket directory access control (design section 4.3). On POSIX we chmod
         // the parent 0700 and fail closed: if we cannot restrict it, refuse to
         // listen rather than expose the socket in a world-accessible directory.
-        // Windows has no chmod/umask for AF_UNIX; the socket instead inherits the
-        // NTFS ACL of the per-user-profile data directory (owner-only by default) --
-        // the same reliance Bitcoin Core has on the datadir ACL. Confirmed on-device
-        // (icacls): node.sock and ipc.cookie grant only the owner, SYSTEM and
-        // Administrators -- no Everyone/Users/Authenticated-Users -- so an
-        // unprivileged local user cannot read the cookie. Explicit DACLs remain a
-        // possible hardening follow-up (design decision 3 / Windows hardening).
+        // Windows has no chmod/umask for AF_UNIX, so the equivalent is an explicit
+        // owner-only *protected* DACL (ApplyOwnerOnlyDacl), applied inheritably so
+        // node.sock and ipc.cookie are owner-only from creation. The port used to
+        // rely instead on the per-user-profile datadir ACL being owner-only by
+        // default: true for a default %APPDATA% install (icacls on-device showed
+        // owner + SYSTEM + Administrators only), but nothing set or checked it, so
+        // a -datadir on a shared volume, an inherited-permissive parent or a
+        // non-ACL filesystem silently exposed the wallet IPC socket and the auth
+        // cookie. Both platforms now fail closed instead of assuming.
         if (path.has_parent_path()) {
             fs::create_directories(path.parent_path());
 #ifndef WIN32
             if (::chmod(path.parent_path().string().c_str(), 0700) != 0) {
                 throw std::system_error(errno, std::system_category());
             }
+#else
+            ApplyOwnerOnlyDacl(path.parent_path(), /*inheritable=*/true);
 #endif
         }
 
@@ -267,12 +460,25 @@ public:
                     CloseSocket(fd);
                     throw std::system_error(chmod_errno, std::system_category());
                 }
+#else
+                // Same fail-closed contract as the chmod above. The socket already
+                // inherited the directory's owner-only ACEs at creation (applied
+                // inheritably above), so this only re-states them non-inheritably
+                // and protects them; a residual window exists solely if the parent
+                // ACL was changed between the two calls, and any failure here
+                // refuses to serve rather than listening unprotected.
+                try {
+                    ApplyOwnerOnlyDacl(path, /*inheritable=*/false);
+                } catch (...) {
+                    CloseSocket(fd);
+                    throw;
+                }
 #endif
                 return fd;
             }
             CloseSocket(fd);
             const std::error_code bind_ec = SocketErrorCode(bind_errno);
-            if (bind_ec != std::errc::address_in_use || attempt == 1) {
+            if (!IsPossiblyStaleSocketBindError(bind_ec) || attempt == 1) {
                 throw std::system_error(bind_ec);
             }
             int probe_errno = 0;
@@ -285,19 +491,43 @@ public:
             }
             // Stale socket path from a crashed node: the liveness probe above just
             // confirmed nothing is listening, so remove it and retry the bind. On
-            // POSIX we additionally confirm it is a socket file before unlinking;
-            // on Windows an AF_UNIX socket is a reparse point that fs::symlink_status
-            // does not report as socket_file and bind() cannot overwrite an existing
-            // path, so remove any leftover path (best-effort).
+            // POSIX we additionally confirm it is a socket file before unlinking.
 #ifndef WIN32
             if (fs::symlink_status(path).type() == fs::socket_file) {
                 fs::remove(path); // stale: safe to remove, then retry the bind
             }
 #else
-            try {
-                fs::remove(path);
-            } catch (const fs::filesystem_error&) {
-                // already gone -- fine, retry the bind
+            // Windows equivalent of the POSIX socket_file guard. An AF_UNIX socket
+            // there is a reparse point, which boost::filesystem reports as
+            // reparse_file (or, defensively, regular_file) -- never socket_file --
+            // so the type cannot be compared verbatim. Refuse to touch a directory
+            // (that is a misconfigured -datadir/address, not a stale socket, and
+            // removing it could destroy data), and say so; anything else at this
+            // path was put there by a previous run of this daemon.
+            const fs::file_type type = fs::symlink_status(path).type();
+            if (type == fs::directory_file) {
+                throw std::runtime_error(strprintf(
+                    "The IPC socket path '%s' is a directory; move it aside or point the IPC "
+                    "address at a different path.", path.string()));
+            }
+            if (type == fs::file_not_found) {
+                // Nothing to clean up, so the bind failure was not a stale socket
+                // after all -- surface the original error rather than spinning.
+                throw std::system_error(bind_ec);
+            }
+            // boost::filesystem::remove() reports "already gone" by RETURNING FALSE,
+            // and throws only on a genuine failure (access denied, sharing violation
+            // because a handle is still open). The previous catch-and-ignore of
+            // filesystem_error therefore swallowed exactly the failures that matter
+            // and handled a case that never reached it. Use the non-throwing overload
+            // and surface a real failure: a silent no-op here means every subsequent
+            // start comes up with no IPC listener, forever.
+            boost::system::error_code remove_ec;
+            fs::remove(path, remove_ec);
+            if (remove_ec) {
+                throw std::runtime_error(strprintf(
+                    "Failed to remove the stale IPC socket '%s': %s. Nothing is listening on it; "
+                    "delete the file manually and restart.", path.string(), remove_ec.message()));
             }
 #endif
         }
@@ -307,4 +537,31 @@ public:
 } // namespace
 
 std::unique_ptr<Process> MakeProcess() { return std::make_unique<ProcessImpl>(); }
+
+#ifdef WIN32
+void ApplyOwnerOnlyDacl(const fs::path& path, bool inheritable)
+{
+    const OwnerOnlyTrustees trustees = GetOwnerOnlyTrustees();
+    PACL dacl = BuildOwnerOnlyDacl(trustees, inheritable);
+
+    // SetNamedSecurityInfoW takes a mutable LPWSTR, hence the local buffer.
+    std::wstring wpath = path.wstring();
+    const DWORD rc = ::SetNamedSecurityInfoW(wpath.data(), SE_FILE_OBJECT,
+                                             DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                                             nullptr, nullptr, dacl, nullptr);
+    ::LocalFree(dacl);
+    if (rc != ERROR_SUCCESS) {
+        throw std::system_error(static_cast<int>(rc), std::system_category(),
+                                "SetNamedSecurityInfo " + path.string());
+    }
+    // Setting an ACL can succeed nominally on a volume that does not store one;
+    // read it back before we act as though the secret is protected.
+    VerifyOwnerOnlyDacl(path, trustees);
+}
+
+void* MakeOwnerOnlyDacl(bool inheritable)
+{
+    return BuildOwnerOnlyDacl(GetOwnerOnlyTrustees(), inheritable);
+}
+#endif // WIN32
 } // namespace ipc

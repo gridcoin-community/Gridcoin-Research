@@ -9,27 +9,29 @@
 #include "random.h"
 #include "tinyformat.h"
 #include "util/strencodings.h"
+#ifdef WIN32
+#include "ipc/process.h" // ApplyOwnerOnlyDacl / MakeOwnerOnlyDacl
+#endif
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <fcntl.h>
-#include <fstream>
+#include <iterator>
 #include <sys/stat.h>
 #include <system_error>
 #ifndef WIN32
 #include <unistd.h>
 #else
-#include <io.h>     // _wsopen_s / _write / _commit / _close
-#include <share.h>  // _SH_DENYRW
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <windows.h> // MoveFileExW
+#include <windows.h> // CreateFileW / WriteFile / MoveFileExW / security descriptors
 #endif
 
 namespace ipc {
@@ -39,11 +41,46 @@ const char* const COOKIE_FILE = "ipc.cookie";
 //! Read an entire file into a string; nullopt if it cannot be opened.
 std::optional<std::string> ReadFile(const fs::path& path)
 {
-    std::ifstream in(path.string(), std::ios::binary);
+    // fsbridge::ifstream, not std::ifstream(path.string()): on Windows the GNU
+    // runtime has no wide-char stream constructor, so a narrow open goes through
+    // the system code page (fs.h, "GNU libstdc++ specific workaround") and cannot
+    // open a path that is not representable there -- while WriteFileAtomic below
+    // writes through the wide API. A datadir under a non-ASCII profile path
+    // (C:\Users\<non-codepage name>\...) would therefore be written successfully
+    // and then read back as "no cookie", leaving the GUI stuck reporting that the
+    // daemon is not running while it is running perfectly well. fsbridge::ifstream
+    // opens via _wfopen and reads exactly the file the writer wrote.
+    fsbridge::ifstream in(path, std::ios::binary);
     if (!in.good()) return std::nullopt;
     std::string contents((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     return contents;
 }
+
+//! Deletes the atomic-write temp file unless explicitly released. The temp file
+//! holds the IPC authentication cookie: on any error path between creating it and
+//! renaming it into place it must not be left behind, or a partial-write failure
+//! leaves a copy of the secret on disk indefinitely (nothing ever cleans up
+//! ipc.cookie.tmp -- the next start writes a *new* temp file and, on success,
+//! renames it away, so the stale one simply persists). Never throws: it runs
+//! during exception unwinding.
+class TempFileGuard
+{
+public:
+    explicit TempFileGuard(const fs::path& path) : m_path(path) {}
+    TempFileGuard(const TempFileGuard&) = delete;
+    TempFileGuard& operator=(const TempFileGuard&) = delete;
+    ~TempFileGuard()
+    {
+        if (!m_armed) return;
+        boost::system::error_code ec;
+        fs::remove(m_path, ec); // best effort: we are already failing
+    }
+    void release() { m_armed = false; }
+
+private:
+    fs::path m_path;
+    bool m_armed = true;
+};
 
 //! Write \p contents to \p path atomically (temp file + rename). The temp file is
 //! created with mode 0600 from the start (no umask window that could expose the
@@ -51,52 +88,104 @@ std::optional<std::string> ReadFile(const fs::path& path)
 //! knows the file does not hold what it expects.
 #ifdef WIN32
 //! Windows port of the atomic cookie writer. Same guarantees as the POSIX path,
-//! mapped to winsock/CRT: _O_NOINHERIT for close-on-exec, _SH_DENYRW for an
-//! exclusive open, _commit() for fsync, and MoveFileExW(REPLACE_EXISTING) for the
-//! atomic replace (boost::filesystem::rename's overwrite behaviour on Windows is
-//! version-dependent, so do not rely on it). There is no chmod: the file inherits
-//! the per-user, owner-only datadir ACL. O_NOFOLLOW has no direct analogue, but
-//! the secret only needs protecting from *other* users, which that ACL provides.
-//! On-device (W4): validated -- the cookie handshake round-trips (daemon writes it
-//! fresh each start, GUI reads and authenticates) and the file inherits the
-//! owner-only datadir NTFS ACL (owner + SYSTEM + Administrators, per icacls).
+//! mapped to the Win32 API: an owner-only protected DACL supplied to CreateFileW
+//! (the analogue of POSIX's mode 0600 at open(): the secret is never on disk under
+//! a permissive ACL, not even briefly), no sharing for an exclusive open,
+//! bInheritHandle=FALSE for close-on-exec, FlushFileBuffers() for fsync, and
+//! MoveFileExW(REPLACE_EXISTING) for the atomic replace (boost::filesystem::
+//! rename's overwrite behaviour on Windows is version-dependent, so do not rely
+//! on it). O_NOFOLLOW has no direct analogue; CREATE_NEW over a pre-planted name
+//! fails rather than following it, which covers the same threat.
+//!
+//! This used to open with _wsopen_s(..., _S_IREAD | _S_IWRITE) and rely on the
+//! file inheriting an owner-only datadir ACL. Neither protected anything: the CRT
+//! pmode is the DOS read-only *attribute*, not an access control entry (it does
+//! not restrict any user), and nothing in the tree ever set or verified the
+//! datadir ACL it was relying on. On-device (W4) the inherited ACL did happen to
+//! be owner + SYSTEM + Administrators for a default %APPDATA% install, but that
+//! was an observation about one machine, not a property this code enforced.
 void WriteFileAtomic(const fs::path& path, const std::string& contents)
 {
     fs::path tmp = path;
     tmp += ".tmp";
     const std::string tmp_str = tmp.string();
 
-    int fd = -1;
-    const errno_t oerr = ::_wsopen_s(&fd, tmp.wstring().c_str(),
-                                     _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY | _O_NOINHERIT,
-                                     _SH_DENYRW, _S_IREAD | _S_IWRITE);
-    if (oerr != 0 || fd == -1) {
-        throw std::system_error(oerr ? oerr : errno, std::generic_category(), "open " + tmp_str);
+    // SECURITY_ATTRIBUTES are honoured only when CreateFileW actually *creates*
+    // the file, so a leftover temp file must go first and the open must use
+    // CREATE_NEW: CREATE_ALWAYS would truncate an existing file and silently keep
+    // whatever ACL that file already had.
+    boost::system::error_code remove_ec;
+    fs::remove(tmp, remove_ec);
+    if (remove_ec) {
+        throw std::runtime_error("Failed to remove a leftover IPC cookie temp file " + tmp_str +
+                                 ": " + remove_ec.message());
     }
+
+    PACL dacl = static_cast<PACL>(MakeOwnerOnlyDacl(/*inheritable=*/false));
+    SECURITY_DESCRIPTOR sd;
+    HANDLE handle = INVALID_HANDLE_VALUE;
+    DWORD create_err = 0;
+    // SE_DACL_PROTECTED: without it the parent directory's inheritable ACEs are
+    // merged into the new file's DACL, which would defeat the point of naming an
+    // explicit trustee set here.
+    if (!::InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION) ||
+        !::SetSecurityDescriptorDacl(&sd, TRUE, dacl, FALSE) ||
+        !::SetSecurityDescriptorControl(&sd, SE_DACL_PROTECTED, SE_DACL_PROTECTED)) {
+        create_err = ::GetLastError();
+    } else {
+        SECURITY_ATTRIBUTES sa{};
+        sa.nLength = sizeof(sa);
+        sa.lpSecurityDescriptor = &sd;
+        sa.bInheritHandle = FALSE; // don't leak the handle into a child process
+        handle = ::CreateFileW(tmp.wstring().c_str(), GENERIC_WRITE, /*dwShareMode=*/0, &sa,
+                               CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (handle == INVALID_HANDLE_VALUE) create_err = ::GetLastError();
+    }
+    ::LocalFree(dacl); // the created file holds its own copy of the ACL
+    if (handle == INVALID_HANDLE_VALUE) {
+        throw std::system_error(static_cast<int>(create_err), std::system_category(),
+                                "create " + tmp_str);
+    }
+    // From here on the temp file exists and holds (or will hold) the secret: every
+    // exit that is not the successful rename must delete it.
+    TempFileGuard guard(tmp);
+
     size_t written = 0;
     while (written < contents.size()) {
-        const int n = ::_write(fd, contents.data() + written,
-                               static_cast<unsigned int>(contents.size() - written));
-        if (n < 0) {
-            const int e = errno;
-            ::_close(fd);
-            throw std::system_error(e, std::generic_category(), "write " + tmp_str);
+        const DWORD chunk = static_cast<DWORD>(
+            std::min<size_t>(contents.size() - written, static_cast<size_t>(1) << 20));
+        DWORD n = 0;
+        if (!::WriteFile(handle, contents.data() + written, chunk, &n, nullptr) || n == 0) {
+            const DWORD e = ::GetLastError();
+            ::CloseHandle(handle);
+            throw std::system_error(static_cast<int>(e), std::system_category(), "write " + tmp_str);
         }
         written += static_cast<size_t>(n);
     }
-    if (::_commit(fd) != 0) { // flush to disk (fsync equivalent)
-        const int e = errno;
-        ::_close(fd);
-        throw std::system_error(e, std::generic_category(), "commit " + tmp_str);
+    if (!::FlushFileBuffers(handle)) { // flush to disk (fsync equivalent)
+        const DWORD e = ::GetLastError();
+        ::CloseHandle(handle);
+        throw std::system_error(static_cast<int>(e), std::system_category(), "flush " + tmp_str);
     }
-    if (::_close(fd) != 0) {
-        throw std::system_error(errno, std::generic_category(), "close " + tmp_str);
+    if (!::CloseHandle(handle)) {
+        throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
+                                "close " + tmp_str);
     }
+
+    // Re-state and verify the DACL on the finished file before it becomes the
+    // cookie: a volume without ACL support accepts the SECURITY_ATTRIBUTES above
+    // and stores nothing, and we would rather refuse to serve IPC than hand out a
+    // world-readable authentication secret. Doing this before the rename means a
+    // volume that cannot protect the cookie never gets one -- the guard deletes
+    // the temp copy on the way out.
+    ApplyOwnerOnlyDacl(tmp, /*inheritable=*/false);
+
     if (!::MoveFileExW(tmp.wstring().c_str(), path.wstring().c_str(),
                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
                                 "MoveFileEx " + tmp_str + " -> " + path.string());
     }
+    guard.release(); // renamed into place: nothing left to clean up
 }
 #else
 void WriteFileAtomic(const fs::path& path, const std::string& contents)
@@ -111,6 +200,9 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
     if (fd == -1) {
         throw std::system_error(errno, std::system_category(), "open " + tmp_str);
     }
+    // The temp file now holds (or will hold) the cookie: every exit that is not
+    // the successful rename must delete it rather than leave the secret on disk.
+    TempFileGuard guard(tmp);
     size_t written = 0;
     while (written < contents.size()) {
         ssize_t n = ::write(fd, contents.data() + written, contents.size() - written);
@@ -130,6 +222,7 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
         throw std::system_error(errno, std::system_category(), "close " + tmp_str);
     }
     fs::rename(tmp, path); // throws (boost::filesystem) on failure
+    guard.release();       // renamed into place: nothing left to clean up
 }
 #endif
 } // namespace
