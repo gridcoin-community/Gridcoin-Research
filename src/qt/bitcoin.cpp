@@ -753,7 +753,15 @@ int main(int argc, char *argv[])
     // at another user's datadir). GetDataDirPath now returns an empty path on such
     // failures instead of throwing; without this check the process would abort silently
     // in the config read below, before any window or dialog exists.
-    if (GetDataDir(/*fNetSpecific=*/true).empty()) {
+    //
+    // Exception: an ABSOLUTE -conf is read independently of the default datadir and may
+    // itself set an accessible datadir=, so an inaccessible default must not pre-empt it
+    // here. In that case defer to the post-config checks below (CheckDataDirOption and the
+    // empty-path guard before LockDirectory), which run once the config -- and thus the
+    // effective datadir -- is known and still fail cleanly.
+    const std::string conf_arg = gArgs.GetArg("-conf", "");
+    const bool conf_is_absolute = !conf_arg.empty() && fs::path(conf_arg).is_absolute();
+    if (!conf_is_absolute && GetDataDir(/*fNetSpecific=*/true).empty()) {
         const std::string dd = gArgs.GetArg("-datadir", "");
         ThreadSafeMessageBox(strprintf("Error: cannot access the data directory %s.\n",
                                        dd.empty() ? std::string("(default location)") : dd),
