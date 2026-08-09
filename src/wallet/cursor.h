@@ -50,6 +50,20 @@ struct CursorDelta {
     enum Type { Reset, Insert, Remove, Change } type;
     int first;
     int count;
+    //! Insert only: the ABSOLUTE record indices of the inserted rows, captured at
+    //! the moment this delta was emitted.
+    //!
+    //! A single apply* call can emit several deltas, each against a different
+    //! intermediate state of view_index (a two-part coinstake inserts one part at
+    //! a time; a multi-row remove promotes off-window rows one at a time). `first`
+    //! is therefore an intermediate-state coordinate, and re-resolving it against
+    //! the FINAL view_index after the batch — which WalletTxStore::emitCursorDeltas
+    //! used to do — attaches the wrong record to the delta, or reads out of bounds
+    //! when a later delta shrank the served window past this coordinate (#3257
+    //! review; the Overview half of #3101). Capturing here makes the delta
+    //! self-describing, so nothing downstream has to re-derive a stale position.
+    //! Empty for Reset/Remove/Change, none of which carry records.
+    std::vector<std::size_t> rows;
 };
 
 class Cursor
@@ -100,8 +114,16 @@ public:
     std::size_t servedCount() const;
     //! Total accepted rows (the full sorted index size).
     std::size_t totalAccepted() const { return m_view_index.size(); }
-    //! Absolute record index at served position `served_pos` (for getRows).
-    std::size_t rowAt(std::size_t served_pos) const { return m_view_index[served_pos]; }
+    //! Absolute record index at served position `served_pos` (for getRows), or
+    //! npos if `served_pos` is out of range. Bounds-checked rather than a raw
+    //! operator[]: the callers derive `served_pos` from separately-sampled state,
+    //! and a stale coordinate must degrade to a skipped row, not a heap read past
+    //! the end of view_index (#3257 review).
+    std::size_t rowAt(std::size_t served_pos) const
+    {
+        return served_pos < m_view_index.size() ? m_view_index[served_pos]
+                                                : static_cast<std::size_t>(-1);
+    }
 
     //! Accepted-row position of absolute record index `absidx` in the sorted
     //! view, or npos (== static_cast<std::size_t>(-1)) if `absidx` is not
@@ -132,6 +154,24 @@ private:
     std::size_t findSlot(std::size_t absidx) const;
     //! Cap as a size_t (SIZE_MAX when unlimited).
     std::size_t cap() const;
+
+    //! Absolute record indices of served rows [first, first+count), read from the
+    //! CURRENT view_index. Used to stamp CursorDelta::rows at emission time;
+    //! clamps to the live size, so a short result means the caller asked for rows
+    //! that do not exist.
+    std::vector<std::size_t> rowsAt(std::size_t first, std::size_t count) const;
+
+    //! Served-window translation for a single-row insert that already happened at
+    //! `slot` (view_index has already grown by 1); `absidx` is the record that
+    //! landed there, stamped onto the emitted Insert.
+    void emitInsertAt(std::size_t slot, std::size_t absidx, std::size_t cap_v,
+                      std::vector<CursorDelta>& out) const;
+
+    //! Served-window translation for a single-row remove that already happened at
+    //! `pos` (`size_before` is the size before the erase). Any promotion Insert is
+    //! stamped from the post-erase view_index.
+    void emitRemoveAt(std::size_t pos, std::size_t size_before, std::size_t cap_v,
+                      std::vector<CursorDelta>& out) const;
 
     int m_view_id;
     FilterSpec m_filter;

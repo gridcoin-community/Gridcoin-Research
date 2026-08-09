@@ -80,6 +80,24 @@ struct WindowCacheSink {
     virtual void dataChanged(int first, int count) = 0;
 };
 
+//!
+//! \brief Outcome of applying one structural delta.
+//!
+//! The structural apply* methods used to return a bare bool, which conflated two
+//! completely different things: a delta correctly skipped because the cache
+//! already reflects it (the routine PR4-fix B seqno gate), and a delta REJECTED
+//! because its position does not fit the cache's virtual table. The first is
+//! normal and happens on every reset refetch; the second means the producer's
+//! cursor and this replica have diverged, which is a bug — and callers, having
+//! only a bool, discarded both silently. Distinguishing them lets the host log
+//! the divergence instead of swallowing it (#3257 review).
+//!
+enum class ApplyResult {
+    Applied,           //!< the delta was applied and the seqno advanced
+    AlreadyReflected,  //!< seqno <= the structural high-water; correctly skipped
+    Rejected,          //!< malformed or out-of-range: replica/producer divergence
+};
+
 template <class Record>
 class WindowCache
 {
@@ -134,10 +152,10 @@ public:
     //! structural baseline is max(high_water, seqno) — the fetch's high-water if
     //! it is ahead of the Reset event's own seqno (PR4-fix B). Brackets the swap
     //! in beginReset/endReset.
-    bool applyReset(WindowCacheSink& sink, uint64_t seqno, std::vector<Record> rows,
-                    int cache_first, int total, uint64_t epoch, uint64_t high_water)
+    ApplyResult applyReset(WindowCacheSink& sink, uint64_t seqno, std::vector<Record> rows,
+                           int cache_first, int total, uint64_t epoch, uint64_t high_water)
     {
-        if (seqno <= m_structural_seqno) return false;   // already reflected
+        if (seqno <= m_structural_seqno) return ApplyResult::AlreadyReflected;
         sink.beginReset();
         m_rows = std::move(rows);
         m_cache_first = cache_first;
@@ -145,19 +163,19 @@ public:
         m_epoch = epoch;
         sink.endReset();
         m_structural_seqno = high_water > seqno ? high_water : seqno;
-        return true;
+        return ApplyResult::Applied;
     }
 
     //! Structural Insert of `records.size()` rows at absolute `pos`. Shifts the
     //! cache base or splices into the slice as the position dictates (see below),
     //! grows m_total inside the begin/endInsert bracket, and advances the seqno.
-    bool applyInsert(WindowCacheSink& sink, uint64_t seqno, int pos,
-                     const std::vector<Record>& records)
+    ApplyResult applyInsert(WindowCacheSink& sink, uint64_t seqno, int pos,
+                            const std::vector<Record>& records)
     {
-        if (seqno <= m_structural_seqno) return false;   // already reflected
+        if (seqno <= m_structural_seqno) return ApplyResult::AlreadyReflected;
         const int count = static_cast<int>(records.size());
-        if (count <= 0) return false;                    // empty insert: nothing to do
-        if (pos < 0 || pos > m_total) return false;      // out of range: drop defensively
+        if (count <= 0) return ApplyResult::Rejected;    // empty insert: nothing to do
+        if (pos < 0 || pos > m_total) return ApplyResult::Rejected;
 
         const int base = m_cache_first;
         const int len = static_cast<int>(m_rows.size());
@@ -177,18 +195,18 @@ public:
         // pos > base + len: entirely after the window; only m_total changed.
         sink.endInsert();
         m_structural_seqno = seqno;
-        return true;
+        return ApplyResult::Applied;
     }
 
     //! Structural Remove of `count` rows at absolute `pos`. Erases the overlap
     //! with the slice and shifts the cache base down by however many removed rows
     //! were strictly before it; shrinks m_total inside the begin/endRemove bracket.
-    bool applyRemove(WindowCacheSink& sink, uint64_t seqno, int pos, int count)
+    ApplyResult applyRemove(WindowCacheSink& sink, uint64_t seqno, int pos, int count)
     {
-        if (seqno <= m_structural_seqno) return false;   // already reflected
+        if (seqno <= m_structural_seqno) return ApplyResult::AlreadyReflected;
         // Subtraction form, not pos+count > m_total: avoids int wrap on pathological
         // input (count > 0 holds by short-circuit when the comparison is reached).
-        if (count <= 0 || pos < 0 || pos > m_total - count) return false;
+        if (count <= 0 || pos < 0 || pos > m_total - count) return ApplyResult::Rejected;
 
         const int base = m_cache_first;
         const int len = static_cast<int>(m_rows.size());
@@ -209,7 +227,7 @@ public:
         m_cache_first = base - removed_before_cache;
         sink.endRemove();
         m_structural_seqno = seqno;
-        return true;
+        return ApplyResult::Applied;
     }
 
     //! Structural Change: `count` rows at absolute `pos` were refreshed in place
@@ -222,13 +240,13 @@ public:
     //! once. If `fresh` is shorter than `count` (a contract violation), the uncovered
     //! rows keep their cached values rather than reading out of bounds; the content
     //! channel refreshes them on the next fetch.
-    bool applyChange(WindowCacheSink& sink, uint64_t seqno, int pos, int count,
-                     const std::vector<Record>& fresh)
+    ApplyResult applyChange(WindowCacheSink& sink, uint64_t seqno, int pos, int count,
+                            const std::vector<Record>& fresh)
     {
-        if (seqno <= m_structural_seqno) return false;   // already reflected
+        if (seqno <= m_structural_seqno) return ApplyResult::AlreadyReflected;
         // Subtraction form, not pos+count > m_total: avoids int wrap on pathological
         // input (count > 0 holds by short-circuit when the comparison is reached).
-        if (count <= 0 || pos < 0 || pos > m_total - count) return false;
+        if (count <= 0 || pos < 0 || pos > m_total - count) return ApplyResult::Rejected;
 
         const int base = m_cache_first;
         const int len = static_cast<int>(m_rows.size());
@@ -249,7 +267,7 @@ public:
         if (updated_lo >= 0) {
             sink.dataChanged(updated_lo, updated_hi - updated_lo + 1);
         }
-        return true;
+        return ApplyResult::Applied;
     }
 
     // ---- content channel ---------------------------------------------------

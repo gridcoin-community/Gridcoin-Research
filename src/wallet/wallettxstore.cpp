@@ -126,11 +126,25 @@ void WalletTxStore::start()
     m_worker = std::thread([this] { workerLoop(); });
 }
 
+void WalletTxStore::warnIfIntakeBacklogged()
+{
+    if (m_intake.size() < m_intake_warn_at) {
+        return;
+    }
+    LogPrintf("WARNING: %s: transaction-store intake backlog is %u items "
+              "(worker parked=%d, rebuild in progress=%d) — new transactions are "
+              "not reaching the GUI transaction views",
+              __func__, static_cast<unsigned int>(m_intake.size()),
+              static_cast<int>(m_worker_parked), static_cast<int>(m_rebuilding));
+    m_intake_warn_at *= 2;
+}
+
 void WalletTxStore::enqueueInsert(std::vector<TransactionRecord> records)
 {
     {
         LOCK(cs_intake);
         m_intake.push_back(IntakeItem{IntakeItem::Insert, std::move(records), uint256()});
+        warnIfIntakeBacklogged();
     }
     m_intake_cv.notify_one();
 }
@@ -140,6 +154,7 @@ void WalletTxStore::enqueueRemove(const uint256& hash)
     {
         LOCK(cs_intake);
         m_intake.push_back(IntakeItem{IntakeItem::Remove, {}, hash});
+        warnIfIntakeBacklogged();
     }
     m_intake_cv.notify_one();
 }
@@ -153,6 +168,7 @@ void WalletTxStore::enqueueUpsert(std::vector<TransactionRecord> records)
     {
         LOCK(cs_intake);
         m_intake.push_back(IntakeItem{IntakeItem::Update, std::move(records), hash, {}, {}});
+        warnIfIntakeBacklogged();
     }
     m_intake_cv.notify_one();
 }
@@ -162,6 +178,7 @@ void WalletTxStore::enqueueAddressBookChange(const std::string& address, const s
     {
         LOCK(cs_intake);
         m_intake.push_back(IntakeItem{IntakeItem::AddressBook, {}, uint256(), address, label});
+        warnIfIntakeBacklogged();
     }
     m_intake_cv.notify_one();
 }
@@ -324,46 +341,70 @@ void WalletTxStore::removeTransaction(const uint256& hash)
     removeLocked(hash);
 }
 
-void WalletTxStore::removeLocked(const uint256& hash)
+bool WalletTxStore::locateHashRange(const uint256& hash, std::size_t& minPos,
+                                    std::size_t& maxPos, std::size_t& count) const
 {
+    // Same-hash keys are contiguous under TxOrderLess (the hash tiebreaker
+    // clusters them), so min/max bound a single range. The erase in removeLocked
+    // depends on that; validate it at runtime rather than with an assert, since the
+    // deployed build is -DNDEBUG and a de-clustered index would erase a wider
+    // [minPos, maxPos] range that swallows foreign rows. The bounds check is
+    // ordered first and short-circuits, so the m_records[] subscripts below it
+    // never run out of range.
     auto range = m_by_hash.equal_range(hash);
     if (range.first == range.second) {
-        // Not present — filtered out at insert time, or never inserted. No-op,
-        // no event.
-        return;
+        return false;
     }
-
-    // Same-hash keys are contiguous under TxOrderLess (the hash tiebreaker
-    // clusters them), so min/max bound a single range.
-    std::size_t minPos = std::numeric_limits<std::size_t>::max();
-    std::size_t maxPos = 0;
+    minPos = std::numeric_limits<std::size_t>::max();
+    maxPos = 0;
     for (auto it = range.first; it != range.second; ++it) {
         if (it->second < minPos) minPos = it->second;
         if (it->second > maxPos) maxPos = it->second;
     }
-    const std::size_t count = maxPos - minPos + 1;
-    const std::size_t distance = static_cast<std::size_t>(std::distance(range.first, range.second));
+    count = maxPos - minPos + 1;
+    const std::size_t distance =
+        static_cast<std::size_t>(std::distance(range.first, range.second));
+    return maxPos < m_records.size()
+        && count == distance
+        && m_records[minPos].hash == hash
+        && m_records[maxPos].hash == hash;
+}
 
-    // The erase below relies on same-hash keys being a single contiguous run
-    // (guaranteed by TxOrderLess's hash tiebreaker). Validate at runtime, not
-    // via assert: the deployed build is -DNDEBUG, so an assert would vanish and
-    // a de-clustered index would erase a wider [minPos, maxPos] range that
-    // swallows foreign rows (heap/structure corruption). The bounds check is
-    // ordered first and short-circuits, so the m_records[] subscripts below it
-    // never run out of range. If the invariant is ever violated, bail without
-    // erasing or emitting — a stale row is a safe degradation; a wrong erase is
-    // not.
-    if (maxPos >= m_records.size()
-            || count != distance
-            || m_records[minPos].hash != hash
-            || m_records[maxPos].hash != hash) {
+bool WalletTxStore::removeLocked(const uint256& hash)
+{
+    std::size_t minPos = 0;
+    std::size_t maxPos = 0;
+    std::size_t count = 0;
+
+    if (!locateHashRange(hash, minPos, maxPos, count)) {
+        if (m_by_hash.find(hash) == m_by_hash.end()) {
+            // Not present — filtered out at insert time, or never inserted. No-op,
+            // no event. Report success: the caller's goal (this hash is gone) holds.
+            return true;
+        }
+        // The index disagrees with m_records. m_by_hash is derived purely from
+        // m_records, and m_records is kept in RecordOrder (which clusters a
+        // transaction's parts), so rebuilding it from the records restores the
+        // invariant by construction. Recover rather than bail: the old code
+        // returned here, and updateTransaction's remove+insert fallback then hit
+        // insertLocked's hash dedup on the still-present stale entries and
+        // returned too, so the transaction became permanently un-updatable,
+        // un-removable and un-reinsertable (#3257 review).
         LogPrintf("ERROR: %s: hash %s index non-contiguous/out-of-range "
-                  "(minPos=%u maxPos=%u count=%u distance=%u keys=%u) — skipping remove",
+                  "(minPos=%u maxPos=%u count=%u records=%u) — rebuilding the hash index",
                   __func__, hash.GetHex(),
                   static_cast<unsigned int>(minPos), static_cast<unsigned int>(maxPos),
-                  static_cast<unsigned int>(count), static_cast<unsigned int>(distance),
+                  static_cast<unsigned int>(count),
                   static_cast<unsigned int>(m_records.size()));
-        return;
+        rebuildIndex();
+        if (!locateHashRange(hash, minPos, maxPos, count)) {
+            if (m_by_hash.find(hash) == m_by_hash.end()) {
+                return true;   // the rebuild showed it was never really there
+            }
+            LogPrintf("ERROR: %s: hash %s still inconsistent after an index rebuild "
+                      "— skipping remove", __func__, hash.GetHex());
+            return false;
+        }
     }
 
     m_records.erase(m_records.begin() + minPos, m_records.begin() + maxPos + 1);
@@ -381,6 +422,7 @@ void WalletTxStore::removeLocked(const uint256& hash)
     for (auto& [viewId, cursor] : m_cursors) {
         emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStoreRemove(minPos, count));
     }
+    return true;
 }
 
 void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
@@ -405,6 +447,28 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
     // (insert/removeTransaction take only cs_store), so waiting for it here while
     // we hold both cannot deadlock. m_started guards the pre-start() first reload
     // (no worker yet → nothing to wait for).
+    //
+    // The park is released by an RAII guard, NOT by falling off the end of this
+    // function. m_rebuilding is the worker's wait predicate, so if anything below
+    // throws — and plenty can: decomposeTransaction calls GetCredit/GetDebit,
+    // which throw std::runtime_error outside MoneyRange, and updateStatus reaches
+    // GetGeneratedType, which hits the tx index and reads a block from disk — the
+    // worker would stay parked FOREVER. Producers would keep enqueuing
+    // successfully and m_intake would grow without bound, while the inline
+    // applyChainTipRefresh kept refreshing already-stored rows: the GUI would show
+    // existing transactions ripening normally and never show a new one again
+    // (#3257).
+    struct RebuildPark {
+        WalletTxStore& s;
+        ~RebuildPark()
+        {
+            LOCK(s.cs_intake);
+            s.m_rebuilding = false;
+            s.m_worker_parked = false;
+            s.m_intake_cv.notify_all();
+        }
+    } park_guard{*this};
+
     {
         WAIT_LOCK(cs_intake, ilock);
         m_rebuilding = true;
@@ -489,15 +553,10 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
         }
     }
 
-    // Release the store-worker (PR2.5): the rebuilt index is live, so resume
-    // draining. Producers remain blocked on cs_wallet until we return, so the
-    // worker has nothing to apply until the snapshot is installed.
-    {
-        LOCK(cs_intake);
-        m_rebuilding = false;
-        m_worker_parked = false;
-        m_intake_cv.notify_all();
-    }
+    // The store-worker is released by park_guard's destructor as this function
+    // returns (PR2.5): the rebuilt index is live, so it resumes draining.
+    // Producers remain blocked on cs_wallet until we return, so the worker has
+    // nothing to apply until the snapshot is installed.
 }
 
 void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
@@ -551,7 +610,15 @@ void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
             || static_cast<std::size_t>(std::distance(range.first, range.second)) != stored
             || m_records[minPos].hash != hash
             || m_records[maxPos].hash != hash) {
-        removeLocked(hash);
+        if (!removeLocked(hash)) {
+            // The index could not be reconciled even after a rebuild. Do NOT fall
+            // through to insertLocked: its hash dedup would see the stale entries
+            // and return silently, dropping the update with no event and no
+            // volatility refresh — permanently, for this hash (#3257 review).
+            LogPrintf("ERROR: %s: hash %s could not be removed for the re-insert "
+                      "fallback — dropping this update", __func__, hash.GetHex());
+            return;
+        }
         insertLocked(std::move(records));
         return;
     }
@@ -631,6 +698,10 @@ void WalletTxStore::applyChainTipRefresh()
     // Copy the set: updateVolatileForHash() mutates m_volatile as matured txs drop
     // out, and we must not iterate it while erasing.
     const std::vector<uint256> hashes(m_volatile.begin(), m_volatile.end());
+    LogPrint(BCLog::LogFlags::VERBOSE,
+             "applyChainTipRefresh: refreshing %u volatile transactions over %u records",
+             static_cast<unsigned int>(hashes.size()),
+             static_cast<unsigned int>(m_records.size()));
     for (const uint256& hash : hashes) {
         auto range = m_by_hash.equal_range(hash);
         if (range.first == range.second) {
@@ -648,6 +719,18 @@ void WalletTxStore::applyChainTipRefresh()
         // A tx's parts are contiguous in m_records; collect + sort their positions.
         std::vector<std::size_t> positions;
         for (auto it = range.first; it != range.second; ++it) {
+            // Bounds-check, as every other m_by_hash consumer in this file does.
+            // This one runs inline on the core thread for every volatile record on
+            // every block, and recomputeCacheAt below WRITES three parallel
+            // vectors at the same index — an unvalidated position here is a heap
+            // write, not just a bad read (#3257 review).
+            if (it->second >= m_records.size()) {
+                LogPrintf("ERROR: %s: hash %s maps to record %u of %u — skipping "
+                          "this part's refresh", __func__, hash.GetHex(),
+                          static_cast<unsigned int>(it->second),
+                          static_cast<unsigned int>(m_records.size()));
+                continue;
+            }
             positions.push_back(it->second);
         }
         std::sort(positions.begin(), positions.end());
@@ -657,14 +740,59 @@ void WalletTxStore::applyChainTipRefresh()
         // their old slots and break that precondition under a Status sort. Interleaving
         // keeps every untouched part at its consistent prior key/slot. Positions in
         // m_records are stable across the loop (status is not part of RecordOrder).
-        for (std::size_t p : positions) {
-            m_records[p].updateStatus(wtx);
-            recomputeCacheAt(p);
-            for (auto& [viewId, cursor] : m_cursors) {
-                emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStatusUpdate(p));
+        //
+        // Guarded per hash. updateStatus() reaches a long way for something running
+        // inline on the core thread: IsTrusted() and GetBlocksToMaturity() walk the
+        // wallet, and GetGeneratedType() goes to the tx index and reads a block from
+        // disk. Any of that can throw — GetCredit/GetDebit raise std::runtime_error
+        // outside MoneyRange, and the disk paths raise their own. Unguarded, one bad
+        // record aborts the whole loop, so every hash AFTER it in the iteration order
+        // is skipped — and not just once. m_volatile is an unordered_set, so a given
+        // hash's position is fixed by its bucket for as long as the bucket count
+        // holds: the same records get skipped block after block, and only a rehash
+        // or a prime() reshuffles which ones.
+        // Those rows would then never leave NotAccepted/Immature, and since both
+        // production views mask inactive rows, every staked block behind the poison
+        // record would stay invisible until a prime() rebuilt the volatile set.
+        // One unrefreshable transaction must not freeze status refresh for the rest
+        // of the wallet (#3257).
+        try {
+            for (std::size_t p : positions) {
+                // Status transition + per-view delta count. Together these split the
+                // "a staked block never appears" failure three ways in one line:
+                //   before == after == NotAccepted  -> updateStatus is not clearing it
+                //   status flips but 0 deltas       -> the cursor is not flipping it in
+                //   status flips and a delta fires  -> the loss is downstream (queue,
+                //                                      drain pump or the Qt consumer)
+                // VERBOSE, so it costs nothing unless a user is chasing this (#3257).
+                const int before = static_cast<int>(m_records[p].status.status);
+                m_records[p].updateStatus(wtx);
+                const int after = static_cast<int>(m_records[p].status.status);
+                recomputeCacheAt(p);
+                for (auto& [viewId, cursor] : m_cursors) {
+                    const std::vector<CursorDelta> deltas = cursor.applyStatusUpdate(p);
+                    LogPrint(BCLog::LogFlags::VERBOSE,
+                             "applyChainTipRefresh: %s part %d record %u status %d->%d "
+                             "view %d emitted %u deltas",
+                             hash.GetHex(), m_records[p].idx,
+                             static_cast<unsigned int>(p), before, after, viewId,
+                             static_cast<unsigned int>(deltas.size()));
+                    emitCursorDeltas(viewId, cursor.epoch(), deltas);
+                }
             }
+            updateVolatileForHash(hash);   // drops the hash once every part is terminal
+        } catch (const std::exception& e) {
+            // Default log level, not VERBOSE: this is the line that names the
+            // offending transaction, and it must be present in a user's ordinary
+            // debug.log without them having to reproduce under -debug=verbose.
+            LogPrintf("ERROR: %s: refreshing hash %s threw (%s) — skipping it this "
+                      "tip; the remaining %u volatile transactions still refresh",
+                      __func__, hash.GetHex(), e.what(),
+                      static_cast<unsigned int>(m_volatile.size()));
+        } catch (...) {
+            LogPrintf("ERROR: %s: refreshing hash %s threw a non-standard exception "
+                      "— skipping it this tip", __func__, hash.GetHex());
         }
-        updateVolatileForHash(hash);   // drops the hash once every part is terminal
     }
 }
 
@@ -688,6 +816,17 @@ void WalletTxStore::makeCursorProjectors(Cursor::FieldsFn& fields, Cursor::KeysF
 
 void WalletTxStore::recomputeCacheAt(std::size_t i)
 {
+    // The three vectors are maintained in lockstep, so this should be
+    // unreachable — but it WRITES, and every caller derives `i` from m_by_hash or
+    // from a cursor position, so validate rather than trust (#3257 review).
+    if (i >= m_records.size() || i >= m_fields_cache.size() || i >= m_keys_cache.size()) {
+        LogPrintf("ERROR: %s: index %u out of range (records=%u fields=%u keys=%u)",
+                  __func__, static_cast<unsigned int>(i),
+                  static_cast<unsigned int>(m_records.size()),
+                  static_cast<unsigned int>(m_fields_cache.size()),
+                  static_cast<unsigned int>(m_keys_cache.size()));
+        return;
+    }
     m_fields_cache[i] = projectFields(m_records[i]);
     m_keys_cache[i] = projectKeys(m_records[i]);
 }
@@ -702,6 +841,9 @@ void WalletTxStore::updateVolatileForHash(const uint256& hash)
     auto range = m_by_hash.equal_range(hash);
     bool volatile_now = false;
     for (auto it = range.first; it != range.second; ++it) {
+        if (it->second >= m_records.size()) {
+            continue;   // stale index entry; removeLocked logs and repairs it
+        }
         if (isVolatile(m_records[it->second])) {
             volatile_now = true;
             break;
@@ -811,7 +953,15 @@ RowsResult WalletTxStore::getRows(int viewId, int first, int count)
         : std::min(served, begin + static_cast<std::size_t>(count));
     res.records.reserve(end - begin);
     for (std::size_t i = begin; i < end; ++i) {
-        res.records.push_back(m_records[cur.rowAt(i)]);
+        const std::size_t absidx = cur.rowAt(i);
+        if (absidx >= m_records.size()) {
+            LogPrintf("ERROR: %s: view %d served row %u maps to record %u of %u — skipping",
+                      __func__, viewId, static_cast<unsigned int>(i),
+                      static_cast<unsigned int>(absidx),
+                      static_cast<unsigned int>(m_records.size()));
+            continue;
+        }
+        res.records.push_back(m_records[absidx]);
     }
     return res;
 }
@@ -840,7 +990,15 @@ RowsResult WalletTxStore::getAllRows(int viewId)
     const std::size_t n = static_cast<std::size_t>(res.total_accepted);
     res.records.reserve(n);
     for (std::size_t i = 0; i < n; ++i) {
-        res.records.push_back(m_records[cur.rowAt(i)]);
+        const std::size_t absidx = cur.rowAt(i);
+        if (absidx >= m_records.size()) {
+            LogPrintf("ERROR: %s: view %d accepted row %u maps to record %u of %u — skipping",
+                      __func__, viewId, static_cast<unsigned int>(i),
+                      static_cast<unsigned int>(absidx),
+                      static_cast<unsigned int>(m_records.size()));
+            continue;
+        }
+        res.records.push_back(m_records[absidx]);
     }
     return res;
 }
@@ -921,7 +1079,6 @@ WalletTxDetail WalletTxStore::getRowDetail(const uint256& hash, int idx)
 void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
                                      const std::vector<CursorDelta>& deltas)
 {
-    auto it = m_cursors.find(viewId);
     for (const CursorDelta& d : deltas) {
         // Record the seqno of every emitted event as the view's high-water (the
         // last one wins) so getRows can tell a consumer exactly what its refetch
@@ -932,12 +1089,37 @@ void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
             m_view_seqno[viewId] = m_queue.push(GRC::RowsResetPayload{viewId, epoch, d.count});
             break;
         case CursorDelta::Insert: {
+            // Read the records the CURSOR stamped on the delta, NOT a re-resolution
+            // of d.first against the cursor's current view_index. A single apply*
+            // call emits its deltas against successive intermediate states, so by
+            // the time we get here d.first can name a different row — or none at
+            // all, when a later delta shrank the served window past it. That was a
+            // wrong-record payload on capped Status-sorted views and an
+            // out-of-bounds read on the promotion path (#3257 review, and the
+            // Overview half of #3101).
             std::vector<TransactionRecord> recs;
-            if (it != m_cursors.end()) {
-                recs.reserve(static_cast<std::size_t>(d.count));
-                for (int j = 0; j < d.count; ++j) {
-                    recs.push_back(m_records[it->second.rowAt(static_cast<std::size_t>(d.first + j))]);
+            recs.reserve(d.rows.size());
+            for (const std::size_t absidx : d.rows) {
+                if (absidx >= m_records.size()) {
+                    // Unreachable by construction: rows are captured from a live
+                    // view_index under the same cs_store hold that mutated
+                    // m_records. Log rather than assert — the deployed build is
+                    // -DNDEBUG — and skip, so a stale index degrades to a missing
+                    // row instead of a heap read.
+                    LogPrintf("ERROR: %s: view %d Insert delta at %d references record "
+                              "%u of %u — skipping",
+                              __func__, viewId, d.first,
+                              static_cast<unsigned int>(absidx),
+                              static_cast<unsigned int>(m_records.size()));
+                    continue;
                 }
+                recs.push_back(m_records[absidx]);
+            }
+            if (recs.size() != static_cast<std::size_t>(d.count)) {
+                LogPrintf("ERROR: %s: view %d Insert delta at %d carries %u of %d records "
+                          "— consumer replicas will diverge until the next reset",
+                          __func__, viewId, d.first,
+                          static_cast<unsigned int>(recs.size()), d.count);
             }
             m_view_seqno[viewId] = m_queue.push(GRC::RowsInsertedPayload{d.first, std::move(recs), viewId, epoch});
             break;
