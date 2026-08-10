@@ -25,8 +25,14 @@ Autounlock is **opt-in** and independent of the core tasks — see [Autounlock](
 ## Quick start
 
 ```powershell
-# From the install directory (…\GridcoinResearch\windows\). Run-as the account that
-# owns the wallet; it will prompt for that account's Windows password.
+# In an ELEVATED PowerShell. A fresh Windows install blocks .ps1 by default, so set the
+# policy for this session and call the scripts directly -- do NOT wrap a call as
+# `powershell.exe -ExecutionPolicy Bypass .\script -Arg "C:\Program Files\..."`, because
+# the outer shell re-parses and splits the spaced path.
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+cd "C:\Program Files\GridcoinResearch\windows"
+
+# Run-as the account that owns the wallet; it will prompt for that account's Windows password.
 .\Install-GridcoinCoreTask.ps1 -DataDir "$env:APPDATA\GridcoinResearch"
 
 Start-ScheduledTask -TaskPath '\Gridcoin\' -TaskName 'Core-Start'   # start the core now
