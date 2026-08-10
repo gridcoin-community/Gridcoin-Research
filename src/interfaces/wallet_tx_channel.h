@@ -115,7 +115,28 @@ struct RowCountChangedPayload
 //!
 //! \brief Producer-side payload (PR3): rows [first, first+count) of \p viewId
 //! changed in place (a status/field update that did NOT move them) — the
-//! consumer re-reads them (dataChanged), re-fetching from the source if windowed.
+//! consumer re-reads them (dataChanged).
+//!
+//! \p records carries the changed rows, sampled at EMISSION time under cs_store,
+//! in the same way RowsInsertedPayload carries its rows. It used to carry only the
+//! range, leaving the consumer to fetch the content itself when it applied the
+//! event, which was wrong twice over:
+//!
+//!   * Staleness: the fetch sampled whatever the cursor held at apply time, which
+//!     within a drained batch can be NEWER than the structural position the
+//!     consumer has applied so far — writing future content into rows that have
+//!     not moved yet. It self-corrected on the next Change or Reset, so it showed
+//!     up as a flicker rather than a fault.
+//!   * Cost: one getRows() per Change, on the consumer's thread, and a synchronous
+//!     IPC round trip in the multiprocess build. A refresh touching a few hundred
+//!     immature records therefore cost a few hundred round trips — and each one
+//!     takes cs_store, which the producer is holding across the very refresh that
+//!     generated them, so they serialized against it rather than merely being
+//!     slow.
+//!
+//! Consumers must use \p records and must not re-fetch. Empty means "no content
+//! sampled" (a producer that could not read the rows); treat that as nothing to
+//! apply rather than as a reason to go back to the source.
 //!
 struct RowsChangedPayload
 {
@@ -123,6 +144,7 @@ struct RowsChangedPayload
     uint64_t epoch;
     int first;
     int count;
+    std::vector<TransactionRecord> records; //!< changed rows, sampled at emission
 };
 
 //!

@@ -1227,9 +1227,36 @@ void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
         case CursorDelta::Remove:
             m_view_seqno[viewId] = m_queue.push(GRC::RowsRemovedPayload{d.first, d.count, viewId, epoch});
             break;
-        case CursorDelta::Change:
-            m_view_seqno[viewId] = m_queue.push(GRC::RowsChangedPayload{viewId, epoch, d.first, d.count});
+        case CursorDelta::Change: {
+            // Sample the changed rows HERE, under the same cs_store hold that
+            // mutated them, from the absolute indices the cursor stamped on the
+            // delta -- exactly as the Insert case does, and for the same reason:
+            // d.first is an intermediate-state coordinate, so re-resolving it later
+            // can name a different row.
+            //
+            // The consumer used to call getRows() when it applied the event
+            // instead. That sampled the cursor's state at apply time, which within
+            // a drained batch can be newer than the structural position applied so
+            // far, and it cost one synchronous IPC round trip per change under
+            // multiprocess -- each taking cs_store, which this refresh is holding,
+            // so they serialized against the producer rather than merely being slow.
+            std::vector<TransactionRecord> recs;
+            recs.reserve(d.rows.size());
+            for (const std::size_t absidx : d.rows) {
+                if (absidx >= m_records.size()) {
+                    LogPrintf("ERROR: %s: view %d Change delta at %d references record "
+                              "%u of %u — skipping",
+                              __func__, viewId, d.first,
+                              static_cast<unsigned int>(absidx),
+                              static_cast<unsigned int>(m_records.size()));
+                    continue;
+                }
+                recs.push_back(m_records[absidx]);
+            }
+            m_view_seqno[viewId] =
+                m_queue.push(GRC::RowsChangedPayload{viewId, epoch, d.first, d.count, std::move(recs)});
             break;
+        }
         }
     }
 }
