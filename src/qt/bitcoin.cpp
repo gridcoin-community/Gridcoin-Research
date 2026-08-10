@@ -447,9 +447,19 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
         // The daemon reports NO wallet identity though a binding exists here (a
         // downgrade signal -- e.g. the node's UUID could not be minted). Never
         // erase the existing binding by persisting empty; keep it armed so a later
-        // real token is still checked. Do not silently auto-trust this away, even
-        // under -autotrustidentity (that flag accepts a *changed* wallet, not the
-        // loss of the identity we bound to).
+        // real token is still checked.
+        //
+        // -autotrustidentity suppresses the prompt here too. It has to: the flag's
+        // whole purpose is unattended starts, and refusing to start when nobody can
+        // click a button would be a worse failure than the one it is guarding
+        // against. Refusing here would also be incoherent -- the same flag already
+        // accepts a *changed* wallet silently in the Mismatch arm above, which is
+        // the strictly stronger concession.
+        //
+        // What the flag does NOT do here is rebind: Mismatch persists the new token,
+        // this arm deliberately persists nothing. The binding survives the session,
+        // so the guard re-arms the moment the node reports a real token again. Only
+        // this session's verification is given up, and the WARN says so.
         if (autotrust) {
             GUILogPrintf("WARN: IPC: the daemon reports no wallet identity though a binding exists; "
                          "-autotrustidentity set -> proceeding, keeping the existing binding");

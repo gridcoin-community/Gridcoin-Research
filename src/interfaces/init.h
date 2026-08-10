@@ -65,6 +65,14 @@ struct NodeIdentity
 //!
 //! The default implementations return nullptr so each process type overrides
 //! only what it supports.
+//!
+//! ADDING A VIRTUAL HERE: it must also be overridden in ServeInit
+//! (src/ipc/serve_init.cpp) with a RequireAuth() call, or it is not gated behind
+//! the IPC cookie. Neither mistake produces a compiler diagnostic -- a missing
+//! override silently falls through to the default below (fails closed, but the
+//! capability just stops working over IPC), and an override without RequireAuth()
+//! serves the method to an unauthenticated peer. test/lint/lint-serve-init-complete.py
+//! checks both and is wired into lint-all.sh.
 class Init
 {
 public:
@@ -86,6 +94,17 @@ public:
     //! serving Init wrapper grants on a valid cookie, so a base Init served
     //! directly never leaks access. The monolithic build never calls this.
     virtual bool authenticate(const std::string& cookie);
+
+    //! Whether authenticate() has already succeeded on this connection.
+    //!
+    //! Deliberately NOT exposed in init.capnp: it has no ordinal, so no remote peer
+    //! can call it. It exists for the LOCAL listener, which arms a deadline on each
+    //! accepted connection and needs to ask -- without talking to the peer -- whether
+    //! that connection ever authenticated (see ipc::IPC_AUTH_DEADLINE). The base
+    //! default reports false, which is the fail-closed answer: a served Init that
+    //! does not implement authentication is treated as never authenticated and its
+    //! connection is reclaimed at the deadline.
+    virtual bool isAuthenticated();
 
     //! The node's build fingerprint, for the schema/protocol/commit comparison in
     //! the handshake (section 4.2). Only meaningful after a successful

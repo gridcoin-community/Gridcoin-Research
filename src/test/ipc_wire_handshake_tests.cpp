@@ -19,6 +19,11 @@
 
 #include "interfaces/init.h"
 #include "interfaces/ipc.h"
+// Complete types for the unique_ptrs the gated factory methods return: the
+// pre-auth test destroys those unique_ptrs (they never get a value, but the
+// destructor is still instantiated).
+#include "interfaces/node.h"
+#include "interfaces/wallet.h"
 #include "ipc/capnp/protocol.h"
 #include "ipc/handshake.h"
 #include "ipc/protocol.h"
@@ -30,10 +35,13 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <atomic>
+#include <chrono>
 #include <cstdlib> // mkdtemp
 #include <cstring>
 #include <memory>
 #include <string>
+#include <thread>
 
 namespace {
 
@@ -169,7 +177,14 @@ BOOST_AUTO_TEST_CASE(wire_handshake_succeeds_with_correct_cookie)
 }
 
 // Wrong cookie: the served ServeInit's authenticate() returns false over the
-// wire, so the client rejects with a non-empty error.
+// wire, so the client rejects.
+//
+// The error TEXT is asserted, not just its non-emptiness. "!ok && !error.empty()"
+// cannot distinguish an authentication rejection from any other way the
+// handshake can fail -- a dropped connection, a marshalling fault, the catch-all
+// at the end of ClientHandshake -- all of which produce exactly the same shape.
+// Matching the distinctive substring is what makes this test evidence that the
+// cookie comparison ran and refused.
 BOOST_AUTO_TEST_CASE(wire_handshake_rejects_wrong_cookie)
 {
     interfaces::NodeIdentity id;
@@ -178,7 +193,106 @@ BOOST_AUTO_TEST_CASE(wire_handshake_rejects_wrong_cookie)
 
     ipc::HandshakeResult r = ipc::ClientHandshake(*link.client, "wrong-cookie", "main");
     BOOST_CHECK(!r.ok);
-    BOOST_CHECK(!r.error.empty());
+    BOOST_REQUIRE(!r.error.empty());
+    BOOST_CHECK_MESSAGE(r.error.find("rejected the authentication cookie") != std::string::npos,
+                        "handshake failed for the wrong reason: " << r.error);
+}
+
+// The auth gate over the REAL transport. ipc_serve_init_tests covers this
+// in-process, which proves ServeInit throws but not that the throw survives the
+// wire: the exception is raised inside a capnp server method, captured by
+// kj::runCatchingExceptions, marshalled back as an RPC error and re-raised on the
+// client. If any link in that chain swallowed it, the in-process test would still
+// pass while an unauthenticated peer got a live capability.
+BOOST_AUTO_TEST_CASE(wire_capabilities_are_refused_before_authentication)
+{
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    id.identity_token = "tok";
+    WireLink link(CookieServeFactory("the-cookie", id));
+
+    // No authenticate() call at all: every gated method must fail.
+    BOOST_CHECK_THROW(link.client->getBuildInfo(), std::exception);
+    BOOST_CHECK_THROW(link.client->getIdentity(), std::exception);
+    BOOST_CHECK_THROW(link.client->isCoreReady(), std::exception);
+    BOOST_CHECK_THROW(link.client->makeNode(), std::exception);
+    BOOST_CHECK_THROW(link.client->makeWallet(), std::exception);
+
+    // And the gate still opens afterwards -- the refusals above did not wedge the
+    // connection, they just refused the calls.
+    BOOST_CHECK(link.client->authenticate("the-cookie"));
+    BOOST_CHECK_NO_THROW(link.client->getBuildInfo());
+}
+
+// A wrong cookie latches the connection: retrying with the CORRECT cookie on the
+// same connection is refused. Over the wire this also confirms the latch lives on
+// the server's per-connection ServeInit, not in client-side state.
+BOOST_AUTO_TEST_CASE(wire_wrong_cookie_latches_the_connection)
+{
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    WireLink link(CookieServeFactory("right-cookie", id));
+
+    BOOST_CHECK(!link.client->authenticate("wrong-cookie"));
+    BOOST_CHECK(!link.client->authenticate("right-cookie"));
+    BOOST_CHECK_THROW(link.client->getBuildInfo(), std::exception);
+}
+
+// The authentication deadline, end to end: a peer that connects and never
+// authenticates is dropped, and the single connection slot it was occupying is
+// returned to service.
+//
+// This is the assertion that matters for availability. max_connections is 1 and
+// accept() is not re-armed while the slot is taken, so before the deadline existed
+// any local process could connect, say nothing, and lock the real GUI out for as
+// long as it stayed alive.
+//
+// The squatter's disconnect is waited for explicitly rather than assumed after a
+// fixed sleep: it is the same event that drives the server-side re-arm, so
+// observing it means the second client's handshake below cannot hang waiting for a
+// listener that never came back.
+BOOST_AUTO_TEST_CASE(wire_unauthenticated_connection_is_dropped_and_slot_reclaimed)
+{
+    interfaces::NodeIdentity id;
+    id.network = "main";
+
+    UnixSocket sock;
+    auto server = ipc::capnp::MakeCapnpProtocol();
+    server->listen(sock.releaseBoundFd(), "ipc-wire-server", CookieServeFactory("cookie", id),
+                   /*auth_deadline=*/std::chrono::seconds{1});
+
+    // The squatter: connects and then does nothing at all.
+    std::atomic<bool> squatter_dropped{false};
+    auto squatter_proto = ipc::capnp::MakeCapnpProtocol();
+    auto squatter = squatter_proto->connect(sock.connectClient(), "ipc-wire-squatter",
+                                            [&squatter_dropped] { squatter_dropped = true; });
+    BOOST_REQUIRE(squatter != nullptr);
+
+    // Wait for the node to drop it. Generous cap: this asserts the drop happens,
+    // not how promptly, and a loaded machine must not turn that into a flake.
+    for (int i = 0; i < 200 && !squatter_dropped; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds{50});
+    }
+    BOOST_REQUIRE_MESSAGE(squatter_dropped,
+                          "the node never dropped a connection that did not authenticate");
+
+    // The slot is free and accept() is re-armed: a real client connects and
+    // completes the full handshake.
+    auto gui_proto = ipc::capnp::MakeCapnpProtocol();
+    auto gui = gui_proto->connect(sock.connectClient(), "ipc-wire-gui", /*on_disconnect=*/{});
+    BOOST_REQUIRE(gui != nullptr);
+    ipc::HandshakeResult r = ipc::ClientHandshake(*gui, "cookie", "main");
+    BOOST_CHECK(r.ok);
+    BOOST_CHECK(r.error.empty());
+
+    // Teardown in the same order WireLink uses: proxies, then incoming
+    // connections, then each protocol (which joins its own loop thread).
+    gui.reset();
+    squatter.reset();
+    server->disconnectIncoming();
+    gui_proto.reset();
+    squatter_proto.reset();
+    server.reset();
 }
 
 // Server reports a higher schema_major than this build => hard fail (the compare

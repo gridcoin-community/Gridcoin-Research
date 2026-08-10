@@ -483,10 +483,21 @@ ProxyServer<Thread>::ProxyServer(Connection& connection, ThreadContext& thread_c
     : m_loop{*connection.m_loop}, m_thread_context(thread_context), m_thread(std::move(thread))
 {
     assert(m_thread_context.waiter.get() != nullptr);
+    // GRIDCOIN: count only real OS threads against the connection's budget. The
+    // callback-thread construction in type-context.h passes a default-constructed
+    // std::thread (nothing to run, nothing to join), so it must not consume a slot.
+    if (m_thread.joinable()) {
+        m_server_thread_count = connection.m_server_thread_count;
+        ++*m_server_thread_count;
+    }
 }
 
 ProxyServer<Thread>::~ProxyServer()
 {
+    // GRIDCOIN: release the connection's thread budget. Non-null iff the
+    // constructor counted this object, which is exactly when m_thread is joinable,
+    // so this stays paired with the early return below.
+    if (m_server_thread_count) --*m_server_thread_count;
     if (!m_thread.joinable()) return;
     // Stop async thread and wait for it to exit. Need to wait because the
     // m_thread handle needs to outlive the thread to avoid "terminate called
@@ -529,6 +540,19 @@ kj::Promise<void> ProxyServer<ThreadMap>::makePool(MakePoolContext context)
     }
     EventLoop& loop{*m_connection.m_loop};
     const uint32_t count = context.getParams().getCount();
+    // GRIDCOIN: count is peer-supplied and was previously unbounded, on a
+    // capability (Init.construct -> ThreadMap) that is served before any
+    // application-level authentication. The loop below blocks on a future per
+    // iteration and runs on the event-loop thread, so a large count stalls all IPC
+    // while exhausting threads. Reject rather than clamp: silently serving fewer
+    // threads than asked for would be a confusing contract for a legitimate caller.
+    if (count > static_cast<uint32_t>(MAX_SERVER_THREADS_PER_CONNECTION) ||
+        m_connection.m_server_thread_count->load() + static_cast<int>(count) >
+            MAX_SERVER_THREADS_PER_CONNECTION) {
+        throw std::runtime_error("makePool requested " + std::to_string(count) +
+                                 " threads, which exceeds the per-connection limit of " +
+                                 std::to_string(MAX_SERVER_THREADS_PER_CONNECTION));
+    }
     for (uint32_t i = 0; i < count; ++i) {
         const std::string thread_name = "pool/" + std::to_string(i);
         std::promise<ThreadContext*> thread_context;
@@ -549,6 +573,15 @@ kj::Promise<void> ProxyServer<ThreadMap>::makeThread(MakeThreadContext context)
 {
     EventLoop& loop{*m_connection.m_loop};
     if (loop.testing_hook_makethread) loop.testing_hook_makethread();
+    // GRIDCOIN: one OS thread per call, previously with no cap at all. See
+    // MAX_SERVER_THREADS_PER_CONNECTION -- the count is of threads that currently
+    // exist, so a long-running client whose worker threads come and go is not
+    // penalised for churn.
+    if (m_connection.m_server_thread_count->load() >= MAX_SERVER_THREADS_PER_CONNECTION) {
+        throw std::runtime_error("makeThread refused: this connection already holds the maximum of " +
+                                 std::to_string(MAX_SERVER_THREADS_PER_CONNECTION) +
+                                 " server threads");
+    }
     const std::string from = context.getParams().getName();
     std::promise<ThreadContext*> thread_context;
     std::thread thread([&loop, &thread_context, from]() {

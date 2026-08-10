@@ -9,6 +9,7 @@
 #include "ipc/capnp/init.capnp.proxy.h"
 #include "ipc/context.h"
 #include "ipc/protocol.h"
+#include "ipc/serve_init.h" // IPC_AUTH_DEADLINE
 #include "util.h"
 
 #include <mp/proxy-io.h>
@@ -156,7 +157,8 @@ public:
         return client;
     }
 
-    void listen(int listen_fd, const char* exe_name, interfaces::MakeServeInitFn make_init) override
+    void listen(int listen_fd, const char* exe_name, interfaces::MakeServeInitFn make_init,
+                std::chrono::seconds auth_deadline) override
     {
         startLoop(exe_name);
         if (::listen(listen_fd, /*backlog=*/5) != 0) {
@@ -175,12 +177,17 @@ public:
         // InitImpl (interfaces::Init) is specified explicitly: it cannot be deduced
         // from the lambda, which converts to the std::function<...> parameter only
         // once the parameter type is known.
+        // The single slot is why the deadline matters: accept() is not re-armed
+        // while it is occupied, so an unauthenticated squatter is a denial of
+        // service against the real GUI until something reclaims the slot.
         mp::ListenConnectionsFactory<messages::Init, interfaces::Init>(
             *m_loop, listen_fd,
             [make_init = std::move(make_init)](int peer_fd) -> std::shared_ptr<interfaces::Init> {
                 return make_init(peer_fd); // unique_ptr -> shared_ptr; null => reject
             },
-            /*max_connections=*/1);
+            /*max_connections=*/1,
+            [](interfaces::Init& init) { return init.isAuthenticated(); },
+            auth_deadline);
     }
 
     void disconnectIncoming() override

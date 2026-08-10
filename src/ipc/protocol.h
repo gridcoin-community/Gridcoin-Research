@@ -7,7 +7,9 @@
 
 #include "interfaces/init.h"
 #include "interfaces/ipc.h"
+#include "ipc/serve_init.h" // IPC_AUTH_DEADLINE
 
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <typeindex>
@@ -36,7 +38,14 @@ public:
     //! build a fresh Init via \p make_init and serve it (per-connection auth).
     //! \p make_init returns null to reject a connection before serving.
     //! Non-blocking; I/O runs on a background thread.
-    virtual void listen(int listen_fd, const char* exe_name, interfaces::MakeServeInitFn make_init) = 0;
+    //!
+    //! \p auth_deadline is how long an accepted connection may stay
+    //! unauthenticated before it is dropped and its slot reclaimed. It is a
+    //! parameter rather than a hardcoded constant only so tests can drive the
+    //! reclaim path in a second instead of thirty; production always takes the
+    //! default. Zero disables the deadline.
+    virtual void listen(int listen_fd, const char* exe_name, interfaces::MakeServeInitFn make_init,
+                        std::chrono::seconds auth_deadline = IPC_AUTH_DEADLINE) = 0;
 
     //! Disconnect any incoming connections that are still connected.
     virtual void disconnectIncoming() = 0;
