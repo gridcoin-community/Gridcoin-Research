@@ -94,6 +94,14 @@ add_executable(test_gridcoin
     # reach them at all. This one drives the real coinstake NotAccepted -> flip-in
     # path against pwalletMain and a mock chain (#3257).
     qt_wallettxstore_chain_tests.cpp
+    # Transport helpers (src/ipc/process.cpp). Also Cap'n Proto-free. Needed here
+    # because on WIN32 handshake.cpp's WriteFileAtomic calls MakeOwnerOnlyDacl /
+    # ApplyOwnerOnlyDacl (defined at process.cpp:587,607) to create the cookie with
+    # an owner-only DACL. gridcoin_ipc would supply them, but it is deliberately
+    # NOT linked here on Windows (see the ENABLE_MULTIPROCESS AND NOT WIN32 guard
+    # below), so without this the win64 test link fails on those two symbols while
+    # every other target succeeds.
+    ${CMAKE_SOURCE_DIR}/src/ipc/process.cpp
     # Multiprocess connect-handshake logic (src/ipc/handshake.cpp): identity-token
     # hashing, the ClientHandshake matching policy, and CheckIdentityBinding. The
     # TU has no Cap'n Proto / libmultiprocess dependency, so it compiles into the
@@ -163,6 +171,14 @@ target_link_libraries(test_gridcoin PRIVATE
     Threads::Threads
     ZLIB::ZLIB
 )
+
+# The IPC sources compiled in above use the Win32 DACL API (SetEntriesInAclW,
+# Get/SetNamedSecurityInfoW, InitializeSecurityDescriptor,
+# SetSecurityDescriptorDacl). gridcoin_ipc carries advapi32 for the other
+# targets, but it is not linked here on Windows, so name it directly.
+if(WIN32)
+    target_link_libraries(test_gridcoin PRIVATE advapi32)
+endif()
 
 # Wire-level IPC handshake test (ipc_wire_handshake_tests.cpp): drives
 # ClientHandshake against a served ServeInit over a REAL AF_UNIX Cap'n Proto

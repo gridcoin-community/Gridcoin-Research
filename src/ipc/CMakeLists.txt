@@ -83,9 +83,17 @@ target_link_libraries(gridcoin_ipc PUBLIC
 # gridcoin_util's WIN32 block; list ws2_32 here too so the IPC layer's socket
 # dependency is self-documenting, and add mswsock (AcceptEx/ConnectEx) for the
 # kj-async Win32 async I/O backend.
+#
+# advapi32 supplies the DACL hardening the transport applies to the datadir,
+# socket and cookie: SetEntriesInAclW, Get/SetNamedSecurityInfoW (process.cpp,
+# via <aclapi.h>) and InitializeSecurityDescriptor / SetSecurityDescriptorDacl
+# (handshake.cpp, via <securitybaseapi.h>). These compile without it -- the
+# headers only declare them -- so the omission surfaces as five undefined
+# __imp_* symbols at final link, long after every object and archive succeeds.
 if(WIN32)
     target_link_libraries(gridcoin_ipc PUBLIC
         ws2_32
         mswsock
+        advapi32
     )
 endif()
