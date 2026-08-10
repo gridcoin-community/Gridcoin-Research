@@ -34,12 +34,49 @@ import sys
 
 CAPNP_GLOB = "src/ipc/capnp/*.capnp"
 
-# "name @N (" at the start of a line -- a method or a struct field. Methods are
-# distinguished below by having a parameter list that we then check.
-MEMBER_RE = re.compile(r"^\s*([a-zA-Z][a-zA-Z0-9_]*)\s*@(\d+)\s*\(")
-# Only interface bodies contain methods; struct bodies contain fields, which
-# never take a context. Track which kind of scope we are in.
-SCOPE_RE = re.compile(r"^\s*(interface|struct)\s+(\w+)")
+# A member with an ordinal. Whitespace-tolerant across newlines, so a declaration
+# split as "makeWallet @7\n    (context :Proxy.Context) -> (...)" is still seen --
+# the previous line-anchored form skipped those entirely, which is a fail-open.
+MEMBER_RE = re.compile(r"(?<![\w.])([a-zA-Z][a-zA-Z0-9_]*)\s*@(\d+)\s*\(", re.MULTILINE)
+# Scope openers, matched on brace structure rather than indentation. Indentation
+# was unreliable: a method at column 0 inside an interface resolved to "no
+# enclosing scope" and was silently skipped.
+SCOPE_RE = re.compile(r"\b(interface|struct|enum|union)\s+(\w+)[^{]*\{")
+COMMENT_RE = re.compile(r"#[^\n]*")
+
+
+def strip_comments(text):
+    """Blank out # comments, preserving offsets so positions stay meaningful."""
+    return COMMENT_RE.sub(lambda m: " " * len(m.group(0)), text)
+
+
+def scope_spans(text):
+    """[(kind, start_of_body, end_of_body)] for every interface/struct/enum/union."""
+    spans = []
+    for m in SCOPE_RE.finditer(text):
+        start = m.end()
+        depth = 1
+        i = start
+        while i < len(text) and depth:
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+            i += 1
+        if depth == 0:
+            spans.append((m.group(1), start, i - 1))
+    return spans
+
+
+def innermost_kind(spans, pos):
+    """The kind of the tightest scope containing `pos`, or None."""
+    best = None
+    best_start = -1
+    for kind, start, end in spans:
+        if start <= pos < end and start > best_start:
+            best, best_start = kind, start
+    return best
+
 
 # (file basename, method name) -> reason it needs no context.
 EXEMPT = {
@@ -55,19 +92,6 @@ def fail(msg):
     print("lint-capnp-context: {}".format(msg), file=sys.stderr)
 
 
-def scope_kind_at(lines, index):
-    """The nearest enclosing 'interface' or 'struct' above `index`, by indentation."""
-    member_indent = len(lines[index]) - len(lines[index].lstrip())
-    for i in range(index - 1, -1, -1):
-        m = SCOPE_RE.match(lines[i])
-        if not m:
-            continue
-        scope_indent = len(lines[i]) - len(lines[i].lstrip())
-        if scope_indent < member_indent:
-            return m.group(1)
-    return None
-
-
 def main():
     files = sorted(glob.glob(CAPNP_GLOB))
     if not files:
@@ -81,29 +105,40 @@ def main():
         base = os.path.basename(path)
         try:
             with open(path, "r", encoding="utf-8") as f:
-                lines = f.read().splitlines()
+                raw = f.read()
         except OSError as e:
             fail("could not read {}: {}".format(path, e))
             return 1
 
-        for i, line in enumerate(lines):
-            m = MEMBER_RE.match(line)
-            if not m:
-                continue
-            if scope_kind_at(lines, i) != "interface":
-                continue  # a struct field, not a method
+        text = strip_comments(raw)
+        spans = scope_spans(text)
+
+        for m in MEMBER_RE.finditer(text):
+            if innermost_kind(spans, m.start()) != "interface":
+                continue  # a struct field / enumerant, not a method
 
             name = m.group(1)
             checked += 1
-            if "context :Proxy.Context" in line or "context:Proxy.Context" in line:
+            # Look at the parameter list itself, wherever it wraps to.
+            depth = 1
+            j = m.end()
+            while j < len(text) and depth:
+                if text[j] == "(":
+                    depth += 1
+                elif text[j] == ")":
+                    depth -= 1
+                j += 1
+            params = " ".join(text[m.end():j - 1].split())
+            if "context :Proxy.Context" in params or "context:Proxy.Context" in params:
                 continue
             if (base, name) in EXEMPT:
                 continue
+            line_no = text.count("\n", 0, m.start()) + 1
             errors.append(
                 "{}:{}: interface method '{}' does not declare 'context :Proxy.Context', so its "
                 "body runs inline on the IPC event-loop thread. One contended lock there stalls "
                 "the whole channel. Add the parameter, or add an entry to EXEMPT in this lint "
-                "with the reason.".format(path, i + 1, name))
+                "with the reason.".format(path, line_no, name))
 
     if not checked:
         fail("parsed no interface methods; the parser is probably broken")

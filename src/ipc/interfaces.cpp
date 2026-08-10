@@ -89,7 +89,16 @@ public:
         // (Same-uid impostors are not excluded by this -- nothing at the OS level
         // can distinguish them -- but a failed listenAddress() is now fatal in the
         // daemon, so the window where node.sock is unowned has been closed too.)
-        if (!ipc::CheckPeerCredentials(fd)) {
+        //
+        // ADVISORY, not Enforcing: this is defense-in-depth on top of the cookie,
+        // not the security boundary (that is the node's accept path, which stays
+        // fail-closed). Client-side peer-credential support is less uniform --
+        // whether Darwin populates credentials on the CONNECTING side of an
+        // AF_UNIX socket is unconfirmed -- and refusing there would mean the GUI
+        // could never connect on macOS at all. A total regression is a worse
+        // outcome than an unverified extra check, so we refuse only on a definite
+        // foreign uid and log when we cannot tell.
+        if (!ipc::CheckPeerCredentials(fd, ipc::PeerCredPolicy::Advisory)) {
             throw std::runtime_error("The process listening on the multiprocess socket belongs to "
                                      "a different OS user; refusing to send the authentication "
                                      "cookie to it.");

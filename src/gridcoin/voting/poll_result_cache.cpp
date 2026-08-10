@@ -156,7 +156,10 @@ std::vector<PollResultItem> PollResultCache::BuildPollTable(PollFilterFlag flags
         // after every element: a reorg that could invalidate the iterator sets the
         // flag, and the loop abandons the attempt and rebuilds the sequence from a
         // freshly pinned tip. Clang's analyzer cannot express "guarded by a
-        // different protocol", so the diagnostic is suppressed HERE and only here.
+        // different protocol", so the diagnostic is suppressed for this traversal.
+        // (It is suppressed in a few other places too -- rpc/voting.cpp, result.cpp;
+        // this is the only one where an unlocked registry WALK is the deliberate
+        // design rather than an unreviewed legacy.)
         //
         // If you are copying this pattern: don't. Every other caller holds the
         // lock for the whole traversal (gridcoin.cpp NotifyPoll, rpc/voting.cpp

@@ -201,6 +201,16 @@ void WalletModel::drainEventQueue()
         // instead of waiting MODEL_EVENT_DRAIN_INTERVAL for the periodic tick.
         std::vector<GRC::WalletEvent> events = m_tx_source.drainEvents(MODEL_EVENT_DRAIN_MAX_BATCH);
         if (events.empty()) {
+            // An empty drain IS a clean pass, and on a quiet wallet it is the most
+            // common one (this timer fires every MODEL_EVENT_DRAIN_INTERVAL). The
+            // reset used to live only after a successful apply below, so it was
+            // unreachable on this path and m_drain_failures was effectively
+            // monotonic for the session: MODEL_EVENT_DRAIN_MAX_FAILURES unrelated
+            // faults hours apart would trip the permanent stop and silence the whole
+            // wallet UI -- the #3257 shape the counter exists to avoid, reached by a
+            // slower route. The budget is for CONSECUTIVE failures, so clear it here
+            // too.
+            m_drain_failures = 0;
             return;
         }
 

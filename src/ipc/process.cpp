@@ -404,8 +404,12 @@ public:
         const fs::path path = ParseAddress(address, data_dir, addr);
 
         // Socket directory access control (design section 4.3). On POSIX we chmod
-        // the parent 0700 and fail closed: if we cannot restrict it, refuse to
-        // listen rather than expose the socket in a world-accessible directory.
+        // the parent 0700 and fail closed WHEN WE CREATE IT: if we cannot restrict a
+        // directory we just made, refuse to listen rather than expose the socket in
+        // a world-accessible one. An EXISTING directory is deliberately left exactly
+        // as the operator configured it and only warned about -- see the create-only
+        // branch below; the socket and cookie inside it are still created owner-only
+        // and still fail closed.
         // Windows has no chmod/umask for AF_UNIX, so the equivalent is an explicit
         // owner-only *protected* DACL (ApplyOwnerOnlyDacl), applied inheritably so
         // node.sock and ipc.cookie are owner-only from creation. The port used to
