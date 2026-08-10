@@ -29,6 +29,11 @@ bool Init::isCoreReady() { return true; }
 // empty for the same reason; the serving Init overrides them.
 bool Init::authenticate(const std::string& /*cookie*/) { return false; }
 
+// Fail closed for the same reason: an Init that does not implement authentication
+// has never authenticated, so the listener's deadline reclaims its connection
+// rather than letting it sit in the single connection slot forever.
+bool Init::isAuthenticated() { return false; }
+
 BuildInfo Init::getBuildInfo() { return BuildInfo{}; }
 
 NodeIdentity Init::getIdentity() { return NodeIdentity{}; }

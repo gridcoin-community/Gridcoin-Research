@@ -34,6 +34,11 @@ namespace {
 //! connection. authenticate() only ever *sets* the flag on a valid cookie (it
 //! never clears it), so a later bad-cookie call on the SAME connection cannot
 //! de-authenticate it.
+//!
+//! This wrapper is hand-maintained and must stay in step with interfaces::Init:
+//! every virtual there needs an override here that calls RequireAuth() first.
+//! test/lint/lint-serve-init-complete.py enforces that (a missing override fails
+//! closed but silently; an override without RequireAuth() fails open).
 class ServeInit : public interfaces::Init
 {
 public:
@@ -54,13 +59,44 @@ public:
             return false;
         }
 
+        // One strike. The design of record says the node disconnects on a cookie
+        // mismatch; previously a wrong cookie merely returned false and left the
+        // peer free to retry forever on the same connection -- an offline guessing
+        // oracle, and a way to hold the single connection slot indefinitely.
+        //
+        // Latching the failure is what this wrapper can enforce on its own: a
+        // connection that got the cookie wrong can never authenticate, so it is
+        // inert, and ipc::IPC_AUTH_DEADLINE reclaims its slot. (The drop is not
+        // instantaneous: authenticate() runs on a server worker thread and closing
+        // the connection is an event-loop-thread operation, so an immediate close
+        // would mean re-entering connection teardown across threads from inside the
+        // auth path. A bounded delay buys the same property without that risk.)
+        //
+        // A legitimate GUI is unaffected: it presents one cookie and disconnects
+        // itself if the node rejects it.
+        if (m_auth_failed) {
+            LogPrintf("WARN: %s: ignoring a repeat authentication attempt on a connection that "
+                      "already presented an invalid cookie", __func__);
+            return false;
+        }
+
         // Return whether THIS cookie is valid (the client checks the result), and
         // set the (per-connection) authenticated flag on success. Never cleared: a
         // later bad-cookie call on the same connection cannot de-authenticate it.
         const bool ok = ConstantTimeEqual(cookie, m_cookie);
-        if (ok) m_authenticated = true;
+        if (ok) {
+            m_authenticated = true;
+        } else {
+            m_auth_failed = true;
+            LogPrintf("WARN: %s: IPC peer presented an invalid cookie; this connection can no "
+                      "longer authenticate and will be dropped", __func__);
+        }
         return ok;
     }
+
+    //! Not served over capnp (no ordinal in init.capnp); the local listener calls
+    //! it to decide whether this connection beat the authentication deadline.
+    bool isAuthenticated() override { return m_authenticated; }
 
     interfaces::BuildInfo getBuildInfo() override
     {
@@ -151,6 +187,10 @@ private:
     //! reads it in RequireAuth(). The transition is monotonic false->true, so the
     //! plain bool was benign in practice, but it was still a formal data race.
     std::atomic<bool> m_authenticated{false};
+    //! Latched by a wrong cookie; atomic for the same reason as m_authenticated.
+    //! Monotonic false->true, and never consulted together with m_authenticated in
+    //! a way that needs the pair to be consistent (a connection cannot be both).
+    std::atomic<bool> m_auth_failed{false};
 };
 } // namespace
 
