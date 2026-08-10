@@ -50,7 +50,29 @@ bool PeerUidAllowed(uid_t peer_uid, uid_t self_uid);
 //! true and the explicit owner+SYSTEM PROTECTED DACL that ipc/process.cpp applies
 //! to node.sock and ipc.cookie (and verifies by read-back) is the guard. Call
 //! PeerCredentialEnforcement() to log which of these is in force.
-bool CheckPeerCredentials(int peer_fd);
+//! How to treat a peer whose uid cannot be determined.
+enum class PeerCredPolicy {
+    //! Refuse unless the uid is positively confirmed to match. For the NODE's
+    //! accept path, where this is a security boundary and peer_fd always comes
+    //! from a socket we just accepted.
+    Enforcing,
+    //! Refuse only on a DEFINITE mismatch; allow (with a log line) when the uid
+    //! cannot be read. For the GUI's own connected socket, where this is
+    //! defense-in-depth layered on the cookie rather than the boundary itself.
+    //!
+    //! The distinction exists because client-side peer-credential support is less
+    //! uniform than server-side. On Darwin, getpeereid() is backed by
+    //! LOCAL_PEERCRED and it is not established that xnu populates credentials on
+    //! the CONNECTING side of an AF_UNIX socket (FreeBSD documents both
+    //! directions; some BSD-derived kernels filled only the accepting side). Under
+    //! Enforcing that would mean the GUI could never connect on macOS at all --
+    //! trading a real, total regression for a defense-in-depth check that the
+    //! cookie already backstops. So the client asks, logs what it learns, and only
+    //! refuses when it positively knows the listener belongs to another user.
+    Advisory,
+};
+
+bool CheckPeerCredentials(int peer_fd, PeerCredPolicy policy = PeerCredPolicy::Enforcing);
 
 //! One-line description of the peer-credential enforcement actually compiled in,
 //! for a startup log line. An operator reading debug.log should never have to

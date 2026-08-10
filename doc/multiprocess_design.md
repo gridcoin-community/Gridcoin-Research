@@ -165,7 +165,11 @@ schema-diff lint against the previous release tag.
 
 ### 4.3 Authentication and transport (Stage 2)
 
-- Socket directory `0700`, socket `0600`; refuse to start on looser permissions.
+- Socket directory `0700`, socket `0600`. The socket and cookie are created
+  owner-only and refuse to start if that cannot be applied. The DIRECTORY is
+  hardened only when the node creates it: an existing data directory is left as
+  the operator configured it and merely warned about, so a deliberately widened
+  datadir is never silently re-tightened.
 - Cookie-PSK: node writes a fresh 256-bit cookie (`ipc.cookie`, `0600`, atomic rename)
   each startup; first IPC call is `Init::authenticate(cookie)`, constant-time compare.
   The cookie is pure portable code and is the load-bearing authenticator on every
@@ -223,8 +227,10 @@ The connect-time sequence, in order (steps 1–7 add ~5–10 ms to startup):
 
 Authentication (step 5) precedes every exchange on the `interfaces::Init` surface —
 build info, identity, and every `make*()` factory are refused until it succeeds, and
-`test/lint/lint-serve-init-complete.py` fails the build if a method is ever added
-without that gate.
+`test/lint/lint-serve-init-complete.py` fails the build when a virtual on
+`interfaces::Init` has no `ServeInit` override, or when an override (each overload
+independently) does not call `RequireAuth()`. It parses the two files textually
+rather than compiling them, so it is a strong smoke test, not a proof.
 
 It does **not** precede everything on the wire, and the distinction matters. The
 Cap'n Proto `Init` interface also carries `construct`, which has no C++ counterpart on

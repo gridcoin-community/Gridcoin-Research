@@ -596,9 +596,13 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries(const
     //   1. The GUI sidestake table (and the interface commands behind it), which
     //      rejects an edit at write time if it would push the total over 100%.
     //   2. -sidestakeaddresses / -sidestakeallocations in gridcoinresearch.conf,
-    //      hand-edited, and still common among long-time users. That file is READ
-    //      ONLY to us: the node does not own it and must not rewrite it, so the
-    //      only options on encountering a mistake are to complain and cope.
+    //      hand-edited, and still common among long-time users. The node does not
+    //      own that file's sidestake content: local sidestake edits are written to
+    //      the r-w settings file, never back into the .conf, so a hand-edited
+    //      mistake there can only be complained about and coped with, never
+    //      corrected in place. (The node does rewrite the .conf for unrelated
+    //      maintenance -- GRC::CleanConfig, CreateNewConfigFile -- but never to
+    //      normalise sidestake allocations.)
     //
     // Entry point 2 is handled where it is read: LoadLocalSideStakesFromConfig()
     // accumulates as it parses, and on crossing 100% it logs

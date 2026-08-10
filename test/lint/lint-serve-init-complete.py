@@ -46,6 +46,19 @@ UNGATED = {
 # "virtual <return type> <name>(" -- the return type may contain spaces, ::, <>, &, *.
 VIRTUAL_RE = re.compile(r"^\s*virtual\s+[\w:<>,\s*&]+?\s+(\w+)\s*\(")
 
+# Line comments, block comments and string literals, so a mention of RequireAuth()
+# in prose cannot satisfy the check below. Order matters: strings first would eat
+# quotes inside comments.
+COMMENT_RE = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
+STRING_RE = re.compile(r'"(?:[^"\\]|\\.)*"')
+
+
+def strip_noncode(text):
+    """Remove comments and string literals, preserving newlines for line numbers."""
+    def blank(m):
+        return "".join(ch if ch == "\n" else " " for ch in m.group(0))
+    return STRING_RE.sub(blank, COMMENT_RE.sub(blank, text))
+
 
 def fail(msg):
     print("lint-serve-init-complete: {}".format(msg), file=sys.stderr)
@@ -98,9 +111,16 @@ def overrides_with_bodies(serve_text):
     body = class_body(serve_text, "ServeInit")
     if body is None:
         return None
+    body = strip_noncode(body)
     out = {}
-    for m in re.finditer(r"\b(\w+)\s*\([^)]*\)\s*override\s*\{", body):
+    for m in re.finditer(r"\b(\w+)\s*\(([^)]*)\)\s*(?:const\s*)?override\b[^{]*\{", body):
         name = m.group(1)
+        # Key by name AND parameter count: keying by bare name let an ungated
+        # overload silently overwrite (or be overwritten by) the gated one, so the
+        # ungated member was never checked. Overloads are checked independently.
+        params = m.group(2).strip()
+        arity = 0 if not params else params.count(",") + 1
+        key = (name, arity)
         start = m.end()
         depth = 1
         i = start
@@ -110,7 +130,7 @@ def overrides_with_bodies(serve_text):
             elif body[i] == "}":
                 depth -= 1
             i += 1
-        out[name] = body[start:i - 1]
+        out[key] = body[start:i - 1]
     return out
 
 
@@ -135,22 +155,28 @@ def main():
 
     errors = []
 
+    found_names = {k[0] for k in found}
+
     for name in expected:
         if name in UNGATED:
             continue
-        if name not in found:
+        if name not in found_names:
             errors.append(
                 "interfaces::Init::{0}() has no override in ServeInit ({1}). It would fall through "
                 "to the base default and silently return nothing over IPC. Add an override that "
                 "calls RequireAuth() and delegates to m_inner.".format(name, SERVE_INIT))
-        elif "RequireAuth()" not in found[name]:
-            errors.append(
-                "ServeInit::{0}() does not call RequireAuth() ({1}). It would be served to an "
-                "unauthenticated IPC peer.".format(name, SERVE_INIT))
+        else:
+            # EVERY overload must be gated, not just one of them.
+            for key, fnbody in found.items():
+                if key[0] == name and "RequireAuth()" not in fnbody:
+                    errors.append(
+                        "ServeInit::{0}() (the {1}-argument overload) does not call RequireAuth() "
+                        "({2}). It would be served to an unauthenticated IPC peer.".format(
+                            name, key[1], SERVE_INIT))
 
     # An override with no counterpart on the interface is dead code, and usually
     # means a rename landed on one side only.
-    for name in found:
+    for name in found_names:
         if name not in expected:
             errors.append(
                 "ServeInit::{0}() overrides nothing declared on interfaces::Init ({1}); it is dead "
@@ -158,7 +184,7 @@ def main():
 
     # An UNGATED entry that calls RequireAuth() is a contradiction worth catching.
     for name in UNGATED:
-        if name in found and "RequireAuth()" in found[name]:
+        if any(k[0] == name and "RequireAuth()" in b for k, b in found.items()):
             errors.append(
                 "ServeInit::{0}() is listed as ungated-by-design but calls RequireAuth(); update "
                 "either the code or UNGATED in this lint.".format(name))

@@ -1003,6 +1003,20 @@ void _ServeOwned(EventLoop& loop, kj::Own<kj::AsyncIoStream>&& stream, std::shar
     // destroys the disconnect handler that may be the one calling it. The caller's
     // own capture keeps it alive across the call.
     auto closed = std::make_shared<bool>(false);
+
+    // Mark this connection closed on EVERY destruction path, not only the two
+    // close_conn drives. CapnpProtocol::disconnectIncoming() erases connections
+    // directly (m_incoming_connections.remove_if) at daemon shutdown, which
+    // bypasses close_conn entirely -- so without this the deadline timer would
+    // later find `closed` still false and call erase() on an already-destroyed
+    // list node. ~Connection runs its sync cleanups on both clean and unclean
+    // teardown, which is exactly the coverage needed.
+    //
+    // Do NOT rely on the timer's weak_ptr check for this instead: ~ProxyServerBase
+    // moves m_impl into the async cleanup queue, so the Init's shared_ptr — and
+    // therefore weak_init.lock() — can outlive the Connection.
+    it->addSyncCleanup([closed] { *closed = true; });
+
     auto close_conn = std::make_shared<std::function<void()>>();
     *close_conn = [&loop, it, closed, on_disconnect = std::forward<OnDisconnect>(on_disconnect)]() mutable {
         if (*closed) return;
