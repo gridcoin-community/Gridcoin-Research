@@ -585,6 +585,50 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries(const
     // occurs immediately after the settings r-w file is updated.
 
     // The loops below prevent sidestakes from being added that cause a total allocation above 1.0 (100%).
+    //
+    // WHY THE CEILING IS APPLIED ON READ AS WELL AS ON WRITE.
+    //
+    // An over-100% total is a user MISTAKE, not a configuration anyone would want.
+    // Nothing here treats it as normal; the point is that it must be handled
+    // gracefully rather than trusted away, because local sidestakes have two entry
+    // points and only one of them is ours to validate:
+    //
+    //   1. The GUI sidestake table (and the interface commands behind it), which
+    //      rejects an edit at write time if it would push the total over 100%.
+    //   2. -sidestakeaddresses / -sidestakeallocations in gridcoinresearch.conf,
+    //      hand-edited, and still common among long-time users. That file is READ
+    //      ONLY to us: the node does not own it and must not rewrite it, so the
+    //      only options on encountering a mistake are to complain and cope.
+    //
+    // Entry point 2 is handled where it is read: LoadLocalSideStakesFromConfig()
+    // accumulates as it parses, and on crossing 100% it logs
+    // "allocation percentage over 100 percent, ending sidestake allocations" and
+    // stops, so the offending entries never reach the registry. That WARN is the
+    // early alert -- deliberately at load rather than at the first kernel found.
+    //
+    // This loop is the same rule applied again at the point of USE, and it is not
+    // redundant: entries can reach the registry without going through the config
+    // parse (the UI path, and any future producer), so the check has to exist
+    // where the entries are consumed too. Everything that matters comes through
+    // here -- miner.cpp (staking) and consensus/block_rewards.cpp (validation) --
+    // so what is APPLIED is bounded regardless of what is STORED.
+    // SplitCoinStakeOutput repeats it once more at coinstake construction.
+    //
+    // Consequences worth stating plainly, because they can look like bugs:
+    //
+    //   * Suppression, not rejection: once the running total would exceed the
+    //     limit, the remaining sidestakes are simply not applied. They stay in the
+    //     registry and reappear if an earlier entry is reduced or removed.
+    //   * A stored total above 100% should not arise from any current path, since
+    //     both entry points stop at the ceiling. If one is ever observed, this
+    //     clamp is what keeps it from being paid out -- treat it as a bug upstream
+    //     of here, not as a reason to weaken this loop.
+    //   * The GUI's <=100% check is therefore a user-facing guard -- it stops
+    //     someone creating an entry that would be silently suppressed at staking
+    //     time -- and not the thing that makes over-allocation safe.
+    //
+    // Which entries get suppressed is map order (destination-keyed), not priority
+    // order.
 
     LOCK(cs_lock);
 
@@ -780,6 +824,68 @@ void SideStakeRegistry::NonContractAdd(const LocalSideStake& sidestake, const bo
     if (save_to_file) {
         SaveLocalSideStakesToConfig();
     }
+}
+
+bool SideStakeRegistry::NonContractSetAllocation(const CTxDestination& destination,
+                                                 const Allocation& allocation,
+                                                 const bool& save_to_file)
+{
+    LOCK(cs_lock);
+
+    auto iter = m_local_sidestake_entries.find(destination);
+
+    if (iter == m_local_sidestake_entries.end()) {
+        return false;
+    }
+
+    // Read the fields we are NOT changing under the same lock as the write, so a
+    // concurrent config reload cannot be undone by them. Replace the shared_ptr
+    // rather than mutating in place, matching NonContractAdd: existing readers
+    // holding a copy keep observing a consistent entry.
+    const LocalSideStake& current = *iter->second;
+
+    iter->second = std::make_shared<LocalSideStake>(destination,
+                                                    allocation,
+                                                    current.m_description,
+                                                    current.m_status.Value());
+
+    ++m_local_sidestake_revision;
+
+    if (save_to_file) {
+        SaveLocalSideStakesToConfig();
+    }
+
+    return true;
+}
+
+bool SideStakeRegistry::NonContractSetDescription(const CTxDestination& destination,
+                                                  const std::string& description,
+                                                  const bool& save_to_file)
+{
+    LOCK(cs_lock);
+
+    auto iter = m_local_sidestake_entries.find(destination);
+
+    if (iter == m_local_sidestake_entries.end()) {
+        return false;
+    }
+
+    // See NonContractSetAllocation: allocation and status are read under the same
+    // lock as the write, so editing a description cannot revert them.
+    const LocalSideStake& current = *iter->second;
+
+    iter->second = std::make_shared<LocalSideStake>(destination,
+                                                    current.m_allocation,
+                                                    description,
+                                                    current.m_status.Value());
+
+    ++m_local_sidestake_revision;
+
+    if (save_to_file) {
+        SaveLocalSideStakesToConfig();
+    }
+
+    return true;
 }
 
 void SideStakeRegistry::NonContractDelete(const CTxDestination& destination, const bool& save_to_file)

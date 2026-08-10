@@ -781,6 +781,43 @@ public:
     void NonContractDelete(const CTxDestination& destination, const bool& save_to_file = true);
 
     //!
+    //! \brief Change ONLY the allocation of an existing local sidestake, leaving its
+    //! description and status as currently stored.
+    //!
+    //! Exists so a caller editing one field does not have to read the whole entry,
+    //! rebuild it, and write it back through NonContractAdd(). That read-modify-write
+    //! spans two separate acquisitions of the registry lock, so a
+    //! LoadLocalSideStakesFromConfig() landing in between (RwSettingsUpdated, e.g. from
+    //! the changesettings RPC) is silently reverted by the fields the caller was not
+    //! trying to change. Here the surviving fields are read under the same lock as the
+    //! write, so there is nothing to lose.
+    //!
+    //! \param destination Map key of the entry to modify.
+    //! \param allocation New allocation.
+    //! \param save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
+    //!
+    //! \return false if no local entry exists for \p destination (nothing written).
+    //!
+    bool NonContractSetAllocation(const CTxDestination& destination,
+                                  const Allocation& allocation,
+                                  const bool& save_to_file = true);
+
+    //!
+    //! \brief Change ONLY the description of an existing local sidestake, leaving its
+    //! allocation and status as currently stored. See NonContractSetAllocation() for
+    //! why this exists rather than a read-modify-write through NonContractAdd().
+    //!
+    //! \param destination Map key of the entry to modify.
+    //! \param description New description (already sanitized by the caller).
+    //! \param save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
+    //!
+    //! \return false if no local entry exists for \p destination (nothing written).
+    //!
+    bool NonContractSetDescription(const CTxDestination& destination,
+                                   const std::string& description,
+                                   const bool& save_to_file = true);
+
+    //!
     //! \brief Revert the registry state for the sidestake entry to the state prior
     //! to this ContractContext application. This is typically used
     //! during reorganizations, where blocks are disconnected.
@@ -870,27 +907,17 @@ public:
                        std::set<SideStake>,
                        HistoricalSideStakeMap> SideStakeDB;
 
-    //!
-    //! \brief Protects the registry against multithreaded access.
-    //!
-    //! Every public method that touches the maps takes this itself, so a caller
-    //! doing ONE thing need not (and should not) hold it. It is public — like
-    //! PollRegistry::cs_poll_registry — because a caller doing a COMPOUND
-    //! operation must be able to hold it across the whole sequence.
-    //!
-    //! The local-sidestake editors in gridcoin/interfaces.cpp are the case that
-    //! forced this: each of them checks the registry (does this address already
-    //! exist, would the new allocation push the active total over 100%) and then
-    //! commits. With per-call locking, the check and the commit are separate
-    //! critical sections, and LoadLocalSideStakesFromConfig() — reachable on
-    //! ThreadRPCServer via `changesettings` — can land in between, so two edits
-    //! that each validated against ≤100% commit to a total above it.
-    //!
-    //! Recursive (CCriticalSection), so holding it around calls that re-acquire it
-    //! is safe and the individual methods keep their own locking.
-    mutable CCriticalSection cs_lock;
-
 private:
+    //!
+    //! \brief Protects the registry with multithreaded access. This is implemented INTERNAL to the registry class.
+    //!
+    //! Deliberately PRIVATE: the locking is a black box. Every public method that
+    //! touches the maps takes this itself, so no caller needs it — and a caller
+    //! that thinks it needs it across several calls should re-read
+    //! ActiveSideStakeEntries() first (see the note there on why the total
+    //! allocation ceiling is enforced on READ, not on write).
+    //!
+    mutable CCriticalSection cs_lock;
 
     //!
     //! \brief Private helper method for the Add and Delete methods above. They both use identical code (with

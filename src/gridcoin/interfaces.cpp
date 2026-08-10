@@ -374,15 +374,6 @@ public:
     {
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
-        // Hold the registry lock across the whole check-then-commit sequence. The
-        // duplicate check and the ≤100% check below each used to take cs_lock
-        // separately from the NonContractAdd that acts on them, so a concurrent
-        // LoadLocalSideStakesFromConfig() (reachable on ThreadRPCServer via
-        // `changesettings`) landing in between meant two edits could each validate
-        // against ≤100% and still commit a total above it. cs_lock is recursive, so
-        // the individual registry calls below keep locking as they always did.
-        LOCK(registry.cs_lock);
-
         const CTxDestination destination = DecodeDestination(address);
         if (!IsValidDestination(destination)) {
             return Result(SideStakeEditStatus::INVALID_ADDRESS);
@@ -402,6 +393,20 @@ public:
         const GRC::Allocation new_allocation(allocation_percent / 100.0);
 
         // The new allocation plus all active entries must not exceed 100%.
+        //
+        // This is a user-facing guard: it stops someone creating, through the one
+        // entry point we control, an entry that would then be silently suppressed
+        // at staking time. It is not what makes over-allocation safe.
+        //
+        // The same rule is applied where sidestakes are read
+        // (SideStakeRegistry::ActiveSideStakeEntries -- read its comment before
+        // changing anything here), and again where they are parsed from
+        // gridcoinresearch.conf, which is read-only to us and where a hand-edited
+        // mistake can only be logged and stopped at, never corrected.
+        //
+        // So this check deliberately does not need to be atomic with the commit
+        // below. Losing that race cannot cause an over-allocated payout: the
+        // read-side accumulate-and-stop is what decides what is actually applied.
         if (TotalActiveAllocation(registry, nullptr) + new_allocation > 1) {
             return Result(SideStakeEditStatus::INVALID_ALLOCATION);
         }
@@ -423,10 +428,6 @@ public:
                                       double allocation_percent) override
     {
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
-
-        // See addLocal: the lookup, the ≤100% check and the commit must be one
-        // critical section or a concurrent config reload can slip between them.
-        LOCK(registry.cs_lock);
 
         GRC::SideStake original;
         if (!FindLocal(registry, address, original)) {
@@ -450,12 +451,15 @@ public:
             return Result(SideStakeEditStatus::INVALID_ALLOCATION);
         }
 
-        registry.NonContractAdd(
-            GRC::LocalSideStake(destination,
-                                new_allocation,
-                                original.GetDescription(),
-                                std::get<GRC::LocalSideStake::Status>(original.GetStatus()).Value()),
-            true);
+        // Change only the allocation. Rebuilding the whole entry from `original`
+        // and writing it back through NonContractAdd() would carry the description
+        // and status from a read taken in an earlier lock scope, so a config reload
+        // (changesettings -> RwSettingsUpdated -> LoadLocalSideStakesFromConfig)
+        // landing in between would be silently reverted by those stale fields.
+        if (!registry.NonContractSetAllocation(destination, new_allocation)) {
+            // Removed between the lookup above and here.
+            return Result(SideStakeEditStatus::INVALID_ADDRESS);
+        }
 
         return Result(SideStakeEditStatus::OK);
     }
@@ -464,10 +468,6 @@ public:
                                        const std::string& description) override
     {
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
-
-        // See addLocal: read-modify-write of an existing entry, so the lookup and
-        // the commit must not be separated.
-        LOCK(registry.cs_lock);
 
         GRC::SideStake original;
         if (!FindLocal(registry, address, original)) {
@@ -483,12 +483,12 @@ public:
             return Result(SideStakeEditStatus::INVALID_DESCRIPTION);
         }
 
-        registry.NonContractAdd(
-            GRC::LocalSideStake(original.GetDestination(),
-                                original.GetAllocation(),
-                                sanitized,
-                                std::get<GRC::LocalSideStake::Status>(original.GetStatus()).Value()),
-            true);
+        // Change only the description; see setAllocation for why the surviving
+        // fields must not be round-tripped through the earlier read.
+        if (!registry.NonContractSetDescription(original.GetDestination(), sanitized)) {
+            // Removed between the lookup above and here.
+            return Result(SideStakeEditStatus::INVALID_ADDRESS);
+        }
 
         return Result(SideStakeEditStatus::OK);
     }
@@ -496,11 +496,6 @@ public:
     SideStakeEditResult deleteLocal(const std::string& address) override
     {
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
-
-        // See addLocal: without this, the entry can be replaced between the lookup
-        // and the delete, so the delete lands on a different entry than the one
-        // that was validated.
-        LOCK(registry.cs_lock);
 
         GRC::SideStake original;
         // Only local entries are deletable; a mandatory address is not found as
