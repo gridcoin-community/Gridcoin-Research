@@ -52,6 +52,7 @@ class QTableView;
 class QAbstractItemModel;
 class QModelIndex;
 class QStackedWidget;
+class QTimer;
 class QUrl;
 class QMessageBox;
 QT_END_NAMESPACE
@@ -142,6 +143,12 @@ private:
     ResearcherModel *researcherModel;
     MRCModel *m_mrc_model;
     VotingModel *votingModel;
+
+    //! Once-a-minute refresh of the beacon icon's age/expiry tooltip. Created on
+    //! the first setResearcherModel() with a model and stopped again when the
+    //! model is detached -- it is parented to this window, so it would otherwise
+    //! outlive the model it reads. Owned by Qt (parent = this).
+    QTimer *m_beacon_status_update_timer = nullptr;
 
     QStackedWidget *centralWidget;
 

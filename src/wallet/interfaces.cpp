@@ -928,20 +928,39 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
         }
     }
 
-    // Add addresses / update labels that we've sent to the address book
-    for (const WalletSendRecipient& rcp : recipients) {
-        CTxDestination dest = DecodeDestination(rcp.address);
-        {
-            LOCK(m_wallet->cs_wallet);
+    // Add addresses / update labels that we've sent to the address book.
+    //
+    // Two phases, deliberately: decide what needs writing under cs_wallet, then
+    // release it and do the writing. SetAddressBookName() emits
+    // NotifyAddressBookChanged (wallet.cpp), and although it does so outside its
+    // OWN lock scope, calling it from inside this one would put the emission back
+    // under cs_wallet. In the multiprocess build that emission is a blocking proxy
+    // call into the GUI, so a front end that is hung rather than dead would pin
+    // the node's wallet lock for as long as it stays hung -- stalling the stake
+    // miner and every other wallet operation behind it. Nothing here needs the
+    // check and the write to be atomic: SetAddressBookName is an unconditional
+    // assignment, so a concurrent writer racing between the two phases just means
+    // the last write wins, exactly as it would have before.
+    std::vector<std::pair<CTxDestination, std::string>> address_book_updates;
+
+    {
+        LOCK(m_wallet->cs_wallet);
+
+        for (const WalletSendRecipient& rcp : recipients) {
+            CTxDestination dest = DecodeDestination(rcp.address);
 
             auto mi = m_wallet->mapAddressBook.find(dest);
 
             // Check if we have a new address or an updated label
             if (mi == m_wallet->mapAddressBook.end() || mi->second.name != rcp.label)
             {
-                m_wallet->SetAddressBookName(dest, rcp.label);
+                address_book_updates.emplace_back(std::move(dest), rcp.label);
             }
         }
+    }
+
+    for (const auto& [dest, label] : address_book_updates) {
+        m_wallet->SetAddressBookName(dest, label);
     }
 
     SendCoinsResult result;

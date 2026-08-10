@@ -1,5 +1,6 @@
 #include "aboutdialog.h"
 #include "qt/decoration.h"
+#include "qt/guilog.h"
 #include "ui_aboutdialog.h"
 #include "clientmodel.h"
 #include "updatedialog.h"
@@ -97,6 +98,30 @@ void AboutDialog::setIpcConnectionInfo(const GuiIpcInfo& info)
 
 AboutDialog::~AboutDialog()
 {
+    // Join the version-check worker before this dialog goes away. The worker
+    // captures the raw interfaces::Node* by value and does a blocking libcurl GET
+    // (up to a 10 s connect timeout), while the dialog itself is a stack object in
+    // BitcoinGUI::aboutClicked(). Nothing else waits for that worker: without this
+    // join it is reaped only at process exit, so opening About, starting a check,
+    // closing it, and quitting inside the timeout leaves it dereferencing a Node
+    // that StartGridcoinQt's teardown has already destroyed -- the same shape as
+    // the teardown use-after-free fixed in #3163. QtConcurrent::run() futures
+    // cannot be cancelled once started, so waiting is the only option.
+    //
+    // Disconnect first so finished() cannot re-enter versionCheckFinished() on a
+    // half-destroyed dialog, and wrap the wait: waitForFinished() RETHROWS an
+    // exception the worker stored (a daemon disconnect mid-GET does exactly that),
+    // and a throw escaping a destructor during unwinding is std::terminate.
+    m_version_check_watcher.disconnect();
+
+    try {
+        m_version_check_watcher.waitForFinished();
+    } catch (const std::exception& e) {
+        GUILogPrintf("WARN: %s: the version-check worker ended with an exception: %s", __func__, e.what());
+    } catch (...) {
+        GUILogPrintf("WARN: %s: the version-check worker ended with an unknown exception", __func__);
+    }
+
     delete ui;
 }
 
