@@ -5,6 +5,7 @@
 
 #include "node/ui_interface.h"
 #include <util/system.h>
+#include "util/dir_permissions.h"
 #include <util/strencodings.h>
 #include <util/check.h>
 #include <util/string.h>
@@ -349,14 +350,30 @@ const fs::path& ArgsManager::GetDataDirPath(bool net_specific) const
     if (net_specific)
         path /= BaseParams().DataDir();
 
-    // On the first run this creates the datadir (and parents); a permission failure
-    // sets ec instead of throwing. (A wallets/ subdir was reserved here for a future
-    // Bitcoin-style move.)
-    fs::create_directories(path, ec);
-    if (ec && !fs::is_directory(path, ec)) {
-        // Could neither create nor find the data directory (e.g. no permission).
-        path = "";
-        return path;
+    // On the first run this creates the datadir (and parents) and restricts it to
+    // this account -- 0700 on POSIX, an owner+SYSTEM protected DACL on Windows.
+    //
+    // This is the CORE's creation point, and it matters as much as the GUI chooser's
+    // (qt/intro.cpp): in a multiprocess deployment the daemon starts first (systemd
+    // unit, Windows scheduled task) and the chooser is skipped entirely
+    // (bitcoin.cpp gates it on !-multiprocess), so this is usually the call that
+    // brings the data directory into existence. It is create-only: an existing
+    // directory is left exactly as the operator configured it.
+    std::string perm_error;
+    if (!util::CreateOwnerOnlyDirectory(path, perm_error)) {
+        // Either it could not be created at all, or it was created but could not be
+        // restricted. Both are reported the same way the old code reported a failed
+        // create: an empty path, which callers already treat as "no usable datadir".
+        // Do NOT throw -- this runs before logging is initialised and from paths that
+        // cannot handle an exception.
+        if (!fs::is_directory(path, ec)) {
+            path = "";
+            return path;
+        }
+        // The directory exists but is not as locked down as we intended. Carry on --
+        // the wallet is usable and the IPC socket and cookie carry their own
+        // owner-only protection -- but say so once, loudly, when logging is up.
+        LogPrintf("WARNING: %s: %s", __func__, perm_error);
     }
 
     path = StripRedundantLastElementsOfPath(path);
