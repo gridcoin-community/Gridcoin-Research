@@ -10,7 +10,7 @@
 #include "tinyformat.h"
 #include "util/strencodings.h"
 #ifdef WIN32
-#include "ipc/process.h" // ApplyOwnerOnlyDacl / MakeOwnerOnlyDacl
+#include "util/dir_permissions.h" // ApplyOwnerOnlyDacl / MakeOwnerOnlyDacl
 #endif
 
 #include <algorithm>
@@ -121,7 +121,7 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
                                  ": " + remove_ec.message());
     }
 
-    PACL dacl = static_cast<PACL>(MakeOwnerOnlyDacl(/*inheritable=*/false));
+    PACL dacl = static_cast<PACL>(util::MakeOwnerOnlyDacl(/*inheritable=*/false));
     SECURITY_DESCRIPTOR sd;
     HANDLE handle = INVALID_HANDLE_VALUE;
     DWORD create_err = 0;
@@ -178,7 +178,7 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
     // world-readable authentication secret. Doing this before the rename means a
     // volume that cannot protect the cookie never gets one -- the guard deletes
     // the temp copy on the way out.
-    ApplyOwnerOnlyDacl(tmp, /*inheritable=*/false);
+    util::ApplyOwnerOnlyDacl(tmp, /*inheritable=*/false);
 
     if (!::MoveFileExW(tmp.wstring().c_str(), path.wstring().c_str(),
                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {

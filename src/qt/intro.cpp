@@ -18,6 +18,7 @@
 
 //#include <interfaces/node.h>
 #include <util.h>
+#include <util/dir_permissions.h>
 
 #include <QFileDialog>
 #include <QSettings>
@@ -223,7 +224,27 @@ bool Intro::showIfNeeded(bool& did_show_intro)
             }
             dataDir = intro.getDataDirectory();
             try {
-                TryCreateDirectories(GUIUtil::qstringToBoostPath(dataDir));
+                // Create it restricted to this account (0700 / owner+SYSTEM DACL).
+                // This is the monolithic build's creation point; the daemon has its
+                // own in GetDataDirPath(), and both go through the same helper so a
+                // data directory is protected no matter which one made it.
+                // Create-only: an existing directory is left as the user set it up.
+                std::string perm_error;
+                if (!util::CreateOwnerOnlyDirectory(GUIUtil::qstringToBoostPath(dataDir), perm_error)) {
+                    // Distinguish "could not create" from "created but could not be
+                    // locked down": the first is fatal to this choice, the second is
+                    // a warning the user can act on without losing their selection.
+                    if (!fs::is_directory(GUIUtil::qstringToBoostPath(dataDir))) {
+                        QMessageBox::critical(nullptr, PACKAGE_NAME,
+                            tr("Error: Specified data directory \"%1\" cannot be created.").arg(dataDir));
+                        continue; /* back to the choosing screen */
+                    }
+                    QMessageBox::warning(nullptr, PACKAGE_NAME,
+                        tr("The data directory \"%1\" was created, but its permissions could not be "
+                           "restricted to your account. Your wallet file may be readable by other "
+                           "users of this computer.\n\n%2")
+                            .arg(dataDir, QString::fromStdString(perm_error)));
+                }
                 break;
             } catch (const fs::filesystem_error&) {
                 QMessageBox::critical(nullptr, PACKAGE_NAME,
