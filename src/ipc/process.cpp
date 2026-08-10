@@ -403,13 +403,27 @@ public:
         struct sockaddr_un addr;
         const fs::path path = ParseAddress(address, data_dir, addr);
 
-        // Socket directory access control (design section 4.3). On POSIX we chmod
-        // the parent 0700 and fail closed WHEN WE CREATE IT: if we cannot restrict a
+        // Socket directory access control (design section 4.3).
+        //
+        // READ THIS BEFORE RELYING ON THE create BRANCH BELOW: for the DEFAULT
+        // address ("unix" -> <datadir>/node.sock) it does not run. GetDataDir()
+        // itself calls fs::create_directories (ArgsManager::GetDataDirPath in
+        // util/system.cpp), and AppInit2, WriteCookie(GetDataDir()) and this
+        // function's own GetDataDir() argument have all called it long before we
+        // get here -- so the directory always already exists and `created` is
+        // false. The branch is live only for a custom `unix:<path>` whose parent
+        // does not exist yet.
+        //
+        // The practical effect is that the datadir keeps whatever the OS gave it
+        // (%APPDATA%'s inherited ACL on Windows, 0755 on macOS), and that is
+        // deliberate as well as accidental: we do not re-tighten a directory the
+        // operator may have widened on purpose. What actually protects the secret
+        // is that node.sock and ipc.cookie are created BY US, owner-only, and fail
+        // closed if that cannot be applied -- see below and in handshake.cpp.
+        //
+        // When the create branch does run, it fails closed: if we cannot restrict a
         // directory we just made, refuse to listen rather than expose the socket in
-        // a world-accessible one. An EXISTING directory is deliberately left exactly
-        // as the operator configured it and only warned about -- see the create-only
-        // branch below; the socket and cookie inside it are still created owner-only
-        // and still fail closed.
+        // a world-accessible one.
         // Windows has no chmod/umask for AF_UNIX, so the equivalent is an explicit
         // owner-only *protected* DACL (ApplyOwnerOnlyDacl), applied inheritably so
         // node.sock and ipc.cookie are owner-only from creation. The port used to
