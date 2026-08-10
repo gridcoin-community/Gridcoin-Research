@@ -517,12 +517,12 @@ void WalletModel::subscribeToCoreSignals()
     // boundary as value types (Phase 1c-i). The callbacks fire on core
     // threads, possibly under core locks, so they enqueue to the Qt thread
     // and return — same discipline the raw-signal handlers applied.
-    m_wallet_handlers.emplace_back(m_wallet.handleStatusChanged(
+    m_wallet_handlers.emplace_back(m_wallet.handleStatusChanged(m_notify_lifetime.guard(
         [this]() {
             GUILogPrintf("NotifyKeyStoreStatusChanged");
             QMetaObject::invokeMethod(this, "updateStatus", Qt::QueuedConnection);
-        }));
-    m_wallet_handlers.emplace_back(m_wallet.handleAddressBookChanged(
+        })));
+    m_wallet_handlers.emplace_back(m_wallet.handleAddressBookChanged(m_notify_lifetime.guard(
         [this](const std::string& address, const std::string& label, bool is_mine,
                const std::string& purpose, ChangeType status) {
             // `purpose` is accepted to match the 6-arg core signal but is not
@@ -535,7 +535,7 @@ void WalletModel::subscribeToCoreSignals()
                                       Q_ARG(QString, QString::fromStdString(label)),
                                       Q_ARG(bool, is_mine),
                                       Q_ARG(int, status));
-        }));
+        })));
 
     // The tx-table producer wiring (NotifyTransactionChanged /
     // NotifyBlocksChanged) now lives node-side in the WalletTxSource, wired in
@@ -548,6 +548,10 @@ void WalletModel::unsubscribeFromCoreSignals()
     // interfaces::Handler's destructor, which disconnects it. The tx-table
     // producer connections severed here in earlier phases now live in the
     // WalletTxSource and are severed by its destructor.
+    // Retire before anything else: disconnecting does not wait for a callback
+    // already running on a core thread (qt/notificationlifetime.h).
+    m_notify_lifetime.retire();
+
     m_wallet_handlers.clear();
 }
 

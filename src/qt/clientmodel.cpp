@@ -368,34 +368,46 @@ void ClientModel::subscribeToCoreSignals()
 {
     // Register notification handlers, retaining each interfaces::Handler so
     // it is disconnected in unsubscribeFromCoreSignals() (from ~ClientModel).
-    // Every callback below captures `this`; a notification firing after this
-    // object is gone would otherwise invoke a slot on freed memory during
-    // shutdown. The callbacks run on core threads and only marshal to the GUI
-    // thread -- they must not take core locks (src/interfaces/README.md).
-    m_handlers.emplace_back(m_node.handleNotifyBlocksChanged(
+    // The callbacks run on core threads and only marshal to the GUI thread --
+    // they must not take core locks or call back into the node (see the handler
+    // contract in src/interfaces/handler.h).
+    //
+    // Every callback captures `this`, and disconnecting does NOT wait for one
+    // already executing on a core thread, so each is wrapped in
+    // m_notify_lifetime.guard(): retire() (called from unsubscribeFromCoreSignals
+    // below) both stops future deliveries and blocks until any in-flight callback
+    // has finished. Without it, ThreadStakeMiner emitting MinerStatusChanged while
+    // this object is being destroyed is a use-after-free.
+    m_handlers.emplace_back(m_node.handleNotifyBlocksChanged(m_notify_lifetime.guard(
         [this](bool syncing, int height, int64_t best_time, uint32_t target_bits) {
             NotifyBlocksChanged(this, syncing, height, best_time, target_bits);
-        }));
-    m_handlers.emplace_back(m_node.handleBannedListChanged(
-        [this]() { BannedListChanged(this); }));
-    m_handlers.emplace_back(m_node.handleNotifyNumConnectionsChanged(
-        [this](int num_connections) { NotifyNumConnectionsChanged(this, num_connections); }));
-    m_handlers.emplace_back(m_node.handleNotifyAlertChanged(
-        [this](const uint256& hash, ChangeType status) { NotifyAlertChanged(this, hash, status); }));
-    m_handlers.emplace_back(m_node.handleNotifyScraperEvent(
+        })));
+    m_handlers.emplace_back(m_node.handleBannedListChanged(m_notify_lifetime.guard(
+        [this]() { BannedListChanged(this); })));
+    m_handlers.emplace_back(m_node.handleNotifyNumConnectionsChanged(m_notify_lifetime.guard(
+        [this](int num_connections) { NotifyNumConnectionsChanged(this, num_connections); })));
+    m_handlers.emplace_back(m_node.handleNotifyAlertChanged(m_notify_lifetime.guard(
+        [this](const uint256& hash, ChangeType status) { NotifyAlertChanged(this, hash, status); })));
+    m_handlers.emplace_back(m_node.handleNotifyScraperEvent(m_notify_lifetime.guard(
         [this](const scrapereventtypes& event_type, ChangeType status, const std::string& message) {
             NotifyScraperEvent(this, event_type, status, message);
-        }));
-    m_handlers.emplace_back(m_node.handleMinerStatusChanged(
-        [this](bool staking, double coin_weight) { MinerStatusChanged(this, staking, coin_weight); }));
-    m_handlers.emplace_back(m_node.handlePSGTPoolChanged(
+        })));
+    m_handlers.emplace_back(m_node.handleMinerStatusChanged(m_notify_lifetime.guard(
+        [this](bool staking, double coin_weight) { MinerStatusChanged(this, staking, coin_weight); })));
+    m_handlers.emplace_back(m_node.handlePSGTPoolChanged(m_notify_lifetime.guard(
         [this](const uint256& revision_hash, ChangeType status, int reason) {
             PSGTPoolChanged(this, revision_hash, status, reason);
-        }));
+        })));
 }
 
 void ClientModel::unsubscribeFromCoreSignals()
 {
+    // Retire FIRST, and before any member of this object is destroyed: this both
+    // refuses further deliveries and waits out any callback already running on a
+    // core thread, so nothing can be touching `this` once it returns. Clearing the
+    // handlers afterwards disconnects them, but disconnecting alone never waited.
+    m_notify_lifetime.retire();
+
     // Disconnect signals from client: clearing the retained handlers runs each
     // interfaces::Handler destructor, which disconnects it.
     m_handlers.clear();

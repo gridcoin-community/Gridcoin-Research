@@ -580,23 +580,27 @@ void ResearcherModel::subscribeToCoreSignals()
     // callbacks fire on a core thread, so each marshals to the GUI thread via a
     // queued invocation of the matching slot; a signal firing after this object
     // is gone would otherwise touch freed memory (issue #3129).
-    m_handlers.emplace_back(m_researcher_context.handleResearcherChanged(
-        [this]() { QMetaObject::invokeMethod(this, "onResearcherChanged", Qt::QueuedConnection); }));
+    m_handlers.emplace_back(m_researcher_context.handleResearcherChanged(m_notify_lifetime.guard(
+        [this]() { QMetaObject::invokeMethod(this, "onResearcherChanged", Qt::QueuedConnection); })));
 
-    m_handlers.emplace_back(m_researcher_context.handleBeaconChanged(
-        [this]() { QMetaObject::invokeMethod(this, "updateBeacon", Qt::QueuedConnection); }));
+    m_handlers.emplace_back(m_researcher_context.handleBeaconChanged(m_notify_lifetime.guard(
+        [this]() { QMetaObject::invokeMethod(this, "updateBeacon", Qt::QueuedConnection); })));
 
-    m_handlers.emplace_back(m_researcher_context.handleAccrualChanged(
-        [this]() { QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection); }));
+    m_handlers.emplace_back(m_researcher_context.handleAccrualChanged(m_notify_lifetime.guard(
+        [this]() { QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection); })));
 
-    m_handlers.emplace_back(m_researcher_context.handleBlocksChanged(
+    m_handlers.emplace_back(m_researcher_context.handleBlocksChanged(m_notify_lifetime.guard(
         [this](bool, int, int64_t, uint32_t) {
             QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
-        }));
+        })));
 }
 
 void ResearcherModel::unsubscribeFromCoreSignals()
 {
+    // Retire before disconnecting: severing a Handler does not wait for a
+    // callback already running on a core thread (qt/notificationlifetime.h).
+    m_notify_lifetime.retire();
+
     // Clearing the retained handlers runs each Handler's destructor, which
     // disconnects it (issue #3129).
     m_handlers.clear();

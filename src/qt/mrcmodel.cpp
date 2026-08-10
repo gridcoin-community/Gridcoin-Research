@@ -210,15 +210,19 @@ void MRCModel::subscribeToCoreSignals()
     // object is gone would otherwise invoke a slot on freed memory. The
     // notification is marshaled to the GUI thread, so the lambda touches no core
     // state (issue #3129).
-    m_mrc_handler = m_mrc.handleMRCChanged([this]() {
+    m_mrc_handler = m_mrc.handleMRCChanged(m_notify_lifetime.guard([this]() {
         GUILogPrint(GUILogCategory::QT, "GUI: received MRCChanged() core signal");
 
         QMetaObject::invokeMethod(this, "mrcChanged", Qt::QueuedConnection);
-    });
+    }));
 }
 
 void MRCModel::unsubscribeFromCoreSignals()
 {
+    // Retire before disconnecting: severing a Handler does not wait for a
+    // callback already running on a core thread (qt/notificationlifetime.h).
+    m_notify_lifetime.retire();
+
     // Disconnect from the node: resetting the handler runs its destructor, which
     // disconnects the subscription (issue #3129).
     m_mrc_handler.reset();

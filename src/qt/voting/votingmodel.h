@@ -7,6 +7,7 @@
 
 #include "amount.h"
 #include "interfaces/voting.h"
+#include "qt/notificationlifetime.h"
 #include "qt/voting/poll_types.h"
 
 #include <QDateTime>
@@ -247,6 +248,10 @@ private:
     //! that fires after this model is destroyed cannot invoke a callback bound to
     //! freed memory. The Handlers disconnect on destruction (issue #3129).
     std::vector<std::unique_ptr<interfaces::Handler>> m_handlers;
+
+    //! Closes the destruction race that disconnecting alone leaves open.
+    //! See qt/notificationlifetime.h.
+    NotificationLifetime m_notify_lifetime;
 
 private slots:
     void handleNewPoll(int64_t poll_time);

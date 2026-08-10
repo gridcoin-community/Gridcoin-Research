@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "interfaces/wallet.h"
+#include "qt/notificationlifetime.h"
 #include "interfaces/wallet_tx_source.h"
 #include "support/allocators/secure.h" /* for SecureString */
 
@@ -249,6 +250,10 @@ private:
     //! the WalletTxSource in Phase 1c-ii, so this model no longer holds any
     //! raw core-signal connections.
     std::vector<std::unique_ptr<interfaces::Handler>> m_wallet_handlers;
+
+    //! Closes the destruction race that disconnecting alone leaves open.
+    //! See qt/notificationlifetime.h.
+    NotificationLifetime m_notify_lifetime;
 
 
 public slots:

@@ -7,6 +7,7 @@
 
 #include "amount.h"
 #include "interfaces/researcher.h"
+#include "qt/notificationlifetime.h"
 
 #include <memory>
 #include <optional>
@@ -158,6 +159,10 @@ private:
     //! that fires after this model is destroyed cannot invoke a slot bound to
     //! freed memory (issue #3129).
     std::vector<std::unique_ptr<interfaces::Handler>> m_handlers;
+
+    //! Closes the destruction race that disconnecting alone leaves open.
+    //! See qt/notificationlifetime.h.
+    NotificationLifetime m_notify_lifetime;
 
     //! Map one node-side project row into a Qt ProjectRow, translating the
     //! whitelist status and resolving the (translatable) error label.
