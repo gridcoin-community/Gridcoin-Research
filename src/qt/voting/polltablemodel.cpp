@@ -254,7 +254,30 @@ PollTableModel::~PollTableModel()
     // refresh has ever been launched. (The queued reload-on-the-GUI-thread
     // lambda guards its own captures with QPointer, so it remains safe even
     // if the event queue drains after the model is gone.)
-    m_refresh_future.waitForFinished();
+    waitForRefreshWorker();
+}
+
+void PollTableModel::waitForRefreshWorker()
+{
+    // Join the worker WITHOUT ever propagating what it left behind. QtConcurrent
+    // stores an exception that escapes the worker body in the future, and
+    // QFuture::waitForFinished() rethrows it. Both callers are teardown paths and
+    // one of them is a destructor, so an unguarded rethrow is fatal rather than
+    // merely noisy: the throw from setModel(nullptr) unwinds into
+    // ~PollTableModel, which waits again, rethrows a second time while unwinding,
+    // and the process aborts -- on nothing worse than "the daemon was stopped".
+    // The refresh() worker body already contains its own exceptions; this is the
+    // backstop that makes the join itself unconditionally safe. The WAIT stays:
+    // it is what keeps the worker from dereferencing a destroyed `this`.
+    try {
+        m_refresh_future.waitForFinished();
+    } catch (const std::exception& e) {
+        GUILogPrintf("WARN: %s: the poll refresh worker ended with an exception: %s",
+                     __func__, e.what());
+    } catch (...) {
+        GUILogPrintf("WARN: %s: the poll refresh worker ended with an unknown exception",
+                     __func__);
+    }
 }
 
 void PollTableModel::setModel(VotingModel* model)
@@ -271,7 +294,7 @@ void PollTableModel::setModel(VotingModel* model)
     // before BitcoinGUI / VotingPage / PollTableModel are torn down. Draining
     // here, while VotingModel is still alive, closes that UAF window.
     if (m_voting_model) {
-        m_refresh_future.waitForFinished();
+        waitForRefreshWorker();
         disconnect(m_voting_model, &VotingModel::newVoteReceived,
                    this, &PollTableModel::handlePollStaleFlag);
     }
@@ -350,7 +373,32 @@ void PollTableModel::refresh()
 
         // Build the new poll table off the GUI thread (this is the slow
         // bit -- AVW recompute, candidate iteration).
-        std::vector<PollItem> new_rows = m_voting_model->buildPollTable(m_filter_flags);
+        //
+        // Contain every exception here rather than letting it escape the lambda:
+        // in the multiprocess build buildPollTable() is a synchronous IPC round
+        // trip, so stopping the daemon mid-refresh raises out of the proxy call.
+        // An escaping exception would be STORED in m_refresh_future and rethrown
+        // by whoever joins it -- including ~PollTableModel -- which turns an
+        // ordinary daemon stop into std::terminate. Report failure through
+        // ordinary state instead: leave the table showing its previous contents
+        // (the caller re-runs refresh() on the next tick) and, crucially, clear
+        // the in-flight debounce so a failed pass cannot latch it true forever
+        // and wedge every future refresh. Clearing it last keeps it set for the
+        // whole of this worker's remaining work, exactly as the success path's
+        // GUI continuation does.
+        std::vector<PollItem> new_rows;
+
+        try {
+            new_rows = m_voting_model->buildPollTable(m_filter_flags);
+        } catch (const std::exception& e) {
+            GUILogPrintf("WARN: %s: poll table refresh failed: %s", func_name, e.what());
+            m_refresh_in_flight.store(false);
+            return;
+        } catch (...) {
+            GUILogPrintf("WARN: %s: poll table refresh failed with an unknown exception", func_name);
+            m_refresh_in_flight.store(false);
+            return;
+        }
 
         // Hand the result back to the GUI thread for the actual model
         // mutation. m_rows is the std::vector backing a QAbstractItemModel

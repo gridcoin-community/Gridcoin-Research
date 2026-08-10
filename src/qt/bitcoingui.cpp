@@ -966,34 +966,51 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
 {
     this->researcherModel = researcherModel;
 
-    if (!researcherModel) {
-        return;
-    }
-
+    // Propagate BEFORE the detach early-return below. OverviewPage and the
+    // diagnostics dialog each keep their own raw copy of this pointer, and
+    // bitcoin.cpp calls setResearcherModel(nullptr) while ResearcherModel is
+    // still alive but about to leave scope. Returning early on nullptr (as this
+    // used to) left both copies dangling for the rest of the window's life --
+    // asymmetric with setVotingModel() / setPSGTPoolContext(), which already
+    // propagate first and only then decide whether there is anything to wire up.
     overviewPage->setResearcherModel(researcherModel);
     diagnosticsDialog->SetResearcherModel(researcherModel);
+
+    if (!researcherModel) {
+        // The tooltip-refresh timer is parented to this window, so it outlives
+        // the detach. Stop it: otherwise any nested event loop entered after
+        // teardown (a modal, a progress dialog) would let it fire
+        // updateBeaconIcon() with no model attached.
+        if (m_beacon_status_update_timer) {
+            m_beacon_status_update_timer->stop();
+        }
+
+        return;
+    }
 
     updateBeaconIcon();
     connect(researcherModel, &ResearcherModel::beaconChanged, this, &BitcoinGUI::updateBeaconIcon);
 
-    QTimer *beacon_status_update_timer = new QTimer(this);
+    if (!m_beacon_status_update_timer) {
+        m_beacon_status_update_timer = new QTimer(this);
 
-    // This timer trigger is to support updating the beacon age and time to expiration in the tooltip.
-    // Once a minute is sufficient.
-    connect(beacon_status_update_timer, &QTimer::timeout, this, &BitcoinGUI::updateBeaconIcon);
+        // This timer trigger is to support updating the beacon age and time to expiration in the tooltip.
+        // Once a minute is sufficient.
+        connect(m_beacon_status_update_timer, &QTimer::timeout, this, &BitcoinGUI::updateBeaconIcon);
+    }
 
     // Check every minute
-    beacon_status_update_timer->start(1000 * 60);
+    m_beacon_status_update_timer->start(1000 * 60);
 }
 
 void BitcoinGUI::setMRCModel(MRCModel *mrcModel)
 {
     m_mrc_model = mrcModel;
 
-    if (!mrcModel) {
-        return;
-    }
-
+    // Propagate unconditionally, including the nullptr detach: OverviewPage holds
+    // its own copy and MRCModel is a stack object in StartGridcoinQt that is
+    // destroyed right after teardown. OverviewPage::onMRCRequestClicked's null
+    // check would otherwise pass on a freed model.
     overviewPage->setMRCModel(mrcModel);
 }
 
@@ -2081,6 +2098,13 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 void BitcoinGUI::updateBeaconIcon()
 {
     GUILogPrint(GUILogCategory::MISC, "BitcoinGUI::updateBeaconIcon()");
+
+    // Every sibling slot null-checks its model (see OverviewPage). This one is
+    // additionally driven by a window-parented timer, so it can still be reached
+    // after setResearcherModel(nullptr) has detached the model.
+    if (!researcherModel) {
+        return;
+    }
 
     if (researcherModel->configuredForNoncruncherMode()
         || researcherModel->detectedPoolMode())

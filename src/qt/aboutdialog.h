@@ -42,9 +42,11 @@ private:
     };
 
     Ui::AboutDialog *ui;
-    //! Node settings/query surface; set in setModel(). Used off the GUI thread
-    //! for checkForLatestUpdate() -- process-lifetime, so capturing it in the
-    //! background worker is safe.
+    //! Node settings/query surface; set in setModel(). Captured by value into the
+    //! background checkForLatestUpdate() worker, so it is NOT process-lifetime:
+    //! StartGridcoinQt owns the Node and destroys it at teardown. The destructor
+    //! joins that worker, which is what keeps the captured pointer valid for as
+    //! long as the worker can dereference it.
     interfaces::Node* m_node = nullptr;
     //! Watches the background version-check fetch so the blocking libcurl GET
     //! never runs on the GUI thread.
