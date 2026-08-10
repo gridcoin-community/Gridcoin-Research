@@ -870,11 +870,27 @@ public:
                        std::set<SideStake>,
                        HistoricalSideStakeMap> SideStakeDB;
 
-private:
     //!
-    //! \brief Protects the registry with multithreaded access. This is implemented INTERNAL to the registry class.
+    //! \brief Protects the registry against multithreaded access.
     //!
+    //! Every public method that touches the maps takes this itself, so a caller
+    //! doing ONE thing need not (and should not) hold it. It is public — like
+    //! PollRegistry::cs_poll_registry — because a caller doing a COMPOUND
+    //! operation must be able to hold it across the whole sequence.
+    //!
+    //! The local-sidestake editors in gridcoin/interfaces.cpp are the case that
+    //! forced this: each of them checks the registry (does this address already
+    //! exist, would the new allocation push the active total over 100%) and then
+    //! commits. With per-call locking, the check and the commit are separate
+    //! critical sections, and LoadLocalSideStakesFromConfig() — reachable on
+    //! ThreadRPCServer via `changesettings` — can land in between, so two edits
+    //! that each validated against ≤100% commit to a total above it.
+    //!
+    //! Recursive (CCriticalSection), so holding it around calls that re-acquire it
+    //! is safe and the individual methods keep their own locking.
     mutable CCriticalSection cs_lock;
+
+private:
 
     //!
     //! \brief Private helper method for the Add and Delete methods above. They both use identical code (with
