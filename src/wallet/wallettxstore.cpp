@@ -123,7 +123,22 @@ void WalletTxStore::start()
         return;
     }
     m_started = true;
-    m_worker = std::thread([this] { workerLoop(); });
+    // Backstop: workerLoop() already contains per-item failures, but nothing may
+    // escape a std::thread body -- that is std::terminate, i.e. the node dies with
+    // no unwinding. Anything reaching here has already defeated the inner handler,
+    // so the worker stops; say so loudly rather than exiting silently, because a
+    // stopped worker means the store never drains again (#3257).
+    m_worker = std::thread([this] {
+        try {
+            workerLoop();
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: WalletTxStore: the store worker stopped after an unhandled "
+                      "exception: %s. Transaction list updates will stop until restart.", e.what());
+        } catch (...) {
+            LogPrintf("ERROR: WalletTxStore: the store worker stopped after an unknown unhandled "
+                      "exception. Transaction list updates will stop until restart.");
+        }
+    });
 }
 
 void WalletTxStore::warnIfIntakeBacklogged()
@@ -216,7 +231,22 @@ void WalletTxStore::workerLoop()
         // before the loop re-evaluates its wait condition.
         {
             REVERSE_LOCK(lock);
-            applyIntake(std::move(item));
+            // Contain a failure to the one item that caused it. This body is the
+            // raw std::thread entry, so an escaping exception is std::terminate --
+            // the whole node killed by, say, a bad_alloc while projecting one
+            // record's sort keys. Keep draining instead: dropping a single intake
+            // item costs that transaction's row until the next prime() or chain-tip
+            // refresh, whereas letting the worker die silently stops the store
+            // draining forever and reproduces the #3257 freeze exactly.
+            try {
+                applyIntake(std::move(item));
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: %s: dropping one wallet transaction store intake item after an "
+                          "exception: %s", __func__, e.what());
+            } catch (...) {
+                LogPrintf("ERROR: %s: dropping one wallet transaction store intake item after an "
+                          "unknown exception", __func__);
+            }
         }
     }
 }
@@ -253,6 +283,24 @@ void WalletTxStore::rebuildIndex()
     m_by_hash.reserve(m_records.size() * 2 + 1);
     for (std::size_t i = 0; i < m_records.size(); ++i) {
         m_by_hash.emplace(m_records[i].hash, i);
+    }
+}
+
+void WalletTxStore::rebuildCaches()
+{
+    // Everything here is derived from m_records, which is the authoritative table:
+    // the projector caches are parallel to it by position, and the volatile set is
+    // the subset whose status can still change. Shared by prime() (which rebuilds
+    // the whole store) and by insertLocked()'s failure path (which must restore the
+    // cross-container invariant after a partially applied splice).
+    m_fields_cache.assign(m_records.size(), TxFilterFields{});
+    m_keys_cache.assign(m_records.size(), SortKey{});
+    m_volatile.clear();
+    for (std::size_t i = 0; i < m_records.size(); ++i) {
+        recomputeCacheAt(i);
+        if (isVolatile(m_records[i])) {
+            m_volatile.insert(m_records[i].hash);
+        }
     }
 }
 
@@ -300,15 +348,19 @@ void WalletTxStore::insertLocked(std::vector<TransactionRecord> records)
     const std::size_t insertIdx = static_cast<std::size_t>(pos - m_records.begin());
     const std::size_t count = records.size();
 
-    // Shift the index BEFORE splicing the vector (the shift uses logical
-    // positions), then splice, then add the new index entries — keeping the
-    // index consistent at every observable point. The records are copied into the
-    // store (the authoritative full-records table) and then moved into the event.
-    shiftIndex(insertIdx, static_cast<std::ptrdiff_t>(count));
-    m_records.insert(m_records.begin() + insertIdx, records.begin(), records.end());
-    // Splice the projector caches at the same position/order (PR4-fix F), computed
-    // from `records` before it is moved into the event below. Done BEFORE the
-    // cursor drive, which reads the cache through applyStoreInsert.
+    // EVERYTHING THAT CAN ALLOCATE HAPPENS BEFORE ANYTHING IS MUTATED.
+    //
+    // This used to interleave the two: shiftIndex() rewrote m_by_hash, then
+    // m_records was spliced, then the projector caches were BUILT (allocating) and
+    // spliced. A bad_alloc anywhere in that run left the store permanently
+    // inconsistent -- an index shifted for records that were never inserted, or
+    // caches at a different length than m_records -- which is exactly what feeds
+    // the unchecked subscripts elsewhere in this file. There is no unwinding that
+    // repairs it, because the damage is to the invariant between four containers.
+    //
+    // So: project first, reserve capacity in all four containers, and only then
+    // mutate. After the reserves, the vector splices do not allocate (they move
+    // existing elements within capacity) and the map has its buckets already.
     std::vector<TxFilterFields> new_fields;
     std::vector<SortKey> new_keys;
     new_fields.reserve(count);
@@ -317,10 +369,39 @@ void WalletTxStore::insertLocked(std::vector<TransactionRecord> records)
         new_fields.push_back(projectFields(r));
         new_keys.push_back(projectKeys(r));
     }
-    m_fields_cache.insert(m_fields_cache.begin() + insertIdx, new_fields.begin(), new_fields.end());
-    m_keys_cache.insert(m_keys_cache.begin() + insertIdx, new_keys.begin(), new_keys.end());
-    for (std::size_t k = 0; k < count; ++k) {
-        m_by_hash.emplace(hash, insertIdx + k);
+
+    m_records.reserve(m_records.size() + count);
+    m_fields_cache.reserve(m_fields_cache.size() + count);
+    m_keys_cache.reserve(m_keys_cache.size() + count);
+    m_by_hash.reserve(m_by_hash.size() + count);
+
+    // From here the sequence is treated as one transaction. A throw would still be
+    // possible in principle (a map node allocation), and the containers are
+    // cross-dependent, so recover by rebuilding everything derived from m_records
+    // -- which is the authoritative table and is fully updated by then -- rather
+    // than leaving a half-applied insert behind.
+    try {
+        // Shift the index BEFORE splicing the vector (the shift uses logical
+        // positions), then splice, then add the new index entries — keeping the
+        // index consistent at every observable point. The records are copied into
+        // the store (the authoritative full-records table) and then moved into the
+        // event.
+        shiftIndex(insertIdx, static_cast<std::ptrdiff_t>(count));
+        m_records.insert(m_records.begin() + insertIdx, records.begin(), records.end());
+        // Splice the projector caches at the same position/order (PR4-fix F). Done
+        // BEFORE the cursor drive, which reads the cache through applyStoreInsert.
+        m_fields_cache.insert(m_fields_cache.begin() + insertIdx, new_fields.begin(), new_fields.end());
+        m_keys_cache.insert(m_keys_cache.begin() + insertIdx, new_keys.begin(), new_keys.end());
+        for (std::size_t k = 0; k < count; ++k) {
+            m_by_hash.emplace(hash, insertIdx + k);
+        }
+    } catch (...) {
+        LogPrintf("ERROR: %s: exception while splicing %u record(s) for hash %s; rebuilding the "
+                  "index and projector caches from the record table",
+                  __func__, static_cast<unsigned int>(count), hash.GetHex());
+        rebuildIndex();
+        rebuildCaches();
+        throw;
     }
     updateVolatileForHash(hash);   // track for the per-tip status refresh (PR4-fix A)
 
@@ -541,15 +622,7 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
         // Rebuild the projector caches and the volatile set parallel to m_records
         // (PR4-fix F/A) BEFORE the cursors rebuild — cursor.rebuild() reads the
         // cache through the projectors.
-        m_fields_cache.assign(m_records.size(), TxFilterFields{});
-        m_keys_cache.assign(m_records.size(), SortKey{});
-        m_volatile.clear();
-        for (std::size_t i = 0; i < m_records.size(); ++i) {
-            recomputeCacheAt(i);
-            if (isVolatile(m_records[i])) {
-                m_volatile.insert(m_records[i].hash);
-            }
-        }
+        rebuildCaches();
         // Rebuild each registered cursor over the new m_records. Their Reset
         // events are pushed AFTER the drain below (which discards pre-rebuild
         // events), so the windowed consumers refill against the new snapshot.

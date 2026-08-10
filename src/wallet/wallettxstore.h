@@ -301,6 +301,12 @@ private:
     void shiftIndex(std::size_t from, std::ptrdiff_t delta) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
     void rebuildIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_store);
 
+    //! Rebuild the projector caches and the volatile set from m_records, the
+    //! authoritative table. Used by prime() for a full reload, and by
+    //! insertLocked()'s failure path to restore the cross-container invariant if a
+    //! splice throws part-way through.
+    void rebuildCaches() EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
     //! Translate one cursor's served-window CursorDeltas into WalletEvents for
     //! \p viewId (Reset/Insert/Remove/Change), fetching records from m_records for
     //! the inserted/changed served rows. Caller holds cs_store.
