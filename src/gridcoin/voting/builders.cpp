@@ -1453,7 +1453,15 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
     }
 
     // If a poll of the same title (not case sensitive) is already in the registry, refuse to create the new poll.
-    if (GRC::GetPollRegistry().TryByTitle(boost::to_lower_copy(m_poll->m_title))) {
+    //
+    // The lock is scoped to the lookup: TryByTitle reads the registry's guarded
+    // map, and only the boolean "does it exist" outlives the scope, so nothing
+    // that could be invalidated afterwards escapes. (It is a check-then-act
+    // against a registry another thread can mutate, but the authoritative
+    // duplicate-title rejection is in contract validation at block acceptance;
+    // this check exists to fail the user's submission early with a clear message.)
+    if (WITH_LOCK(GRC::PollRegistry::cs_poll_registry,
+                  return GRC::GetPollRegistry().TryByTitle(boost::to_lower_copy(m_poll->m_title)) != nullptr)) {
         throw VotingError(_("Poll with that title already exists. Please choose another title."));
     }
 

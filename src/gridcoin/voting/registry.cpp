@@ -330,6 +330,11 @@ PollRegistry g_poll_registry;
 // Global Functions
 // -----------------------------------------------------------------------------
 
+// Definition of the static registry lock. Declared static so the thread-safety
+// annotations on the nested Sequence/Iterator classes resolve to one
+// unambiguous object (see the declaration in registry.h).
+CCriticalSection PollRegistry::cs_poll_registry;
+
 PollRegistry& GRC::GetPollRegistry()
 {
     return g_poll_registry;
@@ -337,7 +342,7 @@ PollRegistry& GRC::GetPollRegistry()
 
 std::string GRC::GetCurrentPollTitle()
 {
-    LOCK(GetPollRegistry().cs_poll_registry);
+    LOCK(PollRegistry::cs_poll_registry);
 
     if (const PollReference* poll_ref = GetPollRegistry().TryLatestActive()) {
         return poll_ref->Title();
@@ -884,8 +889,11 @@ void PollReference::UnlinkVote(const uint256 txid)
 // -----------------------------------------------------------------------------
 const PollRegistry::Sequence PollRegistry::Polls() const
 {
-    LOCK(GetPollRegistry().cs_poll_registry);
-
+    // Deliberately does NOT take cs_poll_registry. It used to, which was
+    // actively misleading: the returned Sequence holds a reference to the
+    // guarded m_polls map, so the lock has to be held for the whole traversal,
+    // and taking it here only covered the construction. EXCLUSIVE_LOCKS_REQUIRED
+    // on the declaration now makes the caller's obligation checkable.
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wthread-safety-reference"
