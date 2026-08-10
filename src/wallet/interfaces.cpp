@@ -937,10 +937,35 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
     // under cs_wallet. In the multiprocess build that emission is a blocking proxy
     // call into the GUI, so a front end that is hung rather than dead would pin
     // the node's wallet lock for as long as it stays hung -- stalling the stake
-    // miner and every other wallet operation behind it. Nothing here needs the
-    // check and the write to be atomic: SetAddressBookName is an unconditional
-    // assignment, so a concurrent writer racing between the two phases just means
-    // the last write wins, exactly as it would have before.
+    // miner and every other wallet operation behind it.
+    //
+    // THIS IS NOT A TOCTOU, and the split should not be "fixed" back. Splitting a
+    // check from its write across a dropped lock is normally exactly that bug, so
+    // here is why this instance is not:
+    //
+    //   The VALUE WRITTEN DOES NOT DEPEND ON THE VALUE READ. We write rcp.label,
+    //   which comes from the caller's send request and is fixed before the lock is
+    //   ever taken. The read decides only WHETHER to write, never WHAT. A classic
+    //   TOCTOU needs the write to be derived from -- or conditional on the
+    //   continued truth of -- the observation (read balance, then spend it; stat a
+    //   path, then open it). Neither holds here.
+    //
+    // Both interleavings against a concurrent writer produce exactly what the old
+    // per-recipient locking produced:
+    //
+    //   * We decided to write, someone else writes in between -> we still write
+    //     the user's label. Under the old lock that writer simply landed before or
+    //     after us; last write wins either way, and it is the same last write.
+    //   * We decided to skip (label already matched), someone else changes it ->
+    //     we skip. The old version skipped too, and that writer's value landed
+    //     regardless. Identical end state.
+    //
+    // There is no ordering the dropped lock admits that the held lock excluded.
+    // The only thing genuinely given up is that the address-book map may be
+    // observed mid-update by an unrelated reader between the two phases -- which
+    // was already true, because SetAddressBookName takes and releases cs_wallet
+    // per call, so the old loop was never one atomic transaction across recipients
+    // either.
     std::vector<std::pair<CTxDestination, std::string>> address_book_updates;
 
     {
