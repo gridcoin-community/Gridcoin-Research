@@ -359,6 +359,11 @@ bool AppInit(int argc, char* argv[])
                 std::string address = "unix";
                 ipc->listenAddress(address);
                 LogPrintf("IPC: serving GUI connections on %s\n", address);
+                // Say which access controls are actually in force, rather than
+                // leaving an operator to infer it from the platform. The uid check
+                // is real on POSIX and absent on Windows; debug.log should not
+                // require the reader to know that.
+                LogPrintf("IPC: peer-credential enforcement: %s\n", ipc::PeerCredentialEnforcement());
             } catch (const std::exception& e) {
                 // Fail loudly and fatally. Previously this was logged and the
                 // daemon carried on as a non-multiprocess node -- but a fresh
