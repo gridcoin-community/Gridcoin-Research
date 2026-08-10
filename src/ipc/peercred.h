@@ -31,8 +31,10 @@ bool PeerUidAllowed(uid_t peer_uid, uid_t self_uid);
 //!
 //! Usable from BOTH ends of the socket. The node calls it on each accepted
 //! connection; the GUI calls it on its own connected fd before presenting the
-//! cookie, so a same-uid impostor that won the race to bind node.sock is refused
-//! before it can harvest the bearer token.
+//! cookie, so a FOREIGN-uid impostor that won the race to bind node.sock is
+//! refused before it can harvest the bearer token. A SAME-uid impostor is not
+//! excluded by this and cannot be -- nothing at the OS level distinguishes two
+//! processes of the same user.
 //!
 //! FAILS CLOSED on POSIX (changed 2026-08: it previously returned true on every
 //! error path). A peer we cannot inspect is refused, because "could not inspect"
