@@ -194,11 +194,35 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
     tmp += ".tmp";
     const std::string tmp_str = tmp.string();
 
-    // O_CLOEXEC: don't leak this fd into any exec'd child. O_NOFOLLOW: the temp
-    // path must not be a pre-planted symlink (this holds secrets: the cookie).
-    int fd = ::open(tmp_str.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0600);
+    // Clear any leftover temp file first, then create exclusively. O_EXCL is what
+    // makes the mode argument mean something: without it, O_CREAT|O_TRUNC happily
+    // opens a file that already exists and writes the cookie into it, keeping
+    // whatever owner and permissions that file had. O_NOFOLLOW rules out a
+    // pre-planted symlink but says nothing about a pre-planted HARD LINK or a
+    // plain attacker-owned regular file -- either would have captured the session
+    // cookie on a datadir the user has widened. (WriteCookie also runs before the
+    // datadir is hardened, and the datadir is only hardened at creation, so this
+    // cannot lean on directory permissions.)
+    boost::system::error_code remove_ec;
+    fs::remove(tmp, remove_ec);
+    if (remove_ec) {
+        throw std::runtime_error("Failed to remove a leftover IPC cookie temp file " + tmp_str +
+                                 ": " + remove_ec.message());
+    }
+
+    // O_CLOEXEC: don't leak this fd into any exec'd child.
+    int fd = ::open(tmp_str.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
     if (fd == -1) {
-        throw std::system_error(errno, std::system_category(), "open " + tmp_str);
+        const int e = errno;
+        if (e == EEXIST) {
+            // Lost a race against something re-creating the path between the
+            // remove above and this open. Refuse: retrying would be racing an
+            // adversary for the right to write a secret.
+            throw std::runtime_error("Refusing to write the IPC cookie: " + tmp_str +
+                                     " reappeared between removal and exclusive creation. Another "
+                                     "process is writing to the data directory.");
+        }
+        throw std::system_error(e, std::system_category(), "open " + tmp_str);
     }
     // The temp file now holds (or will hold) the cookie: every exit that is not
     // the successful rename must delete it rather than leave the secret on disk.
