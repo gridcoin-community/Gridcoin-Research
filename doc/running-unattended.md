@@ -92,7 +92,7 @@ cd "C:\Program Files\GridcoinResearch\windows"
 ### 2. Run the core as a boot task
 
 ```powershell
-.\Install-GridcoinCoreTask.ps1 -DataDir "$env:APPDATA\GridcoinResearch"
+.\Install-GridcoinCoreTask.ps1
 #   enter your Windows LOGIN password at the prompt (so the task can start at boot)
 Start-ScheduledTask -TaskPath '\Gridcoin\' -TaskName 'Core-Start'
 ```

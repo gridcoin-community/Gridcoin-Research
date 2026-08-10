@@ -33,7 +33,11 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 cd "C:\Program Files\GridcoinResearch\windows"
 
 # Run-as the account that owns the wallet; it will prompt for that account's Windows password.
-.\Install-GridcoinCoreTask.ps1 -DataDir "$env:APPDATA\GridcoinResearch"
+# Do NOT pass -DataDir for a default install: the daemon resolves the Windows default itself
+# (CSIDL_APPDATA\GridcoinResearch) and creates it owner-only on first run, whereas an explicit
+# -datadir takes the branch that refuses to create a missing directory. Pass -DataDir only for a
+# genuinely custom location (which the wallet's own chooser will have created already).
+.\Install-GridcoinCoreTask.ps1
 
 Start-ScheduledTask -TaskPath '\Gridcoin\' -TaskName 'Core-Start'   # start the core now
 .\Start-GridcoinGui.ps1                                             # attach the GUI
