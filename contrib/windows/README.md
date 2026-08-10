@@ -109,8 +109,11 @@ Configuration → Windows Settings → Scripts → **Shutdown**, and add a `.cmd
 `Core-Start` runs the core through a generated launcher (`core-autostart.cmd`) that
 retries **once, after a 2-minute wait**, if the daemon exits non-zero — the analogue of
 the Linux unit's `Restart=on-failure`. A *graceful* stop exits 0 and is not retried;
-only a non-zero exit is. Each attempt's stderr is captured to `core-start.err.log` in
-the datadir, so a recurrence is diagnosable.
+only a non-zero exit is. Each attempt's stderr is captured to
+`%TEMP%\gridcoin-core-start.err.log` (deliberately NOT inside the data directory: cmd
+evaluates the redirect before running the daemon, so writing there would force the
+launcher to pre-create the data directory, and the daemon only applies its owner-only
+DACL to a directory it creates itself).
 
 The retry deliberately lives in the launcher rather than in the task: Task Scheduler's
 own restart-on-failure does **not** fire on a program's non-zero exit (confirmed
