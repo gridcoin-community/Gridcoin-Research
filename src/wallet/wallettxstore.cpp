@@ -429,25 +429,6 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
 {
     std::vector<TransactionRecord> built;
 
-    // Hold cs_main + cs_wallet across the whole rebuild AND the queue drain,
-    // exactly as the old loadWallet held them for its scan. cs_main is the
-    // load-bearing exclusion lock here: EVERY producer of insert/remove holds
-    // cs_main — CT_NEW/CT_UPDATED under cs_main+cs_wallet, and BOTH CT_DELETED
-    // sites (ReorganizeChain in main.cpp, ResendWalletTransactions in
-    // wallet.cpp) under cs_main even though they do NOT hold cs_wallet at the
-    // fire site. So holding cs_main across both the index rebuild and the
-    // queue drain fully excludes producers: no event can be queued between the
-    // two, which makes the rebuilt index, the re-armed cursors, and the emptied
-    // queue mutually consistent.
-    LOCK2(cs_main, m_wallet->cs_wallet);
-
-    // Quiesce the store-worker (PR2.5) before clearing/rebuilding. The worker is
-    // an independent store mutator that cs_main/cs_wallet does NOT exclude, so
-    // signal a rebuild and wait for it to park. It never needs cs_main/cs_wallet
-    // (insert/removeTransaction take only cs_store), so waiting for it here while
-    // we hold both cannot deadlock. m_started guards the pre-start() first reload
-    // (no worker yet → nothing to wait for).
-    //
     // The park is released by an RAII guard, NOT by falling off the end of this
     // function. m_rebuilding is the worker's wait predicate, so if anything below
     // throws — and plenty can: decomposeTransaction calls GetCredit/GetDebit,
@@ -458,6 +439,10 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
     // applyChainTipRefresh kept refreshing already-stored rows: the GUI would show
     // existing transactions ripening normally and never show a new one again
     // (#3257).
+    //
+    // Declared before the LOCK2 below so it is destroyed AFTER those locks are
+    // released: the guard takes cs_intake, and producers take cs_intake while
+    // holding cs_main, so releasing in this order never nests the two.
     struct RebuildPark {
         WalletTxStore& s;
         ~RebuildPark()
@@ -469,6 +454,22 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
         }
     } park_guard{*this};
 
+    // Quiesce the store-worker (PR2.5) BEFORE taking cs_main/cs_wallet. The worker
+    // is an independent store mutator that those locks do not exclude, so it has
+    // to be parked either way — but the wait must not happen underneath them.
+    //
+    // It used to: the LOCK2 came first and this wait ran while holding both. That
+    // was sound only because the worker happens to need nothing but cs_store to
+    // reach its park point, and nothing enforced it. The day any worker path
+    // acquired cs_main — held here by this thread, so a recursive mutex does not
+    // help another thread — the worker could never park, this wait would never
+    // return, and the node would sit on cs_main forever: no RPC, no P2P, no
+    // staking. Parking first removes the hazard by construction instead of
+    // relying on a property a future refactor could quietly break. It also stops
+    // the wait itself from counting against cs_main hold time.
+    //
+    // m_started guards the pre-start() first reload (no worker yet → nothing to
+    // wait for).
     {
         WAIT_LOCK(cs_intake, ilock);
         m_rebuilding = true;
@@ -476,8 +477,34 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
         while (m_started && !m_worker_parked) {
             m_idle_cv.wait(ilock);  // wait until the worker confirms it has parked
         }
-        m_intake.clear();           // pre-rebuild intake is superseded by the scan below
     }
+
+    // Hold cs_main + cs_wallet across the whole rebuild AND the queue drain,
+    // exactly as the old loadWallet held them for its scan. cs_main is the
+    // load-bearing exclusion lock here: EVERY producer of insert/remove holds
+    // cs_main — CT_NEW/CT_UPDATED under cs_main+cs_wallet, and BOTH CT_DELETED
+    // sites (ReorganizeChain in main.cpp, ResendWalletTransactions in
+    // wallet.cpp) under cs_main even though they do NOT hold cs_wallet at the
+    // fire site. So holding cs_main across both the index rebuild and the
+    // queue drain fully excludes producers: no event can be queued between the
+    // two, which makes the rebuilt index, the re-armed cursors, and the emptied
+    // queue mutually consistent.
+    //
+    // NOTE this is a full wallet rescan under cs_main, and it is reachable at
+    // runtime from the GUI (WalletModel::reloadTransactionView, wired to the
+    // datetime-cutoff option). In a multiprocess split that blocks the NODE's
+    // cs_main for the duration. It is inherent to the current design — the cutoff
+    // is applied at build time, so records below it are never stored and widening
+    // it genuinely requires a rescan. Storing every record and filtering in the
+    // cursors would remove the rescan entirely; that is a windowed-model change,
+    // not a locking fix, and is deliberately not attempted here.
+    LOCK2(cs_main, m_wallet->cs_wallet);
+
+    // Discard intake queued between the park above and cs_main here. Producers
+    // hold cs_main, so once we own it nothing further can be enqueued, and the
+    // clear + rebuild below observe the same quiescent state the old ordering
+    // gave (which cleared under both locks).
+    WITH_LOCK(cs_intake, m_intake.clear());
 
     built.reserve(m_wallet->mapWallet.size() * 2);
     for (auto it = m_wallet->mapWallet.begin(); it != m_wallet->mapWallet.end(); ++it) {
