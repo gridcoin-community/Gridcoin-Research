@@ -1,6 +1,5 @@
 #include "aboutdialog.h"
 #include "qt/decoration.h"
-#include "qt/guilog.h"
 #include "ui_aboutdialog.h"
 #include "clientmodel.h"
 #include "updatedialog.h"
@@ -98,29 +97,22 @@ void AboutDialog::setIpcConnectionInfo(const GuiIpcInfo& info)
 
 AboutDialog::~AboutDialog()
 {
-    // Join the version-check worker before this dialog goes away. The worker
-    // captures the raw interfaces::Node* by value and does a blocking libcurl GET
-    // (up to a 10 s connect timeout), while the dialog itself is a stack object in
-    // BitcoinGUI::aboutClicked(). Nothing else waits for that worker: without this
-    // join it is reaped only at process exit, so opening About, starting a check,
-    // closing it, and quitting inside the timeout leaves it dereferencing a Node
-    // that StartGridcoinQt's teardown has already destroyed -- the same shape as
-    // the teardown use-after-free fixed in #3163. QtConcurrent::run() futures
-    // cannot be cancelled once started, so waiting is the only option.
+    // Sever the result signal, but deliberately do NOT wait for the worker here.
     //
-    // Disconnect first so finished() cannot re-enter versionCheckFinished() on a
-    // half-destroyed dialog, and wrap the wait: waitForFinished() RETHROWS an
-    // exception the worker stored (a daemon disconnect mid-GET does exactly that),
-    // and a throw escaping a destructor during unwinding is std::terminate.
+    // The worker captures only the interfaces::Node* -- not `this` -- so it never
+    // touches the dialog; the sole path back into dialog state is the watcher's
+    // finished() -> versionCheckFinished(), which this disconnect closes. Destroying
+    // a QFutureWatcher while its future is still running is safe (the QFuture is
+    // refcounted and the watcher simply stops reporting), so closing this dialog is
+    // not the lifetime hazard.
+    //
+    // The hazard is the NODE: the worker dereferences it, and it is destroyed by
+    // StartGridcoinQt's teardown. Waiting here would only freeze the GUI thread for
+    // up to the libcurl connect timeout (~10 s) every time a user closes the dialog
+    // mid-check, while doing nothing about the case that actually matters. The join
+    // therefore lives at teardown, immediately before the node is destroyed --
+    // rarer, and already a waiting context.
     m_version_check_watcher.disconnect();
-
-    try {
-        m_version_check_watcher.waitForFinished();
-    } catch (const std::exception& e) {
-        GUILogPrintf("WARN: %s: the version-check worker ended with an exception: %s", __func__, e.what());
-    } catch (...) {
-        GUILogPrintf("WARN: %s: the version-check worker ended with an unknown exception", __func__);
-    }
 
     delete ui;
 }

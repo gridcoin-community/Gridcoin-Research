@@ -52,6 +52,7 @@
 #include <atomic>
 #ifndef WIN32
 #include <QSocketNotifier>
+#include <QThreadPool>
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
@@ -1502,6 +1503,17 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 window.setPSGTPoolContext(nullptr);
                 guiref = nullptr;
             }
+
+            // Drain any still-running pooled worker BEFORE the interfaces built from
+            // this connection are destroyed below. The About dialog's version check
+            // runs on the global QThreadPool and dereferences interfaces::Node; it is
+            // deliberately NOT joined when that dialog closes (that would freeze the
+            // GUI thread for the libcurl timeout on an ordinary close -- see
+            // ~AboutDialog), so this is the point where it has to be reaped. Without
+            // it, quitting inside the timeout leaves a worker calling into a
+            // destroyed Node -- the teardown use-after-free shape fixed in #3163.
+            // Idempotent with respect to the workers already joined above.
+            QThreadPool::globalInstance()->waitForDone();
             // Shut down the core and its threads (but don't exit Bitcoin-Qt
             // here). Only in the monolithic build: there the core runs in this
             // process. In the multiprocess build the core lives in the daemon
