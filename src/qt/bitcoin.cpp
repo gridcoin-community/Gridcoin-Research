@@ -530,14 +530,47 @@ public:
                 return true;
             }
             if (g_daemon_connection_lost.load()) {
-                // Arm (b). Keep swallowing -- a fatal modal on a front end that is
-                // already on its way out is exactly what the disconnect design
-                // forbids -- but never SILENTLY. Same reasoning as
-                // interfaces::GuardNotify (src/interfaces/handler.cpp): this arm
-                // matches on GUI *state*, not on the exception, so it also catches
-                // every unrelated bug that happens to be thrown between the latch
-                // and the event loop ending. Log at the default level so such a bug
-                // cannot vanish in production merely because of when it landed.
+                // ARM (b) -- STATE-BASED, and deliberately broader than arm (a).
+                //
+                // This matches on the GUI already knowing the connection is lost,
+                // NOT on what was thrown. So it necessarily also catches unrelated
+                // exceptions that happen to be raised in that window. That is a
+                // real trade-off and it was made knowingly; the reasoning, in full,
+                // because the alternative looks more "correct" at a glance:
+                //
+                // WHY NOT SURFACE IT (route to handleRunawayException instead)?
+                // Two independent reasons, either sufficient on its own:
+                //   1. handleRunawayException raises a MODAL. On a headless,
+                //      remote, or unattended front end -- exactly the deployments
+                //      the multiprocess split exists to serve -- a modal nobody
+                //      can dismiss hangs the process forever. A GUI whose node has
+                //      died must exit, not wait for a click.
+                //   2. handleRunawayException then calls exit(1), which terminates
+                //      WITHOUT unwinding while the capnp event-loop thread is still
+                //      running. That is its own crash surface, and it is strictly
+                //      worse than the clean quit below.
+                //
+                // WHY MATCH ON STATE RATHER THAN ONLY ON THE MESSAGE (arm (a))?
+                // libmultiprocess's raise text is not a stable contract -- it is a
+                // log string that upstream may reword at any time. Depending on it
+                // alone would mean a future subtree update silently converts every
+                // disconnect into reason 1 above. Arm (a) is the precise test; arm
+                // (b) is the backstop that keeps the failure mode safe when the
+                // precise test stops matching.
+                //
+                // WHAT WE GIVE UP, AND WHY IT IS ACCEPTABLE: a genuine bug thrown
+                // in this window does not reach handleRunawayException. It is NOT
+                // lost, though -- it is logged below at the DEFAULT level (not a
+                // debug category), so it appears in every user's debug.log without
+                // any flag. And the window is small and one-way: it opens only once
+                // the daemon is already gone and the GUI is committed to shutting
+                // down, so there is no user-visible session left to protect. Same
+                // reasoning as interfaces::GuardNotify (src/interfaces/handler.cpp),
+                // which draws the identical line for notification callbacks.
+                //
+                // If you are tempted to narrow this: re-read reason 1. Narrowing
+                // trades a logged-but-swallowed bug for a front end that can hang
+                // unattended, which is the worse failure.
                 GUILogPrintf("WARN: %s: swallowed a non-disconnect exception raised after the "
                              "daemon connection was lost: %s", __func__, msg);
                 // Re-post the quit as well: this arm only runs while the GUI is
@@ -1549,6 +1582,22 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         // handleRunawayException's exit(1), which skips unwinding while the capnp
         // loop thread is still live. Fall through to the ordinary return below
         // instead -- the same clean exit the on_disconnect path produces.
+        // The `|| g_daemon_connection_lost` half is the same state-based backstop
+        // as arm (b) in GridcoinApplication::notify() above, and carries the same
+        // trade-off: once the connection is known lost, an unrelated exception
+        // raised here is logged and swallowed rather than surfaced. See the long
+        // comment at that arm for why surfacing is the worse option (modal on an
+        // unattended front end; exit(1) without unwinding while the capnp loop
+        // thread is live) and why matching on state is necessary at all
+        // (libmultiprocess's raise text is not a stable contract).
+        //
+        // ONE DIFFERENCE WORTH KNOWING: this path falls through to the ordinary
+        // return below, so the process exits EXIT_SUCCESS. That is intentional --
+        // "the node this GUI was attached to went away" is a normal, expected end
+        // to a multiprocess GUI session, not a failure of the GUI, and a supervisor
+        // restarting on non-zero would flap. The consequence is that a real bug
+        // caught by the state arm also exits 0; the WARN in the log is what
+        // distinguishes the two, not the exit code.
         RemoveGuiTerminationHandler(); // no-op if exec() already did it
         if (IsDaemonDisconnectMessage(e.what()) || g_daemon_connection_lost.load()) {
             GUILogPrintf("IPC: the daemon connection was lost outside the GUI event loop "

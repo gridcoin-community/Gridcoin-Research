@@ -989,7 +989,16 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
     }
 
     updateBeaconIcon();
-    connect(researcherModel, &ResearcherModel::beaconChanged, this, &BitcoinGUI::updateBeaconIcon);
+
+    // Qt::UniqueConnection: this runs on EVERY call with a non-null model, so a
+    // second attach would otherwise stack a duplicate connection and fire
+    // updateBeaconIcon() once per attach for every beaconChanged signal. Only one
+    // call site exists today -- this is closing the latent edge, not fixing a live
+    // duplicate -- so that a future re-attach path cannot introduce one silently.
+    // (Valid here only because the slot is a member-function pointer;
+    // UniqueConnection is not supported for lambda targets.)
+    connect(researcherModel, &ResearcherModel::beaconChanged, this, &BitcoinGUI::updateBeaconIcon,
+            Qt::UniqueConnection);
 
     if (!m_beacon_status_update_timer) {
         m_beacon_status_update_timer = new QTimer(this);
