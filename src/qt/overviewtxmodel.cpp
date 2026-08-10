@@ -171,10 +171,11 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
             } else if constexpr (std::is_same_v<P, GRC::RowsChangedPayload>) {
                 if (payload.viewId != GRC::VIEW_OVERVIEW) return;
                 if (seqno <= m_applied_seqno) return;
-                // The payload carries no records (a Change does not move the row),
-                // so re-fetch the changed slice from the cursor and refresh.
-                const std::vector<TransactionRecord> fresh =
-                    store.getRows(GRC::VIEW_OVERVIEW, payload.first, payload.count).records;
+                // Apply the records the producer sampled at emission. Do NOT
+                // re-fetch: that sampled a possibly-newer cursor state than the
+                // structural position applied so far, and cost a synchronous IPC
+                // round trip per change (see GRC::RowsChangedPayload).
+                const std::vector<TransactionRecord>& fresh = payload.records;
                 for (std::size_t i = 0; i < fresh.size()
                         && static_cast<std::size_t>(payload.first) + i < m_rows.size(); ++i) {
                     m_rows[static_cast<std::size_t>(payload.first) + i] = fresh[i];

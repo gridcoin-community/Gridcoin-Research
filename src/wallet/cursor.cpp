@@ -233,7 +233,10 @@ std::vector<CursorDelta> Cursor::applyStatusUpdate(std::size_t P)
 
     const std::size_t served_full = std::min(size_full, cap_v);
     if (new_slot == old_pos) {                        // unchanged slot → just re-read
-        if (old_pos < served_full) out.push_back({CursorDelta::Change, static_cast<int>(old_pos), 1, {}});
+        // Stamp the absolute record index, as Insert does: the store samples the
+        // changed row from it at emission so the consumer never has to fetch the
+        // content itself when the event lands (see GRC::RowsChangedPayload).
+        if (old_pos < served_full) out.push_back({CursorDelta::Change, static_cast<int>(old_pos), 1, {P}});
         return out;
     }
     const bool old_vis = old_pos < served_full;

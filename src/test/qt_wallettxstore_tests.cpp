@@ -256,9 +256,11 @@ struct Replica
                 rows.erase(rows.begin() + p->position, rows.begin() + p->position + p->count);
             } else if (const auto* p = std::get_if<GRC::RowsChangedPayload>(&ev.payload)) {
                 if (p->viewId != viewId) continue;
-                // A Change carries no records; the consumers refetch the slice.
-                const std::vector<RowKey> fresh =
-                    keysOf(store.getRows(viewId, p->first, p->count).records);
+                // Apply the records the producer stamped on the payload, exactly as
+                // the real consumers do. This replica would still "work" if it
+                // refetched, which is why the dedicated test below asserts the
+                // payload carries them at all.
+                const std::vector<RowKey> fresh = keysOf(p->records);
                 for (std::size_t i = 0; i < fresh.size()
                         && static_cast<std::size_t>(p->first) + i < rows.size(); ++i) {
                     rows[static_cast<std::size_t>(p->first) + i] = fresh[i];
@@ -610,6 +612,70 @@ BOOST_AUTO_TEST_CASE(multiPartInsertDeltaPayloadsMatchServedSlots)
         checkReplicaMatchesStore(store, detail);
         checkReplicaMatchesStore(store, overview);
     }
+}
+
+// A Change payload must CARRY the changed rows, sampled by the producer at
+// emission -- not merely name a range for the consumer to fetch later.
+//
+// Two things went wrong with the fetch-at-apply-time form. The consumer read
+// whatever the cursor held when the event was applied, which inside a drained
+// batch can be a newer state than the structural position it has applied so far,
+// so future content landed in rows that had not moved yet. And every Change cost
+// a getRows() on the consumer's thread -- a synchronous IPC round trip in the
+// multiprocess build, taking cs_store, which the refresh that produced it is
+// holding.
+//
+// The Replica used by the other tests in this file now applies p->records, so a
+// regression to empty payloads would show up there as a stale replica. This test
+// pins the payload directly, so the reason is unambiguous when it fails.
+BOOST_AUTO_TEST_CASE(changePayloadCarriesTheChangedRecords)
+{
+    WalletEventQueue q;
+    WalletTxStore store(nullptr, q);
+    store.start();
+
+    registerProductionViews(store);
+    q.drain();
+
+    for (int i = 0; i < kSeedRows; ++i) {
+        store.enqueueInsert(makePayment(hashOf(i), kBaseTime + i, kBaseHeight + i));
+    }
+    settle(q);
+    q.drain();
+
+    // Re-send one existing row with a changed credit. It keeps its time and hash,
+    // so it does not move: Cursor::applyStatusUpdate takes the same-slot branch and
+    // emits a Change rather than a Remove/Insert pair.
+    const int target = kSeedRows / 2;
+    std::vector<TransactionRecord> updated = makePayment(hashOf(target),
+                                                         kBaseTime + target,
+                                                         kBaseHeight + target);
+    updated.front().credit = 424242;
+    store.enqueueUpsert(std::move(updated));
+    settle(q);
+
+    bool saw_change = false;
+    for (const GRC::WalletEvent& ev : q.drain()) {
+        const auto* p = std::get_if<GRC::RowsChangedPayload>(&ev.payload);
+        if (!p || p->viewId != GRC::VIEW_DETAILED) continue;
+
+        saw_change = true;
+        // The payload is self-describing: one record per changed row.
+        BOOST_CHECK_EQUAL(p->records.size(), static_cast<std::size_t>(p->count));
+        BOOST_REQUIRE(!p->records.empty());
+        // And it is the NEW content, not a stale copy.
+        BOOST_CHECK_EQUAL(p->records.front().credit, 424242);
+        // The stamped record must match what the store serves at that position,
+        // which is what makes the consumer's replica converge without refetching.
+        const std::vector<TransactionRecord> served =
+            store.getRows(GRC::VIEW_DETAILED, p->first, p->count).records;
+        BOOST_REQUIRE_EQUAL(served.size(), p->records.size());
+        BOOST_CHECK(served.front().hash == p->records.front().hash);
+    }
+
+    // Non-vacuous: if the upsert stopped producing a Change at all, this test
+    // would otherwise pass while asserting nothing.
+    BOOST_REQUIRE_MESSAGE(saw_change, "the in-place upsert emitted no Change delta for VIEW_DETAILED");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

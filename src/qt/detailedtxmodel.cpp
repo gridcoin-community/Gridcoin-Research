@@ -393,10 +393,13 @@ void DetailedTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                              m_cache.applyRemove(m_sink, seqno, payload.position, payload.count));
             } else if constexpr (std::is_same_v<P, GRC::RowsChangedPayload>) {
                 if (payload.viewId != GRC::VIEW_DETAILED) return;
-                if (seqno <= m_cache.structuralSeqno()) return;   // skip the wasted getRows
-                // A Change carries no records (no reorder); refetch the changed slice.
-                const std::vector<TransactionRecord> fresh =
-                    store.getRows(GRC::VIEW_DETAILED, payload.first, payload.count).records;
+                if (seqno <= m_cache.structuralSeqno()) return;
+                // Apply the records the producer sampled at emission rather than
+                // fetching them now: an apply-time fetch reads a possibly-newer
+                // cursor state than the structural position applied so far, and
+                // costs a synchronous IPC round trip per change under multiprocess
+                // (see GRC::RowsChangedPayload).
+                const std::vector<TransactionRecord>& fresh = payload.records;
                 noteRejected("change", payload.first, payload.count,
                              m_cache.applyChange(m_sink, seqno, payload.first, payload.count, fresh));
             }
