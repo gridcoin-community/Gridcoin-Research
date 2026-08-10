@@ -92,12 +92,11 @@ public:
         //
         // ADVISORY, not Enforcing: this is defense-in-depth on top of the cookie,
         // not the security boundary (that is the node's accept path, which stays
-        // fail-closed). Client-side peer-credential support is less uniform --
-        // whether Darwin populates credentials on the CONNECTING side of an
-        // AF_UNIX socket is unconfirmed -- and refusing there would mean the GUI
-        // could never connect on macOS at all. A total regression is a worse
-        // outcome than an unverified extra check, so we refuse only on a definite
-        // foreign uid and log when we cannot tell.
+        // fail-closed). Refusing to start the GUI because a supplementary check
+        // could not be evaluated would trade a total outage for something the
+        // cookie already backstops, so we refuse only on a definite foreign uid and
+        // log when we cannot tell. Darwin was measured and DOES answer on the
+        // connecting side (see PeerCredPolicy) -- this is not a macOS workaround.
         if (!ipc::CheckPeerCredentials(fd, ipc::PeerCredPolicy::Advisory)) {
             throw std::runtime_error("The process listening on the multiprocess socket belongs to "
                                      "a different OS user; refusing to send the authentication "

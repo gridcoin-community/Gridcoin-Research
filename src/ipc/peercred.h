@@ -60,15 +60,20 @@ enum class PeerCredPolicy {
     //! cannot be read. For the GUI's own connected socket, where this is
     //! defense-in-depth layered on the cookie rather than the boundary itself.
     //!
-    //! The distinction exists because client-side peer-credential support is less
-    //! uniform than server-side. On Darwin, getpeereid() is backed by
-    //! LOCAL_PEERCRED and it is not established that xnu populates credentials on
-    //! the CONNECTING side of an AF_UNIX socket (FreeBSD documents both
-    //! directions; some BSD-derived kernels filled only the accepting side). Under
-    //! Enforcing that would mean the GUI could never connect on macOS at all --
-    //! trading a real, total regression for a defense-in-depth check that the
-    //! cookie already backstops. So the client asks, logs what it learns, and only
-    //! refuses when it positively knows the listener belongs to another user.
+    //! The distinction is about ROLE, not about any platform being broken: the
+    //! node's accept path is the security boundary, while the client's check is
+    //! defense-in-depth layered on the cookie. Refusing to start the GUI because a
+    //! supplementary check could not be evaluated trades a total outage for a
+    //! check the cookie already backstops.
+    //!
+    //! MEASURED (macOS 14.8.7, xnu-10063, 2026-08-10): Darwin DOES populate peer
+    //! credentials on both ends -- a bind/listen/connect probe read the correct uid
+    //! from the connecting fd as well as the accepted one. An earlier revision of
+    //! this comment speculated that it might not, and used that as the reason for
+    //! Advisory; that speculation was wrong and is recorded here so nobody
+    //! rediscovers it. Advisory is kept on the role argument above, not on a claim
+    //! that macOS cannot answer -- it can. Client-side support on other BSDs and on
+    //! future kj backends remains untested, which is what the policy still buys.
     Advisory,
 };
 
