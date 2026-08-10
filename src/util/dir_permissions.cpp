@@ -230,8 +230,7 @@ bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
     }
 #else
     if (::chmod(path.string().c_str(), 0700) != 0) {
-        error = "created " + path.string() + " but could not chmod it to 0700 (errno "
-              + std::to_string(errno) + ")";
+        error = strprintf("created %s but could not chmod it to 0700 (errno %d)", path.string(), errno);
         return false;
     }
 #endif

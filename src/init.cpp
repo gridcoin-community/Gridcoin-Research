@@ -15,6 +15,7 @@
 #include "wallet/walletdb.h"
 #include <key_io.h>
 #include "banman.h"
+#include "base58.h"
 #include "random.h"
 #include "rpc/server.h"
 #include "init.h"
@@ -386,12 +387,55 @@ bool static Bind(const CService &addr, bool fError = true) {
     return true;
 }
 
+//! Write the first-run configuration file, including RPC credentials.
+//!
+//! The credentials are not optional garnish. gridcoinresearchd soft-sets
+//! -server (gridcoinresearchd.cpp), so StartRPCThreads() runs on every daemon
+//! start, and it refuses to start with an empty rpcpassword. Without credentials
+//! here a genuinely fresh headless install cannot come up at all: the daemon
+//! creates its data directory, writes this file, and then exits telling the
+//! operator to put a password in the file it just wrote. That blocks exactly the
+//! deployment the multiprocess split is built around -- the core started first by
+//! a service manager (Windows scheduled task, systemd unit), where no GUI has run
+//! and no human is present to edit a config mid-boot.
+//!
+//! The generated password is what the error message itself recommends: a random
+//! 256-bit value, base58-encoded, with a fixed username that differs from it.
+//! Nobody needs to memorise it -- it exists so the local RPC endpoint is not
+//! open, and the autounlock helper reads it from this file.
+//!
+//! The file is created owner-only where the platform expresses that as a mode.
+//! On Windows it inherits the data directory's owner+SYSTEM DACL (see
+//! util::CreateOwnerOnlyDirectory), which is applied at creation and inheritable.
 static void CreateNewConfigFile()
 {
     fsbridge::ofstream myConfig;
     myConfig.open(GetConfigFile());
 
+    // Narrow the file BEFORE the password is written, not after: between creation
+    // and a trailing chmod the file would briefly sit at whatever the umask allows,
+    // and on a data directory the operator had previously widened that window is
+    // readable. On Windows there is no meaningful chmod, but the file inherits the
+    // data directory's owner+SYSTEM DACL from creation (util::CreateOwnerOnlyDirectory
+    // applies it inheritable), which closes the same window by a different route.
+#ifndef WIN32
+    if (::chmod(GetConfigFile().string().c_str(), 0600) != 0) {
+        LogPrintf("WARNING: %s: could not restrict %s to owner-only (errno %d); it will contain "
+                  "the generated RPC password", __func__, GetConfigFile().string(), errno);
+    }
+#endif
+
+    unsigned char rand_pwd[32];
+    GetRandBytes(rand_pwd);
+
     myConfig
+        << "# RPC credentials, generated on first run. The local RPC interface is\n"
+        << "# credential-protected even though it listens on localhost only; the\n"
+        << "# daemon will not start without them. Change them if you like, but do\n"
+        << "# not leave rpcpassword empty or equal to rpcuser.\n"
+        << "rpcuser=gridcoinrpc\n"
+        << "rpcpassword=" << EncodeBase58(rand_pwd) << "\n"
+        << "\n"
         << "addnode=addnode-us-central.cycy.me\n"
         << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
         << "addnode=gridcoin.network\n"
