@@ -721,7 +721,7 @@ UniValue listpolls(const UniValue& params)
 
     const bool active = params.size() > 0 ? !params[0].get_bool() : true;
 
-    LOCK(GetPollRegistry().cs_poll_registry);
+    LOCK(GRC::PollRegistry::cs_poll_registry);
 
     for (const auto& iter : GetPollRegistry().Polls().OnlyActive(active)) {
         if (const PollOption poll = iter->TryPollFromDisk()) {
@@ -760,7 +760,7 @@ UniValue getpollresults(const UniValue& params)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wthread-safety-analysis"
 #endif
-   if (const PollReference* ref = WITH_LOCK(GetPollRegistry().cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
+   if (const PollReference* ref = WITH_LOCK(GRC::PollRegistry::cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
         return PollResultToJson(*ref);
     }
 #if defined(__clang__)
@@ -858,7 +858,7 @@ UniValue vote(const UniValue& params)
     PollOption poll;
 
     {
-        LOCK(GetPollRegistry().cs_poll_registry);
+        LOCK(GRC::PollRegistry::cs_poll_registry);
 
         if (const PollReference* ref = GetPollRegistry().TryByTitle(title)) {
             poll = ref->TryReadFromDisk();
@@ -919,7 +919,7 @@ UniValue votebyid(const UniValue& params)
     PollOption poll;
 
     {
-        LOCK(GetPollRegistry().cs_poll_registry);
+        LOCK(GRC::PollRegistry::cs_poll_registry);
 
         if (const PollReference* ref = GetPollRegistry().TryByTxid(poll_id)) {
             poll = ref->TryReadFromDisk();
@@ -968,7 +968,7 @@ UniValue votedetails(const UniValue& params)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wthread-safety-analysis"
 #endif
-   if (const PollReference* ref = WITH_LOCK(GetPollRegistry().cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
+   if (const PollReference* ref = WITH_LOCK(GRC::PollRegistry::cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
         return VoteDetailsToJson(*ref);
     }
 #if defined(__clang__)
@@ -994,6 +994,15 @@ const RPCHelpMan& testpollnotification_helpman() { return testpollnotification_h
 UniValue testpollnotification(const UniValue& params)
 {
     const uint256 txid = uint256S(params[0].get_str());
+
+    // The lock covers the lookup AND the use. TryByTxid returns a raw pointer
+    // into the registry's guarded map, so without it a block disconnect carrying
+    // a poll contract (PollRegistry::Delete, on the validation thread) could erase
+    // the entry between the lookup and the Notify below, leaving this thread to
+    // dereference freed memory. Every other registry lookup in this file already
+    // holds it; this one was missed, and could not be caught by the analyzer until
+    // the lock requirements moved onto the declarations in registry.h.
+    LOCK(GRC::PollRegistry::cs_poll_registry);
 
     const PollReference* ref = GetPollRegistry().TryByTxid(txid);
 

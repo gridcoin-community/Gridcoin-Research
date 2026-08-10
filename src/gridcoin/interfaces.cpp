@@ -374,6 +374,15 @@ public:
     {
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
+        // Hold the registry lock across the whole check-then-commit sequence. The
+        // duplicate check and the ≤100% check below each used to take cs_lock
+        // separately from the NonContractAdd that acts on them, so a concurrent
+        // LoadLocalSideStakesFromConfig() (reachable on ThreadRPCServer via
+        // `changesettings`) landing in between meant two edits could each validate
+        // against ≤100% and still commit a total above it. cs_lock is recursive, so
+        // the individual registry calls below keep locking as they always did.
+        LOCK(registry.cs_lock);
+
         const CTxDestination destination = DecodeDestination(address);
         if (!IsValidDestination(destination)) {
             return Result(SideStakeEditStatus::INVALID_ADDRESS);
@@ -415,6 +424,10 @@ public:
     {
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
+        // See addLocal: the lookup, the ≤100% check and the commit must be one
+        // critical section or a concurrent config reload can slip between them.
+        LOCK(registry.cs_lock);
+
         GRC::SideStake original;
         if (!FindLocal(registry, address, original)) {
             return Result(SideStakeEditStatus::INVALID_ADDRESS);
@@ -452,6 +465,10 @@ public:
     {
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
+        // See addLocal: read-modify-write of an existing entry, so the lookup and
+        // the commit must not be separated.
+        LOCK(registry.cs_lock);
+
         GRC::SideStake original;
         if (!FindLocal(registry, address, original)) {
             return Result(SideStakeEditStatus::INVALID_ADDRESS);
@@ -479,6 +496,11 @@ public:
     SideStakeEditResult deleteLocal(const std::string& address) override
     {
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+        // See addLocal: without this, the entry can be replaced between the lookup
+        // and the delete, so the delete lands on a different entry than the one
+        // that was validated.
+        LOCK(registry.cs_lock);
 
         GRC::SideStake original;
         // Only local entries are deletable; a mandatory address is not found as
@@ -676,17 +698,33 @@ public:
 
     int64_t latestActivePollTime() override
     {
-        // The newest active poll's timestamp. This needs only cs_poll_registry:
+        // The newest active poll's timestamp. Needs only cs_poll_registry:
         // Polls().OnlyActive() filters on GetAdjustedTime() and PollReference::Time()
-        // reads a stored timestamp — neither touches cs_main — so it is not taken
-        // (avoiding needless cs_main contention). The sequence is built under
-        // cs_poll_registry (matching PollResultCache::BuildPollTable's Where()
-        // WITH_LOCK); the per-ref reads then run outside the registry lock as in
-        // that walk.
+        // reads a stored timestamp — neither touches cs_main — so cs_main is not
+        // taken, avoiding needless contention on it.
+        //
+        // The lock is held across the WHOLE walk, not just while building the
+        // sequence. This used to be a WITH_LOCK around Polls().OnlyActive() alone,
+        // which released cs_poll_registry at the end of that expression and then ran
+        // begin/end, operator++/!= and Ref() unlocked — every one of them
+        // EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry), over a GUARDED_BY map that
+        // PollRegistry::Delete erases from and Reset() clears. A block being
+        // disconnected on the validation thread while the GUI walked here was an
+        // iterator use-after-free.
+        //
+        // The old comment claimed this matched PollResultCache::BuildPollTable. It
+        // did not: BuildPollTable additionally holds a TraversalScope and rechecks
+        // reorg_occurred_during_reg_traversal per element, precisely because it must
+        // drop the lock to tally (which takes cs_main, and cs_main must be acquired
+        // BEFORE cs_poll_registry). Nothing here needs cs_main, so simply keeping
+        // the lock is both correct and cheaper than replicating that protocol —
+        // a writer cannot mutate the map underneath us at all, so no reorg
+        // bookkeeping is required.
         GRC::PollRegistry& registry = GRC::GetPollRegistry();
 
         int64_t latest = 0;
-        for (const auto& iter : WITH_LOCK(registry.cs_poll_registry, return registry.Polls().OnlyActive())) {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        for (const auto& iter : registry.Polls().OnlyActive()) {
             latest = std::max<int64_t>(latest, iter->Ref().Time());
         }
 
@@ -761,7 +799,7 @@ public:
         GRC::PollOption poll;
         uint256 poll_reference_txid;
         {
-            LOCK2(cs_main, GRC::GetPollRegistry().cs_poll_registry);
+            LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
 
             const GRC::PollReference* ref = GRC::GetPollRegistry().TryByTxid(txid);
             if (!ref) {

@@ -1291,7 +1291,7 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref, const CBloc
         // vector reallocates). The copy is taken inside the lock scope.
         std::vector<uint256> vote_txids;
         {
-            LOCK(GetPollRegistry().cs_poll_registry);
+            LOCK(PollRegistry::cs_poll_registry);
             vote_txids = poll_ref.Votes();
         }
 
