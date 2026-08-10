@@ -9,6 +9,7 @@
 #include <memory>
 #include <optional>
 #include "amount.h"
+#include "qt/notificationlifetime.h"
 
 class WalletModel;
 class ClientModel;
@@ -102,6 +103,10 @@ private:
     //! fires after this model is destroyed cannot invoke a slot bound to freed
     //! memory (issue #3129). The Handler disconnects on destruction.
     std::unique_ptr<interfaces::Handler> m_mrc_handler;
+
+    //! Closes the destruction race that disconnecting alone leaves open.
+    //! See qt/notificationlifetime.h.
+    NotificationLifetime m_notify_lifetime;
 
     WalletModel* m_wallet_model;
     ClientModel* m_client_model;
