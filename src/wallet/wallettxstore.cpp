@@ -348,7 +348,16 @@ void WalletTxStore::insertLocked(std::vector<TransactionRecord> records)
     const std::size_t insertIdx = static_cast<std::size_t>(pos - m_records.begin());
     const std::size_t count = records.size();
 
-    // EVERYTHING THAT CAN ALLOCATE HAPPENS BEFORE ANYTHING IS MUTATED.
+    // Project the new cache entries and reserve capacity BEFORE mutating anything,
+    // so the common allocation failure (a reallocation of one of the four
+    // containers) happens while the store is still untouched.
+    //
+    // This does NOT make the splices allocation-free, and it would be wrong to
+    // claim it does: vector::insert COPIES the elements, and TransactionRecord,
+    // TxFilterFields and SortKey all hold std::strings, so each copied element
+    // allocates. reserve() removes the reallocation, not the per-element
+    // allocation. The splices therefore remain throwing operations, which is why
+    // the recovery below has to be real rather than decorative.
     //
     // This used to interleave the two: shiftIndex() rewrote m_by_hash, then
     // m_records was spliced, then the projector caches were BUILT (allocating) and
@@ -396,11 +405,38 @@ void WalletTxStore::insertLocked(std::vector<TransactionRecord> records)
             m_by_hash.emplace(hash, insertIdx + k);
         }
     } catch (...) {
+        // Rebuild EVERYTHING derived from m_records, cursors included.
+        //
+        // The cursors are the part that is easy to forget and the part that hurts:
+        // their view_index holds ABSOLUTE m_records positions, so a splice that
+        // threw part-way leaves every cursor entry at or after insertIdx short by
+        // count. Repairing only m_by_hash and the projector caches produces a
+        // self-consistent index over a record table the cursors no longer address
+        // correctly -- and because the resulting indices are still IN RANGE, the
+        // bounds checks in getRows()/getAllRows() never fire. The GUI would then
+        // show the wrong transaction in every row from the insert point on,
+        // silently and permanently, until the next prime(). That is strictly worse
+        // than the std::terminate this exception handling replaced, so the
+        // recovery has to match what prime() does.
+        //
+        // Note m_records itself may be in a valid-but-unspecified state if the
+        // throw came from its own splice (libstdc++ grows the vector before
+        // copying into the gap). Rebuilding from it is still the right move: it is
+        // the only table we have, and a consistent view of slightly wrong rows
+        // that every consumer then RESETS onto beats a torn index. The Resets
+        // pushed below are what make the consumers re-read rather than trust their
+        // replicas.
         LogPrintf("ERROR: %s: exception while splicing %u record(s) for hash %s; rebuilding the "
-                  "index and projector caches from the record table",
+                  "index, projector caches and cursors from the record table, and resetting "
+                  "every view",
                   __func__, static_cast<unsigned int>(count), hash.GetHex());
         rebuildIndex();
         rebuildCaches();
+        for (auto& [viewId, cursor] : m_cursors) {
+            cursor.rebuild(m_records.size());
+            m_view_seqno[viewId] = m_queue.push(GRC::RowsResetPayload{
+                viewId, cursor.epoch(), static_cast<int>(cursor.servedCount())});
+        }
         throw;
     }
     updateVolatileForHash(hash);   // track for the per-tip status refresh (PR4-fix A)
