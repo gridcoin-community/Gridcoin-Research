@@ -157,15 +157,31 @@ BOOST_AUTO_TEST_CASE(sidestake_Allocation_multiplication_and_derivation_of_alloc
 // editing a description would quietly restore the old allocation. Nothing failed;
 // the value just reappeared.
 //
-// These tests do not need to reproduce the race to lock the fix in. They assert the
-// property that makes the race impossible: the surviving fields come from the entry
-// as stored at write time.
+// WHAT THESE DO AND DO NOT COVER -- read this before trusting them.
 //
-// SCOPE, stated honestly: these exercise the REGISTRY methods directly, so on their
-// own they would still pass if the interface-layer editors regressed to reading the
-// entry and writing it back through NonContractAdd(). The
-// sidestake_editors_do_not_revert_the_field_not_being_edited case below covers that
-// half, by driving the real editors.
+// They pin the API contract: a single-field write leaves the other fields at their
+// stored values, and reports false rather than creating an entry that is not there.
+//
+// They do NOT pin the property that actually closes the race, and neither does any
+// other test in the tree. The fix is that the surviving fields are read inside the
+// SAME cs_lock acquisition as the write; the bug was reading them in an earlier
+// acquisition (FindLocal) and writing them back through NonContractAdd(). Those two
+// implementations are indistinguishable to any single-threaded test, because they
+// differ only in what they observe when something mutates the entry BETWEEN the read
+// and the write. Reverting the fix leaves every one of these green.
+//
+// Closing that gap needs an injection point -- a test-only hook fired under cs_lock
+// between the lookup and the write, so a test can simulate a
+// LoadLocalSideStakesFromConfig() landing in the window. That was considered and
+// deliberately rejected (2026-08-10): it means a std::function on a production
+// registry, live in every build, that exists solely for one test. The race is a lost
+// update on a hand-edit that collides with a concurrent changesettings, not a
+// correctness or consensus issue, and the protection is a two-line locking property
+// that is easy to read and hard to regress accidentally.
+//
+// So: if you are changing NonContractSetAllocation / NonContractSetDescription, note
+// that the tests will NOT stop you reintroducing the race. Keep the surviving-field
+// read inside the lock.
 BOOST_AUTO_TEST_CASE(sidestake_NonContractSetAllocation_preserves_other_fields)
 {
     GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();

@@ -798,6 +798,11 @@ public:
     //!
     //! \return false if no local entry exists for \p destination (nothing written).
     //!
+    //! NOT COVERED BY TESTS: that the surviving fields are read inside THIS lock
+    //! acquisition rather than an earlier one is the whole point, and no
+    //! single-threaded test can tell the difference (see the note in
+    //! src/test/gridcoin/sidestake_tests.cpp). Keep the read where it is.
+    //!
     bool NonContractSetAllocation(const CTxDestination& destination,
                                   const Allocation& allocation,
                                   const bool& save_to_file = true);
