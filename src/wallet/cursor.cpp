@@ -68,31 +68,54 @@ std::vector<CursorDelta> Cursor::rebuild(std::size_t n)
     return {{CursorDelta::Reset, 0, static_cast<int>(servedCount())}};
 }
 
+std::vector<std::size_t> Cursor::rowsAt(std::size_t first, std::size_t count) const
+{
+    std::vector<std::size_t> out;
+    if (first >= m_view_index.size()) {
+        return out;
+    }
+    const std::size_t end = std::min(m_view_index.size(), first + count);
+    out.reserve(end - first);
+    for (std::size_t i = first; i < end; ++i) {
+        out.push_back(m_view_index[i]);
+    }
+    return out;
+}
+
 // Served-window translation for a single-row INSERT that already happened at
 // `slot` (m_view_index has grown by 1). Eviction when the window was full.
-static void emitInsertAt(std::size_t slot, std::size_t size_after, std::size_t cap_v,
-                         std::vector<CursorDelta>& out)
+void Cursor::emitInsertAt(std::size_t slot, std::size_t absidx, std::size_t cap_v,
+                          std::vector<CursorDelta>& out) const
 {
+    const std::size_t size_after    = m_view_index.size();
     const std::size_t served_before = std::min(size_after - 1, cap_v);
     const std::size_t served_after  = std::min(size_after, cap_v);
     if (slot < served_after) {
-        out.push_back({CursorDelta::Insert, static_cast<int>(slot), 1});
+        // Stamp the record now: `slot` is only meaningful against the view_index
+        // as it stands at this instant (CursorDelta::rows).
+        out.push_back({CursorDelta::Insert, static_cast<int>(slot), 1, {absidx}});
         if (served_before == cap_v) {  // window was full → last visible row evicted
-            out.push_back({CursorDelta::Remove, static_cast<int>(cap_v), 1});
+            out.push_back({CursorDelta::Remove, static_cast<int>(cap_v), 1, {}});
         }
     }
 }
 
 // Served-window translation for a single-row REMOVE that already happened at
 // `pos` (size_before = size before the erase). Promotion when an off-window row exists.
-static void emitRemoveAt(std::size_t pos, std::size_t size_before, std::size_t cap_v,
-                         std::vector<CursorDelta>& out)
+void Cursor::emitRemoveAt(std::size_t pos, std::size_t size_before, std::size_t cap_v,
+                          std::vector<CursorDelta>& out) const
 {
     const std::size_t served_before = std::min(size_before, cap_v);
     if (pos < served_before) {
-        out.push_back({CursorDelta::Remove, static_cast<int>(pos), 1});
+        out.push_back({CursorDelta::Remove, static_cast<int>(pos), 1, {}});
         if (size_before > cap_v) {  // an off-window row promotes into the last visible slot
-            out.push_back({CursorDelta::Insert, static_cast<int>(cap_v - 1), 1});
+            // Capture the promoted record HERE. The erase has happened, so
+            // view_index holds size_before-1 >= cap_v entries and cap_v-1 is in
+            // range — but a later erase in the same batch can shrink it below
+            // cap_v, which is exactly what made resolving this coordinate after
+            // the batch an out-of-bounds read (#3257 review).
+            out.push_back({CursorDelta::Insert, static_cast<int>(cap_v - 1), 1,
+                           rowsAt(cap_v - 1, 1)});
         }
     }
 }
@@ -110,7 +133,7 @@ std::vector<CursorDelta> Cursor::applyStoreInsert(std::size_t P, std::size_t cou
         if (Accepts(m_fields(i), m_filter)) {
             const std::size_t slot = lowerBoundSlot(i);
             m_view_index.insert(m_view_index.begin() + slot, i);
-            emitInsertAt(slot, m_view_index.size(), cap_v, out);
+            emitInsertAt(slot, i, cap_v, out);
         }
     }
     return out;
@@ -120,18 +143,58 @@ std::vector<CursorDelta> Cursor::applyStoreRemove(std::size_t P, std::size_t cou
 {
     std::vector<CursorDelta> out;
     const std::size_t cap_v = cap();
-    // (a) erase the entries whose absolute value is in [P, P+count), by identity.
+    const std::size_t size_before = m_view_index.size();
+
+    // Erase EVERY target entry before emitting anything, then translate against the
+    // final index. Emitting per-erase (interleaved, as this used to) promotes a row
+    // into the window as each part goes; when a transaction's parts straddle the
+    // cap — one served, its sibling the first off-window row — the promotion picks
+    // up that sibling, which the very next erase then removes. The delta would
+    // carry a record the store has ALREADY erased from m_records (removeLocked
+    // erases before driving the cursors), so the payload named a foreign row, or
+    // ran off the end when the removed run sat at the table end (#3257 review).
+    // Deferring the translation makes every emitted record come from the final,
+    // fully-renumbered index, so a doomed row can never be named.
+
+    // (a) locate the entries whose absolute value is in [P, P+count), by identity.
+    std::vector<std::size_t> positions;
     for (std::size_t v = P; v < P + count; ++v) {
         const std::size_t pos = findSlot(v);
-        if (pos != NPOS) {
-            const std::size_t size_before = m_view_index.size();
-            m_view_index.erase(m_view_index.begin() + pos);
-            emitRemoveAt(pos, size_before, cap_v, out);
-        }
+        if (pos != NPOS) positions.push_back(pos);
     }
+    if (positions.empty()) {
+        return out;   // none of the removed records was in this view
+    }
+    std::sort(positions.begin(), positions.end());
+    for (std::size_t i = positions.size(); i-- > 0;) {
+        m_view_index.erase(m_view_index.begin() + positions[i]);   // high to low
+    }
+
     // (b) the table shrank by `count` at P → later survivors shift -count.
     for (auto& e : m_view_index) {
         if (e >= P + count) e -= count;
+    }
+
+    // (c) served-window translation. One Remove per erased row that WAS visible,
+    // in ascending order — each already-emitted Remove has shifted the consumer's
+    // later rows down by one, hence the running adjustment.
+    const std::size_t served_before = std::min(size_before, cap_v);
+    const std::size_t served_after  = std::min(m_view_index.size(), cap_v);
+    std::size_t removed_in_window = 0;
+    for (const std::size_t pos : positions) {
+        if (pos >= served_before) continue;   // off-window: the consumer never had it
+        out.push_back({CursorDelta::Remove,
+                       static_cast<int>(pos - removed_in_window), 1, {}});
+        ++removed_in_window;
+    }
+
+    // Off-window rows promoting into the freed slots, appended in one batch. Their
+    // records come from the final index, so they are correct by construction.
+    const std::size_t visible_now = served_before - removed_in_window;
+    if (served_after > visible_now) {
+        const std::size_t promoted = served_after - visible_now;
+        out.push_back({CursorDelta::Insert, static_cast<int>(visible_now),
+                       static_cast<int>(promoted), rowsAt(visible_now, promoted)});
     }
     return out;
 }
@@ -150,7 +213,7 @@ std::vector<CursorDelta> Cursor::applyStatusUpdate(std::size_t P)
     if (!old_in && new_in) {                          // membership flip-in
         const std::size_t slot = lowerBoundSlot(P);
         m_view_index.insert(m_view_index.begin() + slot, P);
-        emitInsertAt(slot, m_view_index.size(), cap_v, out);
+        emitInsertAt(slot, P, cap_v, out);
         return out;
     }
     if (old_in && !new_in) {                          // membership flip-out
@@ -170,20 +233,22 @@ std::vector<CursorDelta> Cursor::applyStatusUpdate(std::size_t P)
 
     const std::size_t served_full = std::min(size_full, cap_v);
     if (new_slot == old_pos) {                        // unchanged slot → just re-read
-        if (old_pos < served_full) out.push_back({CursorDelta::Change, static_cast<int>(old_pos), 1});
+        if (old_pos < served_full) out.push_back({CursorDelta::Change, static_cast<int>(old_pos), 1, {}});
         return out;
     }
     const bool old_vis = old_pos < served_full;
     const bool new_vis = new_slot < served_full;
     if (old_vis && new_vis) {                          // reorder within the window
-        out.push_back({CursorDelta::Remove, static_cast<int>(old_pos), 1});
-        out.push_back({CursorDelta::Insert, static_cast<int>(new_slot), 1});
+        out.push_back({CursorDelta::Remove, static_cast<int>(old_pos), 1, {}});
+        out.push_back({CursorDelta::Insert, static_cast<int>(new_slot), 1, {P}});
     } else if (old_vis && !new_vis) {                  // moved out of the window
-        out.push_back({CursorDelta::Remove, static_cast<int>(old_pos), 1});
-        if (size_full > cap_v) out.push_back({CursorDelta::Insert, static_cast<int>(served_full - 1), 1});
+        out.push_back({CursorDelta::Remove, static_cast<int>(old_pos), 1, {}});
+        // The row that promotes into the last visible slot, captured now.
+        if (size_full > cap_v) out.push_back({CursorDelta::Insert, static_cast<int>(served_full - 1), 1,
+                                              rowsAt(served_full - 1, 1)});
     } else if (!old_vis && new_vis) {                  // moved into the window
-        out.push_back({CursorDelta::Insert, static_cast<int>(new_slot), 1});
-        if (size_full > cap_v) out.push_back({CursorDelta::Remove, static_cast<int>(served_full), 1});
+        out.push_back({CursorDelta::Insert, static_cast<int>(new_slot), 1, {P}});
+        if (size_full > cap_v) out.push_back({CursorDelta::Remove, static_cast<int>(served_full), 1, {}});
     }
     // !old_vis && !new_vis: off-window move, no emission (view_index still maintained).
     return out;
@@ -196,9 +261,12 @@ std::vector<CursorDelta> Cursor::setLimit(int new_limit)
     m_filter.limit_rows = new_limit;
     const std::size_t served_new = servedCount();
     if (served_new > served_old) {
-        out.push_back({CursorDelta::Insert, static_cast<int>(served_old), static_cast<int>(served_new - served_old)});
+        out.push_back({CursorDelta::Insert, static_cast<int>(served_old),
+                       static_cast<int>(served_new - served_old),
+                       rowsAt(served_old, served_new - served_old)});
     } else if (served_new < served_old) {
-        out.push_back({CursorDelta::Remove, static_cast<int>(served_new), static_cast<int>(served_old - served_new)});
+        out.push_back({CursorDelta::Remove, static_cast<int>(served_new),
+                       static_cast<int>(served_old - served_new), {}});
     }
     return out;
 }
@@ -215,7 +283,15 @@ std::vector<CursorDelta> Cursor::setSort(int sort_column, int sort_order)
 
 std::vector<CursorDelta> Cursor::setFilter(const FilterSpec& filter, std::size_t n)
 {
+    // Preserve the served-window cap. limit_rows rides along in FilterSpec, but it
+    // is owned by setLimit (the view's own resize), not by the caller's filter —
+    // and a caller building a FilterSpec from the UI's filter controls leaves it at
+    // the -1 default, which would silently uncap the view. Latent today, since no
+    // view both filters and caps, but the two are independent knobs and the wire
+    // type should not couple them.
+    const int32_t cap_kept = m_filter.limit_rows;
     m_filter = filter;
+    m_filter.limit_rows = cap_kept;
     return rebuild(n);
 }
 

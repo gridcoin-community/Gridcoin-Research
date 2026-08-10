@@ -12,6 +12,7 @@
 #include <QTimer>
 
 #include <cassert>
+#include <string>
 
 WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource& tx_source,
                          OptionsModel* optionsModel, QObject* parent)
@@ -248,12 +249,45 @@ void WalletModel::drainEventQueue()
         if (events.size() >= static_cast<std::size_t>(MODEL_EVENT_DRAIN_MAX_BATCH)) {
             QTimer::singleShot(0, this, &WalletModel::drainEventQueue);
         }
+
+        m_drain_failures = 0;   // a clean pass clears the consecutive-failure budget
     } catch (const std::exception& e) {
-        // Almost always the node connection dropping mid-drain (multiprocess), but
-        // do not assert the cause in the message — any drain exception lands here.
-        GUILogPrintf("WalletModel: wallet event drain failed; stopping the periodic drain: %s", e.what());
-        if (eventDrainTimer) {
-            eventDrainTimer->stop();
+        const std::string msg{e.what()};
+        // The node process going away is the case this catch was written for, and
+        // the only one where stopping the pump is right: every later call would
+        // throw too, and the IPC disconnect hook (bitcoin.cpp) is already driving
+        // the quit. Detect it by libmultiprocess's raise text, the same two
+        // substrings GridcoinApplication::notify matches.
+        if (msg.find("interrupted by disconnect") != std::string::npos
+                || msg.find("called after disconnect") != std::string::npos) {
+            GUILogPrintf("WalletModel: node connection lost mid-drain; stopping the "
+                         "periodic wallet event drain: %s", e.what());
+            if (eventDrainTimer) {
+                eventDrainTimer->stop();
+            }
+            return;
+        }
+
+        // Anything else is a bug in an apply slot, not a dead node — and this is
+        // the ONLY periodic pump feeding both windowed transaction views and the
+        // balance refresh, with no restart path anywhere in the tree. Stopping it
+        // for a transient throw silenced the whole wallet UI for the rest of the
+        // session (#3257 review). Log and keep draining; give up only if the
+        // failures are persistent, so a hard loop cannot spin forever.
+        //
+        // Note the batch is already popped by drainEvents(), so the events being
+        // processed when the throw happened are lost to any view not yet notified.
+        // Those views recover on the next cursor Reset; the counter exists so a
+        // repeating fault is visible in the log rather than silently eating events.
+        ++m_drain_failures;
+        GUILogPrintf("WalletModel: wallet event drain failed (%d consecutive): %s",
+                     m_drain_failures, e.what());
+        if (m_drain_failures >= MODEL_EVENT_DRAIN_MAX_FAILURES) {
+            GUILogPrintf("WalletModel: %d consecutive wallet event drain failures; "
+                         "stopping the periodic drain", m_drain_failures);
+            if (eventDrainTimer) {
+                eventDrainTimer->stop();
+            }
         }
     }
 }

@@ -233,6 +233,12 @@ private:
     //! never double-processed. Qt-thread only.
     bool m_draining = false;
 
+    //! Consecutive drain failures that were NOT a node disconnect. Any clean pass
+    //! resets it; the periodic pump gives up at MODEL_EVENT_DRAIN_MAX_FAILURES, so
+    //! a repeating fault stays bounded without a single transient throw silencing
+    //! both windowed views and the balance refresh for the session. Qt-thread only.
+    int m_drain_failures = 0;
+
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
     void checkBalanceChanged();

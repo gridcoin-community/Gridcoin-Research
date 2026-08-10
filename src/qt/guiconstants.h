@@ -20,6 +20,14 @@ static const int MODEL_EVENT_DRAIN_INTERVAL = 500;
  * the Qt event loop between batches. */
 static const int MODEL_EVENT_DRAIN_MAX_BATCH = 1024;
 
+/* Consecutive non-disconnect failures of the wallet event drain before the
+ * periodic pump gives up. That pump is the sole feed for BOTH windowed
+ * transaction views and the balance refresh, and nothing in the tree restarts
+ * it, so a transient throw must not be fatal to it -- but a hard-looping fault
+ * must not spin forever either. A node-disconnect exception still stops it
+ * immediately; only other exceptions are counted here. */
+static const int MODEL_EVENT_DRAIN_MAX_FAILURES = 10;
+
 /* AskPassphraseDialog -- Maximum passphrase length */
 static const int MAX_PASSPHRASE_SIZE = 1024;
 

@@ -133,7 +133,15 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                 if (seqno <= m_applied_seqno) return;   // already reflected in a refetch
                 if (payload.records.empty()) return;  // empty insert → invalid beginInsertRows range
                 const int pos = payload.position;
-                if (pos < 0 || static_cast<std::size_t>(pos) > m_rows.size()) return;
+                if (pos < 0 || static_cast<std::size_t>(pos) > m_rows.size()) {
+                    // Divergence from the producer cursor: the row is lost until the
+                    // next Reset. Should be unreachable; say so rather than
+                    // swallowing it, as this used to (#3257 review).
+                    GUILogPrintf("WARNING: OverviewTxModel: rejected insert at %d "
+                                 "(have %d rows) — view diverged from the producer cursor",
+                                 pos, static_cast<int>(m_rows.size()));
+                    return;
+                }
                 beginInsertRows(QModelIndex(), pos,
                                 pos + static_cast<int>(payload.records.size()) - 1);
                 m_rows.insert(m_rows.begin() + pos,
@@ -146,7 +154,12 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                 const int pos = payload.position;
                 if (pos < 0 || payload.count <= 0
                         || static_cast<std::size_t>(pos) + static_cast<std::size_t>(payload.count)
-                               > m_rows.size()) return;
+                               > m_rows.size()) {
+                    GUILogPrintf("WARNING: OverviewTxModel: rejected remove at %d count %d "
+                                 "(have %d rows) — view diverged from the producer cursor",
+                                 pos, payload.count, static_cast<int>(m_rows.size()));
+                    return;
+                }
                 beginRemoveRows(QModelIndex(), pos, pos + payload.count - 1);
                 m_rows.erase(m_rows.begin() + pos, m_rows.begin() + pos + payload.count);
                 endRemoveRows();
