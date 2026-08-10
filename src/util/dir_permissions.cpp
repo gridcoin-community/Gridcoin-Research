@@ -4,7 +4,10 @@
 
 #include "util/dir_permissions.h"
 
+#include "tinyformat.h" // strprintf, used by the Windows DACL verifier
+
 #include <cerrno>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 
