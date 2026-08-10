@@ -4,7 +4,7 @@
 
 #include "ipc/peercred.h"
 
-#include "util.h" // LogPrintf
+#include "logging.h" // error()
 
 #include <cerrno>
 
@@ -16,18 +16,28 @@
 
 namespace ipc {
 
+#ifndef WIN32
+bool PeerUidAllowed(uid_t peer_uid, uid_t self_uid)
+{
+    return peer_uid == self_uid;
+}
+#endif
+
 bool CheckPeerCredentials(int peer_fd)
 {
 #ifdef WIN32
     // AF_UNIX on Windows exposes no peer-credential API (no SO_PEERCRED /
-    // getpeereid); the owner-only datadir NTFS ACL on node.sock + ipc.cookie is
-    // the guard (see ipc/process.cpp).
+    // getpeereid); the owner+SYSTEM PROTECTED DACL that ipc/process.cpp applies to
+    // node.sock and ipc.cookie -- and verifies by reading it back -- is the guard.
     (void)peer_fd;
     return true;
 #else
+    // Fail closed from here down. See the header: a peer we cannot inspect is
+    // refused rather than admitted, so a platform or backend that stops exposing
+    // the fd turns MP off loudly instead of turning the check off silently.
     if (peer_fd < 0) {
-        LogPrintf("WARN: %s: no peer fd available; skipping peer-credential check", __func__);
-        return true;
+        return error("%s: refusing IPC connection: no peer fd is available, so the peer's uid "
+                     "cannot be verified", __func__);
     }
 
     const uid_t self_uid = ::geteuid();
@@ -38,29 +48,41 @@ bool CheckPeerCredentials(int peer_fd)
     struct ucred cred;
     socklen_t len = sizeof(cred);
     if (::getsockopt(peer_fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0) {
-        LogPrintf("WARN: %s: SO_PEERCRED failed (errno %d); skipping peer-credential check", __func__, errno);
-        return true;
+        return error("%s: refusing IPC connection: SO_PEERCRED failed (errno %d), so the peer's "
+                     "uid cannot be verified", __func__, errno);
     }
     if (len != sizeof(cred)) {
-        LogPrintf("WARN: %s: SO_PEERCRED returned an unexpected size; skipping peer-credential check", __func__);
-        return true;
+        return error("%s: refusing IPC connection: SO_PEERCRED returned %d bytes, expected %d",
+                     __func__, static_cast<int>(len), static_cast<int>(sizeof(cred)));
     }
     peer_uid = cred.uid;
 #else
     // *BSD / macOS.
     gid_t peer_gid;
     if (::getpeereid(peer_fd, &peer_uid, &peer_gid) != 0) {
-        LogPrintf("WARN: %s: getpeereid failed (errno %d); skipping peer-credential check", __func__, errno);
-        return true;
+        return error("%s: refusing IPC connection: getpeereid failed (errno %d), so the peer's "
+                     "uid cannot be verified", __func__, errno);
     }
 #endif
 
-    if (peer_uid != self_uid) {
+    if (!PeerUidAllowed(peer_uid, self_uid)) {
         return error("%s: rejecting IPC connection: peer uid %d does not match serving uid %d",
                      __func__, static_cast<int>(peer_uid), static_cast<int>(self_uid));
     }
     return true;
 #endif // WIN32
+}
+
+const char* PeerCredentialEnforcement()
+{
+#ifdef WIN32
+    return "none (Windows AF_UNIX exposes no peer credentials; the owner-only DACL on node.sock "
+           "and ipc.cookie is the guard)";
+#elif defined(SO_PEERCRED)
+    return "SO_PEERCRED (connections from another OS user are refused)";
+#else
+    return "getpeereid (connections from another OS user are refused)";
+#endif
 }
 
 } // namespace ipc

@@ -5,25 +5,55 @@
 #ifndef GRIDCOIN_IPC_PEERCRED_H
 #define GRIDCOIN_IPC_PEERCRED_H
 
+#ifndef WIN32
+#include <sys/types.h> // uid_t
+#endif
+
 namespace ipc {
 
+#ifndef WIN32
+//! The uid comparison, factored out of CheckPeerCredentials so both branches are
+//! unit-testable (the rejection branch cannot be reached from a single-process
+//! test, because both ends of a socketpair necessarily share our uid).
+//!
+//! Same-uid only. Root is NOT special-cased: a root peer is a different uid and
+//! is refused. A root process can bypass this at will (it can ptrace us or read
+//! the cookie), so admitting it would buy nothing and would widen the rule from
+//! "one user's processes" to "one user's processes, plus root" for no gain.
+bool PeerUidAllowed(uid_t peer_uid, uid_t self_uid);
+#endif
+
 //! Verify that the peer on an accepted AF_UNIX connection is the SAME OS user as
-//! this (serving) process. This is defense-in-depth on top of the cookie: the
-//! cookie file is already owner-only (0600 in an owner-only datadir), so a
-//! different user should never possess it -- but rejecting a foreign uid up front
-//! closes the connection before any handshake, rather than relying solely on the
-//! cookie gate.
+//! this process. This is defense-in-depth on top of the cookie: the cookie file is
+//! already owner-only (0600 in an owner-only datadir), so a different user should
+//! never possess it -- but rejecting a foreign uid up front closes the connection
+//! before any handshake, rather than relying solely on the cookie gate.
 //!
-//! Platform coverage: Linux uses SO_PEERCRED; *BSD/macOS use getpeereid(); on
-//! Windows AF_UNIX exposes no peer-credential API, so this returns true and the
-//! owner-only datadir NTFS ACL on node.sock + ipc.cookie remains the guard (see
-//! ipc/process.cpp).
+//! Usable from BOTH ends of the socket. The node calls it on each accepted
+//! connection; the GUI calls it on its own connected fd before presenting the
+//! cookie, so a same-uid impostor that won the race to bind node.sock is refused
+//! before it can harvest the bearer token.
 //!
-//! Returns false ONLY on a definite uid mismatch (logged). If the peer uid cannot
-//! be determined (peer_fd < 0, or the getsockopt/getpeereid call fails), it logs
-//! and returns true -- we do not hard-fail a connection we simply could not
-//! inspect, because the cookie remains the root of trust.
+//! FAILS CLOSED on POSIX (changed 2026-08: it previously returned true on every
+//! error path). A peer we cannot inspect is refused, because "could not inspect"
+//! and "inspected and it matched" are not the same statement, and the difference
+//! is exactly what an attacker would arrange. In this codebase peer_fd always
+//! comes from an accepted or connected AF_UNIX socket, so the error paths are
+//! not reachable in normal operation; if one ever fires, the log line says which
+//! call failed and MP refuses to serve rather than silently degrading to
+//! cookie-only. Only a definite uid mismatch is logged via error().
+//!
+//! Platform coverage: Linux uses SO_PEERCRED; *BSD/macOS use getpeereid(). On
+//! Windows AF_UNIX exposes no peer-credential API whatsoever, so this returns
+//! true and the explicit owner+SYSTEM PROTECTED DACL that ipc/process.cpp applies
+//! to node.sock and ipc.cookie (and verifies by read-back) is the guard. Call
+//! PeerCredentialEnforcement() to log which of these is in force.
 bool CheckPeerCredentials(int peer_fd);
+
+//! One-line description of the peer-credential enforcement actually compiled in,
+//! for a startup log line. An operator reading debug.log should never have to
+//! guess whether the uid check is real on this platform.
+const char* PeerCredentialEnforcement();
 
 } // namespace ipc
 
