@@ -6,9 +6,11 @@
 #include "interfaces/researcher.h"
 
 #include "qt/bitcoinunits.h"
+#include "qt/guiconstants.h"
 #include "qt/guiutil.h"
 #include "qt/researcher/researchermodel.h"
 #include "qt/researcher/researcherwizard.h"
+#include "util/time.h"
 
 #include <QApplication>
 #include <QDateTime>
@@ -589,8 +591,38 @@ void ResearcherModel::subscribeToCoreSignals()
     m_handlers.emplace_back(m_researcher_context.handleAccrualChanged(m_notify_lifetime.guard(
         [this]() { QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection); })));
 
+    // Rate-limit the per-block refresh while the chain is catching up. refresh()
+    // runs a full trySnapshot(): DeriveBeacon, ComputeActionNeeded, magnitude and
+    // accrual, all under a cs_main TRY_LOCK. None of that is worth doing once per
+    // block during a sync -- no human can read it at that rate, and the same
+    // MODEL_UPDATE_DELAY gate is what ClientModel::NotifyBlocksChanged already
+    // applies to its own subscription using this very flag.
+    //
+    // This matters on two paths, not one. A FRESH install additionally pays a BOINC
+    // data directory probe inside the snapshot (registry + filesystem on Windows,
+    // where a wallet installed before BOINC finds nothing and cannot be fixed via
+    // the wizard until sync completes, because the wizard is gated on being synced).
+    // But a RESYNC of an established wallet -- valid CPID or non-cruncher, every
+    // lookup succeeding -- pays the beacon/magnitude/accrual work per block just the
+    // same, and only this gate removes it.
+    //
+    // The syncing edge forces a refresh: without it the panel would hold whatever
+    // the last throttled pass produced until the next block, and at ~90s block
+    // spacing that is a visible stall exactly when the user is watching sync finish.
     m_handlers.emplace_back(m_researcher_context.handleBlocksChanged(m_notify_lifetime.guard(
-        [this](bool, int, int64_t, uint32_t) {
+        [this](bool syncing, int, int64_t, uint32_t) {
+            const bool was_syncing = m_last_syncing.exchange(syncing);
+
+            if (syncing && was_syncing) {
+                const int64_t now = GetTimeMillis();
+
+                if (m_last_block_refresh_ms.load() + MODEL_UPDATE_DELAY > now) {
+                    return;
+                }
+
+                m_last_block_refresh_ms.store(now);
+            }
+
             QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
         })));
 }
