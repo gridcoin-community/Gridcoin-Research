@@ -9,6 +9,7 @@
 #include "interfaces/researcher.h"
 #include "qt/notificationlifetime.h"
 
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -146,6 +147,17 @@ private:
     //! Cached value snapshot of the researcher/beacon context. Refreshed on the
     //! interface notifications (and by the wizard commands); every getter reads it.
     interfaces::ResearcherSnapshot m_snapshot;
+
+    //! Rate-limit state for the per-block refresh, written from the CORE thread
+    //! (the notification is emitted under cs_main) and read there too, hence
+    //! atomic -- the model itself lives on the GUI thread.
+    //!
+    //! ResearcherModel is the one per-block GUI consumer that subscribes to the
+    //! core signal directly. Every other one (MRCModel, the PSGT pool page) goes
+    //! through ClientModel::numBlocksChanged, which is already throttled, so this
+    //! model was the only path with no rate limit at all.
+    std::atomic<int64_t> m_last_block_refresh_ms{0};
+    std::atomic<bool> m_last_syncing{false};
 
     bool m_wizard_open;
     bool m_privacy_enabled;
