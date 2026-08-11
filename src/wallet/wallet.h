@@ -548,6 +548,33 @@ public:
     int GetVersion() { LOCK(cs_wallet); return nWalletVersion; }
 
     void FixSpentCoins(int& nMismatchSpent, int64_t& nBalanceInQuestion, bool fCheckOnly = false);
+
+    //! Release spent flags recorded by transactions that are NOT in the active
+    //! chain -- spends the wallet remembers but the chain has not (yet) replayed.
+    //!
+    //! Needed because vfSpent is persisted in wallet.dat while the block data is
+    //! not. Reset or roll back the chain under a populated wallet and the wallet
+    //! still believes in every spend it ever saw, including ones now far above the
+    //! tip, so those coins are invisible and the balance under-reports for the
+    //! whole resync. FixSpentCoins cannot repair this: it skips any transaction
+    //! missing from the tx index (wallet.cpp), and immediately after a reset that
+    //! is every transaction in the wallet.
+    //!
+    //! Cheap by construction, unlike FixSpentCoins: no CTxDB and no per-transaction
+    //! index reads. It needs only a mapBlockIndex lookup per wallet transaction
+    //! (~50ns, see TxStateConfirmed in wallet/transaction.h) plus mapWallet lookups,
+    //! and writes only the entries it actually corrects. A wallet whose transactions
+    //! are all in the active chain -- every ordinary startup -- does no writes at all.
+    //!
+    //! Replay re-establishes the flags naturally: when a spend's block is connected
+    //! again, AddToWalletIfInvolvingMe marks its inputs spent as it always did. So
+    //! the balance tracks the chain honestly at every height instead of reading
+    //! low until the resync finishes.
+    //!
+    //! \param nReleased        Number of outputs whose spent flag was cleared.
+    //! \param nAmountReleased  Their total value.
+    //! \param fCheckOnly       Report only; change nothing.
+    void ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountReleased, bool fCheckOnly = false);
     void DisableTransaction(const CTransaction &tx);
 
     //! Clear the spent bits on the parent outputs \p tx consumed, so the coins are
