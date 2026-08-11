@@ -255,7 +255,8 @@ void Shutdown(void* parg)
             bool block_file_synced = false;
             if (FILE* fp = AppendBlockFile(nFile)) {
                 block_file_synced = FileCommit(fp);
-                fclose(fp);
+                // The handle is cached and owned by blockstorage, not by us.
+                CloseBlockFile();
                 if (!block_file_synced) {
                     LogPrintf("WARN: %s: FileCommit failed for blk%05u.dat during shutdown; "
                               "skipping LevelDB sync barrier so the block-index DB does not "
