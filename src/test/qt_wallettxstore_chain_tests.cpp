@@ -281,6 +281,30 @@ BOOST_AUTO_TEST_SUITE(qt_wallettxstore_chain_tests)
 //! it into both views. This drives the REAL applyChainTipRefresh against a real
 //! CWallet — the path with no prior coverage — rather than simulating it with an
 //! upsert.
+//! Deliver what production delivers when the block confirming \p hash is connected.
+//!
+//! PendingTipChain::connect() only moves pindexBest — it is a mock chain, so it
+//! runs none of ConnectBlock. Production connects a block through
+//! ConnectBlock -> GetMainSignals().BlockConnected -> CWallet::BlockConnected ->
+//! SyncTransaction -> NotifyTransactionChanged(hash, CT_UPDATED) ->
+//! WalletTxSourceImpl::onTransactionChanged, which re-decomposes the tx, calls
+//! updateStatus() under cs_main and enqueueUpserts the rows. producerRecordsFor()
+//! is that same producer-side derivation, so this is the event, not a shortcut
+//! around it.
+//!
+//! Delivering it matters because a record inserted BEFORE its block is connected
+//! sits at depth -1, which recordStatusIsVolatile() correctly excludes from the
+//! volatile set: nothing a new tip does can change such a record, only its own
+//! block arriving can, and that arrival is this event. Skipping it here left the
+//! rows permanently outside m_volatile and asserted that the per-tip poll must
+//! discover the transition on its own — a contract production does not rely on,
+//! and whose cost was O(blocks x wallet transactions) during a sync from zero.
+void deliverBlockConnected(WalletTxStore& store, WalletEventQueue& q, const uint256& hash)
+{
+    store.enqueueUpsert(producerRecordsFor(hash));
+    settle(q);
+}
+
 BOOST_AUTO_TEST_CASE(coinstakeFlipsIntoBothViewsOnRealChainTipRefresh)
 {
     PendingTipChain chain;
@@ -312,8 +336,12 @@ BOOST_AUTO_TEST_CASE(coinstakeFlipsIntoBothViewsOnRealChainTipRefresh)
     BOOST_CHECK_EQUAL(viewRowCount(store, GRC::VIEW_DETAILED), 0u);
     BOOST_CHECK_EQUAL(viewRowCount(store, GRC::VIEW_OVERVIEW), 0u);
 
-    // Connect the block and drive the real per-tip refresh, as onBlocksChanged does.
+    // Connect the block, deliver the notification production emits for it, then
+    // drive the per-tip refresh as onBlocksChanged does. Both happen in production
+    // on this path: the upsert re-evaluates volatility with a real depth, and the
+    // tip refresh then ripens the row while it stays inside the maturity window.
     chain.connect();
+    deliverBlockConnected(store, q, cs_hash);
     {
         LOCK(cs_main);
         store.applyChainTipRefresh();
@@ -416,6 +444,16 @@ BOOST_AUTO_TEST_CASE(oneUnrefreshableTxDoesNotFreezeTheRestOfTheWallet)
     BOOST_CHECK_EQUAL(viewRowCount(store, GRC::VIEW_DETAILED), 0u);
 
     chain.connect();
+
+    // Deliver the per-transaction notification production emits when the block is
+    // connected (see deliverBlockConnected). The GOOD transactions only -- the
+    // poison one is deliberately left to the per-tip refresh, because that is the
+    // path whose try/catch this case exists to test. Note that in production the
+    // poison's own CT_UPDATED would throw inside the notification handler too;
+    // that is a separate gap in the event path, not something to encode here.
+    for (const uint256& h : good_hashes) {
+        deliverBlockConnected(store, q, h);
+    }
 
     // Confirm the premise rather than assuming it: with the block connected the
     // poison tx sits at depth 1, so IsTrusted() takes the IsFromMe() -> GetDebit()
