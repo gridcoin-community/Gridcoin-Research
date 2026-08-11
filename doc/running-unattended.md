@@ -89,6 +89,13 @@ cd "C:\Program Files\GridcoinResearch\windows"
 > `powershell.exe -ExecutionPolicy Bypass .\script -Arg "C:\Program Files\..."` — the outer shell re-parses and
 > splits the spaced path.
 
+> **Already running the ordinary wallet?** Retrofitting is supported and reuses your existing wallet and
+> blockchain in place — no resync. Stop the monolithic wallet first (both `gridcoinresearch` and
+> `gridcoinresearchd` must be gone), back up `wallet.dat`, then continue below. Two things behave differently
+> than on a fresh install: your data directory keeps the permissions it already has, and RPC credentials are
+> appended to your existing config if it has none. Both are explained in
+> [`multiprocess.md` → *B. Retrofit an existing wallet*](multiprocess.md#b-retrofit-an-existing-wallet-windows).
+
 ### 2. Run the core as a boot task
 
 ```powershell
@@ -151,6 +158,13 @@ listener-ownership gate). Detail: [`../contrib/windows/README.md` →
 
 - The core is up: `gridcoinresearchd getinfo` (Linux) / `& "…\daemon\gridcoinresearchd.exe" -datadir=… getinfo`
   (Windows) returns.
+- RPC credentials exist. The core generates them if the config has none, so this should simply be true; if it
+  is not, the core would not have started at all:
+  ```
+  rpcuser=gridcoinrpc
+  rpcpassword=<43-44 random base58 characters>
+  ```
+  Setting `server=0` opts out of the RPC listener — and therefore **disables autounlock**, which is pure RPC.
 - Autounlock is working and **stake-only**: `getwalletinfo` shows the wallet unlocked, and a spend-path command
   is refused —
   ```
