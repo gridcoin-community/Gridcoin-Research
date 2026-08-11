@@ -1397,7 +1397,14 @@ private:
         // display" (it restores the long Unicode form on Windows before UTF-8
         // encoding), so the GUI's QString::fromStdString() renders non-ASCII paths
         // correctly cross-platform. Matches the datadir display in bitcoin.cpp.
-        snap.boinc_data_dir = fsbridge::LongPathString(GRC::GetBoincDataDir());
+        // A non-cruncher has declined research rewards, so there is nothing to look
+        // for and the "you may need to manually specify boincdatadir" advice that
+        // FindBoincDataDir() logs on a miss is simply wrong for them. Diagnostics
+        // already reports N/A for the BOINC path in this mode, so leaving it empty
+        // matches what the UI shows.
+        snap.boinc_data_dir = GRC::Researcher::ConfiguredForNoncruncherMode()
+            ? std::string{}
+            : fsbridge::LongPathString(GRC::GetBoincDataDir());
 
         return snap;
     }
