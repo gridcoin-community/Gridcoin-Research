@@ -387,6 +387,112 @@ bool static Bind(const CService &addr, bool fError = true) {
     return true;
 }
 
+//! A random 256-bit RPC password, base58-encoded.
+//!
+//! Base58 is alphanumeric, which matters twice over: the config parser sees no
+//! character it treats specially, and core rejects '#' in an rpcpassword outright
+//! (the autounlock helper documents the same constraint). The encoding is 43-44
+//! characters, so it can never collide with the fixed username either.
+static std::string GenerateRpcPassword()
+{
+    unsigned char rand_pwd[32];
+    GetRandBytes(rand_pwd);
+
+    return EncodeBase58(rand_pwd);
+}
+
+//! Add generated RPC credentials to an EXISTING configuration file that has none.
+//!
+//! CreateNewConfigFile only runs when there is no configuration file at all
+//! (IsConfigFileEmpty is misnamed -- it reports that the file could not be opened,
+//! not that it is empty). So generating credentials there fixes only a genuinely
+//! fresh install. Two cases it does not reach, both of which end with a daemon that
+//! will not run:
+//!
+//!  - Retrofit. An existing wallet's config was written by a build that emitted only
+//!    addnode= lines. The monolithic GUI never needed RPC credentials, so nobody ever
+//!    noticed. Point gridcoinresearchd at that same data directory -- which is exactly
+//!    what moving an existing install to multiprocess does -- and it soft-sets -server,
+//!    StartRPCThreads refuses the empty password, and the core exits during startup.
+//!    Under a service manager that is a silent retry-fail at boot.
+//!  - The newbie headless install. Someone hand-writes a config, forgets credentials,
+//!    and ends up with an instance that cannot be controlled at all.
+//!
+//! The expectation for a headless daemon is that it answers RPC on loopback. That is
+//! not merely convention here: the stake-only autounlock helper is pure RPC
+//! (contrib/wallettools/gridcoin_autounlock.py), so an RPC-less daemon silently loses
+//! the one feature the unattended deployment exists for.
+//!
+//! Scope, deliberately narrow:
+//!  - Only when an RPC server is actually being started. An explicit server=0 is a real
+//!    choice and is honoured -- the config is not touched (and autounlock will not work,
+//!    which is documented).
+//!  - Only ever APPENDS. Nothing already in the file is rewritten or removed. A missing
+//!    rpcpassword is an absence rather than a decision -- no interface ever offered the
+//!    user a way to choose it -- which is what separates this from the data directory
+//!    ACL rule, where widening the permissions IS a deliberate act we must not undo.
+//!  - Each key independently: a user who set rpcuser but no password keeps their name.
+static void AddMissingRpcCredentials()
+{
+    const bool need_user = gArgs.GetArg("-rpcuser", "").empty();
+    const bool need_password = gArgs.GetArg("-rpcpassword", "").empty();
+
+    if (!need_password && !need_user) return;
+
+    const fs::path config_file = GetConfigFile();
+
+    // Warn rather than re-tighten. We are adding a secret to a file the operator already
+    // owns, and this branch's rule is that permissions the user set are left as the user
+    // set them -- the same choice ipc::Process::bind() makes for a pre-existing data
+    // directory. Say so loudly instead, because a credential in a group-readable file is
+    // worth acting on.
+#ifndef WIN32
+    struct stat st;
+    if (::stat(config_file.string().c_str(), &st) == 0 && (st.st_mode & (S_IRWXG | S_IRWXO)) != 0) {
+        LogPrintf("WARNING: %s: %s is readable by other users (mode %03o) and is about to receive a "
+                  "generated RPC password. Leaving the permissions as configured; chmod 600 it if that "
+                  "is not what you want.",
+                  __func__, config_file.string(), static_cast<unsigned>(st.st_mode & 07777));
+    }
+#endif
+
+    {
+        fsbridge::ofstream config(config_file, std::ios_base::app);
+
+        if (!config.good()) {
+            // Not fatal here: fall through to StartRPCThreads, which already fails with a
+            // clear message telling the operator exactly what to put in the file. This is
+            // no worse than the behaviour before this function existed.
+            LogPrintf("WARNING: %s: could not open %s to add the missing RPC credentials",
+                      __func__, config_file.string());
+            return;
+        }
+
+        // Lead with a newline: an existing file need not end with one, and silently gluing
+        // rpcuser= onto the tail of somebody's last directive would corrupt their config.
+        config << "\n"
+               << "# Generated because an RPC server is being started without credentials, which\n"
+               << "# the daemon refuses to do. Without these it would not start at all. Change\n"
+               << "# them if you like; do not leave rpcpassword empty or equal to rpcuser.\n";
+
+        if (need_user) config << "rpcuser=gridcoinrpc\n";
+        if (need_password) config << "rpcpassword=" << GenerateRpcPassword() << "\n";
+    }
+
+    // Re-read so THIS start works rather than only the next one -- the whole point is that
+    // an unattended boot does not need a human. Same pattern as the fresh-config branch.
+    std::string error_msg;
+
+    if (!gArgs.ReadConfigFiles(error_msg, true)) {
+        LogPrintf("WARNING: %s: added RPC credentials but could not re-read the configuration: %s",
+                  __func__, error_msg);
+        return;
+    }
+
+    LogPrintf("%s: added generated RPC credentials to %s (an RPC server was requested without them)",
+              __func__, config_file.string());
+}
+
 //! Write the first-run configuration file, including RPC credentials.
 //!
 //! The credentials are not optional garnish. gridcoinresearchd soft-sets
@@ -425,16 +531,13 @@ static void CreateNewConfigFile()
     }
 #endif
 
-    unsigned char rand_pwd[32];
-    GetRandBytes(rand_pwd);
-
     myConfig
         << "# RPC credentials, generated on first run. The local RPC interface is\n"
         << "# credential-protected even though it listens on localhost only; the\n"
         << "# daemon will not start without them. Change them if you like, but do\n"
         << "# not leave rpcpassword empty or equal to rpcuser.\n"
         << "rpcuser=gridcoinrpc\n"
-        << "rpcpassword=" << EncodeBase58(rand_pwd) << "\n"
+        << "rpcpassword=" << GenerateRpcPassword() << "\n"
         << "\n"
         << "addnode=addnode-us-central.cycy.me\n"
         << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
@@ -1280,6 +1383,14 @@ bool AppInit2(ThreadHandlerPtr threads)
     } else {
         if (!GRC::CleanConfig()) {
             InitWarning("Failed to clean obsolete config keys.");
+        }
+
+        // An existing config predating first-run credential generation, or a hand-written
+        // one, otherwise leaves a daemon that cannot start. Only when an RPC server is
+        // actually being started; -server is soft-set by gridcoinresearchd before AppInit2
+        // runs, so it is already known here, and an explicit server=0 is honoured.
+        if (gArgs.GetBoolArg("-server", false)) {
+            AddMissingRpcCredentials();
         }
     }
 
