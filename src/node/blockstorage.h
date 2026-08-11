@@ -26,7 +26,15 @@ bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex, const Consensus
 
 bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
 FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
+//! Append handle for the current block file. The returned FILE* is CACHED and
+//! owned by blockstorage -- callers must NOT fclose it; use CloseBlockFile().
+//! Requires cs_main.
 FILE* AppendBlockFile(unsigned int& nFileRet);
+
+//! Close the cached block-file append handle, if one is open. Call after the final
+//! FileCommit at shutdown, and any time the handle must not outlive the caller.
+//! Requires cs_main. Safe to call when nothing is open.
+void CloseBlockFile();
 bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
                            unsigned int percent_start = 0, unsigned int percent_end = 100);
 
