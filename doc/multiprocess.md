@@ -133,7 +133,25 @@ cd "C:\Program Files\GridcoinResearch\windows"
    binary creates it on first run and applies an owner-only DACL as it does so. A
    directory pre-created by anything else would inherit ordinary permissions instead.
 
-2. **Register and start the core task:**
+2. **Add the Defender exclusion before the first sync.** `WriteBlockToDisk` opens,
+   appends to and closes `blk*.dat` once per block, and Defender re-scans that
+   multi-gigabyte file on every close. On a 2-core VM syncing blocks 1-100,000 from a
+   LAN peer this measured **605s without the exclusion and 172s with it**, with
+   `MsMpEng` falling from 84% CPU to 6%.
+
+   ```powershell
+   Add-MpPreference -ExclusionPath "$env:APPDATA\GridcoinResearch\blk*.dat"
+   ```
+
+   The wildcard is required: block files roll over at ~2GB, so a literal
+   `blk0001.dat` stops covering the file being written after the first rollover.
+   This excludes block data only -- `wallet.dat`, `database/` and `txleveldb` stay
+   fully scanned. Skipping it breaks nothing; it just makes the initial sync ~3.5x
+   slower, and the symptom (a wallet at low CPU while `MsMpEng` runs hot) looks like
+   a wallet problem rather than a scanner one. Numbers in
+   [`../contrib/windows/README.md`](../contrib/windows/README.md).
+
+3. **Register and start the core task:**
 
    ```powershell
    .\Install-GridcoinCoreTask.ps1
@@ -151,7 +169,7 @@ cd "C:\Program Files\GridcoinResearch\windows"
    bootstrapping. Pass `-DataDir` only for a genuinely custom location, which the
    wallet's own chooser will have created already.
 
-3. **Confirm the first start did what it should.** This is the whole hardening story
+4. **Confirm the first start did what it should.** This is the whole hardening story
    in three checks:
 
    ```powershell
@@ -170,7 +188,7 @@ cd "C:\Program Files\GridcoinResearch\windows"
    > exit. If `Get-Process gridcoinresearchd` shows nothing immediately after, run the
    > `Start-ScheduledTask … Core-Start` line once more.
 
-4. **Attach the GUI:**
+5. **Attach the GUI:**
 
    ```powershell
    .\Start-GridcoinGui.ps1
@@ -180,7 +198,7 @@ cd "C:\Program Files\GridcoinResearch\windows"
    The GUI connects to the running core. It will not start one for you: if nothing is
    listening it says so and stops.
 
-5. **Optional but recommended for an unattended machine:** a Group Policy shutdown
+6. **Optional but recommended for an unattended machine:** a Group Policy shutdown
    script for a clean database flush, and stake-only autounlock. Both are covered in
    [`running-unattended.md`](running-unattended.md).
 

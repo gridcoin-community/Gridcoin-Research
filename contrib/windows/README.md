@@ -80,6 +80,50 @@ idea here even though it is honoured: **autounlock** is pure RPC, and **`Core-St
 runs `gridcoinresearchd.exe stop`**, which is also RPC. Turn RPC off and the only
 remaining way to stop the core is a hard kill with no database flush.
 
+## Windows Defender exclusion (do this before syncing)
+
+**Exclude the block data files from Defender before a first sync.** One entry, and
+note the wildcard -- it matters:
+
+```powershell
+# elevated PowerShell
+Add-MpPreference -ExclusionPath "$env:APPDATA\GridcoinResearch\blk*.dat"
+```
+
+Measured on a 2-core Windows 11 VM syncing mainnet blocks 1..100,000 from a peer on
+the same LAN, so neither WAN latency nor peer speed is involved:
+
+| exclusion | 1 -> 100k | MsMpEng CPU | wallet CPU |
+|---|---|---|---|
+| none | 605s | 84% | 21% |
+| `txleveldb` only | ~730s | 84% | 21% |
+| `blk*.dat` | **172s** | **6%** | **71%** |
+| whole data directory | 170s | - | - |
+
+`blk*.dat` alone recovers all of it. The same run on Linux from the same peer takes
+125-135s, so with the exclusion Windows lands at ~1.3x Linux -- the expected
+filesystem difference -- against ~4.5x without it.
+
+**Why the block files and not LevelDB.** The obvious suspect is `txleveldb`, which
+creates, renames and deletes many small files. Excluding it changes nothing.
+`WriteBlockToDisk` opens `blk*.dat` with `AppendBlockFile`, appends, and lets
+`CAutoFile` close it -- once per block. Defender scans on close-after-modify, and
+the file it re-examines grows into the gigabytes, so the cost rises with chain
+height. That also explains why a long sync feels progressively worse.
+
+**The wildcard is required, not tidiness.** `AppendBlockFile` rolls to a new file at
+~2GB (`nCurrentBlockFile++`), so a mainnet node has `blk0001.dat`, `blk0002.dat`,
+`blk0003.dat`, ... Excluding a literal `blk0001.dat` works until the first rollover
+and then silently stops covering the file actually being written.
+
+**Recognising it.** Low wallet CPU alongside high `MsMpEng` CPU in Task Manager is
+the signature; the wallet looks slow but is simply waiting. Freshly built, unsigned
+binaries attract the most aggressive scanning, so a developer build feels worse than
+a signed release.
+
+This excludes block data only -- no executables, and `wallet.dat`, `database/` and
+`txleveldb` all remain fully scanned.
+
 ## Firewall (inbound P2P)
 
 `Install-GridcoinCoreTask.ps1` adds an **inbound firewall rule for the daemon**
