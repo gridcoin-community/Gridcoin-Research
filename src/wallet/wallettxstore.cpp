@@ -76,6 +76,45 @@ GRC::SortKey projectKeys(const TransactionRecord& r)
 //! them back into the view once they resolve.
 bool recordStatusIsVolatile(const TransactionRecord& r)
 {
+    // A record is volatile only while the tip sits INSIDE the window where its
+    // status can still change:
+    //
+    //     tx_height <= tip_height <= tx_height + (generated ? 110 : 10)
+    //
+    // The upper bound is expressed by the terminal statuses below (Confirmed at
+    // depth >= RecommendedNumConfirmations, or maturity for generated records).
+    // This is the lower bound, and without it the set is inverted exactly when it
+    // hurts most.
+    //
+    // depth == -1 means GetDepthInMainChain found the tx neither in the active
+    // chain nor in the mempool. During initial block download that is EVERY
+    // transaction in the wallet: mapBlockIndex has not reached their confirming
+    // blocks yet, so GetDepthInMainChainINTERNAL returns 0 and the mempool check
+    // turns it into -1. Judging volatility by status alone then classifies the
+    // whole wallet as Conflicted/NotAccepted -> volatile, and applyChainTipRefresh
+    // re-derives every record on every accepted block for the entire sync. The
+    // cost is O(blocks x wallet transactions), which is why a sync from zero
+    // slowed by 5x with ~1000 records and produced a 156 GB debug.log under
+    // -debug=verbose.
+    //
+    // Polling cannot make such a record converge sooner, because nothing about a
+    // new tip changes it -- only its OWN block arriving does. And that arrival is
+    // already delivered as an event: CWallet::BlockConnected walks the block's
+    // transactions (including ones already in mapWallet, by the explicit
+    // mapWallet.find clause) and calls SyncTransaction, which reaches
+    // NotifyTransactionChanged(hash, CT_UPDATED). The store refreshes the record
+    // there and it re-enters the volatile set with a real depth. The same holds
+    // for the reorg paths, which SyncTransaction through TxStateInactive /
+    // TxStateInMempool.
+    //
+    // Deliberately depth < 0 and not depth <= 0: depth == 0 means the tx is in the
+    // mempool, which IS a genuinely polled state and is a handful of rows, not the
+    // wallet. Keeping those volatile preserves the fix for the transaction list
+    // freezing after a send (see the comment above).
+    if (r.status.depth < 0) {
+        return false;
+    }
+
     switch (r.status.status) {
     case TransactionStatus::OpenUntilDate:
     case TransactionStatus::OpenUntilBlock:
