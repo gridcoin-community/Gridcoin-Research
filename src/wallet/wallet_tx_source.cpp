@@ -282,10 +282,22 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
                 }
                 // CT_NEW is a fresh insert; CT_UPDATED / CT_UPDATING is an upsert
                 // of an existing tx (e.g. a confirmation).
+                // Is this tx's confirming block already in the index? During block
+                // connection it is -- the wallet is notified before SetBestChain
+                // advances pindexBest -- so the record lands at depth -1 with a
+                // status the views mask, and no further CT_UPDATED will ever come.
+                // The store keeps such a record volatile for the one refresh that
+                // ripens it. During IBD, by contrast, a wallet tx's block is not in
+                // the index at all, and that record is correctly never polled.
+                // Computed here because it needs mapBlockIndex under cs_main, which
+                // the store worker does not hold.
+                const bool block_known = !wtx.hashBlock.IsNull()
+                    && mapBlockIndex.find(wtx.hashBlock) != mapBlockIndex.end();
+
                 if (status == CT_NEW) {
-                    m_store.enqueueInsert(std::move(recs));
+                    m_store.enqueueInsert(std::move(recs), block_known);
                 } else {
-                    m_store.enqueueUpsert(std::move(recs));
+                    m_store.enqueueUpsert(std::move(recs), block_known);
                 }
             }
         } else {

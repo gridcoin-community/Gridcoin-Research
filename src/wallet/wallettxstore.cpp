@@ -74,44 +74,57 @@ GRC::SortKey projectKeys(const TransactionRecord& r)
 //! Conflicted/NotAccepted, get masked, and (without this) never come back.
 //! Keeping them volatile lets applyChainTipRefresh -> applyStatusUpdate flip
 //! them back into the view once they resolve.
-bool recordStatusIsVolatile(const TransactionRecord& r)
+//! \param block_known  The producer, holding cs_main, found this tx's confirming
+//!                     block in mapBlockIndex. Only consulted when depth < 0.
+bool recordStatusIsVolatile(const TransactionRecord& r, const bool block_known)
 {
     // A record is volatile only while the tip sits INSIDE the window where its
     // status can still change:
     //
     //     tx_height <= tip_height <= tx_height + (generated ? 110 : 10)
     //
-    // The upper bound is expressed by the terminal statuses below (Confirmed at
-    // depth >= RecommendedNumConfirmations, or maturity for generated records).
-    // This is the lower bound, and without it the set is inverted exactly when it
-    // hurts most.
+    // The upper bound is expressed by the terminal statuses below. This is the
+    // lower bound, and without it the set inverts exactly when it hurts most:
+    // during initial block download mapBlockIndex has not reached the wallet's
+    // confirming blocks, so GetDepthInMainChainINTERNAL returns 0, the mempool
+    // check turns that into -1, and updateStatus stamps Conflicted (ordinary) or
+    // NotAccepted (generated) on EVERY transaction. Judging by status alone then
+    // makes the whole wallet volatile, and applyChainTipRefresh re-derives all of
+    // it on every accepted block: O(blocks x wallet transactions), a 5x slower
+    // sync and a 156 GB debug.log under -debug=verbose.
     //
-    // depth == -1 means GetDepthInMainChain found the tx neither in the active
-    // chain nor in the mempool. During initial block download that is EVERY
-    // transaction in the wallet: mapBlockIndex has not reached their confirming
-    // blocks yet, so GetDepthInMainChainINTERNAL returns 0 and the mempool check
-    // turns it into -1. Judging volatility by status alone then classifies the
-    // whole wallet as Conflicted/NotAccepted -> volatile, and applyChainTipRefresh
-    // re-derives every record on every accepted block for the entire sync. The
-    // cost is O(blocks x wallet transactions), which is why a sync from zero
-    // slowed by 5x with ~1000 records and produced a 156 GB debug.log under
-    // -debug=verbose.
+    // Throttling that is NOT an adequate fix. Each pass is still O(wallet) inline
+    // on the core thread under cs_main, so on a large wallet a single pass is
+    // unbounded however rarely it runs.
     //
-    // Polling cannot make such a record converge sooner, because nothing about a
-    // new tip changes it -- only its OWN block arriving does. And that arrival is
-    // already delivered as an event: CWallet::BlockConnected walks the block's
-    // transactions (including ones already in mapWallet, by the explicit
-    // mapWallet.find clause) and calls SyncTransaction, which reaches
-    // NotifyTransactionChanged(hash, CT_UPDATED). The store refreshes the record
-    // there and it re-enters the volatile set with a real depth. The same holds
-    // for the reorg paths, which SyncTransaction through TxStateInactive /
-    // TxStateInMempool.
+    // But depth < 0 on its own is too blunt, and shipping it that way masked every
+    // row in the transaction table. Two different situations produce depth -1:
+    //
+    //   * The confirming block is NOT in mapBlockIndex -- we have not synced that
+    //     far. No new tip can change this record; only its own block arriving can,
+    //     and that arrives as an event (CWallet::BlockConnected -> SyncTransaction
+    //     -> NotifyTransactionChanged(CT_UPDATED)). Polling it is pure waste, and
+    //     this is the case that is the entire wallet during IBD.
+    //
+    //   * The confirming block IS in mapBlockIndex but is not yet the tip. This is
+    //     the window while that block is being connected: the wallet is notified of
+    //     a block's transactions BEFORE SetBestChain advances pindexBest, so the
+    //     record is inserted at depth -1 with a status the views mask. No further
+    //     CT_UPDATED will ever arrive -- a block connects exactly once -- so this
+    //     record MUST stay volatile for the single refresh that ripens it to
+    //     depth 1 and flips it into view. Excluding it left every row inserted,
+    //     hidden, and hidden permanently: the wallet's transaction table came up
+    //     empty after a sync, data present and invisible.
+    //
+    // block_known distinguishes the two. It is decided producer-side because the
+    // test needs mapBlockIndex, hence cs_main, while updateVolatileForHash also
+    // runs on the store worker, which holds neither lock.
     //
     // Deliberately depth < 0 and not depth <= 0: depth == 0 means the tx is in the
-    // mempool, which IS a genuinely polled state and is a handful of rows, not the
-    // wallet. Keeping those volatile preserves the fix for the transaction list
-    // freezing after a send (see the comment above).
-    if (r.status.depth < 0) {
+    // mempool, a genuinely polled state and a handful of rows, not the wallet.
+    // Keeping those volatile preserves the fix for the transaction list freezing
+    // after a send (see the comment above).
+    if (r.status.depth < 0 && !block_known) {
         return false;
     }
 
@@ -193,11 +206,13 @@ void WalletTxStore::warnIfIntakeBacklogged()
     m_intake_warn_at *= 2;
 }
 
-void WalletTxStore::enqueueInsert(std::vector<TransactionRecord> records)
+void WalletTxStore::enqueueInsert(std::vector<TransactionRecord> records, const bool block_known)
 {
+    const uint256 insert_hash = records.empty() ? uint256() : records.front().hash;
     {
         LOCK(cs_intake);
-        m_intake.push_back(IntakeItem{IntakeItem::Insert, std::move(records), uint256()});
+        m_intake.push_back(IntakeItem{IntakeItem::Insert, std::move(records), insert_hash, {}, {},
+                                      block_known});
         warnIfIntakeBacklogged();
     }
     m_intake_cv.notify_one();
@@ -213,7 +228,7 @@ void WalletTxStore::enqueueRemove(const uint256& hash)
     m_intake_cv.notify_one();
 }
 
-void WalletTxStore::enqueueUpsert(std::vector<TransactionRecord> records)
+void WalletTxStore::enqueueUpsert(std::vector<TransactionRecord> records, const bool block_known)
 {
     if (records.empty()) {
         return;
@@ -221,7 +236,8 @@ void WalletTxStore::enqueueUpsert(std::vector<TransactionRecord> records)
     const uint256 hash = records.front().hash;
     {
         LOCK(cs_intake);
-        m_intake.push_back(IntakeItem{IntakeItem::Update, std::move(records), hash, {}, {}});
+        m_intake.push_back(IntakeItem{IntakeItem::Update, std::move(records), hash, {}, {},
+                                      block_known});
         warnIfIntakeBacklogged();
     }
     m_intake_cv.notify_one();
@@ -294,8 +310,12 @@ void WalletTxStore::applyIntake(IntakeItem item)
 {
     // No lock held here; the apply* methods take cs_store internally.
     if (item.kind == IntakeItem::Insert) {
+        // Stamp the producer's view of the confirming block BEFORE the records land,
+        // so the updateVolatileForHash() inside sees it. See m_block_known.
+        WITH_LOCK(cs_store, setBlockKnown(item.hash, item.block_known_at_produce));
         insertTransaction(std::move(item.records));
     } else if (item.kind == IntakeItem::Update) {
+        WITH_LOCK(cs_store, setBlockKnown(item.hash, item.block_known_at_produce));
         updateTransaction(std::move(item.records));
     } else if (item.kind == IntakeItem::AddressBook) {
         applyAddressBookChange(item.ab_address, item.ab_label);
@@ -337,7 +357,7 @@ void WalletTxStore::rebuildCaches()
     m_volatile.clear();
     for (std::size_t i = 0; i < m_records.size(); ++i) {
         recomputeCacheAt(i);
-        if (isVolatile(m_records[i])) {
+        if (isVolatile(m_records[i], m_block_known.count(m_records[i].hash) > 0)) {
             m_volatile.insert(m_records[i].hash);
         }
     }
@@ -569,6 +589,7 @@ bool WalletTxStore::removeLocked(const uint256& hash)
     m_keys_cache.erase(m_keys_cache.begin() + minPos, m_keys_cache.begin() + maxPos + 1);
     m_by_hash.erase(hash);
     m_volatile.erase(hash);   // no longer present -> not in the per-tip refresh set
+    m_block_known.erase(hash);   // ...and no stale entry left behind (see m_block_known)
     shiftIndex(maxPos + 1, -static_cast<std::ptrdiff_t>(count));
 
     m_queue.push(GRC::RowsRemovedPayload{static_cast<int>(minPos), static_cast<int>(count)});
@@ -881,6 +902,7 @@ void WalletTxStore::applyChainTipRefresh()
         auto range = m_by_hash.equal_range(hash);
         if (range.first == range.second) {
             m_volatile.erase(hash);
+            m_block_known.erase(hash);
             continue;
         }
         auto wit = m_wallet->mapWallet.find(hash);
@@ -888,6 +910,7 @@ void WalletTxStore::applyChainTipRefresh()
             // Vanished from the wallet (a CT_DELETED is in flight) — drop it; the
             // removal event will clean up the rows.
             m_volatile.erase(hash);
+            m_block_known.erase(hash);
             continue;
         }
         const CWalletTx& wtx = wit->second;
@@ -1006,20 +1029,21 @@ void WalletTxStore::recomputeCacheAt(std::size_t i)
     m_keys_cache[i] = projectKeys(m_records[i]);
 }
 
-bool WalletTxStore::isVolatile(const TransactionRecord& r)
+bool WalletTxStore::isVolatile(const TransactionRecord& r, const bool block_known)
 {
-    return recordStatusIsVolatile(r);
+    return recordStatusIsVolatile(r, block_known);
 }
 
 void WalletTxStore::updateVolatileForHash(const uint256& hash)
 {
     auto range = m_by_hash.equal_range(hash);
     bool volatile_now = false;
+    const bool block_known = m_block_known.count(hash) > 0;
     for (auto it = range.first; it != range.second; ++it) {
         if (it->second >= m_records.size()) {
             continue;   // stale index entry; removeLocked logs and repairs it
         }
-        if (isVolatile(m_records[it->second])) {
+        if (isVolatile(m_records[it->second], block_known)) {
             volatile_now = true;
             break;
         }
@@ -1028,6 +1052,27 @@ void WalletTxStore::updateVolatileForHash(const uint256& hash)
         m_volatile.insert(hash);
     } else {
         m_volatile.erase(hash);
+    }
+
+    // The flag exists only to carry a record through the one tip between its block
+    // being connected and becoming the tip. Once any part reports depth >= 0 that
+    // transition has happened and ordinary status-based volatility takes over, so
+    // drop it -- this is what keeps m_block_known bounded by the block currently
+    // being connected rather than growing with the wallet.
+    for (auto it = range.first; it != range.second; ++it) {
+        if (it->second < m_records.size() && m_records[it->second].status.depth >= 0) {
+            m_block_known.erase(hash);
+            break;
+        }
+    }
+}
+
+void WalletTxStore::setBlockKnown(const uint256& hash, const bool known)
+{
+    if (known) {
+        m_block_known.insert(hash);
+    } else {
+        m_block_known.erase(hash);
     }
 }
 
