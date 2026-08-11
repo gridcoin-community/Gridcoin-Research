@@ -2256,6 +2256,16 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Add wallet transactions that aren't already in a block to mapTransactions
     pwalletMain->ReacceptWalletTransactions();
 
+    // Release spends the wallet remembers but the chain has not replayed, BEFORE
+    // FixSpentCoins. After a chain reset or rollback the wallet still believes in
+    // every spend it ever saw, so those coins read as gone and the balance
+    // under-reports for the entire resync. FixSpentCoins cannot fix that on its own
+    // -- it skips any transaction missing from the tx index, which right after a
+    // reset is all of them -- and this needs no index at all.
+    int nReleased;
+    int64_t nAmountReleased;
+    pwalletMain->ReleaseSpendsNotInActiveChain(nReleased, nAmountReleased);
+
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);

@@ -4204,6 +4204,74 @@ set< set<CTxDestination> > CWallet::GetAddressGroupings() EXCLUSIVE_LOCKS_REQUIR
 
 // ppcoin: check 'spent' consistency between wallet and txindex
 // ppcoin: fix wallet spent state according to txindex
+void CWallet::ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountReleased, bool fCheckOnly)
+{
+    nReleased = 0;
+    nAmountReleased = 0;
+
+    // cs_main for mapBlockIndex; cs_wallet for mapWallet. Canonical order.
+    LOCK2(cs_main, cs_wallet);
+
+    // A spend only counts if the transaction that made it is in the ACTIVE chain.
+    // Anything else -- a confirming block we have not synced to yet, a block on a
+    // side chain, or one that no longer exists after a reset -- has not happened as
+    // far as the chain is concerned, so the flags it left behind are wrong.
+    //
+    // Deliberately confirmed-state transactions only. A wallet transaction sitting
+    // in the mempool has genuinely committed its inputs and must keep its flags, or
+    // the wallet would happily respend them.
+    const auto spend_is_active = [](const CWalletTx& wtx) {
+        const auto* conf = wtx.state<TxStateConfirmed>();
+        if (conf == nullptr) return true;   // not confirmed: leave it alone
+
+        const auto mi = mapBlockIndex.find(conf->m_confirmed_block_hash);
+        if (mi == mapBlockIndex.end() || mi->second == nullptr) return false;
+
+        return mi->second->IsInMainChain();
+    };
+
+    // Collect first, write second: on an ordinary startup nothing qualifies and we
+    // never touch the wallet database at all.
+    std::vector<std::pair<CWalletTx*, unsigned int>> release;
+
+    for (auto& [hash, wtx] : mapWallet) {
+        if (spend_is_active(wtx)) continue;
+
+        // This transaction's spends have not happened on the active chain. Clear the
+        // flags it set on the outputs it consumed.
+        for (const CTxIn& txin : wtx.vin) {
+            auto it = mapWallet.find(txin.prevout.hash);
+            if (it == mapWallet.end()) continue;
+
+            CWalletTx& prev = it->second;
+
+            if (txin.prevout.n >= prev.vout.size()) continue;
+            if (IsMine(prev.vout[txin.prevout.n]) == ISMINE_NO) continue;
+            if (!prev.IsSpent(txin.prevout.n)) continue;
+
+            release.emplace_back(&prev, txin.prevout.n);
+            nReleased++;
+            nAmountReleased += prev.vout[txin.prevout.n].nValue;
+        }
+    }
+
+    if (release.empty()) return;
+
+    LogPrintf("INFO: %s: %d output(s) totalling %s were marked spent by transactions that are not in "
+              "the active chain (the chain was reset or rolled back under this wallet); %s",
+              __func__, nReleased, FormatMoney(nAmountReleased),
+              fCheckOnly ? "not repairing (check only)" : "releasing them");
+
+    if (fCheckOnly) return;
+
+    CWalletDB walletdb(strWalletFile);
+
+    for (const auto& [prev, n] : release) {
+        prev->MarkUnspent(n);
+        prev->WriteToDisk(&walletdb);
+    }
+}
+
 void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bool fCheckOnly)
 {
     nMismatchFound = 0;
