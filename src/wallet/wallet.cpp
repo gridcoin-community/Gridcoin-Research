@@ -2703,7 +2703,8 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
 }
 
 // A lock must be taken on cs_main before calling this function.
-void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& balance_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& balance_out,
+                                       bool fMiner) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
 
     vCoins.clear();
@@ -2792,7 +2793,12 @@ void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSp
             if (available_output) ++txns_w_avail_outputs;
         }
 
-        g_timer.GetElapsedTime(function
+        // Only the staking thread owns the "miner" timer label -- it is created by
+        // StakeMiner's loop (miner.cpp) and does not exist otherwise. This function
+        // is also reached from the estimated-time-to-stake / net-weight path
+        // (gridcoin/staking/difficulty.cpp), which the GUI polls, and there the
+        // lookup misses and MilliTimer warns on every call.
+        if (fMiner) g_timer.GetElapsedTime(function
                                + "transactions = "
                                + ToString(transactions)
                                + ", txns_w_avail_outputs = "
@@ -3148,7 +3154,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     // the balance_out as a by-product.
     // For that 210000 transaction wallet, all of these changes have reduced the time in the miner loop from >750 msec
     // down to < 450 msec.
-    AvailableCoinsForStaking(vCoins, nSpendTime, balance_out);
+    AvailableCoinsForStaking(vCoins, nSpendTime, balance_out, fMiner);
 
     int64_t BalanceToConsider = balance_out;
 
@@ -3213,7 +3219,9 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
         return false;
     }
 
-    g_timer.GetTimes(function + "select loop", "miner");
+    // See AvailableCoinsForStaking: the "miner" label exists only while StakeMiner
+    // is cycling. fMiner is false on the difficulty/ETTS path.
+    if (fMiner) g_timer.GetTimes(function + "select loop", "miner");
 
     // Randomize the vector order to keep PoS truly a roll of dice in which utxo has a chance to stake first
     if (fMiner)
@@ -3221,7 +3229,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
         Shuffle(vCoinsRet.begin(), vCoinsRet.end(), FastRandomContext());
     }
 
-    g_timer.GetTimes(function + "shuffle", "miner");
+    if (fMiner) g_timer.GetTimes(function + "shuffle", "miner");
 
     return true;
 }
