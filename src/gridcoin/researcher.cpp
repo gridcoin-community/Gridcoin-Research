@@ -1247,6 +1247,13 @@ void Researcher::MarkDirty()
 
 void Researcher::Reload()
 {
+    // Every user action that can change where (or whether) BOINC lives funnels
+    // through here: startup, the researcher wizard (switchMode -> ChangeMode ->
+    // Reload), resetcpids, and the interface reload(). Discard the memoized path so
+    // this reload re-probes -- a user who installs BOINC after the wallet, then uses
+    // the wizard once the chain is synced, must not be served a stale negative.
+    ResetBoincDataDirCache();
+
     if (ConfiguredForNoncruncherMode(true)) {
         StoreResearcher(Researcher()); // Non-cruncher
         return;
