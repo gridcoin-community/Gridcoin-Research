@@ -67,6 +67,19 @@ daemon"*. **That is the access control working, not a bug.**
 flush, which risks database corruption. Shutdown, upgrade, and manual stop all go
 through the one `Core-Stop` task.
 
+**RPC credentials are required, and generated for you.** The daemon soft-sets
+`-server`, so the core always starts its RPC listener (loopback only unless you add
+`rpcallowip`) and refuses to run with an empty `rpcpassword`. On a fresh install the
+credentials are written into the first-run config; on a **retrofit**, where the config
+already exists but predates this and holds only `addnode=` lines, a generated
+`rpcuser`/`rpcpassword` is appended to it and nothing else is touched. You do not need
+to do anything, and there is nothing to memorise.
+
+Two Windows features depend on that RPC endpoint, which is why `server=0` is a poor
+idea here even though it is honoured: **autounlock** is pure RPC, and **`Core-Stop`
+runs `gridcoinresearchd.exe stop`**, which is also RPC. Turn RPC off and the only
+remaining way to stop the core is a hard kill with no database flush.
+
 ## Firewall (inbound P2P)
 
 `Install-GridcoinCoreTask.ps1` adds an **inbound firewall rule for the daemon**
