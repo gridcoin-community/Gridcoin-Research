@@ -4286,6 +4286,61 @@ void CWallet::ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountRele
 
     if (release.empty()) return;
 
+    // Defer to the chain wherever the chain has an opinion.
+    //
+    // "The spending transaction the wallet remembers is not in the active chain" is
+    // NOT the same claim as "this output is unspent", and where they disagree the
+    // chain wins. A wallet moved between nodes can remember a spender whose block is
+    // not on this node's chain while the output is nevertheless spent here, by a
+    // different or replaced transaction. Releasing those is simply wrong.
+    //
+    // Observed on W11-2 with a 6.25M GRC mainnet wallet copied from another node:
+    // this pass released 3,462 outputs on EVERY startup and FixSpentCoins re-marked
+    // exactly those 3,462 immediately afterwards, every time. The end state was right
+    // only because FixSpentCoins runs after this -- thousands of pointless wallet
+    // writes per start, resting on call order, and a window in which the wallet
+    // believes it can spend coins the chain says are gone.
+    //
+    // One ReadTxIndex per CANDIDATE, not per wallet transaction, so this stays cheap:
+    // it is bounded by what we are about to release, and it runs only when there is
+    // something to release. FixSpentCoins pays an index read for all of mapWallet.
+    //
+    // The reset case, which this pass exists for, is unaffected: with the block data
+    // gone the tx index has no entry, the chain has no opinion, and the release
+    // proceeds exactly as before.
+    {
+        CTxDB txdb("r");
+        int deferred = 0;
+
+        for (auto it = release.begin(); it != release.end(); ) {
+            const uint256& prev_hash = it->first.first;
+            const unsigned int n = it->first.second;
+
+            CTxIndex txindex;
+            const bool chain_says_spent = txdb.ReadTxIndex(prev_hash, txindex)
+                && txindex.vSpent.size() > n
+                && !txindex.vSpent[n].IsNull();
+
+            if (chain_says_spent) {
+                nReleased--;
+                nAmountReleased -= it->second->vout[n].nValue;
+                it = release.erase(it);
+                deferred++;
+            } else {
+                ++it;
+            }
+        }
+
+        if (deferred > 0) {
+            LogPrintf("INFO: %s: left %d output(s) marked spent — the spending transaction is not in "
+                      "the active chain but the chain's tx index reports the output spent, so the "
+                      "wallet's record of the spender is stale rather than the flag being wrong",
+                      __func__, deferred);
+        }
+    }
+
+    if (release.empty()) return;
+
     LogPrintf("INFO: %s: %d output(s) totalling %s were marked spent by transactions that are not in "
               "the active chain (the chain was reset or rolled back under this wallet); %s",
               __func__, nReleased, FormatMoney(nAmountReleased),
