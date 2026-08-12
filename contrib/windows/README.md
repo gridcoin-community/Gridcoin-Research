@@ -249,6 +249,13 @@ schtasks /run /tn "\Gridcoin\Autounlock"         # restart so it re-reads the bl
 
 (A reboot does both.)
 
+In the Task Scheduler GUI the equivalent is **End** and then **Run** — in that order. The task is
+registered `MultipleInstancesPolicy = IgnoreNew`, so hitting **Run** while the old helper is still
+running is **silently discarded**: no error, no new `autounlock.log` line, the task still shows
+Running (that is the OLD instance, still holding the OLD passphrase), and the wallet stays locked.
+Confirm the restart took effect by checking that `autounlock.log` gained a new
+`wallet unlocked (stake-only)` line, not by the task's Status column.
+
 A running log (redacted — no secrets) is at `<datadir>\autounlock\autounlock.log`. To
 remove everything:
 
