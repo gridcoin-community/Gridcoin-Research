@@ -675,6 +675,18 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
     // it genuinely requires a rescan. Storing every record and filtering in the
     // cursors would remove the rescan entirely; that is a windowed-model change,
     // not a locking fix, and is deliberately not attempted here.
+    //
+    // Worth stating for whoever does attempt it: only WIDENING the cutoff needs
+    // the wallet. Widening -- an earlier date, or switching limiting off --
+    // asks for records that were never stored, so mapWallet is the only place to
+    // get them. NARROWING -- a later date, or switching limiting on -- only ever
+    // needs records dropped, and m_records is already a superset, so it is an
+    // in-memory filter plus a cursor re-arm: cs_store alone, no cs_main, no
+    // cs_wallet, no disk. Roughly half the option changes therefore take this
+    // full rescan without needing to. Splitting them is a real improvement and
+    // is NOT attempted here: it means a second rebuild path through cursor
+    // re-arming, in code that is both recently churned and carrying an open
+    // GUI-freeze bug, for a saving on a deliberate, infrequent user action.
     LOCK2(cs_main, m_wallet->cs_wallet);
 
     // Discard intake queued between the park above and cs_main here. Producers
