@@ -160,6 +160,44 @@ bool parseCommandLine(std::vector<std::string> &args, const std::string &strComm
     }
 }
 
+namespace {
+//! Commands whose ARGUMENTS are the secret, so the command line itself must not
+//! be echoed, logged or kept in history. Arguments only: dumpprivkey takes a
+//! public address and returns a key, which is a separate concern, and
+//! importwallet takes a path rather than key material.
+//!
+//! walletpassphrasechange is the sharpest case. Getting the old passphrase wrong
+//! is exactly what makes the call fail, and the failure path is the one that
+//! writes to the log -- carrying the new passphrase with it.
+const std::set<std::string> SENSITIVE_ARG_COMMANDS = {
+    "encryptwallet",
+    "importprivkey",
+    "restoreseedphrase",
+    "walletpassphrase",
+    "walletpassphrasechange",
+};
+
+//! Replace the arguments of a secret-bearing command with a placeholder. The
+//! command still executes with its real arguments; only the copies that are
+//! displayed, logged or remembered are reduced.
+//!
+//! The name is taken from parseCommandLine rather than by splitting on
+//! whitespace, so it sees the command exactly as the dispatcher will. Splitting
+//! naively would leave `"walletpassphrase" secret 60` unredacted while the
+//! parser strips the quotes and runs it -- the wrong way round for a guard.
+QString RedactSensitiveArgs(const QString& command)
+{
+    std::vector<std::string> args;
+    if (!parseCommandLine(args, command.toStdString()) || args.empty()) {
+        // Unparseable or empty: it will not dispatch, but say nothing about its
+        // contents either, since we cannot tell what is in it.
+        return QStringLiteral("(unparsed command)");
+    }
+    if (!SENSITIVE_ARG_COMMANDS.count(args[0])) return command;
+    return QString::fromStdString(args[0]) + QStringLiteral(" (arguments not shown)");
+}
+} // namespace
+
 void RPCExecutor::request(const QString &command)
 {
     std::vector<std::string> args;
@@ -183,7 +221,11 @@ void RPCExecutor::request(const QString &command)
     }
     else
     {
-        GUILogPrintf("gridcoinresearch:  Handling Error [Request %s]...", command.toStdString());
+        // This line persists: GUILog::LogPrintf reaches LogPrintStr, i.e.
+        // debug.log. A failed command is the common case for the very commands
+        // that carry a secret, so log the name without its arguments.
+        GUILogPrintf("gridcoinresearch:  Handling Error [Request %s]...",
+                     RedactSensitiveArgs(command).toStdString());
         emit reply(RPCConsole::CMD_ERROR, QString::fromStdString(result.output));
     }
 }
@@ -503,12 +545,18 @@ void RPCConsole::on_lineEdit_returnPressed()
 
     if(!cmd.isEmpty())
     {
-        message(CMD_REQUEST, cmd);
+        // The command is dispatched in full, but the pane echo and the history
+        // keep only the redacted form -- the pane ends up in screenshots pasted
+        // into bug reports, and the history is one Up-arrow away for anyone at
+        // the keyboard. This matches how upstream feeds its filtered command to
+        // both sinks.
+        const QString display_cmd = RedactSensitiveArgs(cmd);
+        message(CMD_REQUEST, display_cmd);
         emit cmdRequest(cmd);
         // Remove command, if already in history
-        history.removeOne(cmd);
+        history.removeOne(display_cmd);
         // Append command to history
-        history.append(cmd);
+        history.append(display_cmd);
         // Enforce maximum history size
         while(history.size() > CONSOLE_HISTORY)
             history.removeFirst();
