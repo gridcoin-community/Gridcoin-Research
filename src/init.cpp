@@ -898,6 +898,13 @@ void SetupServerArgs()
                    "separately with -multiprocess) connects to it instead of running core in-process. "
                    "Default: off (monolithic).",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-ipclogtrace",
+                   "Log the full request and response payload of every IPC call. This includes "
+                   "arguments, so anything passed over the wallet interfaces -- passphrases and "
+                   "seed phrases among them -- is written to debug.log in the clear. Diagnostic "
+                   "use only, on a wallet you are willing to expose. Deliberately separate from "
+                   "-debug: no logging category, including -debug=all, enables this (default: 0).",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-rpcuser=<user>", "Username for JSON-RPC connections",
                    ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::RPC);
     argsman.AddArg("-rpcwait", "Wait for RPC server to start.",
