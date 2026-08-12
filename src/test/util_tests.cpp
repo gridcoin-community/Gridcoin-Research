@@ -503,6 +503,17 @@ BOOST_AUTO_TEST_CASE(util_ParseMoney)
     BOOST_CHECK(!ParseMoney(std::string("\0-1", 3), ret));
     BOOST_CHECK(!ParseMoney(std::string("\01", 2), ret));
     BOOST_CHECK(!ParseMoney(std::string("1\0", 2), ret));
+
+    // Inputs carrying no leading digits must be rejected, not terminate the
+    // process. These reach the whole-part conversion with an empty string,
+    // which is the one case the size and range guards above do not cover.
+    // A decimal without its leading zero is far more likely a typo than an
+    // intended value, so rejecting it matches ParseFixedPoint on the RPC path.
+    BOOST_CHECK(!ParseMoney(".5", ret));
+    BOOST_CHECK(!ParseMoney(".", ret));
+    BOOST_CHECK(!ParseMoney("", ret));
+    BOOST_CHECK(!ParseMoney(" ", ret));
+    BOOST_CHECK(!ParseMoney(".00000001", ret));
 }
 
 BOOST_AUTO_TEST_CASE(util_IsHex)

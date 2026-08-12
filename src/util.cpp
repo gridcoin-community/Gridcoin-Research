@@ -121,8 +121,13 @@ bool ParseMoney(const char* pszIn, int64_t& nRet)
 
     int64_t nWhole = 0;
 
-    // Because of the protection above, this assert should never fail.
-    assert(ParseInt64(strWhole, &nWhole));
+    // strWhole is empty for inputs that carry no leading digits -- ".5", ".",
+    // "" and " " all reach here with nothing accumulated -- and ParseInt64
+    // rejects an empty string. Return false so the caller reports a bad value
+    // rather than terminating. ParseFixedPoint, which the RPC amount path uses,
+    // already rejects the same inputs the same way.
+    if (!ParseInt64(strWhole, &nWhole))
+        return false;
 
     int64_t nValue = nWhole*COIN + nUnits;
 
