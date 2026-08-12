@@ -233,6 +233,22 @@ What it does:
   unprivileged loopback port can be squatted by a local account first; a **foreign or
   unverifiable owner makes it refuse** and log — that is the gate working, not a bug.
 
+**Changing the wallet passphrase.** Re-running the script is necessary but **not sufficient**.
+The helper decrypts the blob **once at startup** and never re-reads it, so a helper that is
+already running keeps the OLD passphrase in memory. It will not notice until it next sees a fresh
+core instance; then `walletpassphrase` is rejected with `-14`, it logs "retrying cannot fix this"
+and exits — and because `-AtStartup` is its only trigger, nothing restarts it until the next boot.
+The result is a correct blob on disk, no helper running, and a wallet that stays locked. Restart
+the task after re-running setup:
+
+```powershell
+.\Set-GridcoinAutounlock.ps1                     # writes the new DPAPI blob
+schtasks /end /tn "\Gridcoin\Autounlock"         # drop the helper holding the old passphrase
+schtasks /run /tn "\Gridcoin\Autounlock"         # restart so it re-reads the blob
+```
+
+(A reboot does both.)
+
 A running log (redacted — no secrets) is at `<datadir>\autounlock\autounlock.log`. To
 remove everything:
 
