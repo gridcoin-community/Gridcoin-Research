@@ -89,10 +89,24 @@ example:
 BUILDDIR=$PWD/build contrib/devtools/gen-manpages.sh
 ```
 
-security-check.py and test-security-check.py
-============================================
+security-check.py
+=================
 
-Perform basic security checks on a series of executables.
+Checks that built executables carry the exploit mitigations the build asks for:
+PIE/ASLR, a stack canary, `_FORTIFY_SOURCE`, full RELRO, non-executable stack and
+branch protection, per format (ELF, PE, Mach-O). Requires `lief`; the release
+workflow pins the version it installs.
+
+Run it against the binaries in a build tree:
+
+```bash
+python3 contrib/devtools/security-check.py build/bin/gridcoinresearchd build/bin/gridcoinresearch
+```
+
+It exits non-zero and names the failing property per binary, which is what makes
+it usable as a release gate. Note this checks the artifact, not the build flags:
+a hardening option that is set but does not reach the linker fails here, which is
+the case it exists to catch.
 
 symbol-check.py
 ===============
