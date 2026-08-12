@@ -279,13 +279,15 @@ with a stored password, **DPAPI decrypt inside the batch-logon task** (the prima
 confirmed), and a cold stake-only unlock taking `getstakinginfo` from `mining-error: [Wallet
 locked]`/`staking: False` to `[]`/`staking: True` with the staking loop observed running. The
 secret stayed in the DPAPI blob alone: `passphrase.cred` owner-only with no inherited ACEs, no
-secret in the task arguments, the config, or either log.
+secret in the task arguments, the config, or either log. The `-AtStartup` trigger was then confirmed on a
+real boot: task launched 9s after boot, wallet unlocked (stake-only) 1m45s later once core was
+ready, decrypting a blob that had been rewritten by a passphrase change 20 minutes earlier.
 
-**Still unconfirmed — do not read the above as covering these:** the `-AtStartup` trigger firing
-on a real boot (validated via `schtasks /run`, which uses the same batch-logon launch path, but
-the task was registered after the reboots); the foreign-listener refusal path; self-heal after a
-core restart; `-Remove`; the upgrade path; different-user connection-refused; the "Log on as a
-batch job" right when it is not already granted; and Microsoft/AzureAD-account principal forms.
+**Still unconfirmed — do not read the above as covering these:** the foreign-listener refusal
+path; the stale-passphrase `-14` exit (described under Autounlock, read from the code but not
+observed); self-heal after a core restart; `-Remove`; the upgrade path; different-user
+connection-refused; the "Log on as a batch job" right when it is not already granted; and
+Microsoft/AzureAD-account principal forms.
 
 **Gotcha worth knowing:** `-AtStartup` is the task's only trigger, so registering it does not run
 it and restarting the *core* does not either. `Last Result 267011` (`SCHED_S_TASK_HAS_NOT_RUN`)
