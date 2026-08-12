@@ -246,11 +246,25 @@ spendable until the next restart.
 
 ## Status
 
-Validated by PowerShell parse-check + inspection; full runtime validation on Windows is
-pending on the test box. Core tasks: install → reboot → autostart → upgrade → GUI attach →
-shutdown-flush → different-user connection-refused. Autounlock: enable → **DPAPI decrypt
-inside the batch-logon task** (the primary unknown) → cold stake-only unlock → foreign-listener
-refused → self-heal on restart → remove. Known items to confirm there: the shutdown-flush
-mechanism (above); that stored-password task registration requires an **elevated** shell and
-the "Log on as a batch job" right for the run-as account; and Microsoft/AzureAD-account
-principal forms.
+Runtime-validated on Windows 11 (2026-08-12) against a populated mainnet wallet.
+
+**Confirmed on device:** core autostart via the `Core-Start` task across two reboots; GUI attach
+to an already-running core; GUI quit leaving core serving; core exit taking the GUI down cleanly;
+ordered shutdown flush; stale `node.sock`/`ipc.cookie` replaced after an abrupt reboot kill; RPC
+credentials generated into a credential-less config on start. Autounlock: elevated registration
+with a stored password, **DPAPI decrypt inside the batch-logon task** (the primary unknown —
+confirmed), and a cold stake-only unlock taking `getstakinginfo` from `mining-error: [Wallet
+locked]`/`staking: False` to `[]`/`staking: True` with the staking loop observed running. The
+secret stayed in the DPAPI blob alone: `passphrase.cred` owner-only with no inherited ACEs, no
+secret in the task arguments, the config, or either log.
+
+**Still unconfirmed — do not read the above as covering these:** the `-AtStartup` trigger firing
+on a real boot (validated via `schtasks /run`, which uses the same batch-logon launch path, but
+the task was registered after the reboots); the foreign-listener refusal path; self-heal after a
+core restart; `-Remove`; the upgrade path; different-user connection-refused; the "Log on as a
+batch job" right when it is not already granted; and Microsoft/AzureAD-account principal forms.
+
+**Gotcha worth knowing:** `-AtStartup` is the task's only trigger, so registering it does not run
+it and restarting the *core* does not either. `Last Result 267011` (`SCHED_S_TASK_HAS_NOT_RUN`)
+with no `autounlock.log` is that state, not a failure. Force it with
+`schtasks /run /tn "\Gridcoin\Autounlock"`.
