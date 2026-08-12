@@ -150,7 +150,10 @@ jobs:
           ALLOWED='libc\.so|libm\.so'
 
           # Check both the GUI (src/qt/) and Daemon (src/)
-          BINARIES="${{ matrix.build_dir }}/src/qt/gridcoinresearch ${{ matrix.build_dir }}/src/gridcoinresearchd"
+          # The build installs into <build_dir>/bin, not <build_dir>/src. Pointing
+          # at src/ meant neither binary was ever found, and the miss branch below
+          # only warned, so this step reported success without inspecting anything.
+          BINARIES="${{ matrix.build_dir }}/bin/gridcoinresearch ${{ matrix.build_dir }}/bin/gridcoinresearchd"
 
           fail_count=0
 
@@ -172,8 +175,10 @@ jobs:
                 echo "Verified hermetic. NEEDED: $(echo $NEEDED | tr '\n' ' ')"
               fi
             else
-              # Warn but don't fail immediately if a binary is missing (e.g. GUI disabled)
-              echo "::warning::Binary not found at expected path: $bin"
+              # A binary we expected to scan is missing: fail. Treating this as a
+              # warning is how the step came to pass while checking nothing.
+              echo "::error::Binary not found at expected path: $bin"
+              fail_count=$((fail_count+1))
             fi
           done
 
@@ -181,6 +186,23 @@ jobs:
             echo "::error::Hermeticity check failed for $fail_count binary(ies)."
             exit 1
           fi
+
+      # 7b. Binary hardening check
+      - name: Verify Binary Hardening
+        run: |
+          python3 -m pip install --quiet --user 'lief==0.17.5'
+          shopt -s nullglob
+          BINS=(${{ matrix.build_dir }}/bin/gridcoinresearch ${{ matrix.build_dir }}/bin/gridcoinresearchd \
+                ${{ matrix.build_dir }}/bin/gridcoinresearch.exe ${{ matrix.build_dir }}/bin/gridcoinresearchd.exe)
+          # An empty list must fail. A hardening gate that silently finds nothing
+          # to inspect is the same failure this workflow already had in its
+          # hermeticity step.
+          if [ ${#BINS[@]} -eq 0 ]; then
+            echo "::error::No binaries found under ${{ matrix.build_dir }}/bin to check"
+            exit 1
+          fi
+          echo "Checking: ${BINS[*]}"
+          python3 contrib/devtools/security-check.py "${BINS[@]}"
 
       # 8a. Test (Linux)
       - name: Run Tests (Linux)
@@ -371,6 +393,21 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+      - name: Verify Binary Hardening
+        run: |
+          python3 -m pip install --quiet --user 'lief==0.17.5' --break-system-packages || \
+            python3 -m pip install --quiet --user 'lief==0.17.5'
+          shopt -s nullglob
+          BINS=(build/bin/gridcoinresearch build/bin/gridcoinresearchd)
+          # An empty list must fail: a gate that finds nothing to inspect is the
+          # same failure this workflow already had in its hermeticity step.
+          if [ ${#BINS[@]} -eq 0 ]; then
+            echo "::error::No binaries found under build/bin to check"
+            exit 1
+          fi
+          echo "Checking: ${BINS[*]}"
+          python3 contrib/devtools/security-check.py "${BINS[@]}"
+
       - name: Package (DMG)
         run: cmake --build build --target deploy
 
@@ -557,6 +594,21 @@ jobs:
       - name: Test
         run: arch -x86_64 /usr/local/bin/ctest --test-dir build --output-on-failure
 
+      - name: Verify Binary Hardening
+        run: |
+          python3 -m pip install --quiet --user 'lief==0.17.5' --break-system-packages || \
+            python3 -m pip install --quiet --user 'lief==0.17.5'
+          shopt -s nullglob
+          BINS=(build/bin/gridcoinresearch build/bin/gridcoinresearchd)
+          # An empty list must fail: a gate that finds nothing to inspect is the
+          # same failure this workflow already had in its hermeticity step.
+          if [ ${#BINS[@]} -eq 0 ]; then
+            echo "::error::No binaries found under build/bin to check"
+            exit 1
+          fi
+          echo "Checking: ${BINS[*]}"
+          python3 contrib/devtools/security-check.py "${BINS[@]}"
+
       - name: Package (DMG)
         run: arch -x86_64 /usr/local/bin/cmake --build build --target deploy
 
@@ -680,6 +732,21 @@ jobs:
       - name: Build
         run: cmake --build build_native
 
+      - name: Verify Binary Hardening
+        run: |
+          python3 -m pip install --quiet --user 'lief==0.17.5' --break-system-packages || \
+            python3 -m pip install --quiet --user 'lief==0.17.5'
+          shopt -s nullglob
+          BINS=(build_native/bin/gridcoinresearch build_native/bin/gridcoinresearchd)
+          # An empty list must fail: a gate that finds nothing to inspect is the
+          # same failure this workflow already had in its hermeticity step.
+          if [ ${#BINS[@]} -eq 0 ]; then
+            echo "::error::No binaries found under build_native/bin to check"
+            exit 1
+          fi
+          echo "Checking: ${BINS[*]}"
+          python3 contrib/devtools/security-check.py "${BINS[@]}"
+
       - name: Prepare Artifacts
         run: |
           mkdir -p dist
@@ -790,6 +857,21 @@ jobs:
 
       - name: Build
         run: cmake --build build_arm64
+
+      - name: Verify Binary Hardening
+        run: |
+          python3 -m pip install --quiet --user 'lief==0.17.5' --break-system-packages || \
+            python3 -m pip install --quiet --user 'lief==0.17.5'
+          shopt -s nullglob
+          BINS=(build_arm64/bin/gridcoinresearch build_arm64/bin/gridcoinresearchd)
+          # An empty list must fail: a gate that finds nothing to inspect is the
+          # same failure this workflow already had in its hermeticity step.
+          if [ ${#BINS[@]} -eq 0 ]; then
+            echo "::error::No binaries found under build_arm64/bin to check"
+            exit 1
+          fi
+          echo "Checking: ${BINS[*]}"
+          python3 contrib/devtools/security-check.py "${BINS[@]}"
 
       - name: Prepare Artifacts
         run: |

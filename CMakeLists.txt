@@ -405,7 +405,14 @@ if(ENABLE_HARDENING)
         message(STATUS "Hardening: _FORTIFY_SOURCE skipped (sanitizer build)")
     endif()
 
-    foreach(flag -fstack-protector-all -Wstack-protector -fstack-clash-protection -fcf-protection=full)
+    # -fcf-protection is x86-only and -mbranch-protection is AArch64-only; they
+    # are the same mitigation (indirect-branch and return-address integrity) on
+    # the two architectures we ship. Both are probed, so each arch silently takes
+    # the one that applies and skips the other. Without the AArch64 half, an arm64
+    # build has no branch protection at all -- which the artifact checker reports
+    # as a CONTROL_FLOW failure rather than passing quietly.
+    foreach(flag -fstack-protector-all -Wstack-protector -fstack-clash-protection
+                 -fcf-protection=full -mbranch-protection=standard)
         string(MAKE_C_IDENTIFIER "HARDENING_CXX${flag}" flag_var)
         check_cxx_compiler_flag("${flag}" ${flag_var})
         if(${flag_var})
