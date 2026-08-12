@@ -199,13 +199,18 @@ static unsigned int nCurrentBlockFile = 1;
 //! after each block, and FileCommit gated to once per 5000 blocks during IBD
 //! (issue #2865). Nothing needed the handle closed.
 //!
-//! It is not free, though. Windows Defender scans a file on close-after-modify,
-//! so closing per block made it re-examine a file that grows into the gigabytes,
-//! once per block, for the whole chain. Measured on a 2-core Windows 11 VM syncing
-//! mainnet blocks 1..100,000 from a LAN peer: 605s, with MsMpEng at 84% CPU and
-//! the wallet at 21% -- waiting on the scanner rather than working. Excluding
-//! blk*.dat from Defender took the same range to 172s. Holding the handle open
-//! removes the trigger itself, so an unexcluded Windows node stops paying it.
+//! What caching does NOT buy, recorded because it was the original motivation and
+//! it turned out to be wrong. Windows Defender makes a sync from zero roughly 3.5x
+//! slower on an unexcluded node (measured on a 2-core Windows 11 VM, mainnet blocks
+//! 1..100,000 from a LAN peer: 605s with MsMpEng at 84% CPU against the wallet's
+//! 21%; 172s with blk*.dat excluded). The theory was that Defender was scanning on
+//! close-after-modify, so removing the per-block close would remove the trigger.
+//!
+//! It does not. Measured again with the cache in place and no exclusion: 674s, with
+//! MsMpEng still at 70%. Defender scans the WRITES, through on-access protection,
+//! and holding the handle open cannot change that because the appends still happen.
+//! The blk*.dat exclusion documented in contrib/windows/README.md is therefore
+//! required, not optional -- do not remove it on the strength of this cache.
 //!
 //! Nothing here changes what reaches the platter: the same fflush, the same
 //! FileCommit cadence, the same LevelDB WAL barrier ordering.
