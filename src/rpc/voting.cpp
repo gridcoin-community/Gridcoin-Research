@@ -840,7 +840,7 @@ static const RPCHelpMan vote_help{
     },
     RPCResult{RPCResult::Type::OBJ, "", "",
         {{RPCResult::Type::ELISION, "",
-            "Vote submission detail; see source (SubmitVote) — includes poll, vote_txid, and responses."}}},
+            "Vote submission detail; see source (SubmitVote) - includes poll, vote_txid, and responses."}}},
     RPCExamples{
         HelpExampleCli("vote", "\"Example Poll\" \"yes\"") +
         HelpExampleRpc("vote", "\"Example Poll\", \"yes\"")},
@@ -896,7 +896,7 @@ static const RPCHelpMan votebyid_help = RPCHelpMan{
     },
     RPCResult{RPCResult::Type::OBJ, "", "",
         {{RPCResult::Type::ELISION, "",
-            "Vote submission detail; see source (SubmitVote) — includes poll, vote_txid, and responses fields."}}},
+            "Vote submission detail; see source (SubmitVote) - includes poll, vote_txid, and responses fields."}}},
     RPCExamples{
         HelpExampleCli("votebyid", "\"<poll_txid>\" 0") +
         HelpExampleCli("votebyid", "\"<poll_txid>\" 0 1") +

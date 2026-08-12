@@ -3716,7 +3716,7 @@ static const RPCHelpMan withdrawpool_help{
     "Operator self-withdrawal. Broadcasts an operator-signed POOL_REGISTER REMOVE "
     "contract that flips the named CPID's pool entry to DELETED. Unlike removepool "
     "(Foundation master-key authority), this is signed by the pool operator's own "
-    "key and requires no master key — the wallet must hold the private key for the "
+    "key and requires no master key - the wallet must hold the private key for the "
     "operator pubkey currently registered for the CPID. Requires the wallet to be "
     "unlocked. A withdrawn builtin slot returns to requiring a fresh Foundation "
     "POOL_APPROVE OPEN before it can be re-claimed.",
@@ -3761,7 +3761,7 @@ UniValue withdrawpool(const UniValue& params)
     }
     if (!existing->m_operator_key.IsValid()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER,
-            strprintf("CPID %s is an unclaimed builtin pool slot — there is no operator "
+            strprintf("CPID %s is an unclaimed builtin pool slot - there is no operator "
                       "registration to withdraw. Foundation removepool de-lists builtins.",
                       cpid.ToString()));
     }

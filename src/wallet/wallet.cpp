@@ -1387,7 +1387,7 @@ void CWallet::TransactionRemovedFromMempool(const CTransactionRef& tx,
             // attempt to re-accept it on the next pass.
             LogPrint(BCLog::LogFlags::VERBOSE,
                     "CWallet::TransactionRemovedFromMempool: tx %s evicted (reason: %d), "
-                    "not marking conflicted — eligible for re-acceptance\n",
+                    "not marking conflicted - eligible for re-acceptance\n",
                     hash.ToString(), static_cast<int>(reason));
             break;
 
@@ -4332,7 +4332,7 @@ void CWallet::ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountRele
         }
 
         if (deferred > 0) {
-            LogPrintf("INFO: %s: left %d output(s) marked spent — the spending transaction is not in "
+            LogPrintf("INFO: %s: left %d output(s) marked spent - the spending transaction is not in "
                       "the active chain but the chain's tx index reports the output spent, so the "
                       "wallet's record of the spender is stale rather than the flag being wrong",
                       __func__, deferred);

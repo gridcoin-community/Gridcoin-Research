@@ -142,7 +142,7 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                     // next Reset. Should be unreachable; say so rather than
                     // swallowing it, as this used to (#3257 review).
                     GUILogPrintf("WARNING: OverviewTxModel: rejected insert at %d "
-                                 "(have %d rows) — view diverged from the producer cursor",
+                                 "(have %d rows) - view diverged from the producer cursor",
                                  pos, static_cast<int>(m_rows.size()));
                     return;
                 }
@@ -160,7 +160,7 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                         || static_cast<std::size_t>(pos) + static_cast<std::size_t>(payload.count)
                                > m_rows.size()) {
                     GUILogPrintf("WARNING: OverviewTxModel: rejected remove at %d count %d "
-                                 "(have %d rows) — view diverged from the producer cursor",
+                                 "(have %d rows) - view diverged from the producer cursor",
                                  pos, payload.count, static_cast<int>(m_rows.size()));
                     return;
                 }

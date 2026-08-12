@@ -507,7 +507,7 @@ BOOST_AUTO_TEST_CASE(primeThatThrowsMidRescanStillReleasesTheIntakeWorker)
     settle(q);
 
     BOOST_CHECK_MESSAGE(store.rowForKey(GRC::VIEW_DETAILED, good_hash, 0) >= 0,
-                        "the intake worker never resumed after prime() threw — "
+                        "the intake worker never resumed after prime() threw - "
                         "every later transaction would be invisible");
 
     EraseWalletTx(good_hash);

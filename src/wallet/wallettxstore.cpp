@@ -199,7 +199,7 @@ void WalletTxStore::warnIfIntakeBacklogged()
         return;
     }
     LogPrintf("WARNING: %s: transaction-store intake backlog is %u items "
-              "(worker parked=%d, rebuild in progress=%d) — new transactions are "
+              "(worker parked=%d, rebuild in progress=%d) - new transactions are "
               "not reaching the GUI transaction views",
               __func__, static_cast<unsigned int>(m_intake.size()),
               static_cast<int>(m_worker_parked), static_cast<int>(m_rebuilding));
@@ -567,7 +567,7 @@ bool WalletTxStore::removeLocked(const uint256& hash)
         // returned too, so the transaction became permanently un-updatable,
         // un-removable and un-reinsertable (#3257 review).
         LogPrintf("ERROR: %s: hash %s index non-contiguous/out-of-range "
-                  "(minPos=%u maxPos=%u count=%u records=%u) — rebuilding the hash index",
+                  "(minPos=%u maxPos=%u count=%u records=%u) - rebuilding the hash index",
                   __func__, hash.GetHex(),
                   static_cast<unsigned int>(minPos), static_cast<unsigned int>(maxPos),
                   static_cast<unsigned int>(count),
@@ -578,7 +578,7 @@ bool WalletTxStore::removeLocked(const uint256& hash)
                 return true;   // the rebuild showed it was never really there
             }
             LogPrintf("ERROR: %s: hash %s still inconsistent after an index rebuild "
-                      "— skipping remove", __func__, hash.GetHex());
+                      "- skipping remove", __func__, hash.GetHex());
             return false;
         }
     }
@@ -833,7 +833,7 @@ void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
             // and return silently, dropping the update with no event and no
             // volatility refresh — permanently, for this hash (#3257 review).
             LogPrintf("ERROR: %s: hash %s could not be removed for the re-insert "
-                      "fallback — dropping this update", __func__, hash.GetHex());
+                      "fallback - dropping this update", __func__, hash.GetHex());
             return;
         }
         insertLocked(std::move(records));
@@ -944,7 +944,7 @@ void WalletTxStore::applyChainTipRefresh()
             // vectors at the same index — an unvalidated position here is a heap
             // write, not just a bad read (#3257 review).
             if (it->second >= m_records.size()) {
-                LogPrintf("ERROR: %s: hash %s maps to record %u of %u — skipping "
+                LogPrintf("ERROR: %s: hash %s maps to record %u of %u - skipping "
                           "this part's refresh", __func__, hash.GetHex(),
                           static_cast<unsigned int>(it->second),
                           static_cast<unsigned int>(m_records.size()));
@@ -1004,13 +1004,13 @@ void WalletTxStore::applyChainTipRefresh()
             // Default log level, not VERBOSE: this is the line that names the
             // offending transaction, and it must be present in a user's ordinary
             // debug.log without them having to reproduce under -debug=verbose.
-            LogPrintf("ERROR: %s: refreshing hash %s threw (%s) — skipping it this "
+            LogPrintf("ERROR: %s: refreshing hash %s threw (%s) - skipping it this "
                       "tip; the remaining %u volatile transactions still refresh",
                       __func__, hash.GetHex(), e.what(),
                       static_cast<unsigned int>(m_volatile.size()));
         } catch (...) {
             LogPrintf("ERROR: %s: refreshing hash %s threw a non-standard exception "
-                      "— skipping it this tip", __func__, hash.GetHex());
+                      "- skipping it this tip", __func__, hash.GetHex());
         }
     }
 }
@@ -1196,7 +1196,7 @@ RowsResult WalletTxStore::getRows(int viewId, int first, int count)
     for (std::size_t i = begin; i < end; ++i) {
         const std::size_t absidx = cur.rowAt(i);
         if (absidx >= m_records.size()) {
-            LogPrintf("ERROR: %s: view %d served row %u maps to record %u of %u — skipping",
+            LogPrintf("ERROR: %s: view %d served row %u maps to record %u of %u - skipping",
                       __func__, viewId, static_cast<unsigned int>(i),
                       static_cast<unsigned int>(absidx),
                       static_cast<unsigned int>(m_records.size()));
@@ -1233,7 +1233,7 @@ RowsResult WalletTxStore::getAllRows(int viewId)
     for (std::size_t i = 0; i < n; ++i) {
         const std::size_t absidx = cur.rowAt(i);
         if (absidx >= m_records.size()) {
-            LogPrintf("ERROR: %s: view %d accepted row %u maps to record %u of %u — skipping",
+            LogPrintf("ERROR: %s: view %d accepted row %u maps to record %u of %u - skipping",
                       __func__, viewId, static_cast<unsigned int>(i),
                       static_cast<unsigned int>(absidx),
                       static_cast<unsigned int>(m_records.size()));
@@ -1348,7 +1348,7 @@ void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
                     // -DNDEBUG — and skip, so a stale index degrades to a missing
                     // row instead of a heap read.
                     LogPrintf("ERROR: %s: view %d Insert delta at %d references record "
-                              "%u of %u — skipping",
+                              "%u of %u - skipping",
                               __func__, viewId, d.first,
                               static_cast<unsigned int>(absidx),
                               static_cast<unsigned int>(m_records.size()));
@@ -1358,7 +1358,7 @@ void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
             }
             if (recs.size() != static_cast<std::size_t>(d.count)) {
                 LogPrintf("ERROR: %s: view %d Insert delta at %d carries %u of %d records "
-                          "— consumer replicas will diverge until the next reset",
+                          "- consumer replicas will diverge until the next reset",
                           __func__, viewId, d.first,
                           static_cast<unsigned int>(recs.size()), d.count);
             }
@@ -1386,7 +1386,7 @@ void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
             for (const std::size_t absidx : d.rows) {
                 if (absidx >= m_records.size()) {
                     LogPrintf("ERROR: %s: view %d Change delta at %d references record "
-                              "%u of %u — skipping",
+                              "%u of %u - skipping",
                               __func__, viewId, d.first,
                               static_cast<unsigned int>(absidx),
                               static_cast<unsigned int>(m_records.size()));

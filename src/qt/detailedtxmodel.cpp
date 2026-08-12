@@ -344,7 +344,7 @@ void DetailedTxModel::noteRejected(const char* what, int first, int count,
         return;
     }
     GUILogPrintf("WARNING: DetailedTxModel: rejected %s delta at %d count %d "
-                 "(rows=%d, cached [%d,%d)) — view diverged from the producer cursor",
+                 "(rows=%d, cached [%d,%d)) - view diverged from the producer cursor",
                  what, first, count, m_cache.total(), m_cache.cacheFirst(),
                  m_cache.cacheFirst() + m_cache.cacheSize());
 }
