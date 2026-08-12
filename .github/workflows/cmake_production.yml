@@ -39,7 +39,7 @@ jobs:
             # Pass specific flags for static linux build
             cmake_args: >
               -DSTATIC_LIBS=ON
-              -DCMAKE_CXX_FLAGS="-fPIE"
+              -DENABLE_PIE=ON
               -DCMAKE_EXE_LINKER_FLAGS="-static-libgcc -static-libstdc++ -Wl,-Bdynamic"
             cpack_generator: TGZ
 
@@ -355,6 +355,7 @@ jobs:
             -DENABLE_GUI=ON \
             -DENABLE_QRENCODE=ON \
             -DENABLE_UPNP=ON \
+            -DENABLE_PIE=ON \
             -DENABLE_TESTS=ON \
             -DENABLE_DOCS=OFF \
             -DUSE_QT6=ON \
@@ -540,6 +541,7 @@ jobs:
             -DENABLE_GUI=ON \
             -DENABLE_QRENCODE=ON \
             -DENABLE_UPNP=ON \
+            -DENABLE_PIE=ON \
             -DENABLE_TESTS=ON \
             -DENABLE_DOCS=OFF \
             -DUSE_QT6=ON \
@@ -669,6 +671,7 @@ jobs:
             -DENABLE_GUI=ON \
             -DUSE_QT6=ON \
             -DENABLE_UPNP=ON \
+            -DENABLE_PIE=ON \
             -DENABLE_TESTS=OFF \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -779,6 +782,7 @@ jobs:
             -DUSE_QT6=ON \
             -DQt6_DIR=/usr/lib/aarch64-linux-gnu/cmake/Qt6 \
             -DENABLE_UPNP=ON \
+            -DENABLE_PIE=ON \
             -DENABLE_TESTS=OFF \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \

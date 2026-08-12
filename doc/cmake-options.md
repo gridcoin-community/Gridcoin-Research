@@ -11,7 +11,8 @@ This document details the CMake configuration options available for Gridcoin. Th
 | `ENABLE_TESTS` | `OFF` | Builds the unit test suite (`src/test/`). Recommended for all developers. |
 | `ENABLE_DOCS` | `OFF` | Generates Doxygen documentation. |
 | `STATIC_LIBS` | `OFF` | Forces the build system to look for static libraries (`.a`) instead of shared libraries (`.so`). Required for `depends` builds. |
-| `ENABLE_PIE` | `OFF` | Enables Position Independent Executables (PIE) for hardening. Recommended for Linux production builds. |
+| `ENABLE_HARDENING` | `ON` | Exploit-mitigation compiler and linker flags: stack protector, `_FORTIFY_SOURCE`, full RELRO, CET. Each is probed, so a toolchain that lacks one is simply not given it. `_FORTIFY_SOURCE` is skipped for `Debug` and sanitizer builds, which are unoptimised. |
+| `ENABLE_PIE` | `OFF` | Position Independent Executables. `OFF` genuinely disables PIE rather than deferring to the toolchain default, so it is a real two-way switch. Not available on Windows, where the linker reports no PIE support and the setting would abort the configure; PE gets its ASLR from `--dynamicbase` instead. |
 | `ENABLE_DEBUG_LOCKORDER` | `OFF` | Enables run-time lock-order checking (`DEBUG_LOCKORDER`). Detects potential deadlocks by tracking lock acquisition order and logging inconsistencies to `debug.log`. Recommended with `Debug` build type. |
 
 ---
