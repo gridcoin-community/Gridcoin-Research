@@ -808,6 +808,26 @@ void BitcoinGUI::showBuildMismatchWarning(const QString& gui_commit, const QStri
 void BitcoinGUI::setIpcConnectionInfo(const GuiIpcInfo& info)
 {
     m_ipc_info = info;
+
+    // Reset blockchain data cannot work from this process in the split build.
+    // resetblockchainClicked() only sets fResetBlockchainRequest and calls
+    // requestQuit(); the deletion itself happens as THIS process exits
+    // (UpgradeQt::ResetBlockchain in bitcoin.cpp). In -multiprocess the blockchain
+    // belongs to the core, which keeps running when the GUI closes and holds those
+    // files open -- so the GUI would either delete data underneath a live node or
+    // quietly do nothing, depending on the platform's unlink semantics. Neither is
+    // an outcome to offer behind a confirmation dialog that promises a resync.
+    //
+    // Disabled rather than hidden so the entry does not silently differ between
+    // builds, and the reason goes in the TEXT rather than a tooltip: QMenu does not
+    // show action tooltips unless setToolTipsVisible(true) is set on the menu, which
+    // it is not here, so a tooltip alone would be invisible.
+    if (m_ipc_info.active && resetblockchainAction) {
+        resetblockchainAction->setEnabled(false);
+        resetblockchainAction->setText(tr("&Reset blockchain data (not available in multiprocess mode)"));
+        resetblockchainAction->setToolTip(tr("The blockchain data belongs to the separate Gridcoin core "
+                                             "process. Stop the core and reset it there."));
+    }
 }
 
 void BitcoinGUI::setClientModel(ClientModel *clientModel)
@@ -1451,6 +1471,17 @@ void BitcoinGUI::processDrainedTransactions(const std::vector<GRC::WalletEvent>&
 
 void BitcoinGUI::resetblockchainClicked()
 {
+    // The menu entry is disabled in the split build (see setIpcConnectionInfo), but
+    // a QAction can still be triggered programmatically, and menus get rearranged.
+    // Refuse here too rather than rely on the entry being unreachable.
+    if (m_ipc_info.active) {
+        QMessageBox::information(this, tr("Reset blockchain data"),
+            tr("This is not available in multiprocess mode. The blockchain data belongs to the "
+               "separate Gridcoin core process, which keeps running when this window closes. "
+               "Stop the core and reset its data directly."));
+        return;
+    }
+
     QMessageBox Msg;
 
     Msg.setIcon(QMessageBox::Question);
