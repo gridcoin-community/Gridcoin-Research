@@ -22,8 +22,8 @@ These options toggle specific functionality within the Gridcoin client.
 
 | Option | Default | Why Use It? | Dependencies |
 | :--- | :--- | :--- | :--- |
-| `ENABLE_UPNP` | `OFF` | **Universal Plug and Play.** Allows the client to automatically map ports on your router for incoming connections. Useful for home users behind NAT. | `miniupnpc` |
-| `DEFAULT_UPNP` | `OFF` | If `ENABLE_UPNP` is ON, this sets the default runtime behavior to "Start with UPnP enabled". | `ENABLE_UPNP` |
+| `ENABLE_UPNP` | `ON` | **Universal Plug and Play.** Compiles in the ability to map a port on your router for incoming connections. Compiled in by default so the GUI setting is operative; it does nothing until enabled at runtime. | `miniupnpc` |
+| `DEFAULT_UPNP` | `OFF` | Starts with UPnP already enabled. Off by default: the stock configuration makes 8 outbound connections, so there is no reason to ask the router to open an inbound port until the operator asks for one. Ignored when not listening. | `ENABLE_UPNP` |
 | `ENABLE_QRENCODE` | `OFF` | **QR Codes.** Allows the GUI to display QR codes for wallet addresses. Convenient for mobile payments. | `libqrencode` |
 | `USE_DBUS` | `OFF` | **Desktop Bus.** Enables OS notifications on Linux desktops (e.g., "Staked a block!"). | `QtDBus` |
 | `USE_QT6` | `OFF` | Builds against Qt 6 instead of Qt 5. Recommended for modern Linux distributions. | `Qt6` |
@@ -62,7 +62,7 @@ These options are primarily used by the `depends` system or advanced users.
 ### Standard Developer Build (Linux)
 ```bash
 cmake -B build -DENABLE_GUI=ON -DENABLE_QRENCODE=ON -DUSE_DBUS=ON \
-    -DENABLE_TESTS=ON -DENABLE_UPNP=ON -DDEFAULT_UPNP=ON \
+    -DENABLE_TESTS=ON -DENABLE_UPNP=ON \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo
 ````
 
@@ -87,7 +87,7 @@ cmake -B build -DENABLE_GUI=OFF -DENABLE_UPNP=OFF -DCMAKE_BUILD_TYPE=Release
 ```bash
 cmake -B build \
     -DENABLE_GUI=ON -DENABLE_QRENCODE=ON -DUSE_DBUS=ON \
-    -DENABLE_UPNP=ON -DDEFAULT_UPNP=ON \
+    -DENABLE_UPNP=ON \
     -DENABLE_PIE=ON \
     -DCMAKE_BUILD_TYPE=Release
 ```

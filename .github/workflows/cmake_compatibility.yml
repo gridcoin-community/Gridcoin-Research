@@ -64,7 +64,6 @@ jobs:
             -DENABLE_QRENCODE=ON \
             -DUSE_DBUS=ON \
             -DENABLE_UPNP=ON \
-            -DDEFAULT_UPNP=ON \
             -DENABLE_PIE=ON \
             -DENABLE_DOCS=OFF \
             -DENABLE_TESTS=ON \

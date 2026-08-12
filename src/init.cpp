@@ -877,10 +877,12 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
 #ifdef USE_UPNP
 #if USE_UPNP
-    argsman.AddArg("-upnp", "Use UPnP to map the listening port (default: 1 when listening and no -proxy)",
+    argsman.AddArg("-upnp", "Use UPnP to map the listening port. Ignored when not listening, "
+                            "which -connect and -proxy imply (default: 1)",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::CONNECTION);
 #else
-    argsman.AddArg("-upnp", "Use UPnP to map the listening port (default: 0)",
+    argsman.AddArg("-upnp", "Use UPnP to map the listening port. Ignored when not listening, "
+                            "which -connect and -proxy imply (default: 0)",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::CONNECTION);
 #endif
 #else
@@ -1176,7 +1178,14 @@ void ApplyRwSettingSideEffect(const std::string& name)
         // USE_UPNP is only defined when UPnP support is compiled in; without it
         // there is nothing to toggle and SetUseUPnP/MapPort do not apply.
         if (g_connman) {
-            g_connman->SetUseUPnP(gArgs.GetBoolArg("-upnp", USE_UPNP));
+            // Apply the same rule AppInit2 applies at startup: mapping a port we
+            // do not listen on is pointless, so -connect or -proxy keeps the
+            // mapping off. That startup rule is a SoftSetBoolArg, which only
+            // covers the initial config -- an explicit runtime change, such as
+            // ticking the GUI checkbox, would otherwise walk straight past it and
+            // start the port-map thread anyway.
+            const bool listening = gArgs.GetBoolArg("-listen", true);
+            g_connman->SetUseUPnP(listening && gArgs.GetBoolArg("-upnp", USE_UPNP));
             MapPort(); // starts or stops the port-map thread to match the flag
         }
 #endif
