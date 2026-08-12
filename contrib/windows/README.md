@@ -124,6 +124,15 @@ a signed release.
 This excludes block data only -- no executables, and `wallet.dat`, `database/` and
 `txleveldb` all remain fully scanned.
 
+**The exclusion is required, not a stopgap.** `WriteBlockToDisk` used to reopen and
+close `blk*.dat` for every block, and the obvious theory was that Defender scans on
+close-after-modify, so caching the handle across blocks would remove the trigger.
+The handle is now cached -- and it does not help: measured with the cache in place
+and no exclusion, the same range took 674s with `MsMpEng` still at 70% CPU. Defender
+scans the **writes**, through on-access protection, which no amount of holding the
+file open can avoid. Do not drop this exclusion on the assumption that a code change
+has made it unnecessary.
+
 ## Firewall (inbound P2P)
 
 `Install-GridcoinCoreTask.ps1` adds an **inbound firewall rule for the daemon**
