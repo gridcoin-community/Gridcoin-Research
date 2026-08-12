@@ -446,7 +446,7 @@ bool LoadBlockIndex(bool fAllowNew)
             if (regtxdb.ReadTxIndex(genesis_coinbase_hash, verify_index)) {
                 LogPrintf("regtest: verified genesis coinbase readable from tx index");
             } else {
-                LogPrintf("regtest: WARN — genesis coinbase NOT readable back from tx index");
+                LogPrintf("regtest: WARN - genesis coinbase NOT readable back from tx index");
             }
         }
     }

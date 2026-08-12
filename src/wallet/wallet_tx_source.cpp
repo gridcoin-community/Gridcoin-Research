@@ -236,7 +236,7 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
             // with an erasure. Remove to keep the consumer in sync.
             LogPrint(BCLog::LogFlags::VERBOSE,
                      "NotifyTransactionChanged: %s status=%d but tx not in mapWallet "
-                     "— removing from store",
+                     "- removing from store",
                      hash.GetHex(), status);
             m_store.enqueueRemove(hash);
             break;
@@ -260,7 +260,7 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
                     && bi->second->pprev == pindexBest) {
                 LogPrint(BCLog::LogFlags::VERBOSE,
                          "NotifyTransactionChanged: %s is in the block being "
-                         "connected — keeping visible despite transient orphan state",
+                         "connected - keeping visible despite transient orphan state",
                          hash.GetHex());
                 visible = true;
             }
