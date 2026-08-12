@@ -691,7 +691,11 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
     // lose its entry and be classed non-volatile, which is exactly the state that
     // left rows masked permanently. prime() is not startup-only: changing the
     // transaction-display cutoff re-primes at runtime (WalletModel::reloadTransactionView).
-    m_block_known.clear();
+    // Collected here (cs_main is held, so mapBlockIndex is readable) but INSTALLED
+    // below under cs_store, which guards m_block_known. Doing it here directly is a
+    // thread-safety-analysis error and, more to the point, a real unguarded write:
+    // this whole section runs before the store lock is taken.
+    std::unordered_set<uint256, TxHashHasher> block_known_built;
 
     built.reserve(m_wallet->mapWallet.size() * 2);
     for (auto it = m_wallet->mapWallet.begin(); it != m_wallet->mapWallet.end(); ++it) {
@@ -700,7 +704,7 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
         }
         if (!it->second.hashBlock.IsNull()
                 && mapBlockIndex.find(it->second.hashBlock) != mapBlockIndex.end()) {
-            m_block_known.insert(it->first);
+            block_known_built.insert(it->first);
         }
         const std::vector<TransactionRecord> decomposed =
             TransactionRecord::decomposeTransaction(m_wallet, it->second);
@@ -728,6 +732,9 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
         m_limit_enabled = limit_enabled;
         m_limit_time = limit_time;
         m_records = std::move(built);
+        // Replace wholesale rather than merging: entries for transactions this
+        // rebuild dropped must not survive it.
+        m_block_known = std::move(block_known_built);
         rebuildIndex();
         // Rebuild the projector caches and the volatile set parallel to m_records
         // (PR4-fix F/A) BEFORE the cursors rebuild — cursor.rebuild() reads the

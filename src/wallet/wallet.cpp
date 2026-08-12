@@ -4230,7 +4230,11 @@ void CWallet::ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountRele
     // After a chain reset that is EVERY transaction in the wallet, so testing only
     // for TxStateConfirmed would skip precisely the ones needing release and this
     // whole pass would do nothing.
-    const auto spend_is_active = [](const CWalletTx& wtx) {
+    // EXCLUSIVE_LOCKS_REQUIRED on the lambda: thread-safety analysis does not
+    // propagate the enclosing LOCK2 into a lambda body, so reading mapBlockIndex and
+    // calling IsInMainChain() inside one needs the requirement stated. It is
+    // satisfied at every call site below, which run under the LOCK2 above.
+    const auto spend_is_active = [](const CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
         // In the mempool: the inputs are genuinely committed and the flags must
         // stand, or the wallet would happily respend them.
         if (wtx.isInMempool()) return true;
