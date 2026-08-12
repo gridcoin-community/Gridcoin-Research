@@ -58,8 +58,8 @@ typedef std::map<CScriptID, CScript > ScriptMap;
 class CBasicKeyStore : public CKeyStore
 {
 protected:
-    KeyMap mapKeys;
-    ScriptMap mapScripts;
+    KeyMap mapKeys GUARDED_BY(cs_KeyStore);
+    ScriptMap mapScripts GUARDED_BY(cs_KeyStore);
 
 public:
     bool AddKeyPubKey(const CKey& key, const CPubKey &pubkey);
@@ -111,7 +111,7 @@ typedef std::map<CKeyID, std::pair<CPubKey, std::vector<unsigned char> > > Crypt
 class CCryptoKeyStore : public CBasicKeyStore
 {
 private:
-    CryptedKeyMap mapCryptedKeys;
+    CryptedKeyMap mapCryptedKeys GUARDED_BY(cs_KeyStore);
 
     CKeyingMaterial vMasterKey;
 
@@ -180,6 +180,11 @@ public:
     bool GetPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
     void GetKeys(std::set<CKeyID> &setAddress) const
     {
+        // The lock covers the IsCrypted() test as well as the walk below, so the
+        // branch and the container it selects cannot disagree. cs_KeyStore is
+        // recursive, so delegating to the base -- which takes it again -- is fine.
+        // This mirrors HaveKey above.
+        LOCK(cs_KeyStore);
         if (!IsCrypted())
         {
             CBasicKeyStore::GetKeys(setAddress);
