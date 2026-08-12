@@ -1290,7 +1290,19 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
         const std::string& value = std::get<0>(setting.second);
         const bool value_changed = std::get<1>(setting.second);
         const bool immediate_effect = std::get<2>(setting.second);
-        const std::string param = name + "=" + value;
+
+        // param is what we report back to the caller, so mask the value of a
+        // setting declared SENSITIVE -- rpcuser and rpcpassword today. The stored
+        // and applied value below is the real one; only the echo is reduced.
+        // Same "****" convention ArgsManager::LogArgs uses at startup.
+        //
+        // The reply travels further than the request did: over the RPC socket to
+        // whatever the caller pipes it into, and, in multiprocess builds, across
+        // the IPC boundary to the GUI. Echoing a credential the caller already
+        // knows still multiplies the number of places it comes to rest.
+        const std::optional<unsigned int> echo_flags = gArgs.GetArgFlags('-' + name);
+        const bool sensitive = echo_flags && (*echo_flags & ArgsManager::SENSITIVE);
+        const std::string param = name + "=" + (sensitive ? "****" : value);
 
         // An empty value erases the setting (unset → default); a null
         // SettingsValue removes the key from gridcoinsettings.json.
