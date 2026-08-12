@@ -4220,19 +4220,42 @@ void CWallet::ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountRele
     // Deliberately confirmed-state transactions only. A wallet transaction sitting
     // in the mempool has genuinely committed its inputs and must keep its flags, or
     // the wallet would happily respend them.
+    // NOTE the state handling here, which is not optional bookkeeping. This runs
+    // AFTER ReacceptWalletTransactions, and ValidateConfirmedTx demotes any confirmed
+    // transaction whose block is missing or off the main chain:
+    //
+    //     if (it == mapBlockIndex.end() || !it->second->IsInMainChain()) {
+    //         wtx.SetTxState(TxStateInactive{false});
+    //
+    // After a chain reset that is EVERY transaction in the wallet, so testing only
+    // for TxStateConfirmed would skip precisely the ones needing release and this
+    // whole pass would do nothing.
     const auto spend_is_active = [](const CWalletTx& wtx) {
-        const auto* conf = wtx.state<TxStateConfirmed>();
-        if (conf == nullptr) return true;   // not confirmed: leave it alone
+        // In the mempool: the inputs are genuinely committed and the flags must
+        // stand, or the wallet would happily respend them.
+        if (wtx.isInMempool()) return true;
 
-        const auto mi = mapBlockIndex.find(conf->m_confirmed_block_hash);
-        if (mi == mapBlockIndex.end() || mi->second == nullptr) return false;
+        // Unrecognized is a not-yet-migrated legacy state, not a statement about the
+        // chain. Leave it to ResolveUnrecognizedTx rather than guessing.
+        if (wtx.isUnrecognized()) return true;
 
-        return mi->second->IsInMainChain();
+        if (const auto* conf = wtx.state<TxStateConfirmed>()) {
+            const auto mi = mapBlockIndex.find(conf->m_confirmed_block_hash);
+            if (mi == mapBlockIndex.end() || mi->second == nullptr) return false;
+
+            return mi->second->IsInMainChain();
+        }
+
+        // Inactive: conflicted, abandoned, or demoted above because its block is
+        // gone. None of those spends are in the active chain.
+        return false;
     };
 
     // Collect first, write second: on an ordinary startup nothing qualifies and we
     // never touch the wallet database at all.
-    std::vector<std::pair<CWalletTx*, unsigned int>> release;
+    // Keyed to dedupe: two wallet transactions can name the same prevout (a
+    // conflicting pair), which would otherwise be counted and written twice.
+    std::map<std::pair<uint256, unsigned int>, CWalletTx*> release;
 
     for (auto& [hash, wtx] : mapWallet) {
         if (spend_is_active(wtx)) continue;
@@ -4249,9 +4272,11 @@ void CWallet::ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountRele
             if (IsMine(prev.vout[txin.prevout.n]) == ISMINE_NO) continue;
             if (!prev.IsSpent(txin.prevout.n)) continue;
 
-            release.emplace_back(&prev, txin.prevout.n);
-            nReleased++;
-            nAmountReleased += prev.vout[txin.prevout.n].nValue;
+            const auto key = std::make_pair(txin.prevout.hash, txin.prevout.n);
+            if (release.emplace(key, &prev).second) {
+                nReleased++;
+                nAmountReleased += prev.vout[txin.prevout.n].nValue;
+            }
         }
     }
 
@@ -4266,8 +4291,8 @@ void CWallet::ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountRele
 
     CWalletDB walletdb(strWalletFile);
 
-    for (const auto& [prev, n] : release) {
-        prev->MarkUnspent(n);
+    for (const auto& [key, prev] : release) {
+        prev->MarkUnspent(key.second);
         prev->WriteToDisk(&walletdb);
     }
 }

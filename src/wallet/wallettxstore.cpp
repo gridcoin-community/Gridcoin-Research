@@ -683,10 +683,24 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
     // gave (which cleared under both locks).
     WITH_LOCK(cs_intake, m_intake.clear());
 
+    // Rebuild m_block_known alongside the records. prime() holds cs_main, so unlike
+    // the store worker it can answer "is this tx's confirming block in the index?"
+    // directly -- and it MUST, for two reasons. Stale entries for transactions this
+    // rebuild drops would otherwise accumulate across re-primes; and, worse, a
+    // record sitting in the block-connection window (depth -1, block known) would
+    // lose its entry and be classed non-volatile, which is exactly the state that
+    // left rows masked permanently. prime() is not startup-only: changing the
+    // transaction-display cutoff re-primes at runtime (WalletModel::reloadTransactionView).
+    m_block_known.clear();
+
     built.reserve(m_wallet->mapWallet.size() * 2);
     for (auto it = m_wallet->mapWallet.begin(); it != m_wallet->mapWallet.end(); ++it) {
         if (!TransactionRecord::showTransaction(it->second)) {
             continue;
+        }
+        if (!it->second.hashBlock.IsNull()
+                && mapBlockIndex.find(it->second.hashBlock) != mapBlockIndex.end()) {
+            m_block_known.insert(it->first);
         }
         const std::vector<TransactionRecord> decomposed =
             TransactionRecord::decomposeTransaction(m_wallet, it->second);
