@@ -13,6 +13,7 @@
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/vote.h"
 #include "gridcoin/researcher.h"
+#include "logging.h"
 #include "txdb.h"
 #include "util/reverse_iterator.h"
 #include "wallet/wallet.h"
@@ -1240,6 +1241,21 @@ PollResult::PollResult(Poll poll)
 
 PollResultOption PollResult::BuildFor(const PollReference& poll_ref, const CBlockIndex* pindex_tip)
 {
+    // Create the timer HERE, at the engine's outermost entry, not in a caller.
+    //
+    // Every "buildPollTable" read in this file -- SetSuperblock, CountVotes,
+    // ProcessVote, Resolve and BuildFor itself -- is a phase of one resolution, and
+    // they all run underneath this call. The label used to be created by
+    // PollResultToJson() in rpc/voting.cpp, which reads it never and owns it only by
+    // accident: the RPC is one caller among several. PollResultCache::BuildFor and
+    // the GUI's voting page reach the same engine without it, so on a node serving
+    // poll results the timer lookup missed on every phase of every poll and
+    // MilliTimer warned each time -- dozens of lines per resolution at default log
+    // level, since the warning is a LogPrintf rather than a category.
+    //
+    // Same log gate the RPC used, so the timings themselves are unchanged.
+    g_timer.InitTimer("buildPollTable", LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
+
     g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
 
     if (PollOption poll = poll_ref.TryReadFromDisk()) {
