@@ -174,7 +174,10 @@ UniValue PollResultToJson(const PollResult& result, const PollReference& poll_re
 
 UniValue PollResultToJson(const PollReference& poll_ref)
 {
-    g_timer.InitTimer("buildPollTable", LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
+    // The "buildPollTable" timer is created by PollResult::BuildFor(), the engine
+    // that actually reads it -- this RPC is only one of its callers (the poll-result
+    // cache and the GUI reach it too), and creating the label here left every other
+    // path warning on a missing timer. See the comment there.
 
     // Mark a traversal in progress for the whole call (RAII, cleared on every
     // return/throw below); the count-based scope keeps the reorg detector armed
