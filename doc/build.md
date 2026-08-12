@@ -167,7 +167,7 @@ cmake -B build_linux_depends \
     -DENABLE_UPNP=ON \
     -DENABLE_TESTS=ON \
     -DDEP_LIB="${DEP_LIB}" \
-    -DCMAKE_CXX_FLAGS="-fPIE" \
+    -DENABLE_PIE=ON \
     -DCMAKE_EXE_LINKER_FLAGS="-static-libgcc -static-libstdc++ -Wl,-Bdynamic" \
     -DCMAKE_BUILD_TYPE=\< Release | RelWithDebInfo | Debug - see table below \>
 ```
@@ -262,7 +262,8 @@ If you are familiar with the legacy Autotools build system (`./configure`), this
 | **QR Code** | `--with-qrencode` | `-DENABLE_QRENCODE=ON` |
 | **Tests** | `--enable-tests` | `-DENABLE_TESTS=ON` |
 | **DBus** | `--with-dbus` | `-DUSE_DBUS=ON` |
-| **Hardening** | `--enable-hardening` | `-DENABLE_PIE=ON` |
+| **Hardening** | `--enable-hardening` | `-DENABLE_HARDENING=ON` *(the default, as it was under Autotools)* |
+| **PIE** | *(part of `--enable-hardening`)* | `-DENABLE_PIE=ON` *(not supported on the Windows cross build)* |
 | **Static Libs** | *(implicit in depends)* | `-DSTATIC_LIBS=ON` |
 
 **Build type note:** The old Autotools default did not strip debug symbols and used `-O2` optimization, which corresponds to CMake's `-DCMAKE_BUILD_TYPE=RelWithDebInfo`. CMake's `-DCMAKE_BUILD_TYPE=Release` uses `-O2` and also strips debug symbols. Omitting `-DCMAKE_BUILD_TYPE` entirely results in no optimization and is not recommended.

@@ -536,7 +536,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "depends" ]] && [[ "$(uname -s)" == "Li
             -DENABLE_UPNP=ON \
             -DENABLE_TESTS=ON \
             -DDEP_LIB="${DEP_LIB}" \
-            -DCMAKE_CXX_FLAGS="-fPIE" \
+            -DENABLE_PIE=ON \
             -DCMAKE_EXE_LINKER_FLAGS="-static-libgcc -static-libstdc++ -Wl,-Bdynamic" \
             -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
             $EXTRA_ARGS
@@ -738,6 +738,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darw
             $MULTIPROCESS_CMAKE_FLAG \
             -DENABLE_QRENCODE=ON \
             -DENABLE_UPNP=ON \
+            -DENABLE_PIE=ON \
             -DENABLE_TESTS=ON \
             $NATIVE_QT_FLAG \
             -DCMAKE_BUILD_TYPE=$BUILD_TYPE \

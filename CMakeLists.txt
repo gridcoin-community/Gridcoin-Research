@@ -121,7 +121,8 @@ endif()
 option(USE_ASM_SCRYPT   "Enable scrypt assembly routines (requires GNU assembler)" ${USE_ASM_SCRYPT})
 
 # Optional functionality
-option(ENABLE_PIE       "Build position-independent executables" OFF)
+option(ENABLE_PIE       "Build position-independent executables. OFF genuinely disables PIE, it does not defer to the toolchain default" OFF)
+option(ENABLE_HARDENING "Apply exploit-mitigation compiler and linker flags" ON)
 option(ENABLE_DEBUG_LOCKORDER "Enable run-time lock-order checking (DEBUG_LOCKORDER)" OFF)
 option(WERROR_THREAD_SAFETY "Promote Clang thread-safety diagnostics to build errors" OFF)
 option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" OFF)
@@ -356,14 +357,70 @@ endif()
 # Run probes
 # ==========
 
-if(ENABLE_PIE)
-    check_pie_supported()
-    if(NOT CMAKE_CXX_LINK_PIE_SUPPORTED)
-        message(FATAL_ERROR "PIE is not supported by the current linker")
-    endif()
+# check_pie_supported() is what activates policy CMP0083's handling of
+# POSITION_INDEPENDENT_CODE on executables. Probing only when ENABLE_PIE was ON
+# left the property silently ignored in BOTH directions whenever it was OFF:
+# CMake emitted neither -pie nor -no-pie, so the option could turn PIE on but
+# never off, and OFF actually meant "whatever this toolchain happens to default
+# to". Probe unconditionally so the setting is honoured either way -- OFF then
+# genuinely emits the no-PIE link flags rather than nothing.
+check_pie_supported()
+
+if(ENABLE_PIE AND NOT CMAKE_CXX_LINK_PIE_SUPPORTED)
+    message(FATAL_ERROR "PIE is not supported by the current linker")
 endif()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ${ENABLE_PIE})
+
+# Exploit mitigations
+# ===================
+#
+# Restores the set the Autotools build applied. There --enable-hardening was the
+# DEFAULT (the spelling was --disable-hardening, i.e. opt out) and configure.ac
+# fed HARDENED_CXXFLAGS/CPPFLAGS/LDFLAGS into AM_* so every target inherited
+# them. The CMake port carried none of it across, so nothing built here has had a
+# stack canary, FORTIFY, full RELRO or CET since the migration. ON by default
+# restores that posture rather than inventing a new one; distributions that
+# manage their own hardening can pass -DENABLE_HARDENING=OFF.
+#
+# Every flag is probed before use, so a toolchain that lacks one simply does not
+# get it -- this is what keeps the ELF-only linker flags from reaching Mach-O,
+# where they are rejected, and -fcf-protection from reaching arm64, where it is
+# not a valid option.
+include(CheckLinkerFlag)
+
+if(ENABLE_HARDENING)
+    # _FORTIFY_SOURCE needs optimisation; without it GCC warns and the checks do
+    # nothing. Debug is excluded via a generator expression. Sanitizer builds are
+    # excluded too: they are built RelWithDebInfo here, so the config test alone
+    # would not catch them, and the instrumentation does not combine well with
+    # FORTIFY's interception of the same calls.
+    string(FIND "${CMAKE_CXX_FLAGS}" "-fsanitize" _hardening_sanitizer_pos)
+    if(_hardening_sanitizer_pos EQUAL -1)
+        # -U first: some toolchains predefine it, and redefining warns.
+        add_compile_options(
+            "$<$<NOT:$<CONFIG:Debug>>:-U_FORTIFY_SOURCE>"
+            "$<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>")
+    else()
+        message(STATUS "Hardening: _FORTIFY_SOURCE skipped (sanitizer build)")
+    endif()
+
+    foreach(flag -fstack-protector-all -Wstack-protector -fstack-clash-protection -fcf-protection=full)
+        string(MAKE_C_IDENTIFIER "HARDENING_CXX${flag}" flag_var)
+        check_cxx_compiler_flag("${flag}" ${flag_var})
+        if(${flag_var})
+            add_compile_options("${flag}")
+        endif()
+    endforeach()
+
+    foreach(flag -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack)
+        string(MAKE_C_IDENTIFIER "HARDENING_LD${flag}" flag_var)
+        check_linker_flag(CXX "${flag}" ${flag_var})
+        if(${flag_var})
+            add_link_options("${flag}")
+        endif()
+    endforeach()
+endif()
 
 # Set compiler flags
 if(APPLE)
