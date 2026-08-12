@@ -109,7 +109,6 @@ modules:
       - -DUSE_DBUS=ON
       - -DENABLE_TESTS=OFF
       - -DENABLE_UPNP=ON
-      - -DDEFAULT_UPNP=ON
       - -DENABLE_QRENCODE=ON
       - -DCMAKE_BUILD_TYPE=Release
     sources:

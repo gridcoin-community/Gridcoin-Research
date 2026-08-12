@@ -104,7 +104,7 @@ This procedure uses your operating system's installed libraries (OpenSSL, Boost,
 
 Run the following from the repository root:
 
-Note that if your distribution has Qt6, you will need to add -DUSE_QT6. You can also leave out -DENABLE_QRENCODE, -DENABLE_UPNP, and -DDEFAULT_UPNP if you don't use that functionality.
+Note that if your distribution has Qt6, you will need to add -DUSE_QT6. You can also leave out -DENABLE_QRENCODE and -DENABLE_UPNP if you do not use that functionality.
 
 ```bash
 rm -rf build
@@ -113,7 +113,6 @@ cmake -B build \
     -DENABLE_QRENCODE=ON \
     -DUSE_DBUS=ON \
     -DENABLE_UPNP=ON \
-    -DDEFAULT_UPNP=ON \
     -DENABLE_PIE=ON \
     -DENABLE_DOCS=ON \
     -DENABLE_TESTS=ON \
@@ -166,7 +165,6 @@ cmake -B build_linux_depends \
     -DUSE_QT6=ON \
     -DSTATIC_LIBS=ON \
     -DENABLE_UPNP=ON \
-    -DDEFAULT_UPNP=ON \
     -DENABLE_TESTS=ON \
     -DDEP_LIB="${DEP_LIB}" \
     -DCMAKE_CXX_FLAGS="-fPIE" \
@@ -223,7 +221,6 @@ cmake -B build_win64 \
     -DENABLE_GUI=ON \
     -DUSE_QT6=ON \
     -DENABLE_UPNP=ON \
-    -DDEFAULT_UPNP=ON \
     -DENABLE_TESTS=ON \
     -DSYSTEM_XXD=ON \
     -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/wine \
