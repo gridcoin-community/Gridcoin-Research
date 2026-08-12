@@ -102,6 +102,28 @@ void IpcLogFn(mp::LogMessage message)
     }
 }
 
+//! Logging options for the mp event loop.
+//!
+//! mp's Trace level is not a verbosity dial. It emits the full request and
+//! response payload of every IPC call (proxy-types.h "request data:" /
+//! "response data:"), so on the wallet interfaces it carries whatever the caller
+//! passed -- passphrases and seed phrases included. LogOptions::log_level
+//! defaults to Log::Trace, meaning everything, and Logger::operator<< tests
+//! enabled() before appending to its buffer, so raising the floor stops the
+//! payload being serialised at all rather than formatting it and discarding it.
+//!
+//! The floor is deliberately NOT a BCLog category. BCLog::ALL is ~0, so -debug=1
+//! and -debug=all would switch payload dumping on -- and those are exactly what
+//! we ask people to run when they report a bug, which is also when they are most
+//! likely to send us the log. Turning this on takes -ipclogtrace and nothing
+//! else, so no general-purpose debug flag can reach it by accident.
+mp::LogOptions MakeIpcLogOptions()
+{
+    mp::LogOptions opts{mp::LogFn{IpcLogFn}};
+    opts.log_level = gArgs.GetBoolArg("-ipclogtrace", false) ? mp::Log::Trace : mp::Log::Debug;
+    return opts;
+}
+
 //! Invoke a caller-supplied disconnect callback with a guard. It runs on the
 //! event-loop thread, so a throw would unwind through libmultiprocess's task set
 //! and terminate the process; contain and log it instead.
@@ -216,7 +238,7 @@ public:
         m_loop_thread = std::thread([&] {
             try {
                 RenameThread("capnp-loop");
-                m_loop.emplace(exe_name, mp::LogFn{IpcLogFn}, &m_context);
+                m_loop.emplace(exe_name, MakeIpcLogOptions(), &m_context);
                 m_loop_ref.emplace(*m_loop);
             } catch (...) {
                 // Surface a construction failure to the waiting thread instead of
