@@ -1078,13 +1078,12 @@ void InitLogging()
     // the active code page, so a data directory containing anything outside it
     // is mangled or throws -- and this line exists precisely to name a directory
     // that may be unusual.
-    fprintf(stderr, "Data directory: %s\n", fsbridge::Utf8PathString(resolved_data_dir).c_str());
+    fputs(strprintf("Data directory: %s\n", fsbridge::Utf8PathString(resolved_data_dir)).c_str(), stderr);
 
-    if (IsVolatileFilesystem(resolved_data_dir)) {
-        fprintf(stderr,
-                "WARNING: the data directory is on a temporary filesystem (tmpfs/ramfs). "
-                "The block chain, the wallet and this log will be DESTROYED when the process "
-                "exits. Set -datadir to persistent storage before continuing.\n");
+    if (fsbridge::IsVolatileFilesystem(resolved_data_dir)) {
+        fputs("WARNING: the data directory is on a temporary filesystem (tmpfs/ramfs). "
+              "The block chain, the wallet and this log will be DESTROYED when the process "
+              "exits. Set -datadir to persistent storage before continuing.\n", stderr);
     }
 
     // This is needed because it is difficult to inject the equivalent of -nodebuglogfile in the testing suite for
@@ -1613,7 +1612,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // pointing at tmpfs has chosen it, and both test harnesses do exactly that:
     // the unit fixture and the functional framework each set -datadir, sometimes
     // beneath a /tmp that is tmpfs on the host distribution.
-    if (!gArgs.IsArgSet("-datadir") && IsVolatileFilesystem(GetDataDir())) {
+    if (!gArgs.IsArgSet("-datadir") && fsbridge::IsVolatileFilesystem(GetDataDir())) {
         return InitError(_("The default data directory is on a temporary filesystem, so the "
                            "block chain and wallet would be lost when the program exits. Pass "
                            "-datadir with a location on persistent storage."));

@@ -104,6 +104,18 @@ namespace fsbridge {
      */
     std::string Utf8PathString(const fs::path& path);
 
+    /**
+     * True when path is on a filesystem whose contents do not survive the process
+     * exiting or the machine rebooting -- tmpfs or ramfs.
+     *
+     * A data directory there accepts every write and loses the chain, the wallet
+     * and debug.log on exit, with no error at any point. Linux only: elsewhere
+     * this returns false, since there is no equivalent test. It also returns
+     * false when the filesystem cannot be determined, so an unreadable path is
+     * never called volatile on the strength of a failed syscall.
+     */
+    bool IsVolatileFilesystem(const fs::path& path);
+
     // GNU libstdc++ specific workaround for opening UTF-8 paths on Windows.
     //
     // On Windows, it is only possible to reliably access multibyte file paths through
