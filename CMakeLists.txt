@@ -441,7 +441,12 @@ if(ENABLE_HARDENING)
         endif()
     endforeach()
 
-    foreach(flag -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack)
+    # separate-code keeps executable and non-executable content on distinct pages,
+    # which shrinks what a ROP search has to work with. GNU ld enables it by default
+    # on x86 since binutils 2.31, so x86 had it accidentally; the aarch64 cross
+    # linker does not, which is how the arm64 job failed this check while every
+    # x86 job passed. Ask for it rather than inheriting it.
+    foreach(flag -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -Wl,-z,separate-code)
         string(MAKE_C_IDENTIFIER "HARDENING_LD${flag}" flag_var)
         check_linker_flag(CXX "${flag}" ${flag_var})
         if(${flag_var})
