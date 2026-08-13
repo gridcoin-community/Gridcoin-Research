@@ -1889,14 +1889,30 @@ void BitcoinGUI::backupWallet()
 {
     if (!walletModel) return;
 
+    // Pass a full suggested path, not a bare directory. getSaveFileName treats its
+    // dir argument as a starting *file* name when the directory does not exist,
+    // so under Flatpak -- where the sandbox has no ~/Documents -- both dialogs
+    // opened pre-filled with the name "Documents". On a native build the
+    // directory does exist, so the effect is milder but still wrong: no filename
+    // was ever suggested.
     QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-    QString walletfilename = QFileDialog::getSaveFileName(this, tr("Backup Wallet"), saveDir, tr("Wallet Data (*.dat)"));
+
+    // Suggest the names actually in use, taking only the filename component so a
+    // configured path cannot leak into the suggestion.
+    const QString wallet_suggestion = QString::fromStdString(
+        fs::path(gArgs.GetArg("-wallet", "wallet.dat")).filename().string());
+    const QString config_suggestion = QString::fromStdString(
+        fs::path(gArgs.GetArg("-conf", GRIDCOIN_CONF_FILENAME)).filename().string());
+
+    QString walletfilename = QFileDialog::getSaveFileName(
+        this, tr("Backup Wallet"), saveDir + "/" + wallet_suggestion, tr("Wallet Data (*.dat)"));
     if(!walletfilename.isEmpty()) {
         if(!walletModel->backupWallet(FromQString(walletfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }
-    QString configfilename = QFileDialog::getSaveFileName(this, tr("Backup Config"), saveDir, tr("Wallet Config (*.conf)"));
+    QString configfilename = QFileDialog::getSaveFileName(
+        this, tr("Backup Config"), saveDir + "/" + config_suggestion, tr("Wallet Config (*.conf)"));
     if(!configfilename.isEmpty()) {
         if(!walletModel->backupConfigFile(FromQString(configfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the config file to the new location."));
