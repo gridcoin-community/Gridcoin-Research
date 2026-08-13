@@ -167,10 +167,15 @@ CAVEATS -- checks with no corresponding Gridcoin build flag
     defaults already satisfy them. Only CONTROL_FLOW and CANARY failed on those
     probes -- i.e. those two are what the restored `-fcf-protection=full` and
     `-fstack-protector-all` + `-lssp` must supply.
-  * MachO arm64 BRANCH_PROTECTION requires `-mbranch-protection=bti`, which Gridcoin
-    does NOT set anywhere. This check is expected to FAIL on macOS arm64 until that
-    flag is added. Do not make the macOS arm64 job blocking until it is. NOT measured
-    here -- no macOS host was available.
+  * MachO arm64 BRANCH_PROTECTION is NOT WIRED UP, deliberately. It requires
+    `-mbranch-protection`, and that flag is withheld on Darwin: the pointer
+    authentication it emits on plain arm64 defeats the unwinder, so a throw stops
+    reaching its handler (MEASURED -- it aborted the macOS arm64 functional tests as
+    "uncaught exception" and hung the job; removing the flag turned it green). PAC on
+    Darwin is an ABI-level opt-in via arm64e, not something this flag can grant.
+    check_MACHO_BRANCH_PROTECTION is kept below but referenced by nothing, so it is
+    ready if we ever ship arm64e. If you re-add it to CHECKS, add the flag in the
+    same change or the check will demand what the build must not produce.
   * MachO checks generally are UNVERIFIED; there was no Mach-O binary to test against.
 
 A NOTE ON LIEF ERROR SHAPES
@@ -404,8 +409,10 @@ def check_MACHO_BRANCH_PROTECTION(binary) -> bool:
     '''
     Check for branch protection instrumentation
 
-    NOTE (Gridcoin): requires -mbranch-protection=bti, which Gridcoin does not
-    currently set. Expected to fail on macOS arm64 until that flag is added.
+    NOTE (Gridcoin): intentionally not referenced by CHECKS. -mbranch-protection is
+    withheld on Darwin because its pointer-authentication codegen breaks unwinding on
+    plain arm64; see the CAVEATS section above and the hardening block in
+    CMakeLists.txt. Retained for a future arm64e target.
     '''
     content = binary.get_content_from_virtual_address(binary.entrypoint, 4, lief.Binary.VA_TYPES.AUTO)
 
@@ -464,7 +471,12 @@ CHECKS = {
         lief.Header.ARCHITECTURES.X86_64: BASE_MACHO + [('PIE', check_PIE),
                                               ('NX', check_NX),
                                               ('CONTROL_FLOW', check_MACHO_CONTROL_FLOW)],
-        lief.Header.ARCHITECTURES.ARM64: BASE_MACHO + [('BRANCH_PROTECTION', check_MACHO_BRANCH_PROTECTION)],
+        # No BRANCH_PROTECTION: Gridcoin deliberately does not pass
+        # -mbranch-protection on Darwin (see the hardening block in CMakeLists.txt),
+        # because the pointer-authentication codegen it produces on plain arm64
+        # breaks exception unwinding. Requiring the check here would demand a flag
+        # the build is required not to set.
+        lief.Header.ARCHITECTURES.ARM64: BASE_MACHO,
     }
 }
 

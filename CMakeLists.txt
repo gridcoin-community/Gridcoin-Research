@@ -395,10 +395,13 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ${ENABLE_PIE})
 # restores that posture rather than inventing a new one; distributions that
 # manage their own hardening can pass -DENABLE_HARDENING=OFF.
 #
-# Every flag is probed before use, so a toolchain that lacks one simply does not
-# get it -- this is what keeps the ELF-only linker flags from reaching Mach-O,
-# where they are rejected, and -fcf-protection from reaching arm64, where it is
-# not a valid option.
+# Every flag is probed before use, so a toolchain that outright rejects one simply
+# does not get it -- that is what keeps the ELF-only linker flags off Mach-O and
+# -fcf-protection off arm64, where they are not valid options.
+#
+# Probing alone is not sufficient, though: it answers "does the driver accept
+# this?", not "does this target honour the code it generates?". Flags that are
+# accepted everywhere but only meaningful on ELF are gated on the platform below.
 include(CheckCXXCompilerFlag)
 include(CheckLinkerFlag)
 
@@ -426,14 +429,53 @@ if(ENABLE_HARDENING)
         message(STATUS "Hardening: _FORTIFY_SOURCE skipped (sanitizer build)")
     endif()
 
-    # -fcf-protection is x86-only and -mbranch-protection is AArch64-only; they
-    # are the same mitigation (indirect-branch and return-address integrity) on
-    # the two architectures we ship. Both are probed, so each arch silently takes
-    # the one that applies and skips the other. Without the AArch64 half, an arm64
-    # build has no branch protection at all -- which the artifact checker reports
-    # as a CONTROL_FLOW failure rather than passing quietly.
-    foreach(flag -fstack-protector-all -Wstack-protector -fstack-clash-protection
-                 -fcf-protection=full -mbranch-protection=standard)
+    # Stack canaries are supported by every toolchain we ship, on every target.
+    set(hardening_flags -fstack-protector-all -Wstack-protector)
+
+    # The rest are ELF/AAPCS mitigations, and they are gated on the platform
+    # rather than on the probe alone. check_cxx_compiler_flag proves only that the
+    # driver ACCEPTS a flag -- never that the target's runtime honours the code it
+    # generates. Clang accepts all three on targets where they do nothing
+    # (-mbranch-protection is inert on x86) or are actively wrong, so probing
+    # cannot tell the two apart and an earlier revision of this block assumed a
+    # symmetry that the build logs do not show.
+    #
+    # On Apple Silicon -mbranch-protection=standard emits pointer-authentication
+    # sign/authenticate pairs around returns. PAC on Darwin is an ABI-level opt-in
+    # (arm64e), not a per-flag one: on plain arm64 the signed return addresses
+    # defeat libunwind, so a throw never reaches a handler that is lexically right
+    # above it. That turned the in-scope catch in ThreadSocketHandler into a
+    # "terminating due to uncaught exception" abort and hung the macOS ARM64
+    # functional tests, while macOS Intel -- where the same flag is a no-op --
+    # passed in three minutes. Keep all three off Mach-O.
+    # -fcf-protection=full stays on every platform. It is meaningful on macOS Intel
+    # -- the Mach-O x86_64 CONTROL_FLOW check reads endbr64 at the entrypoint, and
+    # that check passes today -- and the probe rejects it outright on arm64, so it
+    # lands only where it does something.
+    list(APPEND hardening_flags -fcf-protection=full)
+
+    # Two flags are withheld from Mach-O:
+    #
+    #   -mbranch-protection=standard emits pointer-authentication sign/authenticate
+    #   pairs around returns on AArch64. PAC on Darwin is an ABI-level opt-in
+    #   (arm64e), not a per-flag one, and on plain arm64 the signed return addresses
+    #   stop a throw from reaching its handler -- an exception raised directly
+    #   beneath an in-scope catch aborted as "uncaught", and the macOS ARM64
+    #   functional tests hung. Removing it turned that job green.
+    #
+    #   -fstack-clash-protection is accepted by the driver and then reported as
+    #   "argument unused during compilation" on every translation unit, so it buys
+    #   nothing on Darwin and costs several hundred warnings.
+    #
+    # security-check.py drops the Mach-O arm64 BRANCH_PROTECTION check to match;
+    # the two must be changed together or the artifact check contradicts the build.
+    if(NOT APPLE)
+        list(APPEND hardening_flags -fstack-clash-protection -mbranch-protection=standard)
+    else()
+        message(STATUS "Hardening: branch-protection and stack-clash skipped (Mach-O target)")
+    endif()
+
+    foreach(flag ${hardening_flags})
         string(MAKE_C_IDENTIFIER "HARDENING_CXX${flag}" flag_var)
         check_cxx_compiler_flag("${flag}" ${flag_var})
         if(${flag_var})
