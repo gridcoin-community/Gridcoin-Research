@@ -1067,6 +1067,25 @@ static void StartupNotify(const ArgsManager& args)
  */
 void InitLogging()
 {
+    // Report the data directory on stderr before the log file is opened. The log
+    // lives inside the data directory, so when that directory is the problem --
+    // for example a sandbox default that resolves to tmpfs -- every record of
+    // which directory was used disappears along with it. ASCII only: this can
+    // reach a Windows console.
+    const fs::path resolved_data_dir = GetDataDir();
+
+    // Utf8PathString, not path::string(): on Windows the latter narrows through
+    // the active code page, so a data directory containing anything outside it
+    // is mangled or throws -- and this line exists precisely to name a directory
+    // that may be unusual.
+    fprintf(stderr, "Data directory: %s\n", fsbridge::Utf8PathString(resolved_data_dir).c_str());
+
+    if (IsVolatileFilesystem(resolved_data_dir)) {
+        fprintf(stderr,
+                "WARNING: the data directory is on a temporary filesystem (tmpfs/ramfs). "
+                "The block chain, the wallet and this log will be DESTROYED when the process "
+                "exits. Set -datadir to persistent storage before continuing.\n");
+    }
 
     // This is needed because it is difficult to inject the equivalent of -nodebuglogfile in the testing suite for
     // console only logging, so in the testing suite, -debuglogfile=none is used.
@@ -1584,6 +1603,22 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (datadir.empty()) {
         return InitError(_("Cannot access the data directory; check that it exists and that you have permission to read and write it."));
     }
+
+    // Refuse to run when the DEFAULT data directory lands on a temporary
+    // filesystem. That combination is never deliberate -- it is what the sandbox
+    // fallback used to produce -- and proceeding writes the chain and the wallet
+    // into RAM, loses them at exit, and takes this log with them.
+    //
+    // Deliberately scoped to the default. An operator who passes -datadir
+    // pointing at tmpfs has chosen it, and both test harnesses do exactly that:
+    // the unit fixture and the functional framework each set -datadir, sometimes
+    // beneath a /tmp that is tmpfs on the host distribution.
+    if (!gArgs.IsArgSet("-datadir") && IsVolatileFilesystem(GetDataDir())) {
+        return InitError(_("The default data directory is on a temporary filesystem, so the "
+                           "block chain and wallet would be lost when the program exits. Pass "
+                           "-datadir with a location on persistent storage."));
+    }
+
 
     fs::path walletFileName = gArgs.GetArg("-wallet", "wallet.dat");
 
