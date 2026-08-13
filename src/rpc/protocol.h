@@ -131,14 +131,47 @@ public:
     std::streamsize read(char* s, std::streamsize n)
     {
         handshake(boost::asio::ssl::stream_base::server); // HTTPS servers read first
-        if (fUseSSL) return stream.read_some(boost::asio::buffer(s, n));
-        return stream.next_layer().read_some(boost::asio::buffer(s, n));
+
+        boost::system::error_code ec;
+        const std::size_t bytes = fUseSSL
+            ? stream.read_some(boost::asio::buffer(s, n), ec)
+            : stream.next_layer().read_some(boost::asio::buffer(s, n), ec);
+
+        if (!ec) return static_cast<std::streamsize>(bytes);
+
+        // Boost.IOStreams signals end of sequence by RETURNING -1. The throwing
+        // read_some overload used here previously raised boost::system::system_error
+        // instead, and this device is driven from an RPC worker thread with no
+        // handler above it -- so a peer closing its connection terminated the
+        // process with "read_some: End of file".
+        //
+        // That is not an edge case. It is the normal end of every RPC call, and
+        // AcceptedConnectionImpl::interrupt() deliberately shuts the socket down to
+        // break a worker blocked in this read during shutdown, which produces the
+        // same error by design. Whether the throw escapes is a timing question,
+        // which is why it surfaced on one platform and not the others.
+        //
+        // Any read error leaves the connection unusable, so there is nothing to
+        // distinguish: report end of sequence and let the worker close it.
+        return -1;
     }
     std::streamsize write(const char* s, std::streamsize n)
     {
         handshake(boost::asio::ssl::stream_base::client); // HTTPS clients write first
-        if (fUseSSL) return boost::asio::write(stream, boost::asio::buffer(s, n));
-        return boost::asio::write(stream.next_layer(), boost::asio::buffer(s, n));
+
+        boost::system::error_code ec;
+        const std::size_t bytes = fUseSSL
+            ? boost::asio::write(stream, boost::asio::buffer(s, n), ec)
+            : boost::asio::write(stream.next_layer(), boost::asio::buffer(s, n), ec);
+
+        if (!ec) return static_cast<std::streamsize>(bytes);
+
+        // Same hazard in the other direction: a client that closes before reading
+        // the reply gives a broken pipe here, and boost::asio::write's throwing
+        // overload would abort the process over it. Report the write as consumed --
+        // the connection is finished either way -- rather than throwing from a
+        // thread that cannot catch.
+        return n;
     }
     bool connect(const std::string& server, const std::string& port)
     {
