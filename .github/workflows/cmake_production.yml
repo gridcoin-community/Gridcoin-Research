@@ -389,6 +389,24 @@ jobs:
         timeout-minutes: 45
         run: ctest --test-dir build --output-on-failure --timeout 1800
 
+      - name: Dump crash reports on test failure
+        # macOS writes a symbolicated report to DiagnosticReports when a process
+        # aborts. Without this the only evidence of a crash is the terminate
+        # message on stderr, which names the exception type but not where it was
+        # thrown -- and three rounds of narrowing that down from the type alone
+        # each reached a different wrong answer.
+        if: failure()
+        run: |
+          echo "=== DiagnosticReports ==="
+          ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null || echo "  (none)"
+          for f in ~/Library/Logs/DiagnosticReports/*gridcoin*; do
+            [ -e "$f" ] || continue
+            echo "---------- $f"
+            # .ips reports are JSON with a leading metadata line; print raw either way.
+            head -c 20000 "$f"
+            echo
+          done
+
       - name: Verify Binary Hardening
         run: ./contrib/devtools/check-binary-hardening.sh build
       - name: Package (DMG)
@@ -579,6 +597,24 @@ jobs:
         # running to the six-hour job default.
         timeout-minutes: 45
         run: arch -x86_64 /usr/local/bin/ctest --test-dir build --output-on-failure --timeout 1800
+
+      - name: Dump crash reports on test failure
+        # macOS writes a symbolicated report to DiagnosticReports when a process
+        # aborts. Without this the only evidence of a crash is the terminate
+        # message on stderr, which names the exception type but not where it was
+        # thrown -- and three rounds of narrowing that down from the type alone
+        # each reached a different wrong answer.
+        if: failure()
+        run: |
+          echo "=== DiagnosticReports ==="
+          ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null || echo "  (none)"
+          for f in ~/Library/Logs/DiagnosticReports/*gridcoin*; do
+            [ -e "$f" ] || continue
+            echo "---------- $f"
+            # .ips reports are JSON with a leading metadata line; print raw either way.
+            head -c 20000 "$f"
+            echo
+          done
 
       - name: Verify Binary Hardening
         run: ./contrib/devtools/check-binary-hardening.sh build
