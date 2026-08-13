@@ -173,6 +173,9 @@ const std::set<std::string> SENSITIVE_ARG_COMMANDS = {
     "encryptwallet",
     "importprivkey",
     "restoreseedphrase",
+    "sethdseed",
+    "signrawtransaction",
+    "signrawtransactionwithkey",
     "walletpassphrase",
     "walletpassphrasechange",
 };
@@ -189,9 +192,10 @@ QString RedactSensitiveArgs(const QString& command)
 {
     std::vector<std::string> args;
     if (!parseCommandLine(args, command.toStdString()) || args.empty()) {
-        // Unparseable or empty: it will not dispatch, but say nothing about its
-        // contents either, since we cannot tell what is in it.
-        return QStringLiteral("(unparsed command)");
+        // Unparseable or empty. It will not dispatch and no command name was ever
+        // resolved, so there is nothing to redact -- and replacing it would delete
+        // the text the user has to fix from both the pane and Up-arrow recall.
+        return command;
     }
     if (!SENSITIVE_ARG_COMMANDS.count(args[0])) return command;
     return QString::fromStdString(args[0]) + QStringLiteral(" (arguments not shown)");

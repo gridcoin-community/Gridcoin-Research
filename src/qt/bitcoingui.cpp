@@ -1898,21 +1898,31 @@ void BitcoinGUI::backupWallet()
     QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
 
     // Suggest the names actually in use, taking only the filename component so a
-    // configured path cannot leak into the suggestion.
-    const QString wallet_suggestion = QString::fromStdString(
-        fs::path(gArgs.GetArg("-wallet", "wallet.dat")).filename().string());
-    const QString config_suggestion = QString::fromStdString(
-        fs::path(gArgs.GetArg("-conf", GRIDCOIN_CONF_FILENAME)).filename().string());
+    // configured path cannot leak into the suggestion. boostPathToQString, not
+    // QString::fromStdString(path.string()): on Windows the latter reads the
+    // system code page as UTF-8 and corrupts non-ASCII names (see #2736), which
+    // a wallet or conf file is perfectly entitled to have.
+    const QString wallet_suggestion = GUIUtil::boostPathToQString(
+        fs::path(gArgs.GetArg("-wallet", "wallet.dat")).filename());
+    const QString config_suggestion = GUIUtil::boostPathToQString(
+        fs::path(gArgs.GetArg("-conf", GRIDCOIN_CONF_FILENAME)).filename());
+
+    // writableLocation() returns empty when neither XDG_DOCUMENTS_DIR nor HOME is
+    // set. Joining onto that would suggest "/wallet.dat" at the filesystem root,
+    // so fall back to offering the bare name and letting the dialog choose where
+    // to open.
+    const QString wallet_default = saveDir.isEmpty() ? wallet_suggestion : saveDir + "/" + wallet_suggestion;
+    const QString config_default = saveDir.isEmpty() ? config_suggestion : saveDir + "/" + config_suggestion;
 
     QString walletfilename = QFileDialog::getSaveFileName(
-        this, tr("Backup Wallet"), saveDir + "/" + wallet_suggestion, tr("Wallet Data (*.dat)"));
+        this, tr("Backup Wallet"), wallet_default, tr("Wallet Data (*.dat)"));
     if(!walletfilename.isEmpty()) {
         if(!walletModel->backupWallet(FromQString(walletfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }
     QString configfilename = QFileDialog::getSaveFileName(
-        this, tr("Backup Config"), saveDir + "/" + config_suggestion, tr("Wallet Config (*.conf)"));
+        this, tr("Backup Config"), config_default, tr("Wallet Config (*.conf)"));
     if(!configfilename.isEmpty()) {
         if(!walletModel->backupConfigFile(FromQString(configfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the config file to the new location."));

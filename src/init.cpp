@@ -1612,7 +1612,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // pointing at tmpfs has chosen it, and both test harnesses do exactly that:
     // the unit fixture and the functional framework each set -datadir, sometimes
     // beneath a /tmp that is tmpfs on the host distribution.
-    if (!gArgs.IsArgSet("-datadir") && fsbridge::IsVolatileFilesystem(GetDataDir())) {
+    if (!gArgs.IsArgSet("-datadir") && fsbridge::IsVolatileFilesystem(datadir)) {
         return InitError(_("The default data directory is on a temporary filesystem, so the "
                            "block chain and wallet would be lost when the program exits. Pass "
                            "-datadir with a location on persistent storage."));
@@ -2262,7 +2262,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     // UPnP preference (issue #2558 PR 9d3): formerly the global fUseUPnP, set
     // here now that g_connman exists; read by CConnman::Start -> MapPort.
 #ifdef USE_UPNP
-    g_connman->SetUseUPnP(gArgs.GetBoolArg("-upnp", USE_UPNP));
+    // Same rule the immediate-effect handler applies: no mapping when we are not
+    // listening. The SoftSetBoolArg above only covers an unset -upnp, so an
+    // explicit upnp=1 alongside -connect or -proxy would otherwise start the
+    // port-map thread here and disagree with every later evaluation.
+    g_connman->SetUseUPnP(gArgs.GetBoolArg("-listen", true) && gArgs.GetBoolArg("-upnp", USE_UPNP));
 #endif
 
     uiInterface.InitMessage(_("Loading addresses..."));

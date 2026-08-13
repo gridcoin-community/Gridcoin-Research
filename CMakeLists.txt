@@ -126,12 +126,6 @@ option(ENABLE_HARDENING "Apply exploit-mitigation compiler and linker flags" ON)
 option(ENABLE_DEBUG_LOCKORDER "Enable run-time lock-order checking (DEBUG_LOCKORDER)" OFF)
 option(WERROR_THREAD_SAFETY "Promote Clang thread-safety diagnostics to build errors" OFF)
 option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" OFF)
-# Record whether the operator set this before option() supplies the default, so a
-# missing miniupnpc can be fatal when UPnP was actually asked for and merely
-# disabling when it is only the default.
-if(DEFINED ENABLE_UPNP)
-    set(ENABLE_UPNP_REQUESTED TRUE)
-endif()
 option(ENABLE_UPNP      "Enable UPnP port mapping support" ON)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
@@ -297,8 +291,6 @@ if(ENABLE_UPNP)
 
         if(miniupnpc_FOUND)
             set(LIBMINIUPNPC miniupnpc::miniupnpc)
-        elseif(ENABLE_UPNP_REQUESTED)
-            message(FATAL_ERROR "ENABLE_UPNP was requested but miniupnpc was not found.")
         else()
             # ENABLE_UPNP defaults ON so the GUI setting is always operative, but
             # the library is optional and was not previously needed for a plain
@@ -407,6 +399,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ${ENABLE_PIE})
 # get it -- this is what keeps the ELF-only linker flags from reaching Mach-O,
 # where they are rejected, and -fcf-protection from reaching arm64, where it is
 # not a valid option.
+include(CheckCXXCompilerFlag)
 include(CheckLinkerFlag)
 
 if(ENABLE_HARDENING)
@@ -418,9 +411,17 @@ if(ENABLE_HARDENING)
     string(FIND "${CMAKE_CXX_FLAGS}" "-fsanitize" _hardening_sanitizer_pos)
     if(_hardening_sanitizer_pos EQUAL -1)
         # -U first: some toolchains predefine it, and redefining warns.
-        add_compile_options(
-            "$<$<NOT:$<CONFIG:Debug>>:-U_FORTIFY_SOURCE>"
-            "$<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>")
+        # Guard on there being an optimised config at all, not merely on the
+        # config not being named Debug: with no CMAKE_BUILD_TYPE the compiler runs
+        # at -O0, and FORTIFY then warns on every translation unit while checking
+        # nothing. doc/build.md describes that configuration, so it is reachable.
+        if(CMAKE_BUILD_TYPE OR CMAKE_CONFIGURATION_TYPES)
+            add_compile_options(
+                "$<$<NOT:$<CONFIG:Debug>>:-U_FORTIFY_SOURCE>"
+                "$<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>")
+        else()
+            message(STATUS "Hardening: _FORTIFY_SOURCE skipped (no build type, so no optimisation)")
+        endif()
     else()
         message(STATUS "Hardening: _FORTIFY_SOURCE skipped (sanitizer build)")
     endif()
