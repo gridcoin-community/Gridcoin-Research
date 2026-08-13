@@ -2,7 +2,7 @@
 # Copyright (c) 2015-present The Bitcoin Core developers
 # Copyright (c) 2026 The Gridcoin developers
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/licenses/mit-license.php.
 '''
 Perform basic security checks on a series of executables.
 Exit status will be 0 if successful, and the program will be silent.
