@@ -493,8 +493,21 @@ if __name__ == '__main__':
             retval = 1
             continue
 
-        etype = binary.format
-        arch = binary.abstract.header.architecture
+        # These two reads were outside the guard above, which is where the
+        # fail-closed promise leaked: lief.parse() on a macOS universal binary
+        # returns a FatBinary, which has neither .format nor .abstract, so an
+        # AttributeError escaped and killed the whole run -- losing the verdicts
+        # for every remaining file on the command line, which a shell step can
+        # easily read as "the check ran".
+        try:
+            etype = binary.format
+            arch = binary.abstract.header.architecture
+        except AttributeError:
+            print(f'{filename}: failed PARSE')
+            print(f'{filename}: parsed to {type(binary).__name__}, not a single-architecture '
+                  f'binary (a universal/fat Mach-O must be thinned first)', file=sys.stderr)
+            retval = 1
+            continue
 
         if etype not in CHECKS or arch not in CHECKS[etype]:
             print(f'{filename}: failed UNSUPPORTED')

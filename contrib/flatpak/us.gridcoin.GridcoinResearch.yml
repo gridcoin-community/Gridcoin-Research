@@ -110,6 +110,9 @@ modules:
       - -DENABLE_TESTS=OFF
       - -DENABLE_UPNP=ON
       - -DENABLE_QRENCODE=ON
+      # ENABLE_PIE defaults OFF and OFF now genuinely disables PIE rather than
+      # deferring to the toolchain, so a shipped artifact has to ask for it.
+      - -DENABLE_PIE=ON
       - -DCMAKE_BUILD_TYPE=Release
     sources:
       - type: dir
