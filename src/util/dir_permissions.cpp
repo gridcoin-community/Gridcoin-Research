@@ -219,6 +219,31 @@ bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
     if (!created) return true;
 
     // We made it, so we set the terms.
+    //
+    // If we cannot, the directory we just created is withdrawn again before
+    // returning false. Leaving it behind is what made this fail open: on the NEXT
+    // start the directory exists, the !created branch above returns true without
+    // inspecting it, and a directory we already know we failed to protect is
+    // accepted silently and forever. One warning, then permanent exposure.
+    //
+    // fs::remove is deliberately the non-recursive form: it removes an empty
+    // directory or nothing. This runs microseconds after create_directories()
+    // returned `created`, so the directory is empty -- but if that assumption is
+    // ever wrong, remove() fails and reports rather than destroying anything. A
+    // data directory is the last place to use remove_all().
+    //
+    // A pre-existing directory never reaches here (it returned true above), so the
+    // create-only rule is intact: nothing the operator set up is inspected,
+    // re-tightened, or removed.
+    const auto withdraw = [&path](std::string& err) {
+        boost::system::error_code rm_ec;
+        fs::remove(path, rm_ec);
+        if (rm_ec) {
+            err += "; the directory could not be removed either (" + rm_ec.message()
+                 + "), so it is left in place UNRESTRICTED -- do not put a wallet in it";
+        }
+    };
+
 #ifdef WIN32
     try {
         // Inheritable: entries created inside are owner-only from creation rather
@@ -226,11 +251,13 @@ bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
         ApplyOwnerOnlyDacl(path, /*inheritable=*/true);
     } catch (const std::exception& e) {
         error = "created " + path.string() + " but could not restrict it to this account: " + e.what();
+        withdraw(error);
         return false;
     }
 #else
     if (::chmod(path.string().c_str(), 0700) != 0) {
         error = strprintf("created %s but could not chmod it to 0700 (errno %d)", path.string(), errno);
+        withdraw(error);
         return false;
     }
 #endif

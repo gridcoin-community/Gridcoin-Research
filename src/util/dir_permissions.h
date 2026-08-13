@@ -34,9 +34,25 @@ namespace util {
 //!
 //! \param error  On false, a human-readable reason (never empty).
 //! \return true if the directory exists and is usable when this returns — whether
-//!         created here or already present. false means it could not be created,
-//!         or was created but could not be restricted; the directory is left in
-//!         place either way and the caller decides how loud to be.
+//!         created here or already present.
+//!
+//! FALSE IS FATAL, and callers must treat it that way. It means one of exactly two
+//! things, because a pre-existing directory returns TRUE without being inspected:
+//!
+//!   1. the directory could not be created; or
+//!   2. this call created it and could not restrict it — in which case the
+//!      directory is REMOVED again before returning, so a retry is a real retry.
+//!
+//! What it never means is "an existing directory has permissions we dislike". That
+//! case returns true untouched, per the create-only rule. So a caller that sees
+//! false and carries on because the directory exists is reasoning about a state
+//! this function cannot produce: the directory exists because IT just made it and
+//! failed to protect it. Carrying on puts a wallet somewhere known to be exposed,
+//! and on the next start the directory is pre-existing, returns true, and the
+//! failure is never reported again.
+//!
+//! In the one case where the withdrawal itself fails, the directory is left in
+//! place and \p error says so explicitly.
 bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error);
 
 #ifdef WIN32

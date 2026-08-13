@@ -361,19 +361,22 @@ const fs::path& ArgsManager::GetDataDirPath(bool net_specific) const
     // directory is left exactly as the operator configured it.
     std::string perm_error;
     if (!util::CreateOwnerOnlyDirectory(path, perm_error)) {
-        // Either it could not be created at all, or it was created but could not be
-        // restricted. Both are reported the same way the old code reported a failed
-        // create: an empty path, which callers already treat as "no usable datadir".
-        // Do NOT throw -- this runs before logging is initialised and from paths that
-        // cannot handle an exception.
-        if (!fs::is_directory(path, ec)) {
-            path = "";
-            return path;
-        }
-        // The directory exists but is not as locked down as we intended. Carry on --
-        // the wallet is usable and the IPC socket and cookie carry their own
-        // owner-only protection -- but say so once, loudly, when logging is up.
-        LogPrintf("WARNING: %s: %s", __func__, perm_error);
+        // Any failure is fatal to this path. Both of the two things false can mean --
+        // could not create it, or created it and could not restrict it -- are
+        // reported the way the old code reported a failed create: an empty path,
+        // which callers already treat as "no usable datadir". Do NOT throw: this runs
+        // before logging is initialised and from paths that cannot handle one.
+        //
+        // An earlier revision carved out "the directory exists, so carry on and just
+        // warn", reasoning that the operator had configured it. That state cannot
+        // occur: a pre-existing directory returns true from the helper without being
+        // inspected. Reaching here with the directory present means this call created
+        // it moments ago and failed to protect it, so the carve-out put the wallet in
+        // a directory known to be readable by other accounts -- and on the next start
+        // it would be pre-existing, return true, and never be reported again.
+        LogPrintf("ERROR: %s: %s", __func__, perm_error);
+        path = "";
+        return path;
     }
 
     path = StripRedundantLastElementsOfPath(path);

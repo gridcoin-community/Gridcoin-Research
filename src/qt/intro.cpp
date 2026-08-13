@@ -248,19 +248,22 @@ bool Intro::showIfNeeded(bool& did_show_intro)
                 // Create-only: an existing directory is left as the user set it up.
                 std::string perm_error;
                 if (!util::CreateOwnerOnlyDirectory(GUIUtil::qstringToBoostPath(dataDir), perm_error)) {
-                    // Distinguish "could not create" from "created but could not be
-                    // locked down": the first is fatal to this choice, the second is
-                    // a warning the user can act on without losing their selection.
-                    if (!fs::is_directory(GUIUtil::qstringToBoostPath(dataDir))) {
-                        QMessageBox::critical(nullptr, PACKAGE_NAME,
-                            tr("Error: Specified data directory \"%1\" cannot be created.").arg(dataDir));
-                        continue; /* back to the choosing screen */
-                    }
-                    QMessageBox::warning(nullptr, PACKAGE_NAME,
-                        tr("The data directory \"%1\" was created, but its permissions could not be "
-                           "restricted to your account. Your wallet file may be readable by other "
-                           "users of this computer.\n\n%2")
+                    // Fatal to this choice, both of the two ways it can fail.
+                    //
+                    // An earlier revision downgraded "created but could not be locked
+                    // down" to a warning and kept the selection. That was the worse
+                    // half of the two: it put the wallet in a directory already known
+                    // to be readable by other accounts, and because the helper leaves
+                    // a pre-existing directory alone, re-selecting the same path on
+                    // the next run would succeed silently and never warn again. The
+                    // helper now withdraws a directory it could not protect, so
+                    // returning the user to the chooser is a real retry rather than a
+                    // loop that passes the second time for the wrong reason.
+                    QMessageBox::critical(nullptr, PACKAGE_NAME,
+                        tr("Error: The data directory \"%1\" could not be created and secured.\n\n%2\n\n"
+                           "Please choose a different location.")
                             .arg(dataDir, QString::fromStdString(perm_error)));
+                    continue; /* back to the choosing screen */
                 }
                 break;
             } catch (const fs::filesystem_error&) {
