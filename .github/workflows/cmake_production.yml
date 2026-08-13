@@ -197,7 +197,10 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         # Removed -j flag; CTest reads env var
-        run: ctest --test-dir ${{ matrix.build_dir }} --output-on-failure
+        # See the arm64 job: bounded twice so a hang is reported rather than
+        # running to the six-hour job default.
+        timeout-minutes: 45
+        run: ctest --test-dir ${{ matrix.build_dir }} --output-on-failure --timeout 1800
 
       # 8b. Test (Windows)
       - name: Run Tests (Windows)
@@ -209,7 +212,7 @@ jobs:
         run: |
           wineboot --init || true
           # Removed -j flag; CTest reads env var
-          ctest --test-dir ${{ matrix.build_dir }} --output-on-failure
+          ctest --test-dir ${{ matrix.build_dir }} --output-on-failure --timeout 1800
 
       # 9. Package
       - name: Create Package
@@ -378,7 +381,13 @@ jobs:
         run: cmake --build build
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        # Bounded twice on purpose. --timeout makes ctest kill and REPORT the test
+        # that overran, which is the diagnosable outcome; timeout-minutes is the
+        # backstop for a hang outside ctest itself. Without either, a stuck test
+        # ran to the six-hour job default on a runner billed at ten times the
+        # Linux rate, and produced no usable log when it was finally cancelled.
+        timeout-minutes: 45
+        run: ctest --test-dir build --output-on-failure --timeout 1800
 
       - name: Verify Binary Hardening
         run: ./contrib/devtools/check-binary-hardening.sh build
@@ -566,7 +575,10 @@ jobs:
         run: arch -x86_64 /usr/local/bin/cmake --build build
 
       - name: Test
-        run: arch -x86_64 /usr/local/bin/ctest --test-dir build --output-on-failure
+        # See the arm64 job: bounded twice so a hang is reported rather than
+        # running to the six-hour job default.
+        timeout-minutes: 45
+        run: arch -x86_64 /usr/local/bin/ctest --test-dir build --output-on-failure --timeout 1800
 
       - name: Verify Binary Hardening
         run: ./contrib/devtools/check-binary-hardening.sh build
