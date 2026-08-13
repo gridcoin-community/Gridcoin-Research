@@ -126,6 +126,12 @@ option(ENABLE_HARDENING "Apply exploit-mitigation compiler and linker flags" ON)
 option(ENABLE_DEBUG_LOCKORDER "Enable run-time lock-order checking (DEBUG_LOCKORDER)" OFF)
 option(WERROR_THREAD_SAFETY "Promote Clang thread-safety diagnostics to build errors" OFF)
 option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" OFF)
+# Record whether the operator set this before option() supplies the default, so a
+# missing miniupnpc can be fatal when UPnP was actually asked for and merely
+# disabling when it is only the default.
+if(DEFINED ENABLE_UPNP)
+    set(ENABLE_UPNP_REQUESTED TRUE)
+endif()
 option(ENABLE_UPNP      "Enable UPnP port mapping support" ON)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
@@ -287,8 +293,22 @@ if(ENABLE_UPNP)
     if(MINIUPNPC_FOUND)
         set(LIBMINIUPNPC PkgConfig::MINIUPNPC)
     else()
-        find_package(miniupnpc CONFIG REQUIRED)
-        set(LIBMINIUPNPC miniupnpc::miniupnpc)
+        find_package(miniupnpc CONFIG QUIET)
+
+        if(miniupnpc_FOUND)
+            set(LIBMINIUPNPC miniupnpc::miniupnpc)
+        elseif(ENABLE_UPNP_REQUESTED)
+            message(FATAL_ERROR "ENABLE_UPNP was requested but miniupnpc was not found.")
+        else()
+            # ENABLE_UPNP defaults ON so the GUI setting is always operative, but
+            # the library is optional and was not previously needed for a plain
+            # configure. Requiring it here would turn "cmake -B build" into a hard
+            # failure on any machine without it. Build without UPnP instead, and
+            # say so.
+            message(WARNING "miniupnpc not found: building without UPnP support. "
+                            "Pass -DENABLE_UPNP=ON to make this an error instead.")
+            set(ENABLE_UPNP OFF)
+        endif()
     endif()
 endif()
 
