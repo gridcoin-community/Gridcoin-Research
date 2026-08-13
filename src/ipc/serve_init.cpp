@@ -20,6 +20,7 @@
 #include "logging.h"
 
 #include <atomic>
+#include <cstdint>
 #include <stdexcept>
 #include <utility>
 
@@ -74,20 +75,24 @@ public:
         //
         // A legitimate GUI is unaffected: it presents one cookie and disconnects
         // itself if the node rejects it.
-        if (m_auth_failed) {
-            LogPrintf("WARN: %s: ignoring a repeat authentication attempt on a connection that "
-                      "already presented an invalid cookie", __func__);
+
+        // Claim the connection's single attempt. Losing this race means another
+        // worker already holds or has finished the attempt, so this call is refused
+        // WITHOUT its cookie being compared -- concurrent callers must not each get
+        // a guess.
+        AuthState expected = AuthState::Pending;
+        if (!m_auth_state.compare_exchange_strong(expected, AuthState::InProgress)) {
+            LogPrintf("WARN: %s: refusing an authentication attempt on a connection whose single "
+                      "attempt was already claimed", __func__);
             return false;
         }
 
-        // Return whether THIS cookie is valid (the client checks the result), and
-        // set the (per-connection) authenticated flag on success. Never cleared: a
-        // later bad-cookie call on the same connection cannot de-authenticate it.
+        // Return whether THIS cookie is valid (the client checks the result). Both
+        // outcomes are terminal, so a later call on the same connection can neither
+        // de-authenticate it nor buy another guess.
         const bool ok = ConstantTimeEqual(cookie, m_cookie);
-        if (ok) {
-            m_authenticated = true;
-        } else {
-            m_auth_failed = true;
+        m_auth_state.store(ok ? AuthState::Authenticated : AuthState::Failed);
+        if (!ok) {
             LogPrintf("WARN: %s: IPC peer presented an invalid cookie; this connection can no "
                       "longer authenticate and will be dropped", __func__);
         }
@@ -96,7 +101,7 @@ public:
 
     //! Not served over capnp (no ordinal in init.capnp); the local listener calls
     //! it to decide whether this connection beat the authentication deadline.
-    bool isAuthenticated() override { return m_authenticated; }
+    bool isAuthenticated() override { return m_auth_state.load() == AuthState::Authenticated; }
 
     interfaces::BuildInfo getBuildInfo() override
     {
@@ -173,7 +178,7 @@ public:
 private:
     void RequireAuth() const
     {
-        if (!m_authenticated) {
+        if (m_auth_state.load() != AuthState::Authenticated) {
             throw std::runtime_error("IPC peer is not authenticated");
         }
     }
@@ -181,16 +186,28 @@ private:
     std::unique_ptr<interfaces::Init> m_inner;
     std::string m_cookie;
     interfaces::NodeIdentity m_identity;
-    //! Atomic because a single connection is served by more than one thread:
-    //! libmultiprocess dispatches each client thread's calls to its own server
-    //! worker, so authenticate() may write this from one worker while another
-    //! reads it in RequireAuth(). The transition is monotonic false->true, so the
-    //! plain bool was benign in practice, but it was still a formal data race.
-    std::atomic<bool> m_authenticated{false};
-    //! Latched by a wrong cookie; atomic for the same reason as m_authenticated.
-    //! Monotonic false->true, and never consulted together with m_authenticated in
-    //! a way that needs the pair to be consistent (a connection cannot be both).
-    std::atomic<bool> m_auth_failed{false};
+    //! The connection gets exactly ONE authentication attempt, and the claim on
+    //! that attempt is a single atomic transition.
+    //!
+    //! A previous revision used two atomic bools and did `if (m_auth_failed) return
+    //! false;` before testing the cookie. Each bool was atomic, but the pair
+    //! read-then-write was not: a single connection is served by more than one
+    //! thread (libmultiprocess dispatches each client thread's calls to its own
+    //! server worker), so N workers could all observe m_auth_failed == false, all
+    //! reach ConstantTimeEqual, and all test a different cookie before any of them
+    //! stored true. That turned "one strike" into "N concurrent strikes" and handed
+    //! back the guessing oracle the latch existed to remove.
+    //!
+    //! Pending -> InProgress is a compare_exchange, so exactly one worker can ever
+    //! claim the attempt; every other caller loses the race and is refused without
+    //! its cookie being examined at all.
+    enum class AuthState : uint8_t {
+        Pending,       //!< no attempt claimed yet
+        InProgress,    //!< a worker holds the single attempt
+        Authenticated, //!< terminal: the cookie matched
+        Failed,        //!< terminal: the cookie did not match
+    };
+    std::atomic<AuthState> m_auth_state{AuthState::Pending};
 };
 } // namespace
 

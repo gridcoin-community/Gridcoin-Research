@@ -90,17 +90,23 @@ public:
         // can distinguish them -- but a failed listenAddress() is now fatal in the
         // daemon, so the window where node.sock is unowned has been closed too.)
         //
-        // ADVISORY, not Enforcing: this is defense-in-depth on top of the cookie,
-        // not the security boundary (that is the node's accept path, which stays
-        // fail-closed). Refusing to start the GUI because a supplementary check
-        // could not be evaluated would trade a total outage for something the
-        // cookie already backstops, so we refuse only on a definite foreign uid and
-        // log when we cannot tell. Darwin was measured and DOES answer on the
-        // connecting side (see PeerCredPolicy) -- this is not a macOS workaround.
-        if (!ipc::CheckPeerCredentials(fd, ipc::PeerCredPolicy::Advisory)) {
+        // ENFORCING. An earlier revision used Advisory here and justified it as
+        // defense-in-depth "backstopped by the cookie". That reasoning is circular:
+        // the cookie cannot backstop this check, because the cookie is the very
+        // thing the next call discloses. ClientHandshake hands it to whatever
+        // answered on node.sock, so "we could not determine the peer's uid" has to
+        // abort BEFORE the disclosure, not be logged and stepped over. An
+        // unverifiable listener is exactly the case where sending a bearer token is
+        // least defensible.
+        //
+        // The cost of Enforcing is bounded: CheckPeerCredentials returns true on
+        // WIN32 (no uid to compare), and Darwin was measured to answer on the
+        // connecting side, so this refuses only where the platform can answer and
+        // the answer is wrong or unobtainable.
+        if (!ipc::CheckPeerCredentials(fd, ipc::PeerCredPolicy::Enforcing)) {
             throw std::runtime_error("The process listening on the multiprocess socket belongs to "
-                                     "a different OS user; refusing to send the authentication "
-                                     "cookie to it.");
+                                     "a different OS user, or its owner could not be determined; "
+                                     "refusing to send the authentication cookie to it.");
         }
         auto init = m_protocol->connect(fd, m_exe_name, std::move(on_disconnect));
         guard.release(); // the protocol/stream now owns the fd

@@ -57,14 +57,19 @@ enum class PeerCredPolicy {
     //! from a socket we just accepted.
     Enforcing,
     //! Refuse only on a DEFINITE mismatch; allow (with a log line) when the uid
-    //! cannot be read. For the GUI's own connected socket, where this is
-    //! defense-in-depth layered on the cookie rather than the boundary itself.
+    //! cannot be read.
     //!
-    //! The distinction is about ROLE, not about any platform being broken: the
-    //! node's accept path is the security boundary, while the client's check is
-    //! defense-in-depth layered on the cookie. Refusing to start the GUI because a
-    //! supplementary check could not be evaluated trades a total outage for a
-    //! check the cookie already backstops.
+    //! CURRENTLY UNUSED, and deliberately so. This was the GUI's connect-side
+    //! policy, justified as defense-in-depth "backstopped by the cookie". That
+    //! justification does not survive contact with the call order: the client's
+    //! next act after this check is to hand the cookie to whatever answered, so the
+    //! cookie cannot backstop a check that gates its own disclosure. The connect
+    //! side is now Enforcing.
+    //!
+    //! Retained because the role distinction it encodes is real -- a check that is
+    //! genuinely supplementary, gating nothing that is disclosed on failure, could
+    //! legitimately use it. Do not reach for it to work around a platform that
+    //! cannot answer; that turns "we could not verify" into "we proceeded anyway".
     //!
     //! MEASURED (macOS 14.8.7, xnu-10063, 2026-08-10): Darwin DOES populate peer
     //! credentials on both ends -- a bind/listen/connect probe read the correct uid

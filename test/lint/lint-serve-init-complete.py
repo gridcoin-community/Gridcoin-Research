@@ -44,7 +44,7 @@ UNGATED = {
 }
 
 # "virtual <return type> <name>(" -- the return type may contain spaces, ::, <>, &, *.
-VIRTUAL_RE = re.compile(r"^\s*virtual\s+[\w:<>,\s*&]+?\s+(\w+)\s*\(")
+VIRTUAL_RE = re.compile(r"\bvirtual\s+[\w:<>,\s*&]+?\s+(\w+)\s*\(([^)]*)\)")
 
 # Line comments, block comments and string literals, so a mention of RequireAuth()
 # in prose cannot satisfy the check below. Order matters: strings first would eat
@@ -91,19 +91,33 @@ def class_body(text, class_name):
 
 
 def declared_virtuals(header_text):
+    """Return [(name, arity), ...] for every virtual on interfaces::Init.
+
+    Keyed by arity for the same reason overrides_with_bodies() is: keying by bare
+    name made the completeness check fail open across overloads. Adding
+    `Init::foo(int)` while ServeInit had only a gated `foo()` satisfied a
+    name-only membership test, and the gate check then examined the existing
+    zero-argument override and passed -- so the new overload reached IPC peers
+    ungated, which is precisely what this lint exists to prevent.
+
+    Matched over the whole class body rather than line by line so a declaration
+    whose parameters wrap across lines still yields its arity; `[^)]*` spans
+    newlines. Comments are stripped first so prose cannot introduce a phantom
+    virtual.
+    """
     body = class_body(header_text, "Init")
     if body is None:
         return None
-    names = []
-    for line in body.splitlines():
-        m = VIRTUAL_RE.match(line)
-        if not m:
-            continue
+    body = strip_noncode(body)
+    out = []
+    for m in VIRTUAL_RE.finditer(body):
         name = m.group(1)
         if name == "Init":  # the virtual destructor, written as "virtual ~Init()"
             continue
-        names.append(name)
-    return names
+        params = m.group(2).strip()
+        arity = 0 if not params else params.count(",") + 1
+        out.append((name, arity))
+    return out
 
 
 def overrides_with_bodies(serve_text):
@@ -155,32 +169,36 @@ def main():
 
     errors = []
 
-    found_names = {k[0] for k in found}
+    # Compare (name, arity) keys on BOTH sides. Every declared overload must have
+    # its own gated override; matching on the bare name let a new overload borrow
+    # the verdict of an existing one.
+    expected_keys = set(expected)
 
-    for name in expected:
+    for key in expected:
+        name, arity = key
         if name in UNGATED:
             continue
-        if name not in found_names:
+        if key not in found:
             errors.append(
-                "interfaces::Init::{0}() has no override in ServeInit ({1}). It would fall through "
-                "to the base default and silently return nothing over IPC. Add an override that "
-                "calls RequireAuth() and delegates to m_inner.".format(name, SERVE_INIT))
-        else:
-            # EVERY overload must be gated, not just one of them.
-            for key, fnbody in found.items():
-                if key[0] == name and "RequireAuth()" not in fnbody:
-                    errors.append(
-                        "ServeInit::{0}() (the {1}-argument overload) does not call RequireAuth() "
-                        "({2}). It would be served to an unauthenticated IPC peer.".format(
-                            name, key[1], SERVE_INIT))
+                "interfaces::Init::{0}() (the {1}-argument overload) has no override in ServeInit "
+                "({2}). It would fall through to the base default and silently return nothing over "
+                "IPC. Add an override that calls RequireAuth() and delegates to m_inner.".format(
+                    name, arity, SERVE_INIT))
+        elif "RequireAuth()" not in found[key]:
+            errors.append(
+                "ServeInit::{0}() (the {1}-argument overload) does not call RequireAuth() "
+                "({2}). It would be served to an unauthenticated IPC peer.".format(
+                    name, arity, SERVE_INIT))
 
     # An override with no counterpart on the interface is dead code, and usually
-    # means a rename landed on one side only.
-    for name in found_names:
-        if name not in expected:
+    # means a rename landed on one side only. Arity-aware too: an override whose
+    # signature no longer matches any declaration overrides nothing.
+    for key in found:
+        if key not in expected_keys:
             errors.append(
-                "ServeInit::{0}() overrides nothing declared on interfaces::Init ({1}); it is dead "
-                "code or a half-finished rename.".format(name, INIT_HEADER))
+                "ServeInit::{0}() (the {1}-argument overload) overrides nothing declared on "
+                "interfaces::Init ({2}); it is dead code or a half-finished rename.".format(
+                    key[0], key[1], INIT_HEADER))
 
     # An UNGATED entry that calls RequireAuth() is a contradiction worth catching.
     for name in UNGATED:
