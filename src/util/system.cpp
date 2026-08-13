@@ -14,10 +14,6 @@
 
 #include <chainparamsbase.h>
 
-#ifdef __linux__
-#include <sys/vfs.h>
-#endif
-
 #include <stdexcept>
 #include <thread>
 #include <typeinfo>
@@ -776,26 +772,6 @@ fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific)
     } else {
     return fsbridge::AbsPathJoin(data_dir, path);
     }
-}
-
-bool IsVolatileFilesystem(const fs::path& path)
-{
-#ifdef __linux__
-    struct statfs fs_info;
-
-    // Cannot tell: say no. Reporting "volatile" because a syscall failed would
-    // turn an unreadable path into a hard startup error.
-    if (statfs(path.string().c_str(), &fs_info) != 0) return false;
-
-    // From <linux/magic.h>, inlined so that header is not a build dependency.
-    constexpr decltype(fs_info.f_type) TMPFS_MAGIC_VALUE = 0x01021994;
-    constexpr decltype(fs_info.f_type) RAMFS_MAGIC_VALUE = 0x858458f6;
-
-    return fs_info.f_type == TMPFS_MAGIC_VALUE || fs_info.f_type == RAMFS_MAGIC_VALUE;
-#else
-    (void)path;
-    return false;
-#endif
 }
 
 fs::path GetDefaultDataDir()

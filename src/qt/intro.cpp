@@ -19,7 +19,6 @@
 //#include <interfaces/node.h>
 #include <util.h>
 #include <util/dir_permissions.h>
-#include <util/system.h>
 
 #include <QFileDialog>
 #include <QSettings>
@@ -107,7 +106,7 @@ void FreespaceChecker::check()
         // worth surfacing here rather than only at startup because the free-space
         // figure shown just above is entirely healthy-looking on tmpfs, which is
         // most of why the sandbox case was so hard to diagnose from the outside.
-        if (replyStatus == ST_OK && IsVolatileFilesystem(fs::exists(dataDir) ? dataDir : parentDir))
+        if (replyStatus == ST_OK && fsbridge::IsVolatileFilesystem(fs::exists(dataDir) ? dataDir : parentDir))
         {
             replyStatus = ST_ERROR;
             replyMessage = tr("This location is on a temporary filesystem. Anything stored here, "
