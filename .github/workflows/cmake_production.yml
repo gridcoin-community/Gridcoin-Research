@@ -147,7 +147,9 @@ jobs:
 
           # Use readelf -d to inspect NEEDED entries from the ELF dynamic section.
           # Allowed shared libraries: libc.so.6 and libm.so.6 only.
-          ALLOWED='libc\.so|libm\.so'
+          # The loader is how libc and libm get loaded at all, so it is not a
+          # dependency the build pulled in. Anything else still fails.
+          ALLOWED='libc\.so|libm\.so|ld-linux'
 
           # Check both the GUI (src/qt/) and Daemon (src/)
           # The build installs into <build_dir>/bin, not <build_dir>/src. Pointing
