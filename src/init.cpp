@@ -1074,16 +1074,22 @@ void InitLogging()
     // reach a Windows console.
     const fs::path resolved_data_dir = GetDataDir();
 
+    // Only speak up when the directory is the problem. debug.log lives inside it,
+    // so a volatile data directory takes every record of itself with it -- that is
+    // the case worth a line on stderr before logging starts. Reporting the path
+    // unconditionally was noise on every normal start, and the functional test
+    // framework treats any stderr output from a node as a failure, correctly.
+    //
     // Utf8PathString, not path::string(): on Windows the latter narrows through
-    // the active code page, so a data directory containing anything outside it
-    // is mangled or throws -- and this line exists precisely to name a directory
+    // the active code page, so a directory containing anything outside it is
+    // mangled or throws -- and this line exists precisely to name a directory
     // that may be unusual.
-    fputs(strprintf("Data directory: %s\n", fsbridge::Utf8PathString(resolved_data_dir)).c_str(), stderr);
-
     if (fsbridge::IsVolatileFilesystem(resolved_data_dir)) {
-        fputs("WARNING: the data directory is on a temporary filesystem (tmpfs/ramfs). "
-              "The block chain, the wallet and this log will be DESTROYED when the process "
-              "exits. Set -datadir to persistent storage before continuing.\n", stderr);
+        fputs(strprintf("WARNING: the data directory %s is on a temporary filesystem "
+                        "(tmpfs/ramfs). The block chain, the wallet and this log will be "
+                        "DESTROYED when the process exits. Set -datadir to persistent "
+                        "storage before continuing.\n",
+                        fsbridge::Utf8PathString(resolved_data_dir)).c_str(), stderr);
     }
 
     // This is needed because it is difficult to inject the equivalent of -nodebuglogfile in the testing suite for
