@@ -14,6 +14,10 @@
 
 #include <chainparamsbase.h>
 
+#ifdef __linux__
+#include <sys/vfs.h>
+#endif
+
 #include <stdexcept>
 #include <thread>
 #include <typeinfo>
@@ -774,6 +778,26 @@ fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific)
     }
 }
 
+bool IsVolatileFilesystem(const fs::path& path)
+{
+#ifdef __linux__
+    struct statfs fs_info;
+
+    // Cannot tell: say no. Reporting "volatile" because a syscall failed would
+    // turn an unreadable path into a hard startup error.
+    if (statfs(path.string().c_str(), &fs_info) != 0) return false;
+
+    // From <linux/magic.h>, inlined so that header is not a build dependency.
+    constexpr decltype(fs_info.f_type) TMPFS_MAGIC_VALUE = 0x01021994;
+    constexpr decltype(fs_info.f_type) RAMFS_MAGIC_VALUE = 0x858458f6;
+
+    return fs_info.f_type == TMPFS_MAGIC_VALUE || fs_info.f_type == RAMFS_MAGIC_VALUE;
+#else
+    (void)path;
+    return false;
+#endif
+}
+
 fs::path GetDefaultDataDir()
 {
     // Windows < Vista: C:\Documents and Settings\Username\Application Data\GridcoinResearch
@@ -804,11 +828,38 @@ fs::path GetDefaultDataDir()
     if (container && strcmp(container, "flatpak") == 0) {
         char* state_home = getenv("XDG_STATE_HOME");
 
-        if (!state_home) {
-            return pathRet / ".local" / "state" / "GridcoinResearch";
+        // Per the XDG base directory specification an unset OR empty value is to
+        // be treated as unset, and a value that is not absolute must be ignored.
+        // Testing only for null accepted XDG_STATE_HOME="" and produced the
+        // relative path "GridcoinResearch", which the default branch never runs
+        // through fs::system_complete -- so it would resolve against the process
+        // working directory.
+        if (state_home && *state_home != '\0' && fs::path(state_home).is_absolute()) {
+            return fs::path(state_home) / "GridcoinResearch";
         }
 
-        return fs::path(state_home) / "GridcoinResearch";
+        // Inside the sandbox HOME is the REAL home path, but almost none of it is
+        // bound through to the host: the only persistent mount under it is
+        // ~/.var/app/<app-id>. Anything else -- including ~/.local/state -- is
+        // tmpfs. Writes there succeed, never reach the host, and are gone when the
+        // application exits, which took the chain, the wallet and debug.log with
+        // them. Older flatpak releases do not export XDG_STATE_HOME, so that
+        // fallback was the live path for them.
+        //
+        // FLATPAK_ID is exported inside the sandbox, so derive the per-app
+        // persistent root from it rather than naming the application id here: it
+        // stays declared only in the manifest.
+        char* flatpak_id = getenv("FLATPAK_ID");
+
+        if (flatpak_id && *flatpak_id != '\0') {
+            return pathRet / ".var" / "app" / flatpak_id / ".local" / "state" / "GridcoinResearch";
+        }
+
+        // Neither variable is usable. Keep the previous behaviour rather than
+        // inventing a path, and let the volatile-filesystem check downstream
+        // report it: on a flatpak new enough to export XDG_STATE_HOME this is
+        // unreachable, and on older ones we have nothing better to go on.
+        return pathRet / ".local" / "state" / "GridcoinResearch";
     }
 
 #ifdef MAC_OSX

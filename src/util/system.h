@@ -62,6 +62,19 @@ fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific = true);
 
 fs::path GetDefaultDataDir();
 
+/**
+ * True when path is on a filesystem whose contents do not survive the process
+ * exiting or the machine rebooting -- tmpfs or ramfs.
+ *
+ * A data directory there accepts every write and loses the chain, the wallet and
+ * debug.log on exit, with no error at any point. Linux only: elsewhere this
+ * returns false, since we have no equivalent test and reporting "not volatile"
+ * matches the previous behaviour. It also returns false when the filesystem
+ * cannot be determined, so an unreadable path is never reported as volatile on
+ * the strength of a failed syscall.
+ */
+bool IsVolatileFilesystem(const fs::path& path);
+
 inline bool IsSwitchChar(char c)
 {
 #ifdef WIN32
