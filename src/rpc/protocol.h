@@ -122,15 +122,31 @@ public:
         fNeedHandshake = fUseSSLIn;
     }
 
-    void handshake(boost::asio::ssl::stream_base::handshake_type role)
+    //! \return false if the TLS negotiation failed. Non-throwing for the same
+    //! reason read() and write() are: this runs on an RPC worker thread with no
+    //! handler above it, so an escaping exception terminates the process. An
+    //! earlier revision converted only the data-transfer overloads and left this
+    //! one throwing, which merely moved the abort earlier -- a client that
+    //! disconnects mid-negotiation reaches here, not read().
+    bool handshake(boost::asio::ssl::stream_base::handshake_type role)
     {
-        if (!fNeedHandshake) return;
+        if (!fNeedHandshake) return true;
         fNeedHandshake = false;
-        stream.handshake(role);
+
+        boost::system::error_code ec;
+        stream.handshake(role, ec);
+        if (!ec) return true;
+
+        // The connection never became usable. Callers translate this into their own
+        // end-of-sequence result rather than throwing.
+        return false;
     }
     std::streamsize read(char* s, std::streamsize n)
     {
-        handshake(boost::asio::ssl::stream_base::server); // HTTPS servers read first
+        // HTTPS servers read first. A failed negotiation is end of sequence: there
+        // is no usable connection to read from, and throwing here would abort the
+        // process from a thread that cannot catch.
+        if (!handshake(boost::asio::ssl::stream_base::server)) return -1;
 
         boost::system::error_code ec;
         const std::size_t bytes = fUseSSL
@@ -157,7 +173,9 @@ public:
     }
     std::streamsize write(const char* s, std::streamsize n)
     {
-        handshake(boost::asio::ssl::stream_base::client); // HTTPS clients write first
+        // HTTPS clients write first. Report the write as consumed on a failed
+        // negotiation, matching how the error path below treats a dead connection.
+        if (!handshake(boost::asio::ssl::stream_base::client)) return n;
 
         boost::system::error_code ec;
         const std::size_t bytes = fUseSSL

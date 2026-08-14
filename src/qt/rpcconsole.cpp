@@ -7,6 +7,7 @@
 #include "qt/bantablemodel.h"
 #include "qt/decoration.h"
 #include "guiutil.h"
+#include "util/strencodings.h"
 #endif
 
 #include <QThread>
@@ -180,25 +181,71 @@ const std::set<std::string> SENSITIVE_ARG_COMMANDS = {
     "walletpassphrasechange",
 };
 
+//! Best-effort command name for text that parseCommandLine REJECTED, where there
+//! is no parsed argv to consult. Reads the first token, seeing through one layer
+//! of quoting, because a quoted name is how the whitespace-splitting version of
+//! this guard was defeated. Used only on the failure path -- when the parser
+//! succeeds, its argv is authoritative.
+std::string LeadingCommandToken(const QString& command)
+{
+    const std::string s = command.toStdString();
+    std::string::size_type i = 0;
+
+    while (i < s.size() && IsSpace(s[i])) ++i;
+
+    char quote = 0;
+    if (i < s.size() && (s[i] == '"' || s[i] == '\'')) {
+        quote = s[i];
+        ++i;
+    }
+
+    const std::string::size_type start = i;
+    while (i < s.size()) {
+        const char c = s[i];
+        const bool ends = quote ? (c == quote)
+                                : (IsSpace(c) || c == '"' || c == '\'');
+        if (ends) break;
+        ++i;
+    }
+
+    return s.substr(start, i - start);
+}
+
 //! Replace the arguments of a secret-bearing command with a placeholder. The
 //! command still executes with its real arguments; only the copies that are
 //! displayed, logged or remembered are reduced.
 //!
-//! The name is taken from parseCommandLine rather than by splitting on
-//! whitespace, so it sees the command exactly as the dispatcher will. Splitting
-//! naively would leave `"walletpassphrase" secret 60` unredacted while the
-//! parser strips the quotes and runs it -- the wrong way round for a guard.
+//! When the line parses, the name is taken from parseCommandLine rather than by
+//! splitting on whitespace, so it sees the command exactly as the dispatcher
+//! will. Splitting naively would leave `"walletpassphrase" secret 60` unredacted
+//! while the parser strips the quotes and runs it -- the wrong way round for a
+//! guard.
 QString RedactSensitiveArgs(const QString& command)
 {
     std::vector<std::string> args;
-    if (!parseCommandLine(args, command.toStdString()) || args.empty()) {
-        // Unparseable or empty. It will not dispatch and no command name was ever
-        // resolved, so there is nothing to redact -- and replacing it would delete
-        // the text the user has to fix from both the pane and Up-arrow recall.
-        return command;
+    if (parseCommandLine(args, command.toStdString()) && !args.empty()) {
+        if (!SENSITIVE_ARG_COMMANDS.count(args[0])) return command;
+        return QString::fromStdString(args[0]) + QStringLiteral(" (arguments not shown)");
     }
-    if (!SENSITIVE_ARG_COMMANDS.count(args[0])) return command;
-    return QString::fromStdString(args[0]) + QStringLiteral(" (arguments not shown)");
+
+    // Unparseable. An earlier revision returned the text verbatim here, reasoning
+    // that it would never dispatch and no command name had been resolved, so there
+    // was nothing to redact. That inspects the wrong property. `walletpassphrase
+    // "secret 60` fails on the unbalanced quote and is returned whole -- writing
+    // the passphrase to the console pane and the Up-arrow history, which is the
+    // precise disclosure this guard exists to prevent. Whether the command would
+    // have run does not matter; the secret is in the text either way.
+    //
+    // So fall back to recognising the leading token. If it names a sensitive
+    // command the arguments are dropped even though they were malformed; the user
+    // still sees which command failed. Text whose first token is not recognised is
+    // returned unchanged, so an ordinary typo is still visible to correct.
+    const std::string token = LeadingCommandToken(command);
+    if (!token.empty() && SENSITIVE_ARG_COMMANDS.count(token)) {
+        return QString::fromStdString(token) + QStringLiteral(" (arguments not shown)");
+    }
+
+    return command;
 }
 } // namespace
 
