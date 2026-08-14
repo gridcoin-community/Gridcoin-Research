@@ -827,7 +827,7 @@ jobs:
             libboost-serialization-dev:arm64 libboost-chrono-dev:arm64 \
             libminiupnpc-dev:arm64 libxkbcommon-dev:arm64 \
             libcups2t64:arm64 \
-            libcapnp-dev:arm64 capnproto \
+            libcapnp-dev:arm64 libcapnp-dev capnproto \
             ccache
 
       - name: Setup Concurrency
@@ -847,11 +847,29 @@ jobs:
           key: ccache-prod-arm64-${{ github.sha }}
           restore-keys: ccache-prod-arm64-
 
+      # mpgen is the libmultiprocess code generator, and a cross build produces an
+      # aarch64 one that cannot run on the amd64 runner -- the build then invokes the
+      # target NAME as a command and dies with "Libmultiprocess::mpgen: not found".
+      # Build it for the host first and hand the cross configure the path via
+      # MPGEN_EXECUTABLE, which the subtree exposes for exactly this case.
+      - name: Build native mpgen (cross-build code generator)
+        run: |
+          cmake -B build_mpgen_native -S src/ipc/libmultiprocess -GNinja \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build_mpgen_native --target mpgen -j"${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}"
+          MPGEN_BIN=$(find build_mpgen_native -name mpgen -type f -perm -u+x | head -n 1)
+          if [ -z "$MPGEN_BIN" ]; then
+            echo "::error::native mpgen was not produced"; exit 1
+          fi
+          echo "MPGEN_BIN=$(pwd)/${MPGEN_BIN}" >> "$GITHUB_ENV"
+          echo "native mpgen: $(pwd)/${MPGEN_BIN}"
+
       - name: Configure CMake (Cross)
         env:
           PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig
         run: |
           cmake -B build_arm64 -GNinja \
+            -DMPGEN_EXECUTABLE="${MPGEN_BIN}" \
             -DCMAKE_SYSTEM_NAME=Linux \
             -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
