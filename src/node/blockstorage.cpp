@@ -23,6 +23,7 @@
 #include "util/time.h"
 #include "validation.h"
 
+#include <cerrno>
 #include <stdio.h>
 
 // Chain-state globals defined in main.cpp that LoadBlockIndex references;
@@ -64,8 +65,26 @@ bool WriteBlockToDisk(const CBlock& block, unsigned int& nFileRet, unsigned int&
     nBlockPosRet = fileOutPos;
     fileout << block;
 
-    // Flush stdio buffers and commit to disk before returning
-    fflush(fileout.Get());
+    // Flush stdio buffers and commit to disk before returning.
+    //
+    // The result matters here in a way it did not when this function opened and
+    // closed blk*.dat around every block. Below, FileCommit() is skipped for most
+    // blocks during IBD, so this fflush is the only thing that moves the block out
+    // of stdio's buffer -- and discarding its result lets a disk-full or I/O error
+    // report success, after which the block index records a position for data that
+    // never left the process.
+    //
+    // On failure the cached handle is closed rather than released back: a stream
+    // that failed to flush retains its error state, so every later append through
+    // the same handle would inherit it and fail the same way. CloseBlockFile()
+    // drops it and the next append reopens. That is safe against the guard above --
+    // CAutoFile::release() only disowns the pointer, it does not close it, so there
+    // is no double close.
+    if (fflush(fileout.Get()) != 0) {
+        const int flush_errno = errno;
+        CloseBlockFile();
+        return error("%s: fflush failed, block not written (errno %d)", __func__, flush_errno);
+    }
     if (!IsInitialBlockDownload() || (nBestHeight + 1) % 5000 == 0) {
         // Pair the block-file fsync with a LevelDB WAL sync barrier so the
         // block index DB cannot be made durable referencing blk*.dat data

@@ -171,6 +171,15 @@ namespace {
 //! is exactly what makes the call fail, and the failure path is the one that
 //! writes to the log -- carrying the new passphrase with it.
 const std::set<std::string> SENSITIVE_ARG_COMMANDS = {
+    // Carries settings values, and some settings are marked SENSITIVE precisely
+    // because they are credentials -- rpcpassword and rpcuser among them. The RPC
+    // reply masks those, but that does nothing for the copy the console echoes into
+    // the pane and history, or for the verbatim line written to debug.log when the
+    // call fails. Listing the whole command hides ordinary setting changes too;
+    // that is the intended trade, because deciding per-argument here would mean
+    // re-deriving which settings are sensitive in a second place and getting it
+    // wrong silently.
+    "changesettings",
     "encryptwallet",
     "importprivkey",
     "restoreseedphrase",
