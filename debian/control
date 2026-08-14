@@ -24,6 +24,11 @@ Build-Depends:
  libboost-date-time-dev,
  libboost-test-dev,
  libminiupnpc-dev,
+# Multiprocess (IPC) build: the code generator and the runtime. The vendored
+# libmultiprocess subtree requires Cap'n Proto 0.9 or newer and fails configure
+# below that, so the floor is expressed here rather than discovered mid-build.
+ capnproto (>= 0.9),
+ libcapnp-dev (>= 0.9),
  libqrencode-dev,
  libzip-dev,
  libcurl4-openssl-dev,
@@ -69,6 +74,8 @@ Depends:
  qt6-svg-plugins | libqt6svg6
 Recommends:
  bash-completion
+Suggests:
+ gridcoinresearchd
 Description: Gridcoin Research Qt GUI
  Gridcoin is a proof-of-stake cryptocurrency that rewards BOINC
  (Berkeley Open Infrastructure for Network Computing) participants
@@ -76,3 +83,8 @@ Description: Gridcoin Research Qt GUI
  .
  This package provides the Qt-based graphical user interface
  (gridcoinresearch).
+ .
+ The GUI runs the node in-process by default. To use the multiprocess
+ (GUI/node split) mode with -multiprocess, install gridcoinresearchd as well:
+ in that mode the GUI attaches over IPC to a daemon that is already running,
+ and does not start one itself.
