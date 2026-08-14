@@ -74,8 +74,60 @@ GRC::SortKey projectKeys(const TransactionRecord& r)
 //! Conflicted/NotAccepted, get masked, and (without this) never come back.
 //! Keeping them volatile lets applyChainTipRefresh -> applyStatusUpdate flip
 //! them back into the view once they resolve.
-bool recordStatusIsVolatile(const TransactionRecord& r)
+//! \param block_known  The producer, holding cs_main, found this tx's confirming
+//!                     block in mapBlockIndex. Only consulted when depth < 0.
+bool recordStatusIsVolatile(const TransactionRecord& r, const bool block_known)
 {
+    // A record is volatile only while the tip sits INSIDE the window where its
+    // status can still change:
+    //
+    //     tx_height <= tip_height <= tx_height + (generated ? 110 : 10)
+    //
+    // The upper bound is expressed by the terminal statuses below. This is the
+    // lower bound, and without it the set inverts exactly when it hurts most:
+    // during initial block download mapBlockIndex has not reached the wallet's
+    // confirming blocks, so GetDepthInMainChainINTERNAL returns 0, the mempool
+    // check turns that into -1, and updateStatus stamps Conflicted (ordinary) or
+    // NotAccepted (generated) on EVERY transaction. Judging by status alone then
+    // makes the whole wallet volatile, and applyChainTipRefresh re-derives all of
+    // it on every accepted block: O(blocks x wallet transactions), a 5x slower
+    // sync and a 156 GB debug.log under -debug=verbose.
+    //
+    // Throttling that is NOT an adequate fix. Each pass is still O(wallet) inline
+    // on the core thread under cs_main, so on a large wallet a single pass is
+    // unbounded however rarely it runs.
+    //
+    // But depth < 0 on its own is too blunt, and shipping it that way masked every
+    // row in the transaction table. Two different situations produce depth -1:
+    //
+    //   * The confirming block is NOT in mapBlockIndex -- we have not synced that
+    //     far. No new tip can change this record; only its own block arriving can,
+    //     and that arrives as an event (CWallet::BlockConnected -> SyncTransaction
+    //     -> NotifyTransactionChanged(CT_UPDATED)). Polling it is pure waste, and
+    //     this is the case that is the entire wallet during IBD.
+    //
+    //   * The confirming block IS in mapBlockIndex but is not yet the tip. This is
+    //     the window while that block is being connected: the wallet is notified of
+    //     a block's transactions BEFORE SetBestChain advances pindexBest, so the
+    //     record is inserted at depth -1 with a status the views mask. No further
+    //     CT_UPDATED will ever arrive -- a block connects exactly once -- so this
+    //     record MUST stay volatile for the single refresh that ripens it to
+    //     depth 1 and flips it into view. Excluding it left every row inserted,
+    //     hidden, and hidden permanently: the wallet's transaction table came up
+    //     empty after a sync, data present and invisible.
+    //
+    // block_known distinguishes the two. It is decided producer-side because the
+    // test needs mapBlockIndex, hence cs_main, while updateVolatileForHash also
+    // runs on the store worker, which holds neither lock.
+    //
+    // Deliberately depth < 0 and not depth <= 0: depth == 0 means the tx is in the
+    // mempool, a genuinely polled state and a handful of rows, not the wallet.
+    // Keeping those volatile preserves the fix for the transaction list freezing
+    // after a send (see the comment above).
+    if (r.status.depth < 0 && !block_known) {
+        return false;
+    }
+
     switch (r.status.status) {
     case TransactionStatus::OpenUntilDate:
     case TransactionStatus::OpenUntilBlock:
@@ -123,7 +175,22 @@ void WalletTxStore::start()
         return;
     }
     m_started = true;
-    m_worker = std::thread([this] { workerLoop(); });
+    // Backstop: workerLoop() already contains per-item failures, but nothing may
+    // escape a std::thread body -- that is std::terminate, i.e. the node dies with
+    // no unwinding. Anything reaching here has already defeated the inner handler,
+    // so the worker stops; say so loudly rather than exiting silently, because a
+    // stopped worker means the store never drains again (#3257).
+    m_worker = std::thread([this] {
+        try {
+            workerLoop();
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: WalletTxStore: the store worker stopped after an unhandled "
+                      "exception: %s. Transaction list updates will stop until restart.", e.what());
+        } catch (...) {
+            LogPrintf("ERROR: WalletTxStore: the store worker stopped after an unknown unhandled "
+                      "exception. Transaction list updates will stop until restart.");
+        }
+    });
 }
 
 void WalletTxStore::warnIfIntakeBacklogged()
@@ -132,18 +199,20 @@ void WalletTxStore::warnIfIntakeBacklogged()
         return;
     }
     LogPrintf("WARNING: %s: transaction-store intake backlog is %u items "
-              "(worker parked=%d, rebuild in progress=%d) — new transactions are "
+              "(worker parked=%d, rebuild in progress=%d) - new transactions are "
               "not reaching the GUI transaction views",
               __func__, static_cast<unsigned int>(m_intake.size()),
               static_cast<int>(m_worker_parked), static_cast<int>(m_rebuilding));
     m_intake_warn_at *= 2;
 }
 
-void WalletTxStore::enqueueInsert(std::vector<TransactionRecord> records)
+void WalletTxStore::enqueueInsert(std::vector<TransactionRecord> records, const bool block_known)
 {
+    const uint256 insert_hash = records.empty() ? uint256() : records.front().hash;
     {
         LOCK(cs_intake);
-        m_intake.push_back(IntakeItem{IntakeItem::Insert, std::move(records), uint256()});
+        m_intake.push_back(IntakeItem{IntakeItem::Insert, std::move(records), insert_hash, {}, {},
+                                      block_known});
         warnIfIntakeBacklogged();
     }
     m_intake_cv.notify_one();
@@ -159,7 +228,7 @@ void WalletTxStore::enqueueRemove(const uint256& hash)
     m_intake_cv.notify_one();
 }
 
-void WalletTxStore::enqueueUpsert(std::vector<TransactionRecord> records)
+void WalletTxStore::enqueueUpsert(std::vector<TransactionRecord> records, const bool block_known)
 {
     if (records.empty()) {
         return;
@@ -167,7 +236,8 @@ void WalletTxStore::enqueueUpsert(std::vector<TransactionRecord> records)
     const uint256 hash = records.front().hash;
     {
         LOCK(cs_intake);
-        m_intake.push_back(IntakeItem{IntakeItem::Update, std::move(records), hash, {}, {}});
+        m_intake.push_back(IntakeItem{IntakeItem::Update, std::move(records), hash, {}, {},
+                                      block_known});
         warnIfIntakeBacklogged();
     }
     m_intake_cv.notify_one();
@@ -216,7 +286,22 @@ void WalletTxStore::workerLoop()
         // before the loop re-evaluates its wait condition.
         {
             REVERSE_LOCK(lock);
-            applyIntake(std::move(item));
+            // Contain a failure to the one item that caused it. This body is the
+            // raw std::thread entry, so an escaping exception is std::terminate --
+            // the whole node killed by, say, a bad_alloc while projecting one
+            // record's sort keys. Keep draining instead: dropping a single intake
+            // item costs that transaction's row until the next prime() or chain-tip
+            // refresh, whereas letting the worker die silently stops the store
+            // draining forever and reproduces the #3257 freeze exactly.
+            try {
+                applyIntake(std::move(item));
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: %s: dropping one wallet transaction store intake item after an "
+                          "exception: %s", __func__, e.what());
+            } catch (...) {
+                LogPrintf("ERROR: %s: dropping one wallet transaction store intake item after an "
+                          "unknown exception", __func__);
+            }
         }
     }
 }
@@ -225,8 +310,12 @@ void WalletTxStore::applyIntake(IntakeItem item)
 {
     // No lock held here; the apply* methods take cs_store internally.
     if (item.kind == IntakeItem::Insert) {
+        // Stamp the producer's view of the confirming block BEFORE the records land,
+        // so the updateVolatileForHash() inside sees it. See m_block_known.
+        WITH_LOCK(cs_store, setBlockKnown(item.hash, item.block_known_at_produce));
         insertTransaction(std::move(item.records));
     } else if (item.kind == IntakeItem::Update) {
+        WITH_LOCK(cs_store, setBlockKnown(item.hash, item.block_known_at_produce));
         updateTransaction(std::move(item.records));
     } else if (item.kind == IntakeItem::AddressBook) {
         applyAddressBookChange(item.ab_address, item.ab_label);
@@ -253,6 +342,24 @@ void WalletTxStore::rebuildIndex()
     m_by_hash.reserve(m_records.size() * 2 + 1);
     for (std::size_t i = 0; i < m_records.size(); ++i) {
         m_by_hash.emplace(m_records[i].hash, i);
+    }
+}
+
+void WalletTxStore::rebuildCaches()
+{
+    // Everything here is derived from m_records, which is the authoritative table:
+    // the projector caches are parallel to it by position, and the volatile set is
+    // the subset whose status can still change. Shared by prime() (which rebuilds
+    // the whole store) and by insertLocked()'s failure path (which must restore the
+    // cross-container invariant after a partially applied splice).
+    m_fields_cache.assign(m_records.size(), TxFilterFields{});
+    m_keys_cache.assign(m_records.size(), SortKey{});
+    m_volatile.clear();
+    for (std::size_t i = 0; i < m_records.size(); ++i) {
+        recomputeCacheAt(i);
+        if (isVolatile(m_records[i], m_block_known.count(m_records[i].hash) > 0)) {
+            m_volatile.insert(m_records[i].hash);
+        }
     }
 }
 
@@ -300,15 +407,28 @@ void WalletTxStore::insertLocked(std::vector<TransactionRecord> records)
     const std::size_t insertIdx = static_cast<std::size_t>(pos - m_records.begin());
     const std::size_t count = records.size();
 
-    // Shift the index BEFORE splicing the vector (the shift uses logical
-    // positions), then splice, then add the new index entries — keeping the
-    // index consistent at every observable point. The records are copied into the
-    // store (the authoritative full-records table) and then moved into the event.
-    shiftIndex(insertIdx, static_cast<std::ptrdiff_t>(count));
-    m_records.insert(m_records.begin() + insertIdx, records.begin(), records.end());
-    // Splice the projector caches at the same position/order (PR4-fix F), computed
-    // from `records` before it is moved into the event below. Done BEFORE the
-    // cursor drive, which reads the cache through applyStoreInsert.
+    // Project the new cache entries and reserve capacity BEFORE mutating anything,
+    // so the common allocation failure (a reallocation of one of the four
+    // containers) happens while the store is still untouched.
+    //
+    // This does NOT make the splices allocation-free, and it would be wrong to
+    // claim it does: vector::insert COPIES the elements, and TransactionRecord,
+    // TxFilterFields and SortKey all hold std::strings, so each copied element
+    // allocates. reserve() removes the reallocation, not the per-element
+    // allocation. The splices therefore remain throwing operations, which is why
+    // the recovery below has to be real rather than decorative.
+    //
+    // This used to interleave the two: shiftIndex() rewrote m_by_hash, then
+    // m_records was spliced, then the projector caches were BUILT (allocating) and
+    // spliced. A bad_alloc anywhere in that run left the store permanently
+    // inconsistent -- an index shifted for records that were never inserted, or
+    // caches at a different length than m_records -- which is exactly what feeds
+    // the unchecked subscripts elsewhere in this file. There is no unwinding that
+    // repairs it, because the damage is to the invariant between four containers.
+    //
+    // So: project first, reserve capacity in all four containers, and only then
+    // mutate. After the reserves, the vector splices do not allocate (they move
+    // existing elements within capacity) and the map has its buckets already.
     std::vector<TxFilterFields> new_fields;
     std::vector<SortKey> new_keys;
     new_fields.reserve(count);
@@ -317,10 +437,66 @@ void WalletTxStore::insertLocked(std::vector<TransactionRecord> records)
         new_fields.push_back(projectFields(r));
         new_keys.push_back(projectKeys(r));
     }
-    m_fields_cache.insert(m_fields_cache.begin() + insertIdx, new_fields.begin(), new_fields.end());
-    m_keys_cache.insert(m_keys_cache.begin() + insertIdx, new_keys.begin(), new_keys.end());
-    for (std::size_t k = 0; k < count; ++k) {
-        m_by_hash.emplace(hash, insertIdx + k);
+
+    m_records.reserve(m_records.size() + count);
+    m_fields_cache.reserve(m_fields_cache.size() + count);
+    m_keys_cache.reserve(m_keys_cache.size() + count);
+    m_by_hash.reserve(m_by_hash.size() + count);
+
+    // From here the sequence is treated as one transaction. A throw would still be
+    // possible in principle (a map node allocation), and the containers are
+    // cross-dependent, so recover by rebuilding everything derived from m_records
+    // -- which is the authoritative table and is fully updated by then -- rather
+    // than leaving a half-applied insert behind.
+    try {
+        // Shift the index BEFORE splicing the vector (the shift uses logical
+        // positions), then splice, then add the new index entries — keeping the
+        // index consistent at every observable point. The records are copied into
+        // the store (the authoritative full-records table) and then moved into the
+        // event.
+        shiftIndex(insertIdx, static_cast<std::ptrdiff_t>(count));
+        m_records.insert(m_records.begin() + insertIdx, records.begin(), records.end());
+        // Splice the projector caches at the same position/order (PR4-fix F). Done
+        // BEFORE the cursor drive, which reads the cache through applyStoreInsert.
+        m_fields_cache.insert(m_fields_cache.begin() + insertIdx, new_fields.begin(), new_fields.end());
+        m_keys_cache.insert(m_keys_cache.begin() + insertIdx, new_keys.begin(), new_keys.end());
+        for (std::size_t k = 0; k < count; ++k) {
+            m_by_hash.emplace(hash, insertIdx + k);
+        }
+    } catch (...) {
+        // Rebuild EVERYTHING derived from m_records, cursors included.
+        //
+        // The cursors are the part that is easy to forget and the part that hurts:
+        // their view_index holds ABSOLUTE m_records positions, so a splice that
+        // threw part-way leaves every cursor entry at or after insertIdx short by
+        // count. Repairing only m_by_hash and the projector caches produces a
+        // self-consistent index over a record table the cursors no longer address
+        // correctly -- and because the resulting indices are still IN RANGE, the
+        // bounds checks in getRows()/getAllRows() never fire. The GUI would then
+        // show the wrong transaction in every row from the insert point on,
+        // silently and permanently, until the next prime(). That is strictly worse
+        // than the std::terminate this exception handling replaced, so the
+        // recovery has to match what prime() does.
+        //
+        // Note m_records itself may be in a valid-but-unspecified state if the
+        // throw came from its own splice (libstdc++ grows the vector before
+        // copying into the gap). Rebuilding from it is still the right move: it is
+        // the only table we have, and a consistent view of slightly wrong rows
+        // that every consumer then RESETS onto beats a torn index. The Resets
+        // pushed below are what make the consumers re-read rather than trust their
+        // replicas.
+        LogPrintf("ERROR: %s: exception while splicing %u record(s) for hash %s; rebuilding the "
+                  "index, projector caches and cursors from the record table, and resetting "
+                  "every view",
+                  __func__, static_cast<unsigned int>(count), hash.GetHex());
+        rebuildIndex();
+        rebuildCaches();
+        for (auto& [viewId, cursor] : m_cursors) {
+            cursor.rebuild(m_records.size());
+            m_view_seqno[viewId] = m_queue.push(GRC::RowsResetPayload{
+                viewId, cursor.epoch(), static_cast<int>(cursor.servedCount())});
+        }
+        throw;
     }
     updateVolatileForHash(hash);   // track for the per-tip status refresh (PR4-fix A)
 
@@ -391,7 +567,7 @@ bool WalletTxStore::removeLocked(const uint256& hash)
         // returned too, so the transaction became permanently un-updatable,
         // un-removable and un-reinsertable (#3257 review).
         LogPrintf("ERROR: %s: hash %s index non-contiguous/out-of-range "
-                  "(minPos=%u maxPos=%u count=%u records=%u) — rebuilding the hash index",
+                  "(minPos=%u maxPos=%u count=%u records=%u) - rebuilding the hash index",
                   __func__, hash.GetHex(),
                   static_cast<unsigned int>(minPos), static_cast<unsigned int>(maxPos),
                   static_cast<unsigned int>(count),
@@ -402,7 +578,7 @@ bool WalletTxStore::removeLocked(const uint256& hash)
                 return true;   // the rebuild showed it was never really there
             }
             LogPrintf("ERROR: %s: hash %s still inconsistent after an index rebuild "
-                      "— skipping remove", __func__, hash.GetHex());
+                      "- skipping remove", __func__, hash.GetHex());
             return false;
         }
     }
@@ -413,6 +589,7 @@ bool WalletTxStore::removeLocked(const uint256& hash)
     m_keys_cache.erase(m_keys_cache.begin() + minPos, m_keys_cache.begin() + maxPos + 1);
     m_by_hash.erase(hash);
     m_volatile.erase(hash);   // no longer present -> not in the per-tip refresh set
+    m_block_known.erase(hash);   // ...and no stale entry left behind (see m_block_known)
     shiftIndex(maxPos + 1, -static_cast<std::ptrdiff_t>(count));
 
     m_queue.push(GRC::RowsRemovedPayload{static_cast<int>(minPos), static_cast<int>(count)});
@@ -429,25 +606,6 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
 {
     std::vector<TransactionRecord> built;
 
-    // Hold cs_main + cs_wallet across the whole rebuild AND the queue drain,
-    // exactly as the old loadWallet held them for its scan. cs_main is the
-    // load-bearing exclusion lock here: EVERY producer of insert/remove holds
-    // cs_main — CT_NEW/CT_UPDATED under cs_main+cs_wallet, and BOTH CT_DELETED
-    // sites (ReorganizeChain in main.cpp, ResendWalletTransactions in
-    // wallet.cpp) under cs_main even though they do NOT hold cs_wallet at the
-    // fire site. So holding cs_main across both the index rebuild and the
-    // queue drain fully excludes producers: no event can be queued between the
-    // two, which makes the rebuilt index, the re-armed cursors, and the emptied
-    // queue mutually consistent.
-    LOCK2(cs_main, m_wallet->cs_wallet);
-
-    // Quiesce the store-worker (PR2.5) before clearing/rebuilding. The worker is
-    // an independent store mutator that cs_main/cs_wallet does NOT exclude, so
-    // signal a rebuild and wait for it to park. It never needs cs_main/cs_wallet
-    // (insert/removeTransaction take only cs_store), so waiting for it here while
-    // we hold both cannot deadlock. m_started guards the pre-start() first reload
-    // (no worker yet → nothing to wait for).
-    //
     // The park is released by an RAII guard, NOT by falling off the end of this
     // function. m_rebuilding is the worker's wait predicate, so if anything below
     // throws — and plenty can: decomposeTransaction calls GetCredit/GetDebit,
@@ -458,6 +616,10 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
     // applyChainTipRefresh kept refreshing already-stored rows: the GUI would show
     // existing transactions ripening normally and never show a new one again
     // (#3257).
+    //
+    // Declared before the LOCK2 below so it is destroyed AFTER those locks are
+    // released: the guard takes cs_intake, and producers take cs_intake while
+    // holding cs_main, so releasing in this order never nests the two.
     struct RebuildPark {
         WalletTxStore& s;
         ~RebuildPark()
@@ -469,6 +631,22 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
         }
     } park_guard{*this};
 
+    // Quiesce the store-worker (PR2.5) BEFORE taking cs_main/cs_wallet. The worker
+    // is an independent store mutator that those locks do not exclude, so it has
+    // to be parked either way — but the wait must not happen underneath them.
+    //
+    // It used to: the LOCK2 came first and this wait ran while holding both. That
+    // was sound only because the worker happens to need nothing but cs_store to
+    // reach its park point, and nothing enforced it. The day any worker path
+    // acquired cs_main — held here by this thread, so a recursive mutex does not
+    // help another thread — the worker could never park, this wait would never
+    // return, and the node would sit on cs_main forever: no RPC, no P2P, no
+    // staking. Parking first removes the hazard by construction instead of
+    // relying on a property a future refactor could quietly break. It also stops
+    // the wait itself from counting against cs_main hold time.
+    //
+    // m_started guards the pre-start() first reload (no worker yet → nothing to
+    // wait for).
     {
         WAIT_LOCK(cs_intake, ilock);
         m_rebuilding = true;
@@ -476,13 +654,69 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
         while (m_started && !m_worker_parked) {
             m_idle_cv.wait(ilock);  // wait until the worker confirms it has parked
         }
-        m_intake.clear();           // pre-rebuild intake is superseded by the scan below
     }
+
+    // Hold cs_main + cs_wallet across the whole rebuild AND the queue drain,
+    // exactly as the old loadWallet held them for its scan. cs_main is the
+    // load-bearing exclusion lock here: EVERY producer of insert/remove holds
+    // cs_main — CT_NEW/CT_UPDATED under cs_main+cs_wallet, and BOTH CT_DELETED
+    // sites (ReorganizeChain in main.cpp, ResendWalletTransactions in
+    // wallet.cpp) under cs_main even though they do NOT hold cs_wallet at the
+    // fire site. So holding cs_main across both the index rebuild and the
+    // queue drain fully excludes producers: no event can be queued between the
+    // two, which makes the rebuilt index, the re-armed cursors, and the emptied
+    // queue mutually consistent.
+    //
+    // NOTE this is a full wallet rescan under cs_main, and it is reachable at
+    // runtime from the GUI (WalletModel::reloadTransactionView, wired to the
+    // datetime-cutoff option). In a multiprocess split that blocks the NODE's
+    // cs_main for the duration. It is inherent to the current design — the cutoff
+    // is applied at build time, so records below it are never stored and widening
+    // it genuinely requires a rescan. Storing every record and filtering in the
+    // cursors would remove the rescan entirely; that is a windowed-model change,
+    // not a locking fix, and is deliberately not attempted here.
+    //
+    // Worth stating for whoever does attempt it: only WIDENING the cutoff needs
+    // the wallet. Widening -- an earlier date, or switching limiting off --
+    // asks for records that were never stored, so mapWallet is the only place to
+    // get them. NARROWING -- a later date, or switching limiting on -- only ever
+    // needs records dropped, and m_records is already a superset, so it is an
+    // in-memory filter plus a cursor re-arm: cs_store alone, no cs_main, no
+    // cs_wallet, no disk. Roughly half the option changes therefore take this
+    // full rescan without needing to. Splitting them is a real improvement and
+    // is NOT attempted here: it means a second rebuild path through cursor
+    // re-arming, in code that is both recently churned and carrying an open
+    // GUI-freeze bug, for a saving on a deliberate, infrequent user action.
+    LOCK2(cs_main, m_wallet->cs_wallet);
+
+    // Discard intake queued between the park above and cs_main here. Producers
+    // hold cs_main, so once we own it nothing further can be enqueued, and the
+    // clear + rebuild below observe the same quiescent state the old ordering
+    // gave (which cleared under both locks).
+    WITH_LOCK(cs_intake, m_intake.clear());
+
+    // Rebuild m_block_known alongside the records. prime() holds cs_main, so unlike
+    // the store worker it can answer "is this tx's confirming block in the index?"
+    // directly -- and it MUST, for two reasons. Stale entries for transactions this
+    // rebuild drops would otherwise accumulate across re-primes; and, worse, a
+    // record sitting in the block-connection window (depth -1, block known) would
+    // lose its entry and be classed non-volatile, which is exactly the state that
+    // left rows masked permanently. prime() is not startup-only: changing the
+    // transaction-display cutoff re-primes at runtime (WalletModel::reloadTransactionView).
+    // Collected here (cs_main is held, so mapBlockIndex is readable) but INSTALLED
+    // below under cs_store, which guards m_block_known. Doing it here directly is a
+    // thread-safety-analysis error and, more to the point, a real unguarded write:
+    // this whole section runs before the store lock is taken.
+    std::unordered_set<uint256, TxHashHasher> block_known_built;
 
     built.reserve(m_wallet->mapWallet.size() * 2);
     for (auto it = m_wallet->mapWallet.begin(); it != m_wallet->mapWallet.end(); ++it) {
         if (!TransactionRecord::showTransaction(it->second)) {
             continue;
+        }
+        if (!it->second.hashBlock.IsNull()
+                && mapBlockIndex.find(it->second.hashBlock) != mapBlockIndex.end()) {
+            block_known_built.insert(it->first);
         }
         const std::vector<TransactionRecord> decomposed =
             TransactionRecord::decomposeTransaction(m_wallet, it->second);
@@ -510,19 +744,14 @@ void WalletTxStore::prime(bool limit_enabled, int64_t limit_time)
         m_limit_enabled = limit_enabled;
         m_limit_time = limit_time;
         m_records = std::move(built);
+        // Replace wholesale rather than merging: entries for transactions this
+        // rebuild dropped must not survive it.
+        m_block_known = std::move(block_known_built);
         rebuildIndex();
         // Rebuild the projector caches and the volatile set parallel to m_records
         // (PR4-fix F/A) BEFORE the cursors rebuild — cursor.rebuild() reads the
         // cache through the projectors.
-        m_fields_cache.assign(m_records.size(), TxFilterFields{});
-        m_keys_cache.assign(m_records.size(), SortKey{});
-        m_volatile.clear();
-        for (std::size_t i = 0; i < m_records.size(); ++i) {
-            recomputeCacheAt(i);
-            if (isVolatile(m_records[i])) {
-                m_volatile.insert(m_records[i].hash);
-            }
-        }
+        rebuildCaches();
         // Rebuild each registered cursor over the new m_records. Their Reset
         // events are pushed AFTER the drain below (which discards pre-rebuild
         // events), so the windowed consumers refill against the new snapshot.
@@ -616,7 +845,7 @@ void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
             // and return silently, dropping the update with no event and no
             // volatility refresh — permanently, for this hash (#3257 review).
             LogPrintf("ERROR: %s: hash %s could not be removed for the re-insert "
-                      "fallback — dropping this update", __func__, hash.GetHex());
+                      "fallback - dropping this update", __func__, hash.GetHex());
             return;
         }
         insertLocked(std::move(records));
@@ -706,6 +935,7 @@ void WalletTxStore::applyChainTipRefresh()
         auto range = m_by_hash.equal_range(hash);
         if (range.first == range.second) {
             m_volatile.erase(hash);
+            m_block_known.erase(hash);
             continue;
         }
         auto wit = m_wallet->mapWallet.find(hash);
@@ -713,6 +943,7 @@ void WalletTxStore::applyChainTipRefresh()
             // Vanished from the wallet (a CT_DELETED is in flight) — drop it; the
             // removal event will clean up the rows.
             m_volatile.erase(hash);
+            m_block_known.erase(hash);
             continue;
         }
         const CWalletTx& wtx = wit->second;
@@ -725,7 +956,7 @@ void WalletTxStore::applyChainTipRefresh()
             // vectors at the same index — an unvalidated position here is a heap
             // write, not just a bad read (#3257 review).
             if (it->second >= m_records.size()) {
-                LogPrintf("ERROR: %s: hash %s maps to record %u of %u — skipping "
+                LogPrintf("ERROR: %s: hash %s maps to record %u of %u - skipping "
                           "this part's refresh", __func__, hash.GetHex(),
                           static_cast<unsigned int>(it->second),
                           static_cast<unsigned int>(m_records.size()));
@@ -785,13 +1016,13 @@ void WalletTxStore::applyChainTipRefresh()
             // Default log level, not VERBOSE: this is the line that names the
             // offending transaction, and it must be present in a user's ordinary
             // debug.log without them having to reproduce under -debug=verbose.
-            LogPrintf("ERROR: %s: refreshing hash %s threw (%s) — skipping it this "
+            LogPrintf("ERROR: %s: refreshing hash %s threw (%s) - skipping it this "
                       "tip; the remaining %u volatile transactions still refresh",
                       __func__, hash.GetHex(), e.what(),
                       static_cast<unsigned int>(m_volatile.size()));
         } catch (...) {
             LogPrintf("ERROR: %s: refreshing hash %s threw a non-standard exception "
-                      "— skipping it this tip", __func__, hash.GetHex());
+                      "- skipping it this tip", __func__, hash.GetHex());
         }
     }
 }
@@ -831,20 +1062,21 @@ void WalletTxStore::recomputeCacheAt(std::size_t i)
     m_keys_cache[i] = projectKeys(m_records[i]);
 }
 
-bool WalletTxStore::isVolatile(const TransactionRecord& r)
+bool WalletTxStore::isVolatile(const TransactionRecord& r, const bool block_known)
 {
-    return recordStatusIsVolatile(r);
+    return recordStatusIsVolatile(r, block_known);
 }
 
 void WalletTxStore::updateVolatileForHash(const uint256& hash)
 {
     auto range = m_by_hash.equal_range(hash);
     bool volatile_now = false;
+    const bool block_known = m_block_known.count(hash) > 0;
     for (auto it = range.first; it != range.second; ++it) {
         if (it->second >= m_records.size()) {
             continue;   // stale index entry; removeLocked logs and repairs it
         }
-        if (isVolatile(m_records[it->second])) {
+        if (isVolatile(m_records[it->second], block_known)) {
             volatile_now = true;
             break;
         }
@@ -853,6 +1085,27 @@ void WalletTxStore::updateVolatileForHash(const uint256& hash)
         m_volatile.insert(hash);
     } else {
         m_volatile.erase(hash);
+    }
+
+    // The flag exists only to carry a record through the one tip between its block
+    // being connected and becoming the tip. Once any part reports depth >= 0 that
+    // transition has happened and ordinary status-based volatility takes over, so
+    // drop it -- this is what keeps m_block_known bounded by the block currently
+    // being connected rather than growing with the wallet.
+    for (auto it = range.first; it != range.second; ++it) {
+        if (it->second < m_records.size() && m_records[it->second].status.depth >= 0) {
+            m_block_known.erase(hash);
+            break;
+        }
+    }
+}
+
+void WalletTxStore::setBlockKnown(const uint256& hash, const bool known)
+{
+    if (known) {
+        m_block_known.insert(hash);
+    } else {
+        m_block_known.erase(hash);
     }
 }
 
@@ -955,7 +1208,7 @@ RowsResult WalletTxStore::getRows(int viewId, int first, int count)
     for (std::size_t i = begin; i < end; ++i) {
         const std::size_t absidx = cur.rowAt(i);
         if (absidx >= m_records.size()) {
-            LogPrintf("ERROR: %s: view %d served row %u maps to record %u of %u — skipping",
+            LogPrintf("ERROR: %s: view %d served row %u maps to record %u of %u - skipping",
                       __func__, viewId, static_cast<unsigned int>(i),
                       static_cast<unsigned int>(absidx),
                       static_cast<unsigned int>(m_records.size()));
@@ -992,7 +1245,7 @@ RowsResult WalletTxStore::getAllRows(int viewId)
     for (std::size_t i = 0; i < n; ++i) {
         const std::size_t absidx = cur.rowAt(i);
         if (absidx >= m_records.size()) {
-            LogPrintf("ERROR: %s: view %d accepted row %u maps to record %u of %u — skipping",
+            LogPrintf("ERROR: %s: view %d accepted row %u maps to record %u of %u - skipping",
                       __func__, viewId, static_cast<unsigned int>(i),
                       static_cast<unsigned int>(absidx),
                       static_cast<unsigned int>(m_records.size()));
@@ -1107,7 +1360,7 @@ void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
                     // -DNDEBUG — and skip, so a stale index degrades to a missing
                     // row instead of a heap read.
                     LogPrintf("ERROR: %s: view %d Insert delta at %d references record "
-                              "%u of %u — skipping",
+                              "%u of %u - skipping",
                               __func__, viewId, d.first,
                               static_cast<unsigned int>(absidx),
                               static_cast<unsigned int>(m_records.size()));
@@ -1117,7 +1370,7 @@ void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
             }
             if (recs.size() != static_cast<std::size_t>(d.count)) {
                 LogPrintf("ERROR: %s: view %d Insert delta at %d carries %u of %d records "
-                          "— consumer replicas will diverge until the next reset",
+                          "- consumer replicas will diverge until the next reset",
                           __func__, viewId, d.first,
                           static_cast<unsigned int>(recs.size()), d.count);
             }
@@ -1127,9 +1380,36 @@ void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
         case CursorDelta::Remove:
             m_view_seqno[viewId] = m_queue.push(GRC::RowsRemovedPayload{d.first, d.count, viewId, epoch});
             break;
-        case CursorDelta::Change:
-            m_view_seqno[viewId] = m_queue.push(GRC::RowsChangedPayload{viewId, epoch, d.first, d.count});
+        case CursorDelta::Change: {
+            // Sample the changed rows HERE, under the same cs_store hold that
+            // mutated them, from the absolute indices the cursor stamped on the
+            // delta -- exactly as the Insert case does, and for the same reason:
+            // d.first is an intermediate-state coordinate, so re-resolving it later
+            // can name a different row.
+            //
+            // The consumer used to call getRows() when it applied the event
+            // instead. That sampled the cursor's state at apply time, which within
+            // a drained batch can be newer than the structural position applied so
+            // far, and it cost one synchronous IPC round trip per change under
+            // multiprocess -- each taking cs_store, which this refresh is holding,
+            // so they serialized against the producer rather than merely being slow.
+            std::vector<TransactionRecord> recs;
+            recs.reserve(d.rows.size());
+            for (const std::size_t absidx : d.rows) {
+                if (absidx >= m_records.size()) {
+                    LogPrintf("ERROR: %s: view %d Change delta at %d references record "
+                              "%u of %u - skipping",
+                              __func__, viewId, d.first,
+                              static_cast<unsigned int>(absidx),
+                              static_cast<unsigned int>(m_records.size()));
+                    continue;
+                }
+                recs.push_back(m_records[absidx]);
+            }
+            m_view_seqno[viewId] =
+                m_queue.push(GRC::RowsChangedPayload{viewId, epoch, d.first, d.count, std::move(recs)});
             break;
+        }
         }
     }
 }

@@ -846,7 +846,11 @@ void GRC::NotifyPoll()
 {
     PollRegistry& poll_registry = GetPollRegistry();
 
-    LOCK2(cs_main, poll_registry.cs_poll_registry);
+    // Qualified, not poll_registry.cs_poll_registry: the lock is a static member,
+    // and Clang's thread-safety analyzer only matches it against the annotations
+    // when it is named through the class (instance access is a distinct
+    // expression it cannot resolve). See registry.h.
+    LOCK2(cs_main, PollRegistry::cs_poll_registry);
 
     // Get the expiration warning time from the configuration. Default is 7 days in hours.
     int64_t expiration_warning_time = gArgs.GetArg("-pollexpirewarningtime", 7 * 24);

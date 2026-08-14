@@ -97,6 +97,26 @@ modules:
         sha256: 5385bc1b8c2f20f3b91d258bf8ccc8cf62023935df2d2676b5b67049f31a049c
 
   # ------------------------------------------------------------------
+  # Cap'n Proto 1.5.0 -- the multiprocess (IPC) build's serialization layer and
+  # code generator. Version and hash are taken from depends/packages/native_capnp.mk
+  # rather than picked independently: that file records that Cap'n Proto must match
+  # what the pinned libmultiprocess was generated against, or the build fails with
+  # "Version mismatch between generated code and library headers". Bump both together.
+  # ------------------------------------------------------------------
+  - name: capnproto
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_INSTALL_LIBDIR=lib
+      - -DBUILD_TESTING=OFF
+      - -DWITH_OPENSSL=OFF
+      - -DWITH_ZLIB=OFF
+      - -DBUILD_SHARED_LIBS=ON
+    sources:
+      - type: archive
+        url: https://capnproto.org/capnproto-c++-1.5.0.tar.gz
+        sha256: 77dbc13ca82d9c87ddb4581dd49559d45b63096433d3dadea08b7f31b360a5ba
+
+  # ------------------------------------------------------------------
   # Gridcoin Research
   # ------------------------------------------------------------------
   - name: gridcoin
@@ -109,8 +129,14 @@ modules:
       - -DUSE_DBUS=ON
       - -DENABLE_TESTS=OFF
       - -DENABLE_UPNP=ON
-      - -DDEFAULT_UPNP=ON
       - -DENABLE_QRENCODE=ON
+      # The shipped Flatpak carries the multiprocess (GUI/node split) capability,
+      # matching the other release artifacts. The capnproto module above supplies
+      # Cap'n Proto; libmultiprocess is a vendored subtree in this repository.
+      - -DENABLE_MULTIPROCESS=ON
+      # ENABLE_PIE defaults OFF and OFF now genuinely disables PIE rather than
+      # deferring to the toolchain, so a shipped artifact has to ask for it.
+      - -DENABLE_PIE=ON
       - -DCMAKE_BUILD_TYPE=Release
     sources:
       - type: dir

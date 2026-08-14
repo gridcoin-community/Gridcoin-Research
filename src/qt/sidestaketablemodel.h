@@ -5,6 +5,8 @@
 #ifndef BITCOIN_QT_SIDESTAKETABLEMODEL_H
 #define BITCOIN_QT_SIDESTAKETABLEMODEL_H
 
+#include "qt/notificationlifetime.h"
+
 #include <QAbstractTableModel>
 #include <QStringList>
 #include <cstdint>
@@ -107,6 +109,10 @@ private:
     //! #3129). The Handlers disconnect on destruction.
     std::unique_ptr<interfaces::Handler> m_rw_settings_handler;
     std::unique_ptr<interfaces::Handler> m_mandatory_handler;
+
+    //! Closes the destruction race that disconnecting alone leaves open.
+    //! See qt/notificationlifetime.h.
+    NotificationLifetime m_notify_lifetime;
 
 signals:
 

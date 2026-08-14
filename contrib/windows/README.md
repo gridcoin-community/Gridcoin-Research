@@ -25,9 +25,19 @@ Autounlock is **opt-in** and independent of the core tasks — see [Autounlock](
 ## Quick start
 
 ```powershell
-# From the install directory (…\GridcoinResearch\windows\). Run-as the account that
-# owns the wallet; it will prompt for that account's Windows password.
-.\Install-GridcoinCoreTask.ps1 -DataDir "$env:APPDATA\GridcoinResearch"
+# In an ELEVATED PowerShell. A fresh Windows install blocks .ps1 by default, so set the
+# policy for this session and call the scripts directly -- do NOT wrap a call as
+# `powershell.exe -ExecutionPolicy Bypass .\script -Arg "C:\Program Files\..."`, because
+# the outer shell re-parses and splits the spaced path.
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+cd "C:\Program Files\GridcoinResearch\windows"
+
+# Run-as the account that owns the wallet; it will prompt for that account's Windows password.
+# Do NOT pass -DataDir for a default install: the daemon resolves the Windows default itself
+# (CSIDL_APPDATA\GridcoinResearch) and creates it owner-only on first run, whereas an explicit
+# -datadir takes the branch that refuses to create a missing directory. Pass -DataDir only for a
+# genuinely custom location (which the wallet's own chooser will have created already).
+.\Install-GridcoinCoreTask.ps1
 
 Start-ScheduledTask -TaskPath '\Gridcoin\' -TaskName 'Core-Start'   # start the core now
 .\Start-GridcoinGui.ps1                                             # attach the GUI
@@ -56,6 +66,72 @@ daemon"*. **That is the access control working, not a bug.**
 `Core-Start` task**: Task Scheduler's stop is a hard `TerminateProcess` with no
 flush, which risks database corruption. Shutdown, upgrade, and manual stop all go
 through the one `Core-Stop` task.
+
+**RPC credentials are required, and generated for you.** The daemon soft-sets
+`-server`, so the core always starts its RPC listener (loopback only unless you add
+`rpcallowip`) and refuses to run with an empty `rpcpassword`. On a fresh install the
+credentials are written into the first-run config; on a **retrofit**, where the config
+already exists but predates this and holds only `addnode=` lines, a generated
+`rpcuser`/`rpcpassword` is appended to it and nothing else is touched. You do not need
+to do anything, and there is nothing to memorise.
+
+Two Windows features depend on that RPC endpoint, which is why `server=0` is a poor
+idea here even though it is honoured: **autounlock** is pure RPC, and **`Core-Stop`
+runs `gridcoinresearchd.exe stop`**, which is also RPC. Turn RPC off and the only
+remaining way to stop the core is a hard kill with no database flush.
+
+## Windows Defender exclusion (do this before syncing)
+
+**Exclude the block data files from Defender before a first sync.** One entry, and
+note the wildcard -- it matters:
+
+```powershell
+# elevated PowerShell
+Add-MpPreference -ExclusionPath "$env:APPDATA\GridcoinResearch\blk*.dat"
+```
+
+Measured on a 2-core Windows 11 VM syncing mainnet blocks 1..100,000 from a peer on
+the same LAN, so neither WAN latency nor peer speed is involved:
+
+| exclusion | 1 -> 100k | MsMpEng CPU | wallet CPU |
+|---|---|---|---|
+| none | 605s | 84% | 21% |
+| `txleveldb` only | ~730s | 84% | 21% |
+| `blk*.dat` | **172s** | **6%** | **71%** |
+| whole data directory | 170s | - | - |
+
+`blk*.dat` alone recovers all of it. The same run on Linux from the same peer takes
+125-135s, so with the exclusion Windows lands at ~1.3x Linux -- the expected
+filesystem difference -- against ~4.5x without it.
+
+**Why the block files and not LevelDB.** The obvious suspect is `txleveldb`, which
+creates, renames and deletes many small files. Excluding it changes nothing.
+`WriteBlockToDisk` opens `blk*.dat` with `AppendBlockFile`, appends, and lets
+`CAutoFile` close it -- once per block. Defender scans on close-after-modify, and
+the file it re-examines grows into the gigabytes, so the cost rises with chain
+height. That also explains why a long sync feels progressively worse.
+
+**The wildcard is required, not tidiness.** `AppendBlockFile` rolls to a new file at
+~2GB (`nCurrentBlockFile++`), so a mainnet node has `blk0001.dat`, `blk0002.dat`,
+`blk0003.dat`, ... Excluding a literal `blk0001.dat` works until the first rollover
+and then silently stops covering the file actually being written.
+
+**Recognising it.** Low wallet CPU alongside high `MsMpEng` CPU in Task Manager is
+the signature; the wallet looks slow but is simply waiting. Freshly built, unsigned
+binaries attract the most aggressive scanning, so a developer build feels worse than
+a signed release.
+
+This excludes block data only -- no executables, and `wallet.dat`, `database/` and
+`txleveldb` all remain fully scanned.
+
+**The exclusion is required, not a stopgap.** `WriteBlockToDisk` used to reopen and
+close `blk*.dat` for every block, and the obvious theory was that Defender scans on
+close-after-modify, so caching the handle across blocks would remove the trigger.
+The handle is now cached -- and it does not help: measured with the cache in place
+and no exclusion, the same range took 674s with `MsMpEng` still at 70% CPU. Defender
+scans the **writes**, through on-access protection, which no amount of holding the
+file open can avoid. Do not drop this exclusion on the assumption that a code change
+has made it unnecessary.
 
 ## Firewall (inbound P2P)
 
@@ -106,9 +182,18 @@ Configuration → Windows Settings → Scripts → **Shutdown**, and add a `.cmd
 
 ## Crash recovery
 
-`Core-Start` is registered with restart-on-failure (3 tries, 1 minute apart) — the
-analogue of the Linux unit's `Restart=on-failure`. A *graceful* stop exits 0 and is
-not restarted; only a crash (non-zero exit) triggers a restart.
+`Core-Start` runs the core through a generated launcher (`core-autostart.cmd`) that
+retries **once, after a 2-minute wait**, if the daemon exits non-zero — the analogue of
+the Linux unit's `Restart=on-failure`. A *graceful* stop exits 0 and is not retried;
+only a non-zero exit is. Each attempt's stderr is captured to
+`%TEMP%\gridcoin-core-start.err.log` (deliberately NOT inside the data directory: cmd
+evaluates the redirect before running the daemon, so writing there would force the
+launcher to pre-create the data directory, and the daemon only applies its owner-only
+DACL to a directory it creates itself).
+
+The retry deliberately lives in the launcher rather than in the task: Task Scheduler's
+own restart-on-failure does **not** fire on a program's non-zero exit (confirmed
+on-device), so the `-RestartCount` it used to be registered with never actually helped.
 
 ## Autounlock (opt-in, stake-only, DPAPI)
 
@@ -148,6 +233,29 @@ What it does:
   unprivileged loopback port can be squatted by a local account first; a **foreign or
   unverifiable owner makes it refuse** and log — that is the gate working, not a bug.
 
+**Changing the wallet passphrase.** Re-running the script is necessary but **not sufficient**.
+The helper decrypts the blob **once at startup** and never re-reads it, so a helper that is
+already running keeps the OLD passphrase in memory. It will not notice until it next sees a fresh
+core instance; then `walletpassphrase` is rejected with `-14`, it logs "retrying cannot fix this"
+and exits — and because `-AtStartup` is its only trigger, nothing restarts it until the next boot.
+The result is a correct blob on disk, no helper running, and a wallet that stays locked. Restart
+the task after re-running setup:
+
+```powershell
+.\Set-GridcoinAutounlock.ps1                     # writes the new DPAPI blob
+schtasks /end /tn "\Gridcoin\Autounlock"         # drop the helper holding the old passphrase
+schtasks /run /tn "\Gridcoin\Autounlock"         # restart so it re-reads the blob
+```
+
+(A reboot does both.)
+
+In the Task Scheduler GUI the equivalent is **End** and then **Run** — in that order. The task is
+registered `MultipleInstancesPolicy = IgnoreNew`, so hitting **Run** while the old helper is still
+running is **silently discarded**: no error, no new `autounlock.log` line, the task still shows
+Running (that is the OLD instance, still holding the OLD passphrase), and the wallet stays locked.
+Confirm the restart took effect by checking that `autounlock.log` gained a new
+`wallet unlocked (stake-only)` line, not by the task's Status column.
+
 A running log (redacted — no secrets) is at `<datadir>\autounlock\autounlock.log`. To
 remove everything:
 
@@ -161,11 +269,27 @@ spendable until the next restart.
 
 ## Status
 
-Validated by PowerShell parse-check + inspection; full runtime validation on Windows is
-pending on the test box. Core tasks: install → reboot → autostart → upgrade → GUI attach →
-shutdown-flush → different-user connection-refused. Autounlock: enable → **DPAPI decrypt
-inside the batch-logon task** (the primary unknown) → cold stake-only unlock → foreign-listener
-refused → self-heal on restart → remove. Known items to confirm there: the shutdown-flush
-mechanism (above); that stored-password task registration requires an **elevated** shell and
-the "Log on as a batch job" right for the run-as account; and Microsoft/AzureAD-account
-principal forms.
+Runtime-validated on Windows 11 (2026-08-12) against a populated mainnet wallet.
+
+**Confirmed on device:** core autostart via the `Core-Start` task across two reboots; GUI attach
+to an already-running core; GUI quit leaving core serving; core exit taking the GUI down cleanly;
+ordered shutdown flush; stale `node.sock`/`ipc.cookie` replaced after an abrupt reboot kill; RPC
+credentials generated into a credential-less config on start. Autounlock: elevated registration
+with a stored password, **DPAPI decrypt inside the batch-logon task** (the primary unknown —
+confirmed), and a cold stake-only unlock taking `getstakinginfo` from `mining-error: [Wallet
+locked]`/`staking: False` to `[]`/`staking: True` with the staking loop observed running. The
+secret stayed in the DPAPI blob alone: `passphrase.cred` owner-only with no inherited ACEs, no
+secret in the task arguments, the config, or either log. The `-AtStartup` trigger was then confirmed on a
+real boot: task launched 9s after boot, wallet unlocked (stake-only) 1m45s later once core was
+ready, decrypting a blob that had been rewritten by a passphrase change 20 minutes earlier.
+
+**Still unconfirmed — do not read the above as covering these:** the foreign-listener refusal
+path; the stale-passphrase `-14` exit (described under Autounlock, read from the code but not
+observed); self-heal after a core restart; `-Remove`; the upgrade path; different-user
+connection-refused; the "Log on as a batch job" right when it is not already granted; and
+Microsoft/AzureAD-account principal forms.
+
+**Gotcha worth knowing:** `-AtStartup` is the task's only trigger, so registering it does not run
+it and restarting the *core* does not either. `Last Result 267011` (`SCHED_S_TASK_HAS_NOT_RUN`)
+with no `autounlock.log` is that state, not a failure. Force it with
+`schtasks /run /tn "\Gridcoin\Autounlock"`.

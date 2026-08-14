@@ -121,11 +121,12 @@ endif()
 option(USE_ASM_SCRYPT   "Enable scrypt assembly routines (requires GNU assembler)" ${USE_ASM_SCRYPT})
 
 # Optional functionality
-option(ENABLE_PIE       "Build position-independent executables" OFF)
+option(ENABLE_PIE       "Build position-independent executables. OFF genuinely disables PIE, it does not defer to the toolchain default" OFF)
+option(ENABLE_HARDENING "Apply exploit-mitigation compiler and linker flags" ON)
 option(ENABLE_DEBUG_LOCKORDER "Enable run-time lock-order checking (DEBUG_LOCKORDER)" OFF)
 option(WERROR_THREAD_SAFETY "Promote Clang thread-safety diagnostics to build errors" OFF)
 option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" OFF)
-option(ENABLE_UPNP      "Enable UPnP port mapping support" OFF)
+option(ENABLE_UPNP      "Enable UPnP port mapping support" ON)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
 option(USE_QT6          "Use Qt 6 instead of Qt 5" OFF)
@@ -286,8 +287,24 @@ if(ENABLE_UPNP)
     if(MINIUPNPC_FOUND)
         set(LIBMINIUPNPC PkgConfig::MINIUPNPC)
     else()
-        find_package(miniupnpc CONFIG REQUIRED)
-        set(LIBMINIUPNPC miniupnpc::miniupnpc)
+        find_package(miniupnpc CONFIG QUIET)
+
+        if(miniupnpc_FOUND)
+            set(LIBMINIUPNPC miniupnpc::miniupnpc)
+        else()
+            # ENABLE_UPNP defaults ON so the GUI setting is always operative, but
+            # the library is optional and was not previously needed for a plain
+            # configure. Requiring it here would turn "cmake -B build" into a hard
+            # failure on any machine without it. Build without UPnP instead, and
+            # say so.
+            # No "pass -DENABLE_UPNP=ON to make this fatal" advice here: ENABLE_UPNP
+            # already defaults to ON, and option() caches, so this branch cannot tell
+            # an explicit -DENABLE_UPNP=ON from the default. An earlier revision tried
+            # to and became fatal on every RE-configure once the value was cached.
+            # Offering a switch that does nothing is worse than not offering one.
+            message(WARNING "miniupnpc not found: building without UPnP support.")
+            set(ENABLE_UPNP OFF)
+        endif()
     endif()
 endif()
 
@@ -356,14 +373,133 @@ endif()
 # Run probes
 # ==========
 
-if(ENABLE_PIE)
-    check_pie_supported()
-    if(NOT CMAKE_CXX_LINK_PIE_SUPPORTED)
-        message(FATAL_ERROR "PIE is not supported by the current linker")
-    endif()
+# check_pie_supported() is what activates policy CMP0083's handling of
+# POSITION_INDEPENDENT_CODE on executables. Probing only when ENABLE_PIE was ON
+# left the property silently ignored in BOTH directions whenever it was OFF:
+# CMake emitted neither -pie nor -no-pie, so the option could turn PIE on but
+# never off, and OFF actually meant "whatever this toolchain happens to default
+# to". Probe unconditionally so the setting is honoured either way -- OFF then
+# genuinely emits the no-PIE link flags rather than nothing.
+check_pie_supported()
+
+if(ENABLE_PIE AND NOT CMAKE_CXX_LINK_PIE_SUPPORTED)
+    message(FATAL_ERROR "PIE is not supported by the current linker")
 endif()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ${ENABLE_PIE})
+
+# Exploit mitigations
+# ===================
+#
+# Restores the set the Autotools build applied. There --enable-hardening was the
+# DEFAULT (the spelling was --disable-hardening, i.e. opt out) and configure.ac
+# fed HARDENED_CXXFLAGS/CPPFLAGS/LDFLAGS into AM_* so every target inherited
+# them. The CMake port carried none of it across, so nothing built here has had a
+# stack canary, FORTIFY, full RELRO or CET since the migration. ON by default
+# restores that posture rather than inventing a new one; distributions that
+# manage their own hardening can pass -DENABLE_HARDENING=OFF.
+#
+# Every flag is probed before use, so a toolchain that outright rejects one simply
+# does not get it -- that is what keeps the ELF-only linker flags off Mach-O and
+# -fcf-protection off arm64, where they are not valid options.
+#
+# Probing alone is not sufficient, though: it answers "does the driver accept
+# this?", not "does this target honour the code it generates?". Flags that are
+# accepted everywhere but only meaningful on ELF are gated on the platform below.
+include(CheckCXXCompilerFlag)
+include(CheckLinkerFlag)
+
+if(ENABLE_HARDENING)
+    # _FORTIFY_SOURCE needs optimisation; without it GCC warns and the checks do
+    # nothing. Debug is excluded via a generator expression. Sanitizer builds are
+    # excluded too: they are built RelWithDebInfo here, so the config test alone
+    # would not catch them, and the instrumentation does not combine well with
+    # FORTIFY's interception of the same calls.
+    string(FIND "${CMAKE_CXX_FLAGS}" "-fsanitize" _hardening_sanitizer_pos)
+    if(_hardening_sanitizer_pos EQUAL -1)
+        # -U first: some toolchains predefine it, and redefining warns.
+        # Guard on there being an optimised config at all, not merely on the
+        # config not being named Debug: with no CMAKE_BUILD_TYPE the compiler runs
+        # at -O0, and FORTIFY then warns on every translation unit while checking
+        # nothing. doc/build.md describes that configuration, so it is reachable.
+        if(CMAKE_BUILD_TYPE OR CMAKE_CONFIGURATION_TYPES)
+            add_compile_options(
+                "$<$<NOT:$<CONFIG:Debug>>:-U_FORTIFY_SOURCE>"
+                "$<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>")
+        else()
+            message(STATUS "Hardening: _FORTIFY_SOURCE skipped (no build type, so no optimisation)")
+        endif()
+    else()
+        message(STATUS "Hardening: _FORTIFY_SOURCE skipped (sanitizer build)")
+    endif()
+
+    # Stack canaries are supported by every toolchain we ship, on every target.
+    set(hardening_flags -fstack-protector-all -Wstack-protector)
+
+    # The rest are ELF/AAPCS mitigations, and they are gated on the platform
+    # rather than on the probe alone. check_cxx_compiler_flag proves only that the
+    # driver ACCEPTS a flag -- never that the target's runtime honours the code it
+    # generates. Clang accepts all three on targets where they do nothing
+    # (-mbranch-protection is inert on x86) or are actively wrong, so probing
+    # cannot tell the two apart and an earlier revision of this block assumed a
+    # symmetry that the build logs do not show.
+    #
+    # On Apple Silicon -mbranch-protection=standard emits pointer-authentication
+    # sign/authenticate pairs around returns. PAC on Darwin is an ABI-level opt-in
+    # (arm64e), not a per-flag one: on plain arm64 the signed return addresses
+    # defeat libunwind, so a throw never reaches a handler that is lexically right
+    # above it. That turned the in-scope catch in ThreadSocketHandler into a
+    # "terminating due to uncaught exception" abort and hung the macOS ARM64
+    # functional tests, while macOS Intel -- where the same flag is a no-op --
+    # passed in three minutes. Keep all three off Mach-O.
+    # -fcf-protection=full stays on every platform. It is meaningful on macOS Intel
+    # -- the Mach-O x86_64 CONTROL_FLOW check reads endbr64 at the entrypoint, and
+    # that check passes today -- and the probe rejects it outright on arm64, so it
+    # lands only where it does something.
+    list(APPEND hardening_flags -fcf-protection=full)
+
+    # Two flags are withheld from Mach-O:
+    #
+    #   -mbranch-protection=standard emits pointer-authentication sign/authenticate
+    #   pairs around returns on AArch64. PAC on Darwin is an ABI-level opt-in
+    #   (arm64e), not a per-flag one, and on plain arm64 the signed return addresses
+    #   stop a throw from reaching its handler -- an exception raised directly
+    #   beneath an in-scope catch aborted as "uncaught", and the macOS ARM64
+    #   functional tests hung. Removing it turned that job green.
+    #
+    #   -fstack-clash-protection is accepted by the driver and then reported as
+    #   "argument unused during compilation" on every translation unit, so it buys
+    #   nothing on Darwin and costs several hundred warnings.
+    #
+    # security-check.py drops the Mach-O arm64 BRANCH_PROTECTION check to match;
+    # the two must be changed together or the artifact check contradicts the build.
+    if(NOT APPLE)
+        list(APPEND hardening_flags -fstack-clash-protection -mbranch-protection=standard)
+    else()
+        message(STATUS "Hardening: branch-protection and stack-clash skipped (Mach-O target)")
+    endif()
+
+    foreach(flag ${hardening_flags})
+        string(MAKE_C_IDENTIFIER "HARDENING_CXX${flag}" flag_var)
+        check_cxx_compiler_flag("${flag}" ${flag_var})
+        if(${flag_var})
+            add_compile_options("${flag}")
+        endif()
+    endforeach()
+
+    # separate-code keeps executable and non-executable content on distinct pages,
+    # which shrinks what a ROP search has to work with. GNU ld enables it by default
+    # on x86 since binutils 2.31, so x86 had it accidentally; the aarch64 cross
+    # linker does not, which is how the arm64 job failed this check while every
+    # x86 job passed. Ask for it rather than inheriting it.
+    foreach(flag -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -Wl,-z,separate-code)
+        string(MAKE_C_IDENTIFIER "HARDENING_LD${flag}" flag_var)
+        check_linker_flag(CXX "${flag}" ${flag_var})
+        if(${flag_var})
+            add_link_options("${flag}")
+        endif()
+    endforeach()
+endif()
 
 # Set compiler flags
 if(APPLE)

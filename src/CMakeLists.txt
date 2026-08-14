@@ -246,6 +246,7 @@ add_library(gridcoin_util STATIC
     util/strencodings.cpp
     util/string.cpp
     util/syserror.cpp
+    util/dir_permissions.cpp
     util/system.cpp
     util/threadinterrupt.cpp
     util/threadnames.cpp
@@ -294,6 +295,15 @@ if(UNIX)
 endif()
 
 target_link_libraries(gridcoin_util PUBLIC ${LIBGRIDCOIN_CRYPTO})
+
+# advapi32: util/dir_permissions.cpp applies the owner-only NTFS DACL that protects
+# a freshly created data directory (SetNamedSecurityInfoW / SetEntriesInAclW /
+# GetNamedSecurityInfoW). This lives in gridcoin_util rather than gridcoin_ipc
+# because the monolithic build creates data directories too (the Qt chooser) and
+# gridcoin_ipc is only built when ENABLE_MULTIPROCESS=ON.
+if(WIN32)
+    target_link_libraries(gridcoin_util PUBLIC advapi32)
+endif()
 
 # Multiprocess (IPC) build, RFC #2937. src/ipc owns the libmultiprocess runtime +
 # mpgen (built from the in-tree subtree in the default vendored mode) and the

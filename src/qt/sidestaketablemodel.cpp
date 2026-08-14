@@ -461,19 +461,23 @@ void SideStakeTableModel::subscribeToCoreSignals()
     // (from ~SideStakeTableModel); each callback captures `this` and a signal
     // firing after this object is gone would otherwise invoke a slot on freed
     // memory. The callbacks only marshal to the GUI thread (issue #3129).
-    m_rw_settings_handler = m_sidestake_manager.handleRwSettingsUpdated(
+    m_rw_settings_handler = m_sidestake_manager.handleRwSettingsUpdated(m_notify_lifetime.guard(
         [this]() {
             QMetaObject::invokeMethod(this, "localSideStakeUpdated", Qt::QueuedConnection);
-        });
+        }));
 
-    m_mandatory_handler = m_sidestake_manager.handleMandatorySideStakeChanged(
+    m_mandatory_handler = m_sidestake_manager.handleMandatorySideStakeChanged(m_notify_lifetime.guard(
         [this]() {
             QMetaObject::invokeMethod(this, "mandatorySideStakeChanged", Qt::QueuedConnection);
-        });
+        }));
 }
 
 void SideStakeTableModel::unsubscribeFromCoreSignals()
 {
+    // Retire before disconnecting: severing a Handler does not wait for a
+    // callback already running on a core thread (qt/notificationlifetime.h).
+    m_notify_lifetime.retire();
+
     // Disconnect from the node: resetting each handler runs its destructor, which
     // disconnects the subscription (issue #3129).
     m_rw_settings_handler.reset();

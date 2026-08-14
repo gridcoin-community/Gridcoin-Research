@@ -5,6 +5,8 @@
 #include "gridcoin/boinc.h"
 #include "util.h"
 
+#include <mutex>
+#include <optional>
 #include <vector>
 
 fs::path GRC::ResolveBoincDataDir(const std::vector<fs::path>& candidates)
@@ -26,7 +28,23 @@ fs::path GRC::ResolveBoincDataDir(const std::vector<fs::path>& candidates)
     return "";
 }
 
-fs::path GRC::GetBoincDataDir()
+namespace {
+//! Guards the resolved-path cache below. A leaf lock: nothing is taken while it is
+//! held except the filesystem/registry probe itself, which is exactly what the cache
+//! exists to stop repeating.
+std::mutex g_boinc_data_dir_mutex;
+
+//! Empty until the first probe. Holds the NEGATIVE result too -- caching only
+//! successes would leave the failing case probing forever, and the failing case is
+//! precisely the expensive one (on Windows: a registry open/query, then fs::exists on
+//! C:\ProgramData\BOINC\, then on the legacy C:\Documents and Settings\All Users\...
+//! junction, then an error() log).
+std::optional<fs::path> g_boinc_data_dir_cache;
+} // anonymous namespace
+
+//! Resolve the BOINC data directory from scratch. Callers want GetBoincDataDir(),
+//! which memoizes this.
+static fs::path FindBoincDataDir()
 {
     std::string path = gArgs.GetArg("-boincdatadir", "");
 
@@ -87,7 +105,7 @@ fs::path GRC::GetBoincDataDir()
         linux_candidates.push_back(fs::path(pszHome) / ".var/app/edu.berkeley.BOINC/");
     }
 
-    fs::path linux_result = ResolveBoincDataDir(linux_candidates);
+    fs::path linux_result = GRC::ResolveBoincDataDir(linux_candidates);
 
     if (!linux_result.empty()) {
         return linux_result;
@@ -104,4 +122,36 @@ fs::path GRC::GetBoincDataDir()
           "the data directory location by using boincdatadir=<data directory location>.", __func__);
 
     return "";
+}
+
+fs::path GRC::GetBoincDataDir()
+{
+    std::lock_guard<std::mutex> lock(g_boinc_data_dir_mutex);
+
+    // Probing per call was costing a registry query and two filesystem probes on
+    // Windows every time the GUI rebuilt its researcher snapshot -- which was once
+    // per block. Worse, it is guaranteed futile for a whole class of user: someone
+    // who installs Gridcoin before BOINC has no data directory, and the beacon
+    // wizard that would let them fix it is gated on the wallet being synced. So for
+    // the entire initial sync the answer cannot change and every probe fails, while
+    // error() logs unconditionally -- default logging, no -debug needed.
+    //
+    // Cache it instead. The answer only changes when the user tells the wallet
+    // something changed, and every one of those routes through the no-arg
+    // Researcher::Reload() -- startup, the wizard (switchMode -> ChangeMode ->
+    // Reload), resetcpids, and the interface reload() -- which calls
+    // ResetBoincDataDirCache(). A time-based cache would be wrong here: nothing
+    // expires on a schedule, it changes on an action.
+    if (!g_boinc_data_dir_cache) {
+        g_boinc_data_dir_cache = FindBoincDataDir();
+    }
+
+    return *g_boinc_data_dir_cache;
+}
+
+void GRC::ResetBoincDataDirCache()
+{
+    std::lock_guard<std::mutex> lock(g_boinc_data_dir_mutex);
+
+    g_boinc_data_dir_cache.reset();
 }

@@ -328,6 +328,10 @@ bool AppInit(int argc, char* argv[])
         // Per-connection auth: a new ServeInit is built per connection; the Ipc
         // lives for the run, torn down after the wait loop.
         std::unique_ptr<interfaces::Ipc> ipc;
+        // Note the default: this block runs only when -multiprocess was explicitly
+        // set (command line or config file). There is no implicit/optional MP mode
+        // in the daemon, so a failure here is a failure to honor an explicit
+        // request, not the loss of a nice-to-have.
         if (gArgs.GetBoolArg("-multiprocess", false)) {
             try {
                 std::string cookie = ipc::WriteCookie(GetDataDir());
@@ -355,8 +359,35 @@ bool AppInit(int argc, char* argv[])
                 std::string address = "unix";
                 ipc->listenAddress(address);
                 LogPrintf("IPC: serving GUI connections on %s\n", address);
+                // Say which access controls are actually in force, rather than
+                // leaving an operator to infer it from the platform. The uid check
+                // is real on POSIX and absent on Windows; debug.log should not
+                // require the reader to know that.
+                LogPrintf("IPC: peer-credential enforcement: %s\n", ipc::PeerCredentialEnforcement());
             } catch (const std::exception& e) {
-                LogPrintf("IPC: failed to start the multiprocess listener: %s\n", e.what());
+                // Fail loudly and fatally. Previously this was logged and the
+                // daemon carried on as a non-multiprocess node -- but a fresh
+                // ipc.cookie has already been written above, so the GUI finds a
+                // cookie, dials a socket nobody is listening on, and fails forever
+                // with no explanation, while the one line that says why is buried
+                // in debug.log. The failures reaching here are all actionable:
+                // another process already listening, a socket path over the
+                // 108-byte sockaddr_un limit, or the socket/cookie access control
+                // (chmod / owner-only DACL) not being applicable to this data
+                // directory.
+                InitError(strprintf("Failed to start the multiprocess IPC listener: %s\n\n"
+                                    "-multiprocess was requested, so this is fatal. If the node was "
+                                    "killed or crashed, a stale socket may be left in the data "
+                                    "directory: stop any running gridcoinresearchd, delete "
+                                    "'node.sock' there, and start again. Otherwise start without "
+                                    "-multiprocess.",
+                                    e.what()));
+                // Exit non-zero and take the normal shutdown path: the wait loop
+                // below sees the request immediately and falls through to
+                // Shutdown(), so the node stops cleanly instead of running on as a
+                // node the GUI can never reach.
+                fRet = false;
+                SetShutdownRequested();
             }
         }
 #endif

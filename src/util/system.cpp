@@ -5,6 +5,7 @@
 
 #include "node/ui_interface.h"
 #include <util/system.h>
+#include "util/dir_permissions.h"
 #include <util/strencodings.h>
 #include <util/check.h>
 #include <util/string.h>
@@ -349,12 +350,31 @@ const fs::path& ArgsManager::GetDataDirPath(bool net_specific) const
     if (net_specific)
         path /= BaseParams().DataDir();
 
-    // On the first run this creates the datadir (and parents); a permission failure
-    // sets ec instead of throwing. (A wallets/ subdir was reserved here for a future
-    // Bitcoin-style move.)
-    fs::create_directories(path, ec);
-    if (ec && !fs::is_directory(path, ec)) {
-        // Could neither create nor find the data directory (e.g. no permission).
+    // On the first run this creates the datadir (and parents) and restricts it to
+    // this account -- 0700 on POSIX, an owner+SYSTEM protected DACL on Windows.
+    //
+    // This is the CORE's creation point, and it matters as much as the GUI chooser's
+    // (qt/intro.cpp): in a multiprocess deployment the daemon starts first (systemd
+    // unit, Windows scheduled task) and the chooser is skipped entirely
+    // (bitcoin.cpp gates it on !-multiprocess), so this is usually the call that
+    // brings the data directory into existence. It is create-only: an existing
+    // directory is left exactly as the operator configured it.
+    std::string perm_error;
+    if (!util::CreateOwnerOnlyDirectory(path, perm_error)) {
+        // Any failure is fatal to this path. Both of the two things false can mean --
+        // could not create it, or created it and could not restrict it -- are
+        // reported the way the old code reported a failed create: an empty path,
+        // which callers already treat as "no usable datadir". Do NOT throw: this runs
+        // before logging is initialised and from paths that cannot handle one.
+        //
+        // An earlier revision carved out "the directory exists, so carry on and just
+        // warn", reasoning that the operator had configured it. That state cannot
+        // occur: a pre-existing directory returns true from the helper without being
+        // inspected. Reaching here with the directory present means this call created
+        // it moments ago and failed to protect it, so the carve-out put the wallet in
+        // a directory known to be readable by other accounts -- and on the next start
+        // it would be pre-existing, return true, and never be reported again.
+        LogPrintf("ERROR: %s: %s", __func__, perm_error);
         path = "";
         return path;
     }
@@ -787,11 +807,38 @@ fs::path GetDefaultDataDir()
     if (container && strcmp(container, "flatpak") == 0) {
         char* state_home = getenv("XDG_STATE_HOME");
 
-        if (!state_home) {
-            return pathRet / ".local" / "state" / "GridcoinResearch";
+        // Per the XDG base directory specification an unset OR empty value is to
+        // be treated as unset, and a value that is not absolute must be ignored.
+        // Testing only for null accepted XDG_STATE_HOME="" and produced the
+        // relative path "GridcoinResearch", which the default branch never runs
+        // through fs::system_complete -- so it would resolve against the process
+        // working directory.
+        if (state_home && *state_home != '\0' && fs::path(state_home).is_absolute()) {
+            return fs::path(state_home) / "GridcoinResearch";
         }
 
-        return fs::path(state_home) / "GridcoinResearch";
+        // Inside the sandbox HOME is the REAL home path, but almost none of it is
+        // bound through to the host: the only persistent mount under it is
+        // ~/.var/app/<app-id>. Anything else -- including ~/.local/state -- is
+        // tmpfs. Writes there succeed, never reach the host, and are gone when the
+        // application exits, which took the chain, the wallet and debug.log with
+        // them. Older flatpak releases do not export XDG_STATE_HOME, so that
+        // fallback was the live path for them.
+        //
+        // FLATPAK_ID is exported inside the sandbox, so derive the per-app
+        // persistent root from it rather than naming the application id here: it
+        // stays declared only in the manifest.
+        char* flatpak_id = getenv("FLATPAK_ID");
+
+        if (flatpak_id && *flatpak_id != '\0') {
+            return pathRet / ".var" / "app" / flatpak_id / ".local" / "state" / "GridcoinResearch";
+        }
+
+        // Neither variable is usable. Keep the previous behaviour rather than
+        // inventing a path, and let the volatile-filesystem check downstream
+        // report it: on a flatpak new enough to export XDG_STATE_HOME this is
+        // unreachable, and on older ones we have nothing better to go on.
+        return pathRet / ".local" / "state" / "GridcoinResearch";
     }
 
 #ifdef MAC_OSX

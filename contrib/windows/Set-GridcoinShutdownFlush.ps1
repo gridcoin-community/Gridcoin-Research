@@ -232,31 +232,94 @@ if ($CorePath -match '%')   { throw "-CorePath must not contain a percent charac
 # ONLY the write/delete/own-change bits, NOT the composite Modify/FullControl rights, whose
 # bit patterns overlap ReadAndExecute/Synchronize (masking those would wrongly flag the
 # read-only Program Files "Users: ReadAndExecute, Synchronize" ACE).
-function Get-NonAdminWriteAce([string]$p) {
-    try { $acl = Get-Acl -LiteralPath $p } catch { return 'its ACL could not be read' }
-    $privileged = @(
-        'S-1-5-18',                                                        # SYSTEM
-        'S-1-5-32-544',                                                    # Administrators
-        'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'  # TrustedInstaller
-    )
-    $wmask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
-    foreach ($ace in $acl.Access) {
+$script:PrivilegedSids = @(
+    'S-1-5-18',                                                        # SYSTEM
+    'S-1-5-32-544',                                                    # Administrators
+    'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'  # TrustedInstaller
+)
+# Two masks, because the threat differs by object type and a single mask produces
+# false positives that would make this refuse on EVERY machine:
+#   * On the FILE, any write/delete/ownership right is enough to replace it.
+#   * On an ANCESTOR DIRECTORY, only rights that let you delete or re-permission
+#     that directory matter. Notably NOT AppendData/CreateFiles: being able to
+#     create a NEW entry in C:\ does not let you touch an existing subtree, and
+#     the default volume root really does carry 'Authenticated Users: AppendData'
+#     (verified on Windows 11), so including it would refuse everywhere.
+$script:FileWriteMask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete, ChangePermissions, TakeOwnership')
+$script:DirWriteMask  = [int]([System.Security.AccessControl.FileSystemRights]'Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
+
+function Resolve-AceSid($idr) {
+    if ($null -eq $idr) { return $null }
+    if ($idr -is [System.Security.Principal.SecurityIdentifier]) { return $idr.Value }
+    try { return $idr.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { }
+    # Get-Acl surfaces some identities as a bare string (notably $acl.Owner), which has
+    # no Translate() -- resolve those through NTAccount rather than reporting them as
+    # unresolvable (which would fail closed on every path, including admin-owned ones).
+    try { return ([System.Security.Principal.NTAccount]([string]$idr)).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { return $null }
+}
+
+# Returns a description of the first non-privileged write vector found on $p, or
+# $null if it is safe. Checks THREE things, all of which are ways to replace the
+# binary that a plain ACE scan misses:
+#   1. an empty Access collection -- a NULL DACL grants everyone full control, so
+#      "no ACEs" must read as UNSAFE, not as "no offender";
+#   2. the OWNER -- an owner always holds implicit WRITE_DAC and can simply rewrite
+#      the DACL, so a non-privileged owner defeats any ACE check;
+#   3. Allow ACEs granting write/delete/ownership to a non-privileged principal.
+function Get-NonAdminWriteVector([string]$p, [bool]$IsDirectory) {
+    try { $acl = Get-Acl -LiteralPath $p } catch { return "the ACL of '$p' could not be read" }
+
+    $access = @($acl.Access)
+    if ($access.Count -eq 0) { return "'$p' has a NULL/empty DACL (everyone has full control)" }
+
+    # Ask for the owner AS A SID: $acl.Owner is a string, so translating it directly
+    # is unreliable (see Resolve-AceSid).
+    $ownerSid = $null
+    try { $ownerSid = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value } catch { }
+    if ($null -eq $ownerSid) { $ownerSid = Resolve-AceSid $acl.Owner }
+    if ($null -eq $ownerSid) { return "'$p' has an unresolvable owner ($($acl.Owner))" }
+    if ($script:PrivilegedSids -notcontains $ownerSid) {
+        return "'$p' is owned by $($acl.Owner), who can rewrite its DACL at will"
+    }
+
+    $mask = if ($IsDirectory) { $script:DirWriteMask } else { $script:FileWriteMask }
+    foreach ($ace in $access) {
         if ($ace.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
-        if (([int]$ace.FileSystemRights -band $wmask) -eq 0) { continue }
-        $idr = $ace.IdentityReference
-        $sid = $null
-        if ($idr -is [System.Security.Principal.SecurityIdentifier]) { $sid = $idr.Value }
-        else { try { $sid = $idr.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { $sid = $null } }
-        if ($null -eq $sid) { return "$idr (unresolvable SID) has '$($ace.FileSystemRights)'" }
-        if ($privileged -notcontains $sid) { return "$idr has '$($ace.FileSystemRights)'" }
+        # InheritOnly ACEs do not grant anything on the object that carries them; they
+        # exist purely to be inherited by children. Judging them here would flag the
+        # default inheritable ACEs present on every volume root.
+        if (($ace.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0) { continue }
+        if (([int]$ace.FileSystemRights -band $mask) -eq 0) { continue }
+        $sid = Resolve-AceSid $ace.IdentityReference
+        if ($null -eq $sid) { return "'$p': $($ace.IdentityReference) (unresolvable SID) has '$($ace.FileSystemRights)'" }
+        if ($script:PrivilegedSids -notcontains $sid) { return "'$p': $($ace.IdentityReference) has '$($ace.FileSystemRights)'" }
     }
     return $null
 }
-$offender = Get-NonAdminWriteAce $CorePath
+
+# Walk the binary AND every ancestor directory: write access to a CONTAINING
+# directory is enough to delete and recreate the exe, regardless of the exe's own
+# ACL, so checking the file alone is not sufficient.
+function Get-NonAdminWriteVectorForPath([string]$p) {
+    $current = $p
+    $isDir = $false   # the leaf is the binary itself; every step above it is a directory
+    while ($current) {
+        $vector = Get-NonAdminWriteVector $current $isDir
+        if ($vector) { return $vector }
+        $parent = Split-Path -Parent $current
+        if (-not $parent -or $parent -eq $current) { break }
+        $current = $parent
+        $isDir = $true
+    }
+    return $null
+}
+
+$offender = Get-NonAdminWriteVectorForPath $CorePath
 if ($offender) {
-    throw "Refusing to wire a SYSTEM shutdown script to '$CorePath': $offender, which would let a non-admin " +
-          "replace the exe and gain SYSTEM code execution at shutdown. Install the core under an admin-only " +
-          "location (e.g. Program Files) and point -CorePath there."
+    throw "Refusing to wire a SYSTEM shutdown script to '$CorePath' -- $offender. That is enough for a non-admin " +
+          "to replace the binary this script runs, and so to gain SYSTEM code execution at every shutdown. " +
+          "Install the core under an admin-only location (e.g. Program Files), with every parent directory " +
+          "admin-owned, and point -CorePath there."
 }
 
 # The shutdown stop needs rpcuser/rpcpassword from the datadir conf. Warn if it's not there
@@ -268,12 +331,24 @@ if (-not (Test-Path -LiteralPath (Join-Path $DataDir 'gridcoinresearch.conf'))) 
 
 # The shutdown .cmd (runs as SYSTEM). Issue the graceful RPC stop, then poll until the core
 # exits or the cap is hit. `ping` is the sleep (timeout.exe needs a console and fails here).
+#
+# -nosettings is REQUIRED here, not cosmetic. gridcoinresearchd calls InitSettings()
+# before it dispatches a command-line RPC, and InitSettings unconditionally READS AND
+# REWRITES <datadir>\settings.json. Since this script runs as SYSTEM against a datadir
+# that the (unprivileged) wallet user owns and can write, that would hand SYSTEM a file
+# write into an attacker-controlled directory on every shutdown -- the classic
+# hardlink-the-temp-file privilege escalation, with partially attacker-chosen content
+# because unknown keys in settings.json are preserved verbatim. -nosettings makes
+# GetSettingsPath() return false so InitSettings() does nothing at all, which removes
+# the write primitive rather than trying to defend it. The RPC stop itself needs only
+# to READ gridcoinresearch.conf for the credentials.
 $loops = [Math]::Max(1, [int]($WaitSeconds / 2))
 $cmd = @"
 @echo off
 rem Gridcoin graceful shutdown flush (Group Policy Computer->Shutdown script; runs as SYSTEM).
 rem Managed by Set-GridcoinShutdownFlush.ps1 -- do not edit by hand.
-"$CorePath" -datadir="$DataDir" stop
+rem -nosettings: never let SYSTEM write into the wallet user's datadir (see the script).
+"$CorePath" -nosettings -datadir="$DataDir" stop
 set /a n=0
 :wait
 tasklist /fi "imagename eq gridcoinresearchd.exe" | find /i "gridcoinresearchd.exe" >nul || goto done

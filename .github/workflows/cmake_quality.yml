@@ -160,6 +160,14 @@ jobs:
   # missing annotation to a build error. GUI is built here (ENABLE_GUI=ON)
   # because the Sanitizers job builds with ENABLE_GUI=OFF and would not
   # cover the Qt wallet code.
+  #
+  # ENABLE_MULTIPROCESS=ON for the same reason: without it the IPC transport,
+  # the serving interfaces and the generated capnp proxies compile in no CI job
+  # that runs the analyzer, so annotations on the code that most needs
+  # them — the GUI/node seam, where notifications cross threads and processes —
+  # were never checked. That needs capnproto + libcapnp-dev below. (The
+  # cmake_multiprocess workflow builds the same surface, but with gcc, which
+  # ignores the annotations entirely.)
   # ----------------------------------------------------------------------
   thread-safety:
     name: Thread Safety (Clang)
@@ -172,6 +180,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang cmake build-essential libboost-all-dev \
             libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
+            capnproto libcapnp-dev \
             qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
             libqt6charts6-dev libqt6svg6-dev libqt6core5compat6-dev \
             libxkbcommon-dev libcurl4-openssl-dev libzip-dev zipcmp zipmerge \
@@ -199,6 +208,7 @@ jobs:
             -DENABLE_GUI=ON \
             -DENABLE_TESTS=OFF \
             -DUSE_QT6=ON \
+            -DENABLE_MULTIPROCESS=ON \
             -DWERROR_THREAD_SAFETY=ON \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \

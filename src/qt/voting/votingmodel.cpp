@@ -400,21 +400,25 @@ void VotingModel::subscribeToCoreSignals()
     // so they marshal to the GUI thread via a queued slot invocation; releasing
     // the Handler on teardown severs the callback before `this` is destroyed
     // (issue #3129).
-    m_handlers.emplace_back(m_voting.handleNewPollReceived([this](int64_t poll_time) {
+    m_handlers.emplace_back(m_voting.handleNewPollReceived(m_notify_lifetime.guard([this](int64_t poll_time) {
         GUILogPrint(GUILogCategory::QT, "INFO: VotingModel: received NewPollReceived() notification");
         QMetaObject::invokeMethod(this, "handleNewPoll", Qt::QueuedConnection, Q_ARG(int64_t, poll_time));
-    }));
+    })));
 
-    m_handlers.emplace_back(m_voting.handleNewVoteReceived([this](std::string poll_txid) {
+    m_handlers.emplace_back(m_voting.handleNewVoteReceived(m_notify_lifetime.guard([this](std::string poll_txid) {
         GUILogPrint(GUILogCategory::QT, "INFO: VotingModel: received NewVoteReceived() notification");
         // uint256 is not a registered Qt metatype, so marshal the hex string.
         QMetaObject::invokeMethod(this, "handleNewVote", Qt::QueuedConnection,
                                   Q_ARG(QString, QString::fromStdString(poll_txid)));
-    }));
+    })));
 }
 
 void VotingModel::unsubscribeFromCoreSignals()
 {
+    // Retire before disconnecting: severing a Handler does not wait for a
+    // callback already running on a core thread (qt/notificationlifetime.h).
+    m_notify_lifetime.retire();
+
     // Clearing the retained subscriptions runs each Handler's destructor, which
     // disconnects it (issue #3129).
     m_handlers.clear();

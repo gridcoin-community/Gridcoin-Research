@@ -12,13 +12,26 @@
 # real retry. The core unit is never modified: the [Install] WantedBy= below only
 # creates gridcoinresearchd.service.wants/, leaving its hardening untouched.
 #
-# SETUP (opt-in). Encrypt the wallet passphrase once, host/TPM-bound, then enable:
+# SETUP (opt-in). Encrypt the wallet passphrase once, host/TPM-bound, then enable.
+# NEVER type the passphrase as a literal on the command line: even with a shell
+# builtin (which keeps it out of `ps`), the whole command line lands in
+# ~/.bash_history -- and in sudo's I/O log if log_input is enabled. Have the
+# terminal prompt for it instead, so it is never part of any command:
 #
-#   printf '%s' 'YOUR-WALLET-PASSPHRASE' | sudo systemd-creds encrypt \
-#       --name=wallet-passphrase - /etc/gridcoin/wallet-passphrase.cred
+#   systemd-ask-password 'Wallet passphrase:' \
+#       | sudo systemd-creds encrypt --name=wallet-passphrase - /etc/gridcoin/wallet-passphrase.cred
+#
+#   (or, without systemd-ask-password:
+#       read -rs -p 'Wallet passphrase: ' pw && printf '%s' "$pw" \
+#           | sudo systemd-creds encrypt --name=wallet-passphrase - /etc/gridcoin/wallet-passphrase.cred
+#       unset pw)
+#
 #   sudo chown gridcoin:gridcoin /etc/gridcoin/wallet-passphrase.cred
 #   sudo chmod 0400 /etc/gridcoin/wallet-passphrase.cred
 #   sudo systemctl enable --now gridcoinresearchd-autounlock.service
+#
+# systemd-ask-password appends a newline to what you typed; the helper strips a
+# trailing CR/LF, so the stored credential still decrypts to the right passphrase.
 #
 # systemd decrypts it to $CREDENTIALS_DIRECTORY/wallet-passphrase (0400, readable
 # only by this service) at start. The passphrase is NEVER stored here or on argv.

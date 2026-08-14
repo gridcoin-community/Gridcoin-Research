@@ -84,6 +84,12 @@ public slots:
     void handlePollStaleFlag(QString poll_txid_string);
 
 private:
+    //! Join the in-flight refresh worker, swallowing (and logging) anything it
+    //! stored in m_refresh_future. QFuture::waitForFinished() rethrows a stored
+    //! exception, and both call sites are teardown paths -- one is the
+    //! destructor -- where a rethrow would abort the process. See the definition.
+    void waitForRefreshWorker();
+
     // Initialized in-class so the early-return checks in setModel() and the
     // truthy guard in refresh() never read uninitialized memory before the
     // first explicit setModel(VotingModel*) call. The previous setModel()

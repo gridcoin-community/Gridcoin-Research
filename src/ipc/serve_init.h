@@ -7,10 +7,28 @@
 
 #include "interfaces/init.h"
 
+#include <chrono>
 #include <memory>
 #include <string>
 
 namespace ipc {
+
+//! How long an accepted connection may remain unauthenticated before the node
+//! drops it (doc/multiprocess_design.md section 4.3).
+//!
+//! Why this exists: the listener accepts ONE simultaneous connection, and the
+//! accept is not re-armed while that slot is occupied. Without a deadline, a local
+//! process that connects and then says nothing -- or presents a wrong cookie and
+//! sits there -- denies the real GUI service for as long as it lives, and nothing
+//! in the transport ever reclaims the slot. It also bounds the window in which an
+//! unauthenticated peer can reach the pre-auth surface of the capnp interface
+//! (Init.construct -> ThreadMap; see MAX_SERVER_THREADS_PER_CONNECTION).
+//!
+//! The value is generous on purpose. A real GUI authenticates in the same
+//! millisecond it connects (ClientHandshake's first act is authenticate()), so
+//! anything above a second or two is already unreachable for legitimate traffic;
+//! 30s only avoids punishing a heavily loaded or debugger-stopped client.
+inline constexpr std::chrono::seconds IPC_AUTH_DEADLINE{30};
 
 //! Wrap the node's real (in-process) Init so it can be served over IPC: it adds
 //! the connect handshake (authenticate / getBuildInfo / getIdentity) and gates

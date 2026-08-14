@@ -12,6 +12,8 @@ src/test/test_gridcoin.log
 src/test/test_gridcoin.trs
 
 build
+build_asan
+build_tsa
 build_macos
 build_win64
 build_linux_depends

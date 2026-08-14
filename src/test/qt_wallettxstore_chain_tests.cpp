@@ -304,7 +304,11 @@ BOOST_AUTO_TEST_CASE(coinstakeFlipsIntoBothViewsOnRealChainTipRefresh)
     BOOST_CHECK_EQUAL(static_cast<int>(recs[0].status.status),
                       static_cast<int>(TransactionStatus::NotAccepted));
 
-    store.enqueueInsert(recs);
+    // block_known=true mirrors what WalletTxSourceImpl computes: this tx's
+    // confirming block IS in mapBlockIndex (PendingTipChain put it there) but is not
+    // yet the tip. That is the window in which the record must stay volatile so the
+    // per-tip refresh below can ripen it -- the invariant this case exists to prove.
+    store.enqueueInsert(recs, /*block_known=*/true);
     settle(q);
 
     // Masked in both production views while NotAccepted — the invariant that makes
@@ -408,7 +412,7 @@ BOOST_AUTO_TEST_CASE(oneUnrefreshableTxDoesNotFreezeTheRestOfTheWallet)
             MakeCoinstake(mine.dest, (10 + i) * COIN, sidestake_dest.dest, 1 * COIN);
         InjectConfirmedTx(cs, chain.hash_fresh);
         good_hashes.push_back(cs.GetHash());
-        store.enqueueInsert(producerRecordsFor(cs.GetHash()));
+        store.enqueueInsert(producerRecordsFor(cs.GetHash()), /*block_known=*/true);
     }
     settle(q);
 
@@ -499,11 +503,11 @@ BOOST_AUTO_TEST_CASE(primeThatThrowsMidRescanStillReleasesTheIntakeWorker)
     const uint256 good_hash = good.GetHash();
     InjectConfirmedTx(good, chain.hash_fresh);
 
-    store.enqueueInsert(producerRecordsFor(good_hash));
+    store.enqueueInsert(producerRecordsFor(good_hash), /*block_known=*/true);
     settle(q);
 
     BOOST_CHECK_MESSAGE(store.rowForKey(GRC::VIEW_DETAILED, good_hash, 0) >= 0,
-                        "the intake worker never resumed after prime() threw — "
+                        "the intake worker never resumed after prime() threw - "
                         "every later transaction would be invisible");
 
     EraseWalletTx(good_hash);

@@ -62,6 +62,10 @@ OverviewTxModel::~OverviewTxModel()
             // quit that is running this teardown. Log at verbose so a failure for
             // any OTHER reason is still observable.
             GUILogPrint(GUILogCategory::VERBOSE, "OverviewTxModel: unregisterView skipped: %s", e.what());
+        } catch (...) {
+            // A destructor must not propagate ANYTHING, not just std::exception --
+            // a non-standard throw escaping here would terminate during teardown.
+            GUILogPrint(GUILogCategory::VERBOSE, "OverviewTxModel: unregisterView skipped: non-standard exception");
         }
     }
 }
@@ -138,7 +142,7 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                     // next Reset. Should be unreachable; say so rather than
                     // swallowing it, as this used to (#3257 review).
                     GUILogPrintf("WARNING: OverviewTxModel: rejected insert at %d "
-                                 "(have %d rows) — view diverged from the producer cursor",
+                                 "(have %d rows) - view diverged from the producer cursor",
                                  pos, static_cast<int>(m_rows.size()));
                     return;
                 }
@@ -156,7 +160,7 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                         || static_cast<std::size_t>(pos) + static_cast<std::size_t>(payload.count)
                                > m_rows.size()) {
                     GUILogPrintf("WARNING: OverviewTxModel: rejected remove at %d count %d "
-                                 "(have %d rows) — view diverged from the producer cursor",
+                                 "(have %d rows) - view diverged from the producer cursor",
                                  pos, payload.count, static_cast<int>(m_rows.size()));
                     return;
                 }
@@ -167,10 +171,11 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
             } else if constexpr (std::is_same_v<P, GRC::RowsChangedPayload>) {
                 if (payload.viewId != GRC::VIEW_OVERVIEW) return;
                 if (seqno <= m_applied_seqno) return;
-                // The payload carries no records (a Change does not move the row),
-                // so re-fetch the changed slice from the cursor and refresh.
-                const std::vector<TransactionRecord> fresh =
-                    store.getRows(GRC::VIEW_OVERVIEW, payload.first, payload.count).records;
+                // Apply the records the producer sampled at emission. Do NOT
+                // re-fetch: that sampled a possibly-newer cursor state than the
+                // structural position applied so far, and cost a synchronous IPC
+                // round trip per change (see GRC::RowsChangedPayload).
+                const std::vector<TransactionRecord>& fresh = payload.records;
                 for (std::size_t i = 0; i < fresh.size()
                         && static_cast<std::size_t>(payload.first) + i < m_rows.size(); ++i) {
                     m_rows[static_cast<std::size_t>(payload.first) + i] = fresh[i];

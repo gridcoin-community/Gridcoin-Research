@@ -16,10 +16,23 @@ class CBlockIndex;
 
 namespace GRC {
 
-//! Default cap on how far backward VerifyChainCoherence will walk before
-//! giving up. Sized well above Phase 1's 5000-block IBD fsync interval so
-//! atypical fsync skips still have headroom. Overridable via -coherencewalkmax.
-constexpr int DEFAULT_COHERENCE_WALK_MAX = 10000;
+//! Default cap on how far backward VerifyChainCoherence will walk before giving
+//! up. Overridable via -coherencewalkmax.
+//!
+//! Sized as a multiple of the 5000-block IBD fsync interval in WriteBlockToDisk.
+//! At the previous 10000 that was exactly 2x -- enough for the expected case and
+//! for one skipped fsync, with nothing left over. 15000 gives 3x, so two
+//! consecutive skips still land inside the walk.
+//!
+//! The asymmetry argues for headroom. Walking further costs one block read per
+//! step at startup after an unclean shutdown -- seconds on NVMe, tens of seconds
+//! on a slow disk, and only on that path. Exhausting the walk costs the user a
+//! full -reindex, which is hours. Trading startup seconds against reindex hours
+//! is worth it; the reverse is not.
+//!
+//! The alternative -- shortening the fsync interval -- was rejected: it taxes
+//! every initial block download permanently to buy headroom for a rare recovery.
+constexpr int DEFAULT_COHERENCE_WALK_MAX = 15000;
 
 //! Pack a (nFile, nBlockPos) pair into a uint64_t for fast hash-set lookup
 //! during the chainstate cleanup pass. nFile is uint32 and nBlockPos is

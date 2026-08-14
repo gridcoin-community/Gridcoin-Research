@@ -95,7 +95,7 @@ public:
     //! the leaf cs_intake, never cs_store, so it never waits on the O(N)
     //! ordering maintenance (PR2.5 double-queue).
     //!
-    void enqueueInsert(std::vector<TransactionRecord> records);
+    void enqueueInsert(std::vector<TransactionRecord> records, bool block_known = false);
 
     //!
     //! \brief Producer: a transaction is no longer visible / was deleted.
@@ -112,7 +112,7 @@ public:
     //! records in place and re-evaluates each cursor's membership/sort slot
     //! (applyStatusUpdate). Same O(1) threading contract as enqueueInsert.
     //!
-    void enqueueUpsert(std::vector<TransactionRecord> records);
+    void enqueueUpsert(std::vector<TransactionRecord> records, bool block_known = false);
 
     //!
     //! \brief Producer: an address-book entry changed (label added / renamed /
@@ -233,6 +233,12 @@ private:
         uint256 hash;                           //!< Remove/Update: the tx hash.
         std::string ab_address;                 //!< AddressBook: the changed address.
         std::string ab_label;                   //!< AddressBook: its new label ("" if removed).
+        //! Insert/Update: the producer saw this tx's confirming block in
+        //! mapBlockIndex while its status still read depth -1. That is the window
+        //! where the block is being connected but pindexBest has not advanced, so
+        //! the record needs exactly one more refresh to ripen. See
+        //! WalletTxStore::isVolatile() for why this cannot be decided worker-side.
+        bool block_known_at_produce = false;
     };
 
     //! Intake depth at which to start warning that the worker is not keeping up.
@@ -301,6 +307,12 @@ private:
     void shiftIndex(std::size_t from, std::ptrdiff_t delta) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
     void rebuildIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_store);
 
+    //! Rebuild the projector caches and the volatile set from m_records, the
+    //! authoritative table. Used by prime() for a full reload, and by
+    //! insertLocked()'s failure path to restore the cross-container invariant if a
+    //! splice throws part-way through.
+    void rebuildCaches() EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
     //! Translate one cursor's served-window CursorDeltas into WalletEvents for
     //! \p viewId (Reset/Insert/Remove/Change), fetching records from m_records for
     //! the inserted/changed served rows. Caller holds cs_store.
@@ -338,11 +350,15 @@ private:
     //! and it could never appear (#3100; the same invariant #3257 depends on).
     //! See the rationale on recordStatusIsVolatile in wallettxstore.cpp; do not
     //! "simplify" either to match the other without reading it.
-    static bool isVolatile(const TransactionRecord& r);
+    static bool isVolatile(const TransactionRecord& r, bool block_known);
 
     //! Re-evaluate whether `hash` belongs in m_volatile from its records' current
     //! status, inserting or erasing it. Caller holds cs_store.
     void updateVolatileForHash(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! Record (or clear) whether \p hash's confirming block was known to the
+    //! producer. See m_block_known.
+    void setBlockKnown(const uint256& hash, bool known) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
 
     CWallet* const m_wallet;
     GRC::WalletEventQueue& m_queue;
@@ -367,6 +383,21 @@ private:
     //! ...). applyChainTipRefresh() re-runs updateStatus only over this bounded set
     //! each block, so the per-block cost is O(volatile) rather than O(N) (PR4-fix A).
     std::unordered_set<uint256, TxHashHasher> m_volatile GUARDED_BY(cs_store);
+
+    //! Transactions whose confirming block the PRODUCER saw in mapBlockIndex while
+    //! the record still read depth -1 -- i.e. the block is being connected but
+    //! pindexBest has not advanced yet. Such a record is inserted with a status the
+    //! views mask and gets no further CT_UPDATED (a block connects once), so it
+    //! must stay volatile for the single refresh that ripens it. Everything else at
+    //! depth -1 (the whole wallet during IBD, whose blocks are not in the index) is
+    //! correctly excluded. See recordStatusIsVolatile().
+    //!
+    //! Kept here rather than on TransactionRecord because the record crosses the
+    //! capnp boundary to the GUI and this is store-internal bookkeeping; and it
+    //! cannot be recomputed worker-side, which holds neither cs_main nor the index.
+    //! Entries are dropped as soon as the record reaches depth >= 0, so this stays
+    //! bounded by the transactions in the block currently being connected.
+    std::unordered_set<uint256, TxHashHasher> m_block_known GUARDED_BY(cs_store);
 
     //! Registered per-view cursors (server-side filter+sort), keyed by VIEW_*.
     //! Each indexes into m_records; maintained on the worker thread (insert/

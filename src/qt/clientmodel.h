@@ -2,6 +2,7 @@
 #define BITCOIN_QT_CLIENTMODEL_H
 
 #include "interfaces/node.h"
+#include "qt/notificationlifetime.h"
 
 #include <QObject>
 
@@ -98,6 +99,11 @@ private:
     //! risked a core signal invoking a slot on a destroyed ClientModel during
     //! shutdown. interfaces::Handler disconnects on destruction.
     std::vector<std::unique_ptr<interfaces::Handler>> m_handlers;
+
+    //! Guards those callbacks against the destruction race that disconnecting
+    //! alone does not close -- neither backing implementation waits for a
+    //! callback already executing on a core thread. See qt/notificationlifetime.h.
+    NotificationLifetime m_notify_lifetime;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();

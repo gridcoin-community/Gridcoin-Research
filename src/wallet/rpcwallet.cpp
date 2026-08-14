@@ -3115,7 +3115,7 @@ static const RPCHelpMan maintainbackups_help{
     "walletbackupretainnumdays in the config file are used (defaulting to 365 "
     "each). Both arguments must be supplied together or both omitted.\n"
     "\n"
-    "WARNING: retention will not allow both values to be set lower than 7 — "
+    "WARNING: retention will not allow both values to be set lower than 7 - "
     "values below 7 are clamped to 7 to prevent unintended data loss. The "
     "rule that retains the greater number of files wins.",
     {
@@ -3353,7 +3353,7 @@ UniValue walletpassphrase(const UniValue& params)
                 throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered is incorrect. "
                                                                     "It contains a null character (ie - a zero byte). "
                                                                     "If the passphrase was set with a version of this software prior to 5.4.6, "
-                                                                    "please try again with only the characters up to — but not including — "
+                                                                    "please try again with only the characters up to - but not including - "
                                                                     "the first null character. If this is successful, please set a new "
                                                                     "passphrase to avoid this issue in the future.");
             }
@@ -3420,7 +3420,7 @@ UniValue walletpassphrasechange(const UniValue& params)
             throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The old wallet passphrase entered is incorrect. "
                                                                 "It contains a null character (ie - a zero byte). "
                                                                 "If the old passphrase was set with a version of this software prior to 5.4.6, "
-                                                                "please try again with only the characters up to — but not including — "
+                                                                "please try again with only the characters up to - but not including - "
                                                                 "the first null character.");
         }
     }
@@ -3588,11 +3588,11 @@ UniValue inspectwalletstate(const UniValue& params)
     // Warnings (always shown as counts; per-tx detail gated behind verbose)
     if (inactive_count > 0) {
         result.pushKV("warning_inactive",
-            strprintf("Found %d inactive transaction(s) — these won't contribute to balance", inactive_count));
+            strprintf("Found %d inactive transaction(s) - these won't contribute to balance", inactive_count));
     }
     if (unrecognized_count > 0) {
         result.pushKV("warning_unrecognized",
-            strprintf("Found %d unrecognized transaction(s) — may not be counted in balance", unrecognized_count));
+            strprintf("Found %d unrecognized transaction(s) - may not be counted in balance", unrecognized_count));
     }
 
     // --- Verbose-only detail ---

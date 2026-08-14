@@ -4,6 +4,7 @@
 
 #include "interfaces/wallet_tx_source.h"
 
+#include "interfaces/handler.h"
 #include "main.h"
 #include "node/ui_interface.h"
 #include "wallet/wallet.h"
@@ -168,20 +169,29 @@ void WalletTxSourceImpl::subscribe()
     // block a slot already executing on another thread. m_handlers.clear() in
     // the destructor still severs the subscriptions so no NEW emission is
     // dispatched; the weak_ptr guard covers the in-flight overlap.
+    // The weak_ptr guard above covers LIFETIME. GuardNotify covers ESCAPE: these two
+    // slots run on core threads, and NotifyBlocksChanged in particular is emitted
+    // from UINotificationBridge::UpdatedBlockTip, i.e. from inside SetBestChain. An
+    // exception escaping here does not merely lose a GUI refresh -- boost::signals2
+    // abandons the remaining slots for that emission, so a throw would skip the peer
+    // manager's UpdatedBlockTip and with it the new-tip inventory relay, and would
+    // then unwind out of block connection entirely. Nothing about a wallet-side view
+    // refresh should be able to do that, so contain it here (and log it: a
+    // non-disconnect throw is reported at the default level, see handler.h).
     std::weak_ptr<WalletTxSourceImpl> weak_self = weak_from_this();
 
     m_handlers.emplace_back(m_wallet->NotifyTransactionChanged.connect(
-        [weak_self](CWallet* wallet, const uint256& hash, ChangeType status) {
+        interfaces::GuardNotify([weak_self](CWallet* wallet, const uint256& hash, ChangeType status) {
             if (auto self = weak_self.lock()) {
                 self->onTransactionChanged(wallet, hash, status);
             }
-        }));
+        })));
     m_handlers.emplace_back(uiInterface.NotifyBlocksChanged_connect(
-        [weak_self](bool syncing, int height, int64_t best_time, uint32_t target_bits) {
+        interfaces::GuardNotify([weak_self](bool syncing, int height, int64_t best_time, uint32_t target_bits) {
             if (auto self = weak_self.lock()) {
                 self->onBlocksChanged(syncing, height, best_time, target_bits);
             }
-        }));
+        })));
 }
 
 void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& hash, ChangeType status)
@@ -226,7 +236,7 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
             // with an erasure. Remove to keep the consumer in sync.
             LogPrint(BCLog::LogFlags::VERBOSE,
                      "NotifyTransactionChanged: %s status=%d but tx not in mapWallet "
-                     "— removing from store",
+                     "- removing from store",
                      hash.GetHex(), status);
             m_store.enqueueRemove(hash);
             break;
@@ -250,7 +260,7 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
                     && bi->second->pprev == pindexBest) {
                 LogPrint(BCLog::LogFlags::VERBOSE,
                          "NotifyTransactionChanged: %s is in the block being "
-                         "connected — keeping visible despite transient orphan state",
+                         "connected - keeping visible despite transient orphan state",
                          hash.GetHex());
                 visible = true;
             }
@@ -272,10 +282,22 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
                 }
                 // CT_NEW is a fresh insert; CT_UPDATED / CT_UPDATING is an upsert
                 // of an existing tx (e.g. a confirmation).
+                // Is this tx's confirming block already in the index? During block
+                // connection it is -- the wallet is notified before SetBestChain
+                // advances pindexBest -- so the record lands at depth -1 with a
+                // status the views mask, and no further CT_UPDATED will ever come.
+                // The store keeps such a record volatile for the one refresh that
+                // ripens it. During IBD, by contrast, a wallet tx's block is not in
+                // the index at all, and that record is correctly never polled.
+                // Computed here because it needs mapBlockIndex under cs_main, which
+                // the store worker does not hold.
+                const bool block_known = !wtx.hashBlock.IsNull()
+                    && mapBlockIndex.find(wtx.hashBlock) != mapBlockIndex.end();
+
                 if (status == CT_NEW) {
-                    m_store.enqueueInsert(std::move(recs));
+                    m_store.enqueueInsert(std::move(recs), block_known);
                 } else {
-                    m_store.enqueueUpsert(std::move(recs));
+                    m_store.enqueueUpsert(std::move(recs), block_known);
                 }
             }
         } else {

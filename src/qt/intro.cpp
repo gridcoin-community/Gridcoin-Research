@@ -18,6 +18,7 @@
 
 //#include <interfaces/node.h>
 #include <util.h>
+#include <util/dir_permissions.h>
 
 #include <QFileDialog>
 #include <QSettings>
@@ -98,6 +99,18 @@ void FreespaceChecker::check()
                 replyStatus = ST_ERROR;
                 replyMessage = tr("Path already exists, and is not a directory.");
             }
+        }
+
+        // A directory on tmpfs or ramfs takes every write and loses the lot when
+        // the program exits. Report it as an error so OK stays disabled. This is
+        // worth surfacing here rather than only at startup because the free-space
+        // figure shown just above is entirely healthy-looking on tmpfs, which is
+        // most of why the sandbox case was so hard to diagnose from the outside.
+        if (replyStatus == ST_OK && fsbridge::IsVolatileFilesystem(fs::exists(dataDir) ? dataDir : parentDir))
+        {
+            replyStatus = ST_ERROR;
+            replyMessage = tr("This location is on a temporary filesystem. Anything stored here, "
+                              "including the wallet, is lost when the program exits.");
         }
     } catch (const fs::filesystem_error&)
     {
@@ -195,7 +208,12 @@ bool Intro::showIfNeeded(bool& did_show_intro)
     // properly respected without having to restart after the choosing.
     bool originally_not_default_datadir = (dataDir != GUIUtil::getDefaultDataDirectory());
 
-    if (!fs::exists(GUIUtil::qstringToBoostPath(dataDir))
+    // Non-throwing overload here for the same reason as the -datadir check above:
+    // this call is not inside the try block that starts below, and its caller in
+    // bitcoin.cpp does not catch either, so a path that is ill-formed or whose
+    // parent denies access would terminate the process with no dialog at all --
+    // the exact outcome the comment twelve lines up exists to prevent.
+    if (!fs::exists(GUIUtil::qstringToBoostPath(dataDir), ec)
             || gArgs.GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR)
             || settings.value("fReset", false).toBool()
             || gArgs.GetBoolArg("-resetguisettings", false))
@@ -223,7 +241,30 @@ bool Intro::showIfNeeded(bool& did_show_intro)
             }
             dataDir = intro.getDataDirectory();
             try {
-                TryCreateDirectories(GUIUtil::qstringToBoostPath(dataDir));
+                // Create it restricted to this account (0700 / owner+SYSTEM DACL).
+                // This is the monolithic build's creation point; the daemon has its
+                // own in GetDataDirPath(), and both go through the same helper so a
+                // data directory is protected no matter which one made it.
+                // Create-only: an existing directory is left as the user set it up.
+                std::string perm_error;
+                if (!util::CreateOwnerOnlyDirectory(GUIUtil::qstringToBoostPath(dataDir), perm_error)) {
+                    // Fatal to this choice, both of the two ways it can fail.
+                    //
+                    // An earlier revision downgraded "created but could not be locked
+                    // down" to a warning and kept the selection. That was the worse
+                    // half of the two: it put the wallet in a directory already known
+                    // to be readable by other accounts, and because the helper leaves
+                    // a pre-existing directory alone, re-selecting the same path on
+                    // the next run would succeed silently and never warn again. The
+                    // helper now withdraws a directory it could not protect, so
+                    // returning the user to the chooser is a real retry rather than a
+                    // loop that passes the second time for the wrong reason.
+                    QMessageBox::critical(nullptr, PACKAGE_NAME,
+                        tr("Error: The data directory \"%1\" could not be created and secured.\n\n%2\n\n"
+                           "Please choose a different location.")
+                            .arg(dataDir, QString::fromStdString(perm_error)));
+                    continue; /* back to the choosing screen */
+                }
                 break;
             } catch (const fs::filesystem_error&) {
                 QMessageBox::critical(nullptr, PACKAGE_NAME,

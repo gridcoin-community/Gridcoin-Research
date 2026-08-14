@@ -97,6 +97,23 @@ void AboutDialog::setIpcConnectionInfo(const GuiIpcInfo& info)
 
 AboutDialog::~AboutDialog()
 {
+    // Sever the result signal, but deliberately do NOT wait for the worker here.
+    //
+    // The worker captures only the interfaces::Node* -- not `this` -- so it never
+    // touches the dialog; the sole path back into dialog state is the watcher's
+    // finished() -> versionCheckFinished(), which this disconnect closes. Destroying
+    // a QFutureWatcher while its future is still running is safe (the QFuture is
+    // refcounted and the watcher simply stops reporting), so closing this dialog is
+    // not the lifetime hazard.
+    //
+    // The hazard is the NODE: the worker dereferences it, and it is destroyed by
+    // StartGridcoinQt's teardown. Waiting here would only freeze the GUI thread for
+    // up to the libcurl connect timeout (~10 s) every time a user closes the dialog
+    // mid-check, while doing nothing about the case that actually matters. The join
+    // therefore lives at teardown, immediately before the node is destroyed --
+    // rarer, and already a waiting context.
+    m_version_check_watcher.disconnect();
+
     delete ui;
 }
 

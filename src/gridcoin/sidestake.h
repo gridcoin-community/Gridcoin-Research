@@ -781,6 +781,48 @@ public:
     void NonContractDelete(const CTxDestination& destination, const bool& save_to_file = true);
 
     //!
+    //! \brief Change ONLY the allocation of an existing local sidestake, leaving its
+    //! description and status as currently stored.
+    //!
+    //! Exists so a caller editing one field does not have to read the whole entry,
+    //! rebuild it, and write it back through NonContractAdd(). That read-modify-write
+    //! spans two separate acquisitions of the registry lock, so a
+    //! LoadLocalSideStakesFromConfig() landing in between (RwSettingsUpdated, e.g. from
+    //! the changesettings RPC) is silently reverted by the fields the caller was not
+    //! trying to change. Here the surviving fields are read under the same lock as the
+    //! write, so there is nothing to lose.
+    //!
+    //! \param destination Map key of the entry to modify.
+    //! \param allocation New allocation.
+    //! \param save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
+    //!
+    //! \return false if no local entry exists for \p destination (nothing written).
+    //!
+    //! NOT COVERED BY TESTS: that the surviving fields are read inside THIS lock
+    //! acquisition rather than an earlier one is the whole point, and no
+    //! single-threaded test can tell the difference (see the note in
+    //! src/test/gridcoin/sidestake_tests.cpp). Keep the read where it is.
+    //!
+    bool NonContractSetAllocation(const CTxDestination& destination,
+                                  const Allocation& allocation,
+                                  const bool& save_to_file = true);
+
+    //!
+    //! \brief Change ONLY the description of an existing local sidestake, leaving its
+    //! allocation and status as currently stored. See NonContractSetAllocation() for
+    //! why this exists rather than a read-modify-write through NonContractAdd().
+    //!
+    //! \param destination Map key of the entry to modify.
+    //! \param description New description (already sanitized by the caller).
+    //! \param save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
+    //!
+    //! \return false if no local entry exists for \p destination (nothing written).
+    //!
+    bool NonContractSetDescription(const CTxDestination& destination,
+                                   const std::string& description,
+                                   const bool& save_to_file = true);
+
+    //!
     //! \brief Revert the registry state for the sidestake entry to the state prior
     //! to this ContractContext application. This is typically used
     //! during reorganizations, where blocks are disconnected.
@@ -873,6 +915,12 @@ public:
 private:
     //!
     //! \brief Protects the registry with multithreaded access. This is implemented INTERNAL to the registry class.
+    //!
+    //! Deliberately PRIVATE: the locking is a black box. Every public method that
+    //! touches the maps takes this itself, so no caller needs it — and a caller
+    //! that thinks it needs it across several calls should re-read
+    //! ActiveSideStakeEntries() first (see the note there on why the total
+    //! allocation ceiling is enforced on READ, not on write).
     //!
     mutable CCriticalSection cs_lock;
 

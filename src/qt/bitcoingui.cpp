@@ -808,6 +808,26 @@ void BitcoinGUI::showBuildMismatchWarning(const QString& gui_commit, const QStri
 void BitcoinGUI::setIpcConnectionInfo(const GuiIpcInfo& info)
 {
     m_ipc_info = info;
+
+    // Reset blockchain data cannot work from this process in the split build.
+    // resetblockchainClicked() only sets fResetBlockchainRequest and calls
+    // requestQuit(); the deletion itself happens as THIS process exits
+    // (UpgradeQt::ResetBlockchain in bitcoin.cpp). In -multiprocess the blockchain
+    // belongs to the core, which keeps running when the GUI closes and holds those
+    // files open -- so the GUI would either delete data underneath a live node or
+    // quietly do nothing, depending on the platform's unlink semantics. Neither is
+    // an outcome to offer behind a confirmation dialog that promises a resync.
+    //
+    // Disabled rather than hidden so the entry does not silently differ between
+    // builds, and the reason goes in the TEXT rather than a tooltip: QMenu does not
+    // show action tooltips unless setToolTipsVisible(true) is set on the menu, which
+    // it is not here, so a tooltip alone would be invisible.
+    if (m_ipc_info.active && resetblockchainAction) {
+        resetblockchainAction->setEnabled(false);
+        resetblockchainAction->setText(tr("&Reset blockchain data (not available in multiprocess mode)"));
+        resetblockchainAction->setToolTip(tr("The blockchain data belongs to the separate Gridcoin core "
+                                             "process. Stop the core and reset it there."));
+    }
 }
 
 void BitcoinGUI::setClientModel(ClientModel *clientModel)
@@ -966,34 +986,60 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
 {
     this->researcherModel = researcherModel;
 
-    if (!researcherModel) {
-        return;
-    }
-
+    // Propagate BEFORE the detach early-return below. OverviewPage and the
+    // diagnostics dialog each keep their own raw copy of this pointer, and
+    // bitcoin.cpp calls setResearcherModel(nullptr) while ResearcherModel is
+    // still alive but about to leave scope. Returning early on nullptr (as this
+    // used to) left both copies dangling for the rest of the window's life --
+    // asymmetric with setVotingModel() / setPSGTPoolContext(), which already
+    // propagate first and only then decide whether there is anything to wire up.
     overviewPage->setResearcherModel(researcherModel);
     diagnosticsDialog->SetResearcherModel(researcherModel);
 
+    if (!researcherModel) {
+        // The tooltip-refresh timer is parented to this window, so it outlives
+        // the detach. Stop it: otherwise any nested event loop entered after
+        // teardown (a modal, a progress dialog) would let it fire
+        // updateBeaconIcon() with no model attached.
+        if (m_beacon_status_update_timer) {
+            m_beacon_status_update_timer->stop();
+        }
+
+        return;
+    }
+
     updateBeaconIcon();
-    connect(researcherModel, &ResearcherModel::beaconChanged, this, &BitcoinGUI::updateBeaconIcon);
 
-    QTimer *beacon_status_update_timer = new QTimer(this);
+    // Qt::UniqueConnection: this runs on EVERY call with a non-null model, so a
+    // second attach would otherwise stack a duplicate connection and fire
+    // updateBeaconIcon() once per attach for every beaconChanged signal. Only one
+    // call site exists today -- this is closing the latent edge, not fixing a live
+    // duplicate -- so that a future re-attach path cannot introduce one silently.
+    // (Valid here only because the slot is a member-function pointer;
+    // UniqueConnection is not supported for lambda targets.)
+    connect(researcherModel, &ResearcherModel::beaconChanged, this, &BitcoinGUI::updateBeaconIcon,
+            Qt::UniqueConnection);
 
-    // This timer trigger is to support updating the beacon age and time to expiration in the tooltip.
-    // Once a minute is sufficient.
-    connect(beacon_status_update_timer, &QTimer::timeout, this, &BitcoinGUI::updateBeaconIcon);
+    if (!m_beacon_status_update_timer) {
+        m_beacon_status_update_timer = new QTimer(this);
+
+        // This timer trigger is to support updating the beacon age and time to expiration in the tooltip.
+        // Once a minute is sufficient.
+        connect(m_beacon_status_update_timer, &QTimer::timeout, this, &BitcoinGUI::updateBeaconIcon);
+    }
 
     // Check every minute
-    beacon_status_update_timer->start(1000 * 60);
+    m_beacon_status_update_timer->start(1000 * 60);
 }
 
 void BitcoinGUI::setMRCModel(MRCModel *mrcModel)
 {
     m_mrc_model = mrcModel;
 
-    if (!mrcModel) {
-        return;
-    }
-
+    // Propagate unconditionally, including the nullptr detach: OverviewPage holds
+    // its own copy and MRCModel is a stack object in StartGridcoinQt that is
+    // destroyed right after teardown. OverviewPage::onMRCRequestClicked's null
+    // check would otherwise pass on a freed model.
     overviewPage->setMRCModel(mrcModel);
 }
 
@@ -1425,6 +1471,17 @@ void BitcoinGUI::processDrainedTransactions(const std::vector<GRC::WalletEvent>&
 
 void BitcoinGUI::resetblockchainClicked()
 {
+    // The menu entry is disabled in the split build (see setIpcConnectionInfo), but
+    // a QAction can still be triggered programmatically, and menus get rearranged.
+    // Refuse here too rather than rely on the entry being unreachable.
+    if (m_ipc_info.active) {
+        QMessageBox::information(this, tr("Reset blockchain data"),
+            tr("This is not available in multiprocess mode. The blockchain data belongs to the "
+               "separate Gridcoin core process, which keeps running when this window closes. "
+               "Stop the core and reset its data directly."));
+        return;
+    }
+
     QMessageBox Msg;
 
     Msg.setIcon(QMessageBox::Question);
@@ -1832,14 +1889,40 @@ void BitcoinGUI::backupWallet()
 {
     if (!walletModel) return;
 
+    // Pass a full suggested path, not a bare directory. getSaveFileName treats its
+    // dir argument as a starting *file* name when the directory does not exist,
+    // so under Flatpak -- where the sandbox has no ~/Documents -- both dialogs
+    // opened pre-filled with the name "Documents". On a native build the
+    // directory does exist, so the effect is milder but still wrong: no filename
+    // was ever suggested.
     QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-    QString walletfilename = QFileDialog::getSaveFileName(this, tr("Backup Wallet"), saveDir, tr("Wallet Data (*.dat)"));
+
+    // Suggest the names actually in use, taking only the filename component so a
+    // configured path cannot leak into the suggestion. boostPathToQString, not
+    // QString::fromStdString(path.string()): on Windows the latter reads the
+    // system code page as UTF-8 and corrupts non-ASCII names (see #2736), which
+    // a wallet or conf file is perfectly entitled to have.
+    const QString wallet_suggestion = GUIUtil::boostPathToQString(
+        fs::path(gArgs.GetArg("-wallet", "wallet.dat")).filename());
+    const QString config_suggestion = GUIUtil::boostPathToQString(
+        fs::path(gArgs.GetArg("-conf", GRIDCOIN_CONF_FILENAME)).filename());
+
+    // writableLocation() returns empty when neither XDG_DOCUMENTS_DIR nor HOME is
+    // set. Joining onto that would suggest "/wallet.dat" at the filesystem root,
+    // so fall back to offering the bare name and letting the dialog choose where
+    // to open.
+    const QString wallet_default = saveDir.isEmpty() ? wallet_suggestion : saveDir + "/" + wallet_suggestion;
+    const QString config_default = saveDir.isEmpty() ? config_suggestion : saveDir + "/" + config_suggestion;
+
+    QString walletfilename = QFileDialog::getSaveFileName(
+        this, tr("Backup Wallet"), wallet_default, tr("Wallet Data (*.dat)"));
     if(!walletfilename.isEmpty()) {
         if(!walletModel->backupWallet(FromQString(walletfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }
-    QString configfilename = QFileDialog::getSaveFileName(this, tr("Backup Config"), saveDir, tr("Wallet Config (*.conf)"));
+    QString configfilename = QFileDialog::getSaveFileName(
+        this, tr("Backup Config"), config_default, tr("Wallet Config (*.conf)"));
     if(!configfilename.isEmpty()) {
         if(!walletModel->backupConfigFile(FromQString(configfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the config file to the new location."));
@@ -2081,6 +2164,13 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 void BitcoinGUI::updateBeaconIcon()
 {
     GUILogPrint(GUILogCategory::MISC, "BitcoinGUI::updateBeaconIcon()");
+
+    // Every sibling slot null-checks its model (see OverviewPage). This one is
+    // additionally driven by a window-parented timer, so it can still be reached
+    // after setResearcherModel(nullptr) has detached the model.
+    if (!researcherModel) {
+        return;
+    }
 
     if (researcherModel->configuredForNoncruncherMode()
         || researcherModel->detectedPoolMode())

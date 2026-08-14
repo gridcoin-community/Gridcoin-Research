@@ -112,12 +112,136 @@ if (-not $PSBoundParameters.ContainsKey('DataDir')) {
 if ($DataDir -match '"') {
     throw "-DataDir must not contain a double-quote character."
 }
+# A trailing backslash escapes the closing quote under CommandLineToArgvW (which both
+# powershell.exe and the daemon use to split their command lines), so -datadir="C:\dd\"
+# swallows the quote and corrupts every argument that follows it. It is also baked into the
+# generated .cmd, where cmd.exe applies yet another quoting pass. Reject it rather than try
+# to escape it correctly for both parsers at once.
+if ($DataDir -match '\\$') {
+    throw "-DataDir must not end with a backslash ('$DataDir'): a trailing backslash escapes the closing " +
+          "quote when the command line is parsed, corrupting the arguments after it. Drop the trailing " +
+          "backslash (and use a subdirectory rather than a bare drive root)."
+}
 
 if (-not $TaskPassword) {
     $cred = Get-Credential -UserName $TaskUser `
         -Message "Enter the Windows password for '$TaskUser' (the account the Gridcoin core will run as). This is NOT the wallet passphrase."
     $TaskUser = $cred.UserName
     $TaskPassword = $cred.Password
+}
+
+# ---------------------------------------------------------------------------
+# SECURITY: Core-Start executes the generated core-autostart.cmd (in this script's own
+# directory) as the wallet user, at boot, with no interactive session to notice. Anyone who
+# can replace that .cmd -- or anything on the path to it -- gets arbitrary code run as the
+# wallet user, which owns the wallet and (when autounlock is enabled) the DPAPI store that
+# decrypts the wallet passphrase. Fail CLOSED unless every component is writable only by
+# privileged principals or by the wallet user itself (who already owns the wallet, so that
+# is not an escalation).
+#
+# Mirrors Get-NonAdminWriteVector / Get-NonAdminWriteVectorForPath in
+# Set-GridcoinShutdownFlush.ps1 (whose script runs as SYSTEM and therefore allows no user
+# SID at all). Test ONLY the write/delete/own-change bits, NOT the composite
+# Modify/FullControl rights, whose bit patterns overlap ReadAndExecute/Synchronize (masking
+# those would wrongly flag the read-only Program Files "Users: ReadAndExecute, Synchronize"
+# ACE).
+$script:PrivilegedSids = @(
+    'S-1-5-18',                                                        # SYSTEM
+    'S-1-5-32-544',                                                    # Administrators
+    'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'   # TrustedInstaller
+)
+#
+# The mask differs per object type, which matters: on a FILE, appending to it is enough to
+# change what runs, so AppendData counts. On a DIRECTORY, AppendData/CreateDirectories only
+# permits creating a NEW entry -- it cannot replace an existing child -- and every default
+# Windows volume root grants exactly that to Users ("BUILTIN\Users:(CI)(AD)",
+# "Authenticated Users:(AD)" on C:\), so folding it in would refuse every install on every
+# machine. What matters on a container is CreateFiles/Delete/DeleteSubdirectoriesAndFiles/
+# ChangePermissions/TakeOwnership.
+$script:FileWriteMask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
+$script:DirWriteMask = [int]([System.Security.AccessControl.FileSystemRights]'CreateFiles, WriteExtendedAttributes, WriteAttributes, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
+
+function Resolve-AceSid($idr) {
+    if ($null -eq $idr) { return $null }
+    if ($idr -is [System.Security.Principal.SecurityIdentifier]) { return $idr.Value }
+    try { return $idr.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { }
+    # Get-Acl surfaces some identities as a bare string (notably $acl.Owner), which has no
+    # Translate(). Resolve those through NTAccount -- otherwise EVERY path, including
+    # admin-owned ones, reports an unresolvable owner and this refuses on every machine.
+    try { return ([System.Security.Principal.NTAccount]([string]$idr)).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { return $null }
+}
+
+# The first non-privileged write vector on $p, or $null if safe. Checks three things, all
+# ways to replace the launcher that a plain ACE scan misses: an empty Access collection (a
+# NULL DACL grants everyone full control, so "no ACEs" must read as UNSAFE); the OWNER (who
+# holds implicit WRITE_DAC and can rewrite the DACL at will); and Allow ACEs granting
+# write/delete/ownership to a principal outside $allowedSids.
+function Get-NonAdminWriteVector([string]$p, [string[]]$allowedSids) {
+    try { $acl = Get-Acl -LiteralPath $p } catch { return "the ACL of '$p' could not be read" }
+
+    $access = @($acl.Access)
+    if ($access.Count -eq 0) { return "'$p' has a NULL/empty DACL (everyone has full control)" }
+
+    # Ask for the owner AS A SID: $acl.Owner is a string, so translating it directly
+    # is unreliable (see Resolve-AceSid).
+    $ownerSid = $null
+    try { $ownerSid = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value } catch { }
+    if ($null -eq $ownerSid) { $ownerSid = Resolve-AceSid $acl.Owner }
+    if ($null -eq $ownerSid) { return "'$p' has an unresolvable owner ($($acl.Owner))" }
+    if ($allowedSids -notcontains $ownerSid) {
+        return "'$p' is owned by $($acl.Owner), who can rewrite its DACL at will"
+    }
+
+    $mask = if (Test-Path -LiteralPath $p -PathType Container) { $script:DirWriteMask } else { $script:FileWriteMask }
+    foreach ($ace in $access) {
+        if ($ace.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
+        # An inherit-only ACE grants nothing on THIS object; it is a template for children,
+        # where it shows up as a real (inherited) ACE -- and this walk checks those children
+        # in their own right. Not skipping it would flag every volume root, whose default
+        # "Authenticated Users:(OI)(CI)(IO)(M)" ACE is exactly that.
+        if (([int]$ace.PropagationFlags -band [int][System.Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0) { continue }
+        if (([int]$ace.FileSystemRights -band $mask) -eq 0) { continue }
+        $sid = Resolve-AceSid $ace.IdentityReference
+        if ($null -eq $sid) { return "'$p': $($ace.IdentityReference) (unresolvable SID) has '$($ace.FileSystemRights)'" }
+        if ($allowedSids -notcontains $sid) { return "'$p': $($ace.IdentityReference) has '$($ace.FileSystemRights)'" }
+    }
+    return $null
+}
+
+# Walk the launcher AND every ancestor directory: write access to a CONTAINING directory is
+# enough to delete and recreate the launcher whatever its own ACL says.
+function Get-NonAdminWriteVectorForPath([string]$p, [string[]]$allowedSids) {
+    $current = $p
+    while ($current) {
+        $vector = Get-NonAdminWriteVector $current $allowedSids
+        if ($vector) { return $vector }
+        $parent = Split-Path -Parent $current
+        if (-not $parent -or $parent -eq $current) { break }
+        $current = $parent
+    }
+    return $null
+}
+
+$taskSid = $null
+try {
+    $taskSid = (New-Object System.Security.Principal.NTAccount($TaskUser)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+} catch {
+    $taskSid = $null   # unresolvable: allow only the privileged principals (stricter)
+}
+$allowedSids = $script:PrivilegedSids
+if ($taskSid) { $allowedSids = $allowedSids + @($taskSid) }
+
+# On a first install the launcher does not exist yet, so walk its directory instead (a
+# missing file would otherwise read as "ACL could not be read").
+$guardTarget = Join-Path $PSScriptRoot 'core-autostart.cmd'
+if (-not (Test-Path -LiteralPath $guardTarget)) { $guardTarget = $PSScriptRoot }
+$offender = Get-NonAdminWriteVectorForPath $guardTarget $allowedSids
+if ($offender) {
+    throw "Refusing to register a boot task that runs '$(Join-Path $PSScriptRoot 'core-autostart.cmd')' -- " +
+          "$offender. Anyone who can replace that launcher gets code executed as '$TaskUser' at every boot, " +
+          "with the wallet (and, if autounlock is enabled, the DPAPI store holding the wallet passphrase) at " +
+          "its disposal. Install these scripts under an admin-only location (e.g. Program Files), with every " +
+          "parent directory admin-owned, and re-run from there."
 }
 
 # Register-ScheduledTask -Password requires the plaintext. NOTE: PtrToStringBSTR
@@ -131,6 +255,24 @@ try {
     $plainPw = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
 
     $ddQuoted = '"' + $DataDir + '"'
+
+    # Pass -datadir ONLY when it is not the default.
+    #
+    # GetDataDirPath has two branches: with no -datadir it resolves the Windows
+    # default (CSIDL_APPDATA\GridcoinResearch) and CREATES it, applying the
+    # owner-only DACL; with an explicit -datadir it REFUSES to create a missing
+    # directory and exits with "Specified data directory ... does not exist".
+    # Passing the default explicitly therefore takes the one branch that cannot
+    # bootstrap a fresh install -- the core dies at boot before it can create and
+    # protect its own datadir.
+    #
+    # Omitting it is also more robust than baking in a literal path: the daemon
+    # resolves CSIDL_APPDATA from the TASK'S OWN process token, so it is right for
+    # the wallet user even in a task that runs without a loaded profile, and even
+    # when this installer was run by a different (elevated) account.
+    $defaultDataDir    = Join-Path $env:APPDATA 'GridcoinResearch'
+    $useDefaultDataDir = ($DataDir -eq $defaultDataDir)
+    $ddArg             = if ($useDefaultDataDir) { '' } else { ' -datadir="' + ($DataDir -replace '%', '%%') + '"' }
 
     # Core-Start runs through a generated launcher that retries ONCE (after a 2-minute wait) if
     # the daemon exits non-zero -- covering the rare early-boot start failure seen on-device (the
@@ -149,17 +291,26 @@ try {
     # Ascii would replace with '?') and escape any literal % as %%.
     $coreB   = $CorePath -replace '%', '%%'
     $ddB     = $DataDir  -replace '%', '%%'
-    $errLogB = (Join-Path $DataDir 'core-start.err.log') -replace '%', '%%'
-    $daemonCmd = '"' + $coreB + '" -datadir="' + $ddB + '" -multiprocess 2>>"' + $errLogB + '"'
+    # Capture the launcher's stderr OUTSIDE the data directory, in %TEMP%.
+    #
+    # It used to go to <datadir>\core-start.err.log, which forced the launcher to
+    # 'md' the data directory first -- cmd evaluates a 2>> redirect before running
+    # the command, so a missing directory meant the daemon never launched at all.
+    # That pre-creation is now actively harmful: the daemon applies an owner-only
+    # DACL to the data directory ONLY when it creates the directory itself
+    # (util::CreateOwnerOnlyDirectory, create-only by design so a deliberately
+    # widened datadir is never re-tightened). A launcher that made the directory
+    # first left it with default inherited permissions and the daemon then --
+    # correctly -- left it alone. %TEMP% always exists and is writable by the task's
+    # user, so no pre-creation is needed and the daemon gets to create and protect
+    # its own data directory.
+    $errLogB = '%TEMP%\gridcoin-core-start.err.log'
+    $daemonCmd = '"' + $coreB + '"' + $ddArg + ' -multiprocess 2>>"' + $errLogB + '"'
     Set-Content -LiteralPath $launcher -Encoding Oem -Value @(
         '@echo off',
         'rem Gridcoin Core-Start launcher (generated by Install-GridcoinCoreTask.ps1). Starts the',
         'rem multiprocess core; on a non-zero exit, waits 2 minutes and retries once. A clean run',
         'rem blocks until shutdown (exit 0 = no retry). Do not hand-edit -- re-run the installer.',
-        # Ensure the datadir exists first (as the wallet user, so the ACL is right): on a fresh
-        # install it may not exist yet, and cmd would fail the stderr redirect below -- never
-        # launching the daemon -- before the daemon could create it.
-        ('if not exist "' + $ddB + '" md "' + $ddB + '" 2>nul'),
         $daemonCmd,
         'if %ERRORLEVEL% EQU 0 goto end',
         ('echo ==== attempt 1 failed exit %ERRORLEVEL% at %DATE% %TIME%, retrying in 2 min ==== >>"' + $errLogB + '"'),
@@ -169,7 +320,8 @@ try {
     )
 
     $startAction = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\cmd.exe" -Argument ('/c "' + $launcher + '"')
-    $stopAction  = New-ScheduledTaskAction -Execute $CorePath -Argument "-datadir=$ddQuoted stop"
+    $stopArgs    = if ($useDefaultDataDir) { 'stop' } else { "-datadir=$ddQuoted stop" }
+    $stopAction  = New-ScheduledTaskAction -Execute $CorePath -Argument $stopArgs
 
     # Core-Start: long-running headless daemon, no execution-time limit. The start/crash
     # retry lives in the launcher above (1 retry, 2-min wait), NOT here: Task Scheduler's

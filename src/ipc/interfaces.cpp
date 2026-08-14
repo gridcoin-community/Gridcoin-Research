@@ -5,6 +5,7 @@
 #include "interfaces/init.h"
 #include "interfaces/ipc.h"
 #include "ipc/capnp/protocol.h"
+#include "ipc/peercred.h"
 #include "ipc/process.h"
 #include "ipc/protocol.h"
 #include "util.h"
@@ -79,6 +80,34 @@ public:
             fd = m_process->connect(GetDataDir(), address);
         }
         FdGuard guard{fd};
+        // Authenticate the NODE to US before we speak. The cookie is a bearer
+        // token: ClientHandshake's very first act is to hand it to whatever
+        // answered on node.sock. A same-uid process that won the race to bind the
+        // socket would otherwise receive it, and on a first connect the GUI would
+        // silently bind to the impostor's identity token. Checking the peer's uid
+        // here costs one getsockopt and refuses a foreign-uid listener outright.
+        // (Same-uid impostors are not excluded by this -- nothing at the OS level
+        // can distinguish them -- but a failed listenAddress() is now fatal in the
+        // daemon, so the window where node.sock is unowned has been closed too.)
+        //
+        // ENFORCING. An earlier revision used Advisory here and justified it as
+        // defense-in-depth "backstopped by the cookie". That reasoning is circular:
+        // the cookie cannot backstop this check, because the cookie is the very
+        // thing the next call discloses. ClientHandshake hands it to whatever
+        // answered on node.sock, so "we could not determine the peer's uid" has to
+        // abort BEFORE the disclosure, not be logged and stepped over. An
+        // unverifiable listener is exactly the case where sending a bearer token is
+        // least defensible.
+        //
+        // The cost of Enforcing is bounded: CheckPeerCredentials returns true on
+        // WIN32 (no uid to compare), and Darwin was measured to answer on the
+        // connecting side, so this refuses only where the platform can answer and
+        // the answer is wrong or unobtainable.
+        if (!ipc::CheckPeerCredentials(fd, ipc::PeerCredPolicy::Enforcing)) {
+            throw std::runtime_error("The process listening on the multiprocess socket belongs to "
+                                     "a different OS user, or its owner could not be determined; "
+                                     "refusing to send the authentication cookie to it.");
+        }
         auto init = m_protocol->connect(fd, m_exe_name, std::move(on_disconnect));
         guard.release(); // the protocol/stream now owns the fd
         return init;

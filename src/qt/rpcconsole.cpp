@@ -7,6 +7,7 @@
 #include "qt/bantablemodel.h"
 #include "qt/decoration.h"
 #include "guiutil.h"
+#include "util/strencodings.h"
 #endif
 
 #include <QThread>
@@ -160,6 +161,103 @@ bool parseCommandLine(std::vector<std::string> &args, const std::string &strComm
     }
 }
 
+namespace {
+//! Commands whose ARGUMENTS are the secret, so the command line itself must not
+//! be echoed, logged or kept in history. Arguments only: dumpprivkey takes a
+//! public address and returns a key, which is a separate concern, and
+//! importwallet takes a path rather than key material.
+//!
+//! walletpassphrasechange is the sharpest case. Getting the old passphrase wrong
+//! is exactly what makes the call fail, and the failure path is the one that
+//! writes to the log -- carrying the new passphrase with it.
+const std::set<std::string> SENSITIVE_ARG_COMMANDS = {
+    // Carries settings values, and some settings are marked SENSITIVE precisely
+    // because they are credentials -- rpcpassword and rpcuser among them. The RPC
+    // reply masks those, but that does nothing for the copy the console echoes into
+    // the pane and history, or for the verbatim line written to debug.log when the
+    // call fails. Listing the whole command hides ordinary setting changes too;
+    // that is the intended trade, because deciding per-argument here would mean
+    // re-deriving which settings are sensitive in a second place and getting it
+    // wrong silently.
+    "changesettings",
+    "encryptwallet",
+    "importprivkey",
+    "restoreseedphrase",
+    "sethdseed",
+    "signrawtransaction",
+    "signrawtransactionwithkey",
+    "walletpassphrase",
+    "walletpassphrasechange",
+};
+
+//! Best-effort command name for text that parseCommandLine REJECTED, where there
+//! is no parsed argv to consult. Reads the first token, seeing through one layer
+//! of quoting, because a quoted name is how the whitespace-splitting version of
+//! this guard was defeated. Used only on the failure path -- when the parser
+//! succeeds, its argv is authoritative.
+std::string LeadingCommandToken(const QString& command)
+{
+    const std::string s = command.toStdString();
+    std::string::size_type i = 0;
+
+    while (i < s.size() && IsSpace(s[i])) ++i;
+
+    char quote = 0;
+    if (i < s.size() && (s[i] == '"' || s[i] == '\'')) {
+        quote = s[i];
+        ++i;
+    }
+
+    const std::string::size_type start = i;
+    while (i < s.size()) {
+        const char c = s[i];
+        const bool ends = quote ? (c == quote)
+                                : (IsSpace(c) || c == '"' || c == '\'');
+        if (ends) break;
+        ++i;
+    }
+
+    return s.substr(start, i - start);
+}
+
+//! Replace the arguments of a secret-bearing command with a placeholder. The
+//! command still executes with its real arguments; only the copies that are
+//! displayed, logged or remembered are reduced.
+//!
+//! When the line parses, the name is taken from parseCommandLine rather than by
+//! splitting on whitespace, so it sees the command exactly as the dispatcher
+//! will. Splitting naively would leave `"walletpassphrase" secret 60` unredacted
+//! while the parser strips the quotes and runs it -- the wrong way round for a
+//! guard.
+QString RedactSensitiveArgs(const QString& command)
+{
+    std::vector<std::string> args;
+    if (parseCommandLine(args, command.toStdString()) && !args.empty()) {
+        if (!SENSITIVE_ARG_COMMANDS.count(args[0])) return command;
+        return QString::fromStdString(args[0]) + QStringLiteral(" (arguments not shown)");
+    }
+
+    // Unparseable. An earlier revision returned the text verbatim here, reasoning
+    // that it would never dispatch and no command name had been resolved, so there
+    // was nothing to redact. That inspects the wrong property. `walletpassphrase
+    // "secret 60` fails on the unbalanced quote and is returned whole -- writing
+    // the passphrase to the console pane and the Up-arrow history, which is the
+    // precise disclosure this guard exists to prevent. Whether the command would
+    // have run does not matter; the secret is in the text either way.
+    //
+    // So fall back to recognising the leading token. If it names a sensitive
+    // command the arguments are dropped even though they were malformed; the user
+    // still sees which command failed. Text whose first token is not recognised is
+    // returned unchanged, so an ordinary typo is still visible to correct.
+    const std::string token = LeadingCommandToken(command);
+    if (!token.empty() && SENSITIVE_ARG_COMMANDS.count(token)) {
+        return QString::fromStdString(token) + QStringLiteral(" (arguments not shown)");
+    }
+
+    return command;
+}
+} // namespace
+
 void RPCExecutor::request(const QString &command)
 {
     std::vector<std::string> args;
@@ -183,7 +281,11 @@ void RPCExecutor::request(const QString &command)
     }
     else
     {
-        GUILogPrintf("gridcoinresearch:  Handling Error [Request %s]...", command.toStdString());
+        // This line persists: GUILog::LogPrintf reaches LogPrintStr, i.e.
+        // debug.log. A failed command is the common case for the very commands
+        // that carry a secret, so log the name without its arguments.
+        GUILogPrintf("gridcoinresearch:  Handling Error [Request %s]...",
+                     RedactSensitiveArgs(command).toStdString());
         emit reply(RPCConsole::CMD_ERROR, QString::fromStdString(result.output));
     }
 }
@@ -503,12 +605,18 @@ void RPCConsole::on_lineEdit_returnPressed()
 
     if(!cmd.isEmpty())
     {
-        message(CMD_REQUEST, cmd);
+        // The command is dispatched in full, but the pane echo and the history
+        // keep only the redacted form -- the pane ends up in screenshots pasted
+        // into bug reports, and the history is one Up-arrow away for anyone at
+        // the keyboard. This matches how upstream feeds its filtered command to
+        // both sinks.
+        const QString display_cmd = RedactSensitiveArgs(cmd);
+        message(CMD_REQUEST, display_cmd);
         emit cmdRequest(cmd);
         // Remove command, if already in history
-        history.removeOne(cmd);
+        history.removeOne(display_cmd);
         // Append command to history
-        history.append(cmd);
+        history.append(display_cmd);
         // Enforce maximum history size
         while(history.size() > CONSOLE_HISTORY)
             history.removeFirst();

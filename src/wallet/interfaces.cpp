@@ -524,31 +524,41 @@ public:
                               const std::optional<WalletCoinControl>& coin_control,
                               int64_t accepted_fee) override;
 
+    // NOTE: like every other uiInterface forwarder (see node/interfaces.cpp and
+    // gridcoin/interfaces.cpp), these must be wrapped in GuardNotify. They are not
+    // merely GUI conveniences: CWallet emits them from inside state transitions that
+    // are only half-complete at the emission point. CWallet::SetAddressBookName, for
+    // example, updates mapAddressBook, emits NotifyAddressBookChanged, and only THEN
+    // writes the name to the wallet database -- so an unguarded throw here (in
+    // multiprocess, when the GUI has gone away) unwinds before the write and loses
+    // the label permanently. DelAddressBookName has the mirror-image hazard.
+    // boost::signals2 also stops calling the remaining slots once one throws, which
+    // would silently deprive the node-side WalletTxSource of the same notification.
     std::unique_ptr<Handler> handleStatusChanged(StatusChangedFn fn) override
     {
         return MakeSignalHandler(m_wallet->NotifyStatusChanged.connect(
-            [fn = std::move(fn)](CCryptoKeyStore*) { fn(); }));
+            interfaces::GuardNotify([fn = std::move(fn)](CCryptoKeyStore*) { fn(); })));
     }
 
     std::unique_ptr<Handler> handleAddressBookChanged(AddressBookChangedFn fn) override
     {
         return MakeSignalHandler(m_wallet->NotifyAddressBookChanged.connect(
-            [fn = std::move(fn)](CWallet*,
+            interfaces::GuardNotify([fn = std::move(fn)](CWallet*,
                                  const CTxDestination& address,
                                  const std::string& label,
                                  bool is_mine,
                                  const std::string& purpose,
                                  ChangeType status) {
                 fn(EncodeDestination(address), label, is_mine, purpose, status);
-            }));
+            })));
     }
 
     std::unique_ptr<Handler> handleTransactionChanged(TransactionChangedFn fn) override
     {
         return MakeSignalHandler(m_wallet->NotifyTransactionChanged.connect(
-            [fn = std::move(fn)](CWallet*, const uint256& tx_hash, ChangeType status) {
+            interfaces::GuardNotify([fn = std::move(fn)](CWallet*, const uint256& tx_hash, ChangeType status) {
                 fn(tx_hash, status);
-            }));
+            })));
     }
 
 private:
@@ -918,20 +928,64 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
         }
     }
 
-    // Add addresses / update labels that we've sent to the address book
-    for (const WalletSendRecipient& rcp : recipients) {
-        CTxDestination dest = DecodeDestination(rcp.address);
-        {
-            LOCK(m_wallet->cs_wallet);
+    // Add addresses / update labels that we've sent to the address book.
+    //
+    // Two phases, deliberately: decide what needs writing under cs_wallet, then
+    // release it and do the writing. SetAddressBookName() emits
+    // NotifyAddressBookChanged (wallet.cpp), and although it does so outside its
+    // OWN lock scope, calling it from inside this one would put the emission back
+    // under cs_wallet. In the multiprocess build that emission is a blocking proxy
+    // call into the GUI, so a front end that is hung rather than dead would pin
+    // the node's wallet lock for as long as it stays hung -- stalling the stake
+    // miner and every other wallet operation behind it.
+    //
+    // THIS IS NOT A TOCTOU, and the split should not be "fixed" back. Splitting a
+    // check from its write across a dropped lock is normally exactly that bug, so
+    // here is why this instance is not:
+    //
+    //   The VALUE WRITTEN DOES NOT DEPEND ON THE VALUE READ. We write rcp.label,
+    //   which comes from the caller's send request and is fixed before the lock is
+    //   ever taken. The read decides only WHETHER to write, never WHAT. A classic
+    //   TOCTOU needs the write to be derived from -- or conditional on the
+    //   continued truth of -- the observation (read balance, then spend it; stat a
+    //   path, then open it). Neither holds here.
+    //
+    // Both interleavings against a concurrent writer produce exactly what the old
+    // per-recipient locking produced:
+    //
+    //   * We decided to write, someone else writes in between -> we still write
+    //     the user's label. Under the old lock that writer simply landed before or
+    //     after us; last write wins either way, and it is the same last write.
+    //   * We decided to skip (label already matched), someone else changes it ->
+    //     we skip. The old version skipped too, and that writer's value landed
+    //     regardless. Identical end state.
+    //
+    // There is no ordering the dropped lock admits that the held lock excluded.
+    // The only thing genuinely given up is that the address-book map may be
+    // observed mid-update by an unrelated reader between the two phases -- which
+    // was already true, because SetAddressBookName takes and releases cs_wallet
+    // per call, so the old loop was never one atomic transaction across recipients
+    // either.
+    std::vector<std::pair<CTxDestination, std::string>> address_book_updates;
+
+    {
+        LOCK(m_wallet->cs_wallet);
+
+        for (const WalletSendRecipient& rcp : recipients) {
+            CTxDestination dest = DecodeDestination(rcp.address);
 
             auto mi = m_wallet->mapAddressBook.find(dest);
 
             // Check if we have a new address or an updated label
             if (mi == m_wallet->mapAddressBook.end() || mi->second.name != rcp.label)
             {
-                m_wallet->SetAddressBookName(dest, rcp.label);
+                address_book_updates.emplace_back(std::move(dest), rcp.label);
             }
         }
+    }
+
+    for (const auto& [dest, label] : address_book_updates) {
+        m_wallet->SetAddressBookName(dest, label);
     }
 
     SendCoinsResult result;

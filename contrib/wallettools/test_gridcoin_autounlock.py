@@ -58,8 +58,8 @@ class TestConfig(unittest.TestCase):
             au.resolve_connection({"rpcuser": "alice"}, Args())  # no password
 
     def test_resolve_connection_defaults_port_to_mainnet(self):
-        # A packaged gridcoinresearch.conf commonly omits rpcport; default to the
-        # mainnet RPC port like the daemon (and contrib/api-proxy) do.
+        # A packaged gridcoinresearch.conf commonly omits rpcport; with no chain
+        # selector the config IS mainnet, so the mainnet port is the right default.
         c = au.resolve_connection({"rpcuser": "a", "rpcpassword": "b"}, Args())
         self.assertEqual(c["port"], au.DEFAULT_RPC_PORT)
         self.assertEqual(c["port"], 15715)
@@ -68,14 +68,53 @@ class TestConfig(unittest.TestCase):
         with self.assertRaises(ValueError):
             au.resolve_connection({"rpcuser": "a", "rpcpassword": "b", "rpcport": "abc"}, Args())
 
+    def test_default_port_is_chain_aware(self):
+        # A testnet/regtest node whose conf omits rpcport must NOT fall back to the
+        # mainnet port: if the same uid also runs a mainnet node there, the ownership
+        # gate answers "ours" and this wallet's passphrase goes to the OTHER wallet.
+        for conf, expected in (({"testnet": "1"}, 25715),
+                               ({"testnet": ""}, 25715),      # InterpretBool: empty == true
+                               ({"chain": "test"}, 25715),
+                               ({"regtest": "1"}, 35715),
+                               ({"chain": "regtest"}, 35715),
+                               ({"chain": "main"}, 15715),
+                               ({"testnet": "0"}, 15715)):
+            base = {"rpcuser": "a", "rpcpassword": "b"}
+            base.update(conf)
+            self.assertEqual(au.resolve_connection(base, Args())["port"], expected, conf)
+
+    def test_refuses_to_guess_port_on_ambiguous_chain(self):
+        for conf in ({"testnet": "1", "regtest": "1"},   # the core rejects this too
+                     {"testnet": "1", "chain": "main"},
+                     {"chain": "signet"}):               # no default port known here
+            base = {"rpcuser": "a", "rpcpassword": "b"}
+            base.update(conf)
+            with self.assertRaises(ValueError, msg=conf):
+                au.resolve_connection(base, Args())
+
+    def test_explicit_rpcport_wins_over_chain_default(self):
+        c = au.resolve_connection({"rpcuser": "a", "rpcpassword": "b",
+                                   "testnet": "1", "rpcport": "9999"}, Args())
+        self.assertEqual(c["port"], 9999)
+
 
 class TestLoopback(unittest.TestCase):
     def test_loopback_hosts(self):
-        for h in ("127.0.0.1", "::1", "localhost", "LOCALHOST", "127.5.5.5", " 127.0.0.1 "):
+        for h in ("127.0.0.1", "::1", "localhost", "LOCALHOST", "127.5.5.5",
+                  " 127.0.0.1 ", "[::1]"):
             self.assertTrue(au.is_loopback(h), h)
 
     def test_non_loopback_hosts(self):
         for h in ("10.0.0.2", "192.168.1.5", "example.com", "0.0.0.0", "::2"):
+            self.assertFalse(au.is_loopback(h), h)
+
+    def test_dns_name_with_loopback_prefix_is_not_loopback(self):
+        # A '127.'-prefixed DNS NAME resolves off-box. Classified as loopback (as a
+        # string-prefix test does), the gate would check our own port, answer "ours",
+        # and then POST the Basic-auth header and the passphrase to the remote host in
+        # cleartext. Only IP literals may be loopback.
+        for h in ("127.0.0.1.attacker.example", "127.0.0.1.evil.com", "localhost.evil.com",
+                  "127.0.0.1x", "::1.evil.com"):
             self.assertFalse(au.is_loopback(h), h)
 
 
@@ -431,6 +470,58 @@ class TestGate(unittest.TestCase):
         self.assertIn(("walletpassphrase", ["pw", 60, True]), c.calls)
 
 
+class TestGateIsReCheckedBeforeThePassphrase(unittest.TestCase):
+    """The gate must be re-run immediately before the walletpassphrase POST, not just
+    once per poll: every call opens a fresh connection, so a whole getinfo round trip
+    elapses between the ownership check and the only request that carries the secret."""
+
+    def test_owner_change_between_getinfo_and_unlock_sends_nothing(self):
+        c = GateFake()
+        # 'ours' for the pre-poll gate, then 'foreign' when re-checked: the core exited
+        # during the getinfo round trip and a foreign process won the bind race.
+        with mock.patch.object(au, "check_listener_ownership", side_effect=["ours", "foreign"]):
+            new, code = au.run_once(c, "pw", 60, None)
+        self.assertEqual(code, au.EXIT_UNRECOVERABLE)
+        self.assertEqual([m for m, _ in c.calls], ["getinfo"])  # CRUCIAL: no passphrase sent
+        self.assertIsNone(new)  # baseline unchanged, so the next poll retries the unlock
+
+    def test_listener_vanishing_before_unlock_is_transient_and_silent(self):
+        c = GateFake()
+        with mock.patch.object(au, "check_listener_ownership", side_effect=["ours", "none"]):
+            new, code = au.run_once(c, "pw", 60, 999)
+        self.assertEqual(code, au.EXIT_TRANSIENT)
+        self.assertEqual([m for m, _ in c.calls], ["getinfo"])
+        self.assertEqual(new, 999)  # baseline NOT advanced: the unlock still has to happen
+
+    def test_gate_is_consulted_twice_on_the_happy_path(self):
+        c = GateFake()
+        with mock.patch.object(au, "check_listener_ownership", return_value="ours") as chk:
+            new, code = au.run_once(c, "pw", 60, None)
+        self.assertEqual((new, code), (7, au.EXIT_OK))
+        self.assertEqual(chk.call_count, 2)
+
+
+class TestGateFailsClosedOnAMissingAttribute(unittest.TestCase):
+    def test_missing_loopback_attribute_still_gates(self):
+        # A client object without .loopback must be treated as loopback so the gate
+        # RUNS. Reading a missing attribute as "remote" would skip the check entirely.
+        class NoAttrs:
+            port = 15715
+
+            def __init__(self):
+                self.calls = []
+
+            def call(self, method, params):
+                self.calls.append(method)
+                return {"uptime": 1}
+
+        c = NoAttrs()
+        with mock.patch.object(au, "check_listener_ownership", return_value="foreign"):
+            new, code = au.run_once(c, "pw", 60, None)
+        self.assertEqual(code, au.EXIT_UNRECOVERABLE)
+        self.assertEqual(c.calls, [])
+
+
 class TestGatePlatform(unittest.TestCase):
     def test_loopback_without_gate_support_refuses_by_default(self):
         # Simulate Windows: loopback target, platform cannot verify ownership.
@@ -475,21 +566,21 @@ class FakeResp:
 
 class TestRpcClient(unittest.TestCase):
     def _client(self):
-        return au.RpcClient({"host": "127.0.0.1", "port": 1, "user": "u", "password": "p"})
+        return au.RpcClient({"host": "127.0.0.1", "port": 1, "user": "rpcuser", "password": "rpcpassword"})
 
     def test_loopback_flag_on_loopback_host(self):
         self.assertTrue(self._client().loopback)
 
     def test_loopback_flag_off_remote_host(self):
-        c = au.RpcClient({"host": "10.0.0.2", "port": 1, "user": "u", "password": "p"})
+        c = au.RpcClient({"host": "10.0.0.2", "port": 1, "user": "rpcuser", "password": "rpcpassword"})
         self.assertFalse(c.loopback)
 
     def test_ipv6_literal_host_is_bracketed_in_url(self):
-        c = au.RpcClient({"host": "::1", "port": 15715, "user": "u", "password": "p"})
+        c = au.RpcClient({"host": "::1", "port": 15715, "user": "rpcuser", "password": "rpcpassword"})
         self.assertEqual(c._url, "http://[::1]:15715/")
 
     def test_ipv4_host_url_unbracketed(self):
-        c = au.RpcClient({"host": "127.0.0.1", "port": 15715, "user": "u", "password": "p"})
+        c = au.RpcClient({"host": "127.0.0.1", "port": 15715, "user": "rpcuser", "password": "rpcpassword"})
         self.assertEqual(c._url, "http://127.0.0.1:15715/")
 
     def test_httperror_json_body_yields_code_and_message(self):
@@ -572,18 +663,46 @@ class TestRedaction(unittest.TestCase):
         self.assertEqual(au.redact("passphrase=topsecret ok"), "passphrase=<REDACTED> ok")
 
     def test_multiple_secrets_scrubbed(self):
-        au.register_secret("pw123")
-        au.register_secret("rpcpw")
-        self.assertEqual(au.redact("a pw123 b rpcpw c"), "a <REDACTED> b <REDACTED> c")
+        au.register_secret("pw123-long")
+        au.register_secret("rpcpw-long")
+        self.assertEqual(au.redact("a pw123-long b rpcpw-long c"),
+                         "a <REDACTED> b <REDACTED> c")
 
     def test_empty_secret_is_ignored(self):
         au.register_secret("")  # must not turn every char into <REDACTED>
         self.assertEqual(au.redact("abc"), "abc")
 
+    def test_short_secret_is_not_registered(self):
+        # redact() is an unbounded substring replace: registering a 3-char secret
+        # shreds unrelated text, including the security alerts. Such a secret cannot
+        # be meaningfully hidden in prose anyway, so it is skipped (with a warning).
+        with mock.patch.object(au.sys, "stderr", io.StringIO()) as err:
+            au.register_secret("ass")
+        self.assertEqual(au._SECRETS, [])
+        self.assertEqual(au.redact("REFUSING TO SEND CREDENTIALS: walletpassphrase failed"),
+                         "REFUSING TO SEND CREDENTIALS: walletpassphrase failed")
+        self.assertIn("NOT registered for log redaction", err.getvalue())
+
     def test_client_registers_auth_token(self):
         au.RpcClient({"host": "127.0.0.1", "port": 1, "user": "u", "password": "s3cret"})
         token = au.base64.b64encode(b"u:s3cret").decode()
         self.assertEqual(au.redact("auth=" + token), "auth=<REDACTED>")
+
+    def test_warn_redacts_at_the_sink(self):
+        # Pin redaction where it actually protects the operator -- in warn() itself.
+        # Testing redact() alone would still pass if warn() stopped calling it.
+        au.register_secret("hunter2-passphrase")
+        with mock.patch.object(au.sys, "stderr", io.StringIO()) as err:
+            au.warn("walletpassphrase failed for hunter2-passphrase")
+        self.assertNotIn("hunter2-passphrase", err.getvalue())
+        self.assertIn("<REDACTED>", err.getvalue())
+
+    def test_log_redacts_at_the_sink(self):
+        au.register_secret("hunter2-passphrase")
+        with mock.patch.object(au.sys, "stdout", io.StringIO()) as out:
+            au.log("unlocked with hunter2-passphrase")
+        self.assertNotIn("hunter2-passphrase", out.getvalue())
+        self.assertIn("<REDACTED>", out.getvalue())
 
 
 # --- CLI / passphrase / conf -------------------------------------------------
@@ -689,12 +808,26 @@ class BoomClient:
     """Raises a non-RpcError from call() to exercise the resident-loop catch-all."""
     loopback = False
 
+    def __init__(self, message="kaboom"):
+        self._message = message
+
     def call(self, method, params):
-        raise RuntimeError("kaboom")
+        raise RuntimeError(self._message)
+
+
+_PASSPHRASE = "correct-horse-battery-staple"
+_RPCPASSWORD = "rpcpassword-not-short"
 
 
 class TestMain(unittest.TestCase):
-    def _passfile(self, content="pw\n"):
+    def setUp(self):
+        self._saved = list(au._SECRETS)
+        au._SECRETS.clear()
+
+    def tearDown(self):
+        au._SECRETS[:] = self._saved
+
+    def _passfile(self, content=_PASSPHRASE + "\n"):
         f = tempfile.NamedTemporaryFile("w", delete=False)
         f.write(content)
         f.close()
@@ -703,7 +836,7 @@ class TestMain(unittest.TestCase):
 
     def _argv(self, pf, *extra):
         return ["--passphrase-file", pf, "--rpcuser", "u",
-                "--rpcpassword", "p", "--rpcport", "15715", "--once", *extra]
+                "--rpcpassword", _RPCPASSWORD, "--rpcport", "15715", "--once", *extra]
 
     def test_once_returns_ok_on_successful_unlock(self):
         pf = self._passfile()
@@ -716,6 +849,78 @@ class TestMain(unittest.TestCase):
         with mock.patch.object(au, "RpcClient", return_value=BoomClient()):
             rc = au.main(self._argv(pf))  # must NOT raise
         self.assertEqual(rc, au.EXIT_TRANSIENT)
+
+    def test_main_registers_the_passphrase_and_rpcpassword_for_redaction(self):
+        # Without this, an exception carrying either secret would be logged verbatim.
+        pf = self._passfile()
+        with mock.patch.object(au, "RpcClient", return_value=OnceFake()):
+            au.main(self._argv(pf))
+        self.assertIn(_PASSPHRASE, au._SECRETS)
+        self.assertIn(_RPCPASSWORD, au._SECRETS)
+        self.assertEqual(au.redact("pw=" + _PASSPHRASE), "pw=<REDACTED>")
+
+    def test_main_catchall_redacts_the_secret(self):
+        # An unexpected exception whose text embeds the passphrase must reach the log
+        # redacted -- the catch-all is the last line of defence for a stray secret.
+        pf = self._passfile()
+        boom = BoomClient("kaboom while sending " + _PASSPHRASE)
+        with mock.patch.object(au, "RpcClient", return_value=boom), \
+                mock.patch.object(au.sys, "stderr", io.StringIO()) as err:
+            rc = au.main(self._argv(pf))
+        self.assertEqual(rc, au.EXIT_TRANSIENT)
+        self.assertNotIn(_PASSPHRASE, err.getvalue())
+        self.assertIn("<REDACTED>", err.getvalue())
+
+    def test_allow_unverified_listener_defaults_to_false(self):
+        # Pin the DEFAULT itself: flipping the argparse default to True would silently
+        # disable the fail-closed behaviour on every platform that cannot verify the
+        # listener's owner, and no other test would notice.
+        args = au.build_arg_parser().parse_args(["--passphrase-file", "/dev/null"])
+        self.assertFalse(args.allow_unverified_listener)
+        self.assertTrue(au.build_arg_parser()
+                        .parse_args(["--passphrase-file", "/dev/null", "--allow-unverified-listener"])
+                        .allow_unverified_listener)
+
+    def test_main_wires_the_flag_into_the_client(self):
+        # ...and pin that main() actually PASSES it to RpcClient, defaulting to False.
+        pf = self._passfile()
+        seen = {}
+
+        def fake_client(conn, allow_unverified=False):
+            seen["allow_unverified"] = allow_unverified
+            return OnceFake()
+
+        with mock.patch.object(au, "RpcClient", fake_client):
+            au.main(self._argv(pf))
+        self.assertIs(seen["allow_unverified"], False)
+
+        with mock.patch.object(au, "RpcClient", fake_client):
+            au.main(self._argv(pf, "--allow-unverified-listener"))
+        self.assertIs(seen["allow_unverified"], True)
+
+
+class TestPassphraseFilePermissions(unittest.TestCase):
+    def _passfile(self, mode):
+        f = tempfile.NamedTemporaryFile("w", delete=False)
+        f.write(_PASSPHRASE + "\n")
+        f.close()
+        self.addCleanup(os.unlink, f.name)
+        os.chmod(f.name, mode)
+        return f.name
+
+    @unittest.skipUnless(os.name == "posix", "POSIX modes only")
+    def test_group_or_world_readable_warns_but_still_reads(self):
+        path = self._passfile(0o644)
+        with mock.patch.object(au.sys, "stderr", io.StringIO()) as err:
+            self.assertEqual(au.read_passphrase(path), _PASSPHRASE)
+        self.assertIn("group/world-accessible", err.getvalue())
+
+    @unittest.skipUnless(os.name == "posix", "POSIX modes only")
+    def test_owner_only_file_is_silent(self):
+        path = self._passfile(0o400)
+        with mock.patch.object(au.sys, "stderr", io.StringIO()) as err:
+            self.assertEqual(au.read_passphrase(path), _PASSPHRASE)
+        self.assertEqual(err.getvalue(), "")
 
 
 if __name__ == "__main__":

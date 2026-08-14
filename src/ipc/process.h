@@ -33,6 +33,10 @@ public:
 
 //! Constructor for the Process interface.
 std::unique_ptr<Process> MakeProcess();
+
+#ifdef WIN32
+
+#endif // WIN32
 } // namespace ipc
 
 #endif // GRIDCOIN_IPC_PROCESS_H

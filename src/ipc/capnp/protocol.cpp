@@ -9,6 +9,7 @@
 #include "ipc/capnp/init.capnp.proxy.h"
 #include "ipc/context.h"
 #include "ipc/protocol.h"
+#include "ipc/serve_init.h" // IPC_AUTH_DEADLINE
 #include "util.h"
 
 #include <mp/proxy-io.h>
@@ -101,6 +102,28 @@ void IpcLogFn(mp::LogMessage message)
     }
 }
 
+//! Logging options for the mp event loop.
+//!
+//! mp's Trace level is not a verbosity dial. It emits the full request and
+//! response payload of every IPC call (proxy-types.h "request data:" /
+//! "response data:"), so on the wallet interfaces it carries whatever the caller
+//! passed -- passphrases and seed phrases included. LogOptions::log_level
+//! defaults to Log::Trace, meaning everything, and Logger::operator<< tests
+//! enabled() before appending to its buffer, so raising the floor stops the
+//! payload being serialised at all rather than formatting it and discarding it.
+//!
+//! The floor is deliberately NOT a BCLog category. BCLog::ALL is ~0, so -debug=1
+//! and -debug=all would switch payload dumping on -- and those are exactly what
+//! we ask people to run when they report a bug, which is also when they are most
+//! likely to send us the log. Turning this on takes -ipclogtrace and nothing
+//! else, so no general-purpose debug flag can reach it by accident.
+mp::LogOptions MakeIpcLogOptions()
+{
+    mp::LogOptions opts{mp::LogFn{IpcLogFn}};
+    opts.log_level = gArgs.GetBoolArg("-ipclogtrace", false) ? mp::Log::Trace : mp::Log::Debug;
+    return opts;
+}
+
 //! Invoke a caller-supplied disconnect callback with a guard. It runs on the
 //! event-loop thread, so a throw would unwind through libmultiprocess's task set
 //! and terminate the process; contain and log it instead.
@@ -156,7 +179,8 @@ public:
         return client;
     }
 
-    void listen(int listen_fd, const char* exe_name, interfaces::MakeServeInitFn make_init) override
+    void listen(int listen_fd, const char* exe_name, interfaces::MakeServeInitFn make_init,
+                std::chrono::seconds auth_deadline) override
     {
         startLoop(exe_name);
         if (::listen(listen_fd, /*backlog=*/5) != 0) {
@@ -175,12 +199,17 @@ public:
         // InitImpl (interfaces::Init) is specified explicitly: it cannot be deduced
         // from the lambda, which converts to the std::function<...> parameter only
         // once the parameter type is known.
+        // The single slot is why the deadline matters: accept() is not re-armed
+        // while it is occupied, so an unauthenticated squatter is a denial of
+        // service against the real GUI until something reclaims the slot.
         mp::ListenConnectionsFactory<messages::Init, interfaces::Init>(
             *m_loop, listen_fd,
             [make_init = std::move(make_init)](int peer_fd) -> std::shared_ptr<interfaces::Init> {
                 return make_init(peer_fd); // unique_ptr -> shared_ptr; null => reject
             },
-            /*max_connections=*/1);
+            /*max_connections=*/1,
+            [](interfaces::Init& init) { return init.isAuthenticated(); },
+            auth_deadline);
     }
 
     void disconnectIncoming() override
@@ -209,7 +238,7 @@ public:
         m_loop_thread = std::thread([&] {
             try {
                 RenameThread("capnp-loop");
-                m_loop.emplace(exe_name, mp::LogFn{IpcLogFn}, &m_context);
+                m_loop.emplace(exe_name, MakeIpcLogOptions(), &m_context);
                 m_loop_ref.emplace(*m_loop);
             } catch (...) {
                 // Surface a construction failure to the waiting thread instead of

@@ -50,8 +50,8 @@ struct CursorDelta {
     enum Type { Reset, Insert, Remove, Change } type;
     int first;
     int count;
-    //! Insert only: the ABSOLUTE record indices of the inserted rows, captured at
-    //! the moment this delta was emitted.
+    //! Insert and Change: the ABSOLUTE record indices of the affected rows,
+    //! captured at the moment this delta was emitted.
     //!
     //! A single apply* call can emit several deltas, each against a different
     //! intermediate state of view_index (a two-part coinstake inserts one part at
@@ -62,7 +62,8 @@ struct CursorDelta {
     //! when a later delta shrank the served window past this coordinate (#3257
     //! review; the Overview half of #3101). Capturing here makes the delta
     //! self-describing, so nothing downstream has to re-derive a stale position.
-    //! Empty for Reset/Remove/Change, none of which carry records.
+    //! Also set for Change (one row), so the store can sample its content at
+    //! emission. Empty for Reset/Remove, neither of which carries records.
     std::vector<std::size_t> rows;
 };
 

@@ -50,6 +50,9 @@
 #include "decoration.h"
 
 #include <atomic>
+// Not inside the WIN32 guard below: the teardown join uses QThreadPool on every
+// platform, and nothing else on this file's include path pulls it in.
+#include <QThreadPool>
 #ifndef WIN32
 #include <QSocketNotifier>
 #include <fcntl.h>
@@ -300,12 +303,21 @@ static void DebugMessageHandler(QtMsgType type, const QMessageLogContext& contex
     }
 }
 
+//! Defined below (it needs the log-archive thread handle). Declared here because
+//! handleRunawayException's exit(1) runs static destructors, and destroying a
+//! still-joinable std::thread calls std::terminate.
+static void JoinGuiArchiveThread();
+
 /* Handle runaway exceptions. Shows a message box with the problem and quits the program.
  */
 static void handleRunawayException(std::exception *e)
 {
     PrintExceptionContinue(e, "Runaway exception");
     QMessageBox::critical(nullptr, "Runaway exception", BitcoinGUI::tr("A fatal error occurred. Gridcoin can no longer continue safely and will quit.") + QString("\n") + QString::fromStdString(strMiscWarning));
+    // exit() runs static destructors, so the log-archive thread must be reaped
+    // first: ~std::thread on a joinable thread is std::terminate, which would turn
+    // this reported-and-explained fatal error into a bare SIGABRT.
+    JoinGuiArchiveThread();
     exit(1);
 }
 
@@ -313,15 +325,34 @@ static void handleRunawayException(std::exception *e)
 //! many proxy calls fail in quick succession while the connection tears down.
 static std::atomic<bool> g_daemon_connection_lost{false};
 
+//! True when an exception's text is libmultiprocess's "this connection is gone"
+//! raise (what Gridcoin's IpcLogFn turns into a std::runtime_error). Defined once
+//! so every place that has to distinguish "the daemon went away" from "a real
+//! bug" -- GridcoinApplication::notify() and the try/catch around the whole GUI
+//! lifetime in StartGridcoinQt() -- tests the same substrings and cannot drift.
+static bool IsDaemonDisconnectMessage(const std::string& msg)
+{
+    return msg.find("interrupted by disconnect") != std::string::npos
+        || msg.find("called after disconnect") != std::string::npos;
+}
+
 //! Post a graceful, popup-free GUI quit to the Qt main thread when the node
 //! connection is lost -- the same path a core-initiated shutdown takes
 //! (QueueShutdown / requestQuit). Deliberately NO modal dialog: a modal would
-//! hang an unattended or remote GUI. Idempotent and safe if the QCoreApplication
-//! is already gone.
+//! hang an unattended or remote GUI. Safe if the QCoreApplication is already gone.
 static void QuitOnDaemonConnectionLost(const char* reason)
 {
-    if (g_daemon_connection_lost.exchange(true)) return;
-    GUILogPrintf("IPC: %s; closing the GUI", reason);
+    // The LOG line is one-shot -- a tearing-down connection fails many proxy calls
+    // in quick succession and one line is enough -- but the POST is not. The
+    // queued requestQuit is the only thing that ends the event loop, so making it
+    // one-shot would make the very first post a single point of failure: posted
+    // before exec() starts, or while a nested event loop (a modal, a progress
+    // dialog) owns the stack, it can be consumed without ending the outer loop and
+    // nothing would ever retry it. Re-posting on every call is idempotent
+    // (requestQuit is), and costs nothing once the loop is actually gone.
+    if (!g_daemon_connection_lost.exchange(true)) {
+        GUILogPrintf("IPC: %s; closing the GUI", reason);
+    }
     if (QCoreApplication* qapp = QCoreApplication::instance()) {
         QMetaObject::invokeMethod(qapp, [] { BitcoinGUI::requestQuit(); }, Qt::QueuedConnection);
     }
@@ -418,9 +449,19 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
         // The daemon reports NO wallet identity though a binding exists here (a
         // downgrade signal -- e.g. the node's UUID could not be minted). Never
         // erase the existing binding by persisting empty; keep it armed so a later
-        // real token is still checked. Do not silently auto-trust this away, even
-        // under -autotrustidentity (that flag accepts a *changed* wallet, not the
-        // loss of the identity we bound to).
+        // real token is still checked.
+        //
+        // -autotrustidentity suppresses the prompt here too. It has to: the flag's
+        // whole purpose is unattended starts, and refusing to start when nobody can
+        // click a button would be a worse failure than the one it is guarding
+        // against. Refusing here would also be incoherent -- the same flag already
+        // accepts a *changed* wallet silently in the Mismatch arm above, which is
+        // the strictly stronger concession.
+        //
+        // What the flag does NOT do here is rebind: Mismatch persists the new token,
+        // this arm deliberately persists nothing. The binding survives the session,
+        // so the guard re-arms the moment the node reports a real token again. Only
+        // this session's verification is given up, and the WARN says so.
         if (autotrust) {
             GUILogPrintf("WARN: IPC: the daemon reports no wallet identity though a binding exists; "
                          "-autotrustidentity set -> proceeding, keeping the existing binding");
@@ -486,10 +527,58 @@ public:
             //       GUI is tearing down and further proxy calls will keep throwing,
             //       so any event-handler exception in that state is disconnect fallout.
             const std::string msg{e.what()};
-            if (g_daemon_connection_lost.load()
-                || msg.find("interrupted by disconnect") != std::string::npos
-                || msg.find("called after disconnect") != std::string::npos) {
+            if (IsDaemonDisconnectMessage(msg)) {
                 QuitOnDaemonConnectionLost("a GUI call was interrupted by the daemon disconnecting");
+                return true;
+            }
+            if (g_daemon_connection_lost.load()) {
+                // ARM (b) -- STATE-BASED, and deliberately broader than arm (a).
+                //
+                // This matches on the GUI already knowing the connection is lost,
+                // NOT on what was thrown. So it necessarily also catches unrelated
+                // exceptions that happen to be raised in that window. That is a
+                // real trade-off and it was made knowingly; the reasoning, in full,
+                // because the alternative looks more "correct" at a glance:
+                //
+                // WHY NOT SURFACE IT (route to handleRunawayException instead)?
+                // Two independent reasons, either sufficient on its own:
+                //   1. handleRunawayException raises a MODAL. On a headless,
+                //      remote, or unattended front end -- exactly the deployments
+                //      the multiprocess split exists to serve -- a modal nobody
+                //      can dismiss hangs the process forever. A GUI whose node has
+                //      died must exit, not wait for a click.
+                //   2. handleRunawayException then calls exit(1), which terminates
+                //      WITHOUT unwinding while the capnp event-loop thread is still
+                //      running. That is its own crash surface, and it is strictly
+                //      worse than the clean quit below.
+                //
+                // WHY MATCH ON STATE RATHER THAN ONLY ON THE MESSAGE (arm (a))?
+                // libmultiprocess's raise text is not a stable contract -- it is a
+                // log string that upstream may reword at any time. Depending on it
+                // alone would mean a future subtree update silently converts every
+                // disconnect into reason 1 above. Arm (a) is the precise test; arm
+                // (b) is the backstop that keeps the failure mode safe when the
+                // precise test stops matching.
+                //
+                // WHAT WE GIVE UP, AND WHY IT IS ACCEPTABLE: a genuine bug thrown
+                // in this window does not reach handleRunawayException. It is NOT
+                // lost, though -- it is logged below at the DEFAULT level (not a
+                // debug category), so it appears in every user's debug.log without
+                // any flag. And the window is small and one-way: it opens only once
+                // the daemon is already gone and the GUI is committed to shutting
+                // down, so there is no user-visible session left to protect. Same
+                // reasoning as interfaces::GuardNotify (src/interfaces/handler.cpp),
+                // which draws the identical line for notification callbacks.
+                //
+                // If you are tempted to narrow this: re-read reason 1. Narrowing
+                // trades a logged-but-swallowed bug for a front end that can hang
+                // unattended, which is the worse failure.
+                GUILogPrintf("WARN: %s: swallowed a non-disconnect exception raised after the "
+                             "daemon connection was lost: %s", __func__, msg);
+                // Re-post the quit as well: this arm only runs while the GUI is
+                // supposed to be shutting down, so a lost first post must not
+                // leave it running.
+                QuitOnDaemonConnectionLost("a GUI event handler threw after the daemon disconnected");
                 return true;
             }
             handleRunawayException(&e);
@@ -511,6 +600,10 @@ public:
 //! its core keeps running under systemd -- hits the default disposition and
 //! hard-terminates the GUI with no teardown or final log flush.
 static int g_signal_pipe[2] = {-1, -1};
+//! The notifier that drains the pipe. Held so the teardown below can disable and
+//! destroy it before the read end is closed (a QSocketNotifier left watching a
+//! closed -- or worse, reused -- descriptor is undefined behavior).
+static QSocketNotifier* g_signal_notifier = nullptr;
 extern "C" void GuiTerminationSignalHandler(int)
 {
     const char byte = 0;
@@ -545,8 +638,8 @@ static void InstallGuiTerminationHandler(QCoreApplication& app)
         g_signal_pipe[0] = g_signal_pipe[1] = -1;
         return;
     }
-    auto* notifier = new QSocketNotifier(g_signal_pipe[0], QSocketNotifier::Read, &app);
-    QObject::connect(notifier, &QSocketNotifier::activated, &app, [] {
+    g_signal_notifier = new QSocketNotifier(g_signal_pipe[0], QSocketNotifier::Read, &app);
+    QObject::connect(g_signal_notifier, &QSocketNotifier::activated, &app, [] {
         char buf;
         while (::read(g_signal_pipe[0], &buf, 1) > 0) { /* drain */ }
         GUILogPrintf("IPC: received a termination signal; closing the GUI");
@@ -559,7 +652,64 @@ static void InstallGuiTerminationHandler(QCoreApplication& app)
     ::sigaction(SIGTERM, &sa, nullptr);
     ::sigaction(SIGINT, &sa, nullptr);
 }
+//! Undo InstallGuiTerminationHandler: restore the DEFAULT SIGTERM/SIGINT
+//! disposition and tear the self-pipe down. This must run the moment app.exec()
+//! returns. sigaction() replaces the default disposition permanently, but the only
+//! thing that acts on the delivered signal is a QSocketNotifier -- and a notifier
+//! stops firing when the event loop it belongs to ends. Leaving the handler
+//! installed past exec() therefore does not make teardown interruptible, it makes
+//! it UNINTERRUPTIBLE: both signals get written into a pipe nobody reads, and if
+//! teardown blocks (say, joining a worker against a wedged daemon) only SIGKILL
+//! can stop the process -- strictly worse than the default disposition this
+//! feature replaced. Idempotent, and a no-op when installation never happened.
+static void RemoveGuiTerminationHandler()
+{
+    if (g_signal_pipe[0] == -1 && g_signal_pipe[1] == -1) return;
+
+    // Disarm FIRST, so a signal racing this teardown takes the default action
+    // rather than write()ing to a descriptor that is about to be closed (and
+    // possibly reused by an unrelated open() during the rest of teardown).
+    struct sigaction sa = {};
+    sa.sa_handler = SIG_DFL;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    ::sigaction(SIGTERM, &sa, nullptr);
+    ::sigaction(SIGINT, &sa, nullptr);
+
+    if (g_signal_notifier) {
+        g_signal_notifier->setEnabled(false);
+        delete g_signal_notifier; // on the GUI thread; also unparents it from `app`
+        g_signal_notifier = nullptr;
+    }
+
+    ::close(g_signal_pipe[1]);
+    ::close(g_signal_pipe[0]);
+    g_signal_pipe[0] = g_signal_pipe[1] = -1;
+}
+#else
+//! Windows installs no POSIX signal handler (WinShutdownMonitor handles WM_CLOSE),
+//! so there is nothing to restore -- but the call site stays unconditional.
+static void RemoveGuiTerminationHandler() {}
 #endif // !WIN32
+
+//! The multiprocess GUI's log-archive worker (see the timer in StartGridcoinQt).
+//! At most one pass ever runs -- g_gui_archive_running is the gate -- so a single
+//! handle is enough. It is deliberately JOINABLE rather than detached: archive()
+//! does a close-rename-reopen plus gzip, so a process exit landing in the middle
+//! of one leaves the GUI log half-renamed. File scope so the teardown at the end
+//! of StartGridcoinQt can reap it; the monolithic build never starts one, leaving
+//! this a permanent no-op there.
+static std::atomic<bool> g_gui_archive_running{false};
+static std::thread g_gui_archive_thread;
+
+//! Reap the log-archive worker. Safe to call more than once and when none was ever
+//! started; must be called on a path that runs before the process exits.
+static void JoinGuiArchiveThread()
+{
+    if (g_gui_archive_thread.joinable()) {
+        g_gui_archive_thread.join();
+    }
+}
 
 #ifndef BITCOIN_QT_TEST
 int main(int argc, char *argv[])
@@ -1169,33 +1319,39 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             // still compressing. The GUI owns this file exclusively, so the
             // close-rename-reopen is safe on every platform. Timer parented to
             // `app`, so it lives for the run.
-            static std::atomic<bool> gui_archive_running{false};
             QTimer* logArchiveTimer = new QTimer(&app);
             QObject::connect(logArchiveTimer, &QTimer::timeout, [] {
                 bool expected = false;
-                if (!gui_archive_running.compare_exchange_strong(expected, true)) {
+                if (!g_gui_archive_running.compare_exchange_strong(expected, true)) {
                     return;  // a previous archive pass is still running
                 }
                 try {
-                    std::thread([] {
+                    // Reap the previous pass before reusing the handle. The gate
+                    // above proves it has finished its work, but its std::thread
+                    // may not have exited yet -- and assigning over a joinable
+                    // std::thread calls std::terminate. This join is therefore
+                    // effectively free (it is not the 5-minute-old archive being
+                    // waited on, only the last few instructions of its thread).
+                    JoinGuiArchiveThread();
+                    g_gui_archive_thread = std::thread([] {
                         RenameThread("gui-log-archive");
                         try {
                             fs::path plogfile_out;
                             LogInstance().archive(false, plogfile_out);
                         } catch (const std::exception& e) {
-                            // A throw here would terminate the detached thread (and the
+                            // A throw here would terminate the thread (and the
                             // process); contain it. The logger is left valid (the file is
                             // reopened before the cleanup step); the next tick retries.
                             GUILogPrintf("WARNING: GUI log archive pass failed: %s", e.what());
                         }
-                        gui_archive_running = false;
-                    }).detach();
+                        g_gui_archive_running = false;
+                    });
                 } catch (const std::exception& e) {
                     // std::thread construction can throw (e.g. resource exhaustion).
                     // Reset the guard so a later tick can retry, and don't let it
                     // escape the Qt slot (which would abort the GUI).
                     GUILogPrintf("WARNING: could not start GUI log archive thread: %s", e.what());
-                    gui_archive_running = false;
+                    g_gui_archive_running = false;
                 }
             });
             logArchiveTimer->start(300000);  // 5 minutes, matching the node's schedule
@@ -1352,6 +1508,12 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 #endif
                 app.exec();
 
+                // Give SIGTERM/SIGINT their teeth back immediately. The notifier
+                // that consumed the self-pipe only runs inside the event loop, so
+                // from here on the installed handler would silently absorb both
+                // signals for the whole of teardown -- see RemoveGuiTerminationHandler.
+                RemoveGuiTerminationHandler();
+
                 // Stop the GUI-process-local URI-listener thread now that the
                 // event loop has returned (it no longer reads the core shutdown
                 // state; see qtipcserver ipcShutdown()).
@@ -1368,6 +1530,12 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // above enforces the same on the exception path; this explicit
                 // call then becomes an idempotent no-op for the guard.
                 window.setWalletModel(nullptr);
+                // Clear the MRC model BEFORE mrcModel (a stack object in this
+                // block) is destroyed: BitcoinGUI and OverviewPage each keep a raw
+                // copy, and OverviewPage::onMRCRequestClicked only checks its copy
+                // for null -- so without this detach the pointer stays non-null and
+                // points at freed memory for the rest of the window's life.
+                window.setMRCModel(nullptr);
                 window.setResearcherModel(nullptr);
                 // Clear the voting model BEFORE the enclosing block exits and
                 // destroys the stack-allocated VotingModel: this propagates to
@@ -1379,6 +1547,20 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // model holds a reference to it, so it must be torn down first.
                 window.setPSGTPoolContext(nullptr);
                 guiref = nullptr;
+
+                // Drain any still-running pooled worker BEFORE the interfaces built
+                // from this connection are destroyed. The About dialog's version
+                // check runs on the global QThreadPool and dereferences
+                // interfaces::Node; it is deliberately NOT joined when that dialog
+                // closes (that would freeze the GUI thread for the libcurl timeout on
+                // an ordinary close -- see ~AboutDialog), so this is the point where
+                // it has to be reaped.
+                //
+                // MUST be inside this block: `node` and the other interfaces are
+                // declared here and destroyed at the closing brace below, so joining
+                // after it would join AFTER the worker's Node is already gone --
+                // which is the exact use-after-free this is here to prevent.
+                QThreadPool::globalInstance()->waitForDone();
             }
             // Shut down the core and its threads (but don't exit Bitcoin-Qt
             // here). Only in the monolithic build: there the core runs in this
@@ -1396,10 +1578,44 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     }
     catch (std::exception& e)
     {
-        handleRunawayException(&e);
+        // Everything between `BitcoinGUI window;` above and app.exec() -- and the
+        // whole teardown block after exec() returns -- runs OUTSIDE
+        // GridcoinApplication::notify(), so a node that vanishes there lands here
+        // instead of on the silent-quit route. Apply the same test notify() does:
+        // a lost daemon connection must never raise a modal (it would hang an
+        // unattended or remote GUI forever) and must never take
+        // handleRunawayException's exit(1), which skips unwinding while the capnp
+        // loop thread is still live. Fall through to the ordinary return below
+        // instead -- the same clean exit the on_disconnect path produces.
+        // The `|| g_daemon_connection_lost` half is the same state-based backstop
+        // as arm (b) in GridcoinApplication::notify() above, and carries the same
+        // trade-off: once the connection is known lost, an unrelated exception
+        // raised here is logged and swallowed rather than surfaced. See the long
+        // comment at that arm for why surfacing is the worse option (modal on an
+        // unattended front end; exit(1) without unwinding while the capnp loop
+        // thread is live) and why matching on state is necessary at all
+        // (libmultiprocess's raise text is not a stable contract).
+        //
+        // ONE DIFFERENCE WORTH KNOWING: this path falls through to the ordinary
+        // return below, so the process exits EXIT_SUCCESS. That is intentional --
+        // "the node this GUI was attached to went away" is a normal, expected end
+        // to a multiprocess GUI session, not a failure of the GUI, and a supervisor
+        // restarting on non-zero would flap. The consequence is that a real bug
+        // caught by the state arm also exits 0; the WARN in the log is what
+        // distinguishes the two, not the exit code.
+        RemoveGuiTerminationHandler(); // no-op if exec() already did it
+        if (IsDaemonDisconnectMessage(e.what()) || g_daemon_connection_lost.load()) {
+            GUILogPrintf("IPC: the daemon connection was lost outside the GUI event loop "
+                         "(startup or teardown): %s; exiting cleanly", std::string(e.what()));
+            QuitOnDaemonConnectionLost("a GUI call outside the event loop was interrupted "
+                                       "by the daemon disconnecting");
+        } else {
+            handleRunawayException(&e);
+        }
     }
     catch (...)
     {
+        RemoveGuiTerminationHandler();
         handleRunawayException(nullptr);
     }
 
@@ -1408,6 +1624,10 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     threads->removeAll();
     threads.reset();
 
+    // Reap the GUI log-archive worker (multiprocess only). It is the one thread
+    // this process starts that nothing else waits on, and returning from here
+    // while it is mid close-rename-reopen would leave the log half-archived.
+    JoinGuiArchiveThread();
 
     return EXIT_SUCCESS;
 }

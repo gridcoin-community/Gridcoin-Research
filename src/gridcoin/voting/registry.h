@@ -242,7 +242,27 @@ public:
     using PollMapByTitle = std::map<std::string, PollReference>;
     using PollMapByTxid = std::map<uint256, PollReference*>;
 
-    CCriticalSection cs_poll_registry;  //!< Lock for poll registry.
+    //!
+    //! \brief Lock for poll registry.
+    //!
+    //! STATIC, and that is load-bearing for the thread-safety annotations rather
+    //! than a statement about instances (there is exactly one registry —
+    //! GetPollRegistry() — and never has been another).
+    //!
+    //! Sequence and Iterator are nested classes that do not own the lock, so their
+    //! EXCLUSIVE_LOCKS_REQUIRED clauses have to name it through the enclosing
+    //! class. Clang's analyzer can only resolve that to a single, unambiguous
+    //! object if the member is static; while it was non-static the annotation
+    //! resolved to an unmatchable "some instance's cs_poll_registry", and a caller
+    //! that correctly held GetPollRegistry().cs_poll_registry was reported as NOT
+    //! holding it. That false positive is why the requirements used to live only
+    //! on the out-of-line definitions in registry.cpp, where nothing outside the
+    //! translation unit ever saw them — so no caller was ever checked, which is
+    //! how an unlocked traversal reached production (VotingManagerImpl::
+    //! latestActivePollTime).
+    //!
+    //! Not `mutable`: a static member is not part of any instance's constness.
+    static CCriticalSection cs_poll_registry;
 
     //!
     //! \brief A traversable, immutable sequence of the polls in the registry.
@@ -273,22 +293,22 @@ public:
                 BaseIterator iter,
                 BaseIterator end,
                 const FilterFlag flags,
-                const int64_t now);
+                const int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Initialize an iterator for the end of the sequence.
             //!
-            Iterator(BaseIterator end);
+            Iterator(BaseIterator end) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Get the poll reference at the current position.
             //!
-            const PollReference& Ref() const;
+            const PollReference& Ref() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Load the poll at the current position from disk.
             //!
-            PollOption TryPollFromDisk() const;
+            PollOption TryPollFromDisk() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Get a reference to the current position.
@@ -307,24 +327,24 @@ public:
             //!
             //! \brief Advance the current position.
             //!
-            Iterator& operator++();
+            Iterator& operator++() EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Advance the current position.
             //!
-            Iterator operator++(int);
+            Iterator operator++(int) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Determine whether the item at the current position is
             //! equal to the specified position.
             //!
-            bool operator==(const Iterator& other) const;
+            bool operator==(const Iterator& other) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Determine whether the item at the current position is
             //! not equal to the specified position.
             //!
-            bool operator!=(const Iterator& other) const;
+            bool operator!=(const Iterator& other) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
         private:
             BaseIterator m_iter GUARDED_BY(cs_poll_registry); //!< The current position.
@@ -336,7 +356,7 @@ public:
             //! \brief Advance the iterator to the next item that matches the
             //! configured filters.
             //!
-            void SeekNextMatch();
+            void SeekNextMatch() EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
         }; // Iterator
 
         //!
@@ -345,14 +365,14 @@ public:
         //! \param polls The set of poll references in the registry.
         //! \param flags Attributes to filter polls by.
         //!
-        Sequence(const PollMapByTitle& polls, const FilterFlag flags = NO_FILTER);
+        Sequence(const PollMapByTitle& polls, const FilterFlag flags = NO_FILTER) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
         //!
         //! \brief Set the attributes to filter polls by.
         //!
         //! \return A new sequence for the specified poll filters.
         //!
-        Sequence Where(const FilterFlag flags) const;
+        Sequence Where(const FilterFlag flags) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
         //!
         //! \brief Set whether the sequence skips finished polls.
@@ -361,17 +381,17 @@ public:
         //!
         //! \return A new sequence for the specified poll status filters.
         //!
-        Sequence OnlyActive(const bool active_only = true) const;
+        Sequence OnlyActive(const bool active_only = true) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
         //!
         //! \brief Returns an iterator to the beginning.
         //!
-        Iterator begin() const;
+        Iterator begin() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
         //!
         //! \brief Returns an iterator to the end.
         //!
-        Iterator end() const;
+        Iterator end() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     private:
         const PollMapByTitle& m_polls GUARDED_BY(cs_poll_registry) ; //!< Poll references in the registry.
@@ -384,7 +404,7 @@ public:
     //! \return A traversable type that iterates over the poll references in
     //! the registry and reads poll objects from disk.
     //!
-    const Sequence Polls() const;
+    const Sequence Polls() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Get the most recent poll submitted to the network.
@@ -392,7 +412,7 @@ public:
     //! \return Points to a poll object or \c nullptr when no recent polls
     //! exist.
     //!
-    const PollReference* TryLatestActive() const;
+    const PollReference* TryLatestActive() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Get the poll with the specified transaction ID.
@@ -402,7 +422,7 @@ public:
     //! \return Points to a poll object or \c nullptr when no poll exists for
     //! the supplied transaction hash.
     //!
-    const PollReference* TryByTxid(const uint256 txid) const;
+    const PollReference* TryByTxid(const uint256 txid) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Get the poll with the specified title.
@@ -412,7 +432,7 @@ public:
     //! \return Points to a poll object or \c nullptr when no poll contains a
     //! matching title.
     //!
-    const PollReference* TryByTitle(const std::string& title) const;
+    const PollReference* TryByTitle(const std::string& title) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Get an existing poll in the registry, or if not found, demand load a
@@ -518,7 +538,7 @@ private:
     //! \return Points to a poll object or \c nullptr when no poll contains a
     //! matching title.
     //!
-    PollReference* TryBy(const std::string& title);
+    PollReference* TryBy(const std::string& title) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Get the poll with the specified title.
@@ -528,7 +548,7 @@ private:
     //! \return Points to a poll object or \c nullptr when no poll exists for
     //! the supplied transaction hash.
     //!
-    PollReference* TryBy(const uint256 txid);
+    PollReference* TryBy(const uint256 txid) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Register a poll from contract data.

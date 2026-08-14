@@ -35,17 +35,16 @@ BOOST_AUTO_TEST_CASE(serve_init_gates_everything_on_authentication)
     id.network = "main";
     auto serve = ipc::MakeServeInit(std::make_unique<StubInit>(), "s3cr3t-cookie", id);
 
-    // Pre-auth: nothing is served.
+    // Pre-auth: nothing is served, and the connection reports itself unauthenticated
+    // (which is what the listener's deadline consults).
+    BOOST_CHECK(!serve->isAuthenticated());
     BOOST_CHECK_THROW(serve->getBuildInfo(), std::exception);
     BOOST_CHECK_THROW(serve->getIdentity(), std::exception);
     BOOST_CHECK_THROW(serve->isCoreReady(), std::exception);
 
-    // Wrong cookie: authenticate() reports false and the session stays gated.
-    BOOST_CHECK(!serve->authenticate("wrong-cookie"));
-    BOOST_CHECK_THROW(serve->getBuildInfo(), std::exception);
-
     // Correct cookie: authenticate() succeeds and the gate opens.
     BOOST_CHECK(serve->authenticate("s3cr3t-cookie"));
+    BOOST_CHECK(serve->isAuthenticated());
     BOOST_CHECK_NO_THROW(serve->getBuildInfo());
     BOOST_CHECK(serve->isCoreReady());
 
@@ -53,6 +52,50 @@ BOOST_AUTO_TEST_CASE(serve_init_gates_everything_on_authentication)
     const interfaces::NodeIdentity served = serve->getIdentity();
     BOOST_CHECK_EQUAL(served.identity_token, "expected-token");
     BOOST_CHECK_EQUAL(served.network, "main");
+}
+
+// One strike: a wrong cookie latches the connection permanently unauthenticated,
+// so it cannot be used as a guessing oracle and cannot go on holding the node's
+// single connection slot in the hope of getting it right. The listener's
+// authentication deadline then reclaims the slot. A legitimate GUI presents one
+// cookie and gives up on rejection, so it never sees this.
+BOOST_AUTO_TEST_CASE(serve_init_wrong_cookie_latches_the_connection)
+{
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    auto serve = ipc::MakeServeInit(std::make_unique<StubInit>(), "s3cr3t-cookie", id);
+
+    BOOST_CHECK(!serve->authenticate("wrong-cookie"));
+    BOOST_CHECK(!serve->isAuthenticated());
+    BOOST_CHECK_THROW(serve->getBuildInfo(), std::exception);
+
+    // The RIGHT cookie is now refused too: retrying on this connection is not a
+    // path back in. This is the assertion that distinguishes a latch from merely
+    // "authenticate() returned false".
+    BOOST_CHECK(!serve->authenticate("s3cr3t-cookie"));
+    BOOST_CHECK(!serve->isAuthenticated());
+    BOOST_CHECK_THROW(serve->getBuildInfo(), std::exception);
+    BOOST_CHECK_THROW(serve->isCoreReady(), std::exception);
+
+    // Recovery is by reconnecting, which builds a fresh ServeInit.
+    auto reconnected = ipc::MakeServeInit(std::make_unique<StubInit>(), "s3cr3t-cookie", id);
+    BOOST_CHECK(reconnected->authenticate("s3cr3t-cookie"));
+    BOOST_CHECK(reconnected->isAuthenticated());
+}
+
+// An empty expected cookie must authenticate nobody. ConstantTimeEqual("", "") is
+// true, so without the explicit guard an empty cookie would open the gate to every
+// peer -- and it must not latch either, since nothing the peer did was wrong.
+BOOST_AUTO_TEST_CASE(serve_init_empty_cookie_authenticates_nobody)
+{
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    auto serve = ipc::MakeServeInit(std::make_unique<StubInit>(), "", id);
+
+    BOOST_CHECK(!serve->authenticate(""));
+    BOOST_CHECK(!serve->authenticate("anything"));
+    BOOST_CHECK(!serve->isAuthenticated());
+    BOOST_CHECK_THROW(serve->getBuildInfo(), std::exception);
 }
 
 BOOST_AUTO_TEST_CASE(serve_init_getbuildinfo_is_this_builds_info)

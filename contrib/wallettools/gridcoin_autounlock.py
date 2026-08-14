@@ -27,8 +27,12 @@ gridcoinresearchd-autounlock.service design lineage):
     the helper REFUSES to send unless --allow-unverified-listener is given. When
     the target is a non-loopback (remote) host the gate cannot apply at all and
     the helper proceeds, having warned at startup -- that is the operator opting
-    into network-exposed RPC. A Windows-native owner check (GetExtendedTcpTable)
-    is a follow-up that will let the gate run there too.
+    into network-exposed RPC. "Loopback" is decided by parsing the host as an IP
+    address, never by string prefix: 127.0.0.1.attacker.example is a DNS name that
+    resolves off-box. The gate is re-run immediately before the walletpassphrase
+    call, not just once per poll, so no round trip separates the ownership check
+    from the POST that carries the secret. A Windows-native owner check
+    (GetExtendedTcpTable) is a follow-up that will let the gate run there too.
 
   * Proxy-free opener. urllib's default opener honours *_proxy from the
     environment and proxy_bypass_environment() does not exempt loopback unless
@@ -55,6 +59,7 @@ restart.
 import argparse
 import base64
 import http.client
+import ipaddress
 import json
 import os
 import sys
@@ -66,11 +71,27 @@ EXIT_OK = 0
 EXIT_TRANSIENT = 1
 EXIT_UNRECOVERABLE = 2
 
-# Mainnet RPC port (CBaseChainParams::MAIN, src/chainparamsbase.cpp). The daemon
-# defaults to this when rpcport is unset, and a packaged gridcoinresearch.conf
-# commonly omits it, so default to it here too (matching contrib/api-proxy). A
-# non-mainnet node must set rpcport in the config or pass --rpcport.
-DEFAULT_RPC_PORT = 15715
+# Per-chain default RPC ports (CreateBaseChainParams, src/chainparamsbase.cpp). The
+# daemon defaults to the port of the chain it was started on when rpcport is unset,
+# and a packaged gridcoinresearch.conf commonly omits rpcport -- so derive the default
+# from the chain the config selects instead of assuming mainnet. Assuming mainnet is
+# not merely a connectivity bug: on a testnet node with no rpcport we would gate and
+# POST to 15715, and if the same uid also runs a mainnet node on this host the gate
+# answers "ours" and the TESTNET passphrase is handed to the MAINNET wallet. When the
+# chain cannot be determined unambiguously we refuse to guess (see resolve_connection).
+DEFAULT_RPC_PORT = 15715  # mainnet (CBaseChainParams::MAIN)
+DEFAULT_RPC_PORTS = {"main": DEFAULT_RPC_PORT, "test": 25715, "regtest": 35715}
+
+# Config keys that select a chain, and the chain name each one selects. Mirrors
+# ArgsManager::GetChainName() (src/util/system.cpp).
+_CHAIN_FLAGS = (("regtest", "regtest"), ("testnet", "test"))
+
+# Secrets shorter than this are NOT registered for redaction. redact() is a plain
+# substring replace, so a short secret shreds unrelated text: with rpcpassword=ass the
+# security-critical "REFUSING TO SEND CREDENTIALS" warning came out as
+# "wallet<REDACTED>hrase" nonsense. A secret that short cannot be meaningfully hidden
+# in prose anyway, so registering it costs the readability of every alert for nothing.
+MIN_REDACTABLE_SECRET_LEN = 8
 
 # RPC error codes we react to (src/rpc/protocol.h).
 RPC_INVALID_PARAMETER = -8
@@ -87,9 +108,21 @@ _SECRETS = []
 
 
 def register_secret(value):
-    """Record a secret so redact() can scrub it from any later log line."""
-    if value:
-        _SECRETS.append(value)
+    """Record a secret so redact() can scrub it from any later log line.
+
+    Very short secrets are skipped and warned about (see MIN_REDACTABLE_SECRET_LEN):
+    an unbounded substring replace with a 3-character secret destroys unrelated log
+    text, including the alerts that matter most.
+    """
+    if not value:
+        return
+    if len(value) < MIN_REDACTABLE_SECRET_LEN:
+        warn("a secret shorter than %d characters was NOT registered for log redaction: "
+             "redacting so short a string would shred unrelated text in every log line "
+             "(the warnings included). Use a longer rpcpassword/passphrase."
+             % MIN_REDACTABLE_SECRET_LEN)
+        return
+    _SECRETS.append(value)
 
 
 def redact(text):
@@ -129,14 +162,54 @@ def parse_conf(text):
     return conf
 
 
+def conf_bool(value):
+    """InterpretBool (src/util/system.cpp): an empty value is true; otherwise the
+    integer value, with a non-integer parsing as 0 (false)."""
+    if value is None:
+        return False
+    text = str(value).strip()
+    if not text:
+        return True
+    try:
+        return int(text) != 0
+    except ValueError:
+        return False
+
+
+def conf_chain(conf):
+    """The chain this config selects, mirroring ArgsManager::GetChainName(): the
+    regtest/testnet booleans, else chain=, else 'main'. Returns None when the config
+    is ambiguous (more than one selector -- which the core rejects outright) or names
+    a chain we have no default port for. The caller must then refuse to guess."""
+    selectors = [name for key, name in _CHAIN_FLAGS if conf_bool(conf.get(key))]
+    chain = conf.get("chain")
+    if chain:
+        selectors.append(str(chain).strip().lower())
+    if len(selectors) > 1:
+        return None
+    if selectors:
+        return selectors[0] if selectors[0] in DEFAULT_RPC_PORTS else None
+    return "main"
+
+
 def resolve_connection(conf, args):
     """Merge conf + CLI args into a connection dict. Args win. Validate."""
     user = getattr(args, "rpcuser", None) or conf.get("rpcuser")
     password = getattr(args, "rpcpassword", None) or conf.get("rpcpassword")
     host = getattr(args, "rpcconnect", None) or conf.get("rpcconnect") or "127.0.0.1"
-    port = getattr(args, "rpcport", None) or conf.get("rpcport") or DEFAULT_RPC_PORT
+    port = getattr(args, "rpcport", None) or conf.get("rpcport")
     if not user or not password:
         raise ValueError("rpcuser and rpcpassword must be set (in the config file or via --rpcuser/--rpcpassword)")
+    if not port:
+        # No explicit port: take the default of the chain the config selects, never a
+        # blanket mainnet guess (see DEFAULT_RPC_PORTS).
+        chain = conf_chain(conf)
+        port = DEFAULT_RPC_PORTS.get(chain) if chain else None
+        if port is None:
+            raise ValueError("the config omits rpcport and does not select a chain unambiguously, so the "
+                             "RPC port cannot be guessed safely -- set rpcport in the config file (or pass "
+                             "--rpcport). Guessing the mainnet port on a non-mainnet node would send this "
+                             "wallet's passphrase to whichever wallet is listening there.")
     try:
         port = int(port)
     except (TypeError, ValueError):
@@ -145,9 +218,28 @@ def resolve_connection(conf, args):
 
 
 def is_loopback(host):
-    """True if host addresses this machine's loopback (so the /proc gate applies)."""
+    """True if host addresses this machine's loopback (so the /proc gate applies).
+
+    Classify by PARSING the host as an IP address, never by string prefix. A DNS name
+    like "127.0.0.1.attacker.example" starts with "127." but resolves off-box: a prefix
+    test would call it loopback, run the ownership gate against our OWN port (which
+    answers "ours"), and then POST the Basic-auth header and the passphrase to the
+    remote host in cleartext. Anything that is not a loopback IP literal is remote --
+    with the single exception of the name "localhost", which RFC 6761 reserves and
+    requires name resolution to map to a loopback address. Treating it as remote would
+    be worse than the string prefix ever was: a remote target SKIPS the gate entirely
+    (the operator is assumed to have opted into network-exposed RPC), so the extremely
+    common rpcconnect=localhost would lose its ownership check.
+    """
     h = str(host).strip().lower()
-    return h in ("127.0.0.1", "::1", "localhost") or h.startswith("127.")
+    if h == "localhost":
+        return True
+    if h.startswith("[") and h.endswith("]"):
+        h = h[1:-1]  # bracketed IPv6 literal, as it may appear in a config
+    try:
+        return ipaddress.ip_address(h).is_loopback
+    except ValueError:
+        return False  # not an IP literal (a DNS name): not our loopback
 
 
 def _platform_can_gate():
@@ -303,7 +395,11 @@ def should_unlock(prev_uptime, cur_uptime):
 def gate(client):
     """Run the listener-ownership gate for `client`. Returns an EXIT_* code to
     stop this poll (nothing was sent), or None to proceed with RPC calls."""
-    if not getattr(client, "loopback", False):
+    # Default True, not False: a client object missing the attribute must be treated as
+    # a loopback target so the gate still RUNS. Defaulting to False would read a missing
+    # attribute as "remote" and SKIP the ownership check entirely -- the opposite of
+    # fail-closed. (allow_unverified below defaults to False for the same reason.)
+    if not getattr(client, "loopback", True):
         return None  # remote target: the /proc gate cannot apply (warned at startup)
     if not _platform_can_gate():
         # Loopback target, but this platform has no way to verify who owns the
@@ -358,6 +454,16 @@ def run_once(client, passphrase, timeout, prev_uptime):
     if not should_unlock(prev_uptime, cur_uptime):
         return cur_uptime, EXIT_OK
 
+    # Re-gate immediately before the only call that carries the passphrase. The gate at
+    # the top of this poll ran BEFORE the getinfo round trip, and every call opens a new
+    # connection -- so the core could have exited in that window and a foreign process
+    # won the (unprivileged) bind race. Re-checking here closes that TOCTOU: the check
+    # and the passphrase POST are now adjacent, with no round trip between them. The
+    # baseline is deliberately left at prev_uptime so the next poll retries the unlock.
+    gate_code = gate(client)
+    if gate_code is not None:
+        return prev_uptime, gate_code
+
     try:
         client.call("walletpassphrase", [passphrase, timeout, True])  # stake-only
     except RpcError as e:
@@ -386,7 +492,28 @@ def run_once(client, passphrase, timeout, prev_uptime):
     return cur_uptime, EXIT_OK
 
 
+def warn_if_passphrase_file_is_exposed(path):
+    """Warn -- do NOT fail -- when the passphrase file is readable beyond its owner.
+
+    The supported setups already produce 0400 (systemd's LoadCredentialEncrypted ramfs;
+    the DPAPI blob's owner-only ACL), but a hand-made file is easy to leave 0644, and
+    any local account that can read it can unlock the wallet. This is advisory because
+    hard-failing would break working setups on filesystems that cannot express POSIX
+    modes; those are also why the check is confined to POSIX.
+    """
+    if os.name != "posix":
+        return
+    try:
+        mode = os.stat(path).st_mode & 0o7777
+    except OSError:
+        return
+    if mode & 0o077:
+        warn("passphrase file %s is group/world-accessible (mode %04o) -- any local account "
+             "that can read it can unlock this wallet. Tighten it to 0400." % (path, mode))
+
+
 def read_passphrase(path):
+    warn_if_passphrase_file_is_exposed(path)
     # utf-8-sig transparently drops a UTF-8 BOM, which Windows editors / PowerShell
     # redirection routinely prepend -- an unstripped BOM would make walletpassphrase
     # reject the passphrase (-14).
@@ -430,8 +557,9 @@ def build_arg_parser():
                         "Never pass the passphrase on the command line.")
     p.add_argument("--rpcconnect", default=None)
     p.add_argument("--rpcport", type=int, default=None,
-                   help="RPC port (defaults to the config's rpcport, else %d -- the mainnet "
-                        "default; a non-mainnet node must set it here or in the config)." % DEFAULT_RPC_PORT)
+                   help="RPC port (defaults to the config's rpcport, else the default port of the chain "
+                        "the config selects: %s. When the chain is ambiguous the helper refuses to guess.)"
+                        % ", ".join("%s=%d" % kv for kv in sorted(DEFAULT_RPC_PORTS.items())))
     p.add_argument("--rpcuser", default=None)
     p.add_argument("--rpcpassword", default=None,
                    help="RPC password (visible in the process list; prefer setting it in the config file).")

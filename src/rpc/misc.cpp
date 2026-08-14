@@ -187,7 +187,13 @@ UniValue changesettings(const UniValue& params)
         // Reject a leading dash, a missing '=', and an empty name ("=1").
         if (param.empty() || param[0] == '-' || pos == std::string::npos || pos == 0)
         {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Incorrectly formatted setting change: " + param);
+            // Echo only up to the '=' when there is one. "-rpcpassword=secret"
+            // is a plausible mistake -- the dash belongs on the command line but
+            // not here -- and it lands in this branch, so quoting the argument
+            // whole would put the credential in the error string and from there
+            // into whatever logs or reports the caller's error.
+            const std::string shown = (pos == std::string::npos) ? param : param.substr(0, pos + 1) + "...";
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Incorrectly formatted setting change: " + shown);
         }
 
         settings.emplace_back(param.substr(0, pos), param.substr(pos + 1));

@@ -482,6 +482,46 @@ The `g_timer` instance is also used during initialization
 single-point timings, using `GetTimeMillis()` directly is lighter weight than
 constructing a `MilliTimer`.
 
+#### Where to create the label
+
+**Create a timer at the outermost function of the operation being timed, in the
+same translation unit as the code that reads it. If a second caller can reach the
+readers without passing through the creator, the label is in the wrong place.**
+
+This is the one recurring hazard of the class, and it comes from an asymmetry that
+is easy to miss: the label's lifetime is scoped by *control flow*, while the
+`GetTimes` calls that consume it are placed by *lexical* convenience. Nothing ties
+the two together, so an entirely reasonable-looking pair of edits can leave readers
+running on paths where the label was never created. `GetTimes` then returns a zeroed
+timer and warns — the measurement is silently useless and `debug.log` fills at
+default level, because the warning is a `LogPrintf` rather than a category.
+
+Two real instances, both fixed:
+
+- The `"miner"` label is created inside `StakeMiner()`'s loop, but
+  `SelectCoinsForStaking()` and `AvailableCoinsForStaking()` in
+  [`src/wallet/wallet.cpp`](/src/wallet/wallet.cpp) read it — and they are also
+  called from the staking-difficulty path, which the GUI polls. Every poll warned.
+  Fixed by honouring the `fMiner` flag those functions already take, so the reads
+  only happen on the staking path.
+- The `"buildPollTable"` label was created by `PollResultToJson()` in
+  [`src/rpc/voting.cpp`](/src/rpc/voting.cpp), an RPC that never reads it, while all
+  ten readers live in the vote-resolution engine
+  ([`src/gridcoin/voting/result.cpp`](/src/gridcoin/voting/result.cpp)). The
+  poll-result cache and the GUI reach that engine without the RPC, so every phase of
+  every poll resolution warned. Fixed by creating the label in
+  `PollResult::BuildFor()`, the engine's outermost entry.
+
+`"default"` is read from four files and is nonetheless safe, but only because it is
+created in `main()` and therefore lives for the whole process. Do not treat that as
+the pattern to copy — it is the exception that a process-lifetime owner buys.
+
+The warning names both the label and the log string, so a recurrence identifies its
+own culprit rather than requiring every call site to be enumerated by hand. Note
+that a missing timer is deliberately *not* auto-created on read: that would turn a
+loud bug into a quietly meaningless first measurement, which is worse in a tool
+whose only job is measurement.
+
 ### Sanitizers
 
 Gridcoin Core can be compiled with various "sanitizers" enabled, which add

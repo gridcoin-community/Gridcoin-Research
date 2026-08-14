@@ -143,7 +143,36 @@ std::vector<PollResultItem> PollResultCache::BuildPollTable(PollFilterFlag flags
             break;
         }
 
-        for (const auto& iter : WITH_LOCK(registry.cs_poll_registry, return registry.Polls().Where(flags))) {
+        // THREAD-SAFETY EXCEPTION, deliberate and load-bearing.
+        //
+        // This is the one traversal in the tree that walks the poll registry
+        // WITHOUT holding cs_poll_registry, and it cannot hold it: GetOrBuild()
+        // tallies each poll, which takes cs_main, and the lock order is
+        // cs_main -> cs_poll_registry. Holding the registry lock across the walk
+        // would invert it and deadlock against the validation thread.
+        //
+        // What protects the walk instead is the TraversalScope opened at the top
+        // of this function plus the reorg_occurred_during_reg_traversal recheck
+        // after every element: a reorg that could invalidate the iterator sets the
+        // flag, and the loop abandons the attempt and rebuilds the sequence from a
+        // freshly pinned tip. Clang's analyzer cannot express "guarded by a
+        // different protocol", so the diagnostic is suppressed for this traversal.
+        // (It is suppressed in a few other places too -- rpc/voting.cpp, result.cpp;
+        // this is the only one where an unlocked registry WALK is the deliberate
+        // design rather than an unreviewed legacy.)
+        //
+        // If you are copying this pattern: don't. Every other caller holds the
+        // lock for the whole traversal (gridcoin.cpp NotifyPoll, rpc/voting.cpp
+        // listpolls, interfaces.cpp latestActivePollTime). Dropping the lock
+        // without ALSO opening a TraversalScope and rechecking the flag per
+        // element is an iterator use-after-free -- which is precisely the bug that
+        // was live in latestActivePollTime until the lock requirements were moved
+        // onto the declarations in registry.h and made visible to callers.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
+        for (const auto& iter : WITH_LOCK(PollRegistry::cs_poll_registry, return registry.Polls().Where(flags))) {
             // Read the poll's identifiers outside cs_poll_registry, matching the
             // former GUI traversal: the coarse reorg detector below guards the
             // reference against a reorg that would invalidate it mid-walk.
@@ -176,6 +205,9 @@ std::vector<PollResultItem> PollResultCache::BuildPollTable(PollFilterFlag flags
                 break;
             }
         }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
         // Done if no fork/reorg interrupted this attempt.
         if (!fork_reorg_during_run) {

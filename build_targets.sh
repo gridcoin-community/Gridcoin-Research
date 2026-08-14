@@ -441,7 +441,6 @@ if [[ "$TARGET" == "all" || "$TARGET" == "native" ]] && [[ "$(uname -s)" == "Lin
             -DENABLE_QRENCODE=ON \
             -DUSE_DBUS=ON \
             -DENABLE_UPNP=ON \
-            -DDEFAULT_UPNP=ON \
             -DENABLE_PIE=ON \
             -DENABLE_TESTS=ON \
             $NATIVE_QT_FLAG \
@@ -535,10 +534,9 @@ if [[ "$TARGET" == "all" || "$TARGET" == "depends" ]] && [[ "$(uname -s)" == "Li
             -DUSE_QT6=ON \
             -DSTATIC_LIBS=ON \
             -DENABLE_UPNP=ON \
-            -DDEFAULT_UPNP=ON \
             -DENABLE_TESTS=ON \
             -DDEP_LIB="${DEP_LIB}" \
-            -DCMAKE_CXX_FLAGS="-fPIE" \
+            -DENABLE_PIE=ON \
             -DCMAKE_EXE_LINKER_FLAGS="-static-libgcc -static-libstdc++ -Wl,-Bdynamic" \
             -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
             $EXTRA_ARGS
@@ -632,7 +630,6 @@ if [[ "$TARGET" == "all" || "$TARGET" == "win64" ]] && [[ "$(uname -s)" == "Linu
             $MULTIPROCESS_CMAKE_FLAG \
             -DUSE_QT6=ON \
             -DENABLE_UPNP=ON \
-            -DDEFAULT_UPNP=ON \
             -DENABLE_TESTS=ON \
             -DSYSTEM_XXD=ON \
             $CROSS_EMULATOR_FLAG \
@@ -741,7 +738,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darw
             $MULTIPROCESS_CMAKE_FLAG \
             -DENABLE_QRENCODE=ON \
             -DENABLE_UPNP=ON \
-            -DDEFAULT_UPNP=ON \
+            -DENABLE_PIE=ON \
             -DENABLE_TESTS=ON \
             $NATIVE_QT_FLAG \
             -DCMAKE_BUILD_TYPE=$BUILD_TYPE \

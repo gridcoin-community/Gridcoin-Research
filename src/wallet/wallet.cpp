@@ -28,6 +28,7 @@
 #include "policy/fees.h"
 #include "node/blockstorage.h"
 
+#include <set>
 #include <stdexcept>
 
 using namespace std;
@@ -1387,7 +1388,7 @@ void CWallet::TransactionRemovedFromMempool(const CTransactionRef& tx,
             // attempt to re-accept it on the next pass.
             LogPrint(BCLog::LogFlags::VERBOSE,
                     "CWallet::TransactionRemovedFromMempool: tx %s evicted (reason: %d), "
-                    "not marking conflicted — eligible for re-acceptance\n",
+                    "not marking conflicted - eligible for re-acceptance\n",
                     hash.ToString(), static_cast<int>(reason));
             break;
 
@@ -2703,7 +2704,8 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
 }
 
 // A lock must be taken on cs_main before calling this function.
-void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& balance_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& balance_out,
+                                       bool fMiner) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
 
     vCoins.clear();
@@ -2792,7 +2794,12 @@ void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSp
             if (available_output) ++txns_w_avail_outputs;
         }
 
-        g_timer.GetElapsedTime(function
+        // Only the staking thread owns the "miner" timer label -- it is created by
+        // StakeMiner's loop (miner.cpp) and does not exist otherwise. This function
+        // is also reached from the estimated-time-to-stake / net-weight path
+        // (gridcoin/staking/difficulty.cpp), which the GUI polls, and there the
+        // lookup misses and MilliTimer warns on every call.
+        if (fMiner) g_timer.GetElapsedTime(function
                                + "transactions = "
                                + ToString(transactions)
                                + ", txns_w_avail_outputs = "
@@ -3148,7 +3155,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     // the balance_out as a by-product.
     // For that 210000 transaction wallet, all of these changes have reduced the time in the miner loop from >750 msec
     // down to < 450 msec.
-    AvailableCoinsForStaking(vCoins, nSpendTime, balance_out);
+    AvailableCoinsForStaking(vCoins, nSpendTime, balance_out, fMiner);
 
     int64_t BalanceToConsider = balance_out;
 
@@ -3213,7 +3220,9 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
         return false;
     }
 
-    g_timer.GetTimes(function + "select loop", "miner");
+    // See AvailableCoinsForStaking: the "miner" label exists only while StakeMiner
+    // is cycling. fMiner is false on the difficulty/ETTS path.
+    if (fMiner) g_timer.GetTimes(function + "select loop", "miner");
 
     // Randomize the vector order to keep PoS truly a roll of dice in which utxo has a chance to stake first
     if (fMiner)
@@ -3221,7 +3230,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
         Shuffle(vCoinsRet.begin(), vCoinsRet.end(), FastRandomContext());
     }
 
-    g_timer.GetTimes(function + "shuffle", "miner");
+    if (fMiner) g_timer.GetTimes(function + "shuffle", "miner");
 
     return true;
 }
@@ -4196,6 +4205,206 @@ set< set<CTxDestination> > CWallet::GetAddressGroupings() EXCLUSIVE_LOCKS_REQUIR
 
 // ppcoin: check 'spent' consistency between wallet and txindex
 // ppcoin: fix wallet spent state according to txindex
+void CWallet::ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountReleased, bool fCheckOnly)
+{
+    nReleased = 0;
+    nAmountReleased = 0;
+
+    // cs_main for mapBlockIndex; cs_wallet for mapWallet. Canonical order.
+    LOCK2(cs_main, cs_wallet);
+
+    // A spend only counts if the transaction that made it is in the ACTIVE chain.
+    // Anything else -- a confirming block we have not synced to yet, a block on a
+    // side chain, or one that no longer exists after a reset -- has not happened as
+    // far as the chain is concerned, so the flags it left behind are wrong.
+    //
+    // Deliberately confirmed-state transactions only. A wallet transaction sitting
+    // in the mempool has genuinely committed its inputs and must keep its flags, or
+    // the wallet would happily respend them.
+    // NOTE the state handling here, which is not optional bookkeeping. This runs
+    // AFTER ReacceptWalletTransactions, and ValidateConfirmedTx demotes any confirmed
+    // transaction whose block is missing or off the main chain:
+    //
+    //     if (it == mapBlockIndex.end() || !it->second->IsInMainChain()) {
+    //         wtx.SetTxState(TxStateInactive{false});
+    //
+    // After a chain reset that is EVERY transaction in the wallet, so testing only
+    // for TxStateConfirmed would skip precisely the ones needing release and this
+    // whole pass would do nothing.
+    // EXCLUSIVE_LOCKS_REQUIRED on the lambda: thread-safety analysis does not
+    // propagate the enclosing LOCK2 into a lambda body, so reading mapBlockIndex and
+    // calling IsInMainChain() inside one needs the requirement stated. It is
+    // satisfied at every call site below, which run under the LOCK2 above.
+    const auto spend_is_active = [](const CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+        // In the mempool: the inputs are genuinely committed and the flags must
+        // stand, or the wallet would happily respend them.
+        if (wtx.isInMempool()) return true;
+
+        // Unrecognized is a not-yet-migrated legacy state, not a statement about the
+        // chain. Leave it to ResolveUnrecognizedTx rather than guessing.
+        if (wtx.isUnrecognized()) return true;
+
+        if (const auto* conf = wtx.state<TxStateConfirmed>()) {
+            const auto mi = mapBlockIndex.find(conf->m_confirmed_block_hash);
+            if (mi == mapBlockIndex.end() || mi->second == nullptr) return false;
+
+            return mi->second->IsInMainChain();
+        }
+
+        // Inactive: conflicted, abandoned, or demoted above because its block is
+        // gone. None of those spends are in the active chain.
+        return false;
+    };
+
+    // Collect first, write second: on an ordinary startup nothing qualifies and we
+    // never touch the wallet database at all.
+    // Keyed to dedupe: two wallet transactions can name the same prevout (a
+    // conflicting pair), which would otherwise be counted and written twice.
+    std::map<std::pair<uint256, unsigned int>, CWalletTx*> release;
+
+    for (auto& [hash, wtx] : mapWallet) {
+        if (spend_is_active(wtx)) continue;
+
+        // This transaction's spends have not happened on the active chain. Clear the
+        // flags it set on the outputs it consumed.
+        for (const CTxIn& txin : wtx.vin) {
+            auto it = mapWallet.find(txin.prevout.hash);
+            if (it == mapWallet.end()) continue;
+
+            CWalletTx& prev = it->second;
+
+            if (txin.prevout.n >= prev.vout.size()) continue;
+            if (IsMine(prev.vout[txin.prevout.n]) == ISMINE_NO) continue;
+            if (!prev.IsSpent(txin.prevout.n)) continue;
+
+            const auto key = std::make_pair(txin.prevout.hash, txin.prevout.n);
+            if (release.emplace(key, &prev).second) {
+                nReleased++;
+                nAmountReleased += prev.vout[txin.prevout.n].nValue;
+            }
+        }
+    }
+
+    if (release.empty()) return;
+
+    // An output consumed by a spender that IS active must keep its flag, whatever
+    // some other wallet transaction says about it.
+    //
+    // Skipping the active transaction itself is not enough. vfSpent is a single bit
+    // per output and does not record which transaction set it, so for a conflicting
+    // pair -- one spender in the mempool, one abandoned or conflicted -- the
+    // inactive side reaches the same prevout and would clear the bit the mempool
+    // side still depends on. The output then looks spendable again and the wallet
+    // can build a transaction double-spending its own unconfirmed input.
+    //
+    // The tx-index pass below cannot cover this: a mempool spend has no index entry,
+    // so the chain has no opinion to defer to.
+    //
+    // Deferred until there is at least one candidate, deliberately. Building this
+    // set costs a second full walk of mapWallet and every vin, and on an ordinary
+    // startup -- where nothing qualifies -- the result would be discarded unused.
+    // On a large wallet that is a real cost at every single start.
+    {
+        std::set<std::pair<uint256, unsigned int>> spent_by_active;
+        for (const auto& [hash, wtx] : mapWallet) {
+            if (!spend_is_active(wtx)) continue;
+            for (const CTxIn& txin : wtx.vin) {
+                spent_by_active.emplace(txin.prevout.hash, txin.prevout.n);
+            }
+        }
+
+        int still_spent = 0;
+        for (auto it = release.begin(); it != release.end(); ) {
+            if (spent_by_active.count(it->first)) {
+                nReleased--;
+                nAmountReleased -= it->second->vout[it->first.second].nValue;
+                it = release.erase(it);
+                still_spent++;
+            } else {
+                ++it;
+            }
+        }
+
+        if (still_spent > 0) {
+            LogPrintf("INFO: %s: left %d output(s) marked spent - another wallet transaction that "
+                      "IS in the active chain or the mempool also spends them, and vfSpent cannot "
+                      "record which spender set the flag",
+                      __func__, still_spent);
+        }
+    }
+
+    if (release.empty()) return;
+
+    // Defer to the chain wherever the chain has an opinion.
+    //
+    // "The spending transaction the wallet remembers is not in the active chain" is
+    // NOT the same claim as "this output is unspent", and where they disagree the
+    // chain wins. A wallet moved between nodes can remember a spender whose block is
+    // not on this node's chain while the output is nevertheless spent here, by a
+    // different or replaced transaction. Releasing those is simply wrong.
+    //
+    // Observed on a Windows 11 VM with a 6.25M GRC mainnet wallet copied from another
+    // node: this pass released 3,462 outputs on EVERY startup and FixSpentCoins re-marked
+    // exactly those 3,462 immediately afterwards, every time. The end state was right
+    // only because FixSpentCoins runs after this -- thousands of pointless wallet
+    // writes per start, resting on call order, and a window in which the wallet
+    // believes it can spend coins the chain says are gone.
+    //
+    // One ReadTxIndex per CANDIDATE, not per wallet transaction, so this stays cheap:
+    // it is bounded by what we are about to release, and it runs only when there is
+    // something to release. FixSpentCoins pays an index read for all of mapWallet.
+    //
+    // The reset case, which this pass exists for, is unaffected: with the block data
+    // gone the tx index has no entry, the chain has no opinion, and the release
+    // proceeds exactly as before.
+    {
+        CTxDB txdb("r");
+        int deferred = 0;
+
+        for (auto it = release.begin(); it != release.end(); ) {
+            const uint256& prev_hash = it->first.first;
+            const unsigned int n = it->first.second;
+
+            CTxIndex txindex;
+            const bool chain_says_spent = txdb.ReadTxIndex(prev_hash, txindex)
+                && txindex.vSpent.size() > n
+                && !txindex.vSpent[n].IsNull();
+
+            if (chain_says_spent) {
+                nReleased--;
+                nAmountReleased -= it->second->vout[n].nValue;
+                it = release.erase(it);
+                deferred++;
+            } else {
+                ++it;
+            }
+        }
+
+        if (deferred > 0) {
+            LogPrintf("INFO: %s: left %d output(s) marked spent - the spending transaction is not in "
+                      "the active chain but the chain's tx index reports the output spent, so the "
+                      "wallet's record of the spender is stale rather than the flag being wrong",
+                      __func__, deferred);
+        }
+    }
+
+    if (release.empty()) return;
+
+    LogPrintf("INFO: %s: %d output(s) totalling %s were marked spent by transactions that are not in "
+              "the active chain (the chain was reset or rolled back under this wallet); %s",
+              __func__, nReleased, FormatMoney(nAmountReleased),
+              fCheckOnly ? "not repairing (check only)" : "releasing them");
+
+    if (fCheckOnly) return;
+
+    CWalletDB walletdb(strWalletFile);
+
+    for (const auto& [key, prev] : release) {
+        prev->MarkUnspent(key.second);
+        prev->WriteToDisk(&walletdb);
+    }
+}
+
 void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bool fCheckOnly)
 {
     nMismatchFound = 0;

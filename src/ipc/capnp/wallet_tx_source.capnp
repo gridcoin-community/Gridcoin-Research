@@ -121,6 +121,11 @@ struct RowsChangedPayload $Proxy.wrap("GRC::RowsChangedPayload") {
     epoch @1 :UInt64;
     first @2 :Int32;
     count @3 :Int32;
+    # Appended (new ordinal, so old peers simply do not see it): the changed rows
+    # sampled at emission. Consumers apply these directly instead of calling
+    # getRows() when the event lands -- see GRC::RowsChangedPayload for why
+    # re-fetching at apply time was both stale and a round trip per change.
+    records @4 :List(TransactionRecord);
 }
 
 # WalletEventPayload = std::variant<the six payloads>, marshalled by type-variant.h

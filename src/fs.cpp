@@ -3,6 +3,10 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <fs.h>
+
+#ifdef __linux__
+#include <sys/vfs.h>
+#endif
 #include <util/syserror.h>
 
 #ifndef WIN32
@@ -318,3 +322,23 @@ static_assert(sizeof(*fs::path().BOOST_FILESYSTEM_C_STR) == sizeof(wchar_t),
 #endif // WIN32
 
 } // fsbridge
+
+bool fsbridge::IsVolatileFilesystem(const fs::path& path)
+{
+#ifdef __linux__
+    struct statfs fs_info;
+
+    // Cannot tell: say no. Reporting "volatile" because a syscall failed would
+    // turn an unreadable path into a hard startup error.
+    if (statfs(path.string().c_str(), &fs_info) != 0) return false;
+
+    // From <linux/magic.h>, inlined so that header is not a build dependency.
+    constexpr decltype(fs_info.f_type) TMPFS_MAGIC_VALUE = 0x01021994;
+    constexpr decltype(fs_info.f_type) RAMFS_MAGIC_VALUE = 0x858458f6;
+
+    return fs_info.f_type == TMPFS_MAGIC_VALUE || fs_info.f_type == RAMFS_MAGIC_VALUE;
+#else
+    (void)path;
+    return false;
+#endif
+}

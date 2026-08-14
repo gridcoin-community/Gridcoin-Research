@@ -6,9 +6,11 @@
 #include "interfaces/researcher.h"
 
 #include "qt/bitcoinunits.h"
+#include "qt/guiconstants.h"
 #include "qt/guiutil.h"
 #include "qt/researcher/researchermodel.h"
 #include "qt/researcher/researcherwizard.h"
+#include "util/time.h"
 
 #include <QApplication>
 #include <QDateTime>
@@ -580,23 +582,57 @@ void ResearcherModel::subscribeToCoreSignals()
     // callbacks fire on a core thread, so each marshals to the GUI thread via a
     // queued invocation of the matching slot; a signal firing after this object
     // is gone would otherwise touch freed memory (issue #3129).
-    m_handlers.emplace_back(m_researcher_context.handleResearcherChanged(
-        [this]() { QMetaObject::invokeMethod(this, "onResearcherChanged", Qt::QueuedConnection); }));
+    m_handlers.emplace_back(m_researcher_context.handleResearcherChanged(m_notify_lifetime.guard(
+        [this]() { QMetaObject::invokeMethod(this, "onResearcherChanged", Qt::QueuedConnection); })));
 
-    m_handlers.emplace_back(m_researcher_context.handleBeaconChanged(
-        [this]() { QMetaObject::invokeMethod(this, "updateBeacon", Qt::QueuedConnection); }));
+    m_handlers.emplace_back(m_researcher_context.handleBeaconChanged(m_notify_lifetime.guard(
+        [this]() { QMetaObject::invokeMethod(this, "updateBeacon", Qt::QueuedConnection); })));
 
-    m_handlers.emplace_back(m_researcher_context.handleAccrualChanged(
-        [this]() { QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection); }));
+    m_handlers.emplace_back(m_researcher_context.handleAccrualChanged(m_notify_lifetime.guard(
+        [this]() { QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection); })));
 
-    m_handlers.emplace_back(m_researcher_context.handleBlocksChanged(
-        [this](bool, int, int64_t, uint32_t) {
+    // Rate-limit the per-block refresh while the chain is catching up. refresh()
+    // runs a full trySnapshot(): DeriveBeacon, ComputeActionNeeded, magnitude and
+    // accrual, all under a cs_main TRY_LOCK. None of that is worth doing once per
+    // block during a sync -- no human can read it at that rate, and the same
+    // MODEL_UPDATE_DELAY gate is what ClientModel::NotifyBlocksChanged already
+    // applies to its own subscription using this very flag.
+    //
+    // This matters on two paths, not one. A FRESH install additionally pays a BOINC
+    // data directory probe inside the snapshot (registry + filesystem on Windows,
+    // where a wallet installed before BOINC finds nothing and cannot be fixed via
+    // the wizard until sync completes, because the wizard is gated on being synced).
+    // But a RESYNC of an established wallet -- valid CPID or non-cruncher, every
+    // lookup succeeding -- pays the beacon/magnitude/accrual work per block just the
+    // same, and only this gate removes it.
+    //
+    // The syncing edge forces a refresh: without it the panel would hold whatever
+    // the last throttled pass produced until the next block, and at ~90s block
+    // spacing that is a visible stall exactly when the user is watching sync finish.
+    m_handlers.emplace_back(m_researcher_context.handleBlocksChanged(m_notify_lifetime.guard(
+        [this](bool syncing, int, int64_t, uint32_t) {
+            const bool was_syncing = m_last_syncing.exchange(syncing);
+
+            if (syncing && was_syncing) {
+                const int64_t now = GetTimeMillis();
+
+                if (m_last_block_refresh_ms.load() + MODEL_UPDATE_DELAY > now) {
+                    return;
+                }
+
+                m_last_block_refresh_ms.store(now);
+            }
+
             QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
-        }));
+        })));
 }
 
 void ResearcherModel::unsubscribeFromCoreSignals()
 {
+    // Retire before disconnecting: severing a Handler does not wait for a
+    // callback already running on a core thread (qt/notificationlifetime.h).
+    m_notify_lifetime.retire();
+
     // Clearing the retained handlers runs each Handler's destructor, which
     // disconnects it (issue #3129).
     m_handlers.clear();

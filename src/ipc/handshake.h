@@ -22,8 +22,16 @@ namespace ipc {
 //!
 //! Major 2: the NodeIdentity model was re-based onto the wallet UUID (former
 //! node_id/datadir/genesis_hash retired), a breaking wire change.
+//!
+//! Minor 1: RowsChangedPayload gained `records` (wallet_tx_source.capnp @4), the
+//! changed rows sampled at emission. Additive, so an old node still talks to a new
+//! GUI -- but it degrades SILENTLY if the minor is not bumped: the field simply
+//! arrives empty, the GUI's "empty means nothing to apply" contract does exactly
+//! that, and the Overview list then shows stale rows until the process restarts.
+//! The minor is what turns that into the actionable "Update the node" hard fail in
+//! ClientHandshake.
 constexpr uint32_t IPC_SCHEMA_MAJOR = 2;
-constexpr uint32_t IPC_SCHEMA_MINOR = 0;
+constexpr uint32_t IPC_SCHEMA_MINOR = 1;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 
 //! Domain-separation tag hashed into the node identity token. Bump the suffix if

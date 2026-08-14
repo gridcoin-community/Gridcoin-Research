@@ -213,7 +213,17 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case DisablePollNotifications:
             return QVariant(fDisablePollNotifications);
         case MapPortUPnP:
-            return QVariant(m_node.getSettingBool("upnp", true));
+#ifdef USE_UPNP
+            // Ask for the same default the node applies -- init.cpp uses
+            // GetBoolArg("-upnp", USE_UPNP) -- so the checkbox reports what the
+            // daemon will actually do. A hardcoded true showed the box ticked in
+            // any build configured without -DDEFAULT_UPNP=ON, i.e. the CMake
+            // default, while the node had UPnP off.
+            return QVariant(m_node.getSettingBool("upnp", USE_UPNP));
+#else
+            // UPnP was not compiled in, so there is no port mapping to report.
+            return QVariant(false);
+#endif
         case MinimizeOnClose:
             return QVariant(fMinimizeOnClose);
         case ProxyUse:

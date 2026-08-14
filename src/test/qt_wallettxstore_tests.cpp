@@ -57,9 +57,23 @@ TransactionRecord makeRec(const uint256& hash, int64_t time, int idx)
 //! Poll the event queue (the worker drains asynchronously) until it holds at
 //! least `expected` events or a generous timeout elapses. Each iteration sleeps
 //! 5ms; the ~1.5s ceiling is far above the worker's drain latency.
+//! Wait until the queue holds at least `expected` events, or give up.
+//!
+//! The cap is deliberately generous (20s, not the former 1.5s). This returns the
+//! instant the condition holds, so a large cap costs nothing when the machine is
+//! fast -- but the old budget was a fixed 1.5s for the worker to drain everything
+//! the producers enqueued, which is a race against the host rather than a wait for
+//! a condition. It lost on CI's ARM64 job, where the suite runs under QEMU
+//! emulation roughly 15x slower than native: the worker had drained 394 of 400
+//! events when the wait expired, and the caller then asserted on a partial batch.
+//! Nothing was wrong with the store; the test simply stopped watching too early.
+//!
+//! If a caller ever does time out here, the assertion that follows will report the
+//! shortfall, which is the diagnostic that matters -- so failing slow is strictly
+//! better than failing fast and blaming the code under test.
 void waitForQueue(WalletEventQueue& q, std::size_t expected)
 {
-    for (int i = 0; i < 300 && q.size() < expected; ++i) {
+    for (int i = 0; i < 4000 && q.size() < expected; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 }
@@ -182,11 +196,28 @@ void registerProductionViews(WalletTxStore& store)
 //! Wait until the worker stops producing: the queue depth must hold steady for
 //! several polls. Unlike waitForQueue this needs no expected count, so a test can
 //! assert on the ABSENCE of per-view events without racing the worker.
+//! Wait until the queue stops growing. A HEURISTIC, and weaker than
+//! waitForQueue() -- prefer that whenever the expected count is known.
+//!
+//! The weakness: this cannot distinguish "the worker finished" from "the worker
+//! has not started yet". Immediately after an enqueue the queue is legitimately
+//! empty, so a short stability window is satisfied before any work happens, and a
+//! caller with no positive assertion then passes vacuously.
+//!
+//! Both numbers were raised after CI's ARM64 job (QEMU emulation, ~15x slower than
+//! native) exposed how tight they were: 4 stable polls is 20ms of quiet, which that
+//! host clears trivially between the enqueue and the worker waking. 20 polls
+//! (100ms) plus a 20s cap makes the vacuous window much harder to hit while still
+//! returning immediately on a fast machine.
+//!
+//! It is still a heuristic. Callers should assert something POSITIVE afterwards --
+//! a seen-event flag, an expected row count -- so a premature return fails loudly
+//! instead of silently skipping the case the test exists to cover.
 void settle(WalletEventQueue& q)
 {
     std::size_t last = q.size();
     int stable = 0;
-    for (int i = 0; i < 400 && stable < 4; ++i) {
+    for (int i = 0; i < 4000 && stable < 20; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
         const std::size_t now = q.size();
         stable = (now == last) ? stable + 1 : 0;
@@ -256,9 +287,11 @@ struct Replica
                 rows.erase(rows.begin() + p->position, rows.begin() + p->position + p->count);
             } else if (const auto* p = std::get_if<GRC::RowsChangedPayload>(&ev.payload)) {
                 if (p->viewId != viewId) continue;
-                // A Change carries no records; the consumers refetch the slice.
-                const std::vector<RowKey> fresh =
-                    keysOf(store.getRows(viewId, p->first, p->count).records);
+                // Apply the records the producer stamped on the payload, exactly as
+                // the real consumers do. This replica would still "work" if it
+                // refetched, which is why the dedicated test below asserts the
+                // payload carries them at all.
+                const std::vector<RowKey> fresh = keysOf(p->records);
                 for (std::size_t i = 0; i < fresh.size()
                         && static_cast<std::size_t>(p->first) + i < rows.size(); ++i) {
                     rows[static_cast<std::size_t>(p->first) + i] = fresh[i];
@@ -610,6 +643,70 @@ BOOST_AUTO_TEST_CASE(multiPartInsertDeltaPayloadsMatchServedSlots)
         checkReplicaMatchesStore(store, detail);
         checkReplicaMatchesStore(store, overview);
     }
+}
+
+// A Change payload must CARRY the changed rows, sampled by the producer at
+// emission -- not merely name a range for the consumer to fetch later.
+//
+// Two things went wrong with the fetch-at-apply-time form. The consumer read
+// whatever the cursor held when the event was applied, which inside a drained
+// batch can be a newer state than the structural position it has applied so far,
+// so future content landed in rows that had not moved yet. And every Change cost
+// a getRows() on the consumer's thread -- a synchronous IPC round trip in the
+// multiprocess build, taking cs_store, which the refresh that produced it is
+// holding.
+//
+// The Replica used by the other tests in this file now applies p->records, so a
+// regression to empty payloads would show up there as a stale replica. This test
+// pins the payload directly, so the reason is unambiguous when it fails.
+BOOST_AUTO_TEST_CASE(changePayloadCarriesTheChangedRecords)
+{
+    WalletEventQueue q;
+    WalletTxStore store(nullptr, q);
+    store.start();
+
+    registerProductionViews(store);
+    q.drain();
+
+    for (int i = 0; i < kSeedRows; ++i) {
+        store.enqueueInsert(makePayment(hashOf(i), kBaseTime + i, kBaseHeight + i));
+    }
+    settle(q);
+    q.drain();
+
+    // Re-send one existing row with a changed credit. It keeps its time and hash,
+    // so it does not move: Cursor::applyStatusUpdate takes the same-slot branch and
+    // emits a Change rather than a Remove/Insert pair.
+    const int target = kSeedRows / 2;
+    std::vector<TransactionRecord> updated = makePayment(hashOf(target),
+                                                         kBaseTime + target,
+                                                         kBaseHeight + target);
+    updated.front().credit = 424242;
+    store.enqueueUpsert(std::move(updated));
+    settle(q);
+
+    bool saw_change = false;
+    for (const GRC::WalletEvent& ev : q.drain()) {
+        const auto* p = std::get_if<GRC::RowsChangedPayload>(&ev.payload);
+        if (!p || p->viewId != GRC::VIEW_DETAILED) continue;
+
+        saw_change = true;
+        // The payload is self-describing: one record per changed row.
+        BOOST_CHECK_EQUAL(p->records.size(), static_cast<std::size_t>(p->count));
+        BOOST_REQUIRE(!p->records.empty());
+        // And it is the NEW content, not a stale copy.
+        BOOST_CHECK_EQUAL(p->records.front().credit, 424242);
+        // The stamped record must match what the store serves at that position,
+        // which is what makes the consumer's replica converge without refetching.
+        const std::vector<TransactionRecord> served =
+            store.getRows(GRC::VIEW_DETAILED, p->first, p->count).records;
+        BOOST_REQUIRE_EQUAL(served.size(), p->records.size());
+        BOOST_CHECK(served.front().hash == p->records.front().hash);
+    }
+
+    // Non-vacuous: if the upsert stopped producing a Change at all, this test
+    // would otherwise pass while asserting nothing.
+    BOOST_REQUIRE_MESSAGE(saw_change, "the in-place upsert emitted no Change delta for VIEW_DETAILED");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

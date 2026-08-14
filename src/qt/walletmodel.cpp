@@ -201,6 +201,16 @@ void WalletModel::drainEventQueue()
         // instead of waiting MODEL_EVENT_DRAIN_INTERVAL for the periodic tick.
         std::vector<GRC::WalletEvent> events = m_tx_source.drainEvents(MODEL_EVENT_DRAIN_MAX_BATCH);
         if (events.empty()) {
+            // An empty drain IS a clean pass, and on a quiet wallet it is the most
+            // common one (this timer fires every MODEL_EVENT_DRAIN_INTERVAL). The
+            // reset used to live only after a successful apply below, so it was
+            // unreachable on this path and m_drain_failures was effectively
+            // monotonic for the session: MODEL_EVENT_DRAIN_MAX_FAILURES unrelated
+            // faults hours apart would trip the permanent stop and silence the whole
+            // wallet UI -- the #3257 shape the counter exists to avoid, reached by a
+            // slower route. The budget is for CONSECUTIVE failures, so clear it here
+            // too.
+            m_drain_failures = 0;
             return;
         }
 
@@ -517,12 +527,12 @@ void WalletModel::subscribeToCoreSignals()
     // boundary as value types (Phase 1c-i). The callbacks fire on core
     // threads, possibly under core locks, so they enqueue to the Qt thread
     // and return — same discipline the raw-signal handlers applied.
-    m_wallet_handlers.emplace_back(m_wallet.handleStatusChanged(
+    m_wallet_handlers.emplace_back(m_wallet.handleStatusChanged(m_notify_lifetime.guard(
         [this]() {
             GUILogPrintf("NotifyKeyStoreStatusChanged");
             QMetaObject::invokeMethod(this, "updateStatus", Qt::QueuedConnection);
-        }));
-    m_wallet_handlers.emplace_back(m_wallet.handleAddressBookChanged(
+        })));
+    m_wallet_handlers.emplace_back(m_wallet.handleAddressBookChanged(m_notify_lifetime.guard(
         [this](const std::string& address, const std::string& label, bool is_mine,
                const std::string& purpose, ChangeType status) {
             // `purpose` is accepted to match the 6-arg core signal but is not
@@ -535,7 +545,7 @@ void WalletModel::subscribeToCoreSignals()
                                       Q_ARG(QString, QString::fromStdString(label)),
                                       Q_ARG(bool, is_mine),
                                       Q_ARG(int, status));
-        }));
+        })));
 
     // The tx-table producer wiring (NotifyTransactionChanged /
     // NotifyBlocksChanged) now lives node-side in the WalletTxSource, wired in
@@ -548,6 +558,10 @@ void WalletModel::unsubscribeFromCoreSignals()
     // interfaces::Handler's destructor, which disconnects it. The tx-table
     // producer connections severed here in earlier phases now live in the
     // WalletTxSource and are severed by its destructor.
+    // Retire before anything else: disconnecting does not wait for a callback
+    // already running on a core thread (qt/notificationlifetime.h).
+    m_notify_lifetime.retire();
+
     m_wallet_handlers.clear();
 }
 

@@ -42,9 +42,14 @@ private:
     };
 
     Ui::AboutDialog *ui;
-    //! Node settings/query surface; set in setModel(). Used off the GUI thread
-    //! for checkForLatestUpdate() -- process-lifetime, so capturing it in the
-    //! background worker is safe.
+    //! Node settings/query surface; set in setModel(). Captured by value into the
+    //! background checkForLatestUpdate() worker, so it is NOT process-lifetime:
+    //! StartGridcoinQt owns the Node and destroys it at teardown, and joins the
+    //! global QThreadPool immediately before doing so -- THAT is what keeps the
+    //! captured pointer valid for as long as the worker can dereference it.
+    //! ~AboutDialog deliberately does NOT join (see the comment there): the worker
+    //! never touches the dialog, so closing it is not the lifetime hazard, and
+    //! waiting would freeze the GUI for the libcurl timeout on every close.
     interfaces::Node* m_node = nullptr;
     //! Watches the background version-check fetch so the blocking libcurl GET
     //! never runs on the GUI thread.

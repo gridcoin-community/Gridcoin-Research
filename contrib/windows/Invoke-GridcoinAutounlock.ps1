@@ -21,7 +21,10 @@
         own SID. A foreign owner, or a listener we cannot attribute, fails closed. On
         Windows the owner is resolved natively (Get-NetTCPConnection -> Win32_Process
         GetOwnerSid); this closes the same startup race the Python helper can only refuse
-        on this platform.
+        on this platform. "Loopback" is decided by parsing the host as an IP address, never
+        by string prefix (127.0.0.1.attacker.example is a DNS name that resolves off-box),
+        and the gate is re-run immediately before the walletpassphrase call so no round trip
+        separates the ownership check from the request that carries the secret.
       * Proxy-free request. $req.Proxy = $null so an environment/WinHTTP proxy can never
         divert the passphrase POST off-box in cleartext.
       * Redaction. The passphrase, the rpcpassword, and the Basic token are scrubbed from
@@ -75,10 +78,21 @@ $EXIT_OK = 0
 $EXIT_TRANSIENT = 1
 $EXIT_UNRECOVERABLE = 2
 
-# Mainnet RPC port (CBaseChainParams::MAIN, src/chainparamsbase.cpp). The daemon defaults
-# to this when rpcport is unset and a packaged gridcoinresearch.conf commonly omits it, so
-# default to it too. A non-mainnet node must set rpcport in the config or pass -RpcPort.
-$DEFAULT_RPC_PORT = 15715
+# Per-chain default RPC ports (CreateBaseChainParams, src/chainparamsbase.cpp). The daemon
+# defaults to the port of the chain it was started on when rpcport is unset and a packaged
+# gridcoinresearch.conf commonly omits rpcport -- so derive the default from the chain the
+# config selects instead of assuming mainnet. Assuming mainnet is not just a connectivity
+# bug: on a testnet node with no rpcport we would gate and POST to 15715, and if the same
+# user also runs a mainnet node here the gate answers "ours" and the TESTNET passphrase is
+# handed to the MAINNET wallet. An ambiguous chain is refused rather than guessed.
+$DEFAULT_RPC_PORT = 15715   # mainnet (CBaseChainParams::MAIN)
+$DEFAULT_RPC_PORTS = @{ 'main' = $DEFAULT_RPC_PORT; 'test' = 25715; 'regtest' = 35715 }
+
+# Secrets shorter than this are NOT registered for redaction: Format-Redacted is a plain
+# substring replace, so a short secret shreds unrelated text -- with rpcpassword=ass the
+# security-critical "REFUSING TO SEND CREDENTIALS" warning came out as mangled nonsense.
+# A secret that short cannot be meaningfully hidden in prose anyway.
+$MIN_REDACTABLE_SECRET_LEN = 8
 
 # RPC error codes we react to (src/rpc/protocol.h).
 $RPC_INVALID_PARAMETER = -8
@@ -92,7 +106,14 @@ $RPC_WALLET_ALREADY_UNLOCKED = -17
 $script:Secrets = New-Object System.Collections.Generic.List[string]
 
 function Register-Secret([string]$value) {
-    if ($value) { [void]$script:Secrets.Add($value) }
+    if (-not $value) { return }
+    if ($value.Length -lt $MIN_REDACTABLE_SECRET_LEN) {
+        Write-Warn ("a secret shorter than {0} characters was NOT registered for log redaction: " +
+            "redacting so short a string would shred unrelated text in every log line (the warnings " +
+            "included). Use a longer rpcpassword/passphrase." -f $MIN_REDACTABLE_SECRET_LEN)
+        return
+    }
+    [void]$script:Secrets.Add($value)
 }
 
 function Format-Redacted([string]$text) {
@@ -163,6 +184,60 @@ function Get-GridcoinConf {
         if (Test-Path -LiteralPath $p) { return (ConvertFrom-GridcoinConf ([IO.File]::ReadAllText($p))) }
     }
     return @{}
+}
+
+# InterpretBool (src/util/system.cpp): an empty value is true; otherwise the integer value,
+# with a non-integer parsing as 0 (false).
+function Test-ConfBool($value) {
+    if ($null -eq $value) { return $false }
+    $text = ([string]$value).Trim()
+    if (-not $text) { return $true }
+    $n = 0
+    if (-not [int]::TryParse($text, [ref]$n)) { return $false }
+    return ($n -ne 0)
+}
+
+# The chain this config selects, mirroring ArgsManager::GetChainName(): the regtest/testnet
+# booleans, else chain=, else 'main'. Returns $null when the config is ambiguous (more than
+# one selector -- which the core rejects outright) or names a chain we have no default port
+# for; the caller must then refuse to guess (see $DEFAULT_RPC_PORTS).
+function Get-ConfChain($cfgTable) {
+    # Config key -> the chain it selects. Order is irrelevant: more than one selector is
+    # ambiguous either way.
+    $chainFlags = @{ 'regtest' = 'regtest'; 'testnet' = 'test' }
+    $selectors = New-Object System.Collections.Generic.List[string]
+    foreach ($key in $chainFlags.Keys) {
+        if ($cfgTable.ContainsKey($key) -and (Test-ConfBool $cfgTable[$key])) { [void]$selectors.Add($chainFlags[$key]) }
+    }
+    if ($cfgTable.ContainsKey('chain') -and $cfgTable['chain']) {
+        [void]$selectors.Add(([string]$cfgTable['chain']).Trim().ToLowerInvariant())
+    }
+    if ($selectors.Count -gt 1) { return $null }
+    if ($selectors.Count -eq 1) {
+        if ($DEFAULT_RPC_PORTS.ContainsKey($selectors[0])) { return $selectors[0] }
+        return $null
+    }
+    return 'main'
+}
+
+# ---------------------------------------------------------------------------
+# Loopback classification (mirror is_loopback).
+# ---------------------------------------------------------------------------
+# Classify by PARSING the host as an IP address, never by string prefix. A DNS name like
+# "127.0.0.1.attacker.example" starts with "127." but resolves off-box: a prefix test would
+# call it loopback, run the ownership gate against our OWN port (which answers "ours"), and
+# then POST the Basic-auth header and the passphrase to the remote host in cleartext.
+# Anything that is not a loopback IP literal is remote -- with the single exception of the
+# name "localhost", which RFC 6761 reserves and requires resolution to map to loopback.
+# Treating that as remote would be worse than the prefix ever was: a remote target SKIPS the
+# gate entirely, so the very common rpcconnect=localhost would lose its ownership check.
+function Test-LoopbackHost([string]$hostName) {
+    $h = ([string]$hostName).Trim().ToLowerInvariant()
+    if ($h -eq 'localhost') { return $true }
+    if ($h.StartsWith('[') -and $h.EndsWith(']') -and $h.Length -gt 2) { $h = $h.Substring(1, $h.Length - 2) }
+    $addr = $null
+    if (-not [System.Net.IPAddress]::TryParse($h, [ref]$addr)) { return $false }   # a DNS name
+    return [System.Net.IPAddress]::IsLoopback($addr)
 }
 
 # ---------------------------------------------------------------------------
@@ -340,6 +415,15 @@ function Invoke-Poll([string]$url, [string]$auth, [int]$port, [bool]$loopback, [
     $needUnlock = ($null -eq $prevUptime) -or ($curUptime -lt $prevUptime)
     if (-not $needUnlock) { return @{ Uptime = $curUptime; Code = $EXIT_OK } }
 
+    # Re-gate immediately before the only call that carries the passphrase. The gate at the
+    # top of this poll ran BEFORE the getinfo round trip, and every request opens a fresh
+    # connection (KeepAlive = $false) -- so the core could have exited in that window and a
+    # foreign process won the bind race. Re-checking here closes that TOCTOU: the ownership
+    # check and the passphrase POST are now adjacent, with no round trip between them. The
+    # baseline stays at $prevUptime so the next poll retries the unlock.
+    $gateCode = Invoke-Gate $port $loopback $canGate
+    if ($null -ne $gateCode) { return @{ Uptime = $prevUptime; Code = $gateCode } }
+
     $r = Invoke-GridcoinRpc $url $auth 'walletpassphrase' @($passphrase, $timeout, $true)   # stake-only
     if ($r.Ok) {
         Write-Log 'wallet unlocked (stake-only)'
@@ -389,7 +473,17 @@ if ($RpcPort -gt 0) {
     }
     $port = $parsedPort
 } else {
-    $port = $DEFAULT_RPC_PORT
+    # No explicit port: take the default of the chain the config selects, never a blanket
+    # mainnet guess (see $DEFAULT_RPC_PORTS).
+    $chain = Get-ConfChain $cfg
+    if ($null -eq $chain) {
+        Write-Warn ('the config omits rpcport and does not select a chain unambiguously, so the RPC port ' +
+            'cannot be guessed safely -- set rpcport in the config file (or pass -RpcPort). Guessing the ' +
+            'mainnet port on a non-mainnet node would send this wallet''s passphrase to whichever wallet ' +
+            'is listening there.')
+        exit $EXIT_UNRECOVERABLE
+    }
+    $port = [int]$DEFAULT_RPC_PORTS[$chain]
 }
 
 if (-not $rpcUser -or -not $rpcPass) {
@@ -416,7 +510,7 @@ $urlHost = if ($rpcHost.Contains(':') -and -not $rpcHost.StartsWith('[')) { "[$r
 $url = "http://{0}:{1}/" -f $urlHost, $port
 
 # Gate applicability: a loopback target with the gate mechanism (Get-NetTCPConnection) present.
-$loopback = ($rpcHost -in @('127.0.0.1', '::1', 'localhost')) -or $rpcHost.StartsWith('127.')
+$loopback = Test-LoopbackHost $rpcHost
 $canGate = $false
 if ($loopback) {
     try { Get-Command Get-NetTCPConnection -ErrorAction Stop | Out-Null; $canGate = $true } catch { $canGate = $false }
