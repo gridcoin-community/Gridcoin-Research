@@ -1,3 +1,13 @@
+gridcoinresearch (5.5.1.5-1) unstable; urgency=medium
+
+  * 5.5.1.5 testnet
+
+    ipc, wallet, gui, build: multiprocess program-review hardening,
+    exploit-mitigation restoration, and the Flatpak data-directory fix
+    #3262 (@jamescowens)
+
+ -- Richard Leckinger <caraka@gridcoin.us>  Fri, 14 Aug 2026 10:11:27 -0400
+
 gridcoinresearch (5.5.1.1-1) unstable; urgency=medium
 
   * 5.5.1.0 + 05ba3a0
