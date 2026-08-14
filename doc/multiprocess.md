@@ -133,22 +133,38 @@ cd "C:\Program Files\GridcoinResearch\windows"
    binary creates it on first run and applies an owner-only DACL as it does so. A
    directory pre-created by anything else would inherit ordinary permissions instead.
 
-2. **Add the Defender exclusion before the first sync.** `WriteBlockToDisk` opens,
-   appends to and closes `blk*.dat` once per block, and Defender re-scans that
-   multi-gigabyte file on every close. On a 2-core VM syncing blocks 1-100,000 from a
-   LAN peer this measured **605s without the exclusion and 172s with it**, with
-   `MsMpEng` falling from 84% CPU to 6%.
+2. **Add the Defender exclusions before the first sync.** Two entries, covering two
+   different costs:
 
    ```powershell
    Add-MpPreference -ExclusionPath "$env:APPDATA\GridcoinResearch\blk*.dat"
+   Add-MpPreference -ExclusionPath "$env:APPDATA\GridcoinResearch\txleveldb"
    ```
 
-   The wildcard is required: block files roll over at ~2GB, so a literal
+   **`blk*.dat` -- the initial sync.** Defender re-scans the block files as they are
+   written. On a 2-core VM syncing blocks 1-100,000 from a LAN peer this measured
+   **605s without the exclusion and 172s with it**, with `MsMpEng` falling from 84%
+   CPU to 6%. The wildcard is required: block files roll over at ~2GB, so a literal
    `blk0001.dat` stops covering the file being written after the first rollover.
-   This excludes block data only -- `wallet.dat`, `database/` and `txleveldb` stay
-   fully scanned. Skipping it breaks nothing; it just makes the initial sync ~3.5x
-   slower, and the symptom (a wallet at low CPU while `MsMpEng` runs hot) looks like
-   a wallet problem rather than a scanner one. Numbers in
+   (Do not attribute this to a per-block open/close -- the handle is cached across
+   blocks now, and caching it did not move the Defender numbers.)
+
+   **`txleveldb` -- every startup thereafter.** The block index is LevelDB: many small
+   random reads across many `.ldb` files, which is the access pattern a realtime
+   scanner punishes most, because the cost tracks read count rather than bytes.
+   Measured on a Windows 11 VM against a mainnet wallet of 86,496 transactions, with
+   `blk*.dat` already excluded and the page cache warm in both cases: the wallet's
+   spent-flag reconciliation fell from **37.5s to 20.6s**, and total time from daemon
+   start to "Done loading" fell from **107.7s to 81.2s**.
+
+   That last number is startup latency, not a benchmark: the IPC socket is not created
+   until the node finishes loading, so until then the GUI has nothing to connect to and
+   an attach attempt simply fails.
+
+   `wallet.dat` and `database/` are still fully scanned. Skipping these breaks nothing;
+   it just makes the initial sync ~3.5x slower and every start meaningfully slower, and
+   the symptom (a wallet at low CPU while `MsMpEng` runs hot) looks like a wallet
+   problem rather than a scanner one. Numbers in
    [`../contrib/windows/README.md`](../contrib/windows/README.md).
 
 3. **Register and start the core task:**

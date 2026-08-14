@@ -96,14 +96,45 @@ cd "C:\Program Files\GridcoinResearch\windows"
 > appended to your existing config if it has none. Both are explained in
 > [`multiprocess.md` → *B. Retrofit an existing wallet*](multiprocess.md#b-retrofit-an-existing-wallet-windows).
 
-> **Add the Defender exclusion before the first sync.** Defender re-scans the block files as they are
-> written, and on a 2-core VM syncing blocks 1-100,000 from a LAN peer that is the difference between
-> **605s and 172s**. (The measurement stands, but do not attribute it to per-block open/close: the block
-> file handle is now cached across blocks, and doing so did not move the Defender numbers, because Defender
-> scans the writes rather than a close-after-modify. See the note in `src/node/blockstorage.cpp`.)
-> One entry, wildcard required (block files roll over at ~2GB):
-> `Add-MpPreference -ExclusionPath "$env:APPDATA\GridcoinResearch\blk*.dat"`. Details in
-> [`multiprocess.md`](multiprocess.md#a-fresh-install-windows).
+> **Add the Defender exclusions before the first sync.** Two entries, and both matter for different
+> reasons -- the first for the initial sync, the second for every start after it:
+>
+> ```powershell
+> Add-MpPreference -ExclusionPath "$env:APPDATA\GridcoinResearch\blk*.dat"
+> Add-MpPreference -ExclusionPath "$env:APPDATA\GridcoinResearch\txleveldb"
+> ```
+>
+> **`blk*.dat` -- initial sync.** Defender re-scans the block files as they are written, and on a 2-core
+> VM syncing blocks 1-100,000 from a LAN peer that is the difference between **605s and 172s**. The
+> wildcard is required; block files roll over at ~2GB. (The measurement stands, but do not attribute it
+> to per-block open/close: the block file handle is now cached across blocks, and doing so did not move
+> the Defender numbers, because Defender scans the writes rather than a close-after-modify. See the note
+> in `src/node/blockstorage.cpp`.)
+>
+> **`txleveldb` -- every startup.** The block index is LevelDB, which is close to the worst case for a
+> realtime scanner: thousands of small random reads spread over many `.ldb` files, where the cost tracks
+> read *count* rather than bytes. Startup issues one `ReadTxIndex` per candidate in the wallet's
+> spent-flag reconciliation, so on a large wallet that is thousands of scanned reads before the node is
+> usable.
+>
+> Measured on a Windows 11 VM, mainnet, 86,496 wallet transactions, block index 4,055,586 entries, with
+> `blk*.dat` already excluded in both cases and the page cache warm in both:
+>
+> | | without `txleveldb` excluded | with it excluded |
+> |---|---:|---:|
+> | load block chain (control -- excluded either way) | 47.1s | 42.8s |
+> | wallet spent-flag reconciliation | **37.5s** | **20.6s** |
+> | **total, daemon start to "Done loading"** | **107.7s** | **81.2s** |
+>
+> Roughly 26 seconds per start, for one line. The same wallet and build on Linux reaches "Done loading"
+> in 25.1s, so the exclusion narrows the gap without closing it -- the remainder is ordinary Windows and
+> VM I/O cost.
+>
+> Note this is startup latency, not just a benchmark: in a multiprocess deployment the GUI cannot attach
+> until the node finishes loading, because the IPC socket is not created until then. Whatever this phase
+> costs is time the GUI spends unable to connect.
+>
+> Details in [`multiprocess.md`](multiprocess.md#a-fresh-install-windows).
 
 ### 2. Run the core as a boot task
 

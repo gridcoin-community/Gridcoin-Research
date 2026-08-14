@@ -82,13 +82,32 @@ remaining way to stop the core is a hard kill with no database flush.
 
 ## Windows Defender exclusion (do this before syncing)
 
-**Exclude the block data files from Defender before a first sync.** One entry, and
-note the wildcard -- it matters:
+**Exclude the block data and the block index from Defender before a first sync.** Two
+entries, and note the wildcard on the first -- it matters:
 
 ```powershell
 # elevated PowerShell
 Add-MpPreference -ExclusionPath "$env:APPDATA\GridcoinResearch\blk*.dat"
+Add-MpPreference -ExclusionPath "$env:APPDATA\GridcoinResearch\txleveldb"
 ```
+
+The first covers the initial sync (numbers below). The second covers every startup
+after it: the block index is LevelDB, whose many small random reads are the pattern a
+realtime scanner punishes hardest, since the cost tracks read count rather than bytes.
+
+Measured on a Windows 11 VM against a mainnet wallet of 86,496 transactions and a
+4,055,586-entry block index, with `blk*.dat` already excluded in both cases and the
+page cache warm in both, so the only variable is the `txleveldb` exclusion:
+
+| phase | not excluded | excluded |
+|---|---:|---:|
+| load block chain (control -- excluded either way) | 47.1s | 42.8s |
+| wallet spent-flag reconciliation (`ReadTxIndex` per candidate) | **37.5s** | **20.6s** |
+| **daemon start to "Done loading"** | **107.7s** | **81.2s** |
+
+The control barely moves, which is what makes the comparison readable. The same wallet
+and build on Linux reaches "Done loading" in 25.1s, so this narrows the gap rather than
+closing it -- the rest is ordinary Windows and VM I/O cost.
 
 Measured on a 2-core Windows 11 VM syncing mainnet blocks 1..100,000 from a peer on
 the same LAN, so neither WAN latency nor peer speed is involved:
