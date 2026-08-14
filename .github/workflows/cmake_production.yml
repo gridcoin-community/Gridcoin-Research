@@ -146,10 +146,17 @@ jobs:
           echo "Checking binaries for unexpected shared library dependencies..."
 
           # Use readelf -d to inspect NEEDED entries from the ELF dynamic section.
-          # Allowed shared libraries: libc.so.6 and libm.so.6 only.
-          # The loader is how libc and libm get loaded at all, so it is not a
-          # dependency the build pulled in. Anything else still fails.
-          ALLOWED='libc\.so|libm\.so|ld-linux'
+          # Allowed shared libraries: libc and libm only. The loader is how they get
+          # loaded at all, so it is not a dependency the build pulled in.
+          #
+          # ANCHORED. The sed below leaves one bare SONAME per line, so the pattern
+          # matches a whole line rather than a substring: unanchored, a NEEDED entry
+          # merely CONTAINING an allowed fragment slipped through -- 'libmylibc.so.6'
+          # or 'unexpected-libm.so.6-plugin.so' were both accepted by a gate whose
+          # stated rule is libc/libm/loader only. The loader alternative covers every
+          # arch we build (ld-linux.so.2, ld-linux-x86-64.so.2, ld-linux-aarch64.so.1,
+          # ld-linux-armhf.so.3).
+          ALLOWED='^[[:space:]]*(libc\.so\.[0-9]+|libm\.so\.[0-9]+|ld-linux[-a-z0-9_]*\.so\.[0-9]+)[[:space:]]*$'
 
           # Check both the GUI (src/qt/) and Daemon (src/)
           # The build installs into <build_dir>/bin, not <build_dir>/src. Pointing

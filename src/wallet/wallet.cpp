@@ -4256,28 +4256,6 @@ void CWallet::ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountRele
         return false;
     };
 
-    // Which prevouts are consumed by a spender that IS active (in the main chain,
-    // in the mempool, or not yet classified)? Those flags must survive, whatever
-    // any other wallet transaction says about the same output.
-    //
-    // Skipping the active transaction itself is not sufficient. vfSpent is a single
-    // bit per output and does not record which transaction set it, so for a
-    // conflicting pair -- one spender in the mempool, one abandoned or conflicted --
-    // the inactive side reaches the same prevout and clears the bit the mempool side
-    // still depends on. The output then looks spendable again and the wallet can
-    // build a transaction double-spending its own unconfirmed input.
-    //
-    // The tx-index pass further down cannot cover this: a mempool spend has no entry
-    // in the index, so the chain has no opinion to defer to. It has to be excluded
-    // here, before the candidate is ever collected.
-    std::set<std::pair<uint256, unsigned int>> spent_by_active;
-    for (const auto& [hash, wtx] : mapWallet) {
-        if (!spend_is_active(wtx)) continue;
-        for (const CTxIn& txin : wtx.vin) {
-            spent_by_active.emplace(txin.prevout.hash, txin.prevout.n);
-        }
-    }
-
     // Collect first, write second: on an ordinary startup nothing qualifies and we
     // never touch the wallet database at all.
     // Keyed to dedupe: two wallet transactions can name the same prevout (a
@@ -4300,15 +4278,58 @@ void CWallet::ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountRele
             if (!prev.IsSpent(txin.prevout.n)) continue;
 
             const auto key = std::make_pair(txin.prevout.hash, txin.prevout.n);
-
-            // Another wallet transaction that IS active also spends this output.
-            // Its flag stands; this inactive spender does not get to clear it.
-            if (spent_by_active.count(key)) continue;
-
             if (release.emplace(key, &prev).second) {
                 nReleased++;
                 nAmountReleased += prev.vout[txin.prevout.n].nValue;
             }
+        }
+    }
+
+    if (release.empty()) return;
+
+    // An output consumed by a spender that IS active must keep its flag, whatever
+    // some other wallet transaction says about it.
+    //
+    // Skipping the active transaction itself is not enough. vfSpent is a single bit
+    // per output and does not record which transaction set it, so for a conflicting
+    // pair -- one spender in the mempool, one abandoned or conflicted -- the
+    // inactive side reaches the same prevout and would clear the bit the mempool
+    // side still depends on. The output then looks spendable again and the wallet
+    // can build a transaction double-spending its own unconfirmed input.
+    //
+    // The tx-index pass below cannot cover this: a mempool spend has no index entry,
+    // so the chain has no opinion to defer to.
+    //
+    // Deferred until there is at least one candidate, deliberately. Building this
+    // set costs a second full walk of mapWallet and every vin, and on an ordinary
+    // startup -- where nothing qualifies -- the result would be discarded unused.
+    // On a large wallet that is a real cost at every single start.
+    {
+        std::set<std::pair<uint256, unsigned int>> spent_by_active;
+        for (const auto& [hash, wtx] : mapWallet) {
+            if (!spend_is_active(wtx)) continue;
+            for (const CTxIn& txin : wtx.vin) {
+                spent_by_active.emplace(txin.prevout.hash, txin.prevout.n);
+            }
+        }
+
+        int still_spent = 0;
+        for (auto it = release.begin(); it != release.end(); ) {
+            if (spent_by_active.count(it->first)) {
+                nReleased--;
+                nAmountReleased -= it->second->vout[it->first.second].nValue;
+                it = release.erase(it);
+                still_spent++;
+            } else {
+                ++it;
+            }
+        }
+
+        if (still_spent > 0) {
+            LogPrintf("INFO: %s: left %d output(s) marked spent - another wallet transaction that "
+                      "IS in the active chain or the mempool also spends them, and vfSpent cannot "
+                      "record which spender set the flag",
+                      __func__, still_spent);
         }
     }
 

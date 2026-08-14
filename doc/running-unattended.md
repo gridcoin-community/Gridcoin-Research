@@ -96,9 +96,12 @@ cd "C:\Program Files\GridcoinResearch\windows"
 > appended to your existing config if it has none. Both are explained in
 > [`multiprocess.md` → *B. Retrofit an existing wallet*](multiprocess.md#b-retrofit-an-existing-wallet-windows).
 
-> **Add the Defender exclusion before the first sync.** The block files are reopened and closed once per
-> block, and Defender re-scans them each time; on a 2-core VM syncing blocks 1-100,000 from a LAN peer this
-> is the difference between **605s and 172s**. One entry, wildcard required (block files roll over at ~2GB):
+> **Add the Defender exclusion before the first sync.** Defender re-scans the block files as they are
+> written, and on a 2-core VM syncing blocks 1-100,000 from a LAN peer that is the difference between
+> **605s and 172s**. (The measurement stands, but do not attribute it to per-block open/close: the block
+> file handle is now cached across blocks, and doing so did not move the Defender numbers, because Defender
+> scans the writes rather than a close-after-modify. See the note in `src/node/blockstorage.cpp`.)
+> One entry, wildcard required (block files roll over at ~2GB):
 > `Add-MpPreference -ExclusionPath "$env:APPDATA\GridcoinResearch\blk*.dat"`. Details in
 > [`multiprocess.md`](multiprocess.md#a-fresh-install-windows).
 

@@ -167,6 +167,18 @@ CAVEATS -- checks with no corresponding Gridcoin build flag
     defaults already satisfy them. Only CONTROL_FLOW and CANARY failed on those
     probes -- i.e. those two are what the restored `-fcf-protection=full` and
     `-fstack-protector-all` + `-lssp` must supply.
+  * ELF AArch64 has NO branch-protection check, and this is a real gap rather than a
+    deliberate one. Linux arm64 DOES receive -mbranch-protection=standard (only
+    Darwin withholds it, below), but the ARM64 row runs BASE_ELF, which verifies no
+    such thing -- so an arm64 release could lose the flag entirely and this gate
+    would stay green. That contradicts the principle the gate exists for: asking for
+    a flag and confirming the artifact carries it are different things, and only the
+    second survives a build-system migration.
+    Closing it means checking the AArch64 GNU property note (GNU_PROPERTY_AARCH64_
+    FEATURE_1_AND, BTI/PAC bits) rather than an instruction at the entrypoint. Not
+    added here because there was no arm64 host to validate the check against, and a
+    hardening gate that fails on a correctly-built binary is worse than one with a
+    documented hole. Do not describe arm64 branch protection as verified until it is.
   * MachO arm64 BRANCH_PROTECTION is NOT WIRED UP, deliberately. It requires
     `-mbranch-protection`, and that flag is withheld on Darwin: the pointer
     authentication it emits on plain arm64 defeats the unwinder, so a throw stops

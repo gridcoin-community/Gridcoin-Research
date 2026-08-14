@@ -93,9 +93,16 @@ security-check.py
 =================
 
 Checks that built executables carry the exploit mitigations the build asks for:
-PIE/ASLR, a stack canary, `_FORTIFY_SOURCE`, full RELRO, non-executable stack and
-branch protection, per format (ELF, PE, Mach-O). Requires `lief`; the release
-workflow pins the version it installs.
+PIE/ASLR, a stack canary, `_FORTIFY_SOURCE`, full RELRO and a non-executable
+stack, per format (ELF, PE, Mach-O). Requires `lief`; the release workflow pins
+the version it installs.
+
+Indirect-branch protection is verified only where a check exists for it: CET
+(`endbr64`) on ELF and PE x86_64, and on Mach-O x86_64. It is **not** verified on
+ELF AArch64, so a Linux arm64 build could lose `-mbranch-protection=standard`
+without this gate noticing -- see the CAVEATS section in the script. On Mach-O
+AArch64 there is deliberately nothing to verify: the flag is withheld there
+because its pointer-authentication codegen breaks unwinding on plain arm64.
 
 Run it against the binaries in a build tree:
 
