@@ -91,15 +91,20 @@ jobs:
             depends/work
             depends/${{ matrix.host }}
             depends/sdk-sources
-          key: ${{ env.os_ref }}-depends-${{ matrix.host }}-${{ hashFiles('depends/packages/*', 'depends/Makefile', 'depends/qt.include') }}
+          # 'mp' in the key: MULTIPROCESS=1 builds extra packages, so this tree is not
+          # interchangeable with a non-multiprocess one built from the same sources.
+          key: ${{ env.os_ref }}-depends-mp-${{ matrix.host }}-${{ hashFiles('depends/packages/*', 'depends/Makefile', 'depends/qt.include') }}
 
       # 4. Build Depends
       - name: Build Depends
         if: steps.cache-depends.outputs.cache-hit != 'true'
         run: |
           cd depends
+          # MULTIPROCESS=1 adds native_capnp and capnp, which the release build needs
+          # now that it ships the multiprocess binary. Same recipe the multiprocess
+          # workflow uses for these two hosts.
           # Make (legacy) needs explicit -j flag; we use the variable if set, else nproc
-          make HOST=${{ matrix.host }} -j${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}
+          make HOST=${{ matrix.host }} MULTIPROCESS=1 -j${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}
 
       # 5. Configure CMake
       - name: Configure CMake
@@ -126,6 +131,7 @@ jobs:
             -DENABLE_GUI=ON \
             -DUSE_QT6=ON \
             -DENABLE_UPNP=ON \
+            -DENABLE_MULTIPROCESS=ON \
             -DENABLE_TESTS=ON \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DDEP_LIB="${DEP_LIB_PATH}" \
@@ -291,7 +297,7 @@ jobs:
       - name: Install Dependencies
         run: |
           brew update
-          brew install qt boost openssl libevent miniupnpc qrencode libzip ccache cmake
+          brew install qt boost openssl libevent miniupnpc qrencode libzip ccache cmake capnp
 
       - name: Configure Ccache
         uses: actions/cache@v5
@@ -374,6 +380,7 @@ jobs:
             -DENABLE_GUI=ON \
             -DENABLE_QRENCODE=ON \
             -DENABLE_UPNP=ON \
+            -DENABLE_MULTIPROCESS=ON \
             -DENABLE_PIE=ON \
             -DENABLE_TESTS=ON \
             -DENABLE_DOCS=OFF \
@@ -505,7 +512,7 @@ jobs:
           # The ARM64 runner has Rosetta 2, so x86_64 binaries run transparently.
           arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
           arch -x86_64 /usr/local/bin/brew update
-          arch -x86_64 /usr/local/bin/brew install qt boost openssl libevent miniupnpc qrencode libzip ccache cmake
+          arch -x86_64 /usr/local/bin/brew install qt boost openssl libevent miniupnpc qrencode libzip ccache cmake capnp
 
       - name: Configure Ccache
         uses: actions/cache@v5
@@ -586,6 +593,7 @@ jobs:
             -DENABLE_GUI=ON \
             -DENABLE_QRENCODE=ON \
             -DENABLE_UPNP=ON \
+            -DENABLE_MULTIPROCESS=ON \
             -DENABLE_PIE=ON \
             -DENABLE_TESTS=ON \
             -DENABLE_DOCS=OFF \
@@ -714,7 +722,8 @@ jobs:
       - name: Install Dependencies
         run: |
           source ./install_dependencies.sh
-          install_deps native true true
+          # 4th arg: system Cap'n Proto, for the multiprocess build below.
+          install_deps native true true true
 
       - name: Setup Concurrency
         run: |
@@ -737,6 +746,7 @@ jobs:
         run: |
           cmake -B build_native \
             -DENABLE_GUI=ON \
+            -DENABLE_MULTIPROCESS=ON \
             -DUSE_QT6=ON \
             -DENABLE_UPNP=ON \
             -DENABLE_PIE=ON \
@@ -817,6 +827,7 @@ jobs:
             libboost-serialization-dev:arm64 libboost-chrono-dev:arm64 \
             libminiupnpc-dev:arm64 libxkbcommon-dev:arm64 \
             libcups2t64:arm64 \
+            libcapnp-dev:arm64 capnproto \
             ccache
 
       - name: Setup Concurrency
@@ -852,6 +863,7 @@ jobs:
             -DUSE_QT6=ON \
             -DQt6_DIR=/usr/lib/aarch64-linux-gnu/cmake/Qt6 \
             -DENABLE_UPNP=ON \
+            -DENABLE_MULTIPROCESS=ON \
             -DENABLE_PIE=ON \
             -DENABLE_TESTS=OFF \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
