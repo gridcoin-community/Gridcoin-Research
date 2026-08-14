@@ -457,11 +457,37 @@ if(APPLE)
         endif()
     endif()
 
+    # Ship the daemon inside the bundle.
+    #
+    # Without this the DMG contains the GUI only, so -multiprocess is unusable from a
+    # macOS install: the IPC layer is connect-only (it attaches to a node already
+    # listening on node.sock and never spawns one), and there is no node to attach to.
+    # Every macOS artifact has multiprocess compiled in and advertises -multiprocess in
+    # --help, so shipping without the daemon leaves the option present and impossible to
+    # satisfy. The Windows installer already ships both.
+    #
+    # It goes in Contents/Helpers, not Contents/MacOS. Contents/MacOS is for the
+    # bundle's MAIN executable; codesign treats any other Mach-O there as a
+    # subcomponent that must be independently valid, and an auxiliary binary placed
+    # there fails bundle verification with "code object is not signed at all".
+    # Contents/Helpers is Apple's location for auxiliary executables, and it is a
+    # sibling of Contents/Frameworks exactly as Contents/MacOS is, so the
+    # @executable_path/../Frameworks/... install names resolve from it unchanged.
+    #
+    # It is copied in BEFORE macdeployqtplus runs, so the same pass that relocates the
+    # GUI's library references also relocates the daemon's, and so the daemon is signed
+    # in the inside-out order -- see deployFrameworksForHelpers() and step 3 of the
+    # signing sequence there. Copying it afterwards would leave the daemon pointing at
+    # Homebrew paths that do not exist on a user's machine, and unsigned.
     add_custom_target(deploy
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${_app_bundle}/Contents/Helpers"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:gridcoinresearchd>"
+                "${_app_bundle}/Contents/Helpers/"
         COMMAND ${CMAKE_COMMAND} -E env "QTDIR=${_qt_prefix_dir}" ${_deploy_cmd}
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
         COMMENT "Deploying ${_dmg_name}.dmg via macdeployqtplus"
-        DEPENDS gridcoinresearch
+        DEPENDS gridcoinresearch gridcoinresearchd
     )
 endif()
 

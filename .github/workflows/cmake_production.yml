@@ -474,6 +474,37 @@ jobs:
             echo "WARNING: Code signature verification failed (ad-hoc signing may not verify on CI)"
           fi
 
+          # The daemon must ship alongside the GUI: multiprocess is compiled into
+          # every macOS artifact and the IPC layer is connect-only, so a DMG without
+          # a node makes -multiprocess impossible to satisfy.
+          DAEMON="$APP/Contents/Helpers/gridcoinresearchd"
+          if [ ! -x "$DAEMON" ]; then
+            echo "FAIL: gridcoinresearchd missing from the bundle"
+            ls -la "$APP/Contents/Helpers/" "$APP/Contents/MacOS/" || true
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: gridcoinresearchd present in the bundle"
+
+          # Neither binary may reference a build-machine library path. Homebrew is
+          # present on the runner and on most developer machines, so a missed
+          # relocation runs fine here and fails only on a clean install -- which is
+          # exactly the failure this check exists to catch, and why it asserts rather
+          # than reports.
+          leak=0
+          for b in "$BINARY" "$DAEMON"; do
+            if otool -L "$b" | tail -n +2 | grep -qE "^[[:space:]]*(/usr/local|/opt/homebrew)"; then
+              echo "FAIL: $(basename "$b") references build-machine libraries:"
+              otool -L "$b" | tail -n +2 | grep -E "^[[:space:]]*(/usr/local|/opt/homebrew)"
+              leak=1
+            fi
+          done
+          if [ "$leak" -ne 0 ]; then
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: no build-machine library paths in either binary"
+
           # Verify binary is a valid Mach-O executable (no runtime execution
           # since the GUI binary pops up dialogs that hang in headless CI)
           if file "$BINARY" | grep -q "Mach-O"; then
@@ -683,6 +714,37 @@ jobs:
           else
             echo "WARNING: Code signature verification failed (ad-hoc signing may not verify on CI)"
           fi
+
+          # The daemon must ship alongside the GUI: multiprocess is compiled into
+          # every macOS artifact and the IPC layer is connect-only, so a DMG without
+          # a node makes -multiprocess impossible to satisfy.
+          DAEMON="$APP/Contents/Helpers/gridcoinresearchd"
+          if [ ! -x "$DAEMON" ]; then
+            echo "FAIL: gridcoinresearchd missing from the bundle"
+            ls -la "$APP/Contents/Helpers/" "$APP/Contents/MacOS/" || true
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: gridcoinresearchd present in the bundle"
+
+          # Neither binary may reference a build-machine library path. Homebrew is
+          # present on the runner and on most developer machines, so a missed
+          # relocation runs fine here and fails only on a clean install -- which is
+          # exactly the failure this check exists to catch, and why it asserts rather
+          # than reports.
+          leak=0
+          for b in "$BINARY" "$DAEMON"; do
+            if otool -L "$b" | tail -n +2 | grep -qE "^[[:space:]]*(/usr/local|/opt/homebrew)"; then
+              echo "FAIL: $(basename "$b") references build-machine libraries:"
+              otool -L "$b" | tail -n +2 | grep -E "^[[:space:]]*(/usr/local|/opt/homebrew)"
+              leak=1
+            fi
+          done
+          if [ "$leak" -ne 0 ]; then
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: no build-machine library paths in either binary"
 
           # Verify binary is a valid Mach-O executable (no runtime execution
           # since the GUI binary pops up dialogs that hang in headless CI)
