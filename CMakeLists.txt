@@ -297,8 +297,12 @@ if(ENABLE_UPNP)
             # configure. Requiring it here would turn "cmake -B build" into a hard
             # failure on any machine without it. Build without UPnP instead, and
             # say so.
-            message(WARNING "miniupnpc not found: building without UPnP support. "
-                            "Pass -DENABLE_UPNP=ON to make this an error instead.")
+            # No "pass -DENABLE_UPNP=ON to make this fatal" advice here: ENABLE_UPNP
+            # already defaults to ON, and option() caches, so this branch cannot tell
+            # an explicit -DENABLE_UPNP=ON from the default. An earlier revision tried
+            # to and became fatal on every RE-configure once the value was cached.
+            # Offering a switch that does nothing is worse than not offering one.
+            message(WARNING "miniupnpc not found: building without UPnP support.")
             set(ENABLE_UPNP OFF)
         endif()
     endif()

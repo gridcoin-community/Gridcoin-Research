@@ -47,11 +47,26 @@ bool WriteBlockToDisk(const CBlock& block, unsigned int& nFileRet, unsigned int&
     if (fileout.IsNull())
         return error("%s: AppendBlockFile failed", __func__);
 
-    // Disown on EVERY exit -- including the error returns below, which would
-    // otherwise close the cached handle and leave g_block_file dangling.
+    // Disown on EVERY exit -- including the error returns below and an exception
+    // thrown out of serialization -- because letting CAutoFile close the cached
+    // handle would leave g_block_file dangling.
+    //
+    // Disowning alone is not enough on an UNSUCCESSFUL exit, though. Serializing
+    // the header or the block can throw on a short fwrite(), and the old per-call
+    // CAutoFile would have closed the file as the exception unwound. With the cache
+    // in place, a bare release() hands a partially written, error-state stream back
+    // to g_block_file, and the next block appends through it -- writing after a
+    // torn record and inheriting the error state. So the handle is invalidated
+    // unless the write is known to have completed: ok is set only after
+    // serialization, the flush and any sync have all succeeded.
     struct ReleaseCachedHandle {
         CAutoFile& file;
-        ~ReleaseCachedHandle() { file.release(); }
+        bool ok = false;
+        ~ReleaseCachedHandle()
+        {
+            file.release();            // never let CAutoFile close a cached handle
+            if (!ok) CloseBlockFile(); // ... but do not keep one of unknown state
+        }
     } release_guard{fileout};
 
     // Write index header
@@ -74,16 +89,12 @@ bool WriteBlockToDisk(const CBlock& block, unsigned int& nFileRet, unsigned int&
     // report success, after which the block index records a position for data that
     // never left the process.
     //
-    // On failure the cached handle is closed rather than released back: a stream
-    // that failed to flush retains its error state, so every later append through
-    // the same handle would inherit it and fail the same way. CloseBlockFile()
-    // drops it and the next append reopens. That is safe against the guard above --
-    // CAutoFile::release() only disowns the pointer, it does not close it, so there
-    // is no double close.
+    // A stream that failed to flush retains its error state, so it must not go back
+    // into the cache; the guard above handles that for this and every other
+    // unsuccessful exit.
     if (fflush(fileout.Get()) != 0) {
-        const int flush_errno = errno;
-        CloseBlockFile();
-        return error("%s: fflush failed, block not written (errno %d)", __func__, flush_errno);
+        // The guard invalidates the cached handle on this unsuccessful exit.
+        return error("%s: fflush failed, block not written (errno %d)", __func__, errno);
     }
     if (!IsInitialBlockDownload() || (nBestHeight + 1) % 5000 == 0) {
         // Pair the block-file fsync with a LevelDB WAL sync barrier so the
@@ -108,6 +119,9 @@ bool WriteBlockToDisk(const CBlock& block, unsigned int& nFileRet, unsigned int&
         }
     }
 
+    // Everything that can leave the stream unusable has succeeded: the cached
+    // handle may be reused for the next append.
+    release_guard.ok = true;
     return true;
 }
 

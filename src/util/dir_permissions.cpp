@@ -207,9 +207,16 @@ bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
     boost::system::error_code ec;
     const bool created = fs::create_directories(path, ec);
 
-    if (ec && !fs::is_directory(path, ec)) {
-        error = "could not create the directory " + path.string() + ": " + ec.message();
-        return false;
+    // The status query gets its OWN error_code. Reusing ec would overwrite the
+    // create_directories() failure that is about to be reported: when the query
+    // itself succeeds, ec is cleared and the message reads "could not create ...:
+    // Success", which hides the only actionable part of the diagnostic.
+    if (ec) {
+        boost::system::error_code stat_ec;
+        if (!fs::is_directory(path, stat_ec)) {
+            error = "could not create the directory " + path.string() + ": " + ec.message();
+            return false;
+        }
     }
 
     // Already there: leave it exactly as the operator configured it. Re-tightening
