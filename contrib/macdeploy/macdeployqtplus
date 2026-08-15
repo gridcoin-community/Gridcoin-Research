@@ -783,7 +783,7 @@ if config.sign is not None and platform.system() == "Darwin":
     # 5. Sign the top-level app bundle (with entitlements)
     codesignItem(target, identity, entitlements_path, hardened, verbose)
 
-    # 5. Verify
+    # 6. Verify
     print("+ Verifying code signature +")
     subprocess.check_call(["codesign", "--verify", "--strict", "--verbose=2", target])
 

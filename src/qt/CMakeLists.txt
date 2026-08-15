@@ -479,15 +479,36 @@ if(APPLE)
     # in the inside-out order -- see deployFrameworksForHelpers() and step 3 of the
     # signing sequence there. Copying it afterwards would leave the daemon pointing at
     # Homebrew paths that do not exist on a user's machine, and unsigned.
+    # gridcoinresearchd is only a target when ENABLE_DAEMON is ON (src/CMakeLists.txt).
+    # Naming it unconditionally makes CMake fail at generate time with an "Unknown target"
+    # error that says nothing about the option that caused it, so the copy is conditional.
+    # Its absence is reported rather than silent: a bundle whose GUI advertises
+    # -multiprocess with no daemon beside it is the exact defect this target exists to
+    # prevent, and that combination is worth a warning rather than a note.
+    set(_deploy_helper_commands)
+    set(_deploy_helper_depends)
+    if(TARGET gridcoinresearchd)
+        set(_deploy_helper_commands
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${_app_bundle}/Contents/Helpers"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "$<TARGET_FILE:gridcoinresearchd>"
+                    "${_app_bundle}/Contents/Helpers/")
+        set(_deploy_helper_depends gridcoinresearchd)
+    elseif(ENABLE_MULTIPROCESS)
+        message(WARNING
+            "ENABLE_DAEMON is OFF but ENABLE_MULTIPROCESS is ON: the DMG will contain a GUI "
+            "that advertises -multiprocess with no gridcoinresearchd beside it to connect to.")
+    else()
+        message(STATUS
+            "Deploy: ENABLE_DAEMON is OFF, so the DMG will not contain gridcoinresearchd")
+    endif()
+
     add_custom_target(deploy
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${_app_bundle}/Contents/Helpers"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "$<TARGET_FILE:gridcoinresearchd>"
-                "${_app_bundle}/Contents/Helpers/"
+        ${_deploy_helper_commands}
         COMMAND ${CMAKE_COMMAND} -E env "QTDIR=${_qt_prefix_dir}" ${_deploy_cmd}
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
         COMMENT "Deploying ${_dmg_name}.dmg via macdeployqtplus"
-        DEPENDS gridcoinresearch gridcoinresearchd
+        DEPENDS gridcoinresearch ${_deploy_helper_depends}
     )
 endif()
 
