@@ -1307,11 +1307,14 @@ cmake_production.yml
 
 When a tag is pushed (e.g., `v5.4.9.99`):
 
-1. All Production builds complete
+1. All Production builds complete -- every artifact-producing job must be in the `deploy`
+   job's `needs:` list, or it races the release and its asset is silently dropped
 2. `deploy` job activates
 3. Downloads all artifacts (Linux `.tar.gz`, Windows `.exe`, macOS `.dmg`)
-4. Generates `SHA256SUMS.txt`
-5. Creates **Draft Release** on GitHub with binaries attached
+4. Creates **Draft Release** on GitHub with binaries attached
+
+Checksums are not generated: the GitHub release page already publishes a SHA-256 digest for
+every attached asset.
 
 **Manual steps** (maintainer only):
 - Review draft release

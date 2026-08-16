@@ -474,6 +474,37 @@ jobs:
             echo "WARNING: Code signature verification failed (ad-hoc signing may not verify on CI)"
           fi
 
+          # The daemon must ship alongside the GUI: multiprocess is compiled into
+          # every macOS artifact and the IPC layer is connect-only, so a DMG without
+          # a node makes -multiprocess impossible to satisfy.
+          DAEMON="$APP/Contents/Helpers/gridcoinresearchd"
+          if [ ! -x "$DAEMON" ]; then
+            echo "FAIL: gridcoinresearchd missing from the bundle"
+            ls -la "$APP/Contents/Helpers/" "$APP/Contents/MacOS/" || true
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: gridcoinresearchd present in the bundle"
+
+          # Neither binary may reference a build-machine library path. Homebrew is
+          # present on the runner and on most developer machines, so a missed
+          # relocation runs fine here and fails only on a clean install -- which is
+          # exactly the failure this check exists to catch, and why it asserts rather
+          # than reports.
+          leak=0
+          for b in "$BINARY" "$DAEMON"; do
+            if otool -L "$b" | tail -n +2 | grep -qE "^[[:space:]]*(/usr/local|/opt/homebrew)"; then
+              echo "FAIL: $(basename "$b") references build-machine libraries:"
+              otool -L "$b" | tail -n +2 | grep -E "^[[:space:]]*(/usr/local|/opt/homebrew)"
+              leak=1
+            fi
+          done
+          if [ "$leak" -ne 0 ]; then
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: no build-machine library paths in either binary"
+
           # Verify binary is a valid Mach-O executable (no runtime execution
           # since the GUI binary pops up dialogs that hang in headless CI)
           if file "$BINARY" | grep -q "Mach-O"; then
@@ -683,6 +714,37 @@ jobs:
           else
             echo "WARNING: Code signature verification failed (ad-hoc signing may not verify on CI)"
           fi
+
+          # The daemon must ship alongside the GUI: multiprocess is compiled into
+          # every macOS artifact and the IPC layer is connect-only, so a DMG without
+          # a node makes -multiprocess impossible to satisfy.
+          DAEMON="$APP/Contents/Helpers/gridcoinresearchd"
+          if [ ! -x "$DAEMON" ]; then
+            echo "FAIL: gridcoinresearchd missing from the bundle"
+            ls -la "$APP/Contents/Helpers/" "$APP/Contents/MacOS/" || true
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: gridcoinresearchd present in the bundle"
+
+          # Neither binary may reference a build-machine library path. Homebrew is
+          # present on the runner and on most developer machines, so a missed
+          # relocation runs fine here and fails only on a clean install -- which is
+          # exactly the failure this check exists to catch, and why it asserts rather
+          # than reports.
+          leak=0
+          for b in "$BINARY" "$DAEMON"; do
+            if otool -L "$b" | tail -n +2 | grep -qE "^[[:space:]]*(/usr/local|/opt/homebrew)"; then
+              echo "FAIL: $(basename "$b") references build-machine libraries:"
+              otool -L "$b" | tail -n +2 | grep -E "^[[:space:]]*(/usr/local|/opt/homebrew)"
+              leak=1
+            fi
+          done
+          if [ "$leak" -ne 0 ]; then
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: no build-machine library paths in either binary"
 
           # Verify binary is a valid Mach-O executable (no runtime execution
           # since the GUI binary pops up dialogs that hang in headless CI)
@@ -1068,7 +1130,16 @@ jobs:
   # ----------------------------------------------------------------------
   deploy:
     name: Create Release
-    needs: [depends-builds, flatpak-build]
+    # EVERY job that uploads a gridcoin-* artifact must be listed here.
+    # download-artifact takes whatever exists at the moment it runs, so a producer
+    # missing from this list is a race, not a dependency detail: if it finishes after
+    # this job, its asset is silently absent from the release and the job still
+    # reports success. That is exactly how 5.5.1.5-testnet shipped without the macOS
+    # Intel DMG -- the Intel build completed 4m48s AFTER the release was assembled,
+    # while the ARM64 build happened to finish 17 minutes before it and was included.
+    # The docker-* artifacts are deliberately NOT needed: they feed docker-publish and
+    # are excluded from the release by the gridcoin-* glob below.
+    needs: [depends-builds, flatpak-build, macos-native-arm64, macos-native-intel]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -1081,17 +1152,25 @@ jobs:
 
       - name: Assemble Release Assets
         run: |
+          set -euo pipefail
           mkdir -p release_assets
 
-          # Copy all artifacts into release_assets
-          for dir in artifacts/gridcoin-*/; do
-            cp "$dir"* release_assets/ 2>/dev/null || true
+          # Copy all artifacts into release_assets. A failure here used to be
+          # swallowed by "2>/dev/null || true", which made a missing or unreadable
+          # artifact indistinguishable from a present one; the release then shipped
+          # short and still went green.
+          shopt -s nullglob
+          dirs=(artifacts/gridcoin-*/)
+          if [ ${#dirs[@]} -eq 0 ]; then
+            echo "No gridcoin-* artifacts were downloaded; nothing to release." >&2
+            exit 1
+          fi
+          for dir in "${dirs[@]}"; do
+            cp "$dir"* release_assets/
           done
 
           cd release_assets
           ls -la
-          sha256sum * > SHA256SUMS.txt
-          cat SHA256SUMS.txt
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2

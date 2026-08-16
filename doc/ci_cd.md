@@ -100,11 +100,17 @@ The `deploy` job in `cmake_production.yml` automates the release process.
 
   * **Trigger:** Pushing a tag (e.g., `git tag v5.4.9.99 && git push --tags`).
   * **Process:**
-    1.  Waits for Linux, Windows, and macOS builds to succeed.
+    1.  Waits for Linux, Windows, and macOS builds to succeed. Every job that uploads a
+        `gridcoin-*` artifact must appear in the `deploy` job's `needs:` list --
+        `download-artifact` collects whatever exists when it runs, so a producer left out
+        of `needs:` races the release and its asset is silently dropped.
     2.  Downloads all artifacts.
     3.  **Flattens** them (moves files from subfolders to root).
-    4.  Generates `SHA256SUMS.txt`.
-    5.  Creates a **Draft Release** on GitHub with all binaries attached.
+    4.  Creates a **Draft Release** on GitHub with all binaries attached.
+
+Checksums are not generated. The GitHub release page publishes a SHA-256 digest for every
+attached asset, so a separate `SHA256SUMS.txt` duplicated information the platform already
+provides.
 
 -----
 

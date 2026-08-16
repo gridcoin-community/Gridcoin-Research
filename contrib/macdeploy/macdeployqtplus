@@ -439,6 +439,52 @@ def deployFrameworks(frameworks: List[FrameworkInfo], bundlePath: str, binaryPat
 
     return deploymentInfo
 
+def helperBinaries(applicationBundle: ApplicationBundleInfo) -> List[str]:
+    """Executables shipped in Contents/Helpers, in a stable order.
+
+    Contents/MacOS is for the bundle's MAIN executable. Auxiliary executables belong
+    in Contents/Helpers: codesign treats a stray Mach-O in Contents/MacOS as a
+    subcomponent that must be independently valid, and an unsigned one there makes the
+    whole bundle fail verification with "code object is not signed at all".
+    """
+    helpersDir = os.path.join(applicationBundle.path, "Contents", "Helpers")
+    if not os.path.isdir(helpersDir):
+        return []
+    out = []
+    for name in sorted(os.listdir(helpersDir)):
+        path = os.path.join(helpersDir, name)
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            out.append(path)
+    return out
+
+
+def deployFrameworksForHelpers(applicationBundle: ApplicationBundleInfo, deploymentInfo: DeploymentInfo, strip: bool, verbose: int):
+    """Relocate library references for the helper executables.
+
+    The bundle ships gridcoinresearchd so the multiprocess (GUI/node split) build is
+    usable from the DMG. ApplicationBundleInfo.binaryPath names only the GUI, so
+    without this pass the daemon keeps whatever absolute install names it linked
+    against -- typically Homebrew paths under /usr/local or /opt/homebrew. It would run
+    on the build machine and on any developer box with the same brew packages, and fail
+    on a clean install with a dyld error naming a library the user has never heard of.
+
+    Contents/Helpers is a sibling of Contents/Frameworks, exactly as Contents/MacOS is,
+    so the @executable_path/../Frameworks/... install names deployFrameworks() writes
+    resolve from a helper unchanged.
+
+    deployFrameworks() is safe to call again here: it rewrites the passed binary's
+    install names first, and copyFramework() returns None for anything already in the
+    bundle, so shared libraries are relocated rather than duplicated. Libraries a helper
+    needs and the GUI does not are copied in on this pass.
+    """
+    for binaryPath in helperBinaries(applicationBundle):
+        print(f"+ Deploying frameworks for {os.path.basename(binaryPath)} +")
+        frameworks = getFrameworks(binaryPath, verbose)
+        if not frameworks:
+            continue
+        deployFrameworks(frameworks, applicationBundle.path, binaryPath, strip, verbose, deploymentInfo)
+
+
 def deployFrameworksForAppBundle(applicationBundle: ApplicationBundleInfo, strip: bool, verbose: int) -> DeploymentInfo:
     frameworks = getFrameworks(applicationBundle.binaryPath, verbose)
     if len(frameworks) == 0:
@@ -572,6 +618,7 @@ print("+ Deploying frameworks +")
 
 try:
     deploymentInfo = deployFrameworksForAppBundle(applicationBundle, config.strip, verbose)
+    deployFrameworksForHelpers(applicationBundle, deploymentInfo, config.strip, verbose)
     if deploymentInfo.qtPath is None:
         deploymentInfo.qtPath = os.getenv("QTDIR", None)
         if deploymentInfo.qtPath is None:
@@ -715,14 +762,28 @@ if config.sign is not None and platform.system() == "Darwin":
                     codesignItem(os.path.join(dirpath, filename),
                                  identity, None, hardened, verbose)
 
-    # 3. Sign the main executable (with entitlements)
+    # 3. Sign helper executables in Contents/Helpers, BEFORE the main binary and the
+    #    bundle. Inside-out order is not a style choice here: codesign validates a
+    #    bundle's subcomponents, so an unsigned helper makes signing the bundle fail
+    #    with "code object is not signed at all" naming the helper as the subcomponent.
+    #    Helpers get the same entitlements as the main binary -- gridcoinresearchd does
+    #    the same networking and file access the GUI does when it runs core in-process,
+    #    so under a hardened runtime it needs the same grants.
+    helpers_dir = os.path.join(target, "Contents", "Helpers")
+    if os.path.exists(helpers_dir):
+        for item in sorted(os.listdir(helpers_dir)):
+            item_path = os.path.join(helpers_dir, item)
+            if os.path.isfile(item_path) and os.access(item_path, os.X_OK):
+                codesignItem(item_path, identity, entitlements_path, hardened, verbose)
+
+    # 4. Sign the main executable (with entitlements)
     main_binary = os.path.join(target, "Contents", "MacOS", "gridcoinresearch")
     codesignItem(main_binary, identity, entitlements_path, hardened, verbose)
 
-    # 4. Sign the top-level app bundle (with entitlements)
+    # 5. Sign the top-level app bundle (with entitlements)
     codesignItem(target, identity, entitlements_path, hardened, verbose)
 
-    # 5. Verify
+    # 6. Verify
     print("+ Verifying code signature +")
     subprocess.check_call(["codesign", "--verify", "--strict", "--verbose=2", target])
 
