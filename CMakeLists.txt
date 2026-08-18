@@ -218,6 +218,31 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.30)
     cmake_policy(SET CMP0167 OLD)
 endif()
 
+# CMake's FindBoost defaults Boost_USE_DEBUG_RUNTIME to TRUE when the caller has not
+# set it. That is an MSVC-only concept -- it selects the /MDd runtime -- but Boost's own
+# CMake config files honour it on every platform: each variant file begins with
+#
+#     if(Boost_USE_DEBUG_RUNTIME)
+#       _BOOST_SKIPPED("libboost_foo.so" "release runtime, ...")
+#
+# so on a distribution that ships only release-runtime variants EVERY variant is rejected
+# and Boost is reported as not found ("No suitable build variant has been found").
+# FreeBSD's boost packages are built that way.
+#
+# This only bites when FindBoost actually runs its module search: FindBoost first delegates
+# to find_package(Boost NO_MODULE) and returns early if a BoostConfig.cmake is found, in
+# which case the default is never assigned. So the failure appears on systems whose Boost
+# lacks the CMake config package, and not on those that have it -- which is why it is not
+# reproducible everywhere.
+#
+# Set it OFF up front rather than unsetting it afterwards: FindBoost only assigns the
+# default under if(NOT DEFINED ...), so a value defined here is preserved, it covers the
+# pre-1.70 module-mode branch below as well, and it does not discard a value a user or
+# toolchain file set deliberately.
+if(NOT DEFINED Boost_USE_DEBUG_RUNTIME)
+    set(Boost_USE_DEBUG_RUNTIME OFF)
+endif()
+
 find_package(Boost ${BOOST_MINIMUM_VERSION} REQUIRED)
 
 if(Boost_VERSION VERSION_LESS 1.69.0)
