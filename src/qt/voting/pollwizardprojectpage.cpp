@@ -91,9 +91,12 @@ void PollWizardProjectPage::setModel(VotingModel* voting_model)
         return;
     }
 
-    // These limits come from the model, so they cannot be applied in the
-    // constructor: PollWizard runs setupUi() -- which constructs this page --
-    // before it calls setModel(), so the model is not attached yet there.
+    // These two limits are the ONLY non-static ones on VotingModel
+    // (votingmodel.h), so they are the only ones that need a live instance.
+    // PollWizard runs setupUi() -- which constructs this page -- before it calls
+    // setModel(), so the model is not attached during the constructor and these
+    // must be applied here instead. The details page sets its own limits in its
+    // constructor precisely because those accessors are static.
     ui->projectNameField->setMaxLength(m_voting_model->maxPollProjectNameLength());
     ui->projectUrlField->setMaxLength(m_voting_model->maxPollProjectUrlLength());
 }

@@ -132,6 +132,7 @@ private slots:
 PollTab::PollTab(QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::PollTab)
+    , m_voting_model(nullptr)
     , m_polltable_model(new PollTableModel(this))
     , m_no_result(new NoResult(this))
     , m_loading(new LoadingBar(this))
