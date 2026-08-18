@@ -162,6 +162,7 @@ signals:
 PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
     : QWizardPage(parent)
     , ui(new Ui::PollWizardDetailsPage)
+    , m_voting_model(nullptr)
     , m_poll_types(nullptr)
     , m_additional_fields_model(new AdditionalFieldsTableModel(this))
     , m_choices_model(new ChoicesListModel(this))
@@ -208,10 +209,6 @@ PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
     ui->removeChoiceButton->hide();
 
     ui->additionalFieldsTableView->setItemDelegate(additonal_field_delegate);
-
-    ui->titleField->setMaxLength(m_voting_model->maxPollTitleLength());
-    ui->questionField->setMaxLength(m_voting_model->maxPollQuestionLength());
-    ui->urlField->setMaxLength(m_voting_model->maxPollUrlLength());
 
     connect(
         ui->responseTypeList, QOverload<int>::of(&QComboBox::currentIndexChanged), this,

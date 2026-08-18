@@ -17,6 +17,7 @@
 PollWizardProjectPage::PollWizardProjectPage(QWidget* parent)
     : QWizardPage(parent)
     , ui(new Ui::PollWizardProjectPage)
+    , m_voting_model(nullptr)
 {
     ui->setupUi(this);
 
@@ -30,9 +31,6 @@ PollWizardProjectPage::PollWizardProjectPage(QWidget* parent)
     ui->addWidget->hide();
     ui->removeWidget->hide();
     ui->addRemoveStateLineEdit->hide();
-
-    ui->projectNameField->setMaxLength(m_voting_model->maxPollProjectNameLength());
-    ui->projectUrlField->setMaxLength(m_voting_model->maxPollProjectUrlLength());
 
     QStringListModel* project_names_model = new QStringListModel(this);
     QStringListModel* project_urls_model = new QStringListModel(this);
@@ -88,6 +86,16 @@ PollWizardProjectPage::~PollWizardProjectPage()
 void PollWizardProjectPage::setModel(VotingModel* voting_model)
 {
     m_voting_model = voting_model;
+
+    if (!m_voting_model) {
+        return;
+    }
+
+    // These limits come from the model, so they cannot be applied in the
+    // constructor: PollWizard runs setupUi() -- which constructs this page --
+    // before it calls setModel(), so the model is not attached yet there.
+    ui->projectNameField->setMaxLength(m_voting_model->maxPollProjectNameLength());
+    ui->projectUrlField->setMaxLength(m_voting_model->maxPollProjectUrlLength());
 }
 
 void PollWizardProjectPage::initializePage()
