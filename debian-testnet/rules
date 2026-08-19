@@ -53,7 +53,6 @@ override_dh_auto_configure:
 		-DENABLE_TESTS=ON \
 		-DENABLE_QRENCODE=ON \
 		-DENABLE_UPNP=ON \
-		-DDEFAULT_UPNP=ON \
 		-DUSE_DBUS=ON \
 		-DENABLE_PIE=ON \
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
