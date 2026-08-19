@@ -18,6 +18,17 @@ It utilizes the `build_targets.sh` script to automate dependency installation (M
 
 Open your Linux terminal (e.g., "Ubuntu" from the Start Menu) and run the following commands to clone the repository:
 
+> **Clone inside the WSL filesystem** — use a path under your Linux home such as `~/Gridcoin-Research`,
+> not a Windows drive under `/mnt/c` and not a OneDrive-synced folder. A checkout made with Git for
+> Windows arrives with CRLF line endings: this repository's `.gitattributes` marks every path
+> `text=auto`, and for such a path the working-tree ending follows `core.eol`, whose default `native`
+> means CRLF on Windows — regardless of whether `core.autocrlf` is `true` or `false`, and there is no
+> per-path `eol=lf` override. CRLF breaks the repository's own POSIX shell scripts: `build_targets.sh`
+> fails immediately with `/usr/bin/env: 'bash\r': No such file or directory`, and the bundled BerkeleyDB
+> script `src/bdb53/dist/configure` fails with `Syntax error: newline unexpected` (the exact wording
+> varies by shell). Cloning from inside WSL avoids the conversion, but a build over `/mnt` is still
+> considerably slower than on ext4.
+
 ```bash
 # Update package lists and install git (if not already present)
 sudo apt update && sudo apt install -y git
@@ -116,13 +127,13 @@ The first time you run this, it will take a significant amount of time to compil
 Once the script completes successfully, your Windows executable is located here:
 
 ```bash
-./build_win64/src/gridcoinresearchd.exe
+./build_win64/bin/gridcoinresearchd.exe
 ```
 
 Because you are on WSL, you can run this directly from the Linux terminal to verify the version:
 
 ```bash
-./build_win64/src/gridcoinresearchd.exe --version
+./build_win64/bin/gridcoinresearchd.exe --version
 ```
 
 ## 4\. Create the Installer

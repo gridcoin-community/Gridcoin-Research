@@ -20,6 +20,12 @@ cmake --build build -j $(nproc)
 # Executables: build/bin/gridcoinresearchd, build/bin/gridcoinresearch
 ```
 
+On Windows, develop inside WSL with the clone in the WSL filesystem, not `/mnt/c`
+(see [doc/build-windows-wsl.md](doc/build-windows-wsl.md#1-get-the-source-code)); then
+run the Linux-native commands above unchanged. For Qt GUI iteration there is a tracked
+`gridcoin-gui-wsl` skill under `.claude/skills/` (GUI-only; it builds with
+`-DENABLE_TESTS=OFF`).
+
 ### Automated Build Script
 
 ```bash
