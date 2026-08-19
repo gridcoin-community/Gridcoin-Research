@@ -47,6 +47,7 @@ public:
 VotingPage::VotingPage(QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::VotingPage)
+    , m_voting_model(nullptr)
     , m_filter_action(new QAction())
 {
     ui->setupUi(this);
