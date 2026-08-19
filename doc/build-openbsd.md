@@ -157,10 +157,21 @@ here.
 
 ## Notes on hardening flags
 
-OpenBSD's clang **accepts but ignores** `-fstack-clash-protection`; the build emits many
-`argument unused during compilation` warnings for it. They are harmless, but be aware
-that this particular mitigation is not actually applied on OpenBSD even though the build
-requests it. The other hardening flags are unaffected.
+OpenBSD's clang **accepts but does not implement** `-fstack-clash-protection`: the driver
+takes the flag and the frontend then reports `argument unused during compilation` for it.
+
+The build detects this and does not apply the flag, so you will see it reported at
+configure time rather than as several hundred warnings during compilation:
+
+```
+-- Hardening: -fstack-clash-protection not applied (compiler accepts no working
+   implementation for this target)
+```
+
+Be aware that this particular mitigation is therefore **unavailable on OpenBSD** -- that
+is a property of the toolchain, not something the build can work around. Stack canaries
+(`-fstack-protector-all`) and control-flow protection (`-fcf-protection=full`) are applied
+normally.
 
 ## 4\. Running Gridcoin
 
