@@ -15,7 +15,7 @@ FreeBSD requires the FQDN in the configuration. If you are setting this OS up fr
 ```sh
 sudo sysrc hostname="hostname.domainname"
 sudo hostname "hostname.domainname"
-````
+```
 
 *Note: Ensure you add this hostname to `/etc/hosts` next to 127.0.0.1 and ::1 to prevent sudo delays.*
 

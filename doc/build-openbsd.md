@@ -21,7 +21,7 @@ pkg_add capnproto
 
 # If you prefer sudo over the native doas (optional)
 pkg_add sudo
-````
+```
 
 ### Note on Sudo vs. Doas
 
