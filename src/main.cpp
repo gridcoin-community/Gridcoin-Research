@@ -66,7 +66,10 @@ using namespace boost;
 // the sync clocks, g_reorg_in_progress) moved to chain.cpp (issue #3125 C9);
 // their declarations remain in chain.h.
 
-CCriticalSection cs_tx_val_commit_to_disk;
+// cs_tx_val_commit_to_disk, nCoinbaseMaturity, cPeerBlockCounts,
+// nGrandfather, fEnforceCanonical, g_v11_timestamp, and the sync-state
+// helpers (GetNumBlocksOfPeers, IsInitialBlockDownload, OutOfSyncByAge)
+// moved to validation.{h,cpp} (issue #3125 C9).
 
 ///////////////////////MINOR VERSION////////////////////////////////
 
@@ -75,10 +78,6 @@ extern int64_t GetCoinYearReward(int64_t nTime);
 //Gridcoin Minimum Stake Age (16 Hours)
 unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
 unsigned int nStakeMaxAge = -1; // unlimited
-
-// Gridcoin:
-int nCoinbaseMaturity = 100;
-CMedianFilter<int> cPeerBlockCounts GUARDED_BY(cs_main) {5, 0}; // Amount of blocks that other nodes claim to have
 
 
 
@@ -108,14 +107,7 @@ std::atomic<bool> bGridcoinCoreInitComplete{false};
 CCriticalSection cs_msMiningErrors;
 std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
 
-//When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
-int nGrandfather = 1034700;
-
-bool fEnforceCanonical = true;
 bool fUseFastIndex = false;
-
-// Temporary block version 11 transition helpers:
-int64_t g_v11_timestamp = 0;
 
 // End of Gridcoin Global vars
 
@@ -143,38 +135,6 @@ double CoinToDouble(double surrogate)
 //
 // CBlock and CBlockIndex
 //
-// Return maximum amount of blocks that other nodes claim to have
-int GetNumBlocksOfPeers()
-{
-    LOCK(cs_main);
-    return std::max(cPeerBlockCounts.median(), Params().Checkpoints().GetHeight());
-}
-
-bool IsInitialBlockDownload()
-{
-    LOCK(cs_main);
-    if ((pindexBest == nullptr || nBestHeight < GetNumBlocksOfPeers()) && nBestHeight < 1185000)
-        return true;
-    static int64_t nLastUpdate;
-    static CBlockIndex* pindexLastBest;
-    if (pindexBest != pindexLastBest)
-    {
-        pindexLastBest = pindexBest;
-        nLastUpdate =  GetAdjustedTime();
-    }
-    return ( GetAdjustedTime() - nLastUpdate < 15 &&
-            pindexBest->GetBlockTime() <  GetAdjustedTime() - 8 * 60 * 60);
-}
-
-bool OutOfSyncByAge()
-{
-    // Assume we are out of sync if the current block age is 10
-    // times older than the target spacing. This is the same
-    // rules that Bitcoin uses.
-    constexpr int64_t maxAge = 90 * 10;
-
-    return GetAdjustedTime() - g_previous_block_time >= maxAge;
-}
 
 const GRC::Claim& CBlock::GetClaim() const
 {

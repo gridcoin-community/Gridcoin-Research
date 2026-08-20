@@ -23,8 +23,6 @@
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
-extern int64_t g_v11_timestamp;
-
 namespace {
 /*
 //!
