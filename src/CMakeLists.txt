@@ -140,6 +140,7 @@ add_library(gridcoin_util STATIC
     htlc.cpp
     gridcoin/backup.cpp
     gridcoin/beacon.cpp
+    gridcoin/block_claims.cpp
     gridcoin/boinc.cpp
     gridcoin/crypto/rsaverify.cpp
     gridcoin/claim.cpp
