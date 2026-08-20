@@ -45,7 +45,10 @@ bool PeerUidAllowed(uid_t peer_uid, uid_t self_uid);
 //! call failed and MP refuses to serve rather than silently degrading to
 //! cookie-only. Only a definite uid mismatch is logged via error().
 //!
-//! Platform coverage: Linux uses SO_PEERCRED; *BSD/macOS use getpeereid(). On
+//! Platform coverage: Linux uses SO_PEERCRED with struct ucred; every other POSIX
+//! target we support uses getpeereid(). Note OpenBSD ALSO defines SO_PEERCRED, but
+//! its payload is struct sockpeercred -- so the implementation gates on __linux__
+//! rather than on the option name, which would not compile on OpenBSD. On
 //! Windows AF_UNIX exposes no peer-credential API whatsoever, so this returns
 //! true and the explicit owner+SYSTEM PROTECTED DACL that ipc/process.cpp applies
 //! to node.sock and ipc.cookie (and verifies by read-back) is the guard. Call

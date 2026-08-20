@@ -14,6 +14,18 @@
 #include <unistd.h>
 #endif
 
+//! Linux is the only target where SO_PEERCRED carries `struct ucred`. OpenBSD ALSO
+//! defines SO_PEERCRED (sys/socket.h), but its payload is `struct sockpeercred`, so
+//! keying off the option name alone fails to compile there with "variable has
+//! incomplete type 'struct ucred'". FreeBSD and macOS do not define SO_PEERCRED at
+//! all. Every non-Linux target we support provides getpeereid(3), so that is the
+//! portable branch. Defined once because CheckPeerCredentials() and
+//! PeerCredentialEnforcement() must never disagree: the latter is what the startup
+//! log advertises as the enforcement mechanism in force.
+#if defined(__linux__) && defined(SO_PEERCRED)
+#define GRIDCOIN_PEERCRED_SO_PEERCRED 1
+#endif
+
 namespace ipc {
 
 #ifndef WIN32
@@ -53,7 +65,7 @@ bool CheckPeerCredentials(int peer_fd, PeerCredPolicy policy)
     const uid_t self_uid = ::geteuid();
     uid_t peer_uid;
 
-#if defined(SO_PEERCRED)
+#ifdef GRIDCOIN_PEERCRED_SO_PEERCRED
     // Linux: struct ucred captured at connect time.
     struct ucred cred;
     socklen_t len = sizeof(cred);
@@ -65,7 +77,7 @@ bool CheckPeerCredentials(int peer_fd, PeerCredPolicy policy)
     }
     peer_uid = cred.uid;
 #else
-    // *BSD / macOS.
+    // OpenBSD / FreeBSD / macOS.
     gid_t peer_gid;
     if (::getpeereid(peer_fd, &peer_uid, &peer_gid) != 0) {
         return undetermined("getpeereid failed", errno);
@@ -85,7 +97,7 @@ const char* PeerCredentialEnforcement()
 #ifdef WIN32
     return "none (Windows AF_UNIX exposes no peer credentials; the owner-only DACL on node.sock "
            "and ipc.cookie is the guard)";
-#elif defined(SO_PEERCRED)
+#elif defined(GRIDCOIN_PEERCRED_SO_PEERCRED)
     return "SO_PEERCRED (connections from another OS user are refused)";
 #else
     return "getpeereid (connections from another OS user are refused)";

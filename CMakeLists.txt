@@ -218,6 +218,31 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.30)
     cmake_policy(SET CMP0167 OLD)
 endif()
 
+# CMake's FindBoost defaults Boost_USE_DEBUG_RUNTIME to TRUE when the caller has not
+# set it. That is an MSVC-only concept -- it selects the /MDd runtime -- but Boost's own
+# CMake config files honour it on every platform: each variant file begins with
+#
+#     if(Boost_USE_DEBUG_RUNTIME)
+#       _BOOST_SKIPPED("libboost_foo.so" "release runtime, ...")
+#
+# so on a distribution that ships only release-runtime variants EVERY variant is rejected
+# and Boost is reported as not found ("No suitable build variant has been found").
+# FreeBSD's boost packages are built that way.
+#
+# This only bites when FindBoost actually runs its module search: FindBoost first delegates
+# to find_package(Boost NO_MODULE) and returns early if a BoostConfig.cmake is found, in
+# which case the default is never assigned. So the failure appears on systems whose Boost
+# lacks the CMake config package, and not on those that have it -- which is why it is not
+# reproducible everywhere.
+#
+# Set it OFF up front rather than unsetting it afterwards: FindBoost only assigns the
+# default under if(NOT DEFINED ...), so a value defined here is preserved, it covers the
+# pre-1.70 module-mode branch below as well, and it does not discard a value a user or
+# toolchain file set deliberately.
+if(NOT DEFINED Boost_USE_DEBUG_RUNTIME)
+    set(Boost_USE_DEBUG_RUNTIME OFF)
+endif()
+
 find_package(Boost ${BOOST_MINIMUM_VERSION} REQUIRED)
 
 if(Boost_VERSION VERSION_LESS 1.69.0)
@@ -479,13 +504,43 @@ if(ENABLE_HARDENING)
         message(STATUS "Hardening: branch-protection and stack-clash skipped (Mach-O target)")
     endif()
 
+    # Make the probes reject a flag the driver accepts but then does not implement.
+    #
+    # check_cxx_compiler_flag only proves the driver did not reject the spelling. Clang
+    # will accept a flag it has no implementation for on the current target and then
+    # report "argument unused during compilation: '-fstack-clash-protection'" on EVERY
+    # translation unit: the flag is requested, the mitigation is absent, and the build
+    # gains several hundred warnings saying so. OpenBSD/amd64 does exactly this with
+    # -fstack-clash-protection (316 warnings in a full build), and Darwin does the same.
+    #
+    # Promoting that diagnostic to an error for the duration of the probes turns
+    # "accepted but ignored" into a failed check, so the flag is simply not added. GCC
+    # has no such warning and errors on the option, so probe for it first -- without the
+    # guard, setting it unconditionally would make every hardening probe below fail on
+    # GCC and silently disable hardening on Linux.
+    #
+    # This does not catch a flag that is accepted AND honoured but semantically wrong for
+    # the target -- see -mbranch-protection on Mach-O above, which generates real code
+    # that breaks unwinding. No probe can see that; it stays platform-gated.
+    check_cxx_compiler_flag("-Werror=unused-command-line-argument" HARDENING_HAVE_WERROR_UNUSED_ARG)
+    set(_hardening_saved_required_flags "${CMAKE_REQUIRED_FLAGS}")
+    if(HARDENING_HAVE_WERROR_UNUSED_ARG)
+        string(APPEND CMAKE_REQUIRED_FLAGS " -Werror=unused-command-line-argument")
+    endif()
+
     foreach(flag ${hardening_flags})
         string(MAKE_C_IDENTIFIER "HARDENING_CXX${flag}" flag_var)
         check_cxx_compiler_flag("${flag}" ${flag_var})
         if(${flag_var})
             add_compile_options("${flag}")
+        else()
+            message(STATUS "Hardening: ${flag} not applied (compiler accepts no working "
+                           "implementation for this target)")
         endif()
     endforeach()
+
+    set(CMAKE_REQUIRED_FLAGS "${_hardening_saved_required_flags}")
+    unset(_hardening_saved_required_flags)
 
     # separate-code keeps executable and non-executable content on distinct pages,
     # which shrinks what a ROP search has to work with. GNU ld enables it by default
