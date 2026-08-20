@@ -17,7 +17,7 @@ cmake -B build -DENABLE_GUI=ON -DENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=RelWithDebIn
 # Build
 cmake --build build -j $(nproc)
 
-# Executables: build/src/gridcoinresearchd, build/src/qt/gridcoinresearch
+# Executables: build/bin/gridcoinresearchd, build/bin/gridcoinresearch
 ```
 
 ### Automated Build Script

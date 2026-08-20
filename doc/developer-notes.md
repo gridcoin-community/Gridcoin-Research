@@ -360,7 +360,7 @@ in-tree. Example use:
 $ valgrind --suppressions=contrib/valgrind.supp build/src/test/test_gridcoin
 $ valgrind --suppressions=contrib/valgrind.supp --leak-check=full \
       --show-leak-kinds=all build/src/test/test_gridcoin --log_level=test_suite
-$ valgrind -v --leak-check=full build/src/gridcoinresearchd -printtoconsole
+$ valgrind -v --leak-check=full build/bin/gridcoinresearchd -printtoconsole
 ```
 
 ### Compiling for test coverage
