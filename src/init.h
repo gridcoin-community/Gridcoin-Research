@@ -9,6 +9,7 @@
 #include "wallet/wallet.h"
 #include <boost/thread.hpp>
 
+#include <atomic>
 #include <string>
 #include <utility>
 #include <vector>
@@ -68,4 +69,13 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
                     std::string& error_out);
 
 extern bool fResetBlockchainRequest;
+
+//! Node-lifecycle flags, defined in init.cpp (moved from main.cpp, issue
+//! #3125 C9): fQtActive is set by the Qt entry point before core init so
+//! shutdown paths know a GUI owns the event loop;
+//! bGridcoinCoreInitComplete flips once AppInit2 finishes and gates
+//! interfaces::Init::isCoreReady (#3170) plus the GUI splash handoff.
+extern bool fQtActive;
+extern std::atomic<bool> bGridcoinCoreInitComplete;
+
 #endif
