@@ -127,6 +127,7 @@ add_library(gridcoin_util STATIC
     arith_uint256.cpp
     banman.cpp
     base58.cpp
+    chain.cpp
     chainparams.cpp
     chainparamsbase.cpp
     checkpoints.cpp
@@ -161,6 +162,7 @@ add_library(gridcoin_util STATIC
     gridcoin/scraper/scraper_net.cpp
     gridcoin/scraper/scraper_registry.cpp
     gridcoin/sidestake.cpp
+    gridcoin/staking/chain_trust.cpp
     gridcoin/staking/difficulty.cpp
     gridcoin/staking/exceptions.cpp
     gridcoin/staking/kernel.cpp

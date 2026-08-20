@@ -13,6 +13,8 @@
 
 extern CCriticalSection cs_main;
 
+class CBlockIndex;
+
 namespace GRC {
 //!
 //! \brief Calculates and stores chain trust values.
@@ -362,5 +364,14 @@ private:
     LongTrustCache m_long_cache;      //!< Caches chain trust at height intervals.
 }; // ChainTrustCache
 } // namespace GRC
+
+//! Chain trust cache for the active chain. Defined in chain_trust.cpp (moved
+//! from main.cpp, issue #3125 C9).
+extern GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
+
+//!
+//! \brief Re-exports chain trust values for reporting.
+//!
+arith_uint256 GetChainTrust(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 #endif // GRIDCOIN_STAKING_CHAIN_TRUST_H

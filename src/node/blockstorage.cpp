@@ -26,12 +26,6 @@
 #include <cerrno>
 #include <stdio.h>
 
-// Chain-state globals defined in main.cpp that LoadBlockIndex references;
-// same ad-hoc extern pattern as node/chainman.cpp and node/coherence.cpp.
-extern GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
-extern GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
-
-
 bool WriteBlockToDisk(const CBlock& block, unsigned int& nFileRet, unsigned int& nBlockPosRet,
                       const CMessageHeader::MessageStartChars& messageStart)
         EXCLUSIVE_LOCKS_REQUIRED(cs_main)

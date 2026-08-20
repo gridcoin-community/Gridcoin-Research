@@ -17,9 +17,6 @@
 
 #include <limits>
 
-extern GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
-extern GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
-
 namespace GRC {
 
 CoherenceResult VerifyChainCoherence(int max_walkback)
