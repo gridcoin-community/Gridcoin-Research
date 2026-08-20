@@ -79,10 +79,19 @@
 
 extern int GetDayOfYear(int64_t timestamp);
 
+//! Prefix mixed into signed user messages so a message signature cannot be
+//! replayed as a transaction signature. Defined in util.cpp (moved from
+//! main.cpp, issue #3125 C9).
+extern const std::string strMessageMagic;
+
 void LogException(std::exception* pex, const char* pszThread);
 void PrintException(std::exception* pex, const char* pszThread);
 void PrintExceptionContinue(std::exception* pex, const char* pszThread);
 std::string FormatMoney(int64_t n, bool fPlus=false);
+
+//! Convert satoshis to a human coin amount (moved from main.cpp, issue
+//! #3125 C9).
+double CoinToDouble(double surrogate);
 bool ParseMoney(const std::string& str, int64_t& nRet);
 bool ParseMoney(const char* pszIn, int64_t& nRet);
 bool WildcardMatch(const char* psz, const char* mask);

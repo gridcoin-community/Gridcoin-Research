@@ -29,6 +29,16 @@ using namespace std;
 
 CMedianFilter<int64_t> vTimeOffsets(200,0);
 
+// Moved from main.cpp (issue #3125 C9); declared in util.h.
+const std::string strMessageMagic = "Gridcoin Signed Message:\n";
+
+double CoinToDouble(double surrogate)
+{
+    //Converts satoshis to a human double amount
+    double coin = (double)surrogate/(double)COIN;
+    return coin;
+}
+
 /** A map that contains all the currently held directory locks. After
  * successful locking, these will be held here until the global destructor
  * cleans them up and thus automatically unlocks them, or ReleaseDirectoryLocks

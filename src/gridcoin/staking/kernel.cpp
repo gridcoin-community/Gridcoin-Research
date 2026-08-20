@@ -17,6 +17,12 @@
 using namespace std;
 using namespace GRC;
 
+// Moved from main.cpp (issue #3125 C9); declared in kernel.h.
+
+//Gridcoin Minimum Stake Age (16 Hours)
+unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
+unsigned int nStakeMaxAge = -1; // unlimited
+
 namespace {
 //!
 //! \brief Represents a candidate block for new stake modifier selection.

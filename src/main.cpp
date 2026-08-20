@@ -52,8 +52,6 @@
 #include <math.h>
 #include <util/string.h>
 
-unsigned int nNodeLifespan;
-
 using namespace std;
 using namespace boost;
 
@@ -75,9 +73,9 @@ using namespace boost;
 
 extern int64_t GetCoinYearReward(int64_t nTime);
 
-//Gridcoin Minimum Stake Age (16 Hours)
-unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
-unsigned int nStakeMaxAge = -1; // unlimited
+// nStakeMinAge/nStakeMaxAge moved to gridcoin/staking/kernel.{h,cpp};
+// nNodeLifespan to net.{h,cpp}; strMessageMagic and CoinToDouble to
+// util.{h,cpp} (issue #3125 C9).
 
 
 
@@ -87,7 +85,6 @@ unsigned int nStakeMaxAge = -1; // unlimited
 
 // Constant stuff for coinbase transactions we create:
 CScript COINBASE_FLAGS;
-const string strMessageMagic = "Gridcoin Signed Message:\n";
 
 // Settings
 // This is changed to MIN_TX_FEE * 10 for block version 11 (CTransaction::CURRENT_VERSION 2).
@@ -120,14 +117,6 @@ bool fUseFastIndex = false;
 // rebroadcast self-schedules on g_scheduler, and the net-half request-count /
 // own-tx-trickle paths call pwalletMain directly. The canonical lock order is
 // now cs_main -> cs_wallet.
-
-
-double CoinToDouble(double surrogate)
-{
-    //Converts satoshis to a human double amount
-    double coin = (double)surrogate/(double)COIN;
-    return coin;
-}
 
 
 
