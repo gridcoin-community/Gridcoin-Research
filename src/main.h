@@ -63,36 +63,25 @@ typedef std::optional<Claim> ClaimOption;
 // fEnforceCanonical are declared in validation.h, included above
 // (issue #3125 C9).
 
-extern CScript COINBASE_FLAGS;
-
-// nNodeLifespan is declared in net.h and strMessageMagic in util.h, both
-// included above (issue #3125 C9).
+// nNodeLifespan is declared in net.h, strMessageMagic in util.h, and
+// fUseFastIndex in primitives/block.h, all included above. COINBASE_FLAGS
+// lives in miner.h and the mining status variables (cs_msMiningErrors,
+// msMiningErrors) in gridcoin/researcher.h; their consumers include those
+// directly (issue #3125 C9).
+// Orphan block storage is managed by g_orphan_blocks in node/orphan_blocks.h
 
 // -- Compatibility declarations: delete as the remaining main.h includers
 // -- are repointed (#3125 C9). Verbatim duplicates of the canonical
-// -- declarations in gridcoin/staking/kernel.h, which is NOT part of this
-// -- header's re-include set (kernel.h itself still includes main.h).
+// -- declarations in gridcoin/staking/kernel.h and wallet/wallet.h, which
+// -- are NOT part of this header's re-include set (both still include
+// -- main.h themselves).
 extern unsigned int nStakeMinAge;
 extern unsigned int nStakeMaxAge;
-// -- End compatibility declarations.
-// Orphan block storage is managed by g_orphan_blocks in node/orphan_blocks.h
-
-// Settings
 extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
-
-extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
-
-//! \brief Guards \ref msMiningErrors. Written by Researcher::StoreResearcher
-//! on the GUI / timer thread, read by getmininginfo RPC and the Qt researcher
-//! model on their respective threads. std::string assignment / copy is not
-//! atomic, so the writer's release of internal buffer storage can race with a
-//! reader's traversal of the same buffer — undefined behaviour without
-//! serialization.
-extern CCriticalSection cs_msMiningErrors;
-extern std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
+// -- End compatibility declarations.
 
 class CReserveKey;
 class CTxDB;

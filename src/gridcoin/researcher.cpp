@@ -32,9 +32,12 @@ using namespace GRC;
 
 extern CCriticalSection cs_main;
 extern CCriticalSection cs_ScraperGlobals;
-extern CCriticalSection cs_msMiningErrors;
-extern std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
 extern unsigned int nActiveBeforeSB;
+
+// Mining status variables (moved from main.cpp, issue #3125 C9; declared in
+// researcher.h).
+CCriticalSection cs_msMiningErrors;
+std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
 
 std::vector<MiningPool> MiningPools::GetMiningPools()
 {

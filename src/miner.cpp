@@ -51,6 +51,10 @@ static bool fDevbuildCripple = false;
 bool GetDevbuildCripple() { return fDevbuildCripple; }
 void SetDevbuildCripple(bool crippled) { fDevbuildCripple = crippled; }
 
+// Constant stuff for coinbase transactions we create (moved from main.cpp,
+// issue #3125 C9; declared in miner.h):
+CScript COINBASE_FLAGS;
+
 std::atomic<int> g_stakelimit_height{0};
 
 int32_t ComputeBlockVersion(int height)

@@ -32,8 +32,13 @@ class SuperblockPtr;
 
 // cs_main guards the chain-state globals named in the EXCLUSIVE_LOCKS_REQUIRED
 // annotations on the methods defined out-of-line in primitives/block.cpp.
-// Redeclared here (identical to main.h) so this header stays main.h-free.
+// Redeclared here (identical to chain.h) so this header stays main.h-free.
 extern CCriticalSection cs_main;
+
+//! -fastindex: skip some block-hash verification while loading the block
+//! index. Defined in primitives/block.cpp (moved from main.{h,cpp}, issue
+//! #3125 C9); its only core consumer is the hash caching in block.cpp.
+extern bool fUseFastIndex;
 
 /** Threshold for nLockTime: below this value it is interpreted as block number, otherwise as UNIX timestamp. */
 static const unsigned int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20 1985 UTC

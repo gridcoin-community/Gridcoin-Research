@@ -19,6 +19,10 @@ typedef std::vector<GRC::SideStake_ptr> SideStakeAlloc;
 
 extern unsigned int nMinerSleep;
 
+//! Extra data appended to the coinbase scriptSig of blocks we create.
+//! Defined in miner.cpp (moved from main.{h,cpp}, issue #3125 C9).
+extern CScript COINBASE_FLAGS;
+
 //! \brief Select the block header version the miner must stamp for a block at
 //! the given height. Mirrors Bitcoin Core's ComputeBlockVersion: a pure,
 //! side-effect-free function of \p height and the active chain parameters, so

@@ -8,11 +8,14 @@
 #include "main.h"
 
 // These methods are defined out-of-line (rather than inline in primitives/block.h)
-// because they reference chain-state globals declared in main.h — pindexBest,
-// mapBlockIndex, pindexGenesisBlock, fUseFastIndex, and the genesis-block hashes.
+// because they reference chain-state globals declared in chain.h — pindexBest,
+// mapBlockIndex, pindexGenesisBlock — and the genesis-block hashes.
 // Keeping them here lets primitives/block.h stay free of main.h. The
 // EXCLUSIVE_LOCKS_REQUIRED(cs_main) annotations live on the in-class declarations
 // in the header and are intentionally not repeated on these definitions.
+
+// -fastindex flag (moved from main.cpp, issue #3125 C9; declared in block.h).
+bool fUseFastIndex = false;
 
 bool CBlockIndex::IsInMainChain() const
 {

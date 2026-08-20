@@ -37,6 +37,15 @@
 //! send paths and the GUI status rendering, on different threads.
 extern std::atomic<bool> fWalletUnlockStakingOnly;
 extern bool fConfChange;
+
+// Wallet settings, defined in wallet.cpp (moved from main.{h,cpp}, issue
+// #3125 C9). nTransactionFee is initialized to MIN_TX_FEE * 10 for block
+// version 11; -paytxfee overrides it in AppInit2.
+extern int64_t nTransactionFee;
+extern int64_t nReserveBalance;
+extern int64_t nMinimumInputValue;
+extern unsigned int nDerivationMethodIndex;
+
 class CAccountingEntry;
 class CWalletTx;
 class CReserveKey;

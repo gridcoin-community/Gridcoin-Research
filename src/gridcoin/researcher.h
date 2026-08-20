@@ -21,6 +21,16 @@ class uint256;
 extern CCriticalSection cs_main;
 extern CWallet* pwalletMain;
 
+//! \brief Guards \ref msMiningErrors. Written by Researcher::StoreResearcher
+//! on the GUI / timer thread, read by getmininginfo RPC and the researcher
+//! interface on their respective threads. std::string assignment / copy is
+//! not atomic, so the writer's release of internal buffer storage can race
+//! with a reader's traversal of the same buffer — undefined behaviour
+//! without serialization. Defined in researcher.cpp (moved from
+//! main.{h,cpp}, issue #3125 C9).
+extern CCriticalSection cs_msMiningErrors;
+extern std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
+
 namespace GRC {
 
 class Beacon;
