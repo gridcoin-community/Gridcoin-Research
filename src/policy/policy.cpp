@@ -12,8 +12,12 @@
 #include "consensus/tx_verify.h"
 
 // Defined in main.cpp; declared in main.h. The ad-hoc extern (the
-// node/chainman.cpp pattern) avoids re-including the main.h umbrella here
-// until the global moves to its policy home (#3125 C9).
+// node/chainman.cpp pattern) avoids re-including the main.h umbrella here.
+//
+// This is a bridge, and it has a definite end: #3125 C9 moves the global into
+// validation.{h,cpp}, and policy.h (repointed above) already includes
+// validation.h -- so once that lands this declaration is redundant and should
+// be deleted rather than relocated. It does not move to a policy header.
 extern bool fEnforceCanonical;
 
 bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType)
