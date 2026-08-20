@@ -22,7 +22,7 @@
 #include "interfaces/voting.h"
 #include "interfaces/wallet.h"
 #include "interfaces/wallet_tx_source.h"
-#include "main.h"
+#include "chain.h"
 #include "net.h"
 #include "netbase.h"
 #include "node/ui_interface.h"
@@ -31,6 +31,7 @@
 #include "sync.h"
 #include "util.h"
 #include "util/strencodings.h"
+#include "validation.h"
 #include "wallet/diagnose.h"
 
 #include <univalue.h>
