@@ -7,7 +7,10 @@
 #define BITCOIN_DBWRAPPER_H
 
 #include "clientversion.h"
-#include "main.h"
+#include "index/disktxpos.h"
+#include "index/txindex.h"
+#include "primitives/block.h"
+#include "primitives/transaction.h"
 #include "streams.h"
 
 #include <cstdint>

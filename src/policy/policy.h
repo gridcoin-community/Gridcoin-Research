@@ -6,7 +6,8 @@
 #ifndef BITCOIN_POLICY_POLICY_H
 #define BITCOIN_POLICY_POLICY_H
 
-#include "main.h"
+#include "script.h"
+#include "validation.h"
 
 /**
  * Mandatory script verification flags that all new transactions must comply with for
