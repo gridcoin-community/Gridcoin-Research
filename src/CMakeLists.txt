@@ -189,7 +189,6 @@ add_library(gridcoin_util STATIC
     key_io.cpp
     keystore.cpp
     logging.cpp
-    main.cpp
     merkleblock.cpp
     miner.cpp
     net.cpp
