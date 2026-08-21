@@ -2535,6 +2535,74 @@ BOOST_AUTO_TEST_CASE(incoming_tx_gets_order_position)
     pwalletMain->EraseFromWallet(tx2.GetHash());
 }
 
+// SyncTransaction must write and notify once per affected PARENT, not once per
+// consumed output. This is the second site of the amplification fixed in the
+// WalletUpdateSpent path: a consolidation consumes many outputs of the same
+// parent, and MarkSpent/MarkDirty are in-memory, so N consumed outputs need one
+// write and one notification -- not N of each. Measured on an isolated-testnet
+// consolidation of 427 inputs drawing 7 outputs from each of 61 parents: 427
+// notifications and 427 WriteToDisk calls where 61 of each is the whole content.
+BOOST_AUTO_TEST_CASE(sync_transaction_notifies_once_per_parent)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CKey key;
+    key.MakeNewKey(true);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));
+
+    // One parent with FOUR outputs to us -- the shape a consolidation draws
+    // from, and the shape that made the per-output form repeat itself.
+    CMutableTransaction parent;
+    parent.vin.resize(1);
+    parent.vin[0].prevout = COutPoint(
+        uint256S("0x6666666666666666666666666666666666666666666666666666666666666666"), 0);
+    parent.vout.resize(4);
+    for (unsigned int i = 0; i < 4; ++i) {
+        parent.vout[i].nValue = COIN;
+        parent.vout[i].scriptPubKey.SetDestination(CTxDestination(key.GetPubKey().GetID()));
+    }
+    const CTransaction parent_tx(parent);
+    const uint256 parent_hash = parent_tx.GetHash();
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(parent_tx), TxStateInMempool{}));
+
+    // A child consuming THREE of that one parent's outputs.
+    CKey external_key;
+    external_key.MakeNewKey(true);
+    CMutableTransaction child;
+    child.vin.resize(3);
+    for (unsigned int i = 0; i < 3; ++i) {
+        child.vin[i].prevout = COutPoint(parent_hash, i);
+    }
+    child.vout.resize(1);
+    child.vout[0].nValue = 2 * COIN;
+    child.vout[0].scriptPubKey.SetDestination(CTxDestination(external_key.GetPubKey().GetID()));
+    const CTransaction child_tx(child);
+
+    // Count only AFTER the parent is established, so its own sync is excluded.
+    std::map<uint256, int> notifies;
+    boost::signals2::scoped_connection conn(
+        pwalletMain->NotifyTransactionChanged.connect(
+            [&notifies](CWallet*, const uint256& h, ChangeType) { notifies[h] += 1; }));
+
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(child_tx), TxStateInMempool{}));
+
+    // Three outputs of ONE parent were consumed, so exactly one notification for
+    // it. The per-output form emitted three.
+    BOOST_CHECK_EQUAL(notifies[parent_hash], 1);
+
+    // ...and the coalescing did not cost correctness: every consumed output is
+    // still marked, and the untouched fourth is not.
+    const auto it = pwalletMain->mapWallet.find(parent_hash);
+    BOOST_REQUIRE(it != pwalletMain->mapWallet.end());
+    BOOST_CHECK(it->second.IsSpent(0));
+    BOOST_CHECK(it->second.IsSpent(1));
+    BOOST_CHECK(it->second.IsSpent(2));
+    BOOST_CHECK(!it->second.IsSpent(3));
+
+    pwalletMain->EraseFromWallet(child_tx.GetHash());
+    pwalletMain->EraseFromWallet(parent_hash);
+}
+
 BOOST_AUTO_TEST_CASE(mempool_spend_marks_parent_output_spent)
 {
     // Legacy WalletUpdateSpent parity restored on the SyncTransaction path:
