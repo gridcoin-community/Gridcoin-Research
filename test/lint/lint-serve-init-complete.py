@@ -33,6 +33,7 @@ import sys
 INIT_HEADER = "src/interfaces/init.h"
 SERVE_INIT = "src/ipc/serve_init.cpp"
 INIT_CAPNP = "src/ipc/capnp/init.capnp"
+WIRE_TEST = "src/test/ipc_wire_handshake_tests.cpp"
 
 # Methods that must NOT be gated, with the reason each is exempt.
 UNGATED = {
@@ -201,7 +202,8 @@ def main():
     header_text = read(INIT_HEADER)
     serve_text = read(SERVE_INIT)
     capnp_text = read(INIT_CAPNP)
-    if header_text is None or serve_text is None or capnp_text is None:
+    wire_text = read(WIRE_TEST)
+    if header_text is None or serve_text is None or capnp_text is None or wire_text is None:
         return 1
 
     expected = declared_virtuals(header_text)
@@ -334,6 +336,33 @@ def main():
             errors.append(
                 "interfaces::Init::{0}() is listed as unserved-by-design but has an ordinal in "
                 "{1}; update either the schema or UNSERVED in this lint.".format(name, INIT_CAPNP))
+
+    # --- Fourth gate: the runtime round-trip test must cover every factory ---
+    #
+    # wire_every_init_factory_reaches_the_server drives each factory over a real
+    # socket and asserts the SERVER saw the call, which is the only check that a
+    # declared ordinal actually round-trips. But it enumerates the factories by
+    # hand, so on its own it does NOT generalize: a factory added to Init,
+    # ServeInit and init.capnp but not to that list leaves the test passing while
+    # covering nothing. Tie the two together here, so the list cannot silently
+    # fall behind the interface.
+    #
+    # Scoped to make* -- the handshake methods (authenticate / getBuildInfo /
+    # getIdentity) are exercised by the ClientHandshake cases in the same file
+    # rather than by that enumeration.
+    wire_calls = set(re.findall(r"link\.client->(\w+)\s*\(", strip_noncode(wire_text)))
+    for name, _arity in expected:
+        if not name.startswith("make"):
+            continue
+        if name in UNSERVED:
+            continue
+        if name not in wire_calls:
+            errors.append(
+                "interfaces::Init::{0}() is not exercised by {1}. That test is what proves a "
+                "declared ordinal actually round-trips to the server, and it enumerates factories "
+                "by hand -- so a factory missing from it is untested however correct the schema "
+                "looks. Add `link.client->{0}();` and a matching Seen flag + BOOST_CHECK_MESSAGE "
+                "to wire_every_init_factory_reaches_the_server.".format(name, WIRE_TEST))
 
     # An UNGATED entry that calls RequireAuth() is a contradiction worth catching.
     for name in UNGATED:
