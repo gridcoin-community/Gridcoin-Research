@@ -80,9 +80,9 @@ add_executable(test_gridcoin
     # into the GUI-OFF binary pins the Qt-freedom the node-side source needs.
     ${CMAKE_SOURCE_DIR}/src/wallet/transactionrecord.cpp
     qt_transactionrecord_tests.cpp
-    # Qt-free wallet event queue (src/wallet/wallet_event_queue.cpp) unit suite:
-    # the MPSC intake drain/ordering + multi-producer seqno-density contract. The
-    # core is already in gridcoin_util, so only the suite is listed here (GUI-OFF).
+    # Qt-free wallet event queue (src/wallet/wallet_event_queue.h, a header-only
+    # template shared by the tx and coin channels) unit suite: the MPSC intake
+    # drain/ordering + multi-producer seqno-density contract (GUI-OFF).
     qt_wallet_event_queue_tests.cpp
     # Qt-free store-worker / double-queue (src/wallet/wallettxstore.cpp) unit
     # suite: the worker's drain/ordering/concurrency + clean shutdown and the
