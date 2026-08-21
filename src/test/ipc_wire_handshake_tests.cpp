@@ -126,7 +126,6 @@ struct UnixSocket {
     }
 };
 
-//! Factory serving a fresh ServeInit (StubInner + the given cookie/identity) per
 //! Records which Init factory methods actually ARRIVED on the server. Every
 //! factory returns nullptr -- what is under test is whether the call crossed the
 //! wire at all, not what it produced, so no concrete interface implementations
@@ -172,6 +171,7 @@ struct RecordingInner : interfaces::Init {
     Seen& m_seen;
 };
 
+//! Factory serving a fresh ServeInit (StubInner + the given cookie/identity) per
 //! connection, matching how the daemon serves.
 interfaces::MakeServeInitFn CookieServeFactory(std::string cookie, interfaces::NodeIdentity id)
 {

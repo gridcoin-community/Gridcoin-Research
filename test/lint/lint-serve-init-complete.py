@@ -271,9 +271,41 @@ def main():
         fail("found no methods on `interface Init` in {}; the parser is probably broken".format(INIT_CAPNP))
         return 1
 
+    # Overloads are rejected outright, because Cap'n Proto cannot represent them:
+    # method names must be unique within an interface scope ("error: 'bar' is
+    # already defined in this scope"). An overloaded virtual on an IPC-served
+    # interface is therefore never fully wirable -- at most one of the overloads
+    # can have an ordinal, and the others are silently unreachable over IPC no
+    # matter what anyone intends. No interfaces:: class has one today.
+    #
+    # That structural fact is also why this gate matches by NAME and does not try
+    # to disambiguate by arity. It could not: a capnp method's input parameters do
+    # not correspond to the C++ parameter list, because out-parameters live in the
+    # RESULTS. interfaces::Wallet::getNewReceiveAddress(std::string&) is C++ arity
+    # 1 with ZERO capnp inputs besides context, and getAddressLabel(const
+    # std::string&, std::string&) is arity 2 with one. Deriving arity from the
+    # schema would reject correct code as soon as Init gained such a method.
+    #
+    # So the name match is safe precisely BECAUSE overloads are refused here.
+    seen_names = set()
+    overloaded = set()
+    for name, _arity in expected:
+        if name in seen_names:
+            overloaded.add(name)
+        seen_names.add(name)
+    for name in sorted(overloaded):
+        errors.append(
+            "interfaces::Init::{0}() is overloaded ({1}). Cap'n Proto requires method names to "
+            "be unique within an interface, so an overload cannot be represented in {2} at all: "
+            "at most one of them can hold an ordinal and the rest are unreachable over IPC "
+            "however they are declared. Give the overloads distinct names.".format(
+                name, INIT_HEADER, INIT_CAPNP))
+
     for name, _arity in expected:
         if name in UNSERVED:
             continue
+        if name in overloaded:
+            continue  # already reported above; the name check below cannot be trusted
         if name not in capnp_methods:
             errors.append(
                 "interfaces::Init::{0}() has no ordinal in {1}. mpgen therefore generates no "
