@@ -19,6 +19,12 @@
 #include "random.h"
 #include "wallet/wallet.h"
 
+#include <cerrno>
+#include <cstring>
+#include <iostream>
+#include <system_error>
+#include <typeinfo>
+
 leveldb::Env* txdb_env;
 
 extern CWallet* pwalletMain;
@@ -36,22 +42,83 @@ extern void noui_connect();
 extern leveldb::Options GetOptions();
 extern void InitLogging();
 
+//! Names the setup step in progress.
+//!
+//! Everything up to InitLogging() runs before the logger exists, so a throw in
+//! that window produces a process with NO OUTPUT AT ALL -- ctest reports only
+//! Boost's "Test setup error: ..." line and nothing else. That is precisely
+//! where the intermittent Alpine CI failure lands ("system_error ... Out of
+//! memory", ~0.01s, zero captured output), which is why it has resisted
+//! diagnosis: the one code path with no logging is the one that fails.
+//!
+//! These write to stderr directly, for the same reason: no logger yet.
+static const char* g_setup_step = "(not started)";
+
+//! Report what threw and, where the type carries one, the underlying error
+//! code -- the errno is the datum that would actually identify the failure,
+//! and it is the one Boost's summary discards.
+static void ReportSetupThrow()
+{
+    // Shaped after PrintException() in src/util/system.cpp: LogPrintf for the
+    // log (which buffers until the logger is started, so the message survives
+    // even though we throw before InitLogging), plus tfm::format to std::cerr
+    // so it is actually visible on a run that dies here. strprintf/tfm::format
+    // is the in-tree formatting primitive; the locale-dependent C printf family
+    // is not used.
+    std::string detail;
+    try {
+        throw;
+    } catch (const fs::filesystem_error& e) {
+        // fs:: is boost::filesystem, whose errors derive from std::runtime_error
+        // rather than std::system_error, so they need their own arm to keep the
+        // error code instead of falling through to the generic handler.
+        detail = strprintf("fs::filesystem_error  code=%d (%s)  path=%s  what=%s",
+                           e.code().value(), e.code().category().name(),
+                           e.path1().string(), e.what());
+    } catch (const std::system_error& e) {
+        detail = strprintf("std::system_error  code=%d (%s)  what=%s",
+                           e.code().value(), e.code().category().name(), e.what());
+    } catch (const std::exception& e) {
+        detail = strprintf("%s  what=%s", typeid(e).name(), e.what());
+    } catch (...) {
+        detail = "(not derived from std::exception)";
+    }
+
+    const std::string message = strprintf(
+        "TestingSetup threw during step: %s\n  %s\n  errno at catch: %d (%s)",
+        g_setup_step, detail, errno, std::strerror(errno));
+
+    LogPrintf("\n\n************************\n%s", message);
+    tfm::format(std::cerr, "\n\n************************\n%s\n", message.c_str());
+}
+
 struct TestingSetup {
     TestingSetup() {
-        SetupEnvironment();
+        try {
+            g_setup_step = "SetupEnvironment()";
+            SetupEnvironment();
 
-        fs::path m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / InsecureRand256().ToString();
-        fUseFastIndex = true; // Don't verify block hashes when loading
-        gArgs.ForceSetArg("-datadir", m_path_root.string());
-        gArgs.ClearPathCache();
-        SelectParams(CBaseChainParams::MAIN);
+            g_setup_step = "fs::temp_directory_path()";
+            fs::path m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / InsecureRand256().ToString();
+            fUseFastIndex = true; // Don't verify block hashes when loading
+            g_setup_step = "gArgs -datadir / SelectParams";
+            gArgs.ForceSetArg("-datadir", m_path_root.string());
+            gArgs.ClearPathCache();
+            SelectParams(CBaseChainParams::MAIN);
 
-        // Forces logger to log to the console, and also not log to the debug.log file.
-        gArgs.ForceSetArg("-debuglogfile", "none");
-        gArgs.SoftSetBoolArg("-printtoconsole", true);
+            // Forces logger to log to the console, and also not log to the debug.log file.
+            gArgs.ForceSetArg("-debuglogfile", "none");
+            gArgs.SoftSetBoolArg("-printtoconsole", true);
 
-        InitLogging();
-        ECC_Start();
+            g_setup_step = "InitLogging()";
+            InitLogging();
+            g_setup_step = "ECC_Start()";
+            ECC_Start();
+            g_setup_step = "(past the pre-logging window)";
+        } catch (...) {
+            ReportSetupThrow();
+            throw;
+        }
 
         // TODO: Refactor CTxDB to something like bitcoin's current CDBWrapper and remove this workaround.
         leveldb::Options db_options;
