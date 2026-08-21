@@ -429,7 +429,7 @@ bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr 
 {
     try
     {
-#if defined(__linux__) && !defined(__GLIBCXX__)
+#if defined(__linux__) && !defined(__GLIBC__)
         //
         // Explicitly set the stack size for this thread to 2 MB.
         //
@@ -443,11 +443,18 @@ bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr 
         // Bitcoin's newer thread management utilities, I will not take time
         // to generalize this patch. Ideally, we should specify a stack size
         // suitable for the application instead of relying on the default of
-        // the libc implementation. For now, we will let glibc do its thing.
-        // 2 MB is the typical default for glibc on x86 platforms so this is
-        // the size we'll start with. After testing, we may choose a smaller
-        // stack size. This patch may apply to other libc implementations as
-        // well.
+        // the libc implementation. For now, we let glibc do its thing: 2 MB
+        // matches glibc's typical x86 default, so this only raises musl to
+        // parity rather than changing glibc behaviour.
+        //
+        // The guard tests __GLIBC__, the C library macro, and NOT __GLIBCXX__,
+        // which libstdc++ defines. They are different libraries: Alpine's
+        // ordinary C++ toolchain is musl + libstdc++, so __GLIBCXX__ IS
+        // defined there and a !__GLIBCXX__ guard silently skipped this on the
+        // one platform it was written for. Verified on alpine:latest with g++:
+        // __GLIBCXX__ defined, __GLIBC__ absent, default pthread stack 131072
+        // bytes -- 128 KB, i.e. exactly the size the comment above says scrypt
+        // overruns.
         //
         boost::thread::attributes attrs;
         attrs.set_stack_size(2 << 20);
@@ -469,7 +476,7 @@ bool ThreadHandler::createThread(void(*pfn)(void*), void* parg, const std::strin
 {
     try
     {
-#if defined(__linux__) && !defined(__GLIBCXX__)
+#if defined(__linux__) && !defined(__GLIBC__)
         //
         // Explicitly set the stack size for this thread to 2 MB.
         //
@@ -483,11 +490,18 @@ bool ThreadHandler::createThread(void(*pfn)(void*), void* parg, const std::strin
         // Bitcoin's newer thread management utilities, I will not take time
         // to generalize this patch. Ideally, we should specify a stack size
         // suitable for the application instead of relying on the default of
-        // the libc implementation. For now, we will let glibc do its thing.
-        // 2 MB is the typical default for glibc on x86 platforms so this is
-        // the size we'll start with. After testing, we may choose a smaller
-        // stack size. This patch may apply to other libc implementations as
-        // well.
+        // the libc implementation. For now, we let glibc do its thing: 2 MB
+        // matches glibc's typical x86 default, so this only raises musl to
+        // parity rather than changing glibc behaviour.
+        //
+        // The guard tests __GLIBC__, the C library macro, and NOT __GLIBCXX__,
+        // which libstdc++ defines. They are different libraries: Alpine's
+        // ordinary C++ toolchain is musl + libstdc++, so __GLIBCXX__ IS
+        // defined there and a !__GLIBCXX__ guard silently skipped this on the
+        // one platform it was written for. Verified on alpine:latest with g++:
+        // __GLIBCXX__ defined, __GLIBC__ absent, default pthread stack 131072
+        // bytes -- 128 KB, i.e. exactly the size the comment above says scrypt
+        // overruns.
         //
         boost::thread::attributes attrs;
         attrs.set_stack_size(2 << 20);

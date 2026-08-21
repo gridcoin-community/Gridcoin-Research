@@ -186,6 +186,62 @@ should_skip_build() {
 # Write the state captured at skip-decision time upon success (see
 # should_skip_build). Falls back to "unknown" -- never skippable -- if no
 # capture happened.
+# Record the resource state immediately before ctest.
+#
+# The unit-test binaries do their fixture setup BEFORE any logger exists, so a
+# failure there produces no output beyond ctest's one-line summary. That has made
+# an intermittent CI failure ("Test setup error: system_error ... Out of memory",
+# ~0.01s, no captured output) undiagnosable after the fact: by the time the log is
+# read, the conditions that produced it are gone.
+#
+# This is deliberately cheap and unconditional -- a CI-only switch would not be
+# there on the run that actually fails. Every command is guarded so a missing tool
+# on a minimal image (busybox, no procps) degrades to a blank line rather than
+# failing the build.
+print_pre_test_environment() {
+    echo ">>> Pre-test environment:"
+    echo "    ctest parallelism : -j ${CORES}   (nproc reports $(nproc 2>/dev/null || echo '?'))"
+    if command -v free >/dev/null 2>&1; then
+        free -m 2>/dev/null | sed 's/^/    /'
+    else
+        grep -E '^(MemTotal|MemFree|MemAvailable|SwapTotal|SwapFree)' /proc/meminfo 2>/dev/null | sed 's/^/    /'
+    fi
+    # In a container /proc/meminfo shows the HOST's memory, not the cgroup cap, so
+    # the limit that actually applies has to be read from the cgroup itself.
+    for f in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory/memory.limit_in_bytes; do
+        if [ -r "$f" ]; then echo "    cgroup mem limit  : $(cat "$f" 2>/dev/null) ($f)"; fi
+    done
+    for f in /sys/fs/cgroup/pids.max /sys/fs/cgroup/pids/pids.max; do
+        if [ -r "$f" ]; then echo "    cgroup pids max   : $(cat "$f" 2>/dev/null)"; fi
+    done
+    echo "    fd limit          : $(ulimit -n 2>/dev/null || echo '?')   thread/proc limit: $(ulimit -u 2>/dev/null || echo '?')"
+    echo "    stack limit (kb)  : $(ulimit -s 2>/dev/null || echo '?')"
+    df -h /tmp 2>/dev/null | tail -1 | sed 's/^/    tmp: /'
+    # AT_MINSIGSTKSZ (auxv type 51): the kernel's minimum alternate-signal-stack
+    # size, derived from THIS CPU's XSAVE area -- so it varies with the physical
+    # machine a CI job lands on. Boost.Test installs an alternate stack sized
+    # SIGSTKSZ, which musl hardcodes to 8192 while glibc 2.34+ makes it dynamic;
+    # sigaltstack() returns ENOMEM when the size is below the kernel's minimum.
+    # Recording it is what distinguishes "the runner's CPU needed more than 8192"
+    # from a stale errno on some other Boost assertion, for the intermittent
+    # "Test setup error: system_error ... Out of memory" on the Alpine job.
+    if [ -r /proc/self/auxv ] && command -v od >/dev/null 2>&1; then
+        echo "    AT_MINSIGSTKSZ    : $(od -An -tu8 -v /proc/self/auxv 2>/dev/null \
+            | awk '{ for (i = 1; i <= NF; i += 2) if ($i == 51) print $(i + 1) }' \
+            | head -1)   (musl SIGSTKSZ is 8192)"
+    fi
+    # 4th loadavg field is running/total kernel scheduling entities -- cheap, and
+    # avoids globbing /proc (shellcheck SC2012).
+    echo "    procs run/total   : $(awk '{print $4}' /proc/loadavg 2>/dev/null || echo '?')"
+
+    # Diagnostics must never be the reason a build fails. The script runs under
+    # `set -e`, where any construct whose LAST command is false makes the
+    # function return non-zero and aborts everything -- a trailing
+    # `[ -r x ] && echo` does exactly that (verified). The `if` forms above
+    # avoid it; this return means a line appended later cannot reintroduce it.
+    return 0
+}
+
 write_build_state() {
     local BUILD_DIR=$1
     echo "${CAPTURED_BUILD_STATE:-unknown}" > "$BUILD_DIR/.build_state"
@@ -452,6 +508,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "native" ]] && [[ "$(uname -s)" == "Lin
         cmake --build build -j $CORES
 
         # Test
+        print_pre_test_environment
         ctest --test-dir build -j $CORES --output-on-failure
 
         # Write state file (Only if build and test succeeded)
@@ -545,6 +602,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "depends" ]] && [[ "$(uname -s)" == "Li
         cmake --build build_linux_depends -j $CORES
 
         # Test
+        print_pre_test_environment
         ctest --test-dir build_linux_depends -j $CORES --output-on-failure
 
         # Write state file
@@ -653,6 +711,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "win64" ]] && [[ "$(uname -s)" == "Linu
         if [ "$ENABLE_MULTIPROCESS" = "true" ]; then
             echo ">>> Skipping ctest for multiprocess win64: the MP binary is not runnable under Wine (native-Windows-only); build + link coverage only."
         else
+            print_pre_test_environment
             ctest --test-dir build_win64 -j $CORES --output-on-failure
         fi
 
@@ -750,6 +809,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darw
         cmake --build build_macos -j $CORES
 
         # Test
+        print_pre_test_environment
         ctest --test-dir build_macos -j $CORES --output-on-failure
 
         # Write state file
