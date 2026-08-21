@@ -179,7 +179,6 @@ public:
     //! researcher pool page so it needs no key.h / CPubKey.
     QString getNewReceiveAddress(const QString& label);
     std::vector<interfaces::WalletOutput> getOutputs(const std::vector<COutPoint>& vOutpoints) const;
-    std::map<std::string, std::vector<interfaces::WalletOutput>> listCoins() const;
 
     //!
     //! \brief The windowed transaction-table boundary (Phase 1c-ii). The GUI

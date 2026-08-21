@@ -43,25 +43,24 @@ interface Wallet $Proxy.wrap("interfaces::Wallet") {
     getPubKey @14 (context :Proxy.Context, address :Data) -> (pubKeyOut :Data, result :Bool);
     getKeyFromPool @15 (context :Proxy.Context, label :Text) -> (pubKeyOut :Data, result :Bool);
     getOutputs @16 (context :Proxy.Context, outpoints :List(OutPoint)) -> (result :List(WalletOutput));
-    listCoins @17 (context :Proxy.Context) -> (result :List(Node.Pair(Text, List(WalletOutput))));
-    computeCoinControlSummary @18 (context :Proxy.Context, selection :WalletCoinControl, recipientAmounts :List(Int64), subtractFeeFromAmount :Bool) -> (result :CoinControlSummary);
-    getMaxConsolidationInputs @19 (context :Proxy.Context) -> (result :UInt32);
-    sendCoins @20 (context :Proxy.Context, recipients :List(WalletSendRecipient), coinControl :WalletCoinControl, acceptedFee :Int64) -> (result :SendCoinsResult);
-    backupWallet @21 (context :Proxy.Context, dest :Text) -> (result :Bool);
-    backupConfigFile @22 (context :Proxy.Context, dest :Text) -> (result :Bool);
-    signMessage @23 (context :Proxy.Context, address :Text, message :Text) -> (signatureOut :Text, result :Int32);
-    verifyMessage @24 (context :Proxy.Context, address :Text, message :Text, signature :Data) -> (result :Int32);
-    getAddresses @25 (context :Proxy.Context) -> (result :List(WalletAddress));
-    getAddressLabel @26 (context :Proxy.Context, address :Text) -> (labelOut :Text, result :Bool);
-    isMine @27 (context :Proxy.Context, address :Text) -> (result :Bool);
-    setAddressBook @28 (context :Proxy.Context, address :Text, label :Text) -> ();
-    delAddressBook @29 (context :Proxy.Context, address :Text) -> (result :Bool);
-    getNewReceiveAddress @30 (context :Proxy.Context) -> (addressOut :Text, result :Bool);
-    getNewReceiveAddressWithLabel @31 (context :Proxy.Context, label :Text) -> (addressOut :Text, result :Bool);
-    getUnbookedReceiveAddresses @32 (context :Proxy.Context) -> (result :List(Text));
-    handleStatusChanged @33 (context :Proxy.Context, callback :Node.VoidCallback) -> (result :Handler.Handler);
-    handleAddressBookChanged @34 (context :Proxy.Context, callback :AddressBookChangedCallback) -> (result :Handler.Handler);
-    handleTransactionChanged @35 (context :Proxy.Context, callback :TransactionChangedCallback) -> (result :Handler.Handler);
+    computeCoinControlSummary @17 (context :Proxy.Context, selection :WalletCoinControl, recipientAmounts :List(Int64), subtractFeeFromAmount :Bool) -> (result :CoinControlSummary);
+    getMaxConsolidationInputs @18 (context :Proxy.Context) -> (result :UInt32);
+    sendCoins @19 (context :Proxy.Context, recipients :List(WalletSendRecipient), coinControl :WalletCoinControl, acceptedFee :Int64) -> (result :SendCoinsResult);
+    backupWallet @20 (context :Proxy.Context, dest :Text) -> (result :Bool);
+    backupConfigFile @21 (context :Proxy.Context, dest :Text) -> (result :Bool);
+    signMessage @22 (context :Proxy.Context, address :Text, message :Text) -> (signatureOut :Text, result :Int32);
+    verifyMessage @23 (context :Proxy.Context, address :Text, message :Text, signature :Data) -> (result :Int32);
+    getAddresses @24 (context :Proxy.Context) -> (result :List(WalletAddress));
+    getAddressLabel @25 (context :Proxy.Context, address :Text) -> (labelOut :Text, result :Bool);
+    isMine @26 (context :Proxy.Context, address :Text) -> (result :Bool);
+    setAddressBook @27 (context :Proxy.Context, address :Text, label :Text) -> ();
+    delAddressBook @28 (context :Proxy.Context, address :Text) -> (result :Bool);
+    getNewReceiveAddress @29 (context :Proxy.Context) -> (addressOut :Text, result :Bool);
+    getNewReceiveAddressWithLabel @30 (context :Proxy.Context, label :Text) -> (addressOut :Text, result :Bool);
+    getUnbookedReceiveAddresses @31 (context :Proxy.Context) -> (result :List(Text));
+    handleStatusChanged @32 (context :Proxy.Context, callback :Node.VoidCallback) -> (result :Handler.Handler);
+    handleAddressBookChanged @33 (context :Proxy.Context, callback :AddressBookChangedCallback) -> (result :Handler.Handler);
+    handleTransactionChanged @34 (context :Proxy.Context, callback :TransactionChangedCallback) -> (result :Handler.Handler);
 }
 
 # --- Notification callbacks (interfaces::Wallet::*Fn std::function types) ---

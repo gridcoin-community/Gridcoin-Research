@@ -15,6 +15,7 @@ using Node = import "node.capnp";
 using Staking = import "staking.capnp";
 using Wallet = import "wallet.capnp";
 using WalletTxSource = import "wallet_tx_source.capnp";
+using WalletCoinSource = import "wallet_coin_source.capnp";
 using MRC = import "mrc.capnp";
 using Voting = import "voting.capnp";
 using Researcher = import "researcher.capnp";
@@ -45,6 +46,7 @@ interface Init $Proxy.wrap("interfaces::Init") {
     makeResearcherContext @11 (context :Proxy.Context) -> (result :Researcher.ResearcherContext);
     makePSGTPoolContext @12 (context :Proxy.Context) -> (result :PSGT.PSGTPoolContext);
     makeSideStakeManager @13 (context :Proxy.Context) -> (result :SideStake.SideStakeManager);
+    makeWalletCoinSource @14 (context :Proxy.Context) -> (result :WalletCoinSource.WalletCoinSource);
 }
 
 struct BuildInfo $Proxy.wrap("interfaces::BuildInfo") {

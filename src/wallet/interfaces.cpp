@@ -366,60 +366,6 @@ public:
         return outputs;
     }
 
-    std::map<std::string, std::vector<WalletOutput>> listCoins() override
-    {
-        // The locks are taken BEFORE the AvailableCoins scan (which re-locks
-        // recursively) and held across the loop below: COutput carries raw
-        // pointers into mapWallet, and an unlocked window between the scan
-        // and the dereferences would let a concurrent erasure (e.g. the
-        // mempool-conflict EraseFromWallet path) free the pointed-at
-        // transactions. The old GUI-side code scanned first and locked
-        // after; the migration closes that window.
-        std::map<std::string, std::vector<WalletOutput>> coins;
-
-        LOCK2(cs_main, m_wallet->cs_wallet); // mapWallet
-
-        std::vector<COutput> vCoins;
-        m_wallet->AvailableCoins(vCoins, true, nullptr, false);
-
-        for (const COutput& out : vCoins) {
-            // Group change under the address it derives from by walking back
-            // through own-wallet inputs (put change in one group with the
-            // wallet address).
-            COutput cout = out;
-
-            while (m_wallet->IsChange(cout.tx->vout[cout.i]) && cout.tx->vin.size() > 0
-                   && m_wallet->IsMine(cout.tx->vin[0]) != ISMINE_NO)
-            {
-                auto it = m_wallet->mapWallet.find(cout.tx->vin[0].prevout.hash);
-                if (it == m_wallet->mapWallet.end()) break;
-                cout = COutput(&it->second, cout.tx->vin[0].prevout.n, 0);
-            }
-
-            WalletOutput output = MakeWalletOutput(*out.tx, out.i, out.nDepth);
-
-            // Group key: the walked ancestor's address. When the change-walk
-            // stayed on the original output (the common case), reuse the
-            // snapshot's already-encoded address instead of extracting and
-            // base58-encoding the same destination a second time under the
-            // locks.
-            std::string group_key;
-            if (cout.tx == out.tx && cout.i == out.i) {
-                group_key = output.address;
-            } else {
-                CTxDestination address;
-                if (ExtractDestination(cout.tx->vout[cout.i].scriptPubKey, address)) {
-                    group_key = EncodeDestination(address);
-                }
-            }
-            if (group_key.empty()) continue;
-
-            coins[std::move(group_key)].push_back(std::move(output));
-        }
-
-        return coins;
-    }
-
     CoinControlSummary computeCoinControlSummary(const WalletCoinControl& selection,
                                                  const std::vector<int64_t>& recipient_amounts,
                                                  bool subtract_fee_from_amount) override

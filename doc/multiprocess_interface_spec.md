@@ -7,7 +7,7 @@ automation client — in place of the bundled Qt wallet.
 
 It describes the interface **as it exists on this branch** (post the
 identity-handshake work: `NodeIdentity` is `{identity_token, network}`, IPC
-schema major is `2`). It is a companion to, not a replacement for:
+schema major is `3`). It is a companion to, not a replacement for:
 
 - `doc/multiprocess_design.md` — the design of record (rules, decisions, phasing).
 - `doc/multiprocess.md` — how to build, run, and stop the split binaries.
@@ -208,7 +208,7 @@ Three constants are embedded in **both** binaries and compared during the
 handshake (`ipc/handshake.h`):
 
 ```cpp
-constexpr uint32_t IPC_SCHEMA_MAJOR   = 2;
+constexpr uint32_t IPC_SCHEMA_MAJOR   = 3;
 constexpr uint32_t IPC_SCHEMA_MINOR   = 0;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 ```
@@ -216,10 +216,16 @@ constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 Rules a client must honor (from `ClientHandshake` and design §4.2):
 
 - **`schema_major`** — the Cap'n Proto wire contract. Must match exactly; any
-  difference is a hard fail. **Major 2** reflects the identity model being
+  difference is a hard fail. **Major 2** reflected the identity model being
   re-based onto the wallet UUID (the former `node_id` / `datadir` /
-  `genesis_hash` fields were retired — a breaking change). A breaking schema
-  change bumps this and requires a one-version transition release.
+  `genesis_hash` fields were retired — a breaking change). **Major 3** retires
+  `listCoins` with the windowed coin-control model (#3183): Cap'n Proto requires
+  consecutive ordinals, so removing it shifted every later `Wallet` method down
+  by one, and a peer built against major 2 would dispatch each call to its
+  neighbour. A breaking schema change bumps this and requires a one-version
+  transition release. Major 3 also carries the coin channel's schema
+  (`wallet_coin_source.capnp`) and `Init.makeWalletCoinSource @14`; that piece is
+  additive, but it ships inside the same major, so the minor restarts at 0.
 - **`schema_minor`** — additive schema changes. Asymmetric:
   *client minor > node minor* is a **hard fail** ("update the node"); *client
   minor < node minor* is a **soft, forward-compatible** finding (the node has
@@ -315,7 +321,7 @@ state (`getLockState -> WalletLockState`, `isUnlockedForStakingOnly`,
 `lockWallet`, `unlockWallet`, `changeWalletPassphrase` — all taking a
 `SecureString` passphrase, §7).
 
-Coin control / send: `getOutputs`, `listCoins`, `computeCoinControlSummary(...)
+Coin control / send: `getOutputs`, `computeCoinControlSummary(...)
 -> CoinControlSummary` (all fee math runs node-side), `getMaxConsolidationInputs`,
 and `sendCoins(recipients, coin_control, accepted_fee) -> SendCoinsResult`. Note
 the fee-confirmation protocol: `sendCoins` returns

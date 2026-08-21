@@ -657,11 +657,6 @@ std::vector<interfaces::WalletOutput> WalletModel::getOutputs(const std::vector<
 
 // AvailableCoins grouped by wallet address (change is grouped under the
 // address it derives from, walked node-side)
-std::map<std::string, std::vector<interfaces::WalletOutput>> WalletModel::listCoins() const
-{
-    return m_wallet.listCoins();
-}
-
 void WalletModel::drainCoinEventQueue()
 {
     // Single drain point for the coin channel (drainEvents is destructive and

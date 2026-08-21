@@ -5,14 +5,22 @@
 #include "amount.h"
 
 #include <QWizard>
-#include <QTreeWidgetItem>
 
 namespace Ui {
     class ConsolidateUnspentWizardSelectInputsPage;
 }
 
-class CoinControlDialog;
+class CoinSelectionModel;
 
+//!
+//! \brief The consolidation wizard's input-selection page over the shared
+//! windowed CoinSelectionModel (#3183, VIEW_COIN_WIZARD) — the former
+//! copy-paste of CoinControlDialog's QTreeWidget plumbing is gone. The
+//! summary/fee pipeline (computeCoinControlSummary), the registerField
+//! wiring, and the InputStatus warning state machine are unchanged; the
+//! address-list / default-address signals are re-expressed over the group
+//! directory's server-side aggregates.
+//!
 class ConsolidateUnspentWizardSelectInputsPage : public QWizardPage
 {
     Q_OBJECT
@@ -35,36 +43,23 @@ public slots:
 
 private:
     Ui::ConsolidateUnspentWizardSelectInputsPage *ui;
-    interfaces::WalletCoinControl *coinControl;
-    QList<qint64> *payAmounts;
-    WalletModel *model;
+    interfaces::WalletCoinControl *coinControl{nullptr};
+    QList<qint64> *payAmounts{nullptr};
+    WalletModel *model{nullptr};
+    CoinSelectionModel *m_selection_model{nullptr};
     int sortColumn;
     Qt::SortOrder sortOrder;
     size_t m_InputSelectionLimit{0};
     Qt::CheckState m_ToState = Qt::Checked;
     bool m_FilterMode = true;
     bool m_FilterValueValid = false;
+    //! Set when the filter's input cap culled the selection; cleared by any
+    //! user-driven selection mutation (the WARNING-vs-STOP boundary at
+    //! exactly m_InputSelectionLimit selected inputs depends on it).
     bool m_InputSelectionLimitedByFilter = false;
-    bool m_ViewItemsChangedViaFilter = false;
-
-    QString strPad(QString, int, QString);
-    void sortView(int, Qt::SortOrder);
-    void updateView();
-    bool filterInputsByValue(const bool& less, const CAmount& inputFilterValue, const unsigned int& inputSelectionLimit);
-
-    enum
-    {
-        COLUMN_CHECKBOX,
-        COLUMN_AMOUNT,
-        COLUMN_LABEL,
-        COLUMN_ADDRESS,
-        COLUMN_DATE,
-        COLUMN_CONFIRMATIONS,
-        COLUMN_TXHASH,
-        COLUMN_VOUT_INDEX,
-        COLUMN_AMOUNT_INT64,
-        COLUMN_CHANGE_BOOL
-    };
+    //! True while the filter's own bulk mutation runs, so its
+    //! selectionChanged does not clear the flag it just set.
+    bool m_ApplyingFilter = false;
 
     enum InputStatus
     {
@@ -77,13 +72,14 @@ private:
 private slots:
     void treeModeRadioButton(bool);
     void listModeRadioButton(bool);
-    void viewItemChanged(QTreeWidgetItem*, int);
     void headerSectionClicked(int);
     void buttonSelectAllClicked();
     void maxMinOutputValueChanged();
     void buttonFilterModeClicked();
     void buttonFilterClicked();
     void SetOutputWarningStop(InputStatus input_status);
+    void modelSelectionChanged();
+    void modelLoadingFinished();
 };
 
 #endif // BITCOIN_QT_CONSOLIDATEUNSPENTWIZARDSELECTINPUTSPAGE_H
