@@ -630,6 +630,18 @@ public:
      */
     boost::signals2::signal<void (CWallet *wallet, const uint256 &hashTx, ChangeType status)> NotifyTransactionChanged;
 
+    /** A bulk wallet-transaction mutation pass (rescan / reaccept) completed
+     *  without emitting per-transaction NotifyTransactionChanged signals.
+     *  Subscribers that maintain derived transaction or coin state should
+     *  fully resynchronize from the wallet.
+     *  @note Lock state at emission varies by path (a rescan nested inside
+     *        ReacceptWalletTransactions fires under cs_main + cs_wallet; the
+     *        top-level emissions fire with neither held). Subscribers must not
+     *        assume either and should defer heavy resync work rather than
+     *        perform it inline.
+     */
+    boost::signals2::signal<void ()> NotifyTransactionsBulkChanged;
+
     /* Set the HD chain model (chain child index counters) */
     bool SetHDChain(const CHDChain& chain, bool memonly);
     const CHDChain& GetHDChain() { return hdChain; }
