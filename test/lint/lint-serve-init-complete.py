@@ -32,6 +32,7 @@ import sys
 
 INIT_HEADER = "src/interfaces/init.h"
 SERVE_INIT = "src/ipc/serve_init.cpp"
+INIT_CAPNP = "src/ipc/capnp/init.capnp"
 
 # Methods that must NOT be gated, with the reason each is exempt.
 UNGATED = {
@@ -41,6 +42,26 @@ UNGATED = {
     # that is the only time the listener asks. Not exposed over capnp, so no remote
     # peer can call it.
     "isAuthenticated",
+}
+
+# Virtuals deliberately absent from init.capnp, with the reason each is exempt.
+# Everything else on interfaces::Init MUST have an ordinal: without one, mpgen
+# generates no override on ProxyClient<Init>, the call falls through to the base
+# default (nullptr / an empty value), and the capability silently does not exist
+# over IPC. That is not hypothetical -- the coin channel shipped that way and the
+# multiprocess GUI could not start at all until wallet_coin_source.capnp was
+# added.
+UNSERVED = {
+    # The listener asks this locally, before authentication, to decide whether a
+    # connection beat the deadline. Serving it would let a peer probe the gate.
+    "isAuthenticated",
+}
+
+# Schema methods with no interfaces::Init counterpart, with the reason.
+NOT_A_VIRTUAL = {
+    # libmultiprocess lifecycle entry point (the ThreadMap exchange), generated
+    # by mpgen rather than declared on the C++ interface.
+    "construct",
 }
 
 # "virtual <return type> <name>(" -- the return type may contain spaces, ::, <>, &, *.
@@ -148,10 +169,39 @@ def overrides_with_bodies(serve_text):
     return out
 
 
+def capnp_init_methods(capnp_text):
+    """Return {name: ordinal} for the methods of `interface Init` in init.capnp.
+
+    Scoped to that interface's braces rather than the whole file: the nested
+    structs (BuildInfo, NodeIdentity) restart their own ordinal spaces, and a
+    file-wide scan would mix their FIELD names in with the interface's methods.
+    """
+    m = re.search(r"\binterface\s+Init\b[^{]*\{", capnp_text)
+    if not m:
+        return None
+    start = m.end()
+    depth = 1
+    i = start
+    while i < len(capnp_text) and depth:
+        if capnp_text[i] == "{":
+            depth += 1
+        elif capnp_text[i] == "}":
+            depth -= 1
+        i += 1
+    if depth:
+        return None
+    body = capnp_text[start:i - 1]
+    # Strip capnp comments so prose cannot introduce a phantom method.
+    body = re.sub(r"#[^\n]*", "", body)
+    return {mm.group(1): int(mm.group(2))
+            for mm in re.finditer(r"^\s*(\w+)\s*@(\d+)\s*\(", body, re.M)}
+
+
 def main():
     header_text = read(INIT_HEADER)
     serve_text = read(SERVE_INIT)
-    if header_text is None or serve_text is None:
+    capnp_text = read(INIT_CAPNP)
+    if header_text is None or serve_text is None or capnp_text is None:
         return 1
 
     expected = declared_virtuals(header_text)
@@ -199,6 +249,59 @@ def main():
                 "ServeInit::{0}() (the {1}-argument overload) overrides nothing declared on "
                 "interfaces::Init ({2}); it is dead code or a half-finished rename.".format(
                     key[0], key[1], INIT_HEADER))
+
+    # --- Third gate: the capnp schema ---
+    #
+    # An override in ServeInit only matters if the call can reach it. mpgen drives
+    # ProxyClient<Init> from init.capnp, so a virtual with no ordinal there is never
+    # overridden client-side: the call resolves to interfaces::Init's own default,
+    # returns nullptr, and never leaves the GUI process. Nothing else catches this.
+    # The compiler cannot -- overriding a defaulted virtual is optional.
+    # lint-capnp-schema-compat.py compares ordinals that EXIST against a released
+    # baseline, so it cannot miss one that was never added. The multiprocess CI jobs
+    # build; they do not run a GUI. And INTERFACES_ASSERT_MARSHALABLE asserts the
+    # DTOs are copyable value types, which says nothing about whether marshalling
+    # exists -- the coin channel carried fifteen of those assertions while having no
+    # schema at all.
+    capnp_methods = capnp_init_methods(capnp_text)
+    if capnp_methods is None:
+        fail("could not locate `interface Init` in {} -- the lint needs updating".format(INIT_CAPNP))
+        return 1
+    if not capnp_methods:
+        fail("found no methods on `interface Init` in {}; the parser is probably broken".format(INIT_CAPNP))
+        return 1
+
+    for name, _arity in expected:
+        if name in UNSERVED:
+            continue
+        if name not in capnp_methods:
+            errors.append(
+                "interfaces::Init::{0}() has no ordinal in {1}. mpgen therefore generates no "
+                "override on ProxyClient<Init>, so over IPC the call falls through to the base "
+                "default and the capability silently does not exist -- the multiprocess GUI sees "
+                "nullptr. Add `{0} @<next> (context :Proxy.Context) -> (result :...);` to "
+                "`interface Init`, with a schema for the returned interface if it has none yet. "
+                "If it is deliberately not served, add it to UNSERVED in this lint with the "
+                "reason.".format(name, INIT_CAPNP))
+
+    # The reverse: an ordinal with no virtual behind it. mpgen would fail to build,
+    # but naming it here reports the cause rather than a template error.
+    declared_names = {name for name, _ in expected}
+    for name in capnp_methods:
+        if name in NOT_A_VIRTUAL:
+            continue
+        if name not in declared_names:
+            errors.append(
+                "{0} declares `{1}` on `interface Init`, but interfaces::Init has no such virtual "
+                "({2}); it is a stale ordinal or a half-finished rename.".format(
+                    INIT_CAPNP, name, INIT_HEADER))
+
+    # An UNSERVED entry that IS in the schema is a contradiction worth catching.
+    for name in UNSERVED:
+        if name in capnp_methods:
+            errors.append(
+                "interfaces::Init::{0}() is listed as unserved-by-design but has an ordinal in "
+                "{1}; update either the schema or UNSERVED in this lint.".format(name, INIT_CAPNP))
 
     # An UNGATED entry that calls RequireAuth() is a contradiction worth catching.
     for name in UNGATED:

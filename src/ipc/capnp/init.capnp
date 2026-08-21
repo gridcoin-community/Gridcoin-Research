@@ -24,9 +24,17 @@ using SideStake = import "sidestake.capnp";
 
 # Per-process bootstrap interface (interfaces::Init). construct @0 is the
 # libmultiprocess lifecycle entry point (ThreadMap exchange); the makeX methods
-# hand out the other interface capabilities. Only the subset whose return types
-# are schema'd so far is exposed (grow-per-migration): the remaining factories
-# (makeWallet / makeMRC / ...) are added as their interfaces get schemas.
+# hand out the other interface capabilities.
+#
+# This is no longer a grow-per-migration subset: EVERY virtual on
+# interfaces::Init must appear here, and test/lint/lint-serve-init-complete.py
+# enforces it. A virtual with no ordinal is not "not migrated yet" -- mpgen
+# generates no override for it on ProxyClient<Init>, so the call resolves to the
+# base default, returns nullptr, and the capability silently does not exist over
+# IPC. The coin channel shipped exactly that way and the multiprocess GUI could
+# not start at all. isAuthenticated is the one deliberate omission (the local
+# listener asks it before authentication); it is recorded in that lint's UNSERVED
+# set with the reason.
 interface Init $Proxy.wrap("interfaces::Init") {
     construct @0 (threadMap :Proxy.ThreadMap) -> (threadMap :Proxy.ThreadMap);
     isCoreReady @1 (context :Proxy.Context) -> (result :Bool);
