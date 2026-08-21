@@ -23,7 +23,15 @@
 // pre-auth test destroys those unique_ptrs (they never get a value, but the
 // destructor is still instantiated).
 #include "interfaces/node.h"
+#include "interfaces/mrc.h"
+#include "interfaces/psgt.h"
+#include "interfaces/researcher.h"
+#include "interfaces/sidestake.h"
+#include "interfaces/staking.h"
+#include "interfaces/voting.h"
 #include "interfaces/wallet.h"
+#include "interfaces/wallet_coin_source.h"
+#include "interfaces/wallet_tx_source.h"
 #include "ipc/capnp/protocol.h"
 #include "ipc/handshake.h"
 #include "ipc/protocol.h"
@@ -116,6 +124,51 @@ struct UnixSocket {
         BOOST_REQUIRE_EQUAL(::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)), 0);
         return fd;
     }
+};
+
+//! Records which Init factory methods actually ARRIVED on the server. Every
+//! factory returns nullptr -- what is under test is whether the call crossed the
+//! wire at all, not what it produced, so no concrete interface implementations
+//! are needed.
+//!
+//! This is the runtime half of the guard whose static half is
+//! test/lint/lint-serve-init-complete.py. A virtual on interfaces::Init with no
+//! ordinal in init.capnp gets no override on ProxyClient<Init>, so the client
+//! call resolves to interfaces::Init's own default and returns nullptr WITHOUT
+//! dispatching. Nothing fails to compile, nothing logs, and the capability
+//! simply does not exist over IPC -- which is how the coin channel shipped
+//! unmarshalled and left the multiprocess GUI unable to start. Flags are atomic
+//! because the server answers on its own loop thread.
+struct RecordingInner : interfaces::Init {
+    struct Seen {
+        std::atomic<bool> node{false};
+        std::atomic<bool> staking{false};
+        std::atomic<bool> wallet{false};
+        std::atomic<bool> wallet_tx_source{false};
+        std::atomic<bool> wallet_coin_source{false};
+        std::atomic<bool> mrc{false};
+        std::atomic<bool> voting{false};
+        std::atomic<bool> researcher{false};
+        std::atomic<bool> psgt{false};
+        std::atomic<bool> sidestake{false};
+        std::atomic<bool> core_ready{false};
+    };
+
+    explicit RecordingInner(Seen& seen) : m_seen(seen) {}
+
+    bool isCoreReady() override { m_seen.core_ready = true; return true; }
+    std::unique_ptr<interfaces::Node> makeNode() override { m_seen.node = true; return nullptr; }
+    std::unique_ptr<interfaces::StakingStatus> makeStakingStatus() override { m_seen.staking = true; return nullptr; }
+    std::unique_ptr<interfaces::Wallet> makeWallet() override { m_seen.wallet = true; return nullptr; }
+    std::shared_ptr<interfaces::WalletTxSource> makeWalletTxSource() override { m_seen.wallet_tx_source = true; return nullptr; }
+    std::shared_ptr<interfaces::WalletCoinSource> makeWalletCoinSource() override { m_seen.wallet_coin_source = true; return nullptr; }
+    std::unique_ptr<interfaces::MRC> makeMRC() override { m_seen.mrc = true; return nullptr; }
+    std::unique_ptr<interfaces::VotingManager> makeVotingManager() override { m_seen.voting = true; return nullptr; }
+    std::unique_ptr<interfaces::ResearcherContext> makeResearcherContext() override { m_seen.researcher = true; return nullptr; }
+    std::unique_ptr<interfaces::PSGTPoolContext> makePSGTPoolContext() override { m_seen.psgt = true; return nullptr; }
+    std::unique_ptr<interfaces::SideStakeManager> makeSideStakeManager() override { m_seen.sidestake = true; return nullptr; }
+
+    Seen& m_seen;
 };
 
 //! Factory serving a fresh ServeInit (StubInner + the given cookie/identity) per
@@ -318,6 +371,66 @@ BOOST_AUTO_TEST_CASE(wire_handshake_rejects_network_mismatch)
     ipc::HandshakeResult r = ipc::ClientHandshake(*link.client, "cookie", "test");
     BOOST_CHECK(!r.ok);
     BOOST_CHECK(!r.error.empty());
+}
+
+// Every interfaces::Init factory must actually reach the server over the wire.
+//
+// This is the test that would have caught the coin channel shipping without a
+// Cap'n Proto schema. makeWalletCoinSource existed on interfaces::Init, had an
+// auth-gated ServeInit override, and its DTOs all carried
+// INTERFACES_ASSERT_MARSHALABLE -- but with no ordinal in init.capnp, mpgen
+// generated no override on ProxyClient<Init>. The client call resolved to the
+// base default, returned nullptr without dispatching, and the multiprocess GUI
+// threw at startup. Everything compiled and every existing lint passed.
+//
+// Asserting the SERVER saw each call is what makes this robust: a factory that
+// legitimately returns nullptr (no wallet attached, say) is indistinguishable
+// client-side from one that was never marshalled, so a client-side null check
+// would prove nothing.
+BOOST_AUTO_TEST_CASE(wire_every_init_factory_reaches_the_server)
+{
+    RecordingInner::Seen seen;
+
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    id.identity_token = "tok";
+
+    WireLink link([&seen, &id](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(std::make_unique<RecordingInner>(seen), "the-cookie", id);
+    });
+
+    // ServeInit gates every factory behind RequireAuth(), so authenticate first.
+    ipc::HandshakeResult r = ipc::ClientHandshake(*link.client, "the-cookie", "main");
+    BOOST_REQUIRE(r.ok);
+
+    // Each call returns nullptr by construction; the return is deliberately
+    // ignored. What is asserted is that the invocation arrived server-side.
+    link.client->isCoreReady();
+    link.client->makeNode();
+    link.client->makeStakingStatus();
+    link.client->makeWallet();
+    link.client->makeWalletTxSource();
+    link.client->makeWalletCoinSource();
+    link.client->makeMRC();
+    link.client->makeVotingManager();
+    link.client->makeResearcherContext();
+    link.client->makePSGTPoolContext();
+    link.client->makeSideStakeManager();
+
+    BOOST_CHECK_MESSAGE(seen.core_ready.load(), "isCoreReady did not reach the server");
+    BOOST_CHECK_MESSAGE(seen.node.load(), "makeNode did not reach the server");
+    BOOST_CHECK_MESSAGE(seen.staking.load(), "makeStakingStatus did not reach the server");
+    BOOST_CHECK_MESSAGE(seen.wallet.load(), "makeWallet did not reach the server");
+    BOOST_CHECK_MESSAGE(seen.wallet_tx_source.load(), "makeWalletTxSource did not reach the server");
+    BOOST_CHECK_MESSAGE(seen.wallet_coin_source.load(),
+                        "makeWalletCoinSource did not reach the server -- it is missing an ordinal "
+                        "in src/ipc/capnp/init.capnp, so ProxyClient<Init> has no override and the "
+                        "call never left the client process");
+    BOOST_CHECK_MESSAGE(seen.mrc.load(), "makeMRC did not reach the server");
+    BOOST_CHECK_MESSAGE(seen.voting.load(), "makeVotingManager did not reach the server");
+    BOOST_CHECK_MESSAGE(seen.researcher.load(), "makeResearcherContext did not reach the server");
+    BOOST_CHECK_MESSAGE(seen.psgt.load(), "makePSGTPoolContext did not reach the server");
+    BOOST_CHECK_MESSAGE(seen.sidestake.load(), "makeSideStakeManager did not reach the server");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
