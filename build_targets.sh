@@ -217,6 +217,19 @@ print_pre_test_environment() {
     echo "    fd limit          : $(ulimit -n 2>/dev/null || echo '?')   thread/proc limit: $(ulimit -u 2>/dev/null || echo '?')"
     echo "    stack limit (kb)  : $(ulimit -s 2>/dev/null || echo '?')"
     df -h /tmp 2>/dev/null | tail -1 | sed 's/^/    tmp: /'
+    # AT_MINSIGSTKSZ (auxv type 51): the kernel's minimum alternate-signal-stack
+    # size, derived from THIS CPU's XSAVE area -- so it varies with the physical
+    # machine a CI job lands on. Boost.Test installs an alternate stack sized
+    # SIGSTKSZ, which musl hardcodes to 8192 while glibc 2.34+ makes it dynamic;
+    # sigaltstack() returns ENOMEM when the size is below the kernel's minimum.
+    # Recording it is what distinguishes "the runner's CPU needed more than 8192"
+    # from a stale errno on some other Boost assertion, for the intermittent
+    # "Test setup error: system_error ... Out of memory" on the Alpine job.
+    if [ -r /proc/self/auxv ] && command -v od >/dev/null 2>&1; then
+        echo "    AT_MINSIGSTKSZ    : $(od -An -tu8 -v /proc/self/auxv 2>/dev/null \
+            | awk '{ for (i = 1; i <= NF; i += 2) if ($i == 51) print $(i + 1) }' \
+            | head -1)   (musl SIGSTKSZ is 8192)"
+    fi
     # 4th loadavg field is running/total kernel scheduling entities -- cheap, and
     # avoids globbing /proc (shellcheck SC2012).
     echo "    procs run/total   : $(awk '{print $4}' /proc/loadavg 2>/dev/null || echo '?')"
