@@ -751,6 +751,39 @@ void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* 
     // restored from backup or the user making copies of wallet.dat.
     {
         LOCK(cs_wallet);
+
+        // Transactions whose spent flags this call actually changed, in
+        // first-touch order. The flag updates below are in-memory only
+        // (MarkSpent / MarkUnspent just flip vfSpent and drop the credit
+        // cache); the disk write and the UI notification are deferred to one
+        // per DISTINCT transaction at the end.
+        //
+        // Doing them per OUTPUT instead, as this did, is quadratic in exactly
+        // the case that matters. Every input spending the same parent rewrote
+        // that whole parent record and emitted another identical CT_UPDATED
+        // for it, and the fBlock loop below repeated both for a single hash
+        // once per owned output. Measured on an isolated-testnet consolidation
+        // of 600 inputs (issue #3183's coin control makes these a few clicks):
+        // 549 WriteToDisk calls and 1152 NotifyTransactionChanged for THREE
+        // distinct transactions -- a 384x notification amplification that
+        // backlogged the GUI transaction queue badly enough to leave the table
+        // sluggish and a just-sent transaction showing as unconfirmed long
+        // after it had confirmed.
+        std::vector<uint256> updated;
+        std::set<uint256> updated_seen;
+
+        auto mark_updated = [&updated, &updated_seen](const uint256& hash) {
+            if (updated_seen.insert(hash).second) updated.push_back(hash);
+        };
+
+        // The fBlock branch below changes THIS transaction's own vfSpent, which
+        // must be persisted -- but it must not be notified here. The sole caller
+        // is AddToWallet, which unconditionally fires CT_NEW/CT_UPDATED for this
+        // same hash on the statement after the one that called us, and nothing
+        // can return in between. Notifying here too would hand every subscriber
+        // a duplicate for the transaction being added.
+        bool self_spent_changed = false;
+
         for (auto const& txin : tx.vin)
         {
             auto mi = mapWallet.find(txin.prevout.hash);
@@ -762,8 +795,7 @@ void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* 
                 } else if (!wtx.IsSpent(txin.prevout.n) && (IsMine(wtx.vout[txin.prevout.n]) != ISMINE_NO)) {
                     LogPrint(BCLog::LogFlags::VERBOSE, "WalletUpdateSpent found spent coin %s gC %s", FormatMoney(wtx.GetCredit()), wtx.GetHash().ToString());
                     wtx.MarkSpent(txin.prevout.n);
-                    wtx.WriteToDisk(pwalletdb);
-                    NotifyTransactionChanged(this, txin.prevout.hash, CT_UPDATED);
+                    mark_updated(txin.prevout.hash);
                 }
             }
         }
@@ -772,19 +804,55 @@ void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* 
         {
             uint256 hash = tx.GetHash();
             auto mi = mapWallet.find(hash);
-            CWalletTx& wtx = mi->second;
 
-            for (auto const& txout : tx.vout)
+            // Guard the lookup. Callers reach this only for transactions
+            // already added to the wallet, so the miss is not known to be
+            // reachable -- but the previous code dereferenced the iterator
+            // unconditionally, which is undefined behaviour the moment that
+            // assumption stops holding.
+            if (mi != mapWallet.end())
             {
-                if (IsMine(txout) != ISMINE_NO)
+                CWalletTx& wtx = mi->second;
+
+                for (auto const& txout : tx.vout)
                 {
-                    wtx.MarkUnspent(&txout - &tx.vout[0]);
+                    if (IsMine(txout) != ISMINE_NO)
+                    {
+                        // Only a real transition counts. MarkUnspent is a no-op on
+                        // an already-unspent output, so flagging every owned output
+                        // would force a redundant write on the common path -- and
+                        // AddToWallet has already persisted this transaction by the
+                        // time it calls us. Mirrors the !IsSpent() guard the input
+                        // loop above applies for the same reason.
+                        const unsigned int n = &txout - &tx.vout[0];
+                        if (wtx.IsSpent(n))
+                        {
+                            wtx.MarkUnspent(n);
+                            self_spent_changed = true;
+                        }
+                    }
+                }
+
+                // Write once if anything moved; deliberately no notification
+                // (see self_spent_changed above).
+                if (self_spent_changed) {
                     wtx.WriteToDisk(pwalletdb);
-                    NotifyTransactionChanged(this, hash, CT_UPDATED);
                 }
             }
         }
 
+        // One write and one notification per affected PARENT transaction (the
+        // transaction being added is handled above, write-only). mapWallet is
+        // neither inserted into nor erased from above, so every hash collected
+        // is still present.
+        for (const uint256& hash : updated)
+        {
+            auto mi = mapWallet.find(hash);
+            if (mi == mapWallet.end()) continue;
+
+            mi->second.WriteToDisk(pwalletdb);
+            NotifyTransactionChanged(this, hash, CT_UPDATED);
+        }
     }
 }
 

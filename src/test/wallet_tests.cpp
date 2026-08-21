@@ -5,6 +5,7 @@
 #include "init.h"
 #include "main.h"
 #include "wallet/wallet.h"
+#include "wallet/walletdb.h"
 
 #include <algorithm>
 
@@ -634,6 +635,134 @@ BOOST_AUTO_TEST_CASE(getamounts_omits_coinstake_rollup_when_staked_input_is_unkn
                             "the whole staked principal was reported as a received amount");
     }
     BOOST_CHECK(listReceived.empty());
+}
+
+
+// WalletUpdateSpent must write and notify once per affected TRANSACTION, not
+// once per spent OUTPUT. Doing it per output made a consolidation quadratic:
+// 600 inputs drawn from three parents emitted 1152 notifications and 549
+// WriteToDisk calls, backlogging the GUI transaction queue badly enough to
+// leave the table sluggish and a confirmed transaction rendering as pending.
+// This also pins the calls OUT of the per-output loops, so moving them back
+// fails here rather than in the field.
+BOOST_AUTO_TEST_CASE(wallet_update_spent_notifies_once_per_parent)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CKey key;
+    key.MakeNewKey(true);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));
+
+    // One parent carrying FOUR outputs to us -- the shape a consolidation
+    // draws from, and the shape that made the old code repeat itself.
+    CMutableTransaction parent;
+    parent.vin.resize(1);
+    parent.vin[0].prevout = COutPoint(
+        uint256S("0x4444444444444444444444444444444444444444444444444444444444444444"), 0);
+    parent.vout.resize(4);
+    for (unsigned int i = 0; i < 4; ++i) {
+        parent.vout[i].nValue = COIN;
+        parent.vout[i].scriptPubKey.SetDestination(CTxDestination(key.GetPubKey().GetID()));
+    }
+    const CTransaction parent_tx(parent);
+    const uint256 parent_hash = parent_tx.GetHash();
+
+    // Insert directly rather than through AddToWallet, which fires its own
+    // notification for the inserted transaction and would muddy the count.
+    CWalletTx parent_wtx(pwalletMain, parent_tx);
+    parent_wtx.SetTxState(TxStateInMempool{});
+    pwalletMain->mapWallet[parent_hash] = parent_wtx;
+
+    // A child spending THREE of that one parent's outputs.
+    CKey external_key;
+    external_key.MakeNewKey(true);
+    CMutableTransaction child;
+    child.vin.resize(3);
+    for (unsigned int i = 0; i < 3; ++i) {
+        child.vin[i].prevout = COutPoint(parent_hash, i);
+    }
+    child.vout.resize(1);
+    child.vout[0].nValue = 2 * COIN;
+    child.vout[0].scriptPubKey.SetDestination(CTxDestination(external_key.GetPubKey().GetID()));
+    const CTransaction child_tx(child);
+
+    std::map<uint256, int> notifies;
+    boost::signals2::scoped_connection conn(
+        pwalletMain->NotifyTransactionChanged.connect(
+            [&notifies](CWallet*, const uint256& h, ChangeType) { notifies[h] += 1; }));
+
+    CWalletDB walletdb(pwalletMain->strWalletFile);
+    pwalletMain->WalletUpdateSpent(child_tx, /*fBlock=*/false, &walletdb);
+
+    // Three outputs of ONE parent changed, so exactly one notification. The
+    // per-output form emitted three.
+    BOOST_CHECK_EQUAL(notifies[parent_hash], 1);
+
+    // ...and the coalescing did not cost correctness: every spent output is
+    // still marked, and the untouched fourth is not.
+    const auto it = pwalletMain->mapWallet.find(parent_hash);
+    BOOST_REQUIRE(it != pwalletMain->mapWallet.end());
+    BOOST_CHECK(it->second.IsSpent(0));
+    BOOST_CHECK(it->second.IsSpent(1));
+    BOOST_CHECK(it->second.IsSpent(2));
+    BOOST_CHECK(!it->second.IsSpent(3));
+
+    pwalletMain->EraseFromWallet(parent_hash);
+}
+
+// The fBlock branch must NOT notify the transaction being processed. The sole
+// caller, AddToWallet, unconditionally fires CT_NEW/CT_UPDATED for that same
+// hash on the next statement, so a notification here is a guaranteed duplicate
+// for every subscriber.
+BOOST_AUTO_TEST_CASE(wallet_update_spent_does_not_notify_the_transaction_itself)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CKey key;
+    key.MakeNewKey(true);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(
+        uint256S("0x5555555555555555555555555555555555555555555555555555555555555555"), 0);
+    mtx.vout.resize(2);
+    for (unsigned int i = 0; i < 2; ++i) {
+        mtx.vout[i].nValue = COIN;
+        mtx.vout[i].scriptPubKey.SetDestination(CTxDestination(key.GetPubKey().GetID()));
+    }
+    const CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+
+    CWalletTx wtx(pwalletMain, tx);
+    wtx.SetTxState(TxStateInMempool{});
+    // Seed both outputs SPENT. Inserting with the default (unspent) flags would
+    // make the !IsSpent() assertions below pass even if the MarkUnspent loop were
+    // deleted outright -- they would be asserting the initial state, not the
+    // transition.
+    wtx.MarkSpent(0);
+    wtx.MarkSpent(1);
+    BOOST_REQUIRE(wtx.IsSpent(0));
+    BOOST_REQUIRE(wtx.IsSpent(1));
+    pwalletMain->mapWallet[hash] = wtx;
+
+    std::map<uint256, int> notifies;
+    boost::signals2::scoped_connection conn(
+        pwalletMain->NotifyTransactionChanged.connect(
+            [&notifies](CWallet*, const uint256& h, ChangeType) { notifies[h] += 1; }));
+
+    CWalletDB walletdb(pwalletMain->strWalletFile);
+    pwalletMain->WalletUpdateSpent(tx, /*fBlock=*/true, &walletdb);
+
+    // Both owned outputs were marked unspent, and neither produced an event.
+    BOOST_CHECK_EQUAL(notifies[hash], 0);
+
+    const auto it = pwalletMain->mapWallet.find(hash);
+    BOOST_REQUIRE(it != pwalletMain->mapWallet.end());
+    BOOST_CHECK(!it->second.IsSpent(0));
+    BOOST_CHECK(!it->second.IsSpent(1));
+
+    pwalletMain->EraseFromWallet(hash);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
