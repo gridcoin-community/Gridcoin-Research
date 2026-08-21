@@ -37,6 +37,8 @@ add_library(gridcoinqt STATIC
     clientmodel.cpp
     coincontroldialog.cpp
     coincontroltreewidget.cpp
+    coinselectionmodel.cpp
+    coinselectionview.cpp
     consolidateunspentdialog.cpp
     consolidateunspentwizard.cpp
     consolidateunspentwizardselectdestinationpage.cpp
@@ -181,6 +183,17 @@ target_link_libraries(gridcoinqt PUBLIC
 
 if(USE_QT6)
     target_link_libraries(gridcoinqt PUBLIC ${QT}::Core5Compat)
+endif()
+
+# Dev-only (#3183): run QAbstractItemModelTester over the coin-selection model
+# on every mutation. Needs the QtTest module; NEVER enable at pathological
+# -devsyntheticcoins scales — the tester re-walks the model per signal.
+option(COINSELECTION_MODEL_TESTER
+       "Dev: attach QAbstractItemModelTester to the coin-selection model" OFF)
+if(COINSELECTION_MODEL_TESTER)
+    find_package(${QT} REQUIRED COMPONENTS Test)
+    target_compile_definitions(gridcoinqt PUBLIC COINSELECTION_MODEL_TESTER)
+    target_link_libraries(gridcoinqt PUBLIC ${QT}::Test)
 endif()
 if(USE_DBUS)
     target_link_libraries(gridcoinqt PUBLIC ${QT}::DBus)

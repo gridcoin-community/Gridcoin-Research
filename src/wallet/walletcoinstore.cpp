@@ -337,6 +337,7 @@ void WalletCoinStore::upsertCoins(const uint256& hash, std::vector<CoinRecord> r
         if (it == m_by_outpoint.end()) continue;
         CoinRecord& stored_rec = m_records[it->second];
         if (stored_rec.block_height == r.block_height
+            && stored_rec.time == r.time
             && stored_rec.label == r.label
             && stored_rec.group_address == r.group_address
             && stored_rec.is_change == r.is_change
@@ -614,7 +615,9 @@ void WalletCoinStore::reapplyMirrorAggregates()
     for (const COutPoint& outpoint : m_selected) {
         auto it = m_by_outpoint.find(outpoint);
         if (it == m_by_outpoint.end()) continue;
-        (void)m_views.applySelection(it->second, true);
+        // Quiet: a rebuild/register publishes a Reset, so the consumer reseeds
+        // the aggregates wholesale — per-coin GroupChanges would be redundant.
+        m_views.applySelectionQuiet(it->second, true);
     }
 }
 
@@ -623,22 +626,29 @@ std::set<COutPoint> WalletCoinStore::reconcileSelection(std::set<COutPoint> sele
     LOCK(cs_store);
 
     // Clear the current mirror's aggregates, then install the pruned set.
-    // No events: the consumer reconciles immediately before seeding its
-    // caches, so it reads the refreshed aggregates directly.
+    // The RECONCILING view reads the refreshed aggregates directly (it seeds
+    // its caches immediately after this returns), but the aggregates are
+    // view-independent: any OTHER registered view would render a stale parent
+    // tristate forever with no event to repair it. Collect the groups whose
+    // counters move and emit one coalesced GroupChange each at the end.
+    std::set<std::string> touched;
     for (const COutPoint& outpoint : m_selected) {
         auto it = m_by_outpoint.find(outpoint);
         if (it == m_by_outpoint.end()) continue;
-        (void)m_views.applySelection(it->second, false);
+        m_views.applySelectionQuiet(it->second, false);
+        touched.insert(m_records[it->second].group_address);
     }
 
     std::set<COutPoint> pruned;
     for (const COutPoint& outpoint : selection) {
-        if (m_by_outpoint.count(outpoint) > 0) {
-            pruned.insert(outpoint);
-        }
+        auto it = m_by_outpoint.find(outpoint);
+        if (it == m_by_outpoint.end()) continue;
+        pruned.insert(outpoint);
+        touched.insert(m_records[it->second].group_address);
     }
     m_selected = pruned;
     reapplyMirrorAggregates();
+    emitTouchedGroups(touched);
     return pruned;
 }
 
@@ -671,7 +681,8 @@ CoinSelectionUpdate WalletCoinStore::setSelected(const COutPoint& outpoint, bool
 }
 
 void WalletCoinStore::toggleLocked(std::size_t absidx, bool selected,
-                                   CoinBulkSelectionResult& result)
+                                   CoinBulkSelectionResult& result,
+                                   std::set<std::string>& touched)
 {
     const COutPoint& outpoint = m_records[absidx].outpoint;
     const bool currently = (m_selected.count(outpoint) > 0);
@@ -684,7 +695,17 @@ void WalletCoinStore::toggleLocked(std::size_t absidx, bool selected,
         m_selected.erase(outpoint);
         result.removed.push_back(outpoint);
     }
-    emitDeltas(m_views.applySelection(absidx, selected));
+    m_views.applySelectionQuiet(absidx, selected);
+    touched.insert(m_records[absidx].group_address);
+}
+
+void WalletCoinStore::emitTouchedGroups(const std::set<std::string>& touched)
+{
+    AssertLockHeld(cs_store);
+
+    for (const std::string& address : touched) {
+        emitDeltas(m_views.groupTouchDeltas(address));
+    }
 }
 
 CoinBulkSelectionResult WalletCoinStore::selectGroup(const std::string& group_address,
@@ -692,9 +713,11 @@ CoinBulkSelectionResult WalletCoinStore::selectGroup(const std::string& group_ad
 {
     LOCK(cs_store);
     CoinBulkSelectionResult result;
+    std::set<std::string> touched;
     for (std::size_t absidx : m_views.groupMembers(group_address)) {
-        toggleLocked(absidx, selected, result);
+        toggleLocked(absidx, selected, result, touched);
     }
+    emitTouchedGroups(touched);
     return result;
 }
 
@@ -702,9 +725,11 @@ CoinBulkSelectionResult WalletCoinStore::selectAll(bool selected)
 {
     LOCK(cs_store);
     CoinBulkSelectionResult result;
+    std::set<std::string> touched;
     for (std::size_t absidx = 0; absidx < m_records.size(); ++absidx) {
-        toggleLocked(absidx, selected, result);
+        toggleLocked(absidx, selected, result, touched);
     }
+    emitTouchedGroups(touched);
     return result;
 }
 
@@ -713,6 +738,7 @@ CoinBulkSelectionResult WalletCoinStore::applyValueFilter(bool less_or_equal, in
 {
     LOCK(cs_store);
     CoinBulkSelectionResult result;
+    std::set<std::string> touched;
 
     // Phase 1 — predicate prune over the current selection (never selects):
     // deselect members on the wrong side of the value threshold.
@@ -721,7 +747,7 @@ CoinBulkSelectionResult WalletCoinStore::applyValueFilter(bool less_or_equal, in
         const CoinRecord& r = m_records[absidx];
         if (m_selected.count(r.outpoint) == 0) continue;
         const bool fails = less_or_equal ? (r.amount > value) : (r.amount < value);
-        if (fails) toggleLocked(absidx, false, result);
+        if (fails) toggleLocked(absidx, false, result, touched);
     }
 
     // Phase 2 — the input cap: keep the max_inputs smallest (less_or_equal)
@@ -731,26 +757,28 @@ CoinBulkSelectionResult WalletCoinStore::applyValueFilter(bool less_or_equal, in
     uint32_t kept = 0;
     if (less_or_equal) {
         for (auto it = order.begin(); it != order.end(); ++it) {
-            capPassLocked(*it, max_inputs, kept, result);
+            capPassLocked(*it, max_inputs, kept, result, touched);
         }
     } else {
         for (auto it = order.rbegin(); it != order.rend(); ++it) {
-            capPassLocked(*it, max_inputs, kept, result);
+            capPassLocked(*it, max_inputs, kept, result, touched);
         }
     }
 
+    emitTouchedGroups(touched);
     return result;
 }
 
 void WalletCoinStore::capPassLocked(std::size_t absidx, uint32_t max_inputs, uint32_t& kept,
-                                    CoinBulkSelectionResult& result)
+                                    CoinBulkSelectionResult& result,
+                                    std::set<std::string>& touched)
 {
     const CoinRecord& r = m_records[absidx];
     if (m_selected.count(r.outpoint) == 0) return;
     if (kept < max_inputs) {
         ++kept;
     } else {
-        toggleLocked(absidx, false, result);
+        toggleLocked(absidx, false, result, touched);
         result.culled = true;
     }
 }
@@ -840,6 +868,59 @@ CoinGroupsResult WalletCoinStore::reloadAndSnapshot()
     m_intake_cv.notify_all();
 
     return result;
+}
+
+void WalletCoinStore::seedSynthetic(std::vector<CoinRecord> records, int tip_height)
+{
+    // The reloadAndSnapshot install sequence without the wallet scan (this
+    // store has no wallet): park the worker, swap the table, rebuild the
+    // identity maps and views, discard superseded events, publish Resets.
+    {
+        WAIT_LOCK(cs_intake, ilock);
+        m_rebuilding = true;
+        m_intake_cv.notify_all();
+        while (m_started && !m_worker_parked) {
+            m_idle_cv.wait(ilock);
+        }
+        m_intake.clear();
+    }
+
+    m_tip_height.store(tip_height, std::memory_order_relaxed);
+
+    std::vector<CoinViewDelta> resets;
+    {
+        LOCK(cs_store);
+        m_records = std::move(records);
+        m_by_outpoint.clear();
+        m_by_hash.clear();
+        for (std::size_t i = 0; i < m_records.size(); ++i) {
+            m_by_outpoint.emplace(m_records[i].outpoint, i);
+            m_by_hash.emplace(m_records[i].outpoint.hash, i);
+        }
+        m_pending.clear();
+        for (auto it = m_selected.begin(); it != m_selected.end();) {
+            if (m_by_outpoint.count(*it) == 0) {
+                it = m_selected.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        resets = m_views.rebuild(m_records.size());
+        reapplyMirrorAggregates();
+    }
+
+    m_queue.drain();
+
+    {
+        LOCK(cs_store);
+        emitDeltas(resets);
+    }
+
+    {
+        LOCK(cs_intake);
+        m_rebuilding = false;
+    }
+    m_intake_cv.notify_all();
 }
 
 } // namespace GRC

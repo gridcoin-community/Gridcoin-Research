@@ -9,15 +9,26 @@
 #include <QDialog>
 #include <QList>
 #include <QMenu>
+#include <QModelIndex>
+#include <QPersistentModelIndex>
 #include <QPoint>
 #include <QString>
-#include <QTreeWidgetItem>
 
 namespace Ui {
     class CoinControlDialog;
 }
+class CoinSelectionModel;
 class WalletModel;
 
+//!
+//! \brief Coin-control selection dialog over the windowed CoinSelectionModel
+//! (#3183). The QTreeWidget that materialized every UTXO is replaced by a
+//! CoinSelectionView + virtual model: parent rows render from server-side
+//! aggregates, children realize lazily on expand, and only the viewport
+//! window of records is ever cached GUI-side. Selection state remains
+//! authoritative in interfaces::WalletCoinControl (Phase 1e); the summary
+//! labels (updateLabels/computeCoinControlSummary) are unchanged.
+//!
 class CoinControlDialog : public QDialog
 {
     Q_OBJECT
@@ -43,6 +54,8 @@ signals:
     void selectedConsolidationRecipientSignal(SendCoinsRecipient consolidationRecipient);
 
 public slots:
+    //! The legacy signature, now a thin forward to the model's server-side
+    //! applyValueFilter (prune-only; returns true when the input cap culled).
     bool filterInputsByValue(const bool& less, const CAmount& inputFilterValue, const unsigned int& inputSelectionLimit);
 
 private:
@@ -50,11 +63,16 @@ private:
     interfaces::WalletCoinControl *coinControl;
     QList<qint64> *payAmounts;
     WalletModel *model;
+    CoinSelectionModel *m_selection_model{nullptr};
     int sortColumn;
     Qt::SortOrder sortOrder;
 
     QMenu *contextMenu;
-    QTreeWidgetItem *contextMenuItem;
+    //! PERSISTENT: the menu runs its own nested event loop, in which the drain
+    //! timer keeps firing — a reset or a group removal while the menu is open
+    //! would leave a plain QModelIndex naming a row that no longer exists, and
+    //! the copy actions would read past the directory.
+    QPersistentModelIndex contextMenuIndex;
     QAction *copyTransactionHashAction;
 
     std::pair<QString, QString> m_consolidationAddress;
@@ -62,24 +80,14 @@ private:
     bool m_FilterMode = true;
     bool m_fSubtractFeeFromAmount = false;
 
-    QString strPad(QString, int, QString);
-    void sortView(int, Qt::SortOrder);
-    void updateView();
     void showHideConsolidationReadyToSend();
-
-    enum
-    {
-        COLUMN_CHECKBOX,
-        COLUMN_AMOUNT,
-        COLUMN_LABEL,
-        COLUMN_ADDRESS,
-        COLUMN_DATE,
-        COLUMN_CONFIRMATIONS,
-        COLUMN_TXHASH,
-        COLUMN_VOUT_INDEX,
-        COLUMN_AMOUNT_INT64,
-        COLUMN_CHANGE_BOOL
-    };
+    //! The still-valid row the context menu was opened on (invalid if the
+    //! model dropped it while the menu was open) — see contextMenuIndex.
+    QModelIndex contextMenuTarget() const;
+    //! Expand tree groups that are partially selected (bounded — the legacy
+    //! auto-expand parity, capped so a pathological wallet cannot realize
+    //! half a million rows in one shot).
+    void expandPartiallySelected();
 
 private slots:
     void showMenu(const QPoint &);
@@ -96,7 +104,6 @@ private slots:
     void clipboardChange();
     void treeModeRadioButton(bool);
     void listModeRadioButton(bool);
-    void viewItemChanged(QTreeWidgetItem*, int);
     void headerSectionClicked(int);
     void buttonBoxClicked(QAbstractButton*);
     void buttonSelectAllClicked();
@@ -105,6 +112,8 @@ private slots:
     void buttonFilterClicked();
     void buttonConsolidateClicked();
     void selectedConsolidationAddressSlot(std::pair<QString, QString> address);
+    void modelSelectionChanged();
+    void modelLoadingFinished();
 };
 
 #endif // BITCOIN_QT_COINCONTROLDIALOG_H

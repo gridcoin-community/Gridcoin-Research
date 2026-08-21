@@ -251,6 +251,96 @@ BOOST_AUTO_TEST_CASE(selectGroupAndSelectAllReturnExactDeltas)
     BOOST_CHECK_EQUAL(result.removed.size(), 3u);
 }
 
+BOOST_AUTO_TEST_CASE(bulkSelectionCoalescesOneGroupEventPerGroup)
+{
+    // A bulk op toggles every member of a group, but every one of those
+    // toggles refreshes the SAME directory row: emitting per record puts one
+    // event per coin on the queue (half a million for the #3183 gate wallet),
+    // which the consumer then drains a bounded batch at a time. The bulk paths
+    // must coalesce to ONE GroupChange per touched group per view.
+    Harness h;
+    h.store.registerView(kView, CoinViewMode::Tree, GRC::COINCOL_AMOUNT, 1);
+
+    const uint256 h1 = hashOf(1), h2 = hashOf(2);
+    h.store.enqueueUpsert(h1, {makeCoin(h1, 0, 300, "A"), makeCoin(h1, 1, 100, "A"),
+                               makeCoin(h1, 2, 150, "A")}, false);
+    h.store.enqueueUpsert(h2, {makeCoin(h2, 0, 200, "B")}, false);
+    BOOST_REQUIRE(h.waitForGroupTotal("A", 3));
+    BOOST_REQUIRE(h.waitForGroupTotal("B", 1));
+
+    auto countGroupChanges = [&]() {
+        std::size_t n = 0;
+        for (const GRC::WalletCoinEvent& ev : h.queue.drain()) {
+            if (std::get_if<GRC::CoinGroupsChangedPayload>(&ev.payload)) ++n;
+        }
+        return n;
+    };
+    countGroupChanges(); // discard the seeding events
+
+    // Three members of A toggled -> one event, not three.
+    h.store.selectGroup("A", true);
+    BOOST_CHECK_EQUAL(countGroupChanges(), 1u);
+
+    // selectAll touches both groups (A is already selected, so only B's coin
+    // actually toggles) -> one event for the group that moved.
+    h.store.selectAll(true);
+    BOOST_CHECK_EQUAL(countGroupChanges(), 1u);
+
+    // Deselecting everything touches both groups -> exactly two.
+    h.store.selectAll(false);
+    BOOST_CHECK_EQUAL(countGroupChanges(), 2u);
+
+    // The aggregates still track the mirror exactly after the coalescing.
+    h.store.selectGroup("A", true);
+    countGroupChanges();
+    for (const auto& g : h.store.getGroups(kView, 0, -1).groups) {
+        if (g.address == "A") {
+            BOOST_CHECK_EQUAL(g.selected_count, 3);
+            BOOST_CHECK_EQUAL(g.selected_amount, 550);
+        } else {
+            BOOST_CHECK_EQUAL(g.selected_count, 0);
+        }
+    }
+
+    // The value filter's prune + cap passes coalesce the same way: one event
+    // for the single group whose members it deselects.
+    h.store.applyValueFilter(/*less_or_equal=*/true, 120, /*max_inputs=*/1000);
+    BOOST_CHECK_EQUAL(countGroupChanges(), 1u);
+}
+
+BOOST_AUTO_TEST_CASE(reconcileSelectionNotifiesOtherViews)
+{
+    // reconcileSelection mutates the VIEW-INDEPENDENT group aggregates. The
+    // reconciling view reads them back directly, but a second registered view
+    // (the consolidate wizard page) only learns through events — without them
+    // its parent rows keep a stale tristate forever.
+    constexpr int kSecondView = kView + 1;
+
+    Harness h;
+    h.store.registerView(kView, CoinViewMode::Tree, GRC::COINCOL_AMOUNT, 1);
+    h.store.registerView(kSecondView, CoinViewMode::Tree, GRC::COINCOL_AMOUNT, 1);
+
+    const uint256 h1 = hashOf(1);
+    h.store.enqueueUpsert(h1, {makeCoin(h1, 0, 300, "A"), makeCoin(h1, 1, 100, "A")}, false);
+    BOOST_REQUIRE(h.waitForGroupTotal("A", 2));
+    h.queue.drain();
+
+    h.store.reconcileSelection({COutPoint(h1, 0)});
+
+    std::size_t second_view_events = 0;
+    for (const GRC::WalletCoinEvent& ev : h.queue.drain()) {
+        if (const auto* p = std::get_if<GRC::CoinGroupsChangedPayload>(&ev.payload)) {
+            if (p->view_id == kSecondView) ++second_view_events;
+        }
+    }
+    BOOST_CHECK_EQUAL(second_view_events, 1u);
+
+    // And the aggregate the event tells it to refetch is the reconciled one.
+    auto groups = h.store.getGroups(kSecondView, 0, -1);
+    BOOST_REQUIRE_EQUAL(groups.groups.size(), 1u);
+    BOOST_CHECK_EQUAL(groups.groups[0].selected_count, 1);
+}
+
 BOOST_AUTO_TEST_CASE(valueFilterParityAndTieBreak)
 {
     Harness h;

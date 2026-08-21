@@ -128,30 +128,23 @@ public:
 
     void noteAddressBookChanged(const std::string& address, const std::string& label) override
     {
-        // Labeling an own address flips IsChange for its outputs, which can
-        // regroup coins across the whole store (a change chain re-walks to a
-        // different ancestor). Recompute producer-side on this (GUI) thread —
-        // the worker never takes wallet locks — by re-decomposing every
-        // wallet tx that currently contributes coins grouped under the
-        // address, plus the label snapshot pass for the cheap common case.
+        // Two consequences, handled on two different cost tiers.
+        //
+        // The cheap, common one — the rendered label and the label sort key —
+        // is an O(1) intake item the worker applies off this thread.
         m_store.enqueueAddressBookChange(address, label);
 
-        LOCK2(cs_main, m_wallet->cs_wallet);
-        for (const auto& entry : m_wallet->mapWallet) {
-            bool pending = false;
-            std::vector<GRC::CoinRecord> recs =
-                GRC::WalletCoinStore::DecomposeCoins(m_wallet, entry.second, pending);
-            bool touches = false;
-            for (const GRC::CoinRecord& r : recs) {
-                if (r.group_address == address || r.address == address) {
-                    touches = true;
-                    break;
-                }
-            }
-            if (touches) {
-                m_store.enqueueUpsert(entry.first, std::move(recs), pending);
-            }
-        }
+        // The expensive one: labeling an own address flips IsChange for its
+        // outputs, so change chains re-walk to a different ancestor and coins
+        // regroup across the whole store. Deciding that precisely means
+        // re-decomposing every wallet transaction — O(wallet) under
+        // cs_main + cs_wallet — and this runs on the GUI thread, where that
+        // would freeze the UI and stall block processing behind cs_main on a
+        // large wallet. Flag the resync instead: the drain path polls
+        // consumeNeedsResync() and reloads on the one-shot load thread. The
+        // flag is idempotent, so a burst of label edits collapses into one
+        // rebuild.
+        m_store.markNeedsResync();
     }
 
 private:

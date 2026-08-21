@@ -166,6 +166,14 @@ public:
     //! off the paint path. Returns the address-ordered group directory.
     CoinGroupsResult reloadAndSnapshot();
 
+    //! DEV HARNESS ONLY (-devsyntheticcoins): install a synthetic record
+    //! snapshot on a null-wallet store — the reloadAndSnapshot install steps
+    //! (park worker, swap, rebuild views, discard queue, publish Resets)
+    //! without the wallet scan or wallet locks. Lets the real model/view
+    //! stack be exercised at pathological scale (the #3183 500k-child expand
+    //! acceptance gate) with every windowing/reconciliation semantic intact.
+    void seedSynthetic(std::vector<CoinRecord> records, int tip_height);
+
     //! Decompose one wallet transaction into its currently-available coin
     //! records, reproducing CWallet::AvailableCoins's listCoins conditions
     //! (final, trusted, mature, depth >= 0, unspent, mine, above the minimum
@@ -223,15 +231,26 @@ private:
     void reapplyMirrorAggregates() EXCLUSIVE_LOCKS_REQUIRED(cs_store);
 
     //! Mirror mutation core shared by the bulk operations: toggle \p absidx
-    //! and record the outpoint delta. Caller holds cs_store.
+    //! and record the outpoint delta. The aggregate update is quiet and the
+    //! record's group is recorded in \p touched; the caller emits ONE
+    //! coalesced GroupChange per touched group when its pass finishes (a
+    //! per-record emit here would push one identical event per coin — see
+    //! CoinViews::applySelectionQuiet). Caller holds cs_store.
     void toggleLocked(std::size_t absidx, bool selected,
-                      CoinBulkSelectionResult& result) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+                      CoinBulkSelectionResult& result,
+                      std::set<std::string>& touched) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! Emit the coalesced GroupChange for every group a bulk pass touched.
+    //! Caller holds cs_store.
+    void emitTouchedGroups(const std::set<std::string>& touched)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_store);
 
     //! One step of applyValueFilter's cap pass (a member rather than a lambda
     //! so the thread-safety analyzer can see the held lock — it does not
     //! propagate capabilities into lambda bodies).
     void capPassLocked(std::size_t absidx, uint32_t max_inputs, uint32_t& kept,
-                       CoinBulkSelectionResult& result) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+                       CoinBulkSelectionResult& result,
+                       std::set<std::string>& touched) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
 
     //! CoinViews projector over m_records[i]. Invoked through the core's
     //! std::function indirection, which the thread-safety analyzer cannot see
@@ -250,7 +269,7 @@ private:
     std::unordered_map<COutPoint, std::size_t, OutPointHasher> m_by_outpoint GUARDED_BY(cs_store);
     std::unordered_multimap<uint256, std::size_t, CoinTxHashHasher> m_by_hash GUARDED_BY(cs_store);
 
-    //! The grouped index core (flat/tree/direcory positional arithmetic,
+    //! The grouped index core (flat/tree/directory positional arithmetic,
     //! aggregates, scope high-waters).
     CoinViews m_views GUARDED_BY(cs_store);
 

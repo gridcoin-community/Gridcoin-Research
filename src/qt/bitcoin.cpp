@@ -29,6 +29,7 @@
 #include "interfaces/staking.h"
 #include "interfaces/voting.h"
 #include "interfaces/wallet.h"
+#include "interfaces/wallet_coin_source.h"
 #include "interfaces/wallet_tx_source.h"
 #include "init.h"
 #include "node/shutdown.h"
@@ -40,6 +41,7 @@
 #include "qtipcserver.h"
 #include "txdb.h"
 #include "util.h"
+#include "util/strencodings.h"
 #include "util/threadnames.h"
 #include "winshutdownmonitor.h"
 #include "gridcoin/upgrade.h"
@@ -179,6 +181,10 @@ static void SetupUIArgs(ArgsManager& argsman)
     argsman.AddArg("-style", "Specify GUI style for Qt to use on Windows and MacOS (default: fusion)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
     argsman.AddArg("-suppressnetworkgraph", "Suppress network graph (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-devsyntheticcoins=<n>[:<groups>]",
+                   "DEV ONLY: substitute a synthetic coin-control source with <n> coins over "
+                   "<groups> address groups (default groups: 3) for windowed-model testing",
                    ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
     argsman.AddArg("-showorphans", "Include stale (orphaned) coinstake transactions in the transaction list",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -1410,6 +1416,37 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 if (!wallet_tx_source) {
                     throw std::runtime_error("wallet tx source unavailable after init");
                 }
+                // The windowed coin-control source (#3183): same ownership and
+                // teardown contract as the tx source. Construction is cheap —
+                // the initial wallet scan runs lazily on WalletModel's
+                // one-shot load thread at first dialog open, and the store
+                // stays warm (but silent) between dialog opens.
+                std::shared_ptr<interfaces::WalletCoinSource> wallet_coin_source;
+                const std::string synthetic_coins = gArgs.GetArg("-devsyntheticcoins", "");
+                if (!synthetic_coins.empty()) {
+                    // DEV HARNESS: the #3183 acceptance-gate substitution — the
+                    // real store/views/queue over synthetic records at the
+                    // requested scale (see interfaces/wallet_coin_source.h).
+                    int32_t synth_total = 0;
+                    int32_t synth_groups = 3;
+                    const std::size_t colon = synthetic_coins.find(":");
+                    // Locale-independent parse (lint-locale-dependence bars
+                    // atoi); a malformed argument is a dev-side typo, so fail
+                    // loudly rather than silently harnessing the wrong scale.
+                    if (!ParseInt32(synthetic_coins.substr(0, colon), &synth_total)
+                        || (colon != std::string::npos
+                            && !ParseInt32(synthetic_coins.substr(colon + 1), &synth_groups))) {
+                        throw std::runtime_error(
+                            "-devsyntheticcoins expects integers: <n>[:<groups>]");
+                    }
+                    wallet_coin_source =
+                        interfaces::MakeSyntheticCoinSource(synth_total, synth_groups);
+                } else {
+                    wallet_coin_source = interface_init->makeWalletCoinSource();
+                }
+                if (!wallet_coin_source) {
+                    throw std::runtime_error("wallet coin source unavailable after init");
+                }
                 // The Manual Research Claim interface over the node's wallet
                 // (Phase 1d-i). Owned here so it outlives the MRCModel that
                 // drives it.
@@ -1443,7 +1480,8 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 }
 
                 ClientModel clientModel(*node, *staking_status, &optionsModel);
-                WalletModel walletModel(*wallet, *wallet_tx_source, &optionsModel);
+                WalletModel walletModel(*wallet, *wallet_tx_source, *wallet_coin_source,
+                                        &optionsModel);
                 ResearcherModel researcherModel(*researcher_context);
                 MRCModel mrcModel(*mrc, &walletModel, &clientModel, &researcherModel);
                 VotingModel votingModel(*voting_manager, *researcher_context, clientModel, optionsModel, walletModel);

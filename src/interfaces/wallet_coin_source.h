@@ -143,11 +143,14 @@ public:
     //! schedules reloadAndSnapshot off the paint path.
     virtual bool consumeNeedsResync() = 0;
 
-    //! GUI up-channel: an address-book entry changed. Labeling an own address
-    //! flips IsChange for its outputs, so beyond re-snapshotting labels this
-    //! re-walks the affected records' grouping and emits regroup deltas.
-    //! Called on the GUI thread; the implementation may take cs_main +
-    //! cs_wallet (the worker thread never does).
+    //! GUI up-channel: an address-book entry changed. Beyond re-snapshotting
+    //! the label, this can regroup coins — labeling an own address flips
+    //! IsChange for its outputs, so change chains re-walk to a different
+    //! ancestor. Called on the GUI thread, so the implementation MUST NOT run
+    //! the O(wallet) re-decomposition inline (that would hold cs_main across a
+    //! full wallet walk on the paint path): the label refresh goes through the
+    //! store's intake queue and the regroup is deferred to the resync the
+    //! drain path schedules off-thread.
     virtual void noteAddressBookChanged(const std::string& address,
                                         const std::string& label) = 0;
 };
@@ -159,6 +162,23 @@ public:
 //! implementation lands with the coin store (the #3183 series' store PR);
 //! until then this factory has no definition and nothing links against it.
 std::shared_ptr<WalletCoinSource> MakeWalletCoinSource(CWallet* wallet);
+
+//! DEV HARNESS ONLY (-devsyntheticcoins=<n>[:<groups>]): a WalletCoinSource
+//! over a null-wallet coin store seeded with <total_coins> synthetic records
+//! spread over <groups> addresses — the #3183 acceptance-gate substitution.
+//!
+//! Because the REAL store, views and queue are underneath (only the wallet
+//! scan is replaced by the synthetic seed), every windowing, epoch/floor and
+//! selection-mirror semantic the production dialog exercises is exercised
+//! here too, at whatever scale the argument requests. Group 0 receives the
+//! bulk of the coins (the pathological single-address case); the remaining
+//! groups get 1000 each.
+//!
+//! Limits vs production: the summary labels read 0 (computeCoinControlSummary
+//! resolves outpoints against the real wallet), and there is no live mutation
+//! feed — this harness is for model/view behavior and the measured 500k-child
+//! expand gate, not fee math.
+std::shared_ptr<WalletCoinSource> MakeSyntheticCoinSource(int total_coins, int groups);
 
 } // namespace interfaces
 

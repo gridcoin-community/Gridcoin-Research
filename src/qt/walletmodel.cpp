@@ -15,10 +15,12 @@
 #include <string>
 
 WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource& tx_source,
+                         interfaces::WalletCoinSource& coin_source,
                          OptionsModel* optionsModel, QObject* parent)
          : QObject(parent)
          , m_wallet(wallet)
          , m_tx_source(tx_source)
+         , m_coin_source(coin_source)
          , optionsModel(optionsModel)
          , addressTableModel(nullptr)
          , transactionTableModel(nullptr)
@@ -74,6 +76,12 @@ WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource&
 WalletModel::~WalletModel()
 {
     unsubscribeFromCoreSignals();
+
+    // The one-shot coin-store load thread holds only node-side locks; join it
+    // so it never outlives the model that launched it.
+    if (m_coin_load_thread.joinable()) {
+        m_coin_load_thread.join();
+    }
 }
 
 qint64 WalletModel::getBalance() const
@@ -241,6 +249,9 @@ void WalletModel::drainEventQueue()
         // which filter to their own viewId. The queue is drained exactly once, here.
         emit walletEventsDrained(events);
 
+        // The coin channel drains on the same tick (its own queue, own guard).
+        drainCoinEventQueue();
+
         // Balance and number of transactions might have changed.
         checkBalanceChanged();
 
@@ -349,6 +360,12 @@ void WalletModel::updateAddressBook(const QString &address, const QString &label
     const QString current = addressTableModel
         ? addressTableModel->labelForAddress(address) : label;
     txSource().noteAddressBookChanged(address.toStdString(), current.toStdString());
+
+    // The coin channel needs the same edit: the coin-control tree renders the
+    // label on its group rows and sorts by it, and an own-address label edit
+    // additionally regroups change outputs (see the interface contract — the
+    // implementation defers that part off the GUI thread).
+    coinSource().noteAddressBookChanged(address.toStdString(), current.toStdString());
 }
 
 bool WalletModel::validateAddress(const QString &address)
@@ -643,4 +660,90 @@ std::vector<interfaces::WalletOutput> WalletModel::getOutputs(const std::vector<
 std::map<std::string, std::vector<interfaces::WalletOutput>> WalletModel::listCoins() const
 {
     return m_wallet.listCoins();
+}
+
+void WalletModel::drainCoinEventQueue()
+{
+    // Single drain point for the coin channel (drainEvents is destructive and
+    // the consolidate-wizard flow can have two live coin views). Reentrancy
+    // guard mirrors m_draining: the coin-selection fetch/sort paths call this
+    // synchronously and applying a Reset can re-enter.
+    if (m_coin_draining) {
+        return;
+    }
+    m_coin_draining = true;
+    struct CoinDrainGuard { bool& f; ~CoinDrainGuard() { f = false; } } drain_guard{m_coin_draining};
+
+    auto events = m_coin_source.drainEvents(MODEL_EVENT_DRAIN_MAX_BATCH);
+    if (!events.empty()) {
+        emit coinEventsDrained(events);
+    }
+
+    // A rescan/reaccept bypassed per-tx notifications: rebuild the coin store
+    // off the paint path (the flag is one-shot).
+    if (m_coin_source.consumeNeedsResync()) {
+        ensureCoinSourceLoaded(/*force=*/true);
+    }
+
+    // Batch cap hit: there is still a backlog. Re-arm immediately (0ms) rather
+    // than waiting for the next periodic tick — the drainEventQueue discipline
+    // (see there). Without this a burst drains at one batch per 500ms, and a
+    // Reset stranded behind it (a sort or mode switch) would apply minutes
+    // late.
+    if (events.size() >= static_cast<std::size_t>(MODEL_EVENT_DRAIN_MAX_BATCH)) {
+        QTimer::singleShot(0, this, [this] { drainCoinEventQueue(); });
+    }
+}
+
+void WalletModel::ensureCoinSourceLoaded(bool force)
+{
+    if (m_coin_load_started && !force) {
+        return;
+    }
+    // A load is STILL RUNNING: never join it here. This runs on the GUI thread
+    // and the scan is O(wallet) under cs_main + cs_wallet, so joining would
+    // freeze the UI for the length of a full wallet walk — and the resync flag
+    // that drives the force path fires on ordinary user actions (an
+    // address-book label edit regroups change outputs). Record that another
+    // pass is owed and start it from the completion callback instead; repeated
+    // requests collapse into the single pending flag.
+    if (m_coin_load_in_flight) {
+        m_coin_reload_pending = force;
+        return;
+    }
+    // Not in flight: the thread has already run its completion callback, so
+    // this join only reaps a finished thread.
+    if (m_coin_load_thread.joinable()) {
+        m_coin_load_thread.join();
+    }
+    m_coin_load_started = true;
+    m_coin_load_in_flight = true;
+
+    interfaces::WalletCoinSource* source = &m_coin_source;
+    m_coin_load_thread = std::thread([this, source] {
+        // O(wallet) scan under cs_main + cs_wallet -- the reason this runs on
+        // a one-shot thread and never the GUI thread. Completion arrives as
+        // the CoinReset the reload publishes, through the normal drain.
+        source->reloadAndSnapshot();
+
+        // Hand completion back to the GUI thread: drain first so the reload's
+        // Reset is APPLIED (the consumers' caches hold the scanned wallet),
+        // then announce. Consumers gate their loading state on this signal —
+        // not on the first Reset they happen to see, which for a cold store is
+        // the registration Reset published against an empty table. Queued to
+        // this QObject, so Qt drops it if the model is gone.
+        QMetaObject::invokeMethod(this, [this] {
+            m_coin_load_in_flight = false;
+            m_coin_load_complete = true;
+            drainCoinEventQueue();
+            emit coinSourceLoadFinished();
+
+            // A resync was requested while this pass was running (the wallet
+            // moved under it): run one more, now that nothing is in flight.
+            if (m_coin_reload_pending) {
+                m_coin_reload_pending = false;
+                ensureCoinSourceLoaded(/*force=*/true);
+            }
+        }, Qt::QueuedConnection);
+    });
 }

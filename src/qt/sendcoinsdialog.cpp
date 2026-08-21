@@ -547,12 +547,12 @@ void SendCoinsDialog::coinControlResetButtonClicked()
 
 void SendCoinsDialog::coinControlConsolidateWizardButtonClicked()
 {
-    CoinControlDialog dlg(this, coinControl, payAmounts, hasSubtractFeeRecipient());
-    dlg.setModel(model);
-
-    connect(&dlg, &CoinControlDialog::selectedConsolidationRecipientSignal,
-            this, &SendCoinsDialog::selectedConsolidationRecipient);
-
+    // The throwaway un-exec'd CoinControlDialog that used to be constructed
+    // here existed only for its setModel -> updateView() side effect of
+    // reconciling the selection against the wallet's current coins. The
+    // windowed selection model performs that reconciliation itself at attach
+    // (reconcileSelection), so the extra dialog — which would now register a
+    // concurrent coin view for nothing — is gone.
     ConsolidateUnspentWizard wizard(this, coinControl, payAmounts);
     wizard.setModel(model);
 
