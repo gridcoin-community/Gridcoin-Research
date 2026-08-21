@@ -158,8 +158,18 @@ void CDBEnv::MakeMock()
                              DB_THREAD |
                              DB_PRIVATE,
                          S_IRUSR | S_IWUSR);
-    if (ret > 0)
-        throw runtime_error(strprintf("CDBEnv::MakeMock(): error %d opening database environment", ret));
+    // ret != 0, not ret > 0. Berkeley DB returns a positive errno for system
+    // errors but a NEGATIVE code for its own (DB_RUNRECOVERY -30973,
+    // DB_NOTFOUND -30988, ...), so a > 0 test silently accepted every
+    // BDB-level failure -- the panic return included -- and then set
+    // fDbEnvInit/fMockDb anyway, leaving the whole test suite running against
+    // an environment that had failed to open. Close the handle and decode the
+    // code the same way CDBEnv::Open() above does.
+    if (ret != 0) {
+        dbenv.close(0);
+        throw runtime_error(strprintf("CDBEnv::MakeMock(): error %s (%d) opening database environment",
+                                      DbEnv::strerror(ret), ret));
+    }
 
     fDbEnvInit = true;
     fMockDb = true;
