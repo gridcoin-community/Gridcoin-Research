@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 
+using GRC::ApplyResult;
 using GRC::CoinRecord;
 using GRC::CoinViewDelta;
 using GRC::CoinViewMode;
@@ -448,7 +449,8 @@ BOOST_AUTO_TEST_CASE(multiScopeInterleaveGateAcceptsAndRejects)
         }
         BOOST_REQUIRE(mpos >= 0);
         BOOST_CHECK(cacheB.applyInsert(sink, 7, mpos,
-                                       {h.table[h.table.size() - 1]}));
+                                       {h.table[h.table.size() - 1]})
+                    == ApplyResult::Applied);
         BOOST_CHECK(cacheB.fillContent(sink, 0, std::move(rows), h.cv.epoch(kView),
                                        h.cv.highWater(kView, "B")));
     }
