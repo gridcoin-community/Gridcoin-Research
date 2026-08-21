@@ -12,6 +12,7 @@
 #include "interfaces/staking.h"
 #include "interfaces/voting.h"
 #include "interfaces/wallet.h"
+#include "interfaces/wallet_coin_source.h"
 #include "interfaces/wallet_tx_source.h"
 
 namespace interfaces {
@@ -55,5 +56,7 @@ std::unique_ptr<PSGTPoolContext> Init::makePSGTPoolContext() { return nullptr; }
 std::unique_ptr<Wallet> Init::makeWallet() { return nullptr; }
 
 std::shared_ptr<WalletTxSource> Init::makeWalletTxSource() { return nullptr; }
+
+std::shared_ptr<WalletCoinSource> Init::makeWalletCoinSource() { return nullptr; }
 
 } // namespace interfaces

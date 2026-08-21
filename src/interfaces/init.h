@@ -23,6 +23,7 @@ class SideStakeManager;
 class StakingStatus;
 class VotingManager;
 class Wallet;
+class WalletCoinSource;
 class WalletTxSource;
 
 //! The node's compile-time build fingerprint. After authentication the GUI
@@ -162,6 +163,12 @@ public:
     //! never calls this pays nothing. Takes no wallet argument (see makeMRC).
     //! Returns nullptr before wallet startup completes.
     virtual std::shared_ptr<WalletTxSource> makeWalletTxSource();
+
+    //! Returns a coin-selection source over the node's single wallet (the
+    //! windowed coin-control store, its worker, and the producer subscriptions
+    //! — issue #3183). Same lifecycle contract as makeWalletTxSource, including
+    //! taking no wallet argument (see makeMRC).
+    virtual std::shared_ptr<WalletCoinSource> makeWalletCoinSource();
 };
 
 //! Return the monolithic-build Init implementation.
