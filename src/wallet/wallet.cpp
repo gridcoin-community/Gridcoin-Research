@@ -776,6 +776,14 @@ void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* 
             if (updated_seen.insert(hash).second) updated.push_back(hash);
         };
 
+        // The fBlock branch below changes THIS transaction's own vfSpent, which
+        // must be persisted -- but it must not be notified here. The sole caller
+        // is AddToWallet, which unconditionally fires CT_NEW/CT_UPDATED for this
+        // same hash on the statement after the one that called us, and nothing
+        // can return in between. Notifying here too would hand every subscriber
+        // a duplicate for the transaction being added.
+        bool self_spent_changed = false;
+
         for (auto const& txin : tx.vin)
         {
             auto mi = mapWallet.find(txin.prevout.hash);
@@ -811,13 +819,20 @@ void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* 
                     if (IsMine(txout) != ISMINE_NO)
                     {
                         wtx.MarkUnspent(&txout - &tx.vout[0]);
-                        mark_updated(hash);
+                        self_spent_changed = true;
                     }
+                }
+
+                // Write once if anything moved; deliberately no notification
+                // (see self_spent_changed above).
+                if (self_spent_changed) {
+                    wtx.WriteToDisk(pwalletdb);
                 }
             }
         }
 
-        // One write and one notification per affected transaction. mapWallet is
+        // One write and one notification per affected PARENT transaction (the
+        // transaction being added is handled above, write-only). mapWallet is
         // neither inserted into nor erased from above, so every hash collected
         // is still present.
         for (const uint256& hash : updated)
