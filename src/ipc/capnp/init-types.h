@@ -13,6 +13,7 @@
 #include <ipc/capnp/staking.capnp.proxy-types.h>
 #include <ipc/capnp/wallet.capnp.proxy-types.h>
 #include <ipc/capnp/wallet_tx_source.capnp.proxy-types.h>
+#include <ipc/capnp/wallet_coin_source.capnp.proxy-types.h>
 #include <ipc/capnp/mrc.capnp.proxy-types.h>
 #include <ipc/capnp/voting.capnp.proxy-types.h>
 #include <ipc/capnp/researcher.capnp.proxy-types.h>

@@ -27,7 +27,11 @@ namespace ipc {
 //! coin-control model (#3183) and its ordinal removed from wallet.capnp. Cap'n
 //! Proto requires consecutive ordinals, so every later Wallet method shifted
 //! down by one -- a peer built against major 2 would dispatch each call to its
-//! neighbour. Breaking, hence the major.
+//! neighbour. Breaking, hence the major. The same release adds the coin channel's
+//! own schema (wallet_coin_source.capnp) and Init.makeWalletCoinSource @14.
+//! That addition is additive on its own, but it ships INSIDE major 3, so no
+//! build carrying major 3 lacks it and the minor restarts at 0 rather than
+//! tracking it separately.
 //!
 //! Minor 1: RowsChangedPayload gained `records` (wallet_tx_source.capnp @4), the
 //! changed rows sampled at emission. Additive, so an old node still talks to a new
@@ -37,7 +41,7 @@ namespace ipc {
 //! The minor is what turns that into the actionable "Update the node" hard fail in
 //! ClientHandshake.
 constexpr uint32_t IPC_SCHEMA_MAJOR = 3;
-constexpr uint32_t IPC_SCHEMA_MINOR = 1;
+constexpr uint32_t IPC_SCHEMA_MINOR = 0;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 
 //! Domain-separation tag hashed into the node identity token. Bump the suffix if

@@ -209,7 +209,7 @@ handshake (`ipc/handshake.h`):
 
 ```cpp
 constexpr uint32_t IPC_SCHEMA_MAJOR   = 3;
-constexpr uint32_t IPC_SCHEMA_MINOR   = 1;
+constexpr uint32_t IPC_SCHEMA_MINOR   = 0;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 ```
 
@@ -223,7 +223,9 @@ Rules a client must honor (from `ClientHandshake` and design §4.2):
   consecutive ordinals, so removing it shifted every later `Wallet` method down
   by one, and a peer built against major 2 would dispatch each call to its
   neighbour. A breaking schema change bumps this and requires a one-version
-  transition release.
+  transition release. Major 3 also carries the coin channel's schema
+  (`wallet_coin_source.capnp`) and `Init.makeWalletCoinSource @14`; that piece is
+  additive, but it ships inside the same major, so the minor restarts at 0.
 - **`schema_minor`** — additive schema changes. Asymmetric:
   *client minor > node minor* is a **hard fail** ("update the node"); *client
   minor < node minor* is a **soft, forward-compatible** finding (the node has
