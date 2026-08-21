@@ -23,6 +23,12 @@ namespace ipc {
 //! Major 2: the NodeIdentity model was re-based onto the wallet UUID (former
 //! node_id/datadir/genesis_hash retired), a breaking wire change.
 //!
+//! Major 3: interfaces::Wallet::listCoins was retired with the windowed
+//! coin-control model (#3183) and its ordinal removed from wallet.capnp. Cap'n
+//! Proto requires consecutive ordinals, so every later Wallet method shifted
+//! down by one -- a peer built against major 2 would dispatch each call to its
+//! neighbour. Breaking, hence the major.
+//!
 //! Minor 1: RowsChangedPayload gained `records` (wallet_tx_source.capnp @4), the
 //! changed rows sampled at emission. Additive, so an old node still talks to a new
 //! GUI -- but it degrades SILENTLY if the minor is not bumped: the field simply
@@ -30,7 +36,7 @@ namespace ipc {
 //! that, and the Overview list then shows stale rows until the process restarts.
 //! The minor is what turns that into the actionable "Update the node" hard fail in
 //! ClientHandshake.
-constexpr uint32_t IPC_SCHEMA_MAJOR = 2;
+constexpr uint32_t IPC_SCHEMA_MAJOR = 3;
 constexpr uint32_t IPC_SCHEMA_MINOR = 1;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 
