@@ -15,6 +15,7 @@
 #include "interfaces/staking.h"
 #include "interfaces/voting.h"
 #include "interfaces/wallet.h"
+#include "interfaces/wallet_coin_source.h"
 #include "interfaces/wallet_tx_source.h"
 
 #include "logging.h"
@@ -143,6 +144,12 @@ public:
     {
         RequireAuth();
         return m_inner->makeWalletTxSource();
+    }
+
+    std::shared_ptr<interfaces::WalletCoinSource> makeWalletCoinSource() override
+    {
+        RequireAuth();
+        return m_inner->makeWalletCoinSource();
     }
 
     std::unique_ptr<interfaces::MRC> makeMRC() override
