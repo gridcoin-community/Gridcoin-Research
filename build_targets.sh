@@ -209,10 +209,10 @@ print_pre_test_environment() {
     # In a container /proc/meminfo shows the HOST's memory, not the cgroup cap, so
     # the limit that actually applies has to be read from the cgroup itself.
     for f in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory/memory.limit_in_bytes; do
-        [ -r "$f" ] && echo "    cgroup mem limit  : $(cat "$f" 2>/dev/null) ($f)"
+        if [ -r "$f" ]; then echo "    cgroup mem limit  : $(cat "$f" 2>/dev/null) ($f)"; fi
     done
     for f in /sys/fs/cgroup/pids.max /sys/fs/cgroup/pids/pids.max; do
-        [ -r "$f" ] && echo "    cgroup pids max   : $(cat "$f" 2>/dev/null)"
+        if [ -r "$f" ]; then echo "    cgroup pids max   : $(cat "$f" 2>/dev/null)"; fi
     done
     echo "    fd limit          : $(ulimit -n 2>/dev/null || echo '?')   thread/proc limit: $(ulimit -u 2>/dev/null || echo '?')"
     echo "    stack limit (kb)  : $(ulimit -s 2>/dev/null || echo '?')"
@@ -233,6 +233,13 @@ print_pre_test_environment() {
     # 4th loadavg field is running/total kernel scheduling entities -- cheap, and
     # avoids globbing /proc (shellcheck SC2012).
     echo "    procs run/total   : $(awk '{print $4}' /proc/loadavg 2>/dev/null || echo '?')"
+
+    # Diagnostics must never be the reason a build fails. The script runs under
+    # `set -e`, where any construct whose LAST command is false makes the
+    # function return non-zero and aborts everything -- a trailing
+    # `[ -r x ] && echo` does exactly that (verified). The `if` forms above
+    # avoid it; this return means a line appended later cannot reintroduce it.
+    return 0
 }
 
 write_build_state() {

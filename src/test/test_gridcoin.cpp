@@ -20,6 +20,7 @@
 #include "wallet/wallet.h"
 
 #include <cerrno>
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <system_error>
@@ -59,37 +60,51 @@ static const char* g_setup_step = "(not started)";
 //! and it is the one Boost's summary discards.
 static void ReportSetupThrow()
 {
-    // Shaped after PrintException() in src/util/system.cpp: LogPrintf for the
-    // log (which buffers until the logger is started, so the message survives
-    // even though we throw before InitLogging), plus tfm::format to std::cerr
-    // so it is actually visible on a run that dies here. strprintf/tfm::format
-    // is the in-tree formatting primitive; the locale-dependent C printf family
-    // is not used.
-    std::string detail;
+    // Capture errno FIRST. Everything below allocates and formats, any of which
+    // may set errno itself -- reporting it at the end would describe this
+    // function rather than the failure it is meant to describe.
+    const int saved_errno = errno;
+
     try {
-        throw;
-    } catch (const fs::filesystem_error& e) {
-        // fs:: is boost::filesystem, whose errors derive from std::runtime_error
-        // rather than std::system_error, so they need their own arm to keep the
-        // error code instead of falling through to the generic handler.
-        detail = strprintf("fs::filesystem_error  code=%d (%s)  path=%s  what=%s",
-                           e.code().value(), e.code().category().name(),
-                           e.path1().string(), e.what());
-    } catch (const std::system_error& e) {
-        detail = strprintf("std::system_error  code=%d (%s)  what=%s",
-                           e.code().value(), e.code().category().name(), e.what());
-    } catch (const std::exception& e) {
-        detail = strprintf("%s  what=%s", typeid(e).name(), e.what());
+        std::string detail;
+        try {
+            throw;
+        } catch (const fs::filesystem_error& e) {
+            // fs:: is boost::filesystem, whose errors derive from
+            // std::runtime_error rather than std::system_error, so they need
+            // their own arm to keep the error code.
+            detail = strprintf("fs::filesystem_error  code=%d (%s)  path=%s  what=%s",
+                               e.code().value(), e.code().category().name(),
+                               e.path1().string(), e.what());
+        } catch (const std::system_error& e) {
+            detail = strprintf("std::system_error  code=%d (%s)  what=%s",
+                               e.code().value(), e.code().category().name(), e.what());
+        } catch (const std::exception& e) {
+            detail = strprintf("%s  what=%s", typeid(e).name(), e.what());
+        } catch (...) {
+            detail = "(not derived from std::exception)";
+        }
+
+        const std::string message = strprintf(
+            "TestingSetup threw during step: %s\n  %s\n  errno at throw: %d (%s)",
+            g_setup_step, detail, saved_errno, std::strerror(saved_errno));
+
+        // PrintException()'s shape (src/util/system.cpp): LogPrintf for the log,
+        // which buffers until the logger opens, plus a direct write to stderr
+        // because a buffered message is lost if the process dies first.
+        LogPrintf("\n\n************************\n%s", message);
+        tfm::format(std::cerr, "\n\n************************\n%s\n", message.c_str());
     } catch (...) {
-        detail = "(not derived from std::exception)";
+        // The diagnostic itself failed -- std::bad_alloc being the obvious way,
+        // and memory exhaustion is one of the conditions under investigation.
+        // Fall back to something that neither allocates nor formats, so the
+        // failure being diagnosed is still named instead of being masked by a
+        // second exception escaping a catch handler.
+        std::fputs("\n\n************************\nTestingSetup threw during step: ", stderr);
+        std::fputs(g_setup_step, stderr);
+        std::fputs("\n(diagnostic formatting failed; original exception follows)\n", stderr);
+        std::fflush(stderr);
     }
-
-    const std::string message = strprintf(
-        "TestingSetup threw during step: %s\n  %s\n  errno at catch: %d (%s)",
-        g_setup_step, detail, errno, std::strerror(errno));
-
-    LogPrintf("\n\n************************\n%s", message);
-    tfm::format(std::cerr, "\n\n************************\n%s\n", message.c_str());
 }
 
 struct TestingSetup {
