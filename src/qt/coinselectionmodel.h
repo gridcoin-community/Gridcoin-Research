@@ -109,8 +109,12 @@ public:
     void setDisplayMode(GRC::CoinViewMode mode);
     GRC::CoinViewMode displayMode() const { return m_mode; }
 
-    //! True until the first Reset (from the initial reloadAndSnapshot) has
-    //! seeded the model — the dialog renders a loading state meanwhile.
+    //! True while the STORE's initial scan is still outstanding — the dialog
+    //! renders a loading state meanwhile. Deliberately not "until the first
+    //! Reset": on a cold store the registration Reset is published against a
+    //! not-yet-scanned table and arrives long before the scan finishes, and a
+    //! model attaching to an already-scanned store is not loading at all. The
+    //! gate is WalletModel::isCoinSourceLoaded() / coinSourceLoadFinished().
     bool isLoading() const { return m_loading; }
 
     //! Un-realize a collapsed group's child cache (bounded memory). The view
