@@ -736,6 +736,14 @@ BOOST_AUTO_TEST_CASE(wallet_update_spent_does_not_notify_the_transaction_itself)
 
     CWalletTx wtx(pwalletMain, tx);
     wtx.SetTxState(TxStateInMempool{});
+    // Seed both outputs SPENT. Inserting with the default (unspent) flags would
+    // make the !IsSpent() assertions below pass even if the MarkUnspent loop were
+    // deleted outright -- they would be asserting the initial state, not the
+    // transition.
+    wtx.MarkSpent(0);
+    wtx.MarkSpent(1);
+    BOOST_REQUIRE(wtx.IsSpent(0));
+    BOOST_REQUIRE(wtx.IsSpent(1));
     pwalletMain->mapWallet[hash] = wtx;
 
     std::map<uint256, int> notifies;

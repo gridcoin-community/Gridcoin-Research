@@ -818,8 +818,18 @@ void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* 
                 {
                     if (IsMine(txout) != ISMINE_NO)
                     {
-                        wtx.MarkUnspent(&txout - &tx.vout[0]);
-                        self_spent_changed = true;
+                        // Only a real transition counts. MarkUnspent is a no-op on
+                        // an already-unspent output, so flagging every owned output
+                        // would force a redundant write on the common path -- and
+                        // AddToWallet has already persisted this transaction by the
+                        // time it calls us. Mirrors the !IsSpent() guard the input
+                        // loop above applies for the same reason.
+                        const unsigned int n = &txout - &tx.vout[0];
+                        if (wtx.IsSpent(n))
+                        {
+                            wtx.MarkUnspent(n);
+                            self_spent_changed = true;
+                        }
                     }
                 }
 
