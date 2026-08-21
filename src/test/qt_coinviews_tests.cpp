@@ -542,4 +542,41 @@ BOOST_AUTO_TEST_CASE(viewLifecycleAndModeSwitch)
     h.cv.unregisterView(GRC::VIEW_COIN_WIZARD); // idempotent
 }
 
+BOOST_AUTO_TEST_CASE(regroupKillsTheEmptiedOldGroup)
+{
+    // The regroup case updateReslotsAndRegroups does not reach: the record
+    // leaving is its old group's LAST member, so the old group must die in
+    // the same call that inserts into the new one. This is the only path to
+    // the deferred m_groups erase-by-key in applyUpdate, and it combines
+    // three teardowns (directory row, per-view member index, shared
+    // aggregates) with the new group's directory reslot still to come.
+    Harness h;
+    h.table.push_back(makeCoin(1, 300, "A"));
+    h.table.push_back(makeCoin(2, 200, "B")); // sole member of B
+    h.cv.registerView(kView, CoinViewMode::Tree, GRC::COINCOL_AMOUNT, 1, h.table.size());
+
+    int total = 0;
+    BOOST_REQUIRE_EQUAL(h.cv.directorySlice(kView, 0, -1, total).size(), 2u);
+
+    h.table[1].group_address = "A";
+    auto deltas = h.cv.applyUpdate(1, "B", false, /*was_selected*/ false);
+
+    BOOST_CHECK_EQUAL(countType(deltas, CoinViewDelta::GroupRemove), 1);
+
+    // The emptied group is gone from the directory, the shared aggregates
+    // and the view's member index alike.
+    auto dir = h.cv.directorySlice(kView, 0, -1, total);
+    BOOST_REQUIRE_EQUAL(dir.size(), 1u);
+    BOOST_CHECK_EQUAL(dir[0], "A");
+    BOOST_CHECK_EQUAL(total, 1);
+    BOOST_CHECK_EQUAL(h.cv.groupInfo("B").address, "");
+    BOOST_CHECK_EQUAL(h.cv.groupSlice(kView, "B", 0, -1, total).size(), 0u);
+
+    // ...and the survivor absorbed the member and its amount.
+    BOOST_CHECK_EQUAL(h.cv.groupInfo("A").output_count, 2);
+    BOOST_CHECK_EQUAL(h.cv.groupInfo("A").total_amount, 500);
+    BOOST_CHECK_EQUAL(h.cv.groupSlice(kView, "A", 0, -1, total).size(), 2u);
+    BOOST_CHECK_EQUAL(total, 2);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
