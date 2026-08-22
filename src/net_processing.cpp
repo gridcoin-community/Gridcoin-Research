@@ -57,6 +57,7 @@
 #include <limits>
 #include <math.h>
 #include "wallet/wallet.h"
+#include "txmempool.h"
 
 using namespace std;
 
