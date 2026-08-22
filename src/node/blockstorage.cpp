@@ -13,7 +13,6 @@
 #include "gridcoin/staking/chain_trust.h"
 #include "gridcoin/staking/spam.h"
 #include "init.h"
-#include "main.h"
 #include "net.h"
 #include "node/chainman.h"
 #include "node/ui_interface.h"

@@ -5,7 +5,6 @@
 #include "interfaces/wallet_tx_source.h"
 
 #include "interfaces/handler.h"
-#include "main.h"
 #include "node/ui_interface.h"
 #include "wallet/wallet.h"
 #include "wallet/wallet_event_queue.h"

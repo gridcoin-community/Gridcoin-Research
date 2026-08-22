@@ -13,7 +13,6 @@
 // #include <streams.h>
 #include <tinyformat.h>
 // #include <util/system.h>
-// #include "main.h"
 #include "util.h"
 #include "net.h"
 #include "fs.h"

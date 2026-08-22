@@ -10,7 +10,6 @@
 #include "txdb.h"
 #include "node/shutdown.h"
 #include "miner.h"
-#include "main.h"
 #include "node/chainman.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/cpid.h"
@@ -32,6 +31,7 @@
 #include "util/threadnames.h"
 #include "validation.h"
 #include "wallet/wallet.h"
+#include "txmempool.h"
 
 #include <memory>
 #include <algorithm>

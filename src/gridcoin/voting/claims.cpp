@@ -3,7 +3,6 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "hash.h"
-#include "main.h"
 #include "gridcoin/voting/claims.h"
 
 using namespace GRC;

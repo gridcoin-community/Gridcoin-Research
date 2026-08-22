@@ -5,7 +5,6 @@
 #include "wallet/wallettxstore.h"
 
 #include "wallet/txdetail.h"
-#include "main.h"
 #include "wallet/wallet.h"
 
 #include <algorithm>

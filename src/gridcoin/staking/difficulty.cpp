@@ -9,10 +9,10 @@
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/staking/status.h"
-#include "main.h"
 #include "node/blockstorage.h"
 #include "txdb.h"
 #include "wallet/wallet.h"
+#include "consensus/consensus.h"
 
 #include <vector>
 

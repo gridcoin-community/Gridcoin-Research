@@ -2,10 +2,10 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "validation.h"
 #include <key_io.h>
 #include "chainparams.h"
 #include "gridcoin/project.h"
-#include "main.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/magnitude.h"
 #include <gridcoin/md5.h>

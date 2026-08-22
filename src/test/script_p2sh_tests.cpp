@@ -2,7 +2,6 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include <main.h>
 #include <policy/policy.h>
 #include <script.h>
 #include <validation.h>

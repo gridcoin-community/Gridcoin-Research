@@ -4,7 +4,6 @@
 
 #include "wallet/txdetail.h"
 
-#include "main.h"
 #include "txdb.h"
 #ifdef GetMessage
 #undef GetMessage

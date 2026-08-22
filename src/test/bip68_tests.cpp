@@ -5,7 +5,6 @@
 #include <boost/test/unit_test.hpp>
 
 #include "consensus/tx_verify.h"
-#include "main.h"
 #include "primitives/transaction.h"
 
 BOOST_AUTO_TEST_SUITE(bip68_tests)

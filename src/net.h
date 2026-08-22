@@ -28,7 +28,7 @@ class CNode;
 class CBlockIndex;
 class CBlockLocator;
 extern CCriticalSection cs_main;
-// Duplicate extern of the main.h:82 declaration; both must carry the
+// Duplicate extern of the chain.h declaration; both must carry the
 // GUARDED_BY annotation so cross-TU readers via net.h see the contract.
 extern int nBestHeight GUARDED_BY(cs_main);
 
@@ -791,7 +791,7 @@ private:
 
     //! GETBLOCKS locator cache (issue #2558 PR 9d2). unique_ptr so net.h needs
     //! only a forward declaration of CBlockLocator (its full definition lives in
-    //! main.h, which net.h must not include). Guarded because PushGetBlocks runs
+    //! primitives/block.h, which net.h need not include). Guarded because PushGetBlocks runs
     //! on the message-handler thread and from cs_main-holding callers.
     CCriticalSection m_getblocks_cs;
     const CBlockIndex* m_getblocks_pindex_begin GUARDED_BY(m_getblocks_cs) = nullptr;

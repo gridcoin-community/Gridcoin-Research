@@ -4,9 +4,9 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "script/interpreter.h"
+#include "primitives/block.h"
 #include <crypto/sha1.h>
 #include "key.h"
-#include "main.h"
 #include <policy/policy.h>
 #include "random.h"
 #include "streams.h"

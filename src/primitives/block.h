@@ -32,7 +32,7 @@ class SuperblockPtr;
 
 // cs_main guards the chain-state globals named in the EXCLUSIVE_LOCKS_REQUIRED
 // annotations on the methods defined out-of-line in primitives/block.cpp.
-// Redeclared here (identical to chain.h) so this header stays main.h-free.
+// Redeclared here (identical to chain.h) so this header need not include chain.h.
 extern CCriticalSection cs_main;
 
 //! -fastindex: skip some block-hash verification while loading the block

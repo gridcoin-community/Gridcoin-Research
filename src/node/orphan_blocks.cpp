@@ -4,7 +4,6 @@
 
 #include "node/orphan_blocks.h"
 
-#include "main.h"
 #include "random.h"
 #include "gridcoin/staking/spam.h"
 #include "util.h"

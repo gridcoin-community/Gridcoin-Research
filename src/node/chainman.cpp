@@ -8,7 +8,6 @@
 
 #include "chainparams.h"
 #include "checkpoints.h"
-#include "main.h"
 #include "net.h"
 #include "txdb.h"
 #include "node/blockstorage.h"
@@ -28,6 +27,7 @@
 #include "util.h"
 #include "util/time.h"
 #include "wallet/wallet.h"
+#include "txmempool.h"
 
 #include <boost/range/adaptor/reversed.hpp>
 #include <boost/thread.hpp>

@@ -2,7 +2,6 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "main.h"
 #include "node/ui_interface.h"
 #include "node/shutdown.h"
 #include "random.h"
@@ -21,6 +20,7 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
+#include "consensus/consensus.h"
 
 #include <zlib.h>
 #include <boost/algorithm/string/classification.hpp>

@@ -10,7 +10,6 @@
 #include <boost/test/unit_test.hpp>
 
 #include <key.h>
-#include <main.h>
 #include <miner.h>
 #include <primitives/transaction.h>
 #include <streams.h>

@@ -5,12 +5,13 @@
 #include "node/mempool_persist.h"
 
 #include "clientversion.h"
-#include "main.h"
 #include "random.h"
 #include "streams.h"
 #include "sync.h"
 #include "txmempool.h"
 #include "util.h"
+#include "consensus/validation.h"
+#include "validation.h"
 
 #include <tinyformat.h>
 

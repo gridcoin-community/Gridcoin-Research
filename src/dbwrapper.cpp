@@ -18,7 +18,6 @@
 #include "node/coherence.h"  // GRC::PackBlockFilePos
 #include "txdb.h"
 #include "node/shutdown.h"
-#include "main.h"
 #include "node/blockstorage.h"
 #include "node/chainman.h"
 #include "node/ui_interface.h"

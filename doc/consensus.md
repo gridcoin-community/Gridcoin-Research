@@ -106,7 +106,7 @@ consensus-critical at a specific block version activation height. The
 
 ## 2. General Constants
 
-Defined in `src/consensus/consensus.h` and `src/main.h`/`src/main.cpp`:
+Defined in `src/consensus/consensus.h`:
 
 | Constant | Value | Notes |
 |---|---|---|
@@ -142,7 +142,7 @@ Defined in `src/consensus/consensus.h` and `src/main.h`/`src/main.cpp`:
 - Block target spacing changes from 60 seconds to 90 seconds
 - `GetTargetSpacing()` returns 90 for `IsProtocolV2()` blocks, 60 otherwise
 
-> **Source:** `src/main.h:64`
+> **Source:** `src/primitives/block.h`
 
 ### 3.3 Research Age (Mainnet >= 364,501)
 
@@ -1061,8 +1061,9 @@ When a researcher submits an MRC:
 | `src/chainparams.h` | `Is*Enabled()` height predicates, spacing helpers |
 | `src/chainparams.cpp` | Mainnet/testnet parameter initialization |
 | `src/validation.cpp` | `CheckReward`, coinstake output limits, `GetBlockScriptFlags`, `ConnectBlock` |
-| `src/main.h` / `src/main.cpp` | `nGrandfather`, `nStakeMinAge`, `GetTargetSpacing` |
-| `src/gridcoin/staking/kernel.h` | `STAKE_TIMESTAMP_MASK`, `MaskStakeTime`, kernel function declarations |
+| `src/validation.h` | `nGrandfather` |
+| `src/primitives/block.h` | `GetTargetSpacing` |
+| `src/gridcoin/staking/kernel.h` | `nStakeMinAge`, `STAKE_TIMESTAMP_MASK`, `MaskStakeTime`, kernel function declarations |
 | `src/gridcoin/staking/kernel.cpp` | `CalculateStakeHashV8`, `CalculateStakeWeightV8`, stake modifier computation |
 | `src/gridcoin/staking/reward.cpp` | `GetConstantBlockReward`, `GetProofOfStakeReward`, coin-year schedule |
 | `src/gridcoin/staking/difficulty.cpp` | `GetNextTargetRequired`, retargeting algorithm |

@@ -8,7 +8,6 @@
 #include "gridcoin/researcher.h"
 #include "chainparams.h"
 #include "key.h"
-#include "main.h"
 #include "primitives/transaction.h"
 #include "streams.h"
 #include "sync.h"

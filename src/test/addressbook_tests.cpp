@@ -4,7 +4,6 @@
 
 #include "key.h"
 #include "key_io.h"
-#include "main.h"
 #include "primitives/transaction.h"
 #include "rpc/blockchain.h"
 #include "rpc/protocol.h"
@@ -12,6 +11,7 @@
 #include "test/test_gridcoin.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
+#include "txmempool.h"
 
 #include <univalue.h>
 

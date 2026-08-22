@@ -4,7 +4,6 @@
 #include <stdexcept>
 
 #include "init.h"
-#include "main.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/voting/builders.h"

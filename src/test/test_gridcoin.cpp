@@ -15,7 +15,6 @@
 #include "chainparams.h"
 #include "dbwrapper.h"
 #include "wallet/db.h"
-#include "main.h"
 #include "random.h"
 #include "wallet/wallet.h"
 

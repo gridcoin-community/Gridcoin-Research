@@ -27,7 +27,7 @@ class CWallet;
 
 //! Forward declaration so applyChainTipRefresh() can carry an
 //! EXCLUSIVE_LOCKS_REQUIRED(cs_main) annotation without pulling in the heavy
-//! main.h here (mirrors the same extern in net.h / validation.h). CCriticalSection
+//! chain.h here (mirrors the same extern in net.h / validation.h). CCriticalSection
 //! comes from sync.h, included above.
 extern CCriticalSection cs_main;
 
@@ -36,7 +36,7 @@ namespace GRC {
 //!
 //! \brief Qt-free hasher for the tx-hash index. A correct internal hash over
 //! uint256 (any well-distributed hash works for a private multimap); kept
-//! header-light so wallettxstore.h need not pull in main.h's BlockHasher.
+//! header-light so wallettxstore.h need not pull in primitives/block.h's BlockHasher.
 //!
 struct TxHashHasher {
     std::size_t operator()(const uint256& h) const { return static_cast<std::size_t>(h.GetUint64(0)); }

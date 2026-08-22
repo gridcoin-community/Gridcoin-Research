@@ -6,7 +6,6 @@
 #include "compat/endian.h"
 #include "gridcoin/project.h"
 #include "hash.h"
-#include "main.h"
 #include <gridcoin/md5.h>
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"

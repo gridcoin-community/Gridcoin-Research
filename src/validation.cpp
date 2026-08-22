@@ -7,7 +7,6 @@
 #include "consensus/merkle.h"
 #include "consensus/tx_verify.h"
 #include "dbwrapper.h"
-#include "main.h"
 #include "validationinterface.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/contract/contract.h"
@@ -34,6 +33,7 @@
 #include "util/time.h"
 #include "validation.h"
 #include "wallet/wallet.h"
+#include "txmempool.h"
 
 #include <set>
 #include <stdexcept>

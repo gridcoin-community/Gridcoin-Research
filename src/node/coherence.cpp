@@ -10,7 +10,6 @@
 #include "gridcoin/contract/registry.h"
 #include "gridcoin/staking/chain_trust.h"
 #include "gridcoin/staking/spam.h"
-#include "main.h"
 #include "node/blockstorage.h"
 #include "node/chainman.h"
 #include "util.h"

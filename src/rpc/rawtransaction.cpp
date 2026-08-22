@@ -5,7 +5,6 @@
 
 #include "chainparams.h"
 #include "init.h"
-#include "main.h"
 #include "miner.h"
 #include "net_processing.h"
 #include "gridcoin/beacon.h"
@@ -21,6 +20,7 @@
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
 #include "htlc.h"
+#include "txmempool.h"
 #include <key_io.h>
 #include "merkleblock.h"
 #include "node/blockstorage.h"

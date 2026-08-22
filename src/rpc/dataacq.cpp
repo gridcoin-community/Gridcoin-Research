@@ -5,7 +5,6 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "chainparams.h"
-#include "main.h"
 #include "server.h"
 #include "txdb.h"
 #include "gridcoin/claim.h"
@@ -14,6 +13,7 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/block_finder.h"
 #include "node/blockstorage.h"
+#include "chain.h"
 #include <rpc/util.h>
 #include <util.h>
 #include <util/string.h>

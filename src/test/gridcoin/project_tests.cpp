@@ -2,12 +2,12 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "main.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "util/string.h"
 #include "wallet/generated_type.h"
+#include "chain.h"
 
 #include <boost/test/unit_test.hpp>
 

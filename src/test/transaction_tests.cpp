@@ -7,7 +7,6 @@
 #include <string>
 #include <boost/test/unit_test.hpp>
 
-#include <main.h>
 #include <streams.h>
 #include <wallet/wallet.h>
 #include <policy/policy.h>

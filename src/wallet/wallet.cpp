@@ -4,6 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "chainparams.h"
+#include "txmempool.h"
 #include <key_io.h>
 #include "txdb.h"
 #include "wallet/wallet.h"
@@ -18,7 +19,6 @@
 #include "rpc/client.h"
 #include "rpc/protocol.h"
 #include <script.h>
-#include "main.h"
 #include "net_processing.h"
 #include "util.h"
 #include <util/string.h>

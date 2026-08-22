@@ -6,7 +6,6 @@
 #include "uint256.h"
 #include "gridcoin/protocol.h"
 #include "util.h"
-#include "main.h"
 #include "gridcoin/staking/reward.h"
 
 #include <boost/test/unit_test.hpp>

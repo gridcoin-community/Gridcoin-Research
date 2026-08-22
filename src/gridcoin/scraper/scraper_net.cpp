@@ -5,10 +5,10 @@
 /* Define this if you want to show pubkey as address, otherwise hex id */
 #define SCRAPER_NET_PK_AS_ADDRESS
 
+#include "validation.h"
 #include <memory>
 #include <atomic>
 #include <stdexcept>
-#include "main.h"
 #include "net.h"
 #include "rpc/server.h"
 #include "rpc/protocol.h"

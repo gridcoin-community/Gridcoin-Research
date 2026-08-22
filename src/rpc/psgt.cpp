@@ -6,7 +6,6 @@
 
 #include <chainparams.h>
 #include <key_io.h>
-#include <main.h>
 #include <net_processing.h>
 #include <node/psgt_pool.h>
 #include <rpc/server.h>

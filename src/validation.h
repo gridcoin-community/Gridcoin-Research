@@ -12,6 +12,7 @@
 #include "index/txindex.h"
 #include "primitives/transaction.h"
 #include "sync.h"
+#include "util.h"  // Fraction
 
 #include <map>
 
