@@ -7,7 +7,7 @@
 #ifndef BITCOIN_MINER_H
 #define BITCOIN_MINER_H
 
-#include "main.h"
+#include "gridcoin/mrc.h"
 #include "gridcoin/sidestake.h"
 
 

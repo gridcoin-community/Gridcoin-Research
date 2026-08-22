@@ -5,7 +5,8 @@
 #ifndef GRIDCOIN_NODE_ORPHAN_BLOCKS_H
 #define GRIDCOIN_NODE_ORPHAN_BLOCKS_H
 
-#include "main.h"
+#include "chain.h"  // cs_main (required for clang's EXCLUSIVE_LOCKS_REQUIRED / GUARDED_BY analyzer)
+#include "primitives/block.h"  // BlockHasher
 #include "uint256.h"
 
 #include <functional>

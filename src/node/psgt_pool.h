@@ -6,7 +6,6 @@
 #define GRIDCOIN_NODE_PSGT_POOL_H
 
 #include <amount.h>
-#include <main.h>
 #include <psgt.h>
 #include <pubkey.h>
 #include <script/script.h>

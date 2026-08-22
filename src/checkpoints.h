@@ -5,7 +5,7 @@
 #ifndef BITCOIN_CHECKPOINTS_H
 #define BITCOIN_CHECKPOINTS_H
 
-#include "main.h"
+#include "chain.h"
 
 class uint256;
 class CBlockIndex;
