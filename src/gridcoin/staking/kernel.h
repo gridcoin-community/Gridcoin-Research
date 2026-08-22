@@ -7,7 +7,11 @@
 #define GRIDCOIN_STAKING_KERNEL_H
 
 #include "amount.h"
-#include "main.h"
+#include "chain.h"  // cs_main (required for clang's EXCLUSIVE_LOCKS_REQUIRED analyzer), CBlock, CBlockHeader, uint256
+
+class CTransaction;
+class CTxDB;
+class CValidationState;
 
 //! Gridcoin minimum/maximum stake age. Defined in
 //! gridcoin/staking/kernel.cpp (moved from main.cpp, issue #3125 C9).
