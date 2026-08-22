@@ -115,8 +115,15 @@ protected:
     template<typename K, typename T>
     bool Write(const K& key, const T& value)
     {
-        if (fReadOnly)
+        if (fReadOnly) {
+            // The assert records an invariant the caller is expected to keep: a
+            // read-only handle is never opened for writing. The return is what
+            // makes the refusal operational. Without it the assert IS the guard,
+            // so compiling it out -- or simply deleting it during a sweep --
+            // silently converts a refused write into a performed one.
             assert(!"Write called on database in read-only mode");
+            return false;
+        }
 
         CDataStream ssKey(SER_DISK, CLIENT_VERSION);
         ssKey.reserve(1000);
@@ -142,8 +149,11 @@ protected:
     {
         if (!pdb)
             return false;
-        if (fReadOnly)
+        if (fReadOnly) {
+            // See Write() above: the return, not the assert, is the guard.
             assert(!"Erase called on database in read-only mode");
+            return false;
+        }
 
         CDataStream ssKey(SER_DISK, CLIENT_VERSION);
         ssKey.reserve(1000);

@@ -161,8 +161,14 @@ protected:
     {
         if (!pdb)
             return false;
-        if (fReadOnly)
+        if (fReadOnly) {
+            // The assert records an invariant the caller is expected to keep; the
+            // return is what makes the refusal operational. Without it the assert
+            // IS the guard, and removing it would let a write proceed on a handle
+            // opened read-only. Mirrors the !pdb refusal directly above.
             assert(!"Write called on database in read-only mode");
+            return false;
+        }
 
         // Key
         CDataStream ssKey(SER_DISK, CLIENT_VERSION);
@@ -190,8 +196,11 @@ protected:
     {
         if (!pdb)
             return false;
-        if (fReadOnly)
+        if (fReadOnly) {
+            // See Write() above: the return, not the assert, is the guard.
             assert(!"Erase called on database in read-only mode");
+            return false;
+        }
 
         // Key
         CDataStream ssKey(SER_DISK, CLIENT_VERSION);
