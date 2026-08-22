@@ -70,19 +70,6 @@ typedef std::optional<Claim> ClaimOption;
 // directly (issue #3125 C9).
 // Orphan block storage is managed by g_orphan_blocks in node/orphan_blocks.h
 
-// -- Compatibility declarations: delete as the remaining main.h includers
-// -- are repointed (#3125 C9). Verbatim duplicates of the canonical
-// -- declarations in gridcoin/staking/kernel.h and wallet/wallet.h, which
-// -- are NOT part of this header's re-include set (both still include
-// -- main.h themselves).
-extern unsigned int nStakeMinAge;
-extern unsigned int nStakeMaxAge;
-extern int64_t nTransactionFee;
-extern int64_t nReserveBalance;
-extern int64_t nMinimumInputValue;
-extern unsigned int nDerivationMethodIndex;
-// -- End compatibility declarations.
-
 class CReserveKey;
 class CTxDB;
 class CTxIndex;
@@ -99,11 +86,6 @@ class CTxIndex;
 
 // AbandonChainTo / PurgeOrphanedBlockIndexEntries live in node/coherence.h
 // with the rest of the #2865 recovery logic (issue #3125, workstream C4).
-
-// -- Compatibility declaration (see the fenced block above): verbatim
-// -- duplicate of the canonical declaration in gridcoin/claim.h, which is
-// -- not part of this header's re-include set.
-GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 // GetNumBlocksOfPeers, IsInitialBlockDownload, and OutOfSyncByAge live in
 // validation.h, included above (issue #3125 C9).
