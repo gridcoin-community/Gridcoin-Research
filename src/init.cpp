@@ -35,6 +35,7 @@
 #include <util/proc_hardening.h>
 #include <util/string.h>
 #include <util/syserror.h>
+#include "consensus/consensus.h"  // MAX_BLOCK_SIZE_GEN
 
 #include <openssl/crypto.h>
 
