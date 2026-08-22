@@ -412,8 +412,8 @@ public:
     }
 }; // Claim
 
-//! The canonical definition (the main.h compatibility duplicate was removed
-//! with the header itself; issue #3269 U3/U4).
+//! The canonical definition. main.h carried a duplicate of this typedef, which
+//! went away when that header was deleted (issue #3269).
 typedef std::optional<Claim> ClaimOption;
 }
 
