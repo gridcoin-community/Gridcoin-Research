@@ -10,6 +10,7 @@
 #include "wallet/wallet.h"
 
 #include "wallet/coincontrol.h"
+#include "txmempool.h"
 
 using namespace GRC;
 
