@@ -1402,7 +1402,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     HeapSetInformation(nullptr, HeapEnableTerminationOnCorruption, nullptr, 0);
 #endif
 #ifndef WIN32
-    umask(077);
+    // The process umask is set at the top of main() (util::SetOwnerOnlyUmask), so
+    // that debug.log and the settings file -- both created before this point -- are
+    // covered too. Setting it here would be too late for them.
 
     // Clean shutdown on SIGTERM
     registerSignalHandler(SIGTERM, HandleSIGTERM);

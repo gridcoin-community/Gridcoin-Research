@@ -200,6 +200,13 @@ void VerifyOwnerOnlyDacl(const fs::path& path)
 }
 #endif // WIN32
 
+void SetOwnerOnlyUmask()
+{
+#ifndef WIN32
+    ::umask(077);
+#endif
+}
+
 bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
 {
     error.clear();

@@ -7,6 +7,7 @@
 #include "config/gridcoin-config.h"
 #endif
 
+#include "util/dir_permissions.h"
 #include "chainparams.h"
 #include "chainparamsbase.h"
 #include "util.h"
@@ -406,6 +407,12 @@ bool AppInit(int argc, char* argv[])
 extern void noui_connect();
 int main(int argc, char* argv[])
 {
+    // Before anything can create a file: debug.log, the read-write settings file
+    // and the block subdirectories are all created without an explicit mode, so
+    // without this they inherit a default desktop umask of 022 and land
+    // world-readable. Narrowing here rather than after the fact leaves no window.
+    util::SetOwnerOnlyUmask();
+
     // Reinit default timer to ensure it is zeroed out at the start of main.
     g_timer.InitTimer("default", false);
 

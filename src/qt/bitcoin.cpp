@@ -41,6 +41,7 @@
 #include "qtipcserver.h"
 #include "txdb.h"
 #include "util.h"
+#include "util/dir_permissions.h"
 #include "util/strencodings.h"
 #include "util/threadnames.h"
 #include "winshutdownmonitor.h"
@@ -724,6 +725,11 @@ int main(int argc, char *argv[])
     util::WinCmdLineArgs winArgs;
     std::tie(argc, argv) = winArgs.get();
 #endif
+
+    // Before anything can create a file -- see the same call in
+    // gridcoinresearchd.cpp. The GUI reaches InitLogging() and the settings file
+    // by a different route but creates the same artifacts.
+    util::SetOwnerOnlyUmask();
 
     // Reinit default timer to ensure it is zeroed out at the start of main.
     g_timer.InitTimer("default", false);

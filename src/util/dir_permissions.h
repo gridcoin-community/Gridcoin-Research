@@ -55,6 +55,30 @@ namespace util {
 //! place and \p error says so explicitly.
 bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error);
 
+//! Restrict the process umask so that every file and directory this process
+//! creates afterwards is owner-only from the moment it exists.
+//!
+//! MUST be called before anything is created -- before logging is initialised and
+//! before settings are read or written. The ordering is the entire point. The
+//! alternative, a chmod after the fact, leaves a window in which the file sits at
+//! whatever the ambient umask allowed; CreateNewConfigFile() documents that same
+//! reasoning for the RPC credentials file, which is narrowed before the password
+//! is written rather than after.
+//!
+//! This governs the files a data directory accumulates that are not created
+//! through CreateOwnerOnlyDirectory(): debug.log, the read-write settings file,
+//! and the block index subdirectories. On a default desktop umask of 022 those
+//! land group- and world-readable, which matters most for debug.log.
+//!
+//! It is a deliberate blunt instrument: process-wide, set once, never restored.
+//! Code that needs a different mode for one file should say so explicitly at that
+//! call site, as ipc/process.cpp does when it creates the IPC socket.
+//!
+//! No-op on Windows, which has no umask. There the equivalent protection is the
+//! data directory's inheritable owner+SYSTEM DACL, applied by
+//! CreateOwnerOnlyDirectory() and inherited by everything created inside it.
+void SetOwnerOnlyUmask();
+
 #ifdef WIN32
 //! Apply an owner+SYSTEM PROTECTED DACL to an existing file or directory and verify
 //! it by reading it back. Throws std::system_error on failure — callers that hold
