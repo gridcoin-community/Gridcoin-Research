@@ -229,4 +229,9 @@ endif()
 # supported control. The cost is that Boost can no longer report a
 # stack-overflow SIGSEGV from a separate stack, which is a small price for a
 # suite that starts at all.
+#
+# Only THIS suite needs it. gridcoin_qt_tests is a QTest binary: it does not
+# link Boost::unit_test_framework, and its main() never forwards argc/argv to
+# QTest::qExec -- so it installs no alternate signal stack and would silently
+# ignore the option anyway.
 add_test(NAME gridcoin_tests COMMAND test_gridcoin --use_alt_stack=no)
