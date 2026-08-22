@@ -183,6 +183,13 @@ const std::set<std::string> SENSITIVE_ARG_COMMANDS = {
     "encryptwallet",
     "importprivkey",
     "restoreseedphrase",
+    // Both alert commands take the WIF-encoded alert master private key as an
+    // argument. The console echoes the line into the pane and the Up-arrow
+    // history, and writes it verbatim to debug.log when the call fails -- and a
+    // failed call is the common case here, since these are hand-typed by an
+    // operator under time pressure.
+    "sendalert",
+    "sendalert2",
     "sethdseed",
     "signrawtransaction",
     "signrawtransactionwithkey",
