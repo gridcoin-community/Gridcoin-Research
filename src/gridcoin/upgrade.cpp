@@ -14,6 +14,7 @@
 #include <boost/exception/exception.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iostream>
+#include "node/blockstorage.h"
 
 using namespace GRC;
 

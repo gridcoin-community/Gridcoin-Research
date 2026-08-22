@@ -27,6 +27,7 @@
 #include <util/string.h>
 #include <set>
 #include <univalue.h>
+#include "txmempool.h"
 
 using namespace GRC;
 

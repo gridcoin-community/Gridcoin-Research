@@ -22,6 +22,7 @@
 
 #include <boost/signals2/signal.hpp>
 #include <boost/test/unit_test.hpp>
+#include "consensus/consensus.h"
 
 extern CWallet* pwalletMain;
 

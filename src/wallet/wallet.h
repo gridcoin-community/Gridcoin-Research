@@ -14,10 +14,10 @@
 #include <stdlib.h>
 
 #include "amount.h"
+#include "chain.h"  // cs_main, mapBlockIndex
 #include "node/shutdown.h"
 #include "consensus/tx_verify.h"
 #include "gridcoin/staking/status.h"
-#include "main.h"
 #include "validationinterface.h"
 #include "key.h"
 #include "keystore.h"
