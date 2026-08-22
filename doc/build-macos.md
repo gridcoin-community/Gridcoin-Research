@@ -135,7 +135,7 @@ ctest --test-dir build_macos --output-on-failure
 You can run the application directly from the build folder:
 
 ```
-./build_macos/src/qt/gridcoinresearch
+./build_macos/bin/gridcoinresearch.app/Contents/MacOS/gridcoinresearch
 ```
 
 ### 7. Create the DMG Installer (Optional)
