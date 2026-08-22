@@ -61,10 +61,19 @@ public:
     /** Use the node as download source for this Split object. */
     void UseAsSource(CNode* pnode);
 
-    /** Add a part reference to vParts. Creates a CPart if necessary. */
+    /** Add a part reference to vParts. Creates a CPart if necessary.
+     *
+     * Returns void and therefore cannot reject: callers must validate the hash
+     * first. CScraperManifest::UnserializeCheck() screens the whole part list
+     * before calling this.
+     */
     void addPart(const uint256& ihash);
 
-    /** Create a part from specified data and add reference to it into vParts. */
+    /** Create a part from specified data and add reference to it into vParts.
+     *
+     * Returns the index of the new part, or -1 if \p vData is empty, in which
+     * case nothing is registered.
+     */
     int addPartData(CDataStream&& vData, const bool &publish_in_progress = false);
 
     /** Unref all parts referenced by this. Removes parts with no references */

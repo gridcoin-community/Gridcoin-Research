@@ -36,6 +36,20 @@ extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern AppCacheSectionExt GetExtendedScrapersCache();
 extern bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
 
+namespace {
+//! \brief The double-SHA256 of zero-length content.
+//!
+//! A manifest that declares a part with this hash is malformed: RecvPart
+//! discards empty parts, so no delivery can ever satisfy such an entry and the
+//! manifest could never complete. Computed rather than hardcoded so it cannot
+//! drift from the hash function actually in use.
+const uint256& EmptyPartHash()
+{
+    static const uint256 hash = Hash(std::vector<unsigned char>{});
+    return hash;
+}
+} // anonymous namespace
+
 bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 {
    /* Part of larger hashed blob. Currently only used for scraper data sharing.
@@ -43,6 +57,24 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     * notify object or ignore if no object found
     * erase from mapAlreadyAskedFor
     */
+    // An empty part carries no data and can never satisfy a manifest's part
+    // list. Receiving one is a peer or filesystem condition, not a programming
+    // error, so discard it rather than aborting: the caller reports the failure
+    // and a peer that sent it earns the same banscore as a spurious part.
+    if (vRecv.empty())
+    {
+        if (pfrom)
+        {
+            LOCK(cs_ScraperGlobals);
+
+            pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
+            LogPrintf("WARNING: CSplitBlob::RecvPart: Empty part received from %s. Adding %u banscore.",
+                      pfrom->addr.ToString(), SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
+        }
+
+        return error("Empty part received!");
+    }
+
     auto& ss = vRecv;
     uint256 hash(Hash(ss));
     {
@@ -57,7 +89,6 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     if (ipart != mapParts.end())
     {
         CPart& part = ipart->second;
-        assert(vRecv.size() > 0);
 
         if (!part.present())
         {
@@ -108,8 +139,9 @@ void CSplitBlob::addPart(const uint256& ihash)
 {
     LOCK2(cs_mapParts, cs_manifest);
 
-    assert(ihash != Hash(MakeByteSpan(vParts)));
-
+    // No guard here: addPart() returns void and so cannot reject anything. The
+    // empty-part-hash check that used to sit here as an assert is enforced by
+    // CScraperManifest::UnserializeCheck(), which can refuse the whole manifest.
     unsigned n = vParts.size();
     auto rc = mapParts.emplace(ihash,CPart(ihash));
     CPart& part = rc.first->second;
@@ -128,6 +160,15 @@ int CSplitBlob::addPartData(CDataStream&& vData, const bool& publish_in_progress
     LOCK2(cs_mapParts, cs_manifest);
 
     m_publish_in_progress = publish_in_progress;
+
+    // Our own publishing path: a zero-byte part file (a truncated write, a full
+    // disk, an interrupted gzip) must not be registered. RecvPart ignores its
+    // own return value here, so this is the only place the condition is caught.
+    if (vData.empty())
+    {
+        LogPrintf("ERROR: %s: refusing to add an empty part to the manifest.", __func__);
+        return -1;
+    }
 
     uint256 hash(Hash(vData));
 
@@ -533,6 +574,16 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
              Hash(signature).GetHex());
 
     if (!pubkey.Verify(hash, signature)) return error("CScraperManifest: Invalid manifest signature");
+
+    // Validate the whole part list before registering any of it, so a rejected
+    // manifest never leaves half its parts in the shared mapParts.
+    for (const uint256& ph : vph)
+    {
+        if (ph == EmptyPartHash())
+        {
+            return error("CScraperManifest: manifest declares a part with the empty-content hash");
+        }
+    }
 
     for (const uint256& ph : vph)
     {
