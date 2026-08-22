@@ -2,12 +2,13 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "main.h"
 #include "server.h"
 #include "txmempool.h"
 #include "gridcoin/contract/contract.h"
 #include "streams.h"
 #include "util/strencodings.h"
+#include "consensus/validation.h"
+#include "validation.h"
 
 #include <rpc/util.h>
 #include <univalue.h>

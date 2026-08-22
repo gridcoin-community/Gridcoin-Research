@@ -4,7 +4,6 @@
 
 #include "interfaces/wallet_coin_source.h"
 
-#include "main.h"
 #include "node/ui_interface.h"
 #include "wallet/wallet.h"
 #include "wallet/wallet_event_queue.h"

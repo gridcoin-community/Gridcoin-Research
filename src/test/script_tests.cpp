@@ -10,7 +10,6 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/test/unit_test.hpp>
 
-#include <main.h>
 #include <wallet/wallet.h>
 
 #include <test/data/script_valid.json.h>

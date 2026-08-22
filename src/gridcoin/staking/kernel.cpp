@@ -7,10 +7,11 @@
 #include "arith_uint256.h"
 #include "gridcoin/staking/kernel.h"
 #include "txdb.h"
-#include "main.h"
 #include "random.h"
 #include "streams.h"
 #include "util.h"
+#include "consensus/validation.h"
+#include "script/interpreter.h"
 
 #include <node/blockstorage.h>
 

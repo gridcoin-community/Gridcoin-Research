@@ -6,7 +6,6 @@
 #include <key_io.h>
 #include "chainparams.h"
 #include "logging.h"
-#include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/researcher.h"

@@ -2,8 +2,9 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "main.h"
 #include "gridcoin/support/block_finder.h"
+#include "chain.h"
+#include "primitives/block.h"
 
 using namespace GRC;
 

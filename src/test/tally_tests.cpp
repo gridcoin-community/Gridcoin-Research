@@ -1,5 +1,4 @@
 #include "tally.h"
-#include "main.h"
 
 #include <boost/test/unit_test.hpp>
 #include <memory>

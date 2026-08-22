@@ -7,6 +7,8 @@
 
 #include "amount.h"
 #include "consensus/consensus.h"
+#include "gridcoin/cpid.h"
+#include "primitives/block.h"
 
 #include <optional>
 #include <unordered_map>

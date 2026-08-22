@@ -4,7 +4,6 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <main.h>
 #include <gridcoin/account.h>
 #include <gridcoin/beacon.h>
 #include <gridcoin/cpid.h>

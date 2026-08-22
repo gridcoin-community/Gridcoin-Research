@@ -10,7 +10,6 @@
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/upgrade.h"
-#include "main.h"
 #include "net.h"
 #include "util.h"
 #include <atomic>

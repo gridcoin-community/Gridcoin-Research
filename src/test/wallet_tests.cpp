@@ -1,9 +1,9 @@
+#include "random.h"
 #include <boost/test/unit_test.hpp>
 
 #include "gridcoin/mnemonics.h"
 #include "gridcoin/sidestake.h"
 #include "init.h"
-#include "main.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 

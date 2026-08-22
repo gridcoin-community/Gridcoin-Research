@@ -5,7 +5,6 @@
 #ifndef BITCOIN_RPC_BLOCKCHAIN_H
 #define BITCOIN_RPC_BLOCKCHAIN_H
 
-#include "main.h"
 #include "server.h"
 #include "protocol.h"
 #include "init.h" // for pwalletMain

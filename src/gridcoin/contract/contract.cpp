@@ -4,7 +4,6 @@
 
 #include "amount.h"
 #include "chainparams.h"
-#include "main.h"
 #include "gridcoin/appcache.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/mrc.h"

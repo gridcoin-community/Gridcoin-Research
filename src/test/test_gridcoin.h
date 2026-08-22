@@ -5,7 +5,6 @@
 #ifndef GRIDCOIN_TEST_TEST_GRIDCOIN_H
 #define GRIDCOIN_TEST_TEST_GRIDCOIN_H
 
-#include <main.h>
 #include <random.h>
 #include <wallet/wallet.h>
 

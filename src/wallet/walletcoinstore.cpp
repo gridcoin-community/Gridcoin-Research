@@ -7,7 +7,6 @@
 #include "chain.h"
 #include "consensus/tx_verify.h"
 #include "key_io.h"
-#include "main.h"
 #include "wallet/wallet.h"
 
 #include <algorithm>

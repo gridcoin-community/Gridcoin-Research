@@ -5,8 +5,8 @@
 
 #include "alert.h"
 #include "init.h"
+#include "txmempool.h"
 #include <key_io.h>
-#include "main.h"
 #include "miner.h"
 #include "gridcoin/accrual/snapshot.h"
 #include "gridcoin/quorum.h"

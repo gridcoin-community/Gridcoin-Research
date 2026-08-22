@@ -7,9 +7,9 @@
 #include "chainparams.h"
 #include "hash.h"
 #include "logging.h"
-#include "main.h"
 #include "node/ui_interface.h"
 #include "sync.h"
+#include "chain.h"
 
 #include <cassert>
 

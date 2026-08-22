@@ -3,7 +3,6 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/protocol.h"
-#include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/pool.h"

@@ -30,7 +30,6 @@
 
 #include "key.h"
 #include "key_io.h"
-#include "main.h"
 #include "primitives/transaction.h"
 #include "rpc/blockchain.h"
 #include "test/test_gridcoin.h"

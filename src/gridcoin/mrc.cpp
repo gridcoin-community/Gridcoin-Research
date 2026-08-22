@@ -6,7 +6,6 @@
 
 #include "amount.h"
 #include "key.h"
-#include "main.h"
 #include "gridcoin/account.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/tally.h"

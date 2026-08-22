@@ -3,12 +3,12 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/claim.h"
-#include "main.h"
 #include "node/blockstorage.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "node/ui_interface.h"
+#include "chain.h"
 
 #include <algorithm>
 

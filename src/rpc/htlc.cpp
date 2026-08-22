@@ -4,8 +4,8 @@
 
 #include "htlc.h"
 #include "init.h"
+#include "txmempool.h"
 #include <key_io.h>
-#include "main.h"
 #include "net_processing.h"
 #include "policy/fees.h"
 #include "primitives/transaction.h"

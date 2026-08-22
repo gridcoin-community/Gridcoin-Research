@@ -6,10 +6,11 @@
 // serialize -> deserialize preserves GetHash() for all transaction
 // variants, serving as a safety net for the CMutableTransaction split.
 
+#include "primitives/transaction.h"
+#include "script/script.h"
 #include <boost/test/unit_test.hpp>
 
 #include <key.h>
-#include <main.h>
 #include <streams.h>
 #include <gridcoin/contract/contract.h>
 

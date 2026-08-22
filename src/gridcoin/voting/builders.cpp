@@ -5,7 +5,6 @@
 #include "amount.h"
 #include "chainparams.h"
 #include "init.h"
-#include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/message.h"
@@ -18,6 +17,7 @@
 #include "node/ui_interface.h"
 #include "wallet/coincontrol.h"
 #include "wallet/wallet.h"
+#include "consensus/consensus.h"
 #include <numeric>
 #include <optional>
 #include <util/string.h>

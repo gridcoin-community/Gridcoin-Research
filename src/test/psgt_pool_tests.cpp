@@ -6,7 +6,6 @@
 
 #include <key.h>
 #include <keystore.h>
-#include <main.h>
 #include <node/psgt_pool.h>
 #include <policy/fees.h>
 #include <primitives/transaction.h>

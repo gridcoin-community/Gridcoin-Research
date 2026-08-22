@@ -5,8 +5,8 @@
 #include "gridcoin/voting/poll_result_cache.h"
 #include "gridcoin/voting/registry.h"
 #include "logging.h"
-#include "main.h"
 #include "util/time.h"
+#include "chain.h"
 
 using namespace GRC;
 

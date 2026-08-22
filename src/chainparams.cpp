@@ -27,7 +27,7 @@
 
 // Construct the genesis block for the active network (main/testnet/regtest).
 // Moved out of LoadBlockIndex (issue #3125, workstream C5), fulfilling the
-// old "uncomment when CBlock is moved from main.h" TODO that sat here --
+// old "uncomment when CBlock is moved out of main.h" TODO that sat here --
 // CBlock moved to primitives/block.h in #3060. Behavior-preserving: note the
 // mainnet/testnet coinbase nTime (1413033777) deliberately differs from the
 // testnet block nTime (1406674534), exactly as the original code had it.

@@ -4,7 +4,6 @@
 
 #include "amount.h"
 #include "chainparams.h"
-#include "main.h"
 #include "gridcoin/accrual/newbie.h"
 #include "gridcoin/accrual/null.h"
 #include "gridcoin/accrual/research_age.h"

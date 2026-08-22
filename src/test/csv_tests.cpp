@@ -5,7 +5,6 @@
 #include <boost/test/unit_test.hpp>
 
 #include "key.h"
-#include "main.h"
 #include "primitives/transaction.h"
 #include "script.h"
 

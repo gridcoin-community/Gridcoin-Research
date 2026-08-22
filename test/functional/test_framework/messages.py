@@ -17,9 +17,9 @@ and adapted to Gridcoin's proof-of-stake wire format. Differences from upstream
   (src/primitives/transaction.h:296-309)
 - CBlockHeader serializes `nNonce` only when `nVersion <= 10`; regtest blocks
   are v14, so nNonce is absent on the wire. The block id is the double-SHA256
-  of the serialized header. (src/main.h:304-320, 377-384)
+  of the serialized header. (src/primitives/block.h)
 - CBlock appends `vchBlockSig` (the PoS block signature) after `vtx`; it does
-  not participate in the block hash. (src/main.h:439-452)
+  not participate in the block hash. (src/primitives/block.h)
 - The "version" message is sent on the wire as command `aries`; `addr`/`block`
   have legacy aliases `gridaddr`/`encrypt`. We map all aliases on receive.
   (src/protocol.cpp:33-39, src/net.cpp:518)

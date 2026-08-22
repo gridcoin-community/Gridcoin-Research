@@ -2,12 +2,12 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chain.h"
 #include <consensus/tx_verify.h>
 
 #include <node/blockstorage.h>
 #include <primitives/transaction.h>
 #include "txdb.h"
-#include "main.h"
 
 bool IsFinalTx(const CTransaction &tx, int nBlockHeight, int64_t nBlockTime) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {

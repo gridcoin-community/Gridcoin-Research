@@ -12,10 +12,11 @@
 #include "gridcoin/staking/reward.h"
 #include "gridcoin/tally.h"
 #include "chainparams.h"
-#include "main.h"
 #include "random.h"
 #include "util.h"
 #include "validation.h"
+#include "chain.h"
+#include "primitives/block.h"
 
 #include <algorithm>
 #include <cassert>

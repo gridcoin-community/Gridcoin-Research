@@ -6,7 +6,6 @@
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 #include <boost/test/unit_test.hpp>
 
-#include "main.h"
 #include "wallet/wallet.h"
 #include "net.h"
 #include "util.h"

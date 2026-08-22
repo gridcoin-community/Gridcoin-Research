@@ -28,7 +28,7 @@ class CWalletTx;
 
 //! Forward declaration so applyChainTipRefresh() can carry an
 //! EXCLUSIVE_LOCKS_REQUIRED(cs_main) annotation without pulling in the heavy
-//! main.h here (the WalletTxStore precedent). CCriticalSection comes from
+//! chain.h here (the WalletTxStore precedent). CCriticalSection comes from
 //! sync.h, included above.
 extern CCriticalSection cs_main;
 

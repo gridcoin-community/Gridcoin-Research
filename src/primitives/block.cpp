@@ -4,13 +4,13 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "primitives/block.h"
+#include "chain.h"
 
-#include "main.h"
 
 // These methods are defined out-of-line (rather than inline in primitives/block.h)
 // because they reference chain-state globals declared in chain.h — pindexBest,
 // mapBlockIndex, pindexGenesisBlock — and the genesis-block hashes.
-// Keeping them here lets primitives/block.h stay free of main.h. The
+// Keeping them here lets primitives/block.h stay free of chain.h. The
 // EXCLUSIVE_LOCKS_REQUIRED(cs_main) annotations live on the in-class declarations
 // in the header and are intentionally not repeated on these definitions.
 

@@ -4,7 +4,6 @@
 
 #include "chainparams.h"
 #include "gridcoin/scraper/scraper_registry.h"
-#include "main.h"
 #include "txdb.h"
 #include "util/threadnames.h"
 #include "gridcoin/backup.h"

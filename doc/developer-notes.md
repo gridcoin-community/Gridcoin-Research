@@ -1007,10 +1007,10 @@ bool CreateGridcoinReward(CBlock& blocknew,
 
 ```C++
 // Example: a function that acquires cs_main internally
-// main.h
+// validation.h
 bool GetTransaction(const uint256& hash, CTransaction& tx, uint256& hashBlock);
 
-// main.cpp
+// validation.cpp
 bool GetTransaction(const uint256& hash, CTransaction& tx, uint256& hashBlock)
 {
     LOCK(cs_main);

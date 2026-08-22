@@ -3,7 +3,6 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/protocol.h"
-#include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/pool.h"
 #include "gridcoin/quorum.h"
@@ -18,6 +17,7 @@
 #include "util/reverse_iterator.h"
 #include "wallet/wallet.h"
 #include "init.h"
+#include "node/blockstorage.h"
 
 #include <optional>
 #include <queue>

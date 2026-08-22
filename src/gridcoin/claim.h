@@ -412,7 +412,8 @@ public:
     }
 }; // Claim
 
-//! Identical to the compatibility typedef in main.h (issue #3125 C9).
+//! The canonical definition (the main.h compatibility duplicate was removed
+//! with the header itself; issue #3269 U3/U4).
 typedef std::optional<Claim> ClaimOption;
 }
 

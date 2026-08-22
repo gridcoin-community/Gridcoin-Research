@@ -3,11 +3,11 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "random.h"
 #include <vector>
 #include <boost/test/unit_test.hpp>
 #include "univalue/include/univalue.h"
 
-#include <main.h>
 #include <wallet/wallet.h>
 #include <util.h>
 //#include <util/system.h>

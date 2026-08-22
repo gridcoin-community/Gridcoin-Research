@@ -15,6 +15,7 @@
 #include "gridcoin/sidestake.h"
 #include "node/blockstorage.h"
 #include "node/chainman.h"
+#include "txmempool.h"
 #include <util/string.h>
 #include <util/time.h>
 #include "gridcoin/mrc.h"

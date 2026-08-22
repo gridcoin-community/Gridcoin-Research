@@ -4,9 +4,9 @@
 
 #include "amount.h"
 #include "key.h"
-#include "main.h"
 #include "gridcoin/claim.h"
 #include "util.h"
+#include "primitives/transaction.h"
 
 using namespace GRC;
 
