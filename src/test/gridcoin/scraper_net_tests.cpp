@@ -216,4 +216,40 @@ BOOST_AUTO_TEST_CASE(unserializecheck_refuses_a_reference_one_past_the_end)
     BOOST_CHECK(manifest->UnserializeCheck(ss, banscore) == false);
 }
 
+//!
+//! The dentry vector is bounded at its length prefix too. Without it a manifest
+//! is limited only by the message ceiling, and a dentry costs about 20 bytes on
+//! the wire against roughly 88 resident, so deserializing amplifies ~4.4x.
+//!
+BOOST_AUTO_TEST_CASE(unserializecheck_refuses_too_many_projects)
+{
+    // One part, and one dentry too many -- all referencing part 0, so nothing
+    // but the project cap can be what rejects this.
+    CDataStream ss = ManifestPrefix(1, 0, std::vector<int>(1025, 0));
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+    unsigned int banscore = 0;
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    BOOST_CHECK(manifest->UnserializeCheck(ss, banscore) == false);
+}
+
+//!
+//! The boundary from the other side: exactly at the cap is admitted, and fails
+//! later on the truncated stream instead. That pins the ceiling at 1020 rather
+//! than 1023.
+//!
+BOOST_AUTO_TEST_CASE(unserializecheck_admits_projects_at_the_cap)
+{
+    CDataStream ss = ManifestPrefix(1, 0, std::vector<int>(1024, 0));
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+    unsigned int banscore = 0;
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    BOOST_CHECK_THROW((void)manifest->UnserializeCheck(ss, banscore), std::ios_base::failure);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

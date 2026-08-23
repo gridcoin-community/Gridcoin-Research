@@ -57,6 +57,34 @@ namespace {
 //! to hold.
 constexpr uint64_t MAX_MANIFEST_PART_HASHES = 1024;
 
+//! \brief Maximum number of project entries a manifest may declare.
+//!
+//! The companion to MAX_MANIFEST_PART_HASHES, and deliberately the same value
+//! rather than a second magic number: a manifest cannot carry more dentries than
+//! it carries parts. The publisher emits exactly one part per dentry plus one for
+//! the beacon list (partc and BeaconList_c are hardcoded 0), so parts =
+//! dentries + 1.
+//!
+//! Which means the effective headroom is a little under the constant, and that
+//! is the number worth remembering when judging whether this is generous:
+//!
+//!     1024 parts  ->  1023 dentries  ->  ~1020 real projects
+//!
+//! because three of the dentries are the injected pseudo-projects --
+//! VerifiedBeacons, ProjectsAllCpidTotalCredits and ProjectPublicKeys -- which
+//! ride in this vector without being whitelist entries. Against a current
+//! whitelist of 17-18, that is roughly sixty times over.
+//!
+//! Bounds the ALLOCATION, and has to be a flat constant for the same reason the
+//! part-hash cap is: nMaxProjects below is derived from the whitelist and gated
+//! on !OutOfSyncByAge(), so it is not in force during initial sync, which is
+//! when this needs to hold.
+//!
+//! Without it a dentry vector is bounded only by the message ceiling, and a
+//! dentry costs about 20 bytes on the wire against roughly 88 resident -- two
+//! std::string plus scalars -- so the deserialization amplifies about 4.4x.
+constexpr uint64_t MAX_MANIFEST_PROJECTS = MAX_MANIFEST_PART_HASHES;
+
 //! \brief Maximum wire size of a single part.
 //!
 //! Deliberately coarse, and NOT the real bound. The precise limit is on the
@@ -638,7 +666,29 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
 
     ss >> ConsensusBlock;
     ss >> BeaconList >> BeaconList_c;
-    ss >> projects;
+    {
+        // Read by hand for the same reason as the part-hash vector above: the
+        // default vector deserializer allocates against the declared count
+        // before reading what backs it, so only a check on the CompactSize
+        // prefix prevents the allocation.
+        const uint64_t project_count = ReadCompactSize(ss);
+
+        if (project_count > MAX_MANIFEST_PROJECTS) {
+            // banscore_out is deliberately NOT set here, unlike the part-hash
+            // cap. That one runs before anything has written it;
+            // IsManifestAuthorized() has already run by this point and may have
+            // recorded a verdict, so assigning would override a decision
+            // already made.
+            return error("CScraperManifest::UnserializeCheck: manifest declares %u projects, "
+                         "maximum is %u", project_count, MAX_MANIFEST_PROJECTS);
+        }
+
+        projects.resize(project_count);
+
+        for (dentry& project_entry : projects) {
+            ss >> project_entry;
+        }
+    }
 
     // Reference validity. The comparison is >= rather than >: the ranges are
     // inclusive, so partc == 0 names exactly one part and a reference ending at
