@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include <limits>
 #include "netbase.h"
 #include "util.h"
 #include "sync.h"
@@ -271,20 +272,39 @@ bool static Socks5(string strDest, int port, SOCKET& hSocket)
         closesocket(hSocket);
         return error("Error: malformed proxy response");
     }
-    char pchRet3[256];
+    // uint8_t, not char. For the 0x03 (domain name) reply the length is taken
+    // from the first byte below, and char is signed on the platforms this
+    // matters for: a proxy returning a length byte of 0x80 or above produced a
+    // NEGATIVE nRecv, which POSIX recv() takes as size_t and treats as enormous.
+    // Measured effect was 144 bytes written past this buffer, attacker-sized and
+    // attacker-controlled, with the process exiting 0 and no error returned.
+    // Windows escapes it only by accident: winsock's recv takes int, so a
+    // negative length returns WSAEFAULT and writes nothing.
+    //
+    // With uint8_t the byte is 0..255 and cannot exceed the buffer, which is what
+    // the static_assert below pins -- the safety is a property of the two
+    // declarations together, not of a range check somewhere else.
+    //
+    // The casts are needed because winsock declares recv as taking char*; POSIX
+    // takes void* and would not need them.
+    uint8_t pchRet3[256];
+    static_assert(sizeof(pchRet3) > std::numeric_limits<uint8_t>::max(),
+                  "the domain-name length is read from a single byte, so the buffer "
+                  "must be larger than any value that byte can hold");
+
     switch (pchRet2[3])
     {
-        case 0x01: ret = recv(hSocket, pchRet3, 4, 0) != 4; break;
-        case 0x04: ret = recv(hSocket, pchRet3, 16, 0) != 16; break;
+        case 0x01: ret = recv(hSocket, (char*)pchRet3, 4, 0) != 4; break;
+        case 0x04: ret = recv(hSocket, (char*)pchRet3, 16, 0) != 16; break;
         case 0x03:
         {
-            ret = recv(hSocket, pchRet3, 1, 0) != 1;
+            ret = recv(hSocket, (char*)pchRet3, 1, 0) != 1;
             if (ret) {
                 closesocket(hSocket);
                 return error("Error reading from proxy");
             }
             int nRecv = pchRet3[0];
-            ret = recv(hSocket, pchRet3, nRecv, 0) != nRecv;
+            ret = recv(hSocket, (char*)pchRet3, nRecv, 0) != nRecv;
             break;
         }
         default: closesocket(hSocket); return error("Error: malformed proxy response");
@@ -294,7 +314,7 @@ bool static Socks5(string strDest, int port, SOCKET& hSocket)
         closesocket(hSocket);
         return error("Error reading from proxy");
     }
-    if (recv(hSocket, pchRet3, 2, 0) != 2)
+    if (recv(hSocket, (char*)pchRet3, 2, 0) != 2)
     {
         closesocket(hSocket);
         return error("Error reading from proxy");
