@@ -130,7 +130,8 @@ namespace {
 //! and a chainless test process is out of sync by age, which skips
 //! authorization.
 CDataStream ManifestPrefix(size_t part_count, int beacon_list,
-                           const std::vector<int>& project_part1s)
+                           const std::vector<int>& project_part1s,
+                           const std::vector<unsigned>& project_partcs = {})
 {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
 
@@ -140,11 +141,11 @@ CDataStream ManifestPrefix(size_t part_count, int beacon_list,
     }
 
     std::vector<CScraperManifest::dentry> projects;
-    for (const int p : project_part1s) {
+    for (size_t i = 0; i < project_part1s.size(); ++i) {
         CScraperManifest::dentry d;
         d.project = "project";
-        d.part1 = p;
-        d.partc = 0;
+        d.part1 = project_part1s[i];
+        d.partc = i < project_partcs.size() ? project_partcs[i] : 0;
         projects.push_back(d);
     }
 
@@ -159,6 +160,53 @@ CDataStream ManifestPrefix(size_t part_count, int beacon_list,
     return ss;
 }
 } // anonymous namespace
+
+//!
+//! A negative part reference is refused.
+//!
+//! dentry::part1 and BeaconList are int and default to -1; partc and
+//! BeaconList_c are unsigned. Written as `part1 + partc >= vph.size()` the
+//! addition converts part1 to unsigned first, so part1 = -1 with partc = 1
+//! wraps to 0 and passes. The coverage loop does not catch it either: an
+//! unsigned induction variable starting at -1 begins at 0xFFFFFFFF, fails its
+//! condition immediately and marks nothing, so the manifest still reads as
+//! fully covered when its other references cover every part.
+//!
+//! An accepted manifest then carries a dentry with part1 = -1, and
+//! quorum.cpp bounds that index only from above while scraper.cpp does not
+//! bound it at all -- vParts[-1], dereferenced.
+//!
+BOOST_AUTO_TEST_CASE(unserializecheck_refuses_a_negative_part_reference)
+{
+    // Two parts, both covered legitimately: the beacon list takes 0 and the
+    // first project takes 1. The second project is the malformed one, and its
+    // wrapped range contributes no coverage, so coverage alone cannot reject it.
+    CDataStream ss = ManifestPrefix(2, 0, {1, -1}, {0, 1});
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+    unsigned int banscore = 0;
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    // Must be a clean refusal. Before the fix this got past the range check and
+    // the coverage rule and reached the truncated stream, throwing instead.
+    BOOST_CHECK(manifest->UnserializeCheck(ss, banscore) == false);
+}
+
+//!
+//! The beacon list is int as well, and takes the same treatment.
+//!
+BOOST_AUTO_TEST_CASE(unserializecheck_refuses_a_negative_beacon_reference)
+{
+    CDataStream ss = ManifestPrefix(2, -1, {0, 1});
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+    unsigned int banscore = 0;
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    BOOST_CHECK(manifest->UnserializeCheck(ss, banscore) == false);
+}
 
 //!
 //! A part declared but referenced by nothing is refused. Without this a manifest

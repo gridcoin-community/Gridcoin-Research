@@ -123,10 +123,9 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     * notify object or ignore if no object found
     * erase from mapAlreadyAskedFor
     */
-    // An empty part carries no data and can never satisfy a manifest's part
-    // list. Receiving one is a peer or filesystem condition, not a programming
-    // error, so discard it rather than aborting: the caller reports the failure
-    // and a peer that sent it earns the same banscore as a spurious part.
+    // Bound the part before anything touches its contents. Hashing and storing
+    // are both proportional to size, and nothing upstream of here limits what a
+    // peer may send in a single part message.
     if (vRecv.size() > MAX_PART_WIRE_BYTES)
     {
         if (pfrom)
@@ -141,6 +140,10 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
         return error("Oversized part received!");
     }
 
+    // An empty part carries no data and can never satisfy a manifest's part
+    // list. Receiving one is a peer or filesystem condition, not a programming
+    // error, so discard it rather than aborting: the caller reports the failure
+    // and a peer that sent it earns the same banscore as a spurious part.
     if (vRecv.empty())
     {
         if (pfrom)
@@ -697,17 +700,30 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     // that value here is not harmless. An empty vph is rejected by the same
     // comparison, which is correct: a manifest with no parts carries nothing.
     //
-    // Negative values are rejected too. BeaconList and part1 are int and default
-    // to -1; the int/unsigned comparison promotes them, so an unset index
-    // becomes a very large unsigned and trips the check.
-    if (BeaconList + BeaconList_c >= vph.size())
+    // Negative starts are rejected EXPLICITLY, and the range arithmetic is done
+    // in int64_t.
+    //
+    // BeaconList and part1 are int (default -1) while BeaconList_c and partc are
+    // unsigned. Writing this as `part1 + partc >= vph.size()` converts part1 to
+    // unsigned before the addition, so part1 = -1 with partc = 1 wraps to 0 and
+    // PASSES -- and the coverage loop below, iterating an unsigned i from
+    // 0xFFFFFFFF, contributes nothing, so the manifest can still be fully
+    // covered by its other references. The result is an accepted manifest whose
+    // dentry holds part1 = -1, and quorum.cpp guards only the upper bound while
+    // scraper.cpp does not guard at all: vParts[-1], dereferenced.
+    //
+    // int64_t holds every int and every unsigned, so no operand is converted and
+    // a negative start stays negative.
+    if (BeaconList < 0
+        || static_cast<int64_t>(BeaconList) + BeaconList_c >= static_cast<int64_t>(vph.size()))
     {
         return error("CScraperManifest::UnserializeCheck: beacon part out of range");
     }
 
     for (const dentry& prj : projects)
     {
-        if (prj.part1 + prj.partc >= vph.size())
+        if (prj.part1 < 0
+            || static_cast<int64_t>(prj.part1) + prj.partc >= static_cast<int64_t>(vph.size()))
         {
             return error("CScraperManifest::UnserializeCheck: project part out of range");
         }
@@ -739,16 +755,23 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
         // fire today -- but it is what stands between a weakened check up there
         // and an out-of-bounds write down here, and an index that is skipped
         // simply reads as uncovered and is rejected below.
-        for (unsigned int i = BeaconList; i <= BeaconList + BeaconList_c && i < referenced.size(); ++i)
+        // int64_t for the same reason as the range checks above: an unsigned
+        // induction variable starting from a negative index begins at
+        // 0xFFFFFFFF, fails its own condition immediately, and silently marks
+        // nothing -- which reads as "covered by something else" rather than as
+        // the malformed reference it is.
+        for (int64_t i = BeaconList; i <= static_cast<int64_t>(BeaconList) + BeaconList_c
+                                     && i < static_cast<int64_t>(referenced.size()); ++i)
         {
-            referenced[i] = true;
+            if (i >= 0) referenced[i] = true;
         }
 
         for (const dentry& prj : projects)
         {
-            for (unsigned int i = prj.part1; i <= prj.part1 + prj.partc && i < referenced.size(); ++i)
+            for (int64_t i = prj.part1; i <= static_cast<int64_t>(prj.part1) + prj.partc
+                                        && i < static_cast<int64_t>(referenced.size()); ++i)
             {
-                referenced[i] = true;
+                if (i >= 0) referenced[i] = true;
             }
         }
 
