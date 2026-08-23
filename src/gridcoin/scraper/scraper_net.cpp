@@ -666,6 +666,26 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
                       std::max(0.5, CONVERGENCE_BY_PROJECT_RATIO)) + 2);
     }
 
+    // KNOWN MISMATCH, not fixed here: the two sides of this comparison count
+    // different things. projects.size() counts every dentry, which includes the
+    // pseudo-projects the publisher injects -- VerifiedBeacons,
+    // ProjectsAllCpidTotalCredits and ProjectPublicKeys (scraper.cpp:4888, 5040,
+    // 5077) -- while nMaxProjects is derived from the whitelist alone, and none
+    // of the three is a whitelist entry.
+    //
+    // The +2 and the divisor exist to tolerate the whitelist SHRINKING between
+    // the publisher's snapshot and the receiver's without banning an honest
+    // scraper. The pseudo-projects spend that tolerance instead. Measured on
+    // mainnet: projects.size() = 19 against nMaxProjects = 24-25, so of a 5-6
+    // margin, 3 is consumed by dentries the formula never accounted for. Every
+    // pseudo-project added in future narrows it again, and the trip disposition
+    // here is an immediate ban at -banscore, not a soft rejection.
+    //
+    // Correcting it means either excluding the pseudo-projects from the count or
+    // widening nMaxProjects to admit them, and either changes when a node bans a
+    // peer. Nodes on different sides of that change would disagree about which
+    // manifests are acceptable, so it needs a version gate to roll over
+    // together; it is deliberately left alone in an ungated change.
     if (!OutOfSyncByAge() && projects.size() > nMaxProjects)
     {
         // Immediately ban the node from which the manifest was received.
