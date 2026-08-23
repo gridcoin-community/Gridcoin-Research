@@ -233,7 +233,17 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
 int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
 {
     std::string str;
-    std::getline(stream, str);
+
+    // Bounded, for the same reason the request line is. This is the FIRST thing
+    // the CLI reads from an endpoint, ahead of the bounded headers and body, so
+    // an unbounded getline here means the response ceiling those enforce can be
+    // walked around entirely: a hostile or broken endpoint streams a status line
+    // and never sends a newline.
+    bool overlong = false;
+    if (!ReadLineBounded(stream, str, MAX_HTTP_HEADER_LINE_BYTES, overlong)) {
+        return HTTP_INTERNAL_SERVER_ERROR;
+    }
+
     std::vector<std::string> vWords;
     vWords = SplitString(str, ' ');
     if (vWords.size() < 2)

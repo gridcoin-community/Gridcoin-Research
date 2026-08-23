@@ -51,54 +51,6 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
     // Loopback only warns. Crossing a network refuses outright -- that is where
     // the credentials are actually exposed, and continuing silently would be a
     // downgrade the operator did not ask for and cannot see.
-    // GetBoolArg, not IsArgSet. IsArgSet is true for "rpcssl=0" and for
-    // "-norpcssl" -- configurations that explicitly turned TLS OFF -- and
-    // treating those as a request for encryption would refuse remote CLI calls
-    // from operators who never wanted it. Presence is not intent.
-    if (gArgs.GetBoolArg("-rpcssl", false)) {
-        const std::string host = gArgs.GetArg("-rpcconnect", "127.0.0.1");
-
-        // Resolve the way the connection itself will, with asio's resolver, and
-        // treat the target as loopback only if EVERY endpoint it yields is.
-        //
-        // A numeric-only check (LookupHost with fAllowLookup=false) gets
-        // "127.0.0.1" right and "localhost" wrong: AI_NUMERICHOST refuses to
-        // resolve a name, so the common loopback spelling would fall through to
-        // the refusal below. Deciding on a different resolution than the one
-        // used to connect is also just wrong in principle -- the address that
-        // matters is the one the credentials actually go to.
-        bool loopback = false;
-        try {
-            ioContext probe_context;
-            asio::ip::tcp::resolver probe(probe_context);
-            const auto endpoints = probe.resolve(
-                host, gArgs.GetArg("-rpcport", ToString(GetDefaultRPCPort())));
-
-            loopback = endpoints.begin() != endpoints.end();
-            for (const auto& ep : endpoints) {
-                if (!ep.endpoint().address().is_loopback()) {
-                    loopback = false;
-                    break;
-                }
-            }
-        } catch (const std::exception&) {
-            // Unresolvable. Fall through to the refusal: we cannot show it is
-            // loopback, and the connection is about to fail anyway.
-            loopback = false;
-        }
-
-        if (loopback) {
-            LogPrintf("WARNING: -rpcssl is no longer supported and is being ignored. This "
-                      "connection to %s is NOT encrypted.\n", host);
-        } else {
-            throw std::runtime_error(strprintf(
-                _("-rpcssl is no longer supported, and -rpcconnect=%s is not a loopback address. "
-                  "Sending RPC credentials to it would transmit them unencrypted. Remove -rpcssl "
-                  "to proceed deliberately, and tunnel the connection (for example over SSH) if it "
-                  "crosses an untrusted network."), host));
-        }
-    }
-
     // Connect to localhost
     ioContext io_context;
     asio::ip::tcp::socket socket(io_context);
@@ -110,10 +62,57 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
 
     std::chrono::seconds deadline = GetTime<std::chrono::seconds>() + std::chrono::seconds{timeout};
 
+    const std::string rpc_host = gArgs.GetArg("-rpcconnect", "127.0.0.1");
+    const std::string rpc_port = gArgs.GetArg("-rpcport", ToString(GetDefaultRPCPort()));
+
+    // GetBoolArg, not IsArgSet: IsArgSet is true for "rpcssl=0" and for
+    // "-norpcssl", configurations that explicitly turned TLS OFF, and treating
+    // those as a request for encryption would refuse remote calls from
+    // operators who never wanted it. Presence is not intent.
+    const bool ssl_requested = gArgs.GetBoolArg("-rpcssl", false);
+
     do {
+        // Resolve ONCE per attempt, and connect to exactly what was resolved.
+        //
+        // -rpcssl is gone, and this path never reaches StartRPCThreads(), so the
+        // warning the daemon logs for it is never seen here. Someone running the
+        // CLI with it set believes this connection is encrypted while Basic-auth
+        // credentials go out in clear text. On loopback that warns; to anything
+        // else it refuses, since that is where the credentials cross a network.
+        //
+        // The endpoints are handed to connect() rather than re-resolved inside
+        // it. Checking one resolution and connecting on another leaves a window
+        // where rotation between the two lookups passes the check with loopback
+        // and then connects somewhere else.
+        boost::asio::ip::tcp::resolver::results_type endpoints;
+        try {
+            asio::ip::tcp::resolver res(io_context);
+            endpoints = res.resolve(rpc_host, rpc_port);
+        } catch (const std::exception&) {
+            endpoints = {};
+        }
+
+        if (ssl_requested) {
+            bool loopback = endpoints.begin() != endpoints.end();
+            for (const auto& ep : endpoints) {
+                if (!ep.endpoint().address().is_loopback()) { loopback = false; break; }
+            }
+
+            if (loopback) {
+                LogPrintf("WARNING: -rpcssl is no longer supported and is being ignored. This "
+                          "connection to %s is NOT encrypted.\n", rpc_host);
+            } else {
+                throw std::runtime_error(strprintf(
+                    _("-rpcssl is no longer supported, and -rpcconnect=%s does not resolve to a "
+                      "loopback address. Sending RPC credentials to it would transmit them "
+                      "unencrypted. Remove -rpcssl to proceed deliberately, and tunnel the "
+                      "connection (for example over SSH) if it crosses an untrusted network."),
+                    rpc_host));
+            }
+        }
+
         // If connection succeeds, immediately break. No need to wait.
-        if (d.connect(gArgs.GetArg("-rpcconnect", "127.0.0.1"),
-                      gArgs.GetArg("-rpcport", ToString(GetDefaultRPCPort())))) {
+        if (d.connect(endpoints)) {
             break;
         }
 

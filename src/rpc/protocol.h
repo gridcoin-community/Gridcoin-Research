@@ -12,6 +12,19 @@
 #include <stdint.h>
 #include <string>
 #include <compat.h>
+
+// MSG_NOSIGNAL does not exist on Darwin or the BSDs -- compat.h only defines a
+// zero fallback under WIN32 -- and those platforms use SO_NOSIGPIPE on the
+// socket instead, which connect() below sets. Without this the header does not
+// compile there at all.
+//
+// Guarded on the SYMBOL, not on HAVE_MSG_NOSIGNAL as net.cpp and netbase.cpp
+// do. Those are translation units and see the generated config first; a header
+// does not necessarily. Testing the config macro made this redefine the real
+// MSG_NOSIGNAL in any TU that reached <sys/socket.h> without the config.
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
 #include <cerrno>
 #include <util/system.h>
 #include <boost/iostreams/concepts.hpp>
@@ -244,12 +257,18 @@ public:
         return n;
     }
 
-    bool connect(const std::string& server, const std::string& port)
+    //! Connect to endpoints the caller has already resolved.
+    //!
+    //! Separate from resolution on purpose. CallRPC has to inspect the resolved
+    //! endpoints before connecting -- to refuse sending credentials in clear to
+    //! a non-loopback target -- and resolving a second time in here would mean
+    //! the addresses that were checked are not necessarily the ones connected
+    //! to. Rotation between the two lookups would walk straight past the check.
+    bool connect(const boost::asio::ip::tcp::resolver::results_type& endpoints)
     {
-        boost::asio::ip::tcp::resolver resolver(GetIOService(stream));
         boost::system::error_code error;
 
-        for (const auto& res : resolver.resolve(server, port)) {
+        for (const auto& res : endpoints) {
             stream.close();
             stream.connect(res, error);
 
