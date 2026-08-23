@@ -123,6 +123,37 @@ BOOST_AUTO_TEST_CASE(entries_are_independent)
 }
 
 // An unparseable entry must not take the rest of the list down with it.
+// A link-local peer stringifies with its zone appended ("fe80::1%2"), which is
+// not a form an operator can put in an entry: the zone is a local interface
+// index, not a property of the peer. Matching has to survive it.
+//
+// It does, and without the allow list doing anything about it: LookupHost()
+// resolves through getaddrinfo(), which parses the zone and reports it
+// separately (see the sin6_scope_id read in netbase.cpp), so the conversion
+// succeeds and the subnet comparison runs on the address alone. Pinned here
+// because that is a property of a dependency rather than of this file, and
+// nothing else would notice if it changed.
+BOOST_AUTO_TEST_CASE(link_local_scope_suffix_does_not_defeat_matching)
+{
+    SetAllowList({"fe80::/10"});
+
+    BOOST_CHECK(Allowed("fe80::1"));
+
+    // The same address, carrying a scope id.
+    boost::system::error_code ec;
+    const auto scoped = boost::asio::ip::make_address("fe80::1%2", ec);
+    BOOST_REQUIRE(!ec);
+
+    // Guard the premise: if this ever stops carrying the zone, the case below
+    // is testing nothing.
+    BOOST_REQUIRE(scoped.to_string().find('%') != std::string::npos);
+
+    BOOST_CHECK(ClientAllowed(scoped));
+
+    // Still outside the prefix, zone or no zone.
+    BOOST_CHECK(!Allowed("fec0::1"));
+}
+
 BOOST_AUTO_TEST_CASE(unparseable_entries_do_not_disable_the_others)
 {
     SetAllowList({"this-is-not-an-address", "10.9.8.0/24"});
