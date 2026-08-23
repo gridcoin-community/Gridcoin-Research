@@ -2454,6 +2454,14 @@ bool AppInit2(ThreadHandlerPtr threads)
         ResendUnbroadcastTransactions();
     }, std::chrono::minutes{12});
 
+    // Sweep expired orphan transactions. The pool's count limit only applies when
+    // something new is inserted, so without this a peer can fill it and go quiet,
+    // leaving it full until unrelated traffic happens to evict entries at random.
+    // Five minutes against a twenty-minute TTL, matching the PSGT pool sweep above.
+    g_scheduler->scheduleEvery([]{
+        ExpireOrphanTransactions(GetAdjustedTime());
+    }, std::chrono::minutes{5});
+
     // Periodically rebroadcast the wallet's own unconfirmed transactions. This
     // was previously driven per-pass from net_processing::SendMessages via the
     // setpwalletRegistered ResendWalletTransactions wrapper; it now self-

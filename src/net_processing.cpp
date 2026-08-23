@@ -141,7 +141,46 @@ void ResendUnbroadcastTransactions()
 
 // Orphan transaction storage. All accesses occur under cs_main from
 // ProcessMessage / AddOrphanTx / EraseOrphanTx / LimitOrphanTxSize.
-map<uint256, CTransaction> mapOrphanTransactions GUARDED_BY(cs_main);
+//! \brief An orphan transaction plus when it arrived.
+//!
+//! The timestamp exists so the pool can be reclaimed on its own. The count limit
+//! below is enforced only when a new orphan is inserted, and an orphan is only
+//! erased when its parent turns up -- so an orphan whose parent never exists sits
+//! there indefinitely, and a peer that fills the pool and then goes SILENT leaves
+//! it full, because nothing else drives eviction.
+struct COrphanTx {
+    CTransaction tx;
+    int64_t time_received;
+};
+
+//! \brief How long an orphan transaction may sit before it is swept.
+//!
+//! 20 minutes, matching OrphanBlockManager::MAX_ORPHAN_AGE_SECONDS and
+//! PSGTPool::ORPHAN_EXPIRY_SECONDS -- the other two orphan pools in this tree --
+//! and upstream's ORPHAN_TX_EXPIRE_TIME.
+//!
+//! WHY SWEEPING THIS POOL IS SAFE, and why the same argument does NOT transfer to
+//! orphan BLOCKS. The obvious objection to any expiry here is that it trades a
+//! denial of service through orphan injection for an inability to converge, by
+//! discarding exactly the material a node needs while the network is forked.
+//! That objection is correct for orphan blocks -- a node reconnecting across a
+//! fork receives blocks out of order and must hold them until the parent arrives
+//! -- and OrphanBlockManager is where it applies. This is a different pool.
+//!
+//! mapOrphanTransactions is reachable only from net_processing: no part of
+//! validation consults it. It is a relay cache for transactions whose inputs we
+//! have not seen yet, not an input to consensus. A block containing a swept
+//! transaction validates identically, because ConnectBlock resolves inputs from
+//! the transaction database rather than from this map, and transactions from
+//! disconnected blocks return through the mempool, not through here.
+//!
+//! So the cost of sweeping too eagerly is a transaction that is not relayed
+//! promptly and is rebroadcast or mined regardless -- not a chain that cannot
+//! reorganise. Before extending expiry to any other orphan store, re-establish
+//! that property for that store; do not carry this conclusion across.
+static constexpr int64_t ORPHAN_TX_EXPIRE_SECONDS = 20 * 60;
+
+map<uint256, COrphanTx> mapOrphanTransactions GUARDED_BY(cs_main);
 map<uint256, set<uint256> > mapOrphanTransactionsByPrev GUARDED_BY(cs_main);
 
 //////////////////////////////////////////////////////////////////////////////
@@ -160,8 +199,9 @@ bool AddOrphanTx(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     // large transaction with a missing parent then we assume
     // it will rebroadcast it later, after the parent transaction(s)
     // have been mined or received.
-    // 10,000 orphans, each of which is at most 5,000 bytes big is
-    // at most 500 megabytes of orphans:
+    // MAX_ORPHAN_TRANSACTIONS is MAX_BLOCK_SIZE/100 = 10,000, and each is at
+    // most 5,000 bytes, so the pool is bounded at ~50 MB -- not the 500 MB this
+    // comment claimed before, which was out by a factor of ten.
 
     size_t nSize = GetSerializeSize(tx, SER_NETWORK, CTransaction::CURRENT_VERSION);
 
@@ -171,7 +211,7 @@ bool AddOrphanTx(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         return false;
     }
 
-    mapOrphanTransactions[hash] = tx;
+    mapOrphanTransactions[hash] = COrphanTx { tx, GetAdjustedTime() };
     for (auto const& txin : tx.vin)
         mapOrphanTransactionsByPrev[txin.prevout.hash].insert(hash);
 
@@ -183,7 +223,7 @@ void static EraseOrphanTx(uint256 hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!mapOrphanTransactions.count(hash))
         return;
-    const CTransaction& tx = mapOrphanTransactions[hash];
+    const CTransaction& tx = mapOrphanTransactions[hash].tx;
     for (auto const& txin : tx.vin)
     {
         mapOrphanTransactionsByPrev[txin.prevout.hash].erase(hash);
@@ -200,13 +240,40 @@ unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans) EXCLUSIVE_LOCKS_REQUIRE
     {
         // Evict a random orphan:
         uint256 randomhash = GetRandHash();
-        map<uint256, CTransaction>::iterator it = mapOrphanTransactions.lower_bound(randomhash);
+        map<uint256, COrphanTx>::iterator it = mapOrphanTransactions.lower_bound(randomhash);
         if (it == mapOrphanTransactions.end())
             it = mapOrphanTransactions.begin();
         EraseOrphanTx(it->first);
         ++nEvicted;
     }
     return nEvicted;
+}
+
+unsigned int ExpireOrphanTransactions(const int64_t now)
+{
+    LOCK(cs_main);
+
+    unsigned int expired = 0;
+
+    for (auto it = mapOrphanTransactions.begin(); it != mapOrphanTransactions.end(); ) {
+        if (now - it->second.time_received > ORPHAN_TX_EXPIRE_SECONDS) {
+            const uint256 hash = it->first;
+
+            // EraseOrphanTx invalidates the iterator, so advance past it first.
+            ++it;
+            EraseOrphanTx(hash);
+            ++expired;
+        } else {
+            ++it;
+        }
+    }
+
+    if (expired > 0) {
+        LogPrint(BCLog::LogFlags::MEMPOOL, "ExpireOrphanTransactions: swept %u orphans, %" PRIszu " remaining",
+                 expired, mapOrphanTransactions.size());
+    }
+
+    return expired;
 }
 
 bool static AlreadyHave(CTxDB& txdb, const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -1028,7 +1095,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                      ++mi)
                 {
                     const uint256& orphanTxHash = *mi;
-                    CTransaction& orphanTx = mapOrphanTransactions[orphanTxHash];
+                    CTransaction& orphanTx = mapOrphanTransactions[orphanTxHash].tx;
                     CValidationState orphan_state;
                     bool fMissingInputs2 = false;
 

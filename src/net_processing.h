@@ -41,6 +41,22 @@ void RemoveFromRelayMemory(const uint256& hash);
 //! see the definition for the lock-order rationale).
 void ResendUnbroadcastTransactions();
 
+//! \brief Sweep orphan transactions past ORPHAN_TX_EXPIRE_SECONDS.
+//!
+//! The orphan pool's count limit is applied only when a new orphan is inserted,
+//! and an orphan is otherwise erased only when its parent arrives. A peer that
+//! fills the pool and then stops sending therefore leaves it full indefinitely.
+//! This gives reclamation a driver that does not depend on further traffic.
+//!
+//! Takes cs_main. Safe from the scheduler thread, which holds no per-node locks.
+//!
+//! \return the number of orphans swept.
+//! \param now  Current adjusted time; taken as a parameter rather than read
+//!             internally, matching OrphanBlockManager::EraseExpired and
+//!             PSGTPool::EraseExpired, and so that it is testable without
+//!             mocking the clock for the sweep itself.
+unsigned int ExpireOrphanTransactions(const int64_t now);
+
 //! Relay a pooled PSGT revision (#2910) to peers on PSGT_PROTO_VERSION or
 //! later. The object itself is served from the PSGT pool by the getdata loop.
 void RelayPSGT(const uint256& revision_hash);
