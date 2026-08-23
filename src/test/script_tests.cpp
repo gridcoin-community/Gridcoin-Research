@@ -644,9 +644,9 @@ BOOST_AUTO_TEST_CASE(maxsigcachesize_is_resolved_and_clamped)
 
     // Exactly at the ceiling is allowed; one over is clamped, as is an
     // absurd value of the shape a mistyped config produces.
-    gArgs.ForceSetArg("-maxsigcachesize", std::to_string(MAX_SIG_CACHE_ENTRIES));
+    gArgs.ForceSetArg("-maxsigcachesize", ToString(MAX_SIG_CACHE_ENTRIES));
     BOOST_CHECK_EQUAL(ResolveMaxSigCacheSize(), MAX_SIG_CACHE_ENTRIES);
-    gArgs.ForceSetArg("-maxsigcachesize", std::to_string(MAX_SIG_CACHE_ENTRIES + 1));
+    gArgs.ForceSetArg("-maxsigcachesize", ToString(MAX_SIG_CACHE_ENTRIES + 1));
     BOOST_CHECK_EQUAL(ResolveMaxSigCacheSize(), MAX_SIG_CACHE_ENTRIES);
     gArgs.ForceSetArg("-maxsigcachesize", "500000000");
     BOOST_CHECK_EQUAL(ResolveMaxSigCacheSize(), MAX_SIG_CACHE_ENTRIES);
