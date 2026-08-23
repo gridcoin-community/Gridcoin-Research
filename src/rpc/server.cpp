@@ -907,7 +907,14 @@ static bool StartRPCListenersOn(const std::vector<std::string>& binds, std::stri
             acceptor->set_option(ip::tcp::acceptor::reuse_address(true));
 
             // One address per acceptor, so never dual-stack: a v6 entry binds v6
-            // only. Otherwise binding both "::" and "0.0.0.0" would collide.
+            // only. Otherwise listing both "::" and "0.0.0.0" -- the natural way
+            // to ask for both families explicitly -- would collide on the second
+            // bind.
+            //
+            // Note this differs from the implicit path below, which sets
+            // v6_only(loopback) and so gives a dual-stack socket for the
+            // wildcard. Moving from -rpcallowip alone to -rpcbind=:: therefore
+            // drops IPv4 unless 0.0.0.0 is listed too; the help text says so.
             if (addr.is_v6()) {
                 boost::system::error_code v6_ec;
                 acceptor->set_option(ip::v6_only(true), v6_ec);

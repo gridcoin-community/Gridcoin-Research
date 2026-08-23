@@ -930,8 +930,10 @@ void SetupServerArgs()
                    "opens the RPC port on all interfaces",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcbind=<addr>[:port]", "Bind the JSON-RPC listener to the given address, "
-                   "optionally on a specific port. May be given more than once. When unset the "
-                   "listener uses loopback, or all interfaces if -rpcallowip is set",
+                   "optionally on a specific port. May be given more than once. Each entry binds "
+                   "exactly what it names, so an IPv6 entry does NOT also accept IPv4 -- pass both "
+                   "-rpcbind=:: and -rpcbind=0.0.0.0 to listen on each. When unset the listener "
+                   "uses loopback, or all interfaces (dual-stack) if -rpcallowip is set",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcconnect=<ip>", "Send commands to node running on <ip> (default: 127.0.0.1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
