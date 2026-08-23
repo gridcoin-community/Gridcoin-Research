@@ -54,9 +54,34 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
     if (gArgs.IsArgSet("-rpcssl")) {
         const std::string host = gArgs.GetArg("-rpcconnect", "127.0.0.1");
 
-        CNetAddr target;
-        const bool resolved = LookupHost(host.c_str(), target, false);
-        const bool loopback = resolved && target.IsLocal();
+        // Resolve the way the connection itself will, with asio's resolver, and
+        // treat the target as loopback only if EVERY endpoint it yields is.
+        //
+        // A numeric-only check (LookupHost with fAllowLookup=false) gets
+        // "127.0.0.1" right and "localhost" wrong: AI_NUMERICHOST refuses to
+        // resolve a name, so the common loopback spelling would fall through to
+        // the refusal below. Deciding on a different resolution than the one
+        // used to connect is also just wrong in principle -- the address that
+        // matters is the one the credentials actually go to.
+        bool loopback = false;
+        try {
+            ioContext probe_context;
+            asio::ip::tcp::resolver probe(probe_context);
+            const auto endpoints = probe.resolve(
+                host, gArgs.GetArg("-rpcport", ToString(GetDefaultRPCPort())));
+
+            loopback = endpoints.begin() != endpoints.end();
+            for (const auto& ep : endpoints) {
+                if (!ep.endpoint().address().is_loopback()) {
+                    loopback = false;
+                    break;
+                }
+            }
+        } catch (const std::exception&) {
+            // Unresolvable. Fall through to the refusal: we cannot show it is
+            // loopback, and the connection is about to fail anyway.
+            loopback = false;
+        }
 
         if (loopback) {
             LogPrintf("WARNING: -rpcssl is no longer supported and is being ignored. This "

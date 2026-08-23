@@ -111,6 +111,22 @@ constexpr size_t MAX_MANIFEST_STRING_BYTES = 1024;
 //! compressed under pessimistic assumptions -- because tripping this rejects an
 //! honest scraper's part and breaks convergence. It is still half the 32 MiB
 //! wire ceiling it replaces for this message type.
+//! NOT an aggregate bound, and that gap is deliberate rather than overlooked.
+//! This caps one part. A manifest may reference MAX_MANIFEST_PART_HASHES of
+//! them, so a single accepted manifest can still retain 1024 * 16 MB of
+//! compressed part data in the process-global mapParts, and manifests are
+//! bounded by SCRAPER_CMANIFEST_RETENTION_TIME -- by age, not by count.
+//!
+//! Closing that needs a retention budget with an eviction policy, and eviction
+//! is the hard part: dropping a part breaks the manifest that references it, so
+//! the policy has to interact correctly with convergence rather than simply
+//! reclaiming the largest thing it can find. That is a design change, not a
+//! bound, and it is tracked separately.
+//!
+//! What is true here: an attacker must actually transmit every byte they want
+//! retained, this cap halves what each one buys them relative to the 32 MiB
+//! wire ceiling it replaces, and before it existed there was no per-part limit
+//! at all.
 constexpr size_t MAX_PART_WIRE_BYTES = 16 * 1024 * 1024;
 
 //! \brief The double-SHA256 of zero-length content.
