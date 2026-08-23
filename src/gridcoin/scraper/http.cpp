@@ -53,7 +53,23 @@ namespace
     }
 
     typedef std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> ScopedCurl;
-    typedef std::unique_ptr<FILE, decltype(&fclose)> ScopedFile;
+    //! \brief Deleter for ScopedFile.
+    //!
+    //! A functor rather than decltype(&fclose). glibc declares fclose with
+    //! attributes, and those are dropped when the function pointer type is used
+    //! as a template argument, which -Wignored-attributes reports. A functor
+    //! type carries no attributes, so the warning has nothing to discard, and it
+    //! also lets unique_ptr stay pointer-sized instead of storing a deleter
+    //! beside the handle. ScopedCurl above needs no equivalent:
+    //! curl_easy_cleanup carries no such attributes.
+    //!
+    //! unique_ptr only invokes the deleter for a non-null pointer, so fclose is
+    //! never handed one.
+    struct FileCloser {
+        void operator()(FILE* file) const { fclose(file); }
+    };
+
+    typedef std::unique_ptr<FILE, FileCloser> ScopedFile;
 
     ScopedCurl GetContext()
     {
@@ -132,7 +148,7 @@ void Http::Download(
         const fs::path &destination,
         const std::string &userpass)
 {
-    ScopedFile fp(fsbridge::fopen(destination, "wb"), &fclose);
+    ScopedFile fp(fsbridge::fopen(destination, "wb"));
     if (!fp)
         throw std::runtime_error(
                 tfm::strformat("Error opening target %s: %s (%d)", destination, strerror(errno), errno));
