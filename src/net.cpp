@@ -9,6 +9,7 @@
 
 #include "wallet/db.h"
 #include "banman.h"
+#include "consensus/consensus.h"
 #include "net.h"
 #include "node/shutdown.h"
 #include "net_processing.h"
@@ -86,7 +87,13 @@ CCriticalSection cs_vAddedNodes;
 vector<std::string> vAddedNodes GUARDED_BY(cs_vAddedNodes);
 
 CCriticalSection cs_mapAlreadyAskedFor;
-map<CInv, int64_t> mapAlreadyAskedFor GUARDED_BY(cs_mapAlreadyAskedFor);
+// Bounded at MAX_INV_SZ, the same ceiling upstream used, and the same number a
+// single peer can announce in one inv message. The map is global, so without a
+// bound one peer announcing inventory it never serves grows state charged to
+// every peer: entries are only removed on receipt. limitedmap evicts the lowest
+// value first, and the value here is the request time, so the oldest unfulfilled
+// request is what goes.
+limitedmap<CInv, int64_t> mapAlreadyAskedFor GUARDED_BY(cs_mapAlreadyAskedFor){MAX_INV_SZ};
 
 CCriticalSection cs_vOneShots;
 static deque<string> vOneShots GUARDED_BY(cs_vOneShots);

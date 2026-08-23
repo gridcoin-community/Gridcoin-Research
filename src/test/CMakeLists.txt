@@ -47,6 +47,7 @@ add_executable(test_gridcoin
     gridcoin/superblock_tests.cpp
     interfaces_tests.cpp
     key_tests.cpp
+    limitedmap_tests.cpp
     merkle_tests.cpp
     merkleblock_tests.cpp
     mruset_tests.cpp

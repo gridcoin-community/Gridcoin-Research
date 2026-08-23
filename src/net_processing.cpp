@@ -1622,9 +1622,9 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
             // request is satisfied and we should not reinsert it.
             {
                 LOCK(cs_mapAlreadyAskedFor);
-                auto it = mapAlreadyAskedFor.find(inv);
+                const auto it = mapAlreadyAskedFor.find(inv);
                 if (it != mapAlreadyAskedFor.end()) {
-                    it->second = nNow;
+                    mapAlreadyAskedFor.update(it, nNow);
                 }
             }
         }
