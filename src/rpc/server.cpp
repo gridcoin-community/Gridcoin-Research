@@ -71,6 +71,15 @@ static bool g_rpc_connections_stopped = false;
 //! Returns false if the server is already shutting down, in which case the
 //! caller must not service the connection (there is no worker-drain left to
 //! wake it).
+//!
+//! Deliberately no connection ceiling here. It would be unreachable: this runs
+//! from RPCAcceptHandler, which is an asio completion handler dispatched by the
+//! workers' io_context::run() and which calls ServiceConnection() synchronously,
+//! so a worker is occupied from accept through service and the size of this set
+//! can never exceed -rpcthreads. A cap above that number can never be hit, and a
+//! cap below it is just a smaller thread count. What actually bounds a hostile
+//! client is the socket deadline applied before servicing; further connections
+//! wait in the kernel accept backlog, not here.
 static bool RegisterRPCConnection(AcceptedConnection* conn)
 {
     std::lock_guard<std::mutex> lock(g_rpc_connections_mutex);
@@ -85,6 +94,47 @@ static void UnregisterRPCConnection(AcceptedConnection* conn)
 {
     std::lock_guard<std::mutex> lock(g_rpc_connections_mutex);
     g_rpc_connections.erase(conn);
+}
+
+//! Put a receive and send deadline on an accepted RPC socket.
+//!
+//! The servicing model is one blocking read per worker thread, so the deadline
+//! has to live on the socket rather than in an asio timer: there is no event
+//! loop watching a worker that is parked inside read(). SO_RCVTIMEO makes that
+//! read return an error instead of waiting forever, which the stream device
+//! already reports as end of sequence, so the worker closes the connection and
+//! moves on with no further plumbing.
+static void SetRPCSocketTimeouts(boost::asio::ip::tcp::socket& socket)
+{
+    const int seconds = gArgs.GetArg("-rpcservertimeout", DEFAULT_RPC_SERVER_TIMEOUT);
+    if (seconds <= 0) return;  // explicitly disabled
+
+    // Asio may have left the accepted descriptor non-blocking; a deadline only
+    // means anything on a blocking socket, and the stream device reads it with
+    // recv(2) directly.
+    boost::system::error_code ec;
+    socket.non_blocking(false, ec);
+    socket.native_non_blocking(false, ec);
+
+    const auto fd = socket.native_handle();
+
+#ifdef WIN32
+    DWORD tv = static_cast<DWORD>(seconds) * 1000;
+    const char* val = reinterpret_cast<const char*>(&tv);
+    const int len = sizeof(tv);
+#else
+    struct timeval tv;
+    tv.tv_sec = seconds;
+    tv.tv_usec = 0;
+    const void* val = &tv;
+    const socklen_t len = sizeof(tv);
+#endif
+
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, val, len) != 0
+        || setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, val, len) != 0) {
+        // Not fatal: the connection still works, it just has no deadline.
+        LogPrintf("RPC: WARNING - could not set a %ds timeout on an accepted connection\n", seconds);
+    }
 }
 
 const UniValue emptyobj(UniValue::VOBJ);
@@ -790,14 +840,23 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
             // always told why rather than seeing an unexplained closed socket.
             conn->stream() << HTTPReply(HTTP_FORBIDDEN, "", false) << std::flush;
         }
-        // Register before servicing so a concurrent StopRPCThreads() can wake us
-        // out of the blocking read loop. If the server is already stopping,
-        // RegisterRPCConnection() returns false and we skip servicing entirely
-        // rather than park with no drain left to interrupt us (issue #3123).
-        else if (RegisterRPCConnection(conn))
+        else
         {
-            ServiceConnection(conn);
-            UnregisterRPCConnection(conn);
+            // Apply the read/write deadline before servicing. Without it a
+            // client that opens a connection and then sends nothing keeps this
+            // worker blocked in read() for as long as it cares to, and there
+            // are only -rpcthreads of them.
+            if (tcp_conn) SetRPCSocketTimeouts(tcp_conn->socket);
+
+            // Register before servicing so a concurrent StopRPCThreads() can
+            // wake us out of the blocking read loop. If the server is already
+            // stopping we skip servicing entirely rather than park with no
+            // drain left to interrupt us (issue #3123).
+            if (RegisterRPCConnection(conn))
+            {
+                ServiceConnection(conn);
+                UnregisterRPCConnection(conn);
+            }
         }
 
         conn->close();
@@ -1038,6 +1097,7 @@ void StartRPCThreads()
     }
 
     const int nRPCThreads = gArgs.GetArg("-rpcthreads", 4);
+
     rpc_worker_group = new boost::thread_group();
     for (int i = 0; i < nRPCThreads; i++)
         rpc_worker_group->create_thread(boost::bind(&ioContext::run, rpc_io_service));

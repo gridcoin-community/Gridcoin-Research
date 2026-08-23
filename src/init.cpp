@@ -937,6 +937,9 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcthreads=<n>", "Set the number of threads to service RPC calls (default: 4)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcservertimeout=<n>", strprintf("Close an RPC connection that has been idle "
+                   "for this many seconds; 0 disables (default: %d)", DEFAULT_RPC_SERVER_TIMEOUT),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
 
 #if HAVE_DECL_FORK
     argsman.AddArg("-daemon",

@@ -11,6 +11,7 @@
 #include <map>
 #include <stdint.h>
 #include <string>
+#include <compat.h>
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/asio.hpp>
@@ -138,10 +139,23 @@ public:
 
     std::streamsize read(char* s, std::streamsize n)
     {
-        boost::system::error_code ec;
-        const std::size_t bytes = stream.read_some(boost::asio::buffer(s, n), ec);
+        // recv(2) directly rather than stream.read_some().
+        //
+        // The server puts SO_RCVTIMEO on accepted sockets so a silent client
+        // cannot hold a worker thread forever. Asio's synchronous read does not
+        // honour it: on timeout the underlying recv returns EAGAIN, which asio
+        // cannot distinguish from "not ready yet", so it waits on the descriptor
+        // and retries -- the deadline is swallowed and the read blocks anyway.
+        // Verified: with SO_RCVTIMEO set and read_some() in this position, an
+        // idle connection was still open after 15s against a 3s deadline.
+        //
+        // Going straight to recv(2) keeps the deadline. The socket is in
+        // blocking mode (SetRPCSocketTimeouts forces it), so a timeout arrives
+        // here as EAGAIN/EWOULDBLOCK and is handled below with every other
+        // error: the connection is finished, report end of sequence.
+        const int bytes = ::recv(stream.native_handle(), s, static_cast<size_t>(n), 0);
 
-        if (!ec) return static_cast<std::streamsize>(bytes);
+        if (bytes > 0) return static_cast<std::streamsize>(bytes);
 
         // Boost.IOStreams signals end of sequence by RETURNING -1. The throwing
         // read_some overload raises boost::system::system_error instead, and this
@@ -162,10 +176,18 @@ public:
 
     std::streamsize write(const char* s, std::streamsize n)
     {
-        boost::system::error_code ec;
-        const std::size_t bytes = boost::asio::write(stream, boost::asio::buffer(s, n), ec);
+        // send(2) directly, for the same reason read() uses recv(2): so
+        // SO_SNDTIMEO is not swallowed by asio's retry loop. Looped because a
+        // single send may accept less than asked.
+        std::streamsize sent = 0;
+        while (sent < n) {
+            const int bytes = ::send(stream.native_handle(), s + sent,
+                                     static_cast<size_t>(n - sent), MSG_NOSIGNAL);
+            if (bytes <= 0) break;
+            sent += bytes;
+        }
 
-        if (!ec) return static_cast<std::streamsize>(bytes);
+        if (sent == n) return sent;
 
         // Same hazard in the other direction: a client that closes before reading
         // the reply gives a broken pipe here, and boost::asio::write's throwing

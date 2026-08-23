@@ -31,6 +31,11 @@ class RPCHelpMan;
 //! Parse -rpcallowip into the RPC allow list. Called by StartRPCThreads().
 //! The overload taking entries does the parsing and is what tests drive; the
 //! no-argument form supplies them from gArgs.
+//! Idle deadline for a serviced RPC connection, in seconds. One connection
+//! pins one worker thread, so this is what bounds how long a silent client can
+//! hold one of only -rpcthreads of them.
+static constexpr int DEFAULT_RPC_SERVER_TIMEOUT = 30;
+
 void InitRPCAllowList(const std::vector<std::string>& entries);
 void InitRPCAllowList();
 
