@@ -3883,6 +3883,18 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeD
 //! consumed an entire superblock gives the ceiling on records any one part could
 //! legitimately carry.
 //!
+//! Note this is the ceiling ITSELF, not the ceiling plus a margin. A part
+//! carrying the largest record count the superblock format admits sits exactly
+//! at this limit rather than comfortably under it. That is deliberate -- the
+//! figure means something precise, and padding it would make it mean nothing in
+//! particular -- and it is tolerable because the live count is smaller by orders
+//! of magnitude: the bound is on what the FORMAT permits, not on what the
+//! network produces. Anything approaching it is already anomalous.
+//!
+//! The corollary matters when reading a rejection: tripping this is not "a
+//! slightly oversized part", it is a part claiming more CPIDs than a whole
+//! superblock could ever represent.
+//!
 //! Derived rather than hardcoded so it cannot silently disagree with
 //! Superblock::MAX_SIZE. That is convenience, NOT a guarantee: if that basis
 //! changes, re-derive rather than assume this still holds -- the per-record width
