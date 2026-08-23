@@ -162,6 +162,38 @@ CDataStream ManifestPrefix(size_t part_count, int beacon_list,
 } // anonymous namespace
 
 //!
+//! A manifest string field is bounded at its length prefix.
+//!
+//! sCManifestName, and each dentry's project and ETag, deserialize as plain
+//! std::string, which sizes the string from a declared CompactSize BEFORE
+//! reading anything back. So a message a few bytes long can declare 32 MiB and
+//! cost that allocation. Capping the number of dentries does nothing about it --
+//! one dentry is enough.
+//!
+BOOST_AUTO_TEST_CASE(unserializecheck_refuses_an_oversized_manifest_string)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+
+    std::vector<uint256> vph(1);
+    vph[0] = Hash(std::vector<unsigned char>{1});
+
+    ss << vph;
+    ss << CPubKey();
+
+    // sCManifestName: a declared length far past the cap, with no data behind
+    // it. Unbounded, this sizes a 32 MiB string before discovering the stream is
+    // empty.
+    WriteCompactSize(ss, 32 * 1024 * 1024);
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+    unsigned int banscore = 0;
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    BOOST_CHECK_THROW((void)manifest->UnserializeCheck(ss, banscore), std::ios_base::failure);
+}
+
+//!
 //! A negative part reference is refused.
 //!
 //! dentry::part1 and BeaconList are int and default to -1; partc and
@@ -285,8 +317,11 @@ BOOST_AUTO_TEST_CASE(unserializecheck_refuses_too_many_projects)
 
 //!
 //! The boundary from the other side: exactly at the cap is admitted, and fails
-//! later on the truncated stream instead. That pins the ceiling at 1020 rather
-//! than 1023.
+//! later on the truncated stream instead. The cap is MAX_MANIFEST_PROJECTS,
+//! i.e. 1024 dentries, which is what this pins. (The often-quoted "~1020
+//! projects" is a downstream consequence of that ceiling, not the ceiling
+//! itself: 1024 parts allows 1023 dentries once the beacon list takes one, and
+//! roughly three of those are pseudo-projects.)
 //!
 BOOST_AUTO_TEST_CASE(unserializecheck_admits_projects_at_the_cap)
 {

@@ -85,6 +85,16 @@ constexpr uint64_t MAX_MANIFEST_PART_HASHES = 1024;
 //! std::string plus scalars -- so the deserialization amplifies about 4.4x.
 constexpr uint64_t MAX_MANIFEST_PROJECTS = MAX_MANIFEST_PART_HASHES;
 
+//! Longest string field a manifest may carry: sCManifestName, and each dentry's
+//! project and ETag.
+//!
+//! All three deserialize as plain std::string, which sizes the string from a
+//! declared CompactSize before reading anything, so each is a 32 MiB allocation
+//! waiting to be asked for. Real values are short -- BOINC project names and
+//! HTTP entity tags -- so 1 KiB is an order of magnitude of headroom. At the
+//! dentry cap this bounds the string content of a manifest at about 2 MB.
+constexpr size_t MAX_MANIFEST_STRING_BYTES = 1024;
+
 //! \brief Maximum wire size of a single part.
 //!
 //! Deliberately coarse, and NOT the real bound. The precise limit is on the
@@ -421,8 +431,12 @@ void CScraperManifest::dentry::Serialize(CDataStream& ss) const
 
 void CScraperManifest::dentry::Unserialize(CDataStream& ss)
 {
-    ss >> project;
-    ss >> ETag;
+    // Bounded at the length prefix. Plain `ss >> project` reads a CompactSize
+    // and resizes the string to it before reading anything back, so a dentry
+    // declaring 32 MiB costs that allocation from a message a few bytes long.
+    // Capping the NUMBER of dentries does nothing about the size of each one.
+    ss >> LIMITED_STRING(project, MAX_MANIFEST_STRING_BYTES);
+    ss >> LIMITED_STRING(ETag, MAX_MANIFEST_STRING_BYTES);
     ss >> LastModified;
     ss >> part1 >> partc;
     ss >> GridcoinTeamID;
@@ -605,7 +619,8 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     }
 
     ss >> pubkey;
-    ss >> sCManifestName;
+    // Same treatment, same reason.
+    ss >> LIMITED_STRING(sCManifestName, MAX_MANIFEST_STRING_BYTES);
     ss >> nTime;
 
     // This will set the bCheckAuthorized flag to false if a message
