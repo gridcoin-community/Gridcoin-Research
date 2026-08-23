@@ -111,22 +111,17 @@ constexpr size_t MAX_MANIFEST_STRING_BYTES = 1024;
 //! compressed under pessimistic assumptions -- because tripping this rejects an
 //! honest scraper's part and breaks convergence. It is still half the 32 MiB
 //! wire ceiling it replaces for this message type.
-//! NOT an aggregate bound, and that gap is deliberate rather than overlooked.
-//! This caps one part. A manifest may reference MAX_MANIFEST_PART_HASHES of
-//! them, so a single accepted manifest can still retain 1024 * 16 MB of
-//! compressed part data in the process-global mapParts, and manifests are
-//! bounded by SCRAPER_CMANIFEST_RETENTION_TIME -- by age, not by count.
+//! This bounds one part, not the total held at once. The total is bounded
+//! elsewhere and by a different mechanism: manifests accepted before the wallet
+//! is in sync carry bCheckedAuthorized = false, and
+//! ScraperDeleteUnauthorizedCScraperManifests() removes those on the transition
+//! to in-sync, with ~CSplitBlob dropping each part's reference and erasing it
+//! from mapParts once the last one goes. Retention for that class is therefore
+//! scoped to the sync window rather than to this constant.
 //!
-//! Closing that needs a retention budget with an eviction policy, and eviction
-//! is the hard part: dropping a part breaks the manifest that references it, so
-//! the policy has to interact correctly with convergence rather than simply
-//! reclaiming the largest thing it can find. That is a design change, not a
-//! bound, and it is tracked separately.
-//!
-//! What is true here: an attacker must actually transmit every byte they want
-//! retained, this cap halves what each one buys them relative to the 32 MiB
-//! wire ceiling it replaces, and before it existed there was no per-part limit
-//! at all.
+//! Worth knowing before adding an aggregate cap here: the parts that a cap
+//! would evict are not the ones convergence reads, and the two classes should
+//! not be conflated. See the scraper notes in the maintainer documentation.
 constexpr size_t MAX_PART_WIRE_BYTES = 16 * 1024 * 1024;
 
 //! \brief The double-SHA256 of zero-length content.
