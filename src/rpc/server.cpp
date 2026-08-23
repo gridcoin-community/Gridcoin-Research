@@ -1055,6 +1055,37 @@ void StartRPCThreads()
                   "explicitly.\n", "0.0.0.0 / ::");
     }
 
+    // The mirror image, and the quieter failure of the two: binding somewhere
+    // reachable while the allow list is empty. Loopback is always permitted, so
+    // the socket comes up and local clients work, but every remote client is
+    // answered 403 -- the port is listening and refusing, which reads like a
+    // credential problem rather than a configuration one.
+    //
+    // Only warn if something non-loopback is actually being bound; -rpcbind
+    // pointed at 127.0.0.1 needs no allow list and should not be nagged about.
+    if (bind_specified && !gArgs.IsArgSet("-rpcallowip")) {
+        for (const std::string& spec : gArgs.GetArgs("-rpcbind")) {
+            int port = 0;
+            std::string host;
+            SplitHostPort(spec, port, host);
+            if (host.empty()) continue;
+
+            boost::system::error_code ec;
+            const boost::asio::ip::address addr = boost::asio::ip::make_address(host, ec);
+
+            // An unparseable entry is reported by StartRPCListenersOn; treating
+            // it as remote here would warn twice about one typo.
+            if (ec || addr.is_loopback()) continue;
+
+            LogPrintf("RPC: WARNING - -rpcbind is set to a non-loopback address (%s) but "
+                      "-rpcallowip is not set, so the allow list is empty and every remote "
+                      "client will be refused with 403 Forbidden. Only loopback can connect. "
+                      "Add -rpcallowip for the hosts or subnets that should reach this port.\n",
+                      host);
+            break;
+        }
+    }
+
     // Try a dual IPv6/IPv4 socket, falling back to separate IPv4 and IPv6 sockets
     asio::ip::address bindAddress = loopback ? asio::ip::address_v6::loopback() : asio::ip::address_v6::any();
     ip::tcp::endpoint endpoint(bindAddress, gArgs.GetArg("-rpcport", GetDefaultRPCPort()));
