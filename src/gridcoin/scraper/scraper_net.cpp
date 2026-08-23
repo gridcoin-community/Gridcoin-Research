@@ -57,6 +57,24 @@ namespace {
 //! to hold.
 constexpr uint64_t MAX_MANIFEST_PART_HASHES = 1024;
 
+//! \brief Maximum wire size of a single part.
+//!
+//! Deliberately coarse, and NOT the real bound. The precise limit is on the
+//! DECOMPRESSED content, applied where the part is parsed
+//! (MAX_PART_DECOMPRESSED_BYTES in scraper.cpp), because a part arrives gzipped
+//! and its compressed size says little about what it expands to.
+//!
+//! This exists only to stop the compressed bytes being STORED. mapParts is
+//! process-global and a manifest may declare up to MAX_MANIFEST_PART_HASHES
+//! parts, so without it one peer could park a large multiple of that in memory
+//! before anything is ever decompressed.
+//!
+//! Set well clear of the largest part the derivation admits -- roughly 9 MB
+//! compressed under pessimistic assumptions -- because tripping this rejects an
+//! honest scraper's part and breaks convergence. It is still half the 32 MiB
+//! wire ceiling it replaces for this message type.
+constexpr size_t MAX_PART_WIRE_BYTES = 16 * 1024 * 1024;
+
 //! \brief The double-SHA256 of zero-length content.
 //!
 //! A manifest that declares a part with this hash is malformed: RecvPart
@@ -81,6 +99,20 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     // list. Receiving one is a peer or filesystem condition, not a programming
     // error, so discard it rather than aborting: the caller reports the failure
     // and a peer that sent it earns the same banscore as a spurious part.
+    if (vRecv.size() > MAX_PART_WIRE_BYTES)
+    {
+        if (pfrom)
+        {
+            LOCK(cs_ScraperGlobals);
+
+            pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
+            LogPrintf("WARNING: CSplitBlob::RecvPart: Oversized part (%u bytes) received from %s. Adding %u banscore.",
+                      vRecv.size(), pfrom->addr.ToString(), SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
+        }
+
+        return error("Oversized part received!");
+    }
+
     if (vRecv.empty())
     {
         if (pfrom)

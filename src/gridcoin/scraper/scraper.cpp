@@ -3843,6 +3843,69 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeD
     return bResult;
 }
 
+//! \brief Maximum number of CPID records a project part may contain.
+//!
+//! Back-solved from the superblock, which is what actually limits how many CPIDs
+//! can carry a magnitude: a superblock is at most Superblock::MAX_SIZE and its
+//! minimum serialized entry is sizeof(Cpid) + 1 byte of magnitude -- the same
+//! bound superblock.h uses to size its own reserve. Assuming a single project
+//! consumed an entire superblock gives the ceiling on records any one part could
+//! legitimately carry.
+//!
+//! Derived rather than hardcoded so it cannot silently disagree with
+//! Superblock::MAX_SIZE. That is convenience, NOT a guarantee: if that basis
+//! changes, re-derive rather than assume this still holds -- the per-record width
+//! below and the compression assumptions behind the wire limit were measured
+//! against today's format and do not follow automatically.
+static constexpr size_t MAX_PART_RECORDS = GRC::Superblock::MAX_SIZE / (sizeof(GRC::Cpid) + 1);
+
+//! \brief Maximum length of one record in a project part.
+//!
+//! A record is "TC,RAT,RAC,cpid": three doubles at six significant digits (widest
+//! observed on live data is 11 characters, e.g. 1.01799e+07), three separators
+//! and a 32-character CPID -- about 72 bytes. 512 is generous headroom while
+//! still bounding what a single line can cost.
+//!
+//! Together with MAX_PART_RECORDS this is what stops a decompression bomb, and it
+//! is why parsing stays STREAMING. A part arrives gzipped, so any wire limit
+//! bounds the compressed bytes only and DEFLATE reaches roughly 1032:1: a part
+//! well inside the wire limit can still expand to gigabytes. Bounding the line
+//! keeps peak memory at one record no matter what the stream produces, and
+//! bounding the record count stops the expansion continuing.
+//!
+//! std::getline cannot do this -- it grows its string until a delimiter or EOF,
+//! so an expansion with no newlines is buffered whole before any check can run.
+//! istream::getline(buf, n) bounds the length but sets failbit on a zero-length
+//! extraction, which is exactly what a blank line produces, so it would silently
+//! truncate parsing at the first empty line. Hence ReadBoundedLine below.
+static constexpr size_t MAX_PART_LINE_BYTES = 512;
+
+//! \brief Reads one newline-terminated record, refusing to buffer past \p max_len.
+//!
+//! Returns false at end of input or when the line is over-long, with \p overlong
+//! distinguishing the two. Handles empty lines, which istream::getline does not.
+static bool ReadBoundedLine(std::istream& in, std::string& out, const size_t max_len, bool& overlong)
+{
+    out.clear();
+    overlong = false;
+
+    char c;
+
+    while (in.get(c)) {
+        if (c == '\n') return true;
+
+        if (out.size() >= max_len) {
+            overlong = true;
+            return false;
+        }
+
+        out.push_back(c);
+    }
+
+    // A final record without a trailing newline is still a record.
+    return !out.empty();
+}
+
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
                                          const double& projectmag, ScraperStats& mScraperStats)
 {
@@ -3851,8 +3914,22 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
     // Lets vector the user blocks
     std::string line;
     double dProjectRAC = 0.0;
-    while (std::getline(sUncompressedIn, line))
+    size_t records = 0;
+    bool overlong = false;
+    while (ReadBoundedLine(sUncompressedIn, line, MAX_PART_LINE_BYTES, overlong))
     {
+        // Counts EVERY line, including blanks and comments, and does so before
+        // they are filtered below. That is deliberate: this is a bound on WORK,
+        // not on the size of the stats map. Counting only records that parse
+        // would let an expansion made entirely of blank lines run unbounded,
+        // since none of them would ever increment the counter.
+        if (++records > MAX_PART_RECORDS) {
+            _log(logattribute::ERR, __func__, "Project " + project + " part exceeds the maximum of "
+                 + ToString(MAX_PART_RECORDS) + " records; rejecting.");
+
+            return false;
+        }
+
         if (line[0] == '#')
             continue;
 
@@ -3922,6 +3999,17 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
 
         // Increment project
         dProjectRAC += statsentry.statsvalue.dRAC;
+    }
+
+    // ReadBoundedLine stops rather than buffering an over-long record, so this is
+    // the decompression-bomb case: an expansion with no newlines, or a record far
+    // wider than the format allows. Refuse the part rather than accept a
+    // truncated view of it.
+    if (overlong) {
+        _log(logattribute::ERR, __func__, "Project " + project + " part contains a record longer than "
+             + ToString(MAX_PART_LINE_BYTES) + " bytes; rejecting.");
+
+        return false;
     }
 
     _log(logattribute::INFO, "LoadProjectObjectToStatsByCPID",
