@@ -916,8 +916,16 @@ static bool StartRPCListenersOn(const std::vector<std::string>& binds, std::stri
             // wildcard. Moving from -rpcallowip alone to -rpcbind=:: therefore
             // drops IPv4 unless 0.0.0.0 is listed too; the help text says so.
             if (addr.is_v6()) {
-                boost::system::error_code v6_ec;
-                acceptor->set_option(ip::v6_only(true), v6_ec);
+                // Throwing overload on purpose: the help text promises an IPv6
+                // entry does NOT also accept IPv4, and on a platform where
+                // IPV6_V6ONLY cannot be set the socket may default to
+                // dual-stack. Swallowing that error would leave the listener
+                // quietly accepting IPv4 while the documentation says it does
+                // not -- worse than not binding, because the operator has no
+                // way to see it. Caught below and reported like any other bind
+                // failure, which skips this listener rather than misrepresenting
+                // it.
+                acceptor->set_option(ip::v6_only(true));
             }
 
             acceptor->bind(endpoint);

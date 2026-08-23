@@ -265,12 +265,28 @@ int CSplitBlob::addPartData(CDataStream&& vData, const bool& publish_in_progress
 
     m_publish_in_progress = publish_in_progress;
 
-    // Our own publishing path: a zero-byte part file (a truncated write, a full
-    // disk, an interrupted gzip) must not be registered. RecvPart ignores its
-    // own return value here, so this is the only place the condition is caught.
+    // Our own publishing path. RecvPart's return value is discarded below, so
+    // anything RecvPart would refuse has to be refused HERE -- before mapParts
+    // and vParts are touched -- or the caller gets a valid index for a part
+    // that will never hold data, Complete() is still called, and the manifest
+    // is advertised with a part no peer can ever be served.
+    //
+    // A zero-byte part file: a truncated write, a full disk, an interrupted
+    // gzip.
     if (vData.empty())
     {
         LogPrintf("ERROR: %s: refusing to add an empty part to the manifest.", __func__);
+        return -1;
+    }
+
+    // And oversize, for the same reason in the other direction: a part this
+    // side accepts but every receiver rejects would leave the published
+    // manifest permanently incompletable, project-wide. The write side has to
+    // agree with the read side.
+    if (vData.size() > MAX_PART_WIRE_BYTES)
+    {
+        LogPrintf("ERROR: %s: refusing to add a %u byte part to the manifest; the maximum is %u.",
+                  __func__, vData.size(), MAX_PART_WIRE_BYTES);
         return -1;
     }
 

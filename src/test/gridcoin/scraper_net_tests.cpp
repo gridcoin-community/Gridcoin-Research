@@ -67,6 +67,57 @@ BOOST_AUTO_TEST_CASE(addpartdata_still_accepts_a_non_empty_part)
     BOOST_CHECK_EQUAL(manifest->vParts.size(), 1u);
 }
 
+//! Mirrors MAX_PART_WIRE_BYTES, which is file-local to scraper_net.cpp by
+//! design. Pinned here the same way the manifest caps are pinned below: if the
+//! implementation constant moves, the boundary cases stop straddling it and
+//! addpartdata_refuses_an_oversized_part_and_registers_nothing starts passing
+//! for the wrong reason. Keep them in step.
+constexpr size_t kPartWireCap = 16 * 1024 * 1024;
+
+//!
+//! The publishing path refuses an oversize part, and refuses it BEFORE
+//! registering anything.
+//!
+//! addPartData discards RecvPart's return value, so a part this side accepts
+//! but every receiver rejects would be handed back as a valid index, Complete()
+//! would still run, and the manifest would be advertised with a part no peer
+//! can be served -- permanently incompletable, for that project, network-wide.
+//! The write side has to agree with the read side.
+//!
+BOOST_AUTO_TEST_CASE(addpartdata_refuses_an_oversized_part_and_registers_nothing)
+{
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    const size_t before = CSplitBlob::mapParts.size();
+
+    CDataStream oversize(SER_NETWORK, PROTOCOL_VERSION);
+    oversize.resize(kPartWireCap + 1);
+
+    BOOST_CHECK_EQUAL(manifest->addPartData(std::move(oversize)), -1);
+
+    // Nothing registered: not in the global part map, and no part appended.
+    BOOST_CHECK_EQUAL(CSplitBlob::mapParts.size(), before);
+    BOOST_CHECK(manifest->vParts.empty());
+}
+
+//!
+//! And the boundary from the other side: exactly at the cap is accepted.
+//!
+BOOST_AUTO_TEST_CASE(addpartdata_accepts_a_part_at_the_cap)
+{
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    CDataStream at_cap(SER_NETWORK, PROTOCOL_VERSION);
+    at_cap.resize(kPartWireCap);
+
+    BOOST_CHECK_EQUAL(manifest->addPartData(std::move(at_cap)), 0);
+    BOOST_CHECK_EQUAL(manifest->vParts.size(), 1u);
+}
+
 //!
 //! The constant UnserializeCheck() screens manifest part lists against. Pinned
 //! here so a change to the hash function cannot silently move it: a manifest
