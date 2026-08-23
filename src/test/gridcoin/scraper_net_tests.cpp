@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(unserializecheck_admits_a_part_hash_vector_at_the_cap)
 
     LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
 
-    BOOST_CHECK_THROW(manifest->UnserializeCheck(ss, banscore), std::ios_base::failure);
+    BOOST_CHECK_THROW((void)manifest->UnserializeCheck(ss, banscore), std::ios_base::failure);
 }
 
 namespace {
@@ -194,7 +194,7 @@ BOOST_AUTO_TEST_CASE(unserializecheck_admits_a_fully_referenced_part_list)
 
     LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
 
-    BOOST_CHECK_THROW(manifest->UnserializeCheck(ss, banscore), std::ios_base::failure);
+    BOOST_CHECK_THROW((void)manifest->UnserializeCheck(ss, banscore), std::ios_base::failure);
 }
 
 //!
