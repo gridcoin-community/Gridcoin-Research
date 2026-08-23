@@ -21,7 +21,6 @@
 // (RPCHelpMan::HandleRequest, Arg<T>/MaybeArg<T>, GetArgMap, MatchesType) is
 // intentionally omitted — see src/rpc/util.h for rationale.
 
-const std::string UNIX_EPOCH_TIME = "UNIX epoch time";
 // TODO(#2922): replace with real Gridcoin example addresses before the first
 // Tier 1 conversion PR that references EXAMPLE_ADDRESS lands.
 const std::string EXAMPLE_ADDRESS[2] = {

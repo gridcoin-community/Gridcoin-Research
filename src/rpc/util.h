@@ -16,6 +16,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -60,7 +61,19 @@ struct Sections;
  * String used to describe UNIX epoch time in documentation, factored out to a
  * constant for consistency.
  */
-extern const std::string UNIX_EPOCH_TIME;
+//! Constexpr, so it needs no dynamic initialization.
+//!
+//! This was a namespace-scope const std::string in util.cpp, read by a
+//! namespace-scope RPCHelpMan initializer in blockchain.cpp. Both need dynamic
+//! initialization, their relative order across translation units is decided by
+//! the link, and nothing guarantees util.cpp goes first -- so the help text was
+//! being built from a std::string that may not have been constructed yet.
+//! AddressSanitizer with check_initialization_order=1 reports it as an
+//! initialization-order-fiasco and the daemon dies at startup under that
+//! configuration.
+//!
+//! A constexpr string_view over a literal has no initializer to order.
+inline constexpr std::string_view UNIX_EPOCH_TIME{"UNIX epoch time"};
 
 /**
  * Example addresses for the RPCExamples help documentation. They are

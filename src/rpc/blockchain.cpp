@@ -869,7 +869,7 @@ static const RPCHelpMan setmocktime_help{
     "Adjusts the time returned by GetTime()/GetAdjustedTime() for testing; this does\n"
     "NOT change the system clock.",
     {
-        {"timestamp", RPCArg::Type::NUM, RPCArg::Optional::NO, UNIX_EPOCH_TIME + "\n"
+        {"timestamp", RPCArg::Type::NUM, RPCArg::Optional::NO, std::string(UNIX_EPOCH_TIME) + "\n"
          "Pass 0 to go back to using the system time."},
     },
     RPCResult{RPCResult::Type::NONE, "", ""},
