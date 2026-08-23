@@ -75,6 +75,38 @@ BOOST_AUTO_TEST_CASE(addpartdata_still_accepts_a_non_empty_part)
 constexpr size_t kPartWireCap = 16 * 1024 * 1024;
 
 //!
+//! The project cap accounts for the pseudo-projects, at v15.
+//!
+//! projects.size() counts every dentry including the injected pseudo-projects;
+//! nMaxProjects is derived from the whitelist alone and none of them is a
+//! whitelist entry. They were therefore consuming the margin the +2 reserves
+//! for the whitelist shrinking between publisher and receiver -- three of a
+//! five-to-six margin on mainnet -- and the trip disposition is an immediate
+//! ban, not a soft rejection.
+//!
+//! Gated: correcting it changes when a node bans a peer, so both sides have to
+//! roll over together.
+//!
+BOOST_AUTO_TEST_CASE(the_pseudo_project_list_is_the_one_the_cap_is_derived_from)
+{
+    // The cap widens by exactly the number of pseudo-projects, so adding one to
+    // the list cannot silently narrow the shrinkage margin again.
+    BOOST_CHECK_EQUAL(MANIFEST_PSEUDO_PROJECTS.size(), 3u);
+
+    for (const std::string_view name : MANIFEST_PSEUDO_PROJECTS) {
+        BOOST_CHECK(IsManifestPseudoProject(std::string(name)));
+    }
+
+    // BeaconList is carried by its own index, not as a dentry, so it must NOT
+    // be in this list -- counting it would widen the cap for something that
+    // never consumed it.
+    BOOST_CHECK(!IsManifestPseudoProject("BeaconList"));
+
+    // And a real whitelist project is not one either.
+    BOOST_CHECK(!IsManifestPseudoProject("World_Community_Grid"));
+}
+
+//!
 //! The publishing path refuses an oversize part, and refuses it BEFORE
 //! registering anything.
 //!

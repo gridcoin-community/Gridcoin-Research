@@ -4352,8 +4352,7 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
 
         // Do not process the BeaconList, VerifiedBeacons, ProjectsAllCpidTotalCredits, or ProjectPublicKeys
         // as a project stats file.
-        if (project != "BeaconList" && project != "VerifiedBeacons" && project != "ProjectsAllCpidTotalCredits"
-                && project != "ProjectPublicKeys")
+        if (project != "BeaconList" && !IsManifestPseudoProject(project))
         {
             _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Processing stats for project: " + project);
 
@@ -4470,8 +4469,7 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScrap
 
         // Do not process the BeaconList, VerifiedBeacons, ProjectsAllCpidTotalCredits, or ProjectPublicKeys
         // as a project stats file.
-        if (project != "BeaconList" && project != "VerifiedBeacons" && project != "ProjectsAllCpidTotalCredits"
-                && project != "ProjectPublicKeys")
+        if (project != "BeaconList" && !IsManifestPseudoProject(project))
         {
             _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Processing stats for project: " + project);
 

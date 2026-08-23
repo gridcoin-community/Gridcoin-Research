@@ -5,6 +5,43 @@
 #ifndef GRIDCOIN_SCRAPER_SCRAPER_NET_H
 #define GRIDCOIN_SCRAPER_SCRAPER_NET_H
 
+#include <array>
+#include <string>
+#include <string_view>
+
+//! \brief The non-whitelist entries a published manifest carries.
+//!
+//! The publisher injects these alongside the real project dentries. They are
+//! not whitelist projects and never have been, which matters in two places that
+//! previously disagreed: the manifest project cap in UnserializeCheck(), which
+//! compares a dentry count against a whitelist-derived limit, and the stats
+//! loader in scraper.cpp, which skips them by name when walking parts.
+//!
+//! One list so those two cannot drift. Adding a pseudo-project here widens the
+//! cap by one automatically, which is what previously did not happen -- each new
+//! one silently ate a share of the margin reserved for whitelist shrinkage.
+//!
+//! BeaconList is deliberately absent: it is carried by its own index rather than
+//! as a dentry, so it does not count against the project cap.
+inline constexpr std::array<std::string_view, 3> MANIFEST_PSEUDO_PROJECTS{
+    "VerifiedBeacons",
+    "ProjectsAllCpidTotalCredits",
+    "ProjectPublicKeys",
+};
+
+//! \brief True if the name is one of the injected pseudo-projects.
+//!
+//! Note this does NOT cover BeaconList, which is carried by its own index and
+//! is excluded separately at the call sites that need to skip it.
+inline bool IsManifestPseudoProject(const std::string& project)
+{
+    for (const std::string_view name : MANIFEST_PSEUDO_PROJECTS) {
+        if (project == name) return true;
+    }
+
+    return false;
+}
+
 /* Maybe the parts system will be useful for other things so let's abstract
  * that to parent class. Since it will be all in one file there will not be any
  * polymorphism.

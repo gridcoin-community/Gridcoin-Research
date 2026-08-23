@@ -863,27 +863,28 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
                       std::max(0.5, CONVERGENCE_BY_PROJECT_RATIO)) + 2);
     }
 
-    // KNOWN MISMATCH, not fixed here: the two sides of this comparison count
-    // different things. projects.size() counts every dentry, which includes the
-    // pseudo-projects the publisher injects -- VerifiedBeacons,
-    // ProjectsAllCpidTotalCredits and ProjectPublicKeys (scraper.cpp:4888, 5040,
-    // 5077) -- while nMaxProjects is derived from the whitelist alone, and none
-    // of the three is a whitelist entry.
+    // The two sides of this comparison count different things, and at v15 they
+    // stop doing so.
     //
-    // The +2 and the divisor exist to tolerate the whitelist SHRINKING between
-    // the publisher's snapshot and the receiver's without banning an honest
-    // scraper. The pseudo-projects spend that tolerance instead. Measured on
-    // mainnet: projects.size() = 19 against nMaxProjects = 24-25, so of a 5-6
-    // margin, 3 is consumed by dentries the formula never accounted for. Every
-    // pseudo-project added in future narrows it again, and the trip disposition
-    // here is an immediate ban at -banscore, not a soft rejection.
+    // projects.size() counts every dentry, including the pseudo-projects the
+    // publisher injects (MANIFEST_PSEUDO_PROJECTS). nMaxProjects is derived from
+    // the whitelist alone, and none of those is a whitelist entry. The +2 and
+    // the divisor above exist to tolerate the whitelist SHRINKING between the
+    // publisher's snapshot and the receiver's without banning an honest scraper;
+    // the pseudo-projects were spending that tolerance instead. Measured on
+    // mainnet: 19 dentries against a limit of 24-25, so three of a five-to-six
+    // margin went to entries the formula never accounted for, and every
+    // pseudo-project added in future narrowed it again.
     //
-    // Correcting it means either excluding the pseudo-projects from the count or
-    // widening nMaxProjects to admit them, and either changes when a node bans a
-    // peer. Nodes on different sides of that change would disagree about which
-    // manifests are acceptable, so it needs a version gate to roll over
-    // together; it is deliberately left alone in an ungated change.
-    if (!OutOfSyncByAge() && projects.size() > nMaxProjects)
+    // Gated because correcting it changes when a node BANS a peer, at
+    // -banscore, immediately. Nodes on either side of the change would disagree
+    // about which manifests are acceptable and would score each other's honest
+    // relays, so it has to roll over together rather than on upgrade.
+    const unsigned int max_projects = IsV15Enabled(nBestHeight)
+        ? nMaxProjects + MANIFEST_PSEUDO_PROJECTS.size()
+        : nMaxProjects;
+
+    if (!OutOfSyncByAge() && projects.size() > max_projects)
     {
         // Immediately ban the node from which the manifest was received.
         banscore_out = gArgs.GetArg("-banscore", 100);
