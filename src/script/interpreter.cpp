@@ -13,6 +13,8 @@
 #include "sync.h"
 #include "util.h"
 
+#include <algorithm>
+#include <cstdint>
 #include <stdexcept>
 
 using namespace std;
@@ -1161,6 +1163,22 @@ uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int
 }
 
 
+int64_t ResolveMaxSigCacheSize()
+{
+    const int64_t requested = gArgs.GetArg("-maxsigcachesize", DEFAULT_MAX_SIG_CACHE_SIZE);
+
+    // Zero or negative disables the cache, as before.
+    if (requested <= 0) return 0;
+
+    // Clamp rather than trust. The value is operator-supplied and was
+    // previously unbounded above, so a typo (or a copied config with an extra
+    // digit) sized an unevictable in-memory set with no ceiling. Entries are
+    // roughly SIG_CACHE_ENTRY_BYTES each, so the clamp is expressed as a
+    // memory budget and converted, which keeps it honest if the entry shape
+    // changes.
+    return std::min<int64_t>(requested, MAX_SIG_CACHE_ENTRIES);
+}
+
 // Valid signature cache, to avoid doing expensive ECDSA signature checking
 // twice for every transaction (once when accepted into memory pool, and
 // again when accepted into the block chain)
@@ -1173,7 +1191,19 @@ private:
     std::set< sigdata_type> setValid;
     CCriticalSection cs_sigcache;
 
+    //! Resolved once, at construction, rather than on every insertion.
+    //!
+    //! -maxsigcachesize cannot change after startup, so re-reading it per
+    //! signature bought nothing and cost a gArgs lock plus a map lookup and a
+    //! string compare on the hottest path in validation: every cache-missing
+    //! signature in every transaction in every block. CheckSig is only
+    //! reachable once block validation is running, which is long after
+    //! ParseParameters, so first-use resolution sees the operator's value.
+    const int64_t m_max_size;
+
 public:
+    CSignatureCache() : m_max_size(ResolveMaxSigCacheSize()) {}
+
     bool
     Get(uint256 hash, const std::vector<unsigned char>& vchSig, const std::vector<unsigned char>& pubKey)
     {
@@ -1188,28 +1218,39 @@ public:
 
     void Set(uint256 hash, const std::vector<unsigned char>& vchSig, const std::vector<unsigned char>& pubKey)
     {
-        // DoS prevention: limit cache size to less than 10MB
-        // (~200 bytes per cache entry times 50,000 entries)
-        // Since there are a maximum of 20,000 signature operations per block
-        // 50,000 is a reasonable default.
-        int64_t nMaxCacheSize = gArgs.GetArg("-maxsigcachesize", 50000);
-        if (nMaxCacheSize <= 0) return;
+        if (m_max_size == 0) return;
+
+        // Drawn BEFORE the lock is taken. GetRandHash() reaches ProcRand(),
+        // which takes the process-global RNG mutex; drawing it inside
+        // cs_sigcache nested that global lock underneath this one, so every
+        // signature verification in the process serialized on the RNG.
+        //
+        // One draw is always enough. m_max_size is fixed at construction and
+        // this function inserts a single entry at a time, so the set can
+        // exceed the limit by at most one and the loop below runs at most
+        // once. In the steady state -- a full cache -- it does run each time,
+        // so this is the same number of draws as before, just outside the
+        // critical section.
+        const uint256 randomHash = GetRandHash();
 
         LOCK(cs_sigcache);
 
-        while (static_cast<int64_t>(setValid.size()) > nMaxCacheSize)
+        while (static_cast<int64_t>(setValid.size()) > m_max_size)
         {
             // Evict a random entry. Random because that helps
             // foil would-be DoS attackers who might try to pre-generate
             // and reuse a set of valid signatures just-slightly-greater
             // than our cache size.
-            uint256 randomHash = GetRandHash();
             std::vector<unsigned char> unused;
             std::set<sigdata_type>::iterator it =
                 setValid.lower_bound(sigdata_type(randomHash, unused, unused));
             if (it == setValid.end())
                 it = setValid.begin();
-            setValid.erase(*it);
+
+            // erase(it), not erase(*it): the latter copies the tuple -- and so
+            // heap-allocates both of its vectors -- purely to look up the entry
+            // the iterator already names, while holding the lock.
+            setValid.erase(it);
         }
 
         sigdata_type k(hash, vchSig, pubKey);

@@ -22,6 +22,7 @@
 #include "node/ui_interface.h"
 #include "scheduler.h"
 #include "validationinterface.h"
+#include "script/interpreter.h"
 #include "gridcoin/gridcoin.h"
 #include "gridcoin/upgrade.h"
 #include "gridcoin/contract/registry.h"
@@ -821,7 +822,9 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-enableaccounts", "DEPRECATED: Enable accounting functionality (default: 0)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
-    argsman.AddArg("-maxsigcachesize=<n>", "Set maximum size for signature cache (default: 50000)",
+    argsman.AddArg("-maxsigcachesize=<n>", strprintf("Set maximum size for signature cache, in entries "
+                                                     "(default: %d, maximum: %d)",
+                                                     DEFAULT_MAX_SIG_CACHE_SIZE, MAX_SIG_CACHE_ENTRIES),
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-contractchangetoinputaddress", "Change from a contract transaction is returned to an input address "
                                                     "rather than creating a new change address (default: 0)",
