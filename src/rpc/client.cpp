@@ -43,6 +43,33 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
                                   "If the file does not exist, create it with owner-readable-only file permissions."),
                                 GetConfigFile().string()));
 
+    // -rpcssl is gone, and this path never reaches StartRPCThreads(), so the
+    // warning the daemon logs for it is never seen by someone running the CLI.
+    // Say it here too: an operator who believes this connection is wrapped in
+    // TLS is about to send Basic-auth credentials in clear text.
+    //
+    // Loopback only warns. Crossing a network refuses outright -- that is where
+    // the credentials are actually exposed, and continuing silently would be a
+    // downgrade the operator did not ask for and cannot see.
+    if (gArgs.IsArgSet("-rpcssl")) {
+        const std::string host = gArgs.GetArg("-rpcconnect", "127.0.0.1");
+
+        CNetAddr target;
+        const bool resolved = LookupHost(host.c_str(), target, false);
+        const bool loopback = resolved && target.IsLocal();
+
+        if (loopback) {
+            LogPrintf("WARNING: -rpcssl is no longer supported and is being ignored. This "
+                      "connection to %s is NOT encrypted.\n", host);
+        } else {
+            throw std::runtime_error(strprintf(
+                _("-rpcssl is no longer supported, and -rpcconnect=%s is not a loopback address. "
+                  "Sending RPC credentials to it would transmit them unencrypted. Remove -rpcssl "
+                  "to proceed deliberately, and tunnel the connection (for example over SSH) if it "
+                  "crosses an untrusted network."), host));
+        }
+    }
+
     // Connect to localhost
     ioContext io_context;
     asio::ip::tcp::socket socket(io_context);
@@ -88,7 +115,7 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
     // Receive HTTP reply message headers and body
     map<string, string> mapHeaders;
     string strReply;
-    ReadHTTPMessage(stream, mapHeaders, strReply, nProto);
+    ReadHTTPMessage(stream, mapHeaders, strReply, nProto, MAX_RPC_RESPONSE_SIZE);
 
     if (nStatus == HTTP_UNAUTHORIZED)
         throw runtime_error("incorrect rpcuser or rpcpassword (authorization failed)");

@@ -1251,8 +1251,20 @@ void ServiceConnection(AcceptedConnection *conn)
         if (!ReadHTTPRequestLine(conn->stream(), nProto, strMethod, strURI))
             break;
 
-        // Read HTTP message headers and body
-        ReadHTTPMessage(conn->stream(), mapHeaders, strRequest, nProto);
+        // Read HTTP message headers and body.
+        //
+        // The status matters. Discarding it made an over-long or malformed body
+        // fail only incidentally: the body was never read, strRequest stayed
+        // empty, and the JSON parse further down returned 500 -- so the bound
+        // above worked by accident and reported the wrong thing. Answer with the
+        // status the parser actually produced and close.
+        const int http_status = ReadHTTPMessage(conn->stream(), mapHeaders, strRequest, nProto,
+                                                MAX_RPC_BODY_SIZE);
+
+        if (http_status != HTTP_OK) {
+            conn->stream() << HTTPReply(http_status, "", false) << std::flush;
+            break;
+        }
 
         if (strURI != "/") {
             conn->stream() << HTTPReply(HTTP_NOT_FOUND, "", false) << std::flush;

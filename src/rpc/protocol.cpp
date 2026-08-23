@@ -173,8 +173,19 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
                          std::string& http_method, std::string& http_uri)
 {
     std::string str;
+
+    // Bounded. std::getline() here grows without limit, and this runs before
+    // anything has authenticated: a peer that streams a request line and never
+    // sends a newline grows this string as fast as it can write. The connection
+    // deadline bounds how LONG that lasts, not how many bytes arrive in the
+    // meantime. Same ceiling as a header line -- an RPC request line is "/" or
+    // a short wallet path, so 8 KiB is already far past anything real.
+    //
     // This strips the \n but does NOT strip any extra \r, such as the \r\n in the HTTP standard field line ending.
-    std::getline(stream, str);
+    bool overlong = false;
+    if (!ReadLineBounded(stream, str, MAX_HTTP_HEADER_LINE_BYTES, overlong)) {
+        return false;
+    }
 
     // HTTP request line is space-delimited
     std::vector<std::string> vWords;
@@ -249,20 +260,22 @@ int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
 
 int ReadHTTPMessage(std::basic_istream<char>& stream, std::map<std::string,
                     std::string>& mapHeadersRet, std::string& strMessageRet,
-                    int nProto)
+                    int nProto, size_t max_body_size)
 {
     mapHeadersRet.clear();
     strMessageRet = "";
 
     // Read header
     int nLen = ReadHTTPHeaders(stream, mapHeadersRet);
-    // MAX_SIZE is 32 MiB, so this accepted an unauthenticated header field that
-    // then drove a 32 MiB allocation below. The worst legitimate request is
-    // signrawtransaction fed by consolidatemsunspent output, where the prevtxs
-    // array dominates because every multisig input carries its own redeemScript;
-    // bounded by MAX_STANDARD_TX_SIZE at roughly 1.8x, that is 400-500 KB. 20x
-    // MAX_STANDARD_TX_SIZE leaves several times that.
-    if (nLen < 0 || nLen > (int)MAX_RPC_BODY_SIZE)
+
+    // The ceiling is the CALLER's, because this function reads both directions.
+    // The server reads a request from an unauthenticated peer and wants the
+    // tight bound; the CLI reads a reply from the server it chose to talk to,
+    // and legitimate replies are routinely far larger than any request --
+    // listtransactions on a big wallet, verbose getblock, scraperreport. Using
+    // the request bound for both would have made the CLI report "no response
+    // from server" for exactly those calls.
+    if (nLen < 0 || nLen > (int)max_body_size)
         return HTTP_BAD_REQUEST;
 
     // Read message

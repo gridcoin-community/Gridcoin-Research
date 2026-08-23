@@ -45,6 +45,17 @@
 //! allocated outright -- an allocation driven by an unauthenticated header field.
 static const unsigned int MAX_RPC_BODY_SIZE = 20 * MAX_STANDARD_TX_SIZE;
 
+//! Ceiling on an RPC RESPONSE body read by the command-line client.
+//!
+//! Deliberately far larger than MAX_RPC_BODY_SIZE. A reply comes from the server
+//! the operator pointed the CLI at, not from an unauthenticated peer, and
+//! replies legitimately dwarf requests: listtransactions on a large wallet,
+//! getblock with transaction detail, scraperreport. This keeps a bound so a
+//! hostile or broken endpoint cannot make the CLI allocate without limit, but it
+//! is not the request bound -- applying the request bound in this direction made
+//! the CLI report "no response from server" for exactly those calls.
+static const size_t MAX_RPC_RESPONSE_SIZE = 32 * 1024 * 1024;   // matches MAX_SIZE, the prior behaviour
+
 enum HTTPStatusCode
 {
     HTTP_OK                    = 200,
@@ -330,8 +341,13 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
                          std::string& http_method, std::string& http_uri);
 int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto);
 int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std::string>& mapHeadersRet);
+//! Read an HTTP message body, bounded by max_body_size.
+//!
+//! Used in BOTH directions, which is why the bound is the caller's: the server
+//! reads an unauthenticated request and passes MAX_RPC_BODY_SIZE, the CLI reads
+//! a reply and passes MAX_RPC_RESPONSE_SIZE.
 int ReadHTTPMessage(std::basic_istream<char>& stream, std::map<std::string, std::string>& mapHeadersRet,
-                    std::string& strMessageRet, int nProto);
+                    std::string& strMessageRet, int nProto, size_t max_body_size);
 std::string JSONRPCRequest(const std::string& strMethod, const UniValue& params, const UniValue& id);
 UniValue JSONRPCReplyObj(const UniValue& result, const UniValue& error, const UniValue& id);
 std::string JSONRPCReply(const UniValue& result, const UniValue& error, const UniValue& id);
