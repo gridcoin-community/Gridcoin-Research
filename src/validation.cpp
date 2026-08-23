@@ -404,6 +404,8 @@ bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const s
     return true;
 }
 
+std::atomic<uint64_t> g_connectinputs_signature_checks{0};
+
 bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx,
     const CBlockIndex* pindexBlock, bool fBlock, bool fMiner)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -536,6 +538,14 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
 
             if (!(fBlock && (nBestHeight < Params().Checkpoints().GetHeight())))
             {
+                // Counted so the ordering above can be asserted rather than
+                // just asserted about. The whole point of the conflict pre-scan
+                // is that this is not reached for a transaction that has an
+                // already-spent input, and nothing else makes that observable
+                // from outside. One relaxed atomic increment against an ECDSA
+                // verification is not measurable.
+                g_connectinputs_signature_checks.fetch_add(1, std::memory_order_relaxed);
+
                 // Verify signature
                 if (!VerifySignature(txPrev, tx, GetBlockScriptFlags(*pindexBlock), i, 0))
                 {

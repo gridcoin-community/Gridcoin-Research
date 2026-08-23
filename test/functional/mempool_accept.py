@@ -97,6 +97,12 @@ class MempoolAcceptTest(GridcoinTestFramework):
 
         # 3. spending an outpoint already consumed by a confirmed transaction.
         #
+        # Note this asserts REJECTION, not the ordering of the checks inside
+        # ConnectInputs. It cannot: this transaction has a single input, so the
+        # conflict is found at index 0 either way. The ordering guarantee -- that
+        # a conflicting input costs zero signature verifications -- is asserted
+        # in connectinputs_tests, which counts them.
+        #
         # Distinct from case 2: mapNextTx only knows about the mempool, so this
         # reaches ConnectInputs and is rejected against txindex.vSpent. That is
         # the check the signature loop depends on running first -- if it ever

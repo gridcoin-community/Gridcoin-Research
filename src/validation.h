@@ -6,6 +6,7 @@
 #ifndef BITCOIN_VALIDATION_H
 #define BITCOIN_VALIDATION_H
 
+#include <atomic>
 #include "amount.h"
 #include "consensus/validation.h"
 #include "index/disktxpos.h"
@@ -135,6 +136,16 @@ bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const s
     @param[in] fMiner	true if called from CreateNewBlock
     @return Returns true if all checks succeed
     */
+//! Count of signature verifications performed inside ConnectInputs().
+//!
+//! Exists so the ordering guarantee is testable: the conflict pre-scan means a
+//! transaction with an already-spent input must cost ZERO verifications, and
+//! without a counter that is only observable by instrumenting a build. A
+//! regression that moved the conflict check back inside the signature loop
+//! would otherwise still pass every test, since the transaction is rejected
+//! either way -- only the cost differs.
+extern std::atomic<uint64_t> g_connectinputs_signature_checks;
+
 bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx, const CBlockIndex* pindexBlock, bool fBlock, bool fMiner) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge) EXCLUSIVE_LOCKS_REQUIRED(cs_main); // ppcoin: get transaction coin age
