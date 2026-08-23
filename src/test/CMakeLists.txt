@@ -139,6 +139,7 @@ add_executable(test_gridcoin
     sanity_tests.cpp
     scheduler_tests.cpp
     script_p2sh_tests.cpp
+    rpc_allowlist_tests.cpp
     script_tests.cpp
     serialize_tests.cpp
     sigopcount_tests.cpp

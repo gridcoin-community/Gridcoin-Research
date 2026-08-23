@@ -924,7 +924,14 @@ void SetupServerArgs()
     argsman.AddArg("-rpcport=<port>", strprintf("Listen for JSON-RPC connections on <port> (default: %u, testnet: %u)",
                                                 defaultBaseParams->RPCPort(), testnetBaseParams->RPCPort()),
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcallowip=<ip>", "Allow JSON-RPC connections from specified IP address",
+    argsman.AddArg("-rpcallowip=<ip>", "Allow JSON-RPC connections from the specified IP address, "
+                   "subnet (1.2.3.4/24 or 1.2.3.4/255.255.255.0) or wildcard pattern (1.2.3.*). "
+                   "May be given more than once. Note that setting this without -rpcbind also "
+                   "opens the RPC port on all interfaces",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcbind=<addr>[:port]", "Bind the JSON-RPC listener to the given address, "
+                   "optionally on a specific port. May be given more than once. When unset the "
+                   "listener uses loopback, or all interfaces if -rpcallowip is set",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcconnect=<ip>", "Send commands to node running on <ip> (default: 127.0.0.1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);

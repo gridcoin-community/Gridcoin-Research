@@ -640,6 +640,61 @@ void ErrorReply(std::ostream& stream, const UniValue& objError, const UniValue& 
     stream << HTTPReply(nStatus, strReply, false) << std::flush;
 }
 
+//! -rpcallowip, parsed once at RPC start.
+//!
+//! Two forms are kept because two forms are in the field. Anything
+//! LookupSubNet() accepts -- a CIDR prefix, an address/netmask pair, or a bare
+//! address, v4 or v6 -- becomes a CSubNet and is matched numerically. Anything
+//! else stays a string and is matched with WildcardMatch(), which is what this
+//! function did for every entry before, and is what makes forms like
+//! "192.168.1.*" keep working.
+//!
+//! Parsing every entry on every connection would be wasteful, but that is not
+//! the reason this is hoisted: LookupSubNet() reaches LookupHost(), and doing
+//! name resolution on the request path of an ACL is not something to leave
+//! available even with lookups disabled.
+struct RPCAllowEntry
+{
+    CSubNet subnet;         //!< valid when is_subnet
+    std::string pattern;    //!< used when !is_subnet
+    bool is_subnet{false};
+};
+
+static std::vector<RPCAllowEntry> g_rpc_allow_list;
+static bool g_rpc_allow_list_parsed{false};
+
+//! Parse -rpcallowip. Logs what each entry resolved to, because the failure
+//! this replaces was silent: an entry that matched nothing produced a listener
+//! that rejected everything, with nothing in the log to say why.
+void InitRPCAllowList(const std::vector<std::string>& entries)
+{
+    g_rpc_allow_list.clear();
+
+    for (const std::string& strAllow : entries) {
+        RPCAllowEntry entry;
+
+        CSubNet subnet;
+        if (LookupSubNet(strAllow.c_str(), subnet) && subnet.IsValid()) {
+            entry.subnet = subnet;
+            entry.is_subnet = true;
+            LogPrintf("RPC: -rpcallowip %s allows %s\n", strAllow, subnet.ToString());
+        } else {
+            entry.pattern = strAllow;
+            LogPrintf("RPC: -rpcallowip %s is not an address or subnet; matching it as a "
+                      "wildcard pattern against the peer address text\n", strAllow);
+        }
+
+        g_rpc_allow_list.push_back(entry);
+    }
+
+    g_rpc_allow_list_parsed = true;
+}
+
+void InitRPCAllowList()
+{
+    InitRPCAllowList(gArgs.GetArgs("-rpcallowip"));
+}
+
 bool ClientAllowed(const boost::asio::ip::address& address)
 {
     // Make sure that IPv4-compatible and IPv4-mapped IPv6 addresses are treated as IPv4 addresses
@@ -660,11 +715,27 @@ bool ClientAllowed(const boost::asio::ip::address& address)
       && (address.to_v4().to_bytes()[0] == 127)))
         return true;
 
+    // Fail closed if the list was somehow never parsed, rather than falling
+    // back to an unparsed read that would allow nothing anyway but silently.
+    if (!g_rpc_allow_list_parsed) {
+        LogPrintf("RPC: WARNING - allow list consulted before it was parsed; denying %s\n",
+                  address.to_string());
+        return false;
+    }
+
     const string strAddress = address.to_string();
-    const vector<string>& vAllow = gArgs.GetArgs("-rpcallowip");
-    for (auto const& strAllow : vAllow)
-        if (WildcardMatch(strAddress, strAllow))
+
+    CNetAddr netaddr;
+    const bool have_netaddr = LookupHost(strAddress.c_str(), netaddr, false);
+
+    for (const RPCAllowEntry& entry : g_rpc_allow_list) {
+        if (entry.is_subnet) {
+            if (have_netaddr && entry.subnet.Match(netaddr)) return true;
+        } else if (WildcardMatch(strAddress, entry.pattern)) {
             return true;
+        }
+    }
+
     return false;
 }
 
@@ -743,12 +814,81 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
     delete conn;
 }
 
+//! Bind one acceptor per -rpcbind entry.
+//!
+//! Each entry is an address, optionally with a port ("10.0.0.5", "[::1]:1234").
+//! Unlike the implicit path this makes no wildcard decision of its own: the
+//! operator gets exactly the addresses they named. An entry that fails to bind
+//! is reported and skipped rather than aborting the rest, so one bad line in a
+//! config does not cost the node every other listener; the caller still treats
+//! "none bound at all" as fatal.
+static bool StartRPCListenersOn(const std::vector<std::string>& binds, bool fUseSSL, std::string& strerr)
+{
+    using namespace boost::asio;
+
+    const int default_port = gArgs.GetArg("-rpcport", GetDefaultRPCPort());
+    bool any = false;
+
+    for (const std::string& spec : binds) {
+        int port = default_port;
+        std::string host;
+        SplitHostPort(spec, port, host);
+
+        if (host.empty()) {
+            strerr = strprintf("-rpcbind entry '%s' has no address", spec);
+            LogPrintf("ERROR: StartRPCThreads: %s\n", strerr);
+            continue;
+        }
+
+        boost::system::error_code ec;
+        const ip::address addr = ip::make_address(host, ec);
+        if (ec) {
+            strerr = strprintf("-rpcbind entry '%s' is not a numeric address: %s", spec, ec.message());
+            LogPrintf("ERROR: StartRPCThreads: %s\n", strerr);
+            continue;
+        }
+
+        try {
+            ip::tcp::endpoint endpoint(addr, static_cast<unsigned short>(port));
+            boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(*rpc_io_service));
+
+            acceptor->open(endpoint.protocol());
+            acceptor->set_option(ip::tcp::acceptor::reuse_address(true));
+
+            // One address per acceptor, so never dual-stack: a v6 entry binds v6
+            // only. Otherwise binding both "::" and "0.0.0.0" would collide.
+            if (addr.is_v6()) {
+                boost::system::error_code v6_ec;
+                acceptor->set_option(ip::v6_only(true), v6_ec);
+            }
+
+            acceptor->bind(endpoint);
+            acceptor->listen(socket_base::max_listen_connections);
+
+            RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
+            rpc_acceptors.push_back(acceptor);
+
+            LogPrintf("RPC: bound and listening on %s:%u (-rpcbind)\n",
+                      endpoint.address().to_string(), endpoint.port());
+            any = true;
+        } catch (boost::system::system_error& e) {
+            strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on %s: %s"),
+                               port, host, e.what());
+            LogPrintf("ERROR: StartRPCThreads: %s\n", strerr);
+        }
+    }
+
+    return any;
+}
+
 void StartRPCThreads()
 {
     // Logged unconditionally: the absence of this line in a node's debug.log
     // distinguishes "RPC server never started" from "started but not serving"
     // when diagnosing functional-test RPC-startup timeouts.
     LogPrintf("StartRPCThreads: entered\n");
+
+    InitRPCAllowList();
 
     strRPCUserColonPass = gArgs.GetArg("-rpcuser", "") + ":" + gArgs.GetArg("-rpcpassword", "");
 
@@ -817,8 +957,28 @@ void StartRPCThreads()
         SSL_CTX_set_cipher_list(rpc_ssl_context->native_handle(), strCiphers.c_str());
     }
 
+    // Where to listen.
+    //
+    // Historically this was implied by -rpcallowip: setting any allow entry at
+    // all moved the listener from loopback to the wildcard address, on every
+    // interface. That coupling is surprising in the dangerous direction -- an
+    // operator narrowing who may connect simultaneously widens where the socket
+    // is reachable -- and there was no way to say "listen here" independently.
+    //
+    // -rpcbind now says it explicitly. When it is not given the old behaviour is
+    // kept exactly, so no existing deployment changes on upgrade, but the
+    // implicit widening is logged as a warning rather than happening silently.
+    const bool bind_specified = gArgs.IsArgSet("-rpcbind");
+    const bool loopback = !bind_specified && !gArgs.IsArgSet("-rpcallowip");
+
+    if (!bind_specified && !loopback) {
+        LogPrintf("RPC: WARNING - -rpcallowip is set and -rpcbind is not, so the RPC port is "
+                  "being opened on ALL interfaces (%s), not just loopback. Only the allow list "
+                  "restricts who may connect. Set -rpcbind to choose the listening address "
+                  "explicitly.\n", "0.0.0.0 / ::");
+    }
+
     // Try a dual IPv6/IPv4 socket, falling back to separate IPv4 and IPv6 sockets
-    const bool loopback = !gArgs.IsArgSet("-rpcallowip");
     asio::ip::address bindAddress = loopback ? asio::ip::address_v6::loopback() : asio::ip::address_v6::any();
     ip::tcp::endpoint endpoint(bindAddress, gArgs.GetArg("-rpcport", GetDefaultRPCPort()));
     boost::system::error_code v6_only_error;
@@ -826,6 +986,14 @@ void StartRPCThreads()
 
     bool fListening = false;
     std::string strerr;
+
+    // Explicit -rpcbind replaces the implicit loopback/wildcard choice entirely.
+    // Both paths fall through to the shared "did anything bind?" check and the
+    // worker-thread startup below -- returning early here would leave the
+    // acceptors armed with nothing running io_context::run().
+    if (bind_specified) {
+        fListening = StartRPCListenersOn(gArgs.GetArgs("-rpcbind"), fUseSSL, strerr);
+    } else {
     try
     {
         acceptor->open(endpoint.protocol());
@@ -873,6 +1041,7 @@ void StartRPCThreads()
     {
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv4: %s"), endpoint.port(), e.what());
     }
+    } // !bind_specified
 
     if (!fListening)
     {
