@@ -143,15 +143,22 @@ bool ReadTxFromDisk(CTransaction& tx, COutPoint prevout)
     return ReadTxFromDisk(tx, txdb, prevout, txindex);
 }
 
-bool CheckTransaction(const CTransaction& tx, CValidationState& state)
+bool CheckTransaction(const CTransaction& tx, CValidationState& state, int nHeight)
 {
     // Basic checks that don't depend on any context
     if (tx.vin.empty())
         return state.DoS(10, error("CheckTransaction() : vin empty"));
     if (tx.vout.empty())
         return state.DoS(10, error("CheckTransaction() : vout empty"));
-    // Size limits - don't count coinbase superblocks--we check this at the block level:
-    if (GetSerializeSize(tx, (SER_NETWORK & SER_SKIPSUPERBLOCK), PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
+    // Size limits. From v15 a coinbase or coinstake carrying a superblock is
+    // measured without it: the block-level check bounds the whole block, and
+    // bounds the superblock separately.
+    //
+    // nHeight defaults to 0, so callers with no block context are unaffected;
+    // only CheckBlock() passes a height.
+    const int serialize_type = IsV15Enabled(nHeight) ? (SER_NETWORK | SER_SKIPSUPERBLOCK) : 0;
+
+    if (GetSerializeSize(tx, serialize_type, PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
         return state.DoS(100, error("CheckTransaction() : size limits failed"));
 
     // Check for negative or overflow output values (see CVE-2010-5139)
@@ -1399,10 +1406,27 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
     // These are checks that are independent of context
     // that can be verified before saving an orphan block.
 
-    // Size limits
+    // Size limits. From v15 the two bounds are independent and both bind:
+    //
+    //   block excluding the superblock <= MAX_BLOCK_SIZE
+    //   the superblock itself          <= GRC::Superblock::MAX_SIZE
+    //
+    // Deliberately additive rather than one combined ceiling. A single total
+    // would make each side's headroom depend on the other: a large superblock
+    // would eat the space available to ordinary transactions, and a full block
+    // of transactions would cap the superblock. Measuring them separately means
+    // neither crowds the other out, and the superblock's limit no longer
+    // depends implicitly on how much else the block happens to carry.
+    //
+    // SER_SKIPSUPERBLOCK is what excludes the superblock's bytes from the first
+    // measurement; the claim's serializer honours it (see claim.h).
+    const int block_size_type = (block.GetSuperblock()->WellFormed() && IsV15Enabled(height1))
+        ? (SER_NETWORK | SER_SKIPSUPERBLOCK)
+        : 0;
+
     if (block.vtx.empty()
         || block.vtx.size() > MAX_BLOCK_SIZE
-        || ::GetSerializeSize(block, (SER_NETWORK & SER_SKIPSUPERBLOCK), PROTOCOL_VERSION) > MAX_BLOCK_SIZE
+        || ::GetSerializeSize(block, block_size_type, PROTOCOL_VERSION) > MAX_BLOCK_SIZE
         || ::GetSerializeSize(block.GetSuperblock(), SER_NETWORK, PROTOCOL_VERSION) > GRC::Superblock::MAX_SIZE)
     {
         return state.DoS(100, error("%s: size limits failed", __func__));
@@ -1485,7 +1509,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
     // Check transactions
     for (auto const& tx : block.vtx)
     {
-        if (!CheckTransaction(tx, state))
+        if (!CheckTransaction(tx, state, height1))
             return error("%s: CheckTransaction failed", __func__);
 
         // ppcoin: check transaction timestamp

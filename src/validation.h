@@ -66,7 +66,7 @@ bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout, CTxIndex& 
 bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout);
 bool ReadTxFromDisk(CTransaction& tx, COutPoint prevout);
 
-bool CheckTransaction(const CTransaction& tx, CValidationState& state);
+bool CheckTransaction(const CTransaction& tx, CValidationState& state, int nHeight = 0);
 
 //! \brief Check the validity of any contracts contained in the transaction.
 //!
