@@ -109,6 +109,10 @@ class MempoolAcceptTest(GridcoinTestFramework):
             return
 
         prev_txid, prev_vout, prev_spk, prev_amt = spent
+        if prev_amt <= 1:
+            self.log.warning("coinstake input too small to build a spend; skipping case 3")
+            return
+
         raw = node.createrawtransaction(
             [{"txid": prev_txid, "vout": prev_vout}],
             {node.getnewaddress(): prev_amt - 1})
@@ -116,6 +120,12 @@ class MempoolAcceptTest(GridcoinTestFramework):
             raw,
             [{"txid": prev_txid, "vout": prev_vout,
               "scriptPubKey": prev_spk, "amount": prev_amt}])
+
+        # Without this the test passes vacuously: an unsigned transaction is
+        # rejected too, for an entirely different reason, so a regression in the
+        # conflict check would go unnoticed.
+        assert signed.get("complete"), signed
+
         assert_raises_rpc_error(None, None, node.sendrawtransaction, signed["hex"])
         self.log.info("confirmed-spend replay correctly rejected (%s:%d)",
                       prev_txid, prev_vout)

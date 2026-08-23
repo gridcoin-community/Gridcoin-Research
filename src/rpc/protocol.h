@@ -12,6 +12,8 @@
 #include <stdint.h>
 #include <string>
 #include <compat.h>
+#include <cerrno>
+#include <util/system.h>
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/asio.hpp>
@@ -153,9 +155,26 @@ public:
         // blocking mode (SetRPCSocketTimeouts forces it), so a timeout arrives
         // here as EAGAIN/EWOULDBLOCK and is handled below with every other
         // error: the connection is finished, report end of sequence.
-        const int bytes = ::recv(stream.native_handle(), s, static_cast<size_t>(n), 0);
+        for (;;) {
+#ifdef WIN32
+            const int bytes = ::recv(stream.native_handle(), s, static_cast<int>(n), 0);
+#else
+            // ssize_t, not int: recv(2) returns ssize_t on POSIX and narrowing
+            // it is the same class of sloppiness as reading a length into a
+            // signed char.
+            const ssize_t bytes = ::recv(stream.native_handle(), s, static_cast<size_t>(n), 0);
 
-        if (bytes > 0) return static_cast<std::streamsize>(bytes);
+            // EINTR is a signal arriving mid-call, not a connection failure.
+            // Asio's synchronous read retried on it; treating it as end of
+            // sequence here would disconnect a healthy client whenever a signal
+            // reached this worker thread.
+            if (bytes < 0 && errno == EINTR) continue;
+#endif
+
+            if (bytes > 0) return static_cast<std::streamsize>(bytes);
+
+            break;
+        }
 
         // Boost.IOStreams signals end of sequence by RETURNING -1. The throwing
         // read_some overload raises boost::system::system_error instead, and this
@@ -181,13 +200,30 @@ public:
         // single send may accept less than asked.
         std::streamsize sent = 0;
         while (sent < n) {
+#ifdef WIN32
             const int bytes = ::send(stream.native_handle(), s + sent,
-                                     static_cast<size_t>(n - sent), MSG_NOSIGNAL);
+                                     static_cast<int>(n - sent), MSG_NOSIGNAL);
+#else
+            const ssize_t bytes = ::send(stream.native_handle(), s + sent,
+                                         static_cast<size_t>(n - sent), MSG_NOSIGNAL);
+
+            // As in read(): a signal is not a failure. Breaking here would
+            // report the reply as fully written when it was not.
+            if (bytes < 0 && errno == EINTR) continue;
+#endif
             if (bytes <= 0) break;
             sent += bytes;
         }
 
         if (sent == n) return sent;
+
+        // A short write is reported as consumed, below, because there is no way
+        // to signal an error through this device without throwing from a thread
+        // that cannot catch. Say so in the log, since the client is receiving a
+        // truncated reply and nothing else records that. The send deadline makes
+        // this reachable for a slow-but-alive client, not just a dead one.
+        LogPrintf("RPC: WARNING - short write to client, %d of %d bytes; reply truncated",
+                  static_cast<int64_t>(sent), static_cast<int64_t>(n));
 
         // Same hazard in the other direction: a client that closes before reading
         // the reply gives a broken pipe here, and boost::asio::write's throwing
@@ -207,6 +243,16 @@ public:
             stream.connect(res, error);
 
             if (!error) {
+#ifdef SO_NOSIGPIPE
+                // Darwin/BSD have no MSG_NOSIGNAL -- compat.h defines it as 0 --
+                // and the RPC CLI path never reaches AppInit2, so it never
+                // installs the SIGPIPE handler the daemon relies on. Without
+                // this, a server closing the connection mid-write kills the
+                // client outright. Same call netbase.cpp makes for P2P sockets.
+                int set = 1;
+                setsockopt(stream.native_handle(), SOL_SOCKET, SO_NOSIGPIPE,
+                           (void*)&set, sizeof(int));
+#endif
                 return true;
             }
         }

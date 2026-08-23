@@ -630,7 +630,11 @@ BOOST_AUTO_TEST_CASE(script_FindAndDelete)
 // in-memory set with no other ceiling, so the clamp is the whole point.
 BOOST_AUTO_TEST_CASE(maxsigcachesize_is_resolved_and_clamped)
 {
-    const std::string saved = gArgs.GetArg("-maxsigcachesize", "");
+    // Capture whether it was set at all. Restoring "" would leave the arg SET to
+    // an empty string, which GetArg(name, int64_t) parses as 0 -- i.e. the cache
+    // disabled for the rest of this test binary.
+    const bool had_arg = gArgs.IsArgSet("-maxsigcachesize");
+    const std::string saved = had_arg ? gArgs.GetArg("-maxsigcachesize", "") : std::string();
 
     // A sane operator value passes through untouched.
     gArgs.ForceSetArg("-maxsigcachesize", "120000");
@@ -661,7 +665,13 @@ BOOST_AUTO_TEST_CASE(maxsigcachesize_is_resolved_and_clamped)
     // override the documented default for every node.
     BOOST_CHECK(DEFAULT_MAX_SIG_CACHE_SIZE < MAX_SIG_CACHE_ENTRIES);
 
-    gArgs.ForceSetArg("-maxsigcachesize", saved);
+    if (had_arg) {
+        gArgs.ForceSetArg("-maxsigcachesize", saved);
+    } else {
+        // No clear-arg API; restore the documented default explicitly rather
+        // than leaving the arg set to an empty string.
+        gArgs.ForceSetArg("-maxsigcachesize", ToString(DEFAULT_MAX_SIG_CACHE_SIZE));
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
