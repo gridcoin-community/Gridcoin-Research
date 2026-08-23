@@ -3933,6 +3933,15 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
             _log(logattribute::ERR, __func__, "Project " + project + " part exceeds the maximum of "
                  + ToString(MAX_PART_RECORDS) + " records; rejecting.");
 
+            // Discard what was parsed so far. Every caller merges this map into
+            // the overall stats and none of them looks at the return value, so
+            // returning false alone did not reject anything -- it stopped
+            // parsing and handed back a truncated PREFIX of the project's
+            // statistics, which is worse than the unbounded parse it replaced.
+            // Emptied here, the project contributes nothing, which is what
+            // rejecting the part has to mean.
+            mScraperStats.clear();
+
             return false;
         }
 
@@ -4014,6 +4023,11 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
     if (overlong) {
         _log(logattribute::ERR, __func__, "Project " + project + " part contains a record longer than "
              + ToString(MAX_PART_LINE_BYTES) + " bytes; rejecting.");
+
+        // Same reason as the record-count path above: callers merge this map
+        // regardless of the return value, so it has to be emptied for the
+        // rejection to mean anything.
+        mScraperStats.clear();
 
         return false;
     }
