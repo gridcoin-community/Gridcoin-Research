@@ -199,6 +199,52 @@ bool LookupSubNet(const char* pszName, CSubNet& ret)
     return false;
 }
 
+//! \brief Receive exactly len bytes, or give up at the deadline.
+//!
+//! Every recv() in the SOCKS5 negotiation below was a bare blocking call with
+//! no deadline, so a proxy that accepted the connection and then simply stopped
+//! responding held the connecting thread indefinitely. That is reachable
+//! whenever the configured proxy is unreachable, hung, or hostile, and nothing
+//! else in the negotiation bounds it.
+//!
+//! Bounded with select() and the existing connect timeout, matching the idiom
+//! ConnectSocketDirectly() already uses a few lines below. Chunked rather than
+//! one-shot because the deadline applies to the whole read: a peer that dribbles
+//! one byte per interval must not be able to extend it indefinitely.
+//!
+//! Returns false on timeout, on error, and on a short read -- callers treat all
+//! three the same way, by closing the socket and failing the negotiation.
+static bool InterruptibleRecv(SOCKET hSocket, void* data, size_t len, int timeout_ms)
+{
+    uint8_t* buf = static_cast<uint8_t*>(data);
+    const int64_t deadline = GetTimeMillis() + timeout_ms;
+    size_t have = 0;
+
+    while (have < len)
+    {
+        const int64_t remaining = deadline - GetTimeMillis();
+        if (remaining <= 0) return false;
+
+        struct timeval tv;
+        tv.tv_sec  = remaining / 1000;
+        tv.tv_usec = (remaining % 1000) * 1000;
+
+        fd_set fdset;
+        FD_ZERO(&fdset);
+        FD_SET(hSocket, &fdset);
+
+        const int nRet = select(hSocket + 1, &fdset, nullptr, nullptr, &tv);
+        if (nRet <= 0) return false;   // deadline reached, or select failed
+
+        const ssize_t n = recv(hSocket, (char*)(buf + have), len - have, 0);
+        if (n <= 0) return false;      // closed by peer, or error
+
+        have += static_cast<size_t>(n);
+    }
+
+    return true;
+}
+
 bool static Socks5(string strDest, int port, SOCKET& hSocket)
 {
     LogPrintf("SOCKS5 connecting %s", strDest);
@@ -218,7 +264,7 @@ bool static Socks5(string strDest, int port, SOCKET& hSocket)
         return error("Error sending to proxy");
     }
     char pchRet1[2];
-    if (recv(hSocket, pchRet1, 2, 0) != 2)
+    if (!InterruptibleRecv(hSocket, pchRet1, 2, nConnectTimeout))
     {
         closesocket(hSocket);
         return error("Error reading proxy response");
@@ -241,7 +287,7 @@ bool static Socks5(string strDest, int port, SOCKET& hSocket)
         return error("Error sending to proxy");
     }
     char pchRet2[4];
-    if (recv(hSocket, pchRet2, 4, 0) != 4)
+    if (!InterruptibleRecv(hSocket, pchRet2, 4, nConnectTimeout))
     {
         closesocket(hSocket);
         return error("Error reading proxy response");
@@ -294,17 +340,17 @@ bool static Socks5(string strDest, int port, SOCKET& hSocket)
 
     switch (pchRet2[3])
     {
-        case 0x01: ret = recv(hSocket, (char*)pchRet3, 4, 0) != 4; break;
-        case 0x04: ret = recv(hSocket, (char*)pchRet3, 16, 0) != 16; break;
+        case 0x01: ret = !InterruptibleRecv(hSocket, pchRet3, 4, nConnectTimeout); break;
+        case 0x04: ret = !InterruptibleRecv(hSocket, pchRet3, 16, nConnectTimeout); break;
         case 0x03:
         {
-            ret = recv(hSocket, (char*)pchRet3, 1, 0) != 1;
+            ret = !InterruptibleRecv(hSocket, pchRet3, 1, nConnectTimeout);
             if (ret) {
                 closesocket(hSocket);
                 return error("Error reading from proxy");
             }
             int nRecv = pchRet3[0];
-            ret = recv(hSocket, (char*)pchRet3, nRecv, 0) != nRecv;
+            ret = !InterruptibleRecv(hSocket, pchRet3, nRecv, nConnectTimeout);
             break;
         }
         default: closesocket(hSocket); return error("Error: malformed proxy response");
@@ -314,7 +360,7 @@ bool static Socks5(string strDest, int port, SOCKET& hSocket)
         closesocket(hSocket);
         return error("Error reading from proxy");
     }
-    if (recv(hSocket, (char*)pchRet3, 2, 0) != 2)
+    if (!InterruptibleRecv(hSocket, pchRet3, 2, nConnectTimeout))
     {
         closesocket(hSocket);
         return error("Error reading from proxy");
