@@ -4859,7 +4859,17 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
         CDataStream part(std::move(vchData), SER_NETWORK, 1);
 
-        manifest->addPartData(std::move(part), true);
+        // The part index was reserved before the part existed, so a refused part
+        // would leave the manifest referencing something never created -- a
+        // manifest its own receipt check would then reject. Abandon the publish
+        // instead, and say which part was empty.
+        if (manifest->addPartData(std::move(part), true) < 0)
+        {
+            _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                 "Empty beacon list part (" + inputfile.string() + "); manifest not published.");
+
+            return false;
+        }
 
         iPartNum++;
 
@@ -4892,7 +4902,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
                 part << ScraperVerifiedBeacons.mVerifiedMap;
 
-                manifest->addPartData(std::move(part), true);
+                // See the beacon list part above: the index is already committed.
+                if (manifest->addPartData(std::move(part), true) < 0)
+                {
+                    _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                         "Empty VerifiedBeacons part; manifest not published.");
+
+                    return false;
+                }
 
                 iPartNum++;
             }
@@ -5003,7 +5020,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
             CDataStream part(vchData, SER_NETWORK, 1);
 
-            manifest->addPartData(std::move(part), true);
+            // See the beacon list part above: the index is already committed.
+            if (manifest->addPartData(std::move(part), true) < 0)
+            {
+                _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                     "Empty part for project " + ProjectEntry.project + "; manifest not published.");
+
+                return false;
+            }
 
             iPartNum++;
         }
@@ -5030,7 +5054,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
             part << total_credit_map;
 
-            manifest->addPartData(std::move(part), true);
+            // See the beacon list part above: the index is already committed.
+            if (manifest->addPartData(std::move(part), true) < 0)
+            {
+                _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                     "Empty ProjectsAllCpidTotalCredits part; manifest not published.");
+
+                return false;
+            }
 
             iPartNum++;
         }
@@ -5059,7 +5090,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
                 part << g_project_public_keys;
 
-                manifest->addPartData(std::move(part), true);
+                // See the beacon list part above: the index is already committed.
+                if (manifest->addPartData(std::move(part), true) < 0)
+                {
+                    _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                         "Empty ProjectPublicKeys part; manifest not published.");
+
+                    return false;
+                }
 
                 iPartNum++;
             }

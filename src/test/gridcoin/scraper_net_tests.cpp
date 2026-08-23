@@ -5,8 +5,10 @@
 #include "gridcoin/scraper/scraper_net.h"
 
 #include "hash.h"
+#include "key.h"
 #include "serialize.h"
 #include "streams.h"
+#include "util.h"
 #include "version.h"
 
 #include <boost/test/unit_test.hpp>
@@ -118,6 +120,100 @@ BOOST_AUTO_TEST_CASE(unserializecheck_admits_a_part_hash_vector_at_the_cap)
     LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
 
     BOOST_CHECK_THROW(manifest->UnserializeCheck(ss, banscore), std::ios_base::failure);
+}
+
+namespace {
+//! Build a manifest stream as far as the structural checks read it. The part
+//! list, the beacon-list reference and the project dentries are all that those
+//! checks consult, and they run before signature verification, so no key and no
+//! valid signature are needed. nTime is current so IsManifestCurrent() passes,
+//! and a chainless test process is out of sync by age, which skips
+//! authorization.
+CDataStream ManifestPrefix(size_t part_count, int beacon_list,
+                           const std::vector<int>& project_part1s)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+
+    std::vector<uint256> vph(part_count);
+    for (size_t i = 0; i < part_count; ++i) {
+        vph[i] = Hash(std::vector<unsigned char>{static_cast<unsigned char>(i + 1)});
+    }
+
+    std::vector<CScraperManifest::dentry> projects;
+    for (const int p : project_part1s) {
+        CScraperManifest::dentry d;
+        d.project = "project";
+        d.part1 = p;
+        d.partc = 0;
+        projects.push_back(d);
+    }
+
+    ss << vph;
+    ss << CPubKey();
+    ss << std::string("test-manifest");
+    ss << static_cast<int64_t>(GetAdjustedTime());
+    ss << uint256();
+    ss << beacon_list << static_cast<unsigned int>(0);
+    ss << projects;
+
+    return ss;
+}
+} // anonymous namespace
+
+//!
+//! A part declared but referenced by nothing is refused. Without this a manifest
+//! can declare parts it never uses; each is registered in the process-global
+//! mapParts and held until the manifest ages out, and reclamation is
+//! refcount-driven and so only happens afterwards.
+//!
+BOOST_AUTO_TEST_CASE(unserializecheck_refuses_an_unreferenced_part)
+{
+    // Three parts; the beacon list covers 0 and one project covers 1. Part 2 is
+    // declared and referenced by nothing.
+    CDataStream ss = ManifestPrefix(3, 0, {1});
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+    unsigned int banscore = 0;
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    BOOST_CHECK(manifest->UnserializeCheck(ss, banscore) == false);
+}
+
+//!
+//! The converse: a fully covered part list gets past the coverage rule and fails
+//! later on the truncated stream instead, which is what shows the rule admits
+//! the shape our own publisher emits (beacon list at 0, one part per dentry).
+//!
+BOOST_AUTO_TEST_CASE(unserializecheck_admits_a_fully_referenced_part_list)
+{
+    CDataStream ss = ManifestPrefix(3, 0, {1, 2});
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+    unsigned int banscore = 0;
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    BOOST_CHECK_THROW(manifest->UnserializeCheck(ss, banscore), std::ios_base::failure);
+}
+
+//!
+//! A reference ending exactly at vph.size() names one part past the end. The
+//! ranges are inclusive, so this must be refused -- it passed the previous
+//! comparison, which rejected only strictly-greater, and scraper.cpp indexes
+//! vParts[part1] without a bounds guard.
+//!
+BOOST_AUTO_TEST_CASE(unserializecheck_refuses_a_reference_one_past_the_end)
+{
+    // Two parts, so the only valid indices are 0 and 1. part1 == 2 is one past.
+    CDataStream ss = ManifestPrefix(2, 0, {2});
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+    unsigned int banscore = 0;
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    BOOST_CHECK(manifest->UnserializeCheck(ss, banscore) == false);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

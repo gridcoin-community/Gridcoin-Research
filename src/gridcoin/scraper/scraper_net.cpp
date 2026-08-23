@@ -558,16 +558,75 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     ss >> BeaconList >> BeaconList_c;
     ss >> projects;
 
-    if (BeaconList + BeaconList_c > vph.size())
+    // Reference validity. The comparison is >= rather than >: the ranges are
+    // inclusive, so partc == 0 names exactly one part and a reference ending at
+    // vph.size() names one PAST the end. quorum.cpp:1436 guards the index it
+    // reads, but scraper.cpp:5669 indexes vParts[part1] unguarded, so admitting
+    // that value here is not harmless. An empty vph is rejected by the same
+    // comparison, which is correct: a manifest with no parts carries nothing.
+    //
+    // Negative values are rejected too. BeaconList and part1 are int and default
+    // to -1; the int/unsigned comparison promotes them, so an unset index
+    // becomes a very large unsigned and trips the check.
+    if (BeaconList + BeaconList_c >= vph.size())
     {
         return error("CScraperManifest::UnserializeCheck: beacon part out of range");
     }
 
     for (const dentry& prj : projects)
     {
-        if (prj.part1 + prj.partc > vph.size())
+        if (prj.part1 + prj.partc >= vph.size())
         {
             return error("CScraperManifest::UnserializeCheck: project part out of range");
+        }
+    }
+
+    // Coverage. The checks above reject references pointing outside vph; this
+    // rejects the converse -- parts declared and then never referenced by the
+    // beacon list or any project. Without it a manifest may declare parts it
+    // never uses, and every one is registered in the process-global mapParts by
+    // addPart() below and held until the manifest ages out of the retention
+    // window. Reclamation is refcount-driven (~CSplitBlob) and therefore only
+    // happens after the fact, which is sufficient for housekeeping and not
+    // sufficient against a peer constructing manifests to sit in that window.
+    //
+    // This needs no whitelist, no registry and no sync state, so unlike the
+    // project-count cap below it behaves identically during initial sync. It is
+    // also purely intra-message: it reads only fields of this manifest and says
+    // nothing about whether the part DATA has arrived, so it is unaffected by
+    // the order in which parts or manifests are received.
+    //
+    // banscore_out is deliberately not touched, unlike the length-prefix cap
+    // above: IsManifestAuthorized() has already run by this point and may have
+    // set a score, so assigning here would override a decision already made.
+    {
+        std::vector<bool> referenced(vph.size(), false);
+
+        // The bounds test in each loop is belt-and-suspenders. The range checks
+        // above already reject any reference that reaches this far, so it cannot
+        // fire today -- but it is what stands between a weakened check up there
+        // and an out-of-bounds write down here, and an index that is skipped
+        // simply reads as uncovered and is rejected below.
+        for (unsigned int i = BeaconList; i <= BeaconList + BeaconList_c && i < referenced.size(); ++i)
+        {
+            referenced[i] = true;
+        }
+
+        for (const dentry& prj : projects)
+        {
+            for (unsigned int i = prj.part1; i <= prj.part1 + prj.partc && i < referenced.size(); ++i)
+            {
+                referenced[i] = true;
+            }
+        }
+
+        for (size_t i = 0; i < referenced.size(); ++i)
+        {
+            if (!referenced[i])
+            {
+                return error("CScraperManifest::UnserializeCheck: part %u is declared but never "
+                             "referenced by the beacon list or a project", i);
+            }
         }
     }
 
