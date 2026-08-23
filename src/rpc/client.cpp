@@ -22,7 +22,6 @@
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/asio/ssl.hpp>
 #include <boost/shared_ptr.hpp>
 #include <list>
 #include <stdexcept>
@@ -45,13 +44,10 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
                                 GetConfigFile().string()));
 
     // Connect to localhost
-    bool fUseSSL = gArgs.GetBoolArg("-rpcssl");
     ioContext io_context;
-    ssl::context context(ssl::context::sslv23);
-    context.set_options(ssl::context::no_sslv2);
-    asio::ssl::stream<asio::ip::tcp::socket> sslStream(io_context, context);
-    SSLIOStreamDevice<asio::ip::tcp> d(sslStream, fUseSSL);
-    iostreams::stream< SSLIOStreamDevice<asio::ip::tcp> > stream(d);
+    asio::ip::tcp::socket socket(io_context);
+    SocketIOStreamDevice<asio::ip::tcp> d(socket);
+    iostreams::stream< SocketIOStreamDevice<asio::ip::tcp> > stream(d);
 
     bool fWait = gArgs.GetBoolArg("-rpcwait", false); // -rpcwait means try until server has started or timeout is reached
     int timeout = gArgs.GetArg("-rpcwaittimeout", DEFAULT_WAIT_CLIENT_TIMEOUT); // The max time to wait

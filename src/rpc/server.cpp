@@ -26,7 +26,6 @@
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/asio/ssl.hpp>
 #include <boost/shared_ptr.hpp>
 #include <list>
 #include <algorithm>
@@ -47,7 +46,6 @@ static std::string strRPCUserColonPass;
 
 // These are created by StartRPCThreads, destroyed in StopRPCThreads
 static ioContext* rpc_io_service = nullptr;
-static ssl::context* rpc_ssl_context = nullptr;
 static boost::thread_group* rpc_worker_group = nullptr;
 // Acceptors created by StartRPCThreads. Retained so (a) startup can log the
 // bound endpoints and (b) StopRPCThreads can close() them before tearing down
@@ -744,8 +742,6 @@ void ServiceConnection(AcceptedConnection *conn);
 // Forward declaration required for RPCListen
 template <typename Protocol>
 static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
-                             ssl::context& context,
-                             bool fUseSSL,
                              AcceptedConnection* conn,
                              const boost::system::error_code& error);
 
@@ -753,20 +749,16 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
  * Sets up I/O resources to accept and handle a new connection.
  */
 template <typename Protocol>
-static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
-                      ssl::context& context,
-                      const bool fUseSSL)
+static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor)
 {
     // Accept connection
-    AcceptedConnectionImpl<Protocol>* conn = new AcceptedConnectionImpl<Protocol>(GetIOServiceFromPtr(acceptor), context, fUseSSL);
+    AcceptedConnectionImpl<Protocol>* conn = new AcceptedConnectionImpl<Protocol>(GetIOServiceFromPtr(acceptor));
 
     acceptor->async_accept(
-                conn->sslStream.lowest_layer(),
+                conn->socket,
                 conn->peer,
                 boost::bind(&RPCAcceptHandler<Protocol>,
                             acceptor,
-                            boost::ref(context),
-                            fUseSSL,
                             conn,
                             boost::asio::placeholders::error));
 }
@@ -776,14 +768,12 @@ static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > accep
  */
 template <typename Protocol>
 static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
-                             ssl::context& context,
-                             const bool fUseSSL,
                              AcceptedConnection* conn,
                              const boost::system::error_code& error)
 {
     // Immediately start accepting new connections, except when we're cancelled or our socket is closed.
     if (error != asio::error::operation_aborted && acceptor->is_open())
-        RPCListen(acceptor, context, fUseSSL);
+        RPCListen(acceptor);
 
     // TODO : Actually handle errors
     if (!error)
@@ -794,9 +784,11 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
         AcceptedConnectionImpl<ip::tcp>* tcp_conn = dynamic_cast< AcceptedConnectionImpl<ip::tcp>* >(conn);
         if (tcp_conn && !ClientAllowed(tcp_conn->peer.address()))
         {
-            // Only send a 403 if we're not using SSL to prevent a DoS during the SSL handshake.
-            if (!fUseSSL)
-                conn->stream() << HTTPReply(HTTP_FORBIDDEN, "", false) << std::flush;
+            // The 403 was previously suppressed when TLS was in use, to avoid
+            // replying inside a handshake that had not completed. With -rpcssl
+            // gone there is no handshake to be inside, so a rejected client is
+            // always told why rather than seeing an unexplained closed socket.
+            conn->stream() << HTTPReply(HTTP_FORBIDDEN, "", false) << std::flush;
         }
         // Register before servicing so a concurrent StopRPCThreads() can wake us
         // out of the blocking read loop. If the server is already stopping,
@@ -822,7 +814,7 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
 //! is reported and skipped rather than aborting the rest, so one bad line in a
 //! config does not cost the node every other listener; the caller still treats
 //! "none bound at all" as fatal.
-static bool StartRPCListenersOn(const std::vector<std::string>& binds, bool fUseSSL, std::string& strerr)
+static bool StartRPCListenersOn(const std::vector<std::string>& binds, std::string& strerr)
 {
     using namespace boost::asio;
 
@@ -865,7 +857,7 @@ static bool StartRPCListenersOn(const std::vector<std::string>& binds, bool fUse
             acceptor->bind(endpoint);
             acceptor->listen(socket_base::max_listen_connections);
 
-            RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
+            RPCListen(acceptor);
             rpc_acceptors.push_back(acceptor);
 
             LogPrintf("RPC: bound and listening on %s:%u (-rpcbind)\n",
@@ -920,7 +912,17 @@ void StartRPCThreads()
         return;
     }
 
-    const bool fUseSSL = gArgs.GetBoolArg("-rpcssl");
+    // -rpcssl and its three companion options are gone. Warn rather than ignore:
+    // an operator who believed the RPC port was wrapped in TLS must find out
+    // from the log, not from a packet capture.
+    for (const char* removed : {"-rpcssl", "-rpcsslcertificatechainfile",
+                                "-rpcsslprivatekeyfile", "-rpcsslciphers"}) {
+        if (gArgs.IsArgSet(removed)) {
+            LogPrintf("RPC: WARNING - %s is no longer supported and is being ignored. The JSON-RPC "
+                      "port does not speak TLS. Restrict it with -rpcbind and -rpcallowip, and "
+                      "tunnel it if it must cross an untrusted network.\n", removed);
+        }
+    }
 
     assert(rpc_io_service == nullptr);
 
@@ -937,25 +939,6 @@ void StartRPCThreads()
     }
 
     rpc_io_service = new ioContext();
-    rpc_ssl_context = new ssl::context(ssl::context::sslv23);
-
-    if (fUseSSL)
-    {
-        rpc_ssl_context->set_options(ssl::context::no_sslv2);
-
-        fs::path pathCertFile(gArgs.GetArg("-rpcsslcertificatechainfile", "server.cert"));
-        if (!pathCertFile.is_absolute()) pathCertFile = fs::path(GetDataDir()) / pathCertFile;
-        if (fs::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
-        else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
-
-        fs::path pathPKFile(gArgs.GetArg("-rpcsslprivatekeyfile", "server.pem"));
-        if (!pathPKFile.is_absolute()) pathPKFile = fs::path(GetDataDir()) / pathPKFile;
-        if (fs::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
-        else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
-
-        string strCiphers = gArgs.GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
-        SSL_CTX_set_cipher_list(rpc_ssl_context->native_handle(), strCiphers.c_str());
-    }
 
     // Where to listen.
     //
@@ -992,7 +975,7 @@ void StartRPCThreads()
     // worker-thread startup below -- returning early here would leave the
     // acceptors armed with nothing running io_context::run().
     if (bind_specified) {
-        fListening = StartRPCListenersOn(gArgs.GetArgs("-rpcbind"), fUseSSL, strerr);
+        fListening = StartRPCListenersOn(gArgs.GetArgs("-rpcbind"), strerr);
     } else {
     try
     {
@@ -1005,7 +988,7 @@ void StartRPCThreads()
         acceptor->bind(endpoint);
         acceptor->listen(socket_base::max_listen_connections);
 
-        RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
+        RPCListen(acceptor);
         rpc_acceptors.push_back(acceptor);
         LogPrintf("RPC: bound and listening on [%s]:%u\n", endpoint.address().to_string(), endpoint.port());
 
@@ -1030,7 +1013,7 @@ void StartRPCThreads()
             acceptor->bind(endpoint);
             acceptor->listen(socket_base::max_listen_connections);
 
-            RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
+            RPCListen(acceptor);
             rpc_acceptors.push_back(acceptor);
             LogPrintf("RPC: bound and listening on %s:%u\n", endpoint.address().to_string(), endpoint.port());
 
@@ -1109,8 +1092,6 @@ void StopRPCThreads()
 
     delete rpc_worker_group;
     rpc_worker_group = nullptr;
-    delete rpc_ssl_context;
-    rpc_ssl_context = nullptr;
     delete rpc_io_service;
     rpc_io_service = nullptr;
 }

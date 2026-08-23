@@ -14,7 +14,6 @@
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/asio.hpp>
-#include <boost/asio/ssl.hpp>
 
 #include <univalue.h>
 
@@ -124,55 +123,31 @@ enum RPCErrorCode
 };
 
 //
-// IOStream device that speaks SSL but can also speak non-SSL
+// IOStream device over a plain socket.
+//
+// This was SSLIOStreamDevice, which held a boost::asio::ssl::stream and chose
+// per operation between the TLS layer and next_layer() according to -rpcssl.
+// That option is gone, so the indirection is gone with it: the device holds the
+// socket itself. Removing it also drops the OpenSSL::SSL link, which was linked
+// solely to serve an RPC transport that should not have been carrying TLS.
 //
 template <typename Protocol>
-class SSLIOStreamDevice : public boost::iostreams::device<boost::iostreams::bidirectional> {
+class SocketIOStreamDevice : public boost::iostreams::device<boost::iostreams::bidirectional> {
 public:
-    SSLIOStreamDevice(boost::asio::ssl::stream<typename Protocol::socket> &streamIn, bool fUseSSLIn) : stream(streamIn)
-    {
-        fUseSSL = fUseSSLIn;
-        fNeedHandshake = fUseSSLIn;
-    }
+    explicit SocketIOStreamDevice(typename Protocol::socket& streamIn) : stream(streamIn) {}
 
-    //! \return false if the TLS negotiation failed. Non-throwing for the same
-    //! reason read() and write() are: this runs on an RPC worker thread with no
-    //! handler above it, so an escaping exception terminates the process. An
-    //! earlier revision converted only the data-transfer overloads and left this
-    //! one throwing, which merely moved the abort earlier -- a client that
-    //! disconnects mid-negotiation reaches here, not read().
-    bool handshake(boost::asio::ssl::stream_base::handshake_type role)
-    {
-        if (!fNeedHandshake) return true;
-        fNeedHandshake = false;
-
-        boost::system::error_code ec;
-        stream.handshake(role, ec);
-        if (!ec) return true;
-
-        // The connection never became usable. Callers translate this into their own
-        // end-of-sequence result rather than throwing.
-        return false;
-    }
     std::streamsize read(char* s, std::streamsize n)
     {
-        // HTTPS servers read first. A failed negotiation is end of sequence: there
-        // is no usable connection to read from, and throwing here would abort the
-        // process from a thread that cannot catch.
-        if (!handshake(boost::asio::ssl::stream_base::server)) return -1;
-
         boost::system::error_code ec;
-        const std::size_t bytes = fUseSSL
-            ? stream.read_some(boost::asio::buffer(s, n), ec)
-            : stream.next_layer().read_some(boost::asio::buffer(s, n), ec);
+        const std::size_t bytes = stream.read_some(boost::asio::buffer(s, n), ec);
 
         if (!ec) return static_cast<std::streamsize>(bytes);
 
         // Boost.IOStreams signals end of sequence by RETURNING -1. The throwing
-        // read_some overload used here previously raised boost::system::system_error
-        // instead, and this device is driven from an RPC worker thread with no
-        // handler above it -- so a peer closing its connection terminated the
-        // process with "read_some: End of file".
+        // read_some overload raises boost::system::system_error instead, and this
+        // device is driven from an RPC worker thread with no handler above it --
+        // so a peer closing its connection terminated the process with
+        // "read_some: End of file".
         //
         // That is not an edge case. It is the normal end of every RPC call, and
         // AcceptedConnectionImpl::interrupt() deliberately shuts the socket down to
@@ -184,16 +159,11 @@ public:
         // distinguish: report end of sequence and let the worker close it.
         return -1;
     }
+
     std::streamsize write(const char* s, std::streamsize n)
     {
-        // HTTPS clients write first. Report the write as consumed on a failed
-        // negotiation, matching how the error path below treats a dead connection.
-        if (!handshake(boost::asio::ssl::stream_base::client)) return n;
-
         boost::system::error_code ec;
-        const std::size_t bytes = fUseSSL
-            ? boost::asio::write(stream, boost::asio::buffer(s, n), ec)
-            : boost::asio::write(stream.next_layer(), boost::asio::buffer(s, n), ec);
+        const std::size_t bytes = boost::asio::write(stream, boost::asio::buffer(s, n), ec);
 
         if (!ec) return static_cast<std::streamsize>(bytes);
 
@@ -204,14 +174,15 @@ public:
         // thread that cannot catch.
         return n;
     }
+
     bool connect(const std::string& server, const std::string& port)
     {
         boost::asio::ip::tcp::resolver resolver(GetIOService(stream));
         boost::system::error_code error;
 
         for (const auto& res : resolver.resolve(server, port)) {
-            stream.lowest_layer().close();
-            stream.lowest_layer().connect(res, error);
+            stream.close();
+            stream.connect(res, error);
 
             if (!error) {
                 return true;
@@ -222,9 +193,7 @@ public:
     }
 
 private:
-    bool fNeedHandshake;
-    bool fUseSSL;
-    boost::asio::ssl::stream<typename Protocol::socket>& stream;
+    typename Protocol::socket& stream;
 };
 
 class AcceptedConnection
@@ -247,12 +216,9 @@ template <typename Protocol>
 class AcceptedConnectionImpl : public AcceptedConnection
 {
 public:
-    AcceptedConnectionImpl(
-            ioContext& io_context,
-            boost::asio::ssl::context &context,
-            bool fUseSSL) :
-        sslStream(io_context, context),
-        _d(sslStream, fUseSSL),
+    explicit AcceptedConnectionImpl(ioContext& io_context) :
+        socket(io_context),
+        _d(socket),
         _stream(_d)
     {
     }
@@ -279,15 +245,15 @@ public:
         // recv without racing on file-descriptor reuse. The owning worker
         // still performs the actual close()/delete on its own thread.
         boost::system::error_code ec;
-        sslStream.lowest_layer().shutdown(boost::asio::socket_base::shutdown_both, ec);
+        socket.shutdown(boost::asio::socket_base::shutdown_both, ec);
     }
 
     typename Protocol::endpoint peer;
-    boost::asio::ssl::stream<typename Protocol::socket> sslStream;
+    typename Protocol::socket socket;
 
 private:
-    SSLIOStreamDevice<Protocol> _d;
-    boost::iostreams::stream< SSLIOStreamDevice<Protocol> > _stream;
+    SocketIOStreamDevice<Protocol> _d;
+    boost::iostreams::stream< SocketIOStreamDevice<Protocol> > _stream;
 };
 
 std::string HTTPPost(const std::string& strMsg, const std::map<std::string,std::string>& mapRequestHeaders);

@@ -937,14 +937,6 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcthreads=<n>", "Set the number of threads to service RPC calls (default: 4)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcssl", "Use OpenSSL (https) for JSON-RPC connections", ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcsslcertificatechainfile=<file.cert>", "Server certificate file (default: server.cert)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcsslprivatekeyfile=<file.pem>", "Server private key (default: server.pem)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcsslciphers=<ciphers>",
-                   "Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
 
 #if HAVE_DECL_FORK
     argsman.AddArg("-daemon",
@@ -1029,6 +1021,14 @@ void SetupServerArgs()
     SetupChainParamsBaseOptions(argsman);
 
     // Add the hidden options
+    // Removed options, still accepted so that a node whose config or command
+    // line carries them starts instead of dying on "invalid parameter". The RPC
+    // server logs a warning for each one it finds set.
+    hidden_args.emplace_back("-rpcssl");
+    hidden_args.emplace_back("-rpcsslcertificatechainfile");
+    hidden_args.emplace_back("-rpcsslprivatekeyfile");
+    hidden_args.emplace_back("-rpcsslciphers");
+
     argsman.AddHiddenArgs(hidden_args);
 }
 

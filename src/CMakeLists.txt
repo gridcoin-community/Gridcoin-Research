@@ -290,7 +290,7 @@ target_link_libraries(gridcoin_util PUBLIC
     ${LIBBDB_CXX} ${LIBLEVELDB} ${LIBSECP256K1} ${LIBUNIVALUE}
     Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time Boost::serialization
     CURL::libcurl
-    OpenSSL::Crypto OpenSSL::SSL
+    OpenSSL::Crypto
     Threads::Threads
     ZLIB::ZLIB
 )
@@ -383,7 +383,7 @@ if(ENABLE_DAEMON)
         ${LIBBDB_CXX} ${LIBLEVELDB} ${LIBSECP256K1} ${LIBUNIVALUE}
         Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time Boost::serialization
         CURL::libcurl
-        OpenSSL::Crypto OpenSSL::SSL
+        OpenSSL::Crypto
         Threads::Threads
         ZLIB::ZLIB
     )
