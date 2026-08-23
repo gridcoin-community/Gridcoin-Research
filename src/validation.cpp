@@ -416,6 +416,12 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
     {
         int64_t nValueIn = 0;
         int64_t nFees = 0;
+
+        // Index of the first input whose outpoint is already spent, or -1.
+        // Recorded here rather than acted on immediately so that every DoS(100)
+        // this loop can raise still wins, exactly as before.
+        int conflict_input = -1;
+
         for (unsigned int i = 0; i < tx.vin.size(); i++)
         {
             COutPoint prevout = tx.vin[i].prevout;
@@ -444,10 +450,52 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
             if (!MoneyRange(txPrev.vout[prevout.n].nValue) || !MoneyRange(nValueIn))
                 return state.DoS(100, error("ConnectInputs() : txin values out of range"));
 
+            // Cheap: one array lookup. See the rejection below for why the
+            // result is remembered rather than returned on.
+            if (conflict_input < 0 && !txindex.vSpent[prevout.n].IsNull())
+                conflict_input = static_cast<int>(i);
         }
-        // The first loop above does all the inexpensive checks.
-        // Only if ALL inputs pass do we perform expensive ECDSA signature checks.
-        // Helps prevent CPU exhaustion attacks.
+        // The first loop above does all the inexpensive per-input checks, and
+        // only if ALL inputs pass do we perform the expensive ECDSA signature
+        // checks below. That is what prevents CPU exhaustion, and until this
+        // was added it was not actually true: the conflict check lived in the
+        // loop below, interleaved with VerifySignature. A transaction whose
+        // only defect was an already-spent outpoint in its LAST input cost a
+        // full signature verification for every input before it, and was then
+        // rejected with no DoS score -- deliberately, see below -- so the
+        // sender was neither disconnected nor banned and could send the next
+        // one immediately. At MAX_STANDARD_TX_SIZE that is roughly 675
+        // verifications, held under cs_main, for free and on demand.
+        //
+        // Reject here, between the loops, rather than returning from the loop
+        // itself: letting it run to completion keeps every DoS(100) it can
+        // raise -- including the cumulative MoneyRange check, which depends on
+        // inputs after the conflicting one -- winning exactly as it did before.
+        //
+        // Below nGrandfather the conflict branch in the loop below returns TRUE
+        // for non-miners, i.e. it accepts the transaction. That era is left
+        // entirely to that branch so nothing changes for it.
+        //
+        // The one behavioural difference: a transaction carrying BOTH a bad
+        // signature and a conflict used to be rejected by the signature check
+        // with DoS(100) and is now rejected here without a score. That is peer
+        // scoring, not validity, so it cannot affect which chain a node
+        // follows, and it only ever fired on an attack shape strictly worse
+        // for the attacker than simply omitting the bad signature.
+        if (conflict_input >= 0 && pindexBlock->nHeight >= nGrandfather)
+        {
+            if (fMiner) return false;
+
+            const COutPoint prevout = tx.vin[conflict_input].prevout;
+            const CTxIndex& txindex = inputs[prevout.hash].first;
+
+            return LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)
+                ? error("ConnectInputs() : %s prev tx already used at %s",
+                        tx.GetHash().ToString().c_str(),
+                        txindex.vSpent[prevout.n].ToString().c_str())
+                : false;
+        }
+
         for (unsigned int i = 0; i < tx.vin.size(); i++)
         {
             COutPoint prevout = tx.vin[i].prevout;
