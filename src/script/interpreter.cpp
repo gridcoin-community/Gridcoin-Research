@@ -1235,6 +1235,14 @@ public:
 
         LOCK(cs_sigcache);
 
+        sigdata_type k(hash, vchSig, pubKey);
+        setValid.insert(k);
+
+        // Insert THEN evict. Evicting first, on `size > m_max_size`, left the
+        // set resting at m_max_size + 1: at the limit nothing was evicted, the
+        // insert took it one over, and the next call brought it back. One entry
+        // over a ceiling expressed as a memory budget is a small lie, but it is
+        // a lie the tests and the -maxsigcachesize help text both repeat.
         while (static_cast<int64_t>(setValid.size()) > m_max_size)
         {
             // Evict a random entry. Random because that helps
@@ -1252,9 +1260,6 @@ public:
             // the iterator already names, while holding the lock.
             setValid.erase(it);
         }
-
-        sigdata_type k(hash, vchSig, pubKey);
-        setValid.insert(k);
     }
 };
 

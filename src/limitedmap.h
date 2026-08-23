@@ -20,7 +20,23 @@
 //! are left as asserts. Note that asserts are live in release builds in this
 //! tree: CMakeLists.txt applies -UNDEBUG globally.
 
-/** STL-like map container that only keeps the N elements with the highest value. */
+/** STL-like map container that keeps roughly the N elements with the highest value.
+ *
+ * "Roughly", and the imprecision is upstream's: insert() adds to `map` first and
+ * only indexes the new element in `rmap` AFTER evicting, so the eviction always
+ * picks the lowest-valued PRE-EXISTING element. Inserting a value lower than
+ * everything already held therefore evicts a higher-valued entry and keeps the
+ * new lower one, rather than declining the insert.
+ *
+ * Left as upstream wrote it. This container shipped for years with that
+ * behaviour and the only caller here is mapAlreadyAskedFor, where values are
+ * request times and inserts are almost always "now" -- the highest value, not
+ * the lowest. The one deliberate low insert (chainman.cpp uses 0 to defeat
+ * AskFor's two-minute backoff) raises the value immediately afterwards, so the
+ * entry it displaces is one pending request, bounded and transient. Diverging
+ * from a well-tested upstream container to satisfy its own docstring would buy
+ * less than it costs.
+ */
 template <typename K, typename V>
 class limitedmap
 {
