@@ -51,7 +51,11 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
     // Loopback only warns. Crossing a network refuses outright -- that is where
     // the credentials are actually exposed, and continuing silently would be a
     // downgrade the operator did not ask for and cannot see.
-    if (gArgs.IsArgSet("-rpcssl")) {
+    // GetBoolArg, not IsArgSet. IsArgSet is true for "rpcssl=0" and for
+    // "-norpcssl" -- configurations that explicitly turned TLS OFF -- and
+    // treating those as a request for encryption would refuse remote CLI calls
+    // from operators who never wanted it. Presence is not intent.
+    if (gArgs.GetBoolArg("-rpcssl", false)) {
         const std::string host = gArgs.GetArg("-rpcconnect", "127.0.0.1");
 
         // Resolve the way the connection itself will, with asio's resolver, and
