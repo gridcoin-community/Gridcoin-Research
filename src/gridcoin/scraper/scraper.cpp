@@ -580,6 +580,14 @@ void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist);
  * @param all_cpid_total_credit
  * @return bool true if successful
  */
+//! Longest a single statistics field may be when a part is WRITTEN.
+//!
+//! total_credit, expavg_time and expavg_credit come straight out of the
+//! project's XML, so nothing upstream bounds them. All three are numbers; 64
+//! bytes is far past any real value and far under MAX_PART_LINE_BYTES, leaving
+//! room for the rest of the record.
+constexpr size_t MAX_RAC_FIELD_BYTES = 64;
+
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
                                  BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
                                  ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit)
@@ -3016,9 +3024,32 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             }
 
             // User beacon verified. Append its statistics to the CSV output.
+            const std::string s_expavg_time = ExtractXML(data, "<expavg_time>", "</expavg_time>");
+            const std::string s_expavg_credit = ExtractXML(data, "<expavg_credit>", "</expavg_credit>");
+
+            // These three are lifted verbatim from the project's XML and nothing
+            // upstream bounds them. A single pathological value would produce a
+            // record that read-back refuses -- and refusing one record refuses
+            // the whole part, so one upstream oddity would drop this project out
+            // of convergence on every node that received it. Skip the record.
+            //
+            // No statistics are lost that were not lost already: all three are
+            // parsed as numbers on read-back, so a value this long has always
+            // failed there and been skipped. This only moves the skip to a place
+            // where it cannot take the part with it.
+            if (s_cpid_total_credit.size() > MAX_RAC_FIELD_BYTES
+                || s_expavg_time.size() > MAX_RAC_FIELD_BYTES
+                || s_expavg_credit.size() > MAX_RAC_FIELD_BYTES)
+            {
+                _log(logattribute::WARNING, "ProcessProjectRacFileByCPID",
+                     "Skipping CPID " + cpid + " in project " + project
+                     + ": a statistics field exceeds " + ToString(MAX_RAC_FIELD_BYTES) + " bytes.");
+                continue;
+            }
+
             out << s_cpid_total_credit << ","
-                << ExtractXML(data, "<expavg_time>", "</expavg_time>") << ","
-                << ExtractXML(data, "<expavg_credit>", "</expavg_credit>") << ","
+                << s_expavg_time << ","
+                << s_expavg_credit << ","
                 << cpid
                 << std::endl;
 
