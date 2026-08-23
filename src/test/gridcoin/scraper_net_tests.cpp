@@ -5,11 +5,13 @@
 #include "gridcoin/scraper/scraper_net.h"
 
 #include "hash.h"
+#include "serialize.h"
 #include "streams.h"
 #include "version.h"
 
 #include <boost/test/unit_test.hpp>
 
+#include <ios>
 #include <memory>
 #include <vector>
 
@@ -76,6 +78,46 @@ BOOST_AUTO_TEST_CASE(the_empty_content_hash_is_the_documented_constant)
     BOOST_CHECK_EQUAL(
         empty_hash.ToString(),
         "56944c5d3f98413ef45cf54545538103cc9f298e0575820ad3591376e2e0f65d");
+}
+
+//!
+//! The part-hash vector is the first field on the wire, so its length prefix is
+//! reachable with no signature and no valid manifest behind it. A count above
+//! the ceiling must be refused, and must NOT penalise the peer: the ceiling sits
+//! far above any legitimate manifest, so if it is ever wrong it must not ban.
+//!
+BOOST_AUTO_TEST_CASE(unserializecheck_refuses_an_oversized_part_hash_vector)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    WriteCompactSize(ss, 1025);   // one over the cap, nothing behind it
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    // Sentinel: the guard must actively zero this, not merely leave it alone.
+    unsigned int banscore = 12345;
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    BOOST_CHECK(manifest->UnserializeCheck(ss, banscore) == false);
+    BOOST_CHECK_EQUAL(banscore, 0u);
+}
+
+//!
+//! The boundary, from the other side. A count exactly at the ceiling is admitted
+//! by the cap and then fails on the truncated stream instead -- a different
+//! failure mode, which is what pins the ceiling at 1024 rather than 1023.
+//!
+BOOST_AUTO_TEST_CASE(unserializecheck_admits_a_part_hash_vector_at_the_cap)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    WriteCompactSize(ss, 1024);   // exactly at the cap, still nothing behind it
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+    unsigned int banscore = 0;
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    BOOST_CHECK_THROW(manifest->UnserializeCheck(ss, banscore), std::ios_base::failure);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

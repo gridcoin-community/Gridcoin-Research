@@ -13,6 +13,7 @@
 #include "rpc/server.h"
 #include "rpc/protocol.h"
 #include "rpc/util.h"
+#include "serialize.h"
 #ifdef SCRAPER_NET_PK_AS_ADDRESS
 #include <key_io.h>
 #endif
@@ -37,6 +38,25 @@ extern AppCacheSectionExt GetExtendedScrapersCache();
 extern bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
 
 namespace {
+//! \brief Maximum number of part hashes a manifest may declare.
+//!
+//! A COUNT of uint256, matching what the CompactSize prefix denotes for a
+//! vector<T> -- not a byte size. 1024 hashes is 32 KiB of vector storage,
+//! against a measured worst case of 20 (640 bytes) across 164 mainnet manifests
+//! spanning the full retention window. Our publisher emits exactly one part per
+//! project dentry plus one for the beacon list (partc and BeaconList_c are
+//! hardcoded 0), so this accommodates 1023 dentries against a current 19.
+//!
+//! This bounds the ALLOCATION only, and exists solely because vph is the first
+//! field on the wire, read before `projects`: at this point there is nothing to
+//! validate the count against.
+//!
+//! Deliberately a flat constant rather than a limit derived from the whitelist.
+//! The derived limit is nMaxProjects below, which is gated on !OutOfSyncByAge()
+//! and so is not in force during initial sync -- which is exactly when this has
+//! to hold.
+constexpr uint64_t MAX_MANIFEST_PART_HASHES = 1024;
+
 //! \brief The double-SHA256 of zero-length content.
 //!
 //! A manifest that declares a part with this hash is malformed: RecvPart
@@ -473,7 +493,37 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     const auto pbegin = ss.begin();
 
     std::vector<uint256> vph;
-    ss >> vph;
+
+    {
+        // Read the part-hash vector by hand rather than with `ss >> vph`. The
+        // vector deserializer grows in 5,000,000/sizeof(T) element steps and
+        // allocates against the declared count before reading the data behind
+        // it, so a short message declaring a large count costs a multi-megabyte
+        // allocate-and-memset before the stream runs dry and throws. Checking
+        // the CompactSize prefix is the only point at which that is preventable.
+        const uint64_t part_count = ReadCompactSize(ss);
+
+        if (part_count > MAX_MANIFEST_PART_HASHES) {
+            // Reject the manifest without penalising the peer, and say so
+            // explicitly rather than leaning on RecvManifest's zero
+            // initialisation: a ceiling this far above any legitimate manifest
+            // must not ban if it ever turns out to be wrong. Nothing in this
+            // function has written banscore_out yet -- IsManifestAuthorized()
+            // below is the first -- so this cannot override a decision already
+            // made.
+            banscore_out = 0;
+
+            return error("CScraperManifest::UnserializeCheck: manifest declares %u part hashes, "
+                         "maximum is %u", part_count, MAX_MANIFEST_PART_HASHES);
+        }
+
+        vph.resize(part_count);
+
+        for (uint256& ph : vph) {
+            ss >> ph;
+        }
+    }
+
     ss >> pubkey;
     ss >> sCManifestName;
     ss >> nTime;
