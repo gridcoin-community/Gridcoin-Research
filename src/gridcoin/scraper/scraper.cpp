@@ -5833,8 +5833,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
                     continue;
                 }
 
-                if (iter.project == "VerifiedBeacons" || iter.project == "ProjectsAllCpidTotalCredits"
-                        || iter.project == "ProjectPublicKeys") {
+                if (IsManifestPseudoProject(iter.project)) {
                     StructConvergedManifest.ConvergedManifestPartPtrsMap.insert(std::make_pair(iter.project,
                                                                                                manifest->vParts[iter.part1]));
                 }
@@ -5888,10 +5887,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
                 for (iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.begin();
                      iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end(); ++iter)
                 {
-                    if (iter->first != "BeaconList"
-                            && iter->first != "VerifiedBeacons"
-                            && iter->first != "ProjectsAllCpidTotalCredits"
-                            && iter->first != "ProjectPublicKeys")
+                    if (iter->first != "BeaconList" && !IsManifestPseudoProject(iter->first))
                     {
                         StructConvergedManifest.CScraperConvergedManifest_ptr->addPart(iter->second->hash);
                     }
@@ -6799,10 +6795,7 @@ UniValue convergencereport(const UniValue& params)
 
         for (const auto& entry : ConvergedScraperStatsCache.Convergence.ConvergedManifestPartPtrsMap)
         {
-            if (entry.first == "BeaconList"
-                || entry.first == "VerifiedBeacons"
-                || entry.first == "ProjectsAllCpidTotalCredits"
-                || entry.first == "ProjectPublicKeys") {
+            if (entry.first == "BeaconList" || IsManifestPseudoProject(entry.first)) {
                 continue;
             }
 
