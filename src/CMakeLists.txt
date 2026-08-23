@@ -290,7 +290,16 @@ target_link_libraries(gridcoin_util PUBLIC
     ${LIBBDB_CXX} ${LIBLEVELDB} ${LIBSECP256K1} ${LIBUNIVALUE}
     Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time Boost::serialization
     CURL::libcurl
-    OpenSSL::Crypto
+    # OpenSSL::SSL is linked for libcurl, NOT for the RPC server.
+    #
+    # -rpcssl is gone and no Gridcoin code calls into libssl any more, which
+    # made this look removable. It is not: the scraper fetches project
+    # statistics over HTTPS through libcurl, whose OpenSSL backend needs these
+    # symbols. A dynamic build hides that -- libcurl.so pulls libssl.so in
+    # transitively -- so removing it builds and links cleanly on the native
+    # target and fails only in the static depends build, with 54 undefined
+    # SSL_* references out of libcurl.a.
+    OpenSSL::Crypto OpenSSL::SSL
     Threads::Threads
     ZLIB::ZLIB
 )
@@ -383,7 +392,7 @@ if(ENABLE_DAEMON)
         ${LIBBDB_CXX} ${LIBLEVELDB} ${LIBSECP256K1} ${LIBUNIVALUE}
         Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time Boost::serialization
         CURL::libcurl
-        OpenSSL::Crypto
+        OpenSSL::Crypto OpenSSL::SSL
         Threads::Threads
         ZLIB::ZLIB
     )
