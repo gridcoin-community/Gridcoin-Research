@@ -36,6 +36,27 @@ static constexpr unsigned int STANDARD_SCRIPT_VERIFY_FLAGS{MANDATORY_SCRIPT_VERI
                                                              SCRIPT_VERIFY_CHECKSEQUENCEVERIFY |
                                                              SCRIPT_VERIFY_LOW_S};
 
+/**
+ * Script verification flags that close signature malleability, activated as
+ * CONSENSUS at block version 15 by GetBlockScriptFlags().
+ *
+ * Named for what they are rather than where they are applied: v15 turns them on
+ * for relay and for block validity at the same height, so there is no window in
+ * which a staker assembles a block from its own mempool that its peers reject.
+ *
+ * These close what the crypto layer leaves open by design -- pubkey.cpp
+ * normalizes high-S on verification and documents that enforcement belongs to
+ * SCRIPT_VERIFY_LOW_S, which nothing was setting. Safe to require because
+ * CKey::Sign() produces low-S, canonical-DER signatures by construction, so no
+ * transaction this wallet has ever produced is affected.
+ */
+static constexpr unsigned int V15_SCRIPT_VERIFY_FLAGS{SCRIPT_VERIFY_LOW_S |
+                                                      SCRIPT_VERIFY_DERSIG |
+                                                      SCRIPT_VERIFY_STRICTENC |
+                                                      SCRIPT_VERIFY_NULLDUMMY |
+                                                      SCRIPT_VERIFY_MINIMALDATA |
+                                                      SCRIPT_VERIFY_CLEANSTACK};
+
 /** For convenience, standard but not mandatory verify flags. */
 static constexpr unsigned int STANDARD_NOT_MANDATORY_VERIFY_FLAGS{STANDARD_SCRIPT_VERIFY_FLAGS & ~MANDATORY_SCRIPT_VERIFY_FLAGS};
 

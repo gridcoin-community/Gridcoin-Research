@@ -433,6 +433,30 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
         // would not save it, since the error is the height, not the software.
         const int script_flag_height = fBlock ? pindexBlock->nHeight : pindexBlock->nHeight + 1;
 
+        // Consensus flags decide validity and apply on every path.
+        const unsigned int consensus_flags = GetBlockScriptFlags(script_flag_height);
+
+        // Local policy flags, applied to mempool acceptance only. Zero today.
+        //
+        // This tier exists so that a flag can ever be tightened for RELAY
+        // without banning honest peers, and that is why it lands even while
+        // empty: until a node can tell "consensus-invalid" from "non-standard
+        // to me", every ConnectInputs failure is DoS(100) and any future
+        // tightening scores peers for relaying transactions that are perfectly
+        // valid. The split is the prerequisite; the flags are a separate
+        // decision each time.
+        //
+        // The v15 malleability flags are NOT here. They activate as consensus
+        // in GetBlockScriptFlags() above, which turns them on for relay and for
+        // block validity at the same height -- a coordinated change rather than
+        // a staggered one, and no window where a staker builds from its own
+        // mempool a block its peers reject.
+        // When a flag is added it belongs behind (!fBlock && !fMiner), i.e.
+        // mempool acceptance only -- never when connecting a block, where it
+        // would change which chain this node follows, and never for the miner,
+        // which is assembling a block and must judge by validity alone.
+        const unsigned int policy_flags = 0;
+
         int64_t nValueIn = 0;
         int64_t nFees = 0;
 
@@ -563,9 +587,36 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
                 // verification is not measurable.
                 g_connectinputs_signature_checks.fetch_add(1, std::memory_order_relaxed);
 
-                // Verify signature
-                if (!VerifySignature(txPrev, tx, GetBlockScriptFlags(script_flag_height), i, 0))
+                // Verify signature.
+                //
+                // Two tiers, and the distinction is the whole point. The
+                // consensus flags decide VALIDITY: failing them means the
+                // transaction could never be in a block, so the peer that
+                // relayed it is relaying garbage and earns a ban. The policy
+                // flags are this node's local standard, applied on the mempool
+                // path only. Failing those means the transaction is merely
+                // non-standard to US -- it may be perfectly valid, and other
+                // nodes may relay it quite legitimately -- so it is dropped
+                // quietly and the relayer is NOT scored.
+                //
+                // Before this, every failure was DoS(100) with no way to tell
+                // the two apart, which meant no mempool flag could be tightened
+                // without banning honest peers for relaying transactions that
+                // are consensus-valid. That is why the split has to land before
+                // the flags do, not alongside them.
+                if (!VerifySignature(txPrev, tx, consensus_flags | policy_flags, i, 0))
                 {
+                    // Re-verify with consensus flags alone to place the blame.
+                    // Only worth doing when policy actually added something.
+                    if (policy_flags != 0
+                        && VerifySignature(txPrev, tx, consensus_flags, i, 0))
+                    {
+                        return state.Invalid(
+                            error("ConnectInputs() : %s non-mandatory script verify failure",
+                                  tx.GetHash().ToString().substr(0,10).c_str()),
+                            "non-mandatory-script-verify-flag");
+                    }
+
                     return state.DoS(100,error("ConnectInputs() : %s VerifySignature failed", tx.GetHash().ToString().substr(0,10).c_str()));
                 }
             }
@@ -1028,6 +1079,30 @@ unsigned int GetBlockScriptFlags(int nHeight)
     if (IsV14Enabled(nHeight)) {
         flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
         flags |= SCRIPT_VERIFY_CHECKSEQUENCEVERIFY;
+    }
+
+    // Signature malleability closes at block version 15, the same shape v14
+    // used for CLTV/CSV.
+    //
+    // These are the flags MEMPOOL_POLICY_SCRIPT_VERIFY_FLAGS applies as local
+    // standardness once v15 is live; here they become binding. The progression
+    // is deliberate and is the usual one: a node stops RELAYING these
+    // transactions and stops ACCEPTING blocks that contain them at the same
+    // height, so there is no window in which a staker builds a block from its
+    // own mempool that its peers then reject.
+    //
+    // Inert until v15 is scheduled -- BlockV15Height is
+    // numeric_limits<int>::max() -- so landing this early costs nothing and
+    // means the activation itself is a chainparams change rather than a code
+    // change made under fork pressure.
+    //
+    // What this fixes: pubkey.cpp normalizes high-S on verification and
+    // documents that enforcement belongs to SCRIPT_VERIFY_LOW_S. Nothing set
+    // it, so the other half of that division of responsibility was never
+    // wired up and third-party malleation of an otherwise-canonical signature
+    // stayed possible.
+    if (IsV15Enabled(nHeight)) {
+        flags |= V15_SCRIPT_VERIFY_FLAGS;
     }
 
     return flags;

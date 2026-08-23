@@ -4,6 +4,8 @@
 
 #include <validation.h>
 #include <chainparams.h>
+#include <policy/policy.h>
+#include <limits>
 #include <script/interpreter.h>
 #include <script/script.h>
 #include <txdb.h>
@@ -164,6 +166,47 @@ BOOST_AUTO_TEST_CASE(script_flags_follow_the_height_a_transaction_lands_at)
     // The distinction the fix turns on: a miner or mempool holding the index at
     // v14 - 1 is building for v14, and must use v14's flags, not that index's.
     BOOST_CHECK(before != at);
+}
+
+
+//!
+//! The v15 malleability flags are gated, and inert until v15 is scheduled.
+//!
+//! Landing them early is only safe if they genuinely do nothing at present.
+//! BlockV15Height is numeric_limits<int>::max() until a release schedules it,
+//! so every reachable height must produce the pre-v15 flag set.
+//!
+BOOST_AUTO_TEST_CASE(v15_script_flags_are_inert_until_v15_is_scheduled)
+{
+    const int v15 = GetBlockV15Height();
+
+    // Unscheduled today. If this ever fails, v15 has been given a height and
+    // the assertions below need revisiting rather than deleting.
+    BOOST_REQUIRE_EQUAL(v15, std::numeric_limits<int>::max());
+
+    for (const int h : {0, 1, 1000000, 3989999, 3990000, 4000000, 100000000}) {
+        const unsigned int flags = GetBlockScriptFlags(h);
+        BOOST_CHECK_MESSAGE((flags & V15_SCRIPT_VERIFY_FLAGS) == 0,
+                            "v15 flags leaked at height " << h);
+    }
+}
+
+//!
+//! And that they are the right flags once it is.
+//!
+BOOST_AUTO_TEST_CASE(v15_script_flags_close_malleability_at_activation)
+{
+    // Below the gate: none of them. At and above: all of them, and the v14 set
+    // is still present, since v15 adds rather than replaces.
+    const unsigned int below = GetBlockScriptFlags(std::numeric_limits<int>::max() - 1);
+    BOOST_CHECK((below & SCRIPT_VERIFY_LOW_S) == 0);
+
+    const unsigned int at = GetBlockScriptFlags(std::numeric_limits<int>::max());
+    BOOST_CHECK((at & V15_SCRIPT_VERIFY_FLAGS) == V15_SCRIPT_VERIFY_FLAGS);
+    BOOST_CHECK((at & SCRIPT_VERIFY_LOW_S) != 0);
+    BOOST_CHECK((at & SCRIPT_VERIFY_P2SH) != 0);
+    BOOST_CHECK((at & SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY) != 0);
+    BOOST_CHECK((at & SCRIPT_VERIFY_CHECKSEQUENCEVERIFY) != 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
