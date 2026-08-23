@@ -175,7 +175,16 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
 bool CheckBlockSignature(const CBlock& block);
 
 // Returns the script flags which should be checked for a given block
-unsigned int GetBlockScriptFlags(const CBlockIndex& block_index);
+//! Script verification flags in force at a given block height.
+//!
+//! Takes a height rather than a CBlockIndex because callers disagree about
+//! which block they mean: connecting a block it is that block, but on the
+//! mempool and miner paths the index in hand is the PREVIOUS one and the
+//! transaction is bound for the next. Passing an index invited each caller to
+//! hand over whichever one it had, which is how two of the three came to be a
+//! height low. Mirrors ComputeBlockVersion, which takes a height for the same
+//! reason.
+unsigned int GetBlockScriptFlags(int nHeight);
 
 unsigned int GetCoinstakeOutputLimit(const int& block_version);
 unsigned int GetMandatorySideStakeOutputLimit(const int& block_version);

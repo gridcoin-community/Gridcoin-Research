@@ -416,6 +416,23 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
     // ... both are false when called from CTransaction::AcceptToMemoryPool
     if (!tx.IsCoinBase())
     {
+        // Height of the block these inputs will be validated IN, which is not
+        // always pindexBlock's own height.
+        //
+        // Connecting a block, pindexBlock IS that block. On the mempool and
+        // miner paths it is the PREVIOUS block -- pindexBest and pindexPrev
+        // respectively -- and the transaction is destined for the next one, so
+        // both were evaluating script flags one height low.
+        //
+        // No effect today: the only height at which the flag set differs from
+        // its successor is exactly BlockV14Height - 1, which is behind the tip
+        // and behind the checkpoints, and BlockV15Height is unscheduled. It
+        // matters at the NEXT activation, where a staker computing pre-fork
+        // flags for a block validators judge with post-fork flags would build a
+        // block the network rejects and lose the stake -- and being upgraded
+        // would not save it, since the error is the height, not the software.
+        const int script_flag_height = fBlock ? pindexBlock->nHeight : pindexBlock->nHeight + 1;
+
         int64_t nValueIn = 0;
         int64_t nFees = 0;
 
@@ -547,7 +564,7 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
                 g_connectinputs_signature_checks.fetch_add(1, std::memory_order_relaxed);
 
                 // Verify signature
-                if (!VerifySignature(txPrev, tx, GetBlockScriptFlags(*pindexBlock), i, 0))
+                if (!VerifySignature(txPrev, tx, GetBlockScriptFlags(script_flag_height), i, 0))
                 {
                     return state.DoS(100,error("ConnectInputs() : %s VerifySignature failed", tx.GetHash().ToString().substr(0,10).c_str()));
                 }
@@ -1003,12 +1020,12 @@ bool GridcoinConnectBlock(
 }
 } // Anonymous namespace
 
-unsigned int GetBlockScriptFlags(const CBlockIndex& block_index)
+unsigned int GetBlockScriptFlags(int nHeight)
 {
     unsigned int flags{SCRIPT_VERIFY_P2SH};
 
     // BIP65 (CLTV) and BIP112 (CSV) are enforced starting with block version 14.
-    if (IsV14Enabled(block_index.nHeight)) {
+    if (IsV14Enabled(nHeight)) {
         flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
         flags |= SCRIPT_VERIFY_CHECKSEQUENCEVERIFY;
     }

@@ -3,6 +3,9 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <validation.h>
+#include <chainparams.h>
+#include <script/interpreter.h>
+#include <script/script.h>
 #include <txdb.h>
 #include <primitives/transaction.h>
 
@@ -129,6 +132,38 @@ BOOST_AUTO_TEST_CASE(a_clean_input_set_reaches_the_signature_loop)
                         CDiskTxPos(1, 1, 1), &index, /*fBlock=*/false, /*fMiner=*/false);
 
     BOOST_CHECK_EQUAL(g_connectinputs_signature_checks.load() - before, 1u);
+}
+
+
+//!
+//! Script flags are evaluated at the height the transaction will be validated
+//! IN, which is not always the height of the index the caller happens to hold.
+//!
+//! Connecting a block, that index IS the block. On the mempool and miner paths
+//! it is the PREVIOUS block, and the transaction is bound for the next one --
+//! so both were a height low. Harmless while no activation boundary is nearby,
+//! and a lost stake at the next one: a staker computing pre-fork flags builds a
+//! block that validators, computing post-fork flags, reject.
+//!
+BOOST_AUTO_TEST_CASE(script_flags_follow_the_height_a_transaction_lands_at)
+{
+    const int v14 = Params().GetConsensus().BlockV14Height;
+
+    // Straddling the activation, the flag set differs by exactly one height.
+    const unsigned int before = GetBlockScriptFlags(v14 - 1);
+    const unsigned int at     = GetBlockScriptFlags(v14);
+
+    BOOST_CHECK((before & SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY) == 0);
+    BOOST_CHECK((at & SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY) != 0);
+    BOOST_CHECK((at & SCRIPT_VERIFY_CHECKSEQUENCEVERIFY) != 0);
+
+    // P2SH is unconditional on both sides.
+    BOOST_CHECK((before & SCRIPT_VERIFY_P2SH) != 0);
+    BOOST_CHECK((at & SCRIPT_VERIFY_P2SH) != 0);
+
+    // The distinction the fix turns on: a miner or mempool holding the index at
+    // v14 - 1 is building for v14, and must use v14's flags, not that index's.
+    BOOST_CHECK(before != at);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
