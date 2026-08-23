@@ -408,6 +408,23 @@ EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 
 // This is the complement to IsScraperAuthorizedToBroadcastManifests in the scraper.
 // It is used to determine whether received manifests are authorized.
+//
+// This check is SKIPPED while the receiving node is out of sync by age, at the
+// OutOfSyncByAge() branch in UnserializeCheck(). That is deliberate and is
+// documented there. It is safe because of a design property that is easy to miss
+// when reading this function alone:
+//
+//   An in-sync node TERMINATES a rogue manifest rather than passing it on.
+//   RecvManifest() emplaces speculatively, UnserializeCheck() rejects an
+//   unauthorized key here, and the caller then erases the entry and scores the
+//   sender. The MSG_SCRAPERINDEX relay runs from Complete(), which is reached
+//   only on success -- so an unauthorized manifest is not stored, not served and
+//   not relayed.
+//
+// Since the great majority of nodes on a working network are in sync, injection
+// cannot propagate through them: every victim needs a direct connection from the
+// attacker. The exposure is point to point, not network wide, which is why the
+// skip is tolerable rather than alarming.
 bool CScraperManifest::IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, unsigned int& banscore_out)
 EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 {
@@ -533,9 +550,42 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     // the manifest is authorized, then set the checked flag to true,
     // otherwise terminate the unserializecheck and return false,
     // which will also result in an increase in banscore, if past the grace period.
+    //
+    // THE SKIP BELOW IS DELIBERATE AND LOAD-BEARING. Do not "fix" it by gating
+    // manifest ingest on sync state, and do not add a getmanifests message. Two
+    // separate reasons, both of which cost more than the skip does:
+    //
+    //   1. Authorization is evaluated against the appcache, which is not usable
+    //      while out of sync. Checking anyway would ban a NEWLY AUTHORIZED
+    //      scraper, because this node cannot yet see the authorization.
+    //
+    //   2. Refill precedes housekeeping, and that ORDERING is the safety
+    //      property. PushInvTo() fires at the version handshake and is not gated
+    //      on our own sync state, so a syncing node fills to a complete manifest
+    //      set within seconds of connecting, while housekeeping stays blocked
+    //      until in sync. Housekeeping's first pass therefore always sees a
+    //      COMPLETE set. Gating ingest here inverts that: refill would begin
+    //      after sync, concurrent with housekeeping, so the first pass could run
+    //      on a PARTIAL set. Because the supermajority denominator is the
+    //      locally observed scraper count, a partial set can self-converge on a
+    //      minority view, permanently latch bMinHousekeepingComplete, and
+    //      thereafter return INVALID for legitimate superblocks -- a stall, and
+    //      honest peers banned. Scrapers are also quiescent roughly 20 hours in
+    //      24, so a node syncing in the quiet window would hold no manifests at
+    //      all for hours under such a gate.
+    //
+    // What makes the skip acceptable is documented above IsManifestAuthorized():
+    // an in-sync node terminates a rogue manifest instead of relaying it, so the
+    // exposure is point to point rather than network wide. The bounds checks in
+    // this function are what actually limit what an unauthenticated sender can
+    // cost us.
     if (OutOfSyncByAge())
     {
         bCheckedAuthorized = false;
+
+        LogPrint(BCLog::LogFlags::MANIFEST, "CScraperManifest::UnserializeCheck: accepting manifest "
+                 "\"%s\" without an authorization check: this node is out of sync by age. See the "
+                 "comment above for why this is deliberate.", sCManifestName);
     }
     else if (IsManifestAuthorized(nTime, pubkey, banscore_out))
     {

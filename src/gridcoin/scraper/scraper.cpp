@@ -5233,6 +5233,20 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
     std::multimap<uint256, std::pair<ScraperID, uint256>> mManifestsBinnedbyContent;
     std::multimap<uint256, std::pair<ScraperID, uint256>>::iterator convergence;
 
+    // The denominator for the supermajority is the LOCALLY OBSERVED scraper
+    // count -- how many scrapers this node actually holds manifests from -- and
+    // that is correct by design, not an approximation to be tightened.
+    //
+    // Using the on-chain authorized scraper count instead would stall superblock
+    // production network wide whenever an authorized scraper is merely offline,
+    // which is routine: deauthorization is a manual governance action, so an
+    // idle or failed scraper stays authorized indefinitely. Measuring who is
+    // actually publishing is what keeps convergence possible in that state.
+    //
+    // This is also why manifest ingest must not be gated on sync state (see the
+    // OutOfSyncByAge branch in CScraperManifest::UnserializeCheck): a partial
+    // manifest set reaching housekeeping would shrink this denominator and let a
+    // minority view self-converge.
     unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
 
     _log(logattribute::INFO, "ScraperConstructConvergedManifest",
