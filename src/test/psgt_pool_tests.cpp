@@ -477,7 +477,10 @@ BOOST_AUTO_TEST_CASE(pool_utxo_conflict_eviction)
     spender.vin[0].scriptSig = CScript() << 0;
     spender.vout.push_back(CTxOut(10 * COIN - 1000000, P2PKH(MakeKey().GetPubKey().GetID())));
 
-    pool.TransactionAddedToMempool(MakeTransactionRef(CTransaction(spender)));
+    {
+        LOCK(cs_main);
+        pool.TransactionAddedToMempool(MakeTransactionRef(CTransaction(spender)));
+    }
 
     BOOST_CHECK_EQUAL(pool.Size(), 0u);
     BOOST_CHECK(!pool.Get(image).has_value());
@@ -495,7 +498,10 @@ BOOST_AUTO_TEST_CASE(pool_utxo_conflict_eviction)
 
     CBlock block;
     block.vtx.push_back(CTransaction(spender));
-    pool.BlockConnected(block, 100);
+    {
+        LOCK(cs_main);
+        pool.BlockConnected(block, 100);
+    }
 
     BOOST_CHECK_EQUAL(pool.Size(), 0u);
     BOOST_REQUIRE_EQUAL(events.size(), 4u);
@@ -509,7 +515,10 @@ BOOST_AUTO_TEST_CASE(pool_utxo_conflict_eviction)
 
     CMutableTransaction unrelated = spender;
     unrelated.vin[0].prevout = COutPoint(InsecureRand256(), 0);
-    pool.TransactionAddedToMempool(MakeTransactionRef(CTransaction(unrelated)));
+    {
+        LOCK(cs_main);
+        pool.TransactionAddedToMempool(MakeTransactionRef(CTransaction(unrelated)));
+    }
     BOOST_CHECK_EQUAL(pool.Size(), 1u);
 }
 
