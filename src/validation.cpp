@@ -143,20 +143,22 @@ bool ReadTxFromDisk(CTransaction& tx, COutPoint prevout)
     return ReadTxFromDisk(tx, txdb, prevout, txindex);
 }
 
-bool CheckTransaction(const CTransaction& tx, CValidationState& state, int nHeight)
+bool CheckTransaction(const CTransaction& tx, CValidationState& state, bool v15_rules)
 {
     // Basic checks that don't depend on any context
     if (tx.vin.empty())
         return state.DoS(10, error("CheckTransaction() : vin empty"));
     if (tx.vout.empty())
         return state.DoS(10, error("CheckTransaction() : vout empty"));
-    // Size limits. From v15 a coinbase or coinstake carrying a superblock is
-    // measured without it: the block-level check bounds the whole block, and
+    // Size limits. Under v15 rules a coinbase or coinstake carrying a superblock
+    // is measured without it: the block-level check bounds the whole block, and
     // bounds the superblock separately.
     //
-    // nHeight defaults to 0, so callers with no block context are unaffected;
-    // only CheckBlock() passes a height.
-    const int serialize_type = IsV15Enabled(nHeight) ? (SER_NETWORK | SER_SKIPSUPERBLOCK) : 0;
+    // Takes the caller's determination rather than a height, for the reason
+    // spelled out in CheckBlock(): the height available there is the tip's next
+    // height, not necessarily this block's. Defaults to false, so the callers
+    // with no block context are unaffected -- only CheckBlock() passes it.
+    const int serialize_type = v15_rules ? (SER_NETWORK | SER_SKIPSUPERBLOCK) : 0;
 
     if (GetSerializeSize(tx, serialize_type, PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
         return state.DoS(100, error("CheckTransaction() : size limits failed"));
@@ -1431,7 +1433,28 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
         return state.DoS(100, error("%s: block has no transactions", __func__));
     }
 
-    const int block_size_type = (block.GetSuperblock()->WellFormed() && IsV15Enabled(height1))
+    // Keyed on the BLOCK'S OWN VERSION, not on a height.
+    //
+    // CheckBlock() does not reliably know the height of the block in front of
+    // it: ProcessBlock() passes pindexBest->nHeight + 1, the tip's next height,
+    // which is not this block's height for an orphan, a block arriving out of
+    // order, or a node catching up. ConnectBlock() passes the real height, but
+    // fChecked short-circuits that second call, so the approximate verdict is
+    // the only one that ever runs.
+    //
+    // Getting that wrong around an activation is a consensus split, not a
+    // nuisance: a node whose tip sits below the activation height would judge a
+    // valid post-activation block by the older rule, reject it, and score the
+    // honest peer that relayed it.
+    //
+    // The block's version does not have that problem -- it travels with the
+    // block. AcceptBlock() enforces version against the authoritative height
+    // (pindexPrev->nHeight + 1) and rejects a v15 block below the activation
+    // height as well as a pre-v15 block at or above it, so a block cannot claim
+    // this envelope and also be accepted at a height that does not permit it.
+    const bool v15_rules = block.nVersion >= 15;
+
+    const int block_size_type = (block.GetSuperblock()->WellFormed() && v15_rules)
         ? (SER_NETWORK | SER_SKIPSUPERBLOCK)
         : 0;
 
@@ -1519,7 +1542,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
     // Check transactions
     for (auto const& tx : block.vtx)
     {
-        if (!CheckTransaction(tx, state, height1))
+        if (!CheckTransaction(tx, state, v15_rules))
             return error("%s: CheckTransaction failed", __func__);
 
         // ppcoin: check transaction timestamp

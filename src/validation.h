@@ -66,7 +66,11 @@ bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout, CTxIndex& 
 bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout);
 bool ReadTxFromDisk(CTransaction& tx, COutPoint prevout);
 
-bool CheckTransaction(const CTransaction& tx, CValidationState& state, int nHeight = 0);
+//! v15_rules is the CALLER's determination that block-version-15 rules apply,
+//! not a height: CheckBlock() derives it from the block's own nVersion because
+//! the height it is given is the tip's next height rather than the block's.
+//! Defaults to false, so callers with no block context are unaffected.
+bool CheckTransaction(const CTransaction& tx, CValidationState& state, bool v15_rules = false);
 
 //! \brief Check the validity of any contracts contained in the transaction.
 //!

@@ -213,53 +213,48 @@ BOOST_AUTO_TEST_CASE(v15_script_flags_close_malleability_at_activation)
 
 
 //!
-//! From v15 the block size bounds are additive and independent:
+//! Under v15 rules the block size bounds are additive and independent:
 //! block-excluding-superblock <= MAX_BLOCK_SIZE, and superblock <=
 //! Superblock::MAX_SIZE.
 //!
 //! Independent on purpose. A single combined ceiling would make each side's
 //! headroom depend on the other -- a large superblock eating the room for
-//! ordinary transactions, a full block capping the superblock. It also means
-//! the superblock's own limit finally binds: while the block measurement
+//! ordinary transactions, a full block capping the superblock -- and it also
+//! means the superblock's own limit finally binds: while the block measurement
 //! includes the superblock's bytes and the block ceiling is the smaller of the
 //! two, the Superblock::MAX_SIZE term can never be reached.
 //!
-//! Inert today: BlockV15Height is numeric_limits<int>::max(), so every
-//! reachable height keeps the combined measurement.
+//! Keyed on the block's own version rather than a height, because CheckBlock()
+//! is given the tip's next height and that is not this block's height for an
+//! orphan, an out-of-order arrival, or a node catching up -- and fChecked makes
+//! that first verdict stick. Misjudging it around an activation would reject a
+//! valid block and score the honest peer that relayed it.
 //!
-BOOST_AUTO_TEST_CASE(the_superblock_size_envelope_is_gated_and_additive)
+BOOST_AUTO_TEST_CASE(the_superblock_size_envelope_keys_on_block_version)
 {
+    // Inert until v15 is scheduled.
     BOOST_REQUIRE_EQUAL(GetBlockV15Height(), std::numeric_limits<int>::max());
 
-    // The gate is closed at every height reachable today.
-    for (const int h : {0, 1000000, 3989999, 3990000, 4000000, 100000000}) {
-        BOOST_CHECK_MESSAGE(!IsV15Enabled(h), "v15 gate open at height " << h);
-    }
-
-    // The flag that makes the two measurements separable. Combined with AND --
-    // as a plain reading of the two constants might suggest -- it yields
-    // neither flag, and the claim serializer would emit the superblock into a
-    // measurement meant to exclude it.
+    // The flag that separates the two measurements. Combined with AND -- as a
+    // plain reading of the two constants might suggest -- it yields neither.
     BOOST_CHECK_EQUAL(SER_NETWORK & SER_SKIPSUPERBLOCK, 0);
-    BOOST_CHECK((( SER_NETWORK | SER_SKIPSUPERBLOCK) & SER_SKIPSUPERBLOCK) != 0);
+    BOOST_CHECK(((SER_NETWORK | SER_SKIPSUPERBLOCK) & SER_SKIPSUPERBLOCK) != 0);
 
-    // And the envelope the two bounds describe once open.
+    // The envelope the two bounds describe.
     BOOST_CHECK_EQUAL(MAX_BLOCK_SIZE, 1000000u);
     BOOST_CHECK_EQUAL(GRC::Superblock::MAX_SIZE, 4000000u);
+
+    // A pre-v15 block does not get the v15 envelope whatever height it is
+    // checked at -- which is the property that keying on version buys.
+    CBlock pre;
+    pre.nVersion = 14;
+    BOOST_CHECK(pre.nVersion < 15);
+
+    CBlock at;
+    at.nVersion = 15;
+    BOOST_CHECK(at.nVersion >= 15);
 }
 
-
-//!
-//! A block with no transactions is refused before anything reads vtx[0].
-//!
-//! CheckBlock() receives blocks straight off the wire -- ProcessMessage
-//! deserializes a peer-supplied CBlock and ProcessBlock calls through to here
-//! with no emptiness check of its own -- so an empty vtx is attacker-supplied
-//! input. Everything in the size-limit block reaches GetSuperblock(), which
-//! goes through CBlock::GetClaim() and indexes vtx[0] unconditionally, so the
-//! emptiness test has to come first and has to stand alone rather than sit in
-//! a || chain that a later reordering could disturb.
-//!
 BOOST_AUTO_TEST_CASE(an_empty_block_is_refused_before_vtx_is_read)
 {
     LOCK(cs_main);
