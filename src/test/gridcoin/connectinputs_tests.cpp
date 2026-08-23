@@ -248,4 +248,31 @@ BOOST_AUTO_TEST_CASE(the_superblock_size_envelope_is_gated_and_additive)
     BOOST_CHECK_EQUAL(GRC::Superblock::MAX_SIZE, 4000000u);
 }
 
+
+//!
+//! A block with no transactions is refused before anything reads vtx[0].
+//!
+//! CheckBlock() receives blocks straight off the wire -- ProcessMessage
+//! deserializes a peer-supplied CBlock and ProcessBlock calls through to here
+//! with no emptiness check of its own -- so an empty vtx is attacker-supplied
+//! input. Everything in the size-limit block reaches GetSuperblock(), which
+//! goes through CBlock::GetClaim() and indexes vtx[0] unconditionally, so the
+//! emptiness test has to come first and has to stand alone rather than sit in
+//! a || chain that a later reordering could disturb.
+//!
+BOOST_AUTO_TEST_CASE(an_empty_block_is_refused_before_vtx_is_read)
+{
+    LOCK(cs_main);
+
+    CBlock block;
+    block.nVersion = 11;
+    BOOST_REQUIRE(block.vtx.empty());
+
+    CValidationState state;
+
+    // Must return false rather than crash. Before the guard was hoisted this
+    // dereferenced vtx[0] on an empty vector.
+    BOOST_CHECK(!CheckBlock(block, state, 1, false, false, false, false));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

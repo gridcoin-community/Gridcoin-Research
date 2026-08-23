@@ -1420,12 +1420,22 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
     //
     // SER_SKIPSUPERBLOCK is what excludes the superblock's bytes from the first
     // measurement; the claim's serializer honours it (see claim.h).
+    // Emptiness FIRST, and on its own. Everything below reaches GetSuperblock(),
+    // which goes through CBlock::GetClaim() and indexes vtx[0] unconditionally,
+    // so it must not run against a block with no transactions. A peer supplies
+    // this object straight off the wire -- ProcessMessage deserializes it and
+    // ProcessBlock calls straight through to here -- so an empty vtx is
+    // attacker-supplied input, not an internal impossibility.
+    if (block.vtx.empty())
+    {
+        return state.DoS(100, error("%s: block has no transactions", __func__));
+    }
+
     const int block_size_type = (block.GetSuperblock()->WellFormed() && IsV15Enabled(height1))
         ? (SER_NETWORK | SER_SKIPSUPERBLOCK)
         : 0;
 
-    if (block.vtx.empty()
-        || block.vtx.size() > MAX_BLOCK_SIZE
+    if (block.vtx.size() > MAX_BLOCK_SIZE
         || ::GetSerializeSize(block, block_size_type, PROTOCOL_VERSION) > MAX_BLOCK_SIZE
         || ::GetSerializeSize(block.GetSuperblock(), SER_NETWORK, PROTOCOL_VERSION) > GRC::Superblock::MAX_SIZE)
     {
