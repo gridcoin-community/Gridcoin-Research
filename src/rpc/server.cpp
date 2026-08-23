@@ -106,15 +106,24 @@ static void UnregisterRPCConnection(AcceptedConnection* conn)
 //! moves on with no further plumbing.
 static void SetRPCSocketTimeouts(boost::asio::ip::tcp::socket& socket)
 {
-    const int seconds = gArgs.GetArg("-rpcservertimeout", DEFAULT_RPC_SERVER_TIMEOUT);
-    if (seconds <= 0) return;  // explicitly disabled
-
-    // Asio may have left the accepted descriptor non-blocking; a deadline only
-    // means anything on a blocking socket, and the stream device reads it with
-    // recv(2) directly.
+    // Blocking mode first, and unconditionally.
+    //
+    // Asio may have left the accepted descriptor non-blocking. The stream device
+    // reads with recv(2) directly and treats EAGAIN as end of sequence -- correct
+    // for a deadline expiring, fatal on a non-blocking socket, where EAGAIN just
+    // means the client has not sent yet. That would close every connection before
+    // its first request.
+    //
+    // So this is a requirement of the device, not part of the deadline, and it
+    // has to happen even when the deadline is switched off. Setting it before the
+    // early return below is the whole point: -rpcservertimeout=0 is documented as
+    // "no timeout", not "no RPC".
     boost::system::error_code ec;
     socket.non_blocking(false, ec);
     socket.native_non_blocking(false, ec);
+
+    const int seconds = gArgs.GetArg("-rpcservertimeout", DEFAULT_RPC_SERVER_TIMEOUT);
+    if (seconds <= 0) return;  // deadline explicitly disabled; socket stays blocking
 
     const auto fd = socket.native_handle();
 
@@ -832,6 +841,23 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
         // do this before starting client thread, to filter out
         // certain DoS and misbehaving clients.
         AcceptedConnectionImpl<ip::tcp>* tcp_conn = dynamic_cast< AcceptedConnectionImpl<ip::tcp>* >(conn);
+
+        // Before the allow-list test, so it covers the rejection path too.
+        //
+        // Two things happen here: the socket is forced into blocking mode, which
+        // the stream device requires to tell a deadline from "nothing yet", and
+        // the read/write deadline is applied. Without the deadline a client that
+        // opens a connection and then sends nothing keeps this worker blocked in
+        // read() for as long as it cares to, and there are only -rpcthreads of
+        // them.
+        //
+        // The rejection path needs it just as much. Writing the 403 below is a
+        // blocking send: a client that stops reading -- letting its receive
+        // window close -- parks this worker there indefinitely. That one costs
+        // an attacker nothing at all, since failing the allow-list means it
+        // never had to present a credential.
+        if (tcp_conn) SetRPCSocketTimeouts(tcp_conn->socket);
+
         if (tcp_conn && !ClientAllowed(tcp_conn->peer.address()))
         {
             // The 403 was previously suppressed when TLS was in use, to avoid
@@ -842,12 +868,6 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
         }
         else
         {
-            // Apply the read/write deadline before servicing. Without it a
-            // client that opens a connection and then sends nothing keeps this
-            // worker blocked in read() for as long as it cares to, and there
-            // are only -rpcthreads of them.
-            if (tcp_conn) SetRPCSocketTimeouts(tcp_conn->socket);
-
             // Register before servicing so a concurrent StopRPCThreads() can
             // wake us out of the blocking read loop. If the server is already
             // stopping we skip servicing entirely rather than park with no

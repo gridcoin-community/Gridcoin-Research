@@ -175,10 +175,14 @@ public:
         // Verified: with SO_RCVTIMEO set and read_some() in this position, an
         // idle connection was still open after 15s against a 3s deadline.
         //
-        // Going straight to recv(2) keeps the deadline. The socket is in
-        // blocking mode (SetRPCSocketTimeouts forces it), so a timeout arrives
-        // here as EAGAIN/EWOULDBLOCK and is handled below with every other
-        // error: the connection is finished, report end of sequence.
+        // Going straight to recv(2) keeps the deadline. This REQUIRES a blocking
+        // socket -- SetRPCSocketTimeouts forces one on every accepted connection,
+        // whether or not a deadline is configured -- because a timeout arrives
+        // here as EAGAIN/EWOULDBLOCK and is handled below with every other error:
+        // the connection is finished, report end of sequence. On a non-blocking
+        // socket that same EAGAIN means only "nothing has arrived yet", and
+        // treating it as end of sequence would drop the connection before the
+        // client's first request.
         for (;;) {
 #ifdef WIN32
             const int bytes = ::recv(stream.native_handle(), s, static_cast<int>(n), 0);
