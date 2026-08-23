@@ -14,15 +14,14 @@
 
 #include <test/test_gridcoin.h>
 
+#include <net_processing.h>
 #include <stdint.h>
 
 // Tests this internal-to-main.cpp method:
 extern bool AddOrphanTx(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 extern unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-struct COrphanTx { CTransaction tx; int64_t time_received; };
 extern std::map<uint256, COrphanTx> mapOrphanTransactions GUARDED_BY(cs_main);
 extern unsigned int ExpireOrphanTransactions(const int64_t now);
-static constexpr int64_t ORPHAN_TX_EXPIRE_SECONDS = 20 * 60;
 extern std::map<uint256, std::set<uint256> > mapOrphanTransactionsByPrev GUARDED_BY(cs_main);
 
 // The orphan-tx tests below are single-threaded and drive

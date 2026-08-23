@@ -5,6 +5,7 @@
 #ifndef BITCOIN_NET_PROCESSING_H
 #define BITCOIN_NET_PROCESSING_H
 
+#include <primitives/transaction.h>
 #include "net.h"
 #include "sync.h"
 #include "validationinterface.h"
@@ -40,6 +41,23 @@ void RemoveFromRelayMemory(const uint256& hash);
 //! Intended to be driven periodically by the scheduler (never from SendMessages;
 //! see the definition for the lock-order rationale).
 void ResendUnbroadcastTransactions();
+
+//! \brief One entry in the orphan transaction pool.
+//!
+//! Declared here, rather than privately in net_processing.cpp, so that the tests
+//! that drive the pool name the same type. A private copy in a test satisfies
+//! ODR only for as long as the two stay token-identical, and the failure when
+//! they diverge is a silent type mismatch across translation units.
+struct COrphanTx {
+    CTransaction tx;
+    int64_t time_received;
+};
+
+//! \brief How long an orphan transaction may sit before it is swept.
+//!
+//! Published for the same reason as COrphanTx: a test asserting the boundary
+//! must assert against the value the implementation actually uses.
+static constexpr int64_t ORPHAN_TX_EXPIRE_SECONDS = 20 * 60;
 
 //! \brief Sweep orphan transactions past ORPHAN_TX_EXPIRE_SECONDS.
 //!

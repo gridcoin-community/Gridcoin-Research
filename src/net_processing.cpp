@@ -148,11 +148,6 @@ void ResendUnbroadcastTransactions()
 //! erased when its parent turns up -- so an orphan whose parent never exists sits
 //! there indefinitely, and a peer that fills the pool and then goes SILENT leaves
 //! it full, because nothing else drives eviction.
-struct COrphanTx {
-    CTransaction tx;
-    int64_t time_received;
-};
-
 //! \brief How long an orphan transaction may sit before it is swept.
 //!
 //! 20 minutes, matching OrphanBlockManager::MAX_ORPHAN_AGE_SECONDS and
@@ -178,7 +173,6 @@ struct COrphanTx {
 //! promptly and is rebroadcast or mined regardless -- not a chain that cannot
 //! reorganise. Before extending expiry to any other orphan store, re-establish
 //! that property for that store; do not carry this conclusion across.
-static constexpr int64_t ORPHAN_TX_EXPIRE_SECONDS = 20 * 60;
 
 map<uint256, COrphanTx> mapOrphanTransactions GUARDED_BY(cs_main);
 map<uint256, set<uint256> > mapOrphanTransactionsByPrev GUARDED_BY(cs_main);
@@ -1636,21 +1630,27 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
     {
         const CInv& inv = (*pto->mapAskFor.begin()).second;
 
-        // mapAlreadyAskedFor gains an entry when the node enqueues a request
-        // for the object from a peer, and the node removes the entry when it
-        // receives the object. If the request does not exist in this map, we
-        // don't need to ask for the object again:
+        // This used to skip the request entirely when inv was absent from
+        // mapAlreadyAskedFor, on the reasoning that the entry is removed when
+        // the object arrives, so absence means satisfied.
         //
-        bool already_asked_present;
-        {
-            LOCK(cs_mapAlreadyAskedFor);
-            already_asked_present = mapAlreadyAskedFor.find(inv) != mapAlreadyAskedFor.end();
-        }
-        if (!already_asked_present)
-        {
-            pto->mapAskFor.erase(pto->mapAskFor.begin());
-            continue;
-        }
+        // That inference was sound only while the map was unbounded. It is now
+        // a limitedmap capped at MAX_INV_SZ and evicts lowest-value-first,
+        // where the value is the request time -- so absence now means EITHER
+        // "received" OR "evicted because something newer arrived", and the two
+        // are indistinguishable here. One peer announcing MAX_INV_SZ unknown
+        // hashes in a single inv inserts a fresh, higher-valued entry for each,
+        // which is enough to evict every older pending request in the process.
+        // Skipping on absence would then silently cancel real requests that
+        // were never answered, and nothing re-issues them unless another peer
+        // re-announces.
+        //
+        // AlreadyHave() below already answers the real question -- do we still
+        // need this object -- so the check simply falls through to it. The cost
+        // is one AlreadyHave() call for objects we have already received, where
+        // this previously short-circuited; correctness is worth more than the
+        // lookup, and the mapAskFor entry is erased at the bottom of the loop
+        // either way.
 
         // cs_main is required for the AlreadyHave call (mapBlockIndex
         // lookup) and must be released before the cs_mapManifest scope
