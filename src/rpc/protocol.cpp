@@ -96,15 +96,58 @@ std::string HTTPReply(int nStatus, const std::string& strMsg, bool keepalive)
         strMsg);
 }
 
+//! \brief Maximum number of header lines accepted from one request.
+//!
+//! A legitimate RPC request sends a handful -- host, connection, content-type,
+//! content-length, authorization, user-agent. 100 is far beyond that while
+//! bounding what an unauthenticated client can insert into mapHeadersRet.
+static constexpr size_t MAX_HTTP_HEADER_COUNT = 100;
+
+//! \brief Maximum length of a single header line.
+//!
+//! 8 KiB, the de facto limit Apache and nginx apply. Bounding the individual line
+//! matters as much as bounding the count: std::getline grows its string until a
+//! delimiter or EOF, so a client that opens a header and never sends a newline
+//! is buffered without limit.
+static constexpr size_t MAX_HTTP_HEADER_LINE_BYTES = 8192;
+
+//! \brief Maximum total bytes of header lines accepted from one request.
+//!
+//! Count times line length would allow 800 KiB, which is far more than the
+//! headers of any real request; 32 KiB is generous against a typical few hundred
+//! bytes and caps the aggregate independently of how it is divided up.
+static constexpr size_t MAX_HTTP_HEADER_TOTAL_BYTES = 32768;
+
 int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std::string>& mapHeadersRet)
 {
     int nLen = 0;
+    size_t header_count = 0;
+    size_t header_bytes = 0;
+    bool overlong = false;
+
+    // All three bounds are reachable BEFORE any authentication check, which is
+    // what makes them worth having: nothing above this point has established who
+    // the client is.
     while (true)
     {
         std::string str;
-        std::getline(stream, str);
+
+        if (!ReadLineBounded(stream, str, MAX_HTTP_HEADER_LINE_BYTES, overlong)) {
+            // Negative, not a status code: this function returns a CONTENT LENGTH,
+            // and the caller rejects a negative one. Returning 400 here would be
+            // read as a body of 400 bytes.
+            if (overlong) return -1;
+
+            break;
+        }
+
         if (str.empty() || str == "\r")
             break;
+
+        if (++header_count > MAX_HTTP_HEADER_COUNT) return -1;
+
+        header_bytes += str.size();
+        if (header_bytes > MAX_HTTP_HEADER_TOTAL_BYTES) return -1;
         std::string::size_type nColon = str.find(":");
         if (nColon != std::string::npos)
         {
@@ -115,7 +158,12 @@ int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std:
             strValue = TrimString(strValue);
             mapHeadersRet[strHeader] = strValue;
             if (strHeader == "content-length" && !ParseInt32(strValue, &nLen)) {
-                throw std::invalid_argument("Unable to parse content-length value.");
+                // Returning rather than throwing: ServiceConnection has no
+                // try/catch around this call, so an exception here escapes on a
+                // malformed header from an unauthenticated client. Negative
+                // because this returns a content length, which the caller
+                // rejects when negative.
+                return -1;
             }
         }
     }
@@ -150,7 +198,12 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
 
     std::string strProto = vWords[2];
 
-    // Strip the \r, which MUST be present according to the HTTP standard.
+    // Strip the \r, which MUST be present according to the HTTP standard. Guarded
+    // because the request line "GET / " splits into three words whose third is
+    // empty, and pop_back() on an empty string is undefined -- reachable before
+    // authentication.
+    if (strProto.empty()) return false;
+
     strProto.pop_back();
     size_t length = strProto.length();
 
@@ -204,8 +257,14 @@ int ReadHTTPMessage(std::basic_istream<char>& stream, std::map<std::string,
 
     // Read header
     int nLen = ReadHTTPHeaders(stream, mapHeadersRet);
-    if (nLen < 0 || nLen > (int)MAX_SIZE)
-        return HTTP_INTERNAL_SERVER_ERROR;
+    // MAX_SIZE is 32 MiB, so this accepted an unauthenticated header field that
+    // then drove a 32 MiB allocation below. The worst legitimate request is
+    // signrawtransaction fed by consolidatemsunspent output, where the prevtxs
+    // array dominates because every multisig input carries its own redeemScript;
+    // bounded by MAX_STANDARD_TX_SIZE at roughly 1.8x, that is 400-500 KB. 20x
+    // MAX_STANDARD_TX_SIZE leaves several times that.
+    if (nLen < 0 || nLen > (int)MAX_RPC_BODY_SIZE)
+        return HTTP_BAD_REQUEST;
 
     // Read message
     if (nLen > 0)

@@ -6,6 +6,7 @@
 #ifndef BITCOIN_RPC_PROTOCOL_H
 #define BITCOIN_RPC_PROTOCOL_H
 
+#include "consensus/consensus.h"
 #include <list>
 #include <map>
 #include <stdint.h>
@@ -30,6 +31,18 @@
 #endif
 
 // HTTP status codes
+//! \brief Maximum accepted Content-Length for an RPC request body.
+//!
+//! Derived, not guessed. The worst legitimate request is signrawtransaction fed
+//! by consolidatemsunspent output, where the prevtxs array dominates because
+//! every multisig input carries its own redeemScript. That is bounded by
+//! MAX_STANDARD_TX_SIZE at roughly 1.8x, so 400-500 KB worst case; 20x leaves
+//! several times the headroom.
+//!
+//! Before this, Content-Length was accepted up to MAX_SIZE (32 MiB) and then
+//! allocated outright -- an allocation driven by an unauthenticated header field.
+static const unsigned int MAX_RPC_BODY_SIZE = 20 * MAX_STANDARD_TX_SIZE;
+
 enum HTTPStatusCode
 {
     HTTP_OK                    = 200,

@@ -3877,34 +3877,9 @@ static constexpr size_t MAX_PART_RECORDS = GRC::Superblock::MAX_SIZE / (sizeof(G
 //! so an expansion with no newlines is buffered whole before any check can run.
 //! istream::getline(buf, n) bounds the length but sets failbit on a zero-length
 //! extraction, which is exactly what a blank line produces, so it would silently
-//! truncate parsing at the first empty line. Hence ReadBoundedLine below.
+//! truncate parsing at the first empty line. Hence ReadLineBounded (util/string.h).
 static constexpr size_t MAX_PART_LINE_BYTES = 512;
 
-//! \brief Reads one newline-terminated record, refusing to buffer past \p max_len.
-//!
-//! Returns false at end of input or when the line is over-long, with \p overlong
-//! distinguishing the two. Handles empty lines, which istream::getline does not.
-static bool ReadBoundedLine(std::istream& in, std::string& out, const size_t max_len, bool& overlong)
-{
-    out.clear();
-    overlong = false;
-
-    char c;
-
-    while (in.get(c)) {
-        if (c == '\n') return true;
-
-        if (out.size() >= max_len) {
-            overlong = true;
-            return false;
-        }
-
-        out.push_back(c);
-    }
-
-    // A final record without a trailing newline is still a record.
-    return !out.empty();
-}
 
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
                                          const double& projectmag, ScraperStats& mScraperStats)
@@ -3916,7 +3891,7 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
     double dProjectRAC = 0.0;
     size_t records = 0;
     bool overlong = false;
-    while (ReadBoundedLine(sUncompressedIn, line, MAX_PART_LINE_BYTES, overlong))
+    while (ReadLineBounded(sUncompressedIn, line, MAX_PART_LINE_BYTES, overlong))
     {
         // Counts EVERY line, including blanks and comments, and does so before
         // they are filtered below. That is deliberate: this is a bound on WORK,
@@ -4001,7 +3976,7 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
         dProjectRAC += statsentry.statsvalue.dRAC;
     }
 
-    // ReadBoundedLine stops rather than buffering an over-long record, so this is
+    // ReadLineBounded stops rather than buffering an over-long record, so this is
     // the decompression-bomb case: an expansion with no newlines, or a record far
     // wider than the format allows. Refuse the part rather than accept a
     // truncated view of it.

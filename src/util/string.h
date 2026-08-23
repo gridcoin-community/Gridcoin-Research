@@ -20,10 +20,30 @@
 #include <locale>
 #include <sstream>
 #include <string>
+#include <istream>
 #include <string_view>
 #include <vector>
 
 void ParseString(const std::string& str, char c, std::vector<std::string>& v);
+
+/** Read one newline-terminated line, refusing to buffer more than \p max_len bytes.
+ *
+ * std::getline grows its string until it finds a delimiter or hits EOF, so input
+ * with no newline in it is buffered whole -- which is a decompression bomb on one
+ * path and an unauthenticated peer on another. istream::getline takes a bound but
+ * sets failbit on a zero-length extraction, which is exactly what a blank line
+ * produces, so it silently stops at the first one.
+ *
+ * This returns on the delimiter regardless of how much was accumulated, so blank
+ * lines behave as they do with std::getline, and stops rather than growing past
+ * the bound.
+ *
+ * \param out       Receives the line, without its terminator.
+ * \param max_len   Maximum bytes to accumulate.
+ * \param overlong  Set when the bound was hit; distinguishes that from end of input.
+ * \return true if a line was read.
+ */
+bool ReadLineBounded(std::istream& in, std::string& out, size_t max_len, bool& overlong);
 
 /** Split a string on any char found in separators, returning a vector.
  *

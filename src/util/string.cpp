@@ -33,3 +33,25 @@ std::string FromDoubleToString(const double& t, const int& precision)
     oss << std::scientific << std::setprecision(precision) << t;
     return oss.str();
 }
+
+bool ReadLineBounded(std::istream& in, std::string& out, const size_t max_len, bool& overlong)
+{
+    out.clear();
+    overlong = false;
+
+    char c;
+
+    while (in.get(c)) {
+        if (c == '\n') return true;
+
+        if (out.size() >= max_len) {
+            overlong = true;
+            return false;
+        }
+
+        out.push_back(c);
+    }
+
+    // A final line without a trailing newline is still a line.
+    return !out.empty();
+}
