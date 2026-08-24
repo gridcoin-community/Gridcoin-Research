@@ -109,15 +109,21 @@ class MempoolAcceptTest(GridcoinTestFramework):
         # regresses to being tested per-input alongside VerifySignature, a
         # transaction like this one costs a full signature verification for
         # every input ahead of the conflicting one before being dropped.
+        # Assertions, not skips. run_test() stakes ten blocks above, so a
+        # coinstake with a spendable input is a property of the setup rather than
+        # something that may or may not turn up. Warning and returning here would
+        # let the case that motivates this whole file stop running while the test
+        # still reported success -- the failure mode being guarded against
+        # everywhere else in it.
         spent = self._confirmed_spent_outpoint(node)
-        if spent is None:
-            self.log.warning("no confirmed coinstake input found; skipping case 3")
-            return
+        assert spent is not None, (
+            "no confirmed coinstake input found: the ten staked blocks in run_test() "
+            "should always provide one, so the setup no longer does what case 3 needs")
 
         prev_txid, prev_vout, prev_spk, prev_amt = spent
-        if prev_amt <= 1:
-            self.log.warning("coinstake input too small to build a spend; skipping case 3")
-            return
+        assert prev_amt > 1, (
+            "coinstake input of {} is too small to build a spend with the ~1 GRC fee; "
+            "the staking setup no longer produces an output case 3 can use".format(prev_amt))
 
         raw = node.createrawtransaction(
             [{"txid": prev_txid, "vout": prev_vout}],
