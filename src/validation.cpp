@@ -1454,6 +1454,35 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
     // this envelope and also be accepted at a height that does not permit it.
     const bool v15_rules = block.nVersion >= 15;
 
+    // A claim rides in the coinbase, and only there.
+    //
+    // The accounting below takes that as given. It measures the block with
+    // SER_SKIPSUPERBLOCK, which drops the superblock from every claim the
+    // serializer walks, and then measures the superblock separately through
+    // GetSuperblock() -- which resolves via CBlock::GetClaim() and reads vtx[0].
+    // The two line up only while vtx[0] holds the block's one claim: a claim
+    // anywhere else is subtracted by the first measurement and invisible to the
+    // second, so nothing bounds what it carries.
+    //
+    // Nothing legitimate produces one. The miner puts the claim in the coinbase,
+    // and the checks further down already require it to be there and to be the
+    // only contract in it. This says the rest of the block may not hold one, so
+    // the skip flag means what the accounting assumes it means.
+    if (v15_rules)
+    {
+        for (unsigned int i = 1; i < block.vtx.size(); i++)
+        {
+            for (const auto& contract : block.vtx[i].vContracts)
+            {
+                if (contract.m_type == GRC::ContractType::CLAIM)
+                {
+                    return state.DoS(100, error("%s: claim contract outside the coinbase (tx %u)",
+                                                __func__, i));
+                }
+            }
+        }
+    }
+
     const int block_size_type = (block.GetSuperblock()->WellFormed() && v15_rules)
         ? (SER_NETWORK | SER_SKIPSUPERBLOCK)
         : 0;
