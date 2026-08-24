@@ -97,10 +97,12 @@ constexpr size_t MAX_MANIFEST_STRING_BYTES = 1024;
 
 //! \brief Maximum wire size of a single part.
 //!
-//! Deliberately coarse, and NOT the real bound. The precise limit is on the
-//! DECOMPRESSED content, applied where the part is parsed
-//! (MAX_PART_DECOMPRESSED_BYTES in scraper.cpp), because a part arrives gzipped
-//! and its compressed size says little about what it expands to.
+//! Deliberately coarse, and NOT the real bound. A part arrives gzipped, so its
+//! compressed size says little about what it expands to; what limits the
+//! expansion is applied where the part is parsed, as a cap on the number of
+//! records (MAX_PART_RECORDS) and on the length of any one of them
+//! (MAX_PART_LINE_BYTES), both in scraper.cpp. There is no ceiling on total
+//! decompressed bytes, and parsing stays streaming so none is needed.
 //!
 //! This exists only to stop the compressed bytes being STORED. mapParts is
 //! process-global and a manifest may declare up to MAX_MANIFEST_PART_HASHES

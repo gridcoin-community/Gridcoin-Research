@@ -1093,12 +1093,15 @@ unsigned int GetBlockScriptFlags(int nHeight)
     // Signature malleability closes at block version 15, the same shape v14
     // used for CLTV/CSV.
     //
-    // These are the flags MEMPOOL_POLICY_SCRIPT_VERIFY_FLAGS applies as local
-    // standardness once v15 is live; here they become binding. The progression
-    // is deliberate and is the usual one: a node stops RELAYING these
-    // transactions and stops ACCEPTING blocks that contain them at the same
-    // height, so there is no window in which a staker builds a block from its
-    // own mempool that its peers then reject.
+    // Consensus flags, and the only tier these use. There is no separate
+    // standardness constant applying them for relay first -- the policy tier in
+    // ConnectInputs() is empty, deliberately, and this is what both paths read.
+    //
+    // Which is the point: mempool acceptance asks for the flags at the tip's
+    // next height and block connection asks for the flags at the block's own
+    // height, so a node stops RELAYING these transactions and stops ACCEPTING
+    // blocks containing them at the same height. No window opens in which a
+    // staker builds a block from its own mempool that its peers then reject.
     //
     // Inert until v15 is scheduled -- BlockV15Height is
     // numeric_limits<int>::max() -- so landing this early costs nothing and
@@ -2129,6 +2132,27 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     // Rather not work on nonstandard transactions
     if (!IsStandardTx(tx))
         return state.Invalid(error("AcceptToMemoryPool : nonstandard transaction type"), "tx-nonstandard");
+
+    // A claim belongs in a coinbase, so it can never belong in a loose one.
+    //
+    // Contract dispatch will not catch this: CLAIM has no handler and falls to
+    // the permissive one, which accepts anything. Without this the transaction
+    // sits in the mempool, gets selected into a block, and CheckBlock() then
+    // refuses the block -- costing the staker the block rather than the sender
+    // the transaction.
+    //
+    // Gated to activate with the block rule it mirrors, so a node stops
+    // RELAYING these and stops ACCEPTING blocks containing them at the same
+    // height. Judged at the height the transaction would be mined at, which is
+    // the next one, for the same reason the script flags are.
+    if (IsV15Enabled(nBestHeight + 1)) {
+        for (const auto& contract : tx.GetContracts()) {
+            if (contract.m_type == GRC::ContractType::CLAIM) {
+                return state.DoS(100, error("%s: claim contract in a non-coinbase transaction", __func__),
+                                 "claim-outside-coinbase");
+            }
+        }
+    }
 
     // Perform contextual validation for any contracts:
 
