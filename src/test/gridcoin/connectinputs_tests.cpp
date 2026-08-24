@@ -282,7 +282,7 @@ CTransaction OrdinaryTx(const uint32_t nonce, const GRC::Superblock* const super
     tx.nVersion = 2;
     tx.nTime = 1000;  // before the block time set in BlockOf()
     tx.vin.resize(1);
-    tx.vin[0].prevout = COutPoint(uint256{nonce + 1}, 0);
+    tx.vin[0].prevout = COutPoint(uint256(nonce + 1), 0);
     tx.vout.resize(1);
     tx.vout[0].nValue = 1;
 

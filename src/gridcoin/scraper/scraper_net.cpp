@@ -608,7 +608,8 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
     }
 }
 
-[[nodiscard]] bool CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out)
+[[nodiscard]] bool CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out,
+                                                     const bool v15_project_cap)
 EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manifest)
 {
     const auto pbegin = ss.begin();
@@ -880,7 +881,17 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     // -banscore, immediately. Nodes on either side of the change would disagree
     // about which manifests are acceptable and would score each other's honest
     // relays, so it has to roll over together rather than on upgrade.
-    const unsigned int max_projects = IsV15Enabled(nBestHeight)
+    // Taken from the caller rather than read here.
+    //
+    // This runs holding cs_mapManifest and cs_manifest, and nBestHeight is
+    // guarded by cs_main. Reaching for cs_main from inside those is the
+    // ordering net_processing.cpp warns about above its own manifest handling:
+    // the net thread takes cs_main and then cs_mapManifest, while the scraper
+    // thread takes cs_mapManifest first and reaches authorization from there.
+    // Holding both concatenated in the other order is what that comment exists
+    // to prevent, so the height is read in RecvManifest() before any of these
+    // locks are acquired.
+    const unsigned int max_projects = v15_project_cap
         ? nMaxProjects + MANIFEST_PSEUDO_PROJECTS.size()
         : nMaxProjects;
 
@@ -896,7 +907,19 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
 
     uint256 hash = Hash(Span<const std::byte>{(std::byte*)&pbegin[0], (std::byte*)&ss.begin()[0]});
 
-    ss >> signature;
+    // Bounded like every other wire-driven length in this function, and for the
+    // same reason: the default vector deserializer reserves against the declared
+    // count before reading what backs it, so a short message can declare a large
+    // signature and charge us the allocation on the way to failing.
+    //
+    // This is reached unauthenticated. The out-of-sync branch above sets
+    // bCheckedAuthorized = false and carries on, which is what makes the bounds
+    // in this function -- rather than the authorization check -- the thing that
+    // limits what an unknown sender can cost.
+    //
+    // CPubKey::SIGNATURE_SIZE is the largest DER signature CKey::Sign() can
+    // produce, so this cannot refuse a signature a scraper actually made.
+    ss >> LIMITED_VECTOR(signature, CPubKey::SIGNATURE_SIZE);
     LogPrint(BCLog::LogFlags::MANIFEST, "CScraperManifest::UnserializeCheck: hash of signature = %s",
              Hash(signature).GetHex());
 
@@ -1060,6 +1083,13 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     // hash the object
     uint256 hash(Hash(vRecv));
 
+    // Read the chain height BEFORE taking any of the manifest locks, and let go
+    // of cs_main again immediately. UnserializeCheck() needs to know whether the
+    // v15 project-count rule applies, but it runs under cs_mapManifest and
+    // cs_manifest, and taking cs_main from there is the lock ordering
+    // net_processing.cpp explicitly avoids for this same pair.
+    const bool v15_project_cap = WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight));
+
     LOCK(cs_mapManifest);
 
     // see if we do not already have it
@@ -1087,7 +1117,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 
         try
         {
-            if (!manifest->UnserializeCheck(vRecv, banscore))
+            if (!manifest->UnserializeCheck(vRecv, banscore, v15_project_cap))
             {
                 mapManifest.erase(hash);
                 LogPrint(BCLog::LogFlags::MANIFEST, "invalid manifest %s received", hash.GetHex());

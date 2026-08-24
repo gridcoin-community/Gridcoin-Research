@@ -263,7 +263,13 @@ public: /* public methods */
     /** A combination of unserialization and integrity checking, which includes hash checks, authorization checks, and
      *  signature checks.
      */
-    [[nodiscard]] bool UnserializeCheck(CDataStream& s, unsigned int& banscore_out);
+    //! \param v15_project_cap Whether the v15 project-count rule applies. Passed
+    //! in rather than derived here: this runs under cs_mapManifest and
+    //! cs_manifest, and the chain height is guarded by cs_main, which must not
+    //! be acquired from inside those (see RecvManifest). Defaults to false, the
+    //! pre-v15 rule.
+    [[nodiscard]] bool UnserializeCheck(CDataStream& s, unsigned int& banscore_out,
+                                        bool v15_project_cap = false);
 
     /** Checks to see whether manifest age is current according to the SCRAPER_CMANIFEST_RETENTION_TIME network setting. */
     bool IsManifestCurrent() const;
