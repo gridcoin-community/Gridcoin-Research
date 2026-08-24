@@ -4292,11 +4292,6 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
 
     ScraperStatsVerifiedBeaconsTotalCredits stats_verified_beacons_tc;
 
-    // Enumerate the count of active projects from the dummy converged manifest. One of the parts
-    // is the beacon list, is not a project, which is why that should not be included in the count.
-    // Populate the verified beacons map, and if it is don't count that either.
-    int exclude_parts_from_count = 1;
-
     auto iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("VerifiedBeacons");
     if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
     {
@@ -4310,8 +4305,6 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
         {
             _log(logattribute::WARNING, __func__, "failed to deserialize verified beacons part: " + std::string(e.what()));
         }
-
-        ++exclude_parts_from_count;
     }
 
     iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectsAllCpidTotalCredits");
@@ -4327,16 +4320,28 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
         {
             _log(logattribute::WARNING, __func__, "failed to deserialize ProjectsAllCpidTotalCredits part: " + std::string(e.what()));
         }
-
-        ++exclude_parts_from_count;
     }
 
-    iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectPublicKeys");
-    if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
+    // Count the parts that are not projects, derived from the shared list rather
+    // than named here.
+    //
+    // These two things have to agree: what the loaders SKIP, and what this
+    // denominator EXCLUDES. Naming the pseudo-projects separately in each place
+    // let them disagree -- a name added to the list would be skipped as a source
+    // of statistics while still counting as an active project, which divides the
+    // network magnitude across a project that contributed none of it and quietly
+    // reduces every real project's share.
+    //
+    // The beacon list is the one that is not on the list, and is why this starts
+    // at one rather than zero.
+    int exclude_parts_from_count = 1;
+
+    for (const auto& part : StructConvergedManifest.ConvergedManifestPartPtrsMap)
     {
-        // ProjectPublicKeys is a non-project part; exclude from active project count.
-        // The data is available in the converged manifest for future use.
-        ++exclude_parts_from_count;
+        if (IsManifestPseudoProject(part.first))
+        {
+            ++exclude_parts_from_count;
+        }
     }
 
     unsigned int nActiveProjects = StructConvergedManifest.ConvergedManifestPartPtrsMap.size() - exclude_parts_from_count;
@@ -4405,12 +4410,7 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScrap
 
     ScraperStatsVerifiedBeaconsTotalCredits stats_verified_beacons_tc {};
 
-    // Enumerate the count of active projects from the dummy converged manifest. One of the parts
-    // is the beacon list, is not a project, which is why that should not be included in the count.
-    // Populate the verified beacons map, and if it is don't count that either.
     ScraperPendingBeaconMap VerifiedBeaconMap;
-
-    int exclude_parts_from_count = 1;
 
     auto iter = StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.find("VerifiedBeacons");
     if (iter != StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.end())
@@ -4425,8 +4425,6 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScrap
         {
             _log(logattribute::WARNING, __func__, "failed to deserialize verified beacons part: " + std::string(e.what()));
         }
-
-        ++exclude_parts_from_count;
     }
 
     stats_verified_beacons_tc.mVerifiedMap = VerifiedBeaconMap;
@@ -4446,16 +4444,30 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScrap
         {
             _log(logattribute::WARNING, __func__, "failed to deserialize ProjectsAllCpidTotalCredits part: " + std::string(e.what()));
         }
-
-        ++exclude_parts_from_count;
     }
 
     stats_verified_beacons_tc.m_total_credit_map = projects_all_cpid_total_credits_map;
 
-    iter = StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectPublicKeys");
-    if (iter != StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.end())
+    // Count the parts that are not projects, derived from the shared list rather
+    // than named here.
+    //
+    // These two things have to agree: what the loaders SKIP, and what this
+    // denominator EXCLUDES. Naming the pseudo-projects separately in each place
+    // let them disagree -- a name added to the list would be skipped as a source
+    // of statistics while still counting as an active project, which divides the
+    // network magnitude across a project that contributed none of it and quietly
+    // reduces every real project's share.
+    //
+    // The beacon list is the one that is not on the list, and is why this starts
+    // at one rather than zero.
+    int exclude_parts_from_count = 1;
+
+    for (const auto& part : StructDummyConvergedManifest.ConvergedManifestPartPtrsMap)
     {
-        ++exclude_parts_from_count;
+        if (IsManifestPseudoProject(part.first))
+        {
+            ++exclude_parts_from_count;
+        }
     }
 
     unsigned int nActiveProjects = StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.size()
