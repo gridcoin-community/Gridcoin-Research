@@ -344,6 +344,60 @@ BOOST_AUTO_TEST_CASE(unserializecheck_refuses_an_unreferenced_part)
 }
 
 //!
+//! The signature is a wire-driven length like any other, and it is read on the
+//! unauthenticated path: the out-of-sync branch sets bCheckedAuthorized = false
+//! and carries on, so the bounds in UnserializeCheck() -- not the authorization
+//! check -- are what limit what an unknown sender can cost.
+//!
+//! Both the bounded and unbounded forms throw on this input, so asserting the
+//! throw alone would prove nothing. The message is the discriminator: refused on
+//! the declared length, before the allocation, rather than after running off the
+//! end of a stream that was never that long.
+//!
+BOOST_AUTO_TEST_CASE(unserializecheck_refuses_an_oversized_signature_on_its_prefix)
+{
+    CDataStream ss = ManifestPrefix(3, 0, {1, 2});
+
+    ss << uint256();  // nContentHash
+
+    // A signature far larger than any key could produce, and no bytes behind it.
+    WriteCompactSize(ss, 5000000);
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+    unsigned int banscore = 0;
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    BOOST_CHECK_EXCEPTION(
+        (void)manifest->UnserializeCheck(ss, banscore),
+        std::ios_base::failure,
+        [](const std::ios_base::failure& e) {
+            return std::string(e.what()).find("Vector length limit exceeded") != std::string::npos;
+        });
+}
+
+//!
+//! The bound is set at the largest DER signature CKey::Sign() can produce, so a
+//! signature of that size has to get through it. This one is refused later, on
+//! verification against a default public key -- which is the point: it is past
+//! the length check, so the check cannot be rejecting real signatures.
+//!
+BOOST_AUTO_TEST_CASE(unserializecheck_admits_a_maximum_length_signature)
+{
+    CDataStream ss = ManifestPrefix(3, 0, {1, 2});
+
+    ss << uint256();  // nContentHash
+    ss << std::vector<unsigned char>(CPubKey::SIGNATURE_SIZE, 0x01);
+
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+    unsigned int banscore = 0;
+
+    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+
+    BOOST_CHECK(manifest->UnserializeCheck(ss, banscore) == false);
+}
+
+//!
 //! The converse: a fully covered part list gets past the coverage rule and fails
 //! later on the truncated stream instead, which is what shows the rule admits
 //! the shape our own publisher emits (beacon list at 0, one part per dentry).
