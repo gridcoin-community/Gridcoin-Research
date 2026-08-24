@@ -8,6 +8,7 @@
 #include <gridcoin/superblock.h>
 #include <gridcoin/contract/contract.h>
 #include <gridcoin/claim.h>
+#include <gridcoin/tx_message.h>
 #include <consensus/consensus.h>
 #include <limits>
 #include <script/interpreter.h>
@@ -451,6 +452,75 @@ BOOST_AUTO_TEST_CASE(a_coinbase_with_no_contracts_is_refused_before_the_claim_is
     BOOST_REQUIRE(block.nVersion >= 11);
 
     BOOST_CHECK(!CheckBlockSizeOnly(block));
+}
+
+//!
+//! A coinbase whose first contract is not a claim.
+//!
+//! The same read as the case above, reached a different way. GetClaim() used to
+//! decide on the block version alone, so a coinbase carrying some other kind of
+//! contract took the claim branch and handed a payload of one type to a cast
+//! expecting another. The message payload here is genuinely not a Claim, which
+//! is what makes this discriminating: a version-keyed accessor casts it, a
+//! shape-keyed one does not.
+//!
+BOOST_AUTO_TEST_CASE(a_coinbase_carrying_another_contract_type_is_refused)
+{
+    LOCK(cs_main);
+
+    CMutableTransaction cb;
+    cb.nVersion = 2;
+    cb.nTime = 1000;
+    cb.vin.resize(1);
+    cb.vin[0].prevout.SetNull();
+    cb.vin[0].scriptSig = CScript() << OP_11 << OP_11;
+    cb.vout.resize(1);
+    cb.vout[0].nValue = 1;
+    cb.vContracts.emplace_back(
+        GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "not a claim"));
+
+    CBlock block = BlockOf(14, {CTransaction(cb)});
+    BOOST_REQUIRE(block.vtx[0].vContracts[0].m_type != GRC::ContractType::CLAIM);
+
+    BOOST_CHECK(!CheckBlockSizeOnly(block));
+}
+
+//!
+//! The same shape below version 11, where the coinbase contract checks do not
+//! run at all.
+//!
+//! Nothing rejects this on the contract, so the block is measured and the claim
+//! is read. The accessor has to stay defined without a check in front of it --
+//! reaching the fallback and reporting no superblock, rather than casting.
+//!
+//! No verdict is asserted here. Whether a block this old is acceptable is not
+//! what is under test, and pinning it would invent a rule; what is under test is
+//! that asking the question is safe.
+//!
+BOOST_AUTO_TEST_CASE(a_pre_v11_coinbase_contract_is_read_without_casting_it)
+{
+    LOCK(cs_main);
+
+    CMutableTransaction cb;
+    cb.nVersion = 2;
+    cb.nTime = 1000;
+    cb.vin.resize(1);
+    cb.vin[0].prevout.SetNull();
+    cb.vin[0].scriptSig = CScript() << OP_11 << OP_11;
+    cb.vout.resize(1);
+    cb.vout[0].nValue = 1;
+    cb.vContracts.emplace_back(
+        GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "not a claim"));
+
+    CBlock block = BlockOf(10, {CTransaction(cb)});
+    BOOST_REQUIRE(block.nVersion < 11);
+    BOOST_REQUIRE(!block.vtx[0].vContracts.empty());
+
+    // The read itself, which is the part that used to be undefined.
+    BOOST_CHECK(!block.GetSuperblock()->WellFormed());
+
+    CValidationState state;
+    (void)CheckBlock(block, state, 1000, false, false, false);
 }
 
 BOOST_AUTO_TEST_CASE(an_empty_block_is_refused_before_vtx_is_read)

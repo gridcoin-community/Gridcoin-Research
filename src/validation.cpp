@@ -1452,23 +1452,50 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
     // (pindexPrev->nHeight + 1) and rejects a v15 block below the activation
     // height as well as a pre-v15 block at or above it, so a block cannot claim
     // this envelope and also be accepted at a height that does not permit it.
-    const bool v15_rules = block.nVersion >= 15;
+    // The coinbase claim is established BEFORE anything reads it.
+    //
+    // These are the same checks that have always run, moved ahead of the size
+    // accounting below, which resolves the block's superblock through
+    // CBlock::GetClaim(). Running them first means the claim is known to be
+    // present, singular and of the right type by the time it is read, rather
+    // than after.
+    //
+    // A move, not a new rule: every one of these already refused these blocks,
+    // so the set of acceptable blocks is unchanged and only the order in which
+    // a bad one is reported differs. Deliberately kept that way -- a rule that
+    // does not exist on the current network cannot be added here without an
+    // activation to carry it.
+    //
+    // Version 11+ blocks store the Gridcoin claim context as a contract in the
+    // coinbase transaction instead of the hashBoinc field.
+    //
+    if (block.nVersion >= 11) {
+        if (block.vtx[0].vContracts.empty()) {
+            return state.DoS(100, error("%s: missing claim contract", __func__));
+        }
 
-    // The claim contract has to be present before anything asks for it.
-    //
-    // CBlock::GetClaim() reads vtx[0].vContracts[0] whenever nVersion >= 11 --
-    // the version alone satisfies its guard, with no test that the vector holds
-    // anything. The size accounting below resolves through it via
-    // GetSuperblock(), while the test for an empty vContracts sits further
-    // down, so the read currently happens first.
-    //
-    // Ordering only. A block like this is refused either way; this refuses it
-    // ahead of the read instead of after, so the set of acceptable blocks is
-    // unchanged.
-    if (block.nVersion >= 11 && block.vtx[0].vContracts.empty())
-    {
-        return state.DoS(100, error("%s: missing claim contract", __func__));
+        if (block.vtx[0].vContracts.size() > 1) {
+            return state.DoS(100, error("%s: too many coinbase contracts", __func__));
+        }
+
+        if (block.vtx[0].vContracts[0].m_type != GRC::ContractType::CLAIM) {
+            return state.DoS(100, error("%s: unexpected coinbase contract", __func__));
+        }
+
+        if (!block.vtx[0].vContracts[0].WellFormed()) {
+            return state.DoS(100, error("%s: malformed claim contract", __func__));
+        }
+
+        if (block.vtx[0].vContracts[0].m_version <= 1 || block.GetClaim().m_version <= 1) {
+            return state.DoS(100, error("%s: legacy claim", __func__));
+        }
+
+        if (!OnTestnet() && block.GetClaim().m_version == 2) {
+            return state.DoS(100, error("%s: testnet-only claim", __func__));
+        }
     }
+
+    const bool v15_rules = block.nVersion >= 15;
 
     // A claim rides in the coinbase, and only there.
     //
@@ -1527,35 +1554,6 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
     for (unsigned int i = 1; i < block.vtx.size(); i++)
         if (block.vtx[i].IsCoinBase())
             return state.DoS(100, error("%s: more than one coinbase", __func__));
-
-    // Version 11+ blocks store the Gridcoin claim context as a contract in the
-    // coinbase transaction instead of the hashBoinc field.
-    //
-    if (block.nVersion >= 11) {
-        if (block.vtx[0].vContracts.empty()) {
-            return state.DoS(100, error("%s: missing claim contract", __func__));
-        }
-
-        if (block.vtx[0].vContracts.size() > 1) {
-            return state.DoS(100, error("%s: too many coinbase contracts", __func__));
-        }
-
-        if (block.vtx[0].vContracts[0].m_type != GRC::ContractType::CLAIM) {
-            return state.DoS(100, error("%s: unexpected coinbase contract", __func__));
-        }
-
-        if (!block.vtx[0].vContracts[0].WellFormed()) {
-            return state.DoS(100, error("%s: malformed claim contract", __func__));
-        }
-
-        if (block.vtx[0].vContracts[0].m_version <= 1 || block.GetClaim().m_version <= 1) {
-            return state.DoS(100, error("%s: legacy claim", __func__));
-        }
-
-        if (!OnTestnet() && block.GetClaim().m_version == 2) {
-            return state.DoS(100, error("%s: testnet-only claim", __func__));
-        }
-    }
 
     // End of Proof Of Research
     if (block.IsProofOfStake())
