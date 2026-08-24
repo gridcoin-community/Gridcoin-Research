@@ -278,6 +278,77 @@ BOOST_AUTO_TEST_CASE(size_cap_enforced)
 // Time-based expiry
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Byte accounting
+// ---------------------------------------------------------------------------
+
+// The running total has to match what was actually stored, through every path
+// that removes an entry. It is maintained incrementally, so a missed decrement
+// does not show up as a wrong answer anywhere -- it shows up much later as a
+// budget that evicts too eagerly, or never.
+//
+// The budget THRESHOLD is not exercised here: MAX_ORPHAN_BYTES is a thousand
+// times MAX_BLOCK_SIZE, and reaching it would mean allocating a gigabyte of
+// blocks in a unit test. What is checked is the arithmetic that decides when
+// the threshold is met.
+BOOST_AUTO_TEST_CASE(byte_accounting_follows_the_stored_blocks)
+{
+    OrphanBlockManager mgr;
+
+    BOOST_CHECK_EQUAL(mgr.Bytes(), 0u);
+
+    const CBlock a = MakeTestBlock(uint256(1), 1);
+    const CBlock b = MakeTestBlock(uint256(2), 2);
+
+    const size_t a_bytes = ::GetSerializeSize(a, SER_NETWORK, PROTOCOL_VERSION);
+    const size_t b_bytes = ::GetSerializeSize(b, SER_NETWORK, PROTOCOL_VERSION);
+
+    BOOST_REQUIRE(mgr.Add(a.GetHash(true), a, 1000));
+    BOOST_CHECK_EQUAL(mgr.Bytes(), a_bytes);
+
+    BOOST_REQUIRE(mgr.Add(b.GetHash(true), b, 1000));
+    BOOST_CHECK_EQUAL(mgr.Bytes(), a_bytes + b_bytes);
+
+    // A refused duplicate must not be counted twice.
+    BOOST_CHECK(!mgr.Add(a.GetHash(true), a, 1000));
+    BOOST_CHECK_EQUAL(mgr.Bytes(), a_bytes + b_bytes);
+
+    // Expiry is one of the removal paths.
+    BOOST_CHECK_EQUAL(mgr.EraseExpired(1000 + OrphanBlockManager::MAX_ORPHAN_AGE_SECONDS + 1), 2u);
+    BOOST_CHECK_EQUAL(mgr.Size(), 0u);
+    BOOST_CHECK_EQUAL(mgr.Bytes(), 0u);
+
+    // As is Clear().
+    BOOST_REQUIRE(mgr.Add(a.GetHash(true), a, 2000));
+    BOOST_CHECK_EQUAL(mgr.Bytes(), a_bytes);
+    mgr.Clear();
+    BOOST_CHECK_EQUAL(mgr.Bytes(), 0u);
+}
+
+// Eviction under the count cap must keep the byte total consistent with what
+// remains, or the two bounds drift apart.
+BOOST_AUTO_TEST_CASE(byte_accounting_survives_eviction)
+{
+    OrphanBlockManager mgr;
+
+    const size_t overshoot = OrphanBlockManager::MAX_ORPHAN_BLOCKS + 50;
+
+    for (uint32_t i = 0; i < overshoot; i++) {
+        const CBlock block = MakeTestBlock(uint256(i + 1), i);
+        mgr.Add(block.GetHash(true), block, 1000);
+    }
+
+    BOOST_CHECK_EQUAL(mgr.Size(), OrphanBlockManager::MAX_ORPHAN_BLOCKS);
+
+    // Every block here serializes to the same size, so the total is exact
+    // rather than approximate.
+    const CBlock sample = MakeTestBlock(uint256(1), 0);
+    const size_t each = ::GetSerializeSize(sample, SER_NETWORK, PROTOCOL_VERSION);
+
+    BOOST_CHECK_EQUAL(mgr.Bytes(), each * OrphanBlockManager::MAX_ORPHAN_BLOCKS);
+    BOOST_CHECK_LE(mgr.Bytes(), OrphanBlockManager::MAX_ORPHAN_BYTES);
+}
+
 BOOST_AUTO_TEST_CASE(expire_old_orphans)
 {
     OrphanBlockManager mgr;

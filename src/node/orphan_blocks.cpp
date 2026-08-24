@@ -17,21 +17,29 @@ bool OrphanBlockManager::Add(const uint256& hash, const CBlock& block, int64_t n
         return false;
     }
 
-    // Expire stale orphans first, then evict randomly if still full.
+    const size_t bytes = ::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION);
+
+    // Expire stale orphans first, then evict randomly if still full -- on
+    // either bound. Guarded on emptiness rather than on the counters alone: a
+    // single block larger than the whole budget would otherwise spin here
+    // evicting nothing.
     EraseExpired(now);
 
-    while (m_orphans.size() >= MAX_ORPHAN_BLOCKS) {
+    while (!m_orphans.empty()
+           && (m_orphans.size() >= MAX_ORPHAN_BLOCKS || m_bytes + bytes > MAX_ORPHAN_BYTES)) {
         EvictRandom();
     }
 
     OrphanEntry entry;
     entry.block = std::make_unique<CBlock>(block);
     entry.time_received = now;
+    entry.bytes = bytes;
 
     const uint256 prev_hash = block.hashPrevBlock;
 
     m_orphans.emplace(hash, std::move(entry));
     m_by_prev.emplace(prev_hash, hash);
+    m_bytes += bytes;
 
     LogPrint(BCLog::LogFlags::VERBOSE, "OrphanBlockManager: added orphan %s (prev=%s, map size %u)",
              hash.ToString(), prev_hash.ToString(), m_orphans.size());
@@ -140,6 +148,11 @@ size_t OrphanBlockManager::Size() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     return m_orphans.size();
 }
 
+size_t OrphanBlockManager::Bytes() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    return m_bytes;
+}
+
 void OrphanBlockManager::Clear() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     for (auto& [hash, entry] : m_orphans) {
@@ -150,6 +163,7 @@ void OrphanBlockManager::Clear() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     m_orphans.clear();
     m_by_prev.clear();
+    m_bytes = 0;
 }
 
 std::unique_ptr<CBlock> OrphanBlockManager::EraseInternal(const uint256& hash)
@@ -161,6 +175,9 @@ std::unique_ptr<CBlock> OrphanBlockManager::EraseInternal(const uint256& hash)
 
     const uint256 prev_hash = it->second.block->hashPrevBlock;
     std::unique_ptr<CBlock> block = std::move(it->second.block);
+
+    // Subtract what was added, not a fresh measurement of the block.
+    m_bytes -= it->second.bytes;
 
     m_orphans.erase(it);
 

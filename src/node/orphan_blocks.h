@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_NODE_ORPHAN_BLOCKS_H
 #define GRIDCOIN_NODE_ORPHAN_BLOCKS_H
 
+#include <consensus/consensus.h>
 #include "chain.h"  // cs_main (required for clang's EXCLUSIVE_LOCKS_REQUIRED / GUARDED_BY analyzer)
 #include "primitives/block.h"  // BlockHasher
 #include "uint256.h"
@@ -28,6 +29,21 @@ public:
     //! superblock interval (~960 blocks) to avoid evicting orphans from a
     //! legitimate missing-block chain before it can be resolved.
     static constexpr size_t MAX_ORPHAN_BLOCKS = 1000;
+
+    //! Maximum total serialized bytes of orphan blocks to hold in memory.
+    //!
+    //! The count above used to imply this on its own: every block was bounded
+    //! by MAX_BLOCK_SIZE, so a thousand of them could not exceed a thousand
+    //! times that. A block carrying a superblock is measured against a larger
+    //! envelope, and once the per-block bound and the count differ the product
+    //! stops being a bound on anything. Stating the byte budget keeps the
+    //! ceiling where the count already put it, rather than letting it grow with
+    //! whatever the largest permitted block happens to become.
+    //!
+    //! Orphans are held before a parent is known, so nothing about the block
+    //! has been established when it is stored -- the bound cannot rely on the
+    //! block being valid, or on its sender being honest.
+    static constexpr size_t MAX_ORPHAN_BYTES = MAX_ORPHAN_BLOCKS * MAX_BLOCK_SIZE;
 
     //! Maximum age in seconds before an orphan is eligible for eviction.
     static constexpr int64_t MAX_ORPHAN_AGE_SECONDS = 20 * 60;
@@ -62,6 +78,9 @@ public:
     //! Current number of stored orphans.
     size_t Size() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+    //! Current total serialized bytes of stored orphans.
+    size_t Bytes() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
     //! Remove all orphans and clean up associated SeenStakes entries.
     void Clear() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
@@ -70,6 +89,10 @@ private:
     {
         std::unique_ptr<CBlock> block;
         int64_t time_received;
+
+        //! Measured once, on the way in. Recomputing it on the way out would
+        //! let the running total drift if the block were ever altered in place.
+        size_t bytes;
     };
 
     //! Primary storage: orphan block hash -> entry.
@@ -78,6 +101,9 @@ private:
     //! Reverse index: parent block hash -> set of orphan block hashes that
     //! claim it as their previous block.
     std::unordered_multimap<uint256, uint256, BlockHasher> m_by_prev;
+
+    //! Running total of OrphanEntry::bytes, maintained by Add/EraseInternal.
+    size_t m_bytes{0};
 
     //! Remove an orphan from all internal indices. Returns the block
     //! (moved out) so the caller can inspect it if needed.
