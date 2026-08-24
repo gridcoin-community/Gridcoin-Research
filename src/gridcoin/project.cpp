@@ -477,6 +477,13 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in,
     // [Added] Determine the flag based on the height of the superblock being processed.
     bool use_benefit_of_doubt = IsAutoGreylistAuditEnabled(superblock_ptr_in.m_height);
 
+    // Gate for treating a chain-resident zero project total credit as missing data. Anchored on the
+    // ACTIVE SUPERBLOCK height (not the wall-clock tip) so historical validation stays deterministic,
+    // matching m_deep_copy_active above. Applied at BOTH the baseline construction and the update
+    // path, so a zero is interpreted identically at every position in the window.
+    bool zero_credit_is_missing = IsAutoGreylistRedesignEnabled(superblock_ptr_in.m_height);
+
+
     unsigned int superblock_count = 0;
 
     // Notice the superblock_ptr_in m_projects_all_cpid_total_credits MUST ALREADY BE POPULATED to record the TC state into
@@ -495,13 +502,32 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in,
             && superblock_ptr_in.m_timestamp >= project_first_active->second->m_timestamp) {
             if (project != superblock_ptr_in->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.end()) {
                 // Record new greylist candidate entry baseline with the total credit for each project present in superblock.
+                // Same normalization the update path applies (see UpdateGreylistCandidateEntry): a
+                // recorded total credit of exactly zero is corruption, not an observation. It has to
+                // happen here too, because the BASELINE (sb_from_baseline == 0) is seeded through this
+                // constructor and never passes through the update path -- so without this a zero would
+                // be treated as missing at every position EXCEPT the head, which is the position it
+                // does the most damage from (it becomes m_TC_initial_bookmark, and no historical total
+                // credit is ever greater than zero, so every WAS delta is skipped).
+                std::optional<uint64_t> baseline_tc = project->second;
+
+                if (zero_credit_is_missing && baseline_tc && *baseline_tc == 0) {
+                    baseline_tc = std::nullopt;
+                }
+
+                // Effective credit is the normalized value; recorded credit is what the superblock
+                // actually holds, so a head zero stays visible in show_history.
                 m_greylist_ptr->insert(std::make_pair(iter.m_name,
-                                                      GreylistCandidateEntry(iter.m_name, project->second)));
+                                                      GreylistCandidateEntry(iter.m_name,
+                                                                             baseline_tc,
+                                                                             project->second)));
             } else {
                 // Record new greylist candidate entry with nullopt total credit. This is for a project that is in the whitelist,
                 // but does not have a project entry in the superblock. This would be because the scrapers could not converge on the
-                // project.
+                // project. Nothing was recorded for this project at all, so the effective and the recorded
+                // credit are both absent -- unlike the zero case above, there is no value to keep visible.
                 m_greylist_ptr->insert(std::make_pair(iter.m_name, GreylistCandidateEntry(iter.m_name,
+                                                                                          std::optional<uint64_t>(),
                                                                                           std::optional<uint64_t>())));
             }
         }
@@ -584,15 +610,16 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in,
                 && superblock_ptr.m_timestamp >= project_first_active->second->m_timestamp) {
                 if (project != superblock_ptr->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.end()) {
                     // Update greylist candidate entry with the total credit for each project present in superblock.
-                    // [Changed] Pass use_benefit_of_doubt
-                    greylist_entry->second.UpdateGreylistCandidateEntry(project->second, superblock_count, use_benefit_of_doubt);
+                    // [Changed] Pass use_benefit_of_doubt and zero_credit_is_missing
+                    greylist_entry->second.UpdateGreylistCandidateEntry(project->second, superblock_count, use_benefit_of_doubt,
+                                                                        zero_credit_is_missing);
                 } else {
                     // Record updated greylist candidate entry with nullopt total credit. This is for a project that is in the
                     // whitelist, but does not have a project entry in this superblock. This would be because the scrapers could
                     // not converge on the project for this superblock.
-                    // [Changed] Pass use_benefit_of_doubt
+                    // [Changed] Pass use_benefit_of_doubt and zero_credit_is_missing
                     greylist_entry->second.UpdateGreylistCandidateEntry(std::optional<uint64_t>(std::nullopt), superblock_count,
-                                                                        use_benefit_of_doubt);
+                                                                        use_benefit_of_doubt, zero_credit_is_missing);
                 }
             }
         }

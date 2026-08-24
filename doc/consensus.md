@@ -59,13 +59,18 @@ in `src/chainparams.h`.
 | `BlockV15Height` | _not yet activated_ | _not yet activated_ | `IsV15Enabled()` (>= height) |
 | `PollV3Height` | 2,671,700 | 1,944,820 | `IsPollV3Enabled()` (>= height) |
 | `ProjectV2Height` | 2,671,700 | 1,944,820 | `IsProjectV2Enabled()` (>= height) |
-| `ProjectV4Height` | _not yet activated_ | 2,870,000 | `IsProjectV4Enabled()` (>= height) |
-| `SuperblockV3Height` | _not yet activated_ | 2,870,000 | `IsSuperblockV3Enabled()` (>= height) |
-| `AutoGreylistAuditHeight` | _not yet activated_ | 3,111,000 | `IsAutoGreylistAuditEnabled()` (>= height) |
+| `ProjectV4Height` | 3,989,800 | 2,870,000 | `IsProjectV4Enabled()` (>= height) |
+| `SuperblockV3Height` | 3,989,800 | 2,870,000 | `IsSuperblockV3Enabled()` (>= height) |
+| `AutoGreylistAuditHeight` | 3,989,800 | 3,111,000 | `IsAutoGreylistAuditEnabled()` (>= height) |
+| `AutoGreylistDeepCopyHeight` | _not yet activated_ | _not yet activated_ | `IsAutoGreylistDeepCopyEnabled()` (>= height) |
+| `AutoGreylistTotalCreditFixHeight` | _not yet activated_ | _not yet activated_ | `IsAutoGreylistTotalCreditFixEnabled()` (>= height) |
+| `AutoGreylistRedesignHeight` | _not yet activated_ | _not yet activated_ | `IsAutoGreylistRedesignEnabled()` (>= height) |
 
-> **Note:** "not yet activated" means the height is set to
-> `std::numeric_limits<int>::max()` in `CMainParams`. The feature exists in
-> code and is active on testnet.
+> **Note:** "not yet activated" means that network's chain parameters set the
+> height to `std::numeric_limits<int>::max()`, so the gate never opens there.
+> Every row currently marked that way is inactive on **both** mainnet and
+> testnet. The feature is present in code; where a hidden height override
+> exists it can be activated ahead of schedule on an isolated testnet.
 
 ### Non-Height Parameters
 
@@ -567,7 +572,31 @@ Via protocol entry `"magnitudeweightfactor"`:
 - Automatic exclusion of unresponsive BOINC projects based on Zero Credit
   Days (ZCD) and Whitelist Activity Score (WAS)
 - Benefit-of-the-doubt audit logic activated at `AutoGreylistAuditHeight`
-  (testnet 3,111,000)
+  (mainnet 3,989,800 -- coincident with v13 and `SuperblockV3Height`; testnet
+  3,111,000)
+- `AutoGreylistDeepCopyHeight` -- `Whitelist::Snapshot` stops overlaying the
+  greylist by mutating the shared registry entries in place and deep-copies
+  instead. Crossing it forward triggers `ReinitFromDisk` in
+  `Quorum::PushSuperblock` to heal entries already stuck `AUTO_GREYLISTED`
+- `AutoGreylistTotalCreditFixHeight` -- scraper-side EMIT gate: a project whose
+  statistics export yielded no usable records is omitted from the superblock's
+  all-CPID total-credit map instead of being written as a spurious zero. Note
+  this is forward-only; it cannot reinterpret zeros already in the chain, and a
+  legitimately scraped zero (`no_records == false`) is still emitted by design
+- `AutoGreylistRedesignHeight` -- single gate for the remaining correctness
+  batch: separation of the pending (candidate) greylist state from the
+  authoritative (committed-superblock) state, treating a chain-resident zero
+  total credit as missing data, and the walker corrections that follow.
+  **Must never be set below `AutoGreylistDeepCopyHeight`** -- before that gate
+  the Snapshot overlay only ever promotes to `AUTO_GREYLISTED` and there is no
+  demotion arm, so a spuriously greylisted project cannot heal. The release sets
+  all of these coincident with `BlockV15Height`
+
+> These four heights are separate fields so they can be driven independently
+> during testing (`-autogreylist{audit,deepcopy,totalcreditfix,redesign}height`).
+> On the isolated mesh the first three are overridden low and already crossed,
+> which is **not** the mainnet sequencing -- mainnet activates all of them in the
+> same block as v15.
 
 ### 9.7 Project v4
 

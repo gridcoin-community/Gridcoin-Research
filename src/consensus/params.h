@@ -85,6 +85,29 @@ struct Params {
       * activation is scheduled; overridable via -autogreylisttotalcreditfixheight for testnet rollout. */
     int AutoGreylistTotalCreditFixHeight;
     /**
+      * @brief Single activation height for the remaining AutoGreylist correctness batch. Covers
+      * (a) separation of the pending (candidate/tip-anchored) greylist state from the authoritative
+      * (committed-superblock) state, (b) treating a chain-resident zero project total credit as
+      * missing data rather than a real observation, and (c) the walker corrections that follow from
+      * (a). Batched behind ONE height deliberately: these activate together in the release, and a
+      * partial combination is a configuration nobody tests. AutoGreylistTotalCreditFixHeight is a
+      * different thing -- a scraper-EMIT gate that stops new spurious zeros being written; zeros
+      * already recorded in the chain are permanent and keep corrupting the WAS window as they
+      * transit it (one landing on the j=40 endpoint inflates the 40-SB average and collapses WAS;
+      * one at j<=7 inflates the 7-SB average and can mask a genuine greylist).
+      *
+      * MUST NOT be set below AutoGreylistDeepCopyHeight. Before the deep-copy gate the Snapshot
+      * overlay writes through to the registry and only ever promotes to AUTO_GREYLISTED -- there is
+      * no demotion arm, and ReinitFromDisk is conditioned on the deep-copy crossing -- so a project
+      * spuriously greylisted before that gate cannot heal. Co-activation satisfies this: within
+      * Quorum::PushSuperblock, ReinitFromDisk runs before the AutoGreylist Refresh. By procedure the
+      * deep-copy height is never set above the others.
+      *
+      * TBD: set coincident with BlockV15Height when v15 is scheduled. std::numeric_limits<int>::max()
+      * on main/testnet until then; kept as its own field only so it can be driven independently
+      * during testing. Overridable via -autogreylistredesignheight for testnet rollout. */
+    int AutoGreylistRedesignHeight;
+    /**
       * @brief The default GRC paid for a constant block reward.
       *
       * Note that the GRC paid for CBR can be specified by an administrative protocol entry with the key name "blockreward1" for

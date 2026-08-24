@@ -969,6 +969,7 @@ void SetupServerArgs()
     hidden_args.emplace_back("-pollmultiaddressheight");
     hidden_args.emplace_back("-autogreylistdeepcopyheight");
     hidden_args.emplace_back("-autogreylisttotalcreditfixheight");
+    hidden_args.emplace_back("-autogreylistredesignheight");
 
     // This puts hidden options in the form of -clear<type>history, where <type> is the contract types that have a
     // registry with a backing db. This is currently beacon, project, protocol, and scraper, with sidestakes starting
@@ -1618,6 +1619,46 @@ bool AppInit2(ThreadHandlerPtr threads)
     // -pendingpoolretention override is visible in the log and an accidental
     // mismatch across nodes is diagnosable (the value is consensus-affecting).
     LogPrintf("POOL pending/open retention configured at %d blocks", GetPendingPoolRetention());
+
+    // Same rationale for the AutoGreylist activation heights: all four are
+    // consensus-affecting, all four carry hidden isolated-testnet overrides, and
+    // none of them was previously surfaced -- so a node running a different
+    // effective value from its peers had nothing in the log to show it.
+    {
+        const int64_t audit_height = gArgs.GetArg("-autogreylistauditheight",
+                                                  Params().GetConsensus().AutoGreylistAuditHeight);
+        const int64_t deep_copy_height = gArgs.GetArg("-autogreylistdeepcopyheight",
+                                                      Params().GetConsensus().AutoGreylistDeepCopyHeight);
+        const int64_t total_credit_fix_height = gArgs.GetArg("-autogreylisttotalcreditfixheight",
+                                                             Params().GetConsensus().AutoGreylistTotalCreditFixHeight);
+        const int64_t redesign_height = gArgs.GetArg("-autogreylistredesignheight",
+                                                     Params().GetConsensus().AutoGreylistRedesignHeight);
+
+        LogPrintf("AutoGreylist audit configured for block %" PRId64, audit_height);
+        LogPrintf("AutoGreylist deep-copy configured for block %" PRId64, deep_copy_height);
+        LogPrintf("AutoGreylist total-credit fix configured for block %" PRId64, total_credit_fix_height);
+        LogPrintf("AutoGreylist redesign configured for block %" PRId64, redesign_height);
+
+        // Enforce the ordering the Consensus::Params comment documents, rather than
+        // relying on it being followed. Before the deep-copy gate the Snapshot overlay
+        // writes through to the registry and only ever promotes to AUTO_GREYLISTED --
+        // there is no demotion arm -- so a project greylisted while the redesign is
+        // active but deep-copy is not cannot heal.
+        //
+        // Refused rather than silently clamped to the deep-copy height. Clamping would
+        // make the effective redesign height a function of BOTH values, so two nodes
+        // configuring the redesign identically but the deep-copy differently would then
+        // disagree about the redesign gate as well -- turning one misconfiguration into
+        // two divergences, silently. Refusing to start surfaces it on the node that is
+        // actually wrong.
+        if (redesign_height < deep_copy_height) {
+            return InitError(strprintf(_("-autogreylistredesignheight (%d) must not be below "
+                                         "-autogreylistdeepcopyheight (%d). Activating the AutoGreylist "
+                                         "redesign before the deep-copy gate leaves a spuriously greylisted "
+                                         "project unable to recover."),
+                                       redesign_height, deep_copy_height));
+        }
+    }
 
     fs::path datadir = GetDataDir();
 
