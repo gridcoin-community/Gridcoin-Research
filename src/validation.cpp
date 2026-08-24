@@ -1454,6 +1454,22 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
     // this envelope and also be accepted at a height that does not permit it.
     const bool v15_rules = block.nVersion >= 15;
 
+    // The claim contract has to be present before anything asks for it.
+    //
+    // CBlock::GetClaim() reads vtx[0].vContracts[0] whenever nVersion >= 11 --
+    // the version alone satisfies its guard, with no test that the vector holds
+    // anything. The size accounting below resolves through it via
+    // GetSuperblock(), while the test for an empty vContracts sits further
+    // down, so the read currently happens first.
+    //
+    // Ordering only. A block like this is refused either way; this refuses it
+    // ahead of the read instead of after, so the set of acceptable blocks is
+    // unchanged.
+    if (block.nVersion >= 11 && block.vtx[0].vContracts.empty())
+    {
+        return state.DoS(100, error("%s: missing claim contract", __func__));
+    }
+
     // A claim rides in the coinbase, and only there.
     //
     // The accounting below takes that as given. It measures the block with

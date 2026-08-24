@@ -420,6 +420,39 @@ BOOST_AUTO_TEST_CASE(a_claim_outside_the_coinbase_is_refused_under_v15_rules)
     BOOST_CHECK(CheckBlockSizeOnly(clean));
 }
 
+//!
+//! A coinbase carrying no contracts at all.
+//!
+//! CBlock::GetClaim() indexes vtx[0].vContracts[0] on the strength of the block
+//! version alone, and the size accounting reaches it through GetSuperblock()
+//! before anything has established that the vector holds a claim. Blocks are
+//! deserialized from untrusted input, so an empty vContracts is a shape that has
+//! to be handled rather than assumed away.
+//!
+//! Note this case does not fail by returning the wrong answer if the guard is
+//! removed -- it fails by faulting.
+//!
+BOOST_AUTO_TEST_CASE(a_coinbase_with_no_contracts_is_refused_before_the_claim_is_read)
+{
+    LOCK(cs_main);
+
+    CMutableTransaction cb;
+    cb.nVersion = 2;
+    cb.nTime = 1000;
+    cb.vin.resize(1);
+    cb.vin[0].prevout.SetNull();
+    cb.vin[0].scriptSig = CScript() << OP_11 << OP_11;
+    cb.vout.resize(1);
+    cb.vout[0].nValue = 1;
+    // vContracts deliberately left empty.
+
+    CBlock block = BlockOf(14, {CTransaction(cb)});
+    BOOST_REQUIRE(block.vtx[0].vContracts.empty());
+    BOOST_REQUIRE(block.nVersion >= 11);
+
+    BOOST_CHECK(!CheckBlockSizeOnly(block));
+}
+
 BOOST_AUTO_TEST_CASE(an_empty_block_is_refused_before_vtx_is_read)
 {
     LOCK(cs_main);
