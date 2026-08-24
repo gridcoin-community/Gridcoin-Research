@@ -253,11 +253,26 @@ public:
         LogPrintf("RPC: WARNING - short write to client, %d of %d bytes; reply truncated",
                   static_cast<int64_t>(sent), static_cast<int64_t>(n));
 
-        // Same hazard in the other direction: a client that closes before reading
+        // End the connection, rather than assuming it has ended.
+        //
+        // ServiceConnection() runs a keep-alive loop. Reporting the write as
+        // consumed and leaving the socket open lets that loop read the next
+        // request off the same connection and answer it -- while the client is
+        // still waiting for the rest of a Content-Length body it will never
+        // receive. It would then take the head of the next reply as the tail of
+        // the previous one, and every message after that is misframed.
+        //
+        // shutdown() rather than close(): the same choice interrupt() makes
+        // below, and for the same reason. It breaks the worker out of its next
+        // read without disturbing the descriptor this device still refers to.
+        boost::system::error_code shutdown_error;
+        stream.shutdown(boost::asio::socket_base::shutdown_both, shutdown_error);
+
+        // Only now is the claim below true. A client that closes before reading
         // the reply gives a broken pipe here, and boost::asio::write's throwing
-        // overload would abort the process over it. Report the write as consumed --
-        // the connection is finished either way -- rather than throwing from a
-        // thread that cannot catch.
+        // overload would abort the process over it. Report the write as consumed
+        // -- the connection is finished -- rather than throwing from a thread
+        // that cannot catch.
         return n;
     }
 

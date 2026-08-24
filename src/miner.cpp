@@ -430,6 +430,35 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                 continue;
             }
 
+            // A claim rides in the coinbase, so one here would make this block
+            // invalid under v15 rules. Contract dispatch does not screen it --
+            // CLAIM has no handler and falls to the permissive one -- so the
+            // check above passes it.
+            //
+            // The mempool refuses these once v15 is live, but this cannot rely
+            // on that: a transaction accepted before the activation height is
+            // still sitting there afterwards. Dropping it costs nothing; keeping
+            // it costs the whole block.
+            if (IsV15Enabled(nHeight)) {
+                bool claim_outside_coinbase = false;
+
+                for (const auto& contract : tx.GetContracts()) {
+                    if (contract.m_type == GRC::ContractType::CLAIM) {
+                        claim_outside_coinbase = true;
+                        break;
+                    }
+                }
+
+                if (claim_outside_coinbase) {
+                    LogPrint(BCLog::LogFlags::MINER,
+                        "%s: claim contract outside the coinbase. Skipped tx %s",
+                        __func__,
+                        tx.GetHash().ToString());
+
+                    continue;
+                }
+            }
+
             COrphan* porphan = nullptr;
             int64_t nTotalIn = 0;
             bool fMissingInputs = false;
