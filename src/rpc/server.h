@@ -7,8 +7,10 @@
 #ifndef BITCOIN_RPC_SERVER_H
 #define BITCOIN_RPC_SERVER_H
 
+#include <boost/asio/ip/address.hpp>
 #include <cstdint>
 #include <string>
+#include <vector>
 #include <list>
 #include <map>
 
@@ -25,6 +27,21 @@ class uint256;
 class RPCHelpMan;
 
 #include <univalue.h>
+
+//! Idle deadline for a serviced RPC connection, in seconds. One connection pins
+//! one worker thread, so this is what bounds how long a silent client can hold
+//! one of only -rpcthreads of them.
+static constexpr int DEFAULT_RPC_SERVER_TIMEOUT = 30;
+
+//! Parse -rpcallowip into the RPC allow list. Called by StartRPCThreads().
+//! The overload taking entries does the parsing and is what tests drive; the
+//! no-argument form supplies them from gArgs.
+void InitRPCAllowList(const std::vector<std::string>& entries);
+void InitRPCAllowList();
+
+//! True if the address may open a JSON-RPC connection. Loopback is always
+//! allowed; everything else must match the -rpcallowip list.
+bool ClientAllowed(const boost::asio::ip::address& address);
 
 void StartRPCThreads();
 void StopRPCThreads();

@@ -163,4 +163,62 @@ BOOST_AUTO_TEST_CASE(getaddednodeinfo_dns_true_returns_array)
     g_connman->RemoveAddedNode(node); // vAddedNodes is process-global; clean up
 }
 
+//! The HTTP header parse is reachable BEFORE any authentication check, so its
+//! bounds are what an unauthenticated client is limited to. Each returns a
+//! negative length, which ReadHTTPMessage rejects -- not a status code, which it
+//! would read as a body size.
+BOOST_AUTO_TEST_CASE(http_headers_bounded)
+{
+    std::map<std::string, std::string> headers;
+
+    // A normal request parses, and yields its content length.
+    {
+        std::istringstream in("content-length: 42\r\nconnection: close\r\n\r\n");
+        BOOST_CHECK_EQUAL(ReadHTTPHeaders(in, headers), 42);
+    }
+
+    // Too many headers.
+    {
+        std::string raw;
+        for (int i = 0; i < 101; ++i) raw += "x-pad-" + ToString(i) + ": v\r\n";
+        raw += "\r\n";
+        std::istringstream in(raw);
+        BOOST_CHECK(ReadHTTPHeaders(in, headers) < 0);
+    }
+
+    // One header longer than the per-line bound, with no newline to end it --
+    // the shape std::getline would have buffered without limit.
+    {
+        std::istringstream in("x-pad: " + std::string(9000, 'A'));
+        BOOST_CHECK(ReadHTTPHeaders(in, headers) < 0);
+    }
+
+    // Within the count and line bounds, but past the aggregate.
+    {
+        std::string raw;
+        for (int i = 0; i < 20; ++i) raw += "x-pad-" + ToString(i) + ": " + std::string(4000, 'A') + "\r\n";
+        raw += "\r\n";
+        std::istringstream in(raw);
+        BOOST_CHECK(ReadHTTPHeaders(in, headers) < 0);
+    }
+
+    // A malformed content-length returns rather than throwing: ServiceConnection
+    // has no try/catch around this call.
+    {
+        std::istringstream in("content-length: notanumber\r\n\r\n");
+        BOOST_CHECK_NO_THROW(BOOST_CHECK(ReadHTTPHeaders(in, headers) < 0));
+    }
+}
+
+//! "GET / " splits into three words whose third is empty, and pop_back() on an
+//! empty string is undefined. Reachable before authentication.
+BOOST_AUTO_TEST_CASE(http_request_line_empty_proto)
+{
+    std::istringstream in("GET / \r\n");
+    int proto = 0;
+    std::string method, uri;
+
+    BOOST_CHECK_NO_THROW((void)ReadHTTPRequestLine(in, proto, method, uri));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

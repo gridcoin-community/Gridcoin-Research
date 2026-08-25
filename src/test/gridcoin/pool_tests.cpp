@@ -76,6 +76,8 @@ void DispatchApply(const CTransaction& tx, const CBlockIndex* pindex)
 {
     GRC::RegistryBookmarks bookmarks;
     bool found_contract = false;
+
+    LOCK(cs_main);
     GRC::ApplyContracts(tx, pindex, bookmarks, found_contract);
 }
 

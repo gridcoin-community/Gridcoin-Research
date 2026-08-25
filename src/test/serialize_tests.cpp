@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 
+#include "primitives/block.h"
+
 #include <boost/test/unit_test.hpp>
 
 BOOST_AUTO_TEST_SUITE(serialize_tests)
@@ -360,6 +362,45 @@ BOOST_AUTO_TEST_CASE(variants)
     BOOST_CHECK(std::get<p_t>(v) == std::make_pair(14, 48));
     ss >> v;
     BOOST_CHECK(std::get<CSerializeMethodsTestSingle>(v) == csmts);
+}
+
+//!
+//! A locator at exactly the cap must round-trip. This is the property that had
+//! to hold before capping at all: Set() produces at most 42 entries even at the
+//! maximum representable chain height, so 101 cannot reject anything an honest
+//! peer generates. A cap below the legitimate maximum would partition the
+//! network rather than protect it.
+//!
+BOOST_AUTO_TEST_CASE(block_locator_round_trips_at_the_cap)
+{
+    CBlockLocator locator;
+    locator.vHave.assign(MAX_LOCATOR_SZ, uint256());
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << locator;
+
+    CBlockLocator out;
+    ss >> out;
+
+    BOOST_CHECK_EQUAL(out.vHave.size(), (size_t)MAX_LOCATOR_SZ);
+}
+
+//!
+//! One over the cap is refused at the length prefix, before the vector is
+//! sized -- so the allocation an oversized locator would force never happens,
+//! and neither does the per-entry mapBlockIndex lookup under cs_main that makes
+//! a large locator expensive to receive.
+//!
+BOOST_AUTO_TEST_CASE(block_locator_refuses_one_over_the_cap)
+{
+    CBlockLocator locator;
+    locator.vHave.assign(MAX_LOCATOR_SZ + 1, uint256());
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << locator;   // writing is unrestricted, matching LimitedString
+
+    CBlockLocator out;
+    BOOST_CHECK_THROW(ss >> out, std::ios_base::failure);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

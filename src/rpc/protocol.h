@@ -6,14 +6,30 @@
 #ifndef BITCOIN_RPC_PROTOCOL_H
 #define BITCOIN_RPC_PROTOCOL_H
 
+#include "consensus/consensus.h"
 #include <list>
 #include <map>
 #include <stdint.h>
 #include <string>
+#include <compat.h>
+
+// MSG_NOSIGNAL does not exist on Darwin or the BSDs -- compat.h only defines a
+// zero fallback under WIN32 -- and those platforms use SO_NOSIGPIPE on the
+// socket instead, which connect() below sets. Without this the header does not
+// compile there at all.
+//
+// Guarded on the SYMBOL, not on HAVE_MSG_NOSIGNAL as net.cpp and netbase.cpp
+// do. Those are translation units and see the generated config first; a header
+// does not necessarily. Testing the config macro made this redefine the real
+// MSG_NOSIGNAL in any TU that reached <sys/socket.h> without the config.
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+#include <cerrno>
+#include <util/system.h>
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/asio.hpp>
-#include <boost/asio/ssl.hpp>
 
 #include <univalue.h>
 
@@ -30,6 +46,29 @@
 #endif
 
 // HTTP status codes
+//! \brief Maximum accepted Content-Length for an RPC request body.
+//!
+//! Derived, not guessed. The worst legitimate request is signrawtransaction fed
+//! by consolidatemsunspent output, where the prevtxs array dominates because
+//! every multisig input carries its own redeemScript. That is bounded by
+//! MAX_STANDARD_TX_SIZE at roughly 1.8x, so 400-500 KB worst case; 20x leaves
+//! several times the headroom.
+//!
+//! Before this, Content-Length was accepted up to MAX_SIZE (32 MiB) and then
+//! allocated outright -- an allocation driven by an unauthenticated header field.
+static const unsigned int MAX_RPC_BODY_SIZE = 20 * MAX_STANDARD_TX_SIZE;
+
+//! Ceiling on an RPC RESPONSE body read by the command-line client.
+//!
+//! Deliberately far larger than MAX_RPC_BODY_SIZE. A reply comes from the server
+//! the operator pointed the CLI at, not from an unauthenticated peer, and
+//! replies legitimately dwarf requests: listtransactions on a large wallet,
+//! getblock with transaction detail, scraperreport. This keeps a bound so a
+//! hostile or broken endpoint cannot make the CLI allocate without limit, but it
+//! is not the request bound -- applying the request bound in this direction made
+//! the CLI report "no response from server" for exactly those calls.
+static const size_t MAX_RPC_RESPONSE_SIZE = 32 * 1024 * 1024;   // matches MAX_SIZE, the prior behaviour
+
 enum HTTPStatusCode
 {
     HTTP_OK                    = 200,
@@ -111,55 +150,65 @@ enum RPCErrorCode
 };
 
 //
-// IOStream device that speaks SSL but can also speak non-SSL
+// IOStream device over a plain socket.
+//
+// This was SSLIOStreamDevice, which held a boost::asio::ssl::stream and chose
+// per operation between the TLS layer and next_layer() according to -rpcssl.
+// That option is gone, so the indirection is gone with it: the device holds the
+// socket itself. Removing it also drops the OpenSSL::SSL link, which was linked
+// solely to serve an RPC transport that should not have been carrying TLS.
 //
 template <typename Protocol>
-class SSLIOStreamDevice : public boost::iostreams::device<boost::iostreams::bidirectional> {
+class SocketIOStreamDevice : public boost::iostreams::device<boost::iostreams::bidirectional> {
 public:
-    SSLIOStreamDevice(boost::asio::ssl::stream<typename Protocol::socket> &streamIn, bool fUseSSLIn) : stream(streamIn)
-    {
-        fUseSSL = fUseSSLIn;
-        fNeedHandshake = fUseSSLIn;
-    }
+    explicit SocketIOStreamDevice(typename Protocol::socket& streamIn) : stream(streamIn) {}
 
-    //! \return false if the TLS negotiation failed. Non-throwing for the same
-    //! reason read() and write() are: this runs on an RPC worker thread with no
-    //! handler above it, so an escaping exception terminates the process. An
-    //! earlier revision converted only the data-transfer overloads and left this
-    //! one throwing, which merely moved the abort earlier -- a client that
-    //! disconnects mid-negotiation reaches here, not read().
-    bool handshake(boost::asio::ssl::stream_base::handshake_type role)
-    {
-        if (!fNeedHandshake) return true;
-        fNeedHandshake = false;
-
-        boost::system::error_code ec;
-        stream.handshake(role, ec);
-        if (!ec) return true;
-
-        // The connection never became usable. Callers translate this into their own
-        // end-of-sequence result rather than throwing.
-        return false;
-    }
     std::streamsize read(char* s, std::streamsize n)
     {
-        // HTTPS servers read first. A failed negotiation is end of sequence: there
-        // is no usable connection to read from, and throwing here would abort the
-        // process from a thread that cannot catch.
-        if (!handshake(boost::asio::ssl::stream_base::server)) return -1;
+        // recv(2) directly rather than stream.read_some().
+        //
+        // The server puts SO_RCVTIMEO on accepted sockets so a silent client
+        // cannot hold a worker thread forever. Asio's synchronous read does not
+        // honour it: on timeout the underlying recv returns EAGAIN, which asio
+        // cannot distinguish from "not ready yet", so it waits on the descriptor
+        // and retries -- the deadline is swallowed and the read blocks anyway.
+        // Verified: with SO_RCVTIMEO set and read_some() in this position, an
+        // idle connection was still open after 15s against a 3s deadline.
+        //
+        // Going straight to recv(2) keeps the deadline. This REQUIRES a blocking
+        // socket -- SetRPCSocketTimeouts forces one on every accepted connection,
+        // whether or not a deadline is configured -- because a timeout arrives
+        // here as EAGAIN/EWOULDBLOCK and is handled below with every other error:
+        // the connection is finished, report end of sequence. On a non-blocking
+        // socket that same EAGAIN means only "nothing has arrived yet", and
+        // treating it as end of sequence would drop the connection before the
+        // client's first request.
+        for (;;) {
+#ifdef WIN32
+            const int bytes = ::recv(stream.native_handle(), s, static_cast<int>(n), 0);
+#else
+            // ssize_t, not int: recv(2) returns ssize_t on POSIX and narrowing
+            // it is the same class of sloppiness as reading a length into a
+            // signed char.
+            const ssize_t bytes = ::recv(stream.native_handle(), s, static_cast<size_t>(n), 0);
 
-        boost::system::error_code ec;
-        const std::size_t bytes = fUseSSL
-            ? stream.read_some(boost::asio::buffer(s, n), ec)
-            : stream.next_layer().read_some(boost::asio::buffer(s, n), ec);
+            // EINTR is a signal arriving mid-call, not a connection failure.
+            // Asio's synchronous read retried on it; treating it as end of
+            // sequence here would disconnect a healthy client whenever a signal
+            // reached this worker thread.
+            if (bytes < 0 && errno == EINTR) continue;
+#endif
 
-        if (!ec) return static_cast<std::streamsize>(bytes);
+            if (bytes > 0) return static_cast<std::streamsize>(bytes);
+
+            break;
+        }
 
         // Boost.IOStreams signals end of sequence by RETURNING -1. The throwing
-        // read_some overload used here previously raised boost::system::system_error
-        // instead, and this device is driven from an RPC worker thread with no
-        // handler above it -- so a peer closing its connection terminated the
-        // process with "read_some: End of file".
+        // read_some overload raises boost::system::system_error instead, and this
+        // device is driven from an RPC worker thread with no handler above it --
+        // so a peer closing its connection terminated the process with
+        // "read_some: End of file".
         //
         // That is not an edge case. It is the normal end of every RPC call, and
         // AcceptedConnectionImpl::interrupt() deliberately shuts the socket down to
@@ -171,36 +220,88 @@ public:
         // distinguish: report end of sequence and let the worker close it.
         return -1;
     }
+
     std::streamsize write(const char* s, std::streamsize n)
     {
-        // HTTPS clients write first. Report the write as consumed on a failed
-        // negotiation, matching how the error path below treats a dead connection.
-        if (!handshake(boost::asio::ssl::stream_base::client)) return n;
+        // send(2) directly, for the same reason read() uses recv(2): so
+        // SO_SNDTIMEO is not swallowed by asio's retry loop. Looped because a
+        // single send may accept less than asked.
+        std::streamsize sent = 0;
+        while (sent < n) {
+#ifdef WIN32
+            const int bytes = ::send(stream.native_handle(), s + sent,
+                                     static_cast<int>(n - sent), MSG_NOSIGNAL);
+#else
+            const ssize_t bytes = ::send(stream.native_handle(), s + sent,
+                                         static_cast<size_t>(n - sent), MSG_NOSIGNAL);
 
-        boost::system::error_code ec;
-        const std::size_t bytes = fUseSSL
-            ? boost::asio::write(stream, boost::asio::buffer(s, n), ec)
-            : boost::asio::write(stream.next_layer(), boost::asio::buffer(s, n), ec);
+            // As in read(): a signal is not a failure. Breaking here would
+            // report the reply as fully written when it was not.
+            if (bytes < 0 && errno == EINTR) continue;
+#endif
+            if (bytes <= 0) break;
+            sent += bytes;
+        }
 
-        if (!ec) return static_cast<std::streamsize>(bytes);
+        if (sent == n) return sent;
 
-        // Same hazard in the other direction: a client that closes before reading
+        // A short write is reported as consumed, below, because there is no way
+        // to signal an error through this device without throwing from a thread
+        // that cannot catch. Say so in the log, since the client is receiving a
+        // truncated reply and nothing else records that. The send deadline makes
+        // this reachable for a slow-but-alive client, not just a dead one.
+        LogPrintf("RPC: WARNING - short write to client, %d of %d bytes; reply truncated",
+                  static_cast<int64_t>(sent), static_cast<int64_t>(n));
+
+        // End the connection, rather than assuming it has ended.
+        //
+        // ServiceConnection() runs a keep-alive loop. Reporting the write as
+        // consumed and leaving the socket open lets that loop read the next
+        // request off the same connection and answer it -- while the client is
+        // still waiting for the rest of a Content-Length body it will never
+        // receive. It would then take the head of the next reply as the tail of
+        // the previous one, and every message after that is misframed.
+        //
+        // shutdown() rather than close(): the same choice interrupt() makes
+        // below, and for the same reason. It breaks the worker out of its next
+        // read without disturbing the descriptor this device still refers to.
+        boost::system::error_code shutdown_error;
+        stream.shutdown(boost::asio::socket_base::shutdown_both, shutdown_error);
+
+        // Only now is the claim below true. A client that closes before reading
         // the reply gives a broken pipe here, and boost::asio::write's throwing
-        // overload would abort the process over it. Report the write as consumed --
-        // the connection is finished either way -- rather than throwing from a
-        // thread that cannot catch.
+        // overload would abort the process over it. Report the write as consumed
+        // -- the connection is finished -- rather than throwing from a thread
+        // that cannot catch.
         return n;
     }
-    bool connect(const std::string& server, const std::string& port)
+
+    //! Connect to endpoints the caller has already resolved.
+    //!
+    //! Separate from resolution on purpose. CallRPC has to inspect the resolved
+    //! endpoints before connecting -- to refuse sending credentials in clear to
+    //! a non-loopback target -- and resolving a second time in here would mean
+    //! the addresses that were checked are not necessarily the ones connected
+    //! to. Rotation between the two lookups would walk straight past the check.
+    bool connect(const boost::asio::ip::tcp::resolver::results_type& endpoints)
     {
-        boost::asio::ip::tcp::resolver resolver(GetIOService(stream));
         boost::system::error_code error;
 
-        for (const auto& res : resolver.resolve(server, port)) {
-            stream.lowest_layer().close();
-            stream.lowest_layer().connect(res, error);
+        for (const auto& res : endpoints) {
+            stream.close();
+            stream.connect(res, error);
 
             if (!error) {
+#ifdef SO_NOSIGPIPE
+                // Darwin/BSD have no MSG_NOSIGNAL -- compat.h defines it as 0 --
+                // and the RPC CLI path never reaches AppInit2, so it never
+                // installs the SIGPIPE handler the daemon relies on. Without
+                // this, a server closing the connection mid-write kills the
+                // client outright. Same call netbase.cpp makes for P2P sockets.
+                int set = 1;
+                setsockopt(stream.native_handle(), SOL_SOCKET, SO_NOSIGPIPE,
+                           (void*)&set, sizeof(int));
+#endif
                 return true;
             }
         }
@@ -209,9 +310,7 @@ public:
     }
 
 private:
-    bool fNeedHandshake;
-    bool fUseSSL;
-    boost::asio::ssl::stream<typename Protocol::socket>& stream;
+    typename Protocol::socket& stream;
 };
 
 class AcceptedConnection
@@ -234,12 +333,9 @@ template <typename Protocol>
 class AcceptedConnectionImpl : public AcceptedConnection
 {
 public:
-    AcceptedConnectionImpl(
-            ioContext& io_context,
-            boost::asio::ssl::context &context,
-            bool fUseSSL) :
-        sslStream(io_context, context),
-        _d(sslStream, fUseSSL),
+    explicit AcceptedConnectionImpl(ioContext& io_context) :
+        socket(io_context),
+        _d(socket),
         _stream(_d)
     {
     }
@@ -266,15 +362,15 @@ public:
         // recv without racing on file-descriptor reuse. The owning worker
         // still performs the actual close()/delete on its own thread.
         boost::system::error_code ec;
-        sslStream.lowest_layer().shutdown(boost::asio::socket_base::shutdown_both, ec);
+        socket.shutdown(boost::asio::socket_base::shutdown_both, ec);
     }
 
     typename Protocol::endpoint peer;
-    boost::asio::ssl::stream<typename Protocol::socket> sslStream;
+    typename Protocol::socket socket;
 
 private:
-    SSLIOStreamDevice<Protocol> _d;
-    boost::iostreams::stream< SSLIOStreamDevice<Protocol> > _stream;
+    SocketIOStreamDevice<Protocol> _d;
+    boost::iostreams::stream< SocketIOStreamDevice<Protocol> > _stream;
 };
 
 std::string HTTPPost(const std::string& strMsg, const std::map<std::string,std::string>& mapRequestHeaders);
@@ -283,8 +379,13 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
                          std::string& http_method, std::string& http_uri);
 int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto);
 int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std::string>& mapHeadersRet);
+//! Read an HTTP message body, bounded by max_body_size.
+//!
+//! Used in BOTH directions, which is why the bound is the caller's: the server
+//! reads an unauthenticated request and passes MAX_RPC_BODY_SIZE, the CLI reads
+//! a reply and passes MAX_RPC_RESPONSE_SIZE.
 int ReadHTTPMessage(std::basic_istream<char>& stream, std::map<std::string, std::string>& mapHeadersRet,
-                    std::string& strMessageRet, int nProto);
+                    std::string& strMessageRet, int nProto, size_t max_body_size);
 std::string JSONRPCRequest(const std::string& strMethod, const UniValue& params, const UniValue& id);
 UniValue JSONRPCReplyObj(const UniValue& result, const UniValue& error, const UniValue& id);
 std::string JSONRPCReply(const UniValue& result, const UniValue& error, const UniValue& id);

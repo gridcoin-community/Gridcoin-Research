@@ -41,11 +41,13 @@ add_executable(test_gridcoin
     gridcoin/protocol_tests.cpp
     gridcoin/researcher_tests.cpp
     gridcoin/rsaverify_tests.cpp
+    gridcoin/scraper_net_tests.cpp
     gridcoin/scraper_registry_tests.cpp
     gridcoin/sidestake_tests.cpp
     gridcoin/superblock_tests.cpp
     interfaces_tests.cpp
     key_tests.cpp
+    limitedmap_tests.cpp
     merkle_tests.cpp
     merkleblock_tests.cpp
     mruset_tests.cpp
@@ -137,6 +139,8 @@ add_executable(test_gridcoin
     sanity_tests.cpp
     scheduler_tests.cpp
     script_p2sh_tests.cpp
+    gridcoin/connectinputs_tests.cpp
+    rpc_allowlist_tests.cpp
     script_tests.cpp
     serialize_tests.cpp
     sigopcount_tests.cpp

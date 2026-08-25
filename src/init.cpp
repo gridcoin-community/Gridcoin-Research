@@ -22,6 +22,7 @@
 #include "node/ui_interface.h"
 #include "scheduler.h"
 #include "validationinterface.h"
+#include "script/interpreter.h"
 #include "gridcoin/gridcoin.h"
 #include "gridcoin/upgrade.h"
 #include "gridcoin/contract/registry.h"
@@ -821,7 +822,9 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-enableaccounts", "DEPRECATED: Enable accounting functionality (default: 0)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
-    argsman.AddArg("-maxsigcachesize=<n>", "Set maximum size for signature cache (default: 50000)",
+    argsman.AddArg("-maxsigcachesize=<n>", strprintf("Set maximum size for signature cache, in entries "
+                                                     "(default: %d, maximum: %d)",
+                                                     DEFAULT_MAX_SIG_CACHE_SIZE, MAX_SIG_CACHE_ENTRIES),
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-contractchangetoinputaddress", "Change from a contract transaction is returned to an input address "
                                                     "rather than creating a new change address (default: 0)",
@@ -921,19 +924,23 @@ void SetupServerArgs()
     argsman.AddArg("-rpcport=<port>", strprintf("Listen for JSON-RPC connections on <port> (default: %u, testnet: %u)",
                                                 defaultBaseParams->RPCPort(), testnetBaseParams->RPCPort()),
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcallowip=<ip>", "Allow JSON-RPC connections from specified IP address",
+    argsman.AddArg("-rpcallowip=<ip>", "Allow JSON-RPC connections from the specified IP address, "
+                   "subnet (1.2.3.4/24 or 1.2.3.4/255.255.255.0) or wildcard pattern (1.2.3.*). "
+                   "May be given more than once. Note that setting this without -rpcbind also "
+                   "opens the RPC port on all interfaces",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcbind=<addr>[:port]", "Bind the JSON-RPC listener to the given address, "
+                   "optionally on a specific port. May be given more than once. Each entry binds "
+                   "exactly what it names, so an IPv6 entry does NOT also accept IPv4 -- pass both "
+                   "-rpcbind=:: and -rpcbind=0.0.0.0 to listen on each. When unset the listener "
+                   "uses loopback, or all interfaces (dual-stack) if -rpcallowip is set",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcconnect=<ip>", "Send commands to node running on <ip> (default: 127.0.0.1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcthreads=<n>", "Set the number of threads to service RPC calls (default: 4)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcssl", "Use OpenSSL (https) for JSON-RPC connections", ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcsslcertificatechainfile=<file.cert>", "Server certificate file (default: server.cert)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcsslprivatekeyfile=<file.pem>", "Server private key (default: server.pem)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcsslciphers=<ciphers>",
-                   "Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)",
+    argsman.AddArg("-rpcservertimeout=<n>", strprintf("Close an RPC connection that has been idle "
+                   "for this many seconds; 0 disables (default: %d)", DEFAULT_RPC_SERVER_TIMEOUT),
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
 
 #if HAVE_DECL_FORK
@@ -1019,6 +1026,14 @@ void SetupServerArgs()
     SetupChainParamsBaseOptions(argsman);
 
     // Add the hidden options
+    // Removed options, still accepted so that a node whose config or command
+    // line carries them starts instead of dying on "invalid parameter". The RPC
+    // server logs a warning for each one it finds set.
+    hidden_args.emplace_back("-rpcssl");
+    hidden_args.emplace_back("-rpcsslcertificatechainfile");
+    hidden_args.emplace_back("-rpcsslprivatekeyfile");
+    hidden_args.emplace_back("-rpcsslciphers");
+
     argsman.AddHiddenArgs(hidden_args);
 }
 
@@ -1402,7 +1417,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     HeapSetInformation(nullptr, HeapEnableTerminationOnCorruption, nullptr, 0);
 #endif
 #ifndef WIN32
-    umask(077);
+    // The process umask is set at the top of main() (util::SetOwnerOnlyUmask), so
+    // that debug.log and the settings file -- both created before this point -- are
+    // covered too. Setting it here would be too late for them.
 
     // Clean shutdown on SIGTERM
     registerSignalHandler(SIGTERM, HandleSIGTERM);
@@ -2451,6 +2468,14 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_scheduler->scheduleEvery([]{
         ResendUnbroadcastTransactions();
     }, std::chrono::minutes{12});
+
+    // Sweep expired orphan transactions. The pool's count limit only applies when
+    // something new is inserted, so without this a peer can fill it and go quiet,
+    // leaving it full until unrelated traffic happens to evict entries at random.
+    // Five minutes against a twenty-minute TTL, matching the PSGT pool sweep above.
+    g_scheduler->scheduleEvery([]{
+        ExpireOrphanTransactions(GetAdjustedTime());
+    }, std::chrono::minutes{5});
 
     // Periodically rebroadcast the wallet's own unconfirmed transactions. This
     // was previously driven per-pass from net_processing::SendMessages via the

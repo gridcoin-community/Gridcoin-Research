@@ -155,8 +155,8 @@ struct MiningProject
     Cpid m_cpid;        //!< CPID of the BOINC account for the project.
     std::string m_team; //!< Name of the team joined for the project.
     std::string m_url;  //!< URL of the project website.
-    double m_rac;       //!< RAC of the project.
-    Error m_error;      //!< May describe why a project is ineligible.
+    double m_rac = 0.0;             //!< RAC of the project.
+    Error m_error = Error::NONE;    //!< May describe why a project is ineligible.
 
     //!
     //! \brief Determine whether the project is eligible for reward.
@@ -297,7 +297,7 @@ private:
     //!
     //! \brief Caches whether the map contains a project attached to a pool.
     //!
-    bool m_has_pool_project;
+    bool m_has_pool_project = false;
 }; // MiningProjectMap
 
 class Researcher; // forward for ResearcherPtr
@@ -697,8 +697,8 @@ public:
 private:
     MiningId m_mining_id;            //!< CPID or NONCRUNCHER variant.
     MiningProjectMap m_projects;     //!< Local projects loaded from BOINC.
-    GRC::BeaconError m_beacon_error; //!< Last beacon error that occurred, if any.
-    bool m_has_split_cpid;           //!< Flag that indicates project list has more than one CPID
+    GRC::BeaconError m_beacon_error = GRC::BeaconError::NONE; //!< Last beacon error that occurred, if any.
+    bool m_has_split_cpid = false;   //!< Flag that indicates project list has more than one CPID
 }; // Researcher
 }
 

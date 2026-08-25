@@ -58,9 +58,9 @@ EXPECTED_BOOST_INCLUDES=(
     boost/algorithm/string/split.hpp
     boost/array.hpp
     boost/asio.hpp
+    boost/asio/ip/address.hpp
     boost/asio/ip/udp.hpp
     boost/asio/ip/v6_only.hpp
-    boost/asio/ssl.hpp
     boost/asio/system_timer.hpp
     boost/assert.hpp
     boost/assign/list_of.hpp

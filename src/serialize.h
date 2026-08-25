@@ -503,6 +503,7 @@ static inline Wrapper<Formatter, T&> Using(T&& t) { return Wrapper<Formatter, T&
 #define VARINT(obj, ...) WrapVarInt<__VA_ARGS__>(REF(obj))
 #define COMPACTSIZE(obj) CCompactSize(REF(obj))
 #define LIMITED_STRING(obj,n) LimitedString< n >(REF(obj))
+#define LIMITED_VECTOR(obj,n) MakeLimitedVector< n >(REF(obj))
 
 template<VarIntMode Mode, typename I>
 class CVarInt
@@ -647,6 +648,58 @@ public:
             s.write(MakeByteSpan(string));
     }
 };
+
+/**
+ * Wrapper for a vector with a maximum element count, enforced at the length
+ * prefix.
+ *
+ * The mirror of LimitedString above, and for the same reason: the check has to
+ * happen on the CompactSize prefix, BEFORE the vector is sized. The default
+ * vector deserializer grows in 5,000,000/sizeof(T) element steps and allocates
+ * against the declared count before reading the data behind it, so a short
+ * message declaring a huge count already costs a multi-megabyte allocation by
+ * the time a post-hoc size test could run.
+ *
+ * Deliberately shaped like LimitedString rather than ported from upstream's
+ * LimitedVectorFormatter, which needs the DefaultFormatter / VectorFormatter
+ * chain that this tree does not carry.
+ */
+template<size_t Limit, typename V>
+class LimitedVector
+{
+protected:
+    V& vec;
+public:
+    explicit LimitedVector(V& _vec) : vec(_vec) {}
+
+    template<typename Stream>
+    void Unserialize(Stream& s)
+    {
+        vec.clear();
+        const size_t size = ReadCompactSize(s);
+        if (size > Limit) {
+            throw std::ios_base::failure("Vector length limit exceeded");
+        }
+        vec.reserve(size);
+        for (size_t i = 0; i < size; ++i) {
+            vec.emplace_back();
+            s >> vec.back();
+        }
+    }
+
+    template<typename Stream>
+    void Serialize(Stream& s) const
+    {
+        WriteCompactSize(s, vec.size());
+        for (const auto& element : vec) {
+            s << element;
+        }
+    }
+};
+
+//! Deduction helper so LIMITED_VECTOR need not name the container type.
+template<size_t Limit, typename V>
+LimitedVector<Limit, V> MakeLimitedVector(V& vec) { return LimitedVector<Limit, V>(vec); }
 
 template<VarIntMode Mode=VarIntMode::DEFAULT, typename I>
 CVarInt<Mode, I> WrapVarInt(I& n) { return CVarInt<Mode, I>{n}; }

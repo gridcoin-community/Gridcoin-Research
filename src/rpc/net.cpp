@@ -728,7 +728,7 @@ UniValue sendalert(const UniValue& params)
     sMsg << (CUnsignedAlert)alert;
     alert.vchMsg = vector<unsigned char>((unsigned char*)&sMsg.begin()[0], (unsigned char*)&sMsg.end()[0]);
 
-    key = DecodeSecret(params[0].get_str());
+    key = DecodeSecret(params[1].get_str());
 
     if (!key.IsValid()) {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");

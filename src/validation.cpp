@@ -143,15 +143,24 @@ bool ReadTxFromDisk(CTransaction& tx, COutPoint prevout)
     return ReadTxFromDisk(tx, txdb, prevout, txindex);
 }
 
-bool CheckTransaction(const CTransaction& tx, CValidationState& state)
+bool CheckTransaction(const CTransaction& tx, CValidationState& state, bool v15_rules)
 {
     // Basic checks that don't depend on any context
     if (tx.vin.empty())
         return state.DoS(10, error("CheckTransaction() : vin empty"));
     if (tx.vout.empty())
         return state.DoS(10, error("CheckTransaction() : vout empty"));
-    // Size limits - don't count coinbase superblocks--we check this at the block level:
-    if (GetSerializeSize(tx, (SER_NETWORK & SER_SKIPSUPERBLOCK), PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
+    // Size limits. Under v15 rules a coinbase or coinstake carrying a superblock
+    // is measured without it: the block-level check bounds the whole block, and
+    // bounds the superblock separately.
+    //
+    // Takes the caller's determination rather than a height, for the reason
+    // spelled out in CheckBlock(): the height available there is the tip's next
+    // height, not necessarily this block's. Defaults to false, so the callers
+    // with no block context are unaffected -- only CheckBlock() passes it.
+    const int serialize_type = v15_rules ? (SER_NETWORK | SER_SKIPSUPERBLOCK) : 0;
+
+    if (GetSerializeSize(tx, serialize_type, PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
         return state.DoS(100, error("CheckTransaction() : size limits failed"));
 
     // Check for negative or overflow output values (see CVE-2010-5139)
@@ -404,6 +413,8 @@ bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const s
     return true;
 }
 
+std::atomic<uint64_t> g_connectinputs_signature_checks{0};
+
 bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx,
     const CBlockIndex* pindexBlock, bool fBlock, bool fMiner)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -414,8 +425,55 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
     // ... both are false when called from CTransaction::AcceptToMemoryPool
     if (!tx.IsCoinBase())
     {
+        // Height of the block these inputs will be validated IN, which is not
+        // always pindexBlock's own height.
+        //
+        // Connecting a block, pindexBlock IS that block. On the mempool and
+        // miner paths it is the PREVIOUS block -- pindexBest and pindexPrev
+        // respectively -- and the transaction is destined for the next one, so
+        // both were evaluating script flags one height low.
+        //
+        // No effect today: the only height at which the flag set differs from
+        // its successor is exactly BlockV14Height - 1, which is behind the tip
+        // and behind the checkpoints, and BlockV15Height is unscheduled. It
+        // matters at the NEXT activation, where a staker computing pre-fork
+        // flags for a block validators judge with post-fork flags would build a
+        // block the network rejects and lose the stake -- and being upgraded
+        // would not save it, since the error is the height, not the software.
+        const int script_flag_height = fBlock ? pindexBlock->nHeight : pindexBlock->nHeight + 1;
+
+        // Consensus flags decide validity and apply on every path.
+        const unsigned int consensus_flags = GetBlockScriptFlags(script_flag_height);
+
+        // Local policy flags, applied to mempool acceptance only. Zero today.
+        //
+        // This tier exists so that a flag can ever be tightened for RELAY
+        // without banning honest peers, and that is why it lands even while
+        // empty: until a node can tell "consensus-invalid" from "non-standard
+        // to me", every ConnectInputs failure is DoS(100) and any future
+        // tightening scores peers for relaying transactions that are perfectly
+        // valid. The split is the prerequisite; the flags are a separate
+        // decision each time.
+        //
+        // The v15 malleability flags are NOT here. They activate as consensus
+        // in GetBlockScriptFlags() above, which turns them on for relay and for
+        // block validity at the same height -- a coordinated change rather than
+        // a staggered one, and no window where a staker builds from its own
+        // mempool a block its peers reject.
+        // When a flag is added it belongs behind (!fBlock && !fMiner), i.e.
+        // mempool acceptance only -- never when connecting a block, where it
+        // would change which chain this node follows, and never for the miner,
+        // which is assembling a block and must judge by validity alone.
+        const unsigned int policy_flags = 0;
+
         int64_t nValueIn = 0;
         int64_t nFees = 0;
+
+        // Index of the first input whose outpoint is already spent, or -1.
+        // Recorded here rather than acted on immediately so that every DoS(100)
+        // this loop can raise still wins, exactly as before.
+        int conflict_input = -1;
+
         for (unsigned int i = 0; i < tx.vin.size(); i++)
         {
             COutPoint prevout = tx.vin[i].prevout;
@@ -444,10 +502,52 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
             if (!MoneyRange(txPrev.vout[prevout.n].nValue) || !MoneyRange(nValueIn))
                 return state.DoS(100, error("ConnectInputs() : txin values out of range"));
 
+            // Cheap: one array lookup. See the rejection below for why the
+            // result is remembered rather than returned on.
+            if (conflict_input < 0 && !txindex.vSpent[prevout.n].IsNull())
+                conflict_input = static_cast<int>(i);
         }
-        // The first loop above does all the inexpensive checks.
-        // Only if ALL inputs pass do we perform expensive ECDSA signature checks.
-        // Helps prevent CPU exhaustion attacks.
+        // The first loop above does all the inexpensive per-input checks, and
+        // only if ALL inputs pass do we perform the expensive ECDSA signature
+        // checks below. That is what prevents CPU exhaustion, and until this
+        // was added it was not actually true: the conflict check lived in the
+        // loop below, interleaved with VerifySignature. A transaction whose
+        // only defect was an already-spent outpoint in its LAST input cost a
+        // full signature verification for every input before it, and was then
+        // rejected with no DoS score -- deliberately, see below -- so the
+        // sender was neither disconnected nor banned and could send the next
+        // one immediately. At MAX_STANDARD_TX_SIZE that is roughly 675
+        // verifications, held under cs_main, for free and on demand.
+        //
+        // Reject here, between the loops, rather than returning from the loop
+        // itself: letting it run to completion keeps every DoS(100) it can
+        // raise -- including the cumulative MoneyRange check, which depends on
+        // inputs after the conflicting one -- winning exactly as it did before.
+        //
+        // Below nGrandfather the conflict branch in the loop below returns TRUE
+        // for non-miners, i.e. it accepts the transaction. That era is left
+        // entirely to that branch so nothing changes for it.
+        //
+        // The one behavioural difference: a transaction carrying BOTH a bad
+        // signature and a conflict used to be rejected by the signature check
+        // with DoS(100) and is now rejected here without a score. That is peer
+        // scoring, not validity, so it cannot affect which chain a node
+        // follows, and it only ever fired on an attack shape strictly worse
+        // for the attacker than simply omitting the bad signature.
+        if (conflict_input >= 0 && pindexBlock->nHeight >= nGrandfather)
+        {
+            if (fMiner) return false;
+
+            const COutPoint prevout = tx.vin[conflict_input].prevout;
+            const CTxIndex& txindex = inputs[prevout.hash].first;
+
+            return LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)
+                ? error("ConnectInputs() : %s prev tx already used at %s",
+                        tx.GetHash().ToString().c_str(),
+                        txindex.vSpent[prevout.n].ToString().c_str())
+                : false;
+        }
+
         for (unsigned int i = 0; i < tx.vin.size(); i++)
         {
             COutPoint prevout = tx.vin[i].prevout;
@@ -488,9 +588,44 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
 
             if (!(fBlock && (nBestHeight < Params().Checkpoints().GetHeight())))
             {
-                // Verify signature
-                if (!VerifySignature(txPrev, tx, GetBlockScriptFlags(*pindexBlock), i, 0))
+                // Counted so the ordering above can be asserted rather than
+                // just asserted about. The whole point of the conflict pre-scan
+                // is that this is not reached for a transaction that has an
+                // already-spent input, and nothing else makes that observable
+                // from outside. One relaxed atomic increment against an ECDSA
+                // verification is not measurable.
+                g_connectinputs_signature_checks.fetch_add(1, std::memory_order_relaxed);
+
+                // Verify signature.
+                //
+                // Two tiers, and the distinction is the whole point. The
+                // consensus flags decide VALIDITY: failing them means the
+                // transaction could never be in a block, so the peer that
+                // relayed it is relaying garbage and earns a ban. The policy
+                // flags are this node's local standard, applied on the mempool
+                // path only. Failing those means the transaction is merely
+                // non-standard to US -- it may be perfectly valid, and other
+                // nodes may relay it quite legitimately -- so it is dropped
+                // quietly and the relayer is NOT scored.
+                //
+                // Before this, every failure was DoS(100) with no way to tell
+                // the two apart, which meant no mempool flag could be tightened
+                // without banning honest peers for relaying transactions that
+                // are consensus-valid. That is why the split has to land before
+                // the flags do, not alongside them.
+                if (!VerifySignature(txPrev, tx, consensus_flags | policy_flags, i, 0))
                 {
+                    // Re-verify with consensus flags alone to place the blame.
+                    // Only worth doing when policy actually added something.
+                    if (policy_flags != 0
+                        && VerifySignature(txPrev, tx, consensus_flags, i, 0))
+                    {
+                        return state.Invalid(
+                            error("ConnectInputs() : %s non-mandatory script verify failure",
+                                  tx.GetHash().ToString().substr(0,10).c_str()),
+                            "non-mandatory-script-verify-flag");
+                    }
+
                     return state.DoS(100,error("ConnectInputs() : %s VerifySignature failed", tx.GetHash().ToString().substr(0,10).c_str()));
                 }
             }
@@ -945,14 +1080,41 @@ bool GridcoinConnectBlock(
 }
 } // Anonymous namespace
 
-unsigned int GetBlockScriptFlags(const CBlockIndex& block_index)
+unsigned int GetBlockScriptFlags(int nHeight)
 {
     unsigned int flags{SCRIPT_VERIFY_P2SH};
 
     // BIP65 (CLTV) and BIP112 (CSV) are enforced starting with block version 14.
-    if (IsV14Enabled(block_index.nHeight)) {
+    if (IsV14Enabled(nHeight)) {
         flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
         flags |= SCRIPT_VERIFY_CHECKSEQUENCEVERIFY;
+    }
+
+    // Signature malleability closes at block version 15, the same shape v14
+    // used for CLTV/CSV.
+    //
+    // Consensus flags, and the only tier these use. There is no separate
+    // standardness constant applying them for relay first -- the policy tier in
+    // ConnectInputs() is empty, deliberately, and this is what both paths read.
+    //
+    // Which is the point: mempool acceptance asks for the flags at the tip's
+    // next height and block connection asks for the flags at the block's own
+    // height, so a node stops RELAYING these transactions and stops ACCEPTING
+    // blocks containing them at the same height. No window opens in which a
+    // staker builds a block from its own mempool that its peers then reject.
+    //
+    // Inert until v15 is scheduled -- BlockV15Height is
+    // numeric_limits<int>::max() -- so landing this early costs nothing and
+    // means the activation itself is a chainparams change rather than a code
+    // change made under fork pressure.
+    //
+    // What this fixes: pubkey.cpp normalizes high-S on verification and
+    // documents that enforcement belongs to SCRIPT_VERIFY_LOW_S. Nothing set
+    // it, so the other half of that division of responsibility was never
+    // wired up and third-party malleation of an otherwise-canonical signature
+    // stayed possible.
+    if (IsV15Enabled(nHeight)) {
+        flags |= V15_SCRIPT_VERIFY_FLAGS;
     }
 
     return flags;
@@ -1249,33 +1411,64 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
     // These are checks that are independent of context
     // that can be verified before saving an orphan block.
 
-    // Size limits
-    if (block.vtx.empty()
-        || block.vtx.size() > MAX_BLOCK_SIZE
-        || ::GetSerializeSize(block, (SER_NETWORK & SER_SKIPSUPERBLOCK), PROTOCOL_VERSION) > MAX_BLOCK_SIZE
-        || ::GetSerializeSize(block.GetSuperblock(), SER_NETWORK, PROTOCOL_VERSION) > GRC::Superblock::MAX_SIZE)
+    // Size limits. From v15 the two bounds are independent and both bind:
+    //
+    //   block excluding the superblock <= MAX_BLOCK_SIZE
+    //   the superblock itself          <= GRC::Superblock::MAX_SIZE
+    //
+    // Deliberately additive rather than one combined ceiling. A single total
+    // would make each side's headroom depend on the other: a large superblock
+    // would eat the space available to ordinary transactions, and a full block
+    // of transactions would cap the superblock. Measuring them separately means
+    // neither crowds the other out, and the superblock's limit no longer
+    // depends implicitly on how much else the block happens to carry.
+    //
+    // SER_SKIPSUPERBLOCK is what excludes the superblock's bytes from the first
+    // measurement; the claim's serializer honours it (see claim.h).
+    // Emptiness FIRST, and on its own. Everything below reaches GetSuperblock(),
+    // which goes through CBlock::GetClaim() and indexes vtx[0] unconditionally,
+    // so it must not run against a block with no transactions. A peer supplies
+    // this object straight off the wire -- ProcessMessage deserializes it and
+    // ProcessBlock calls straight through to here -- so an empty vtx is
+    // attacker-supplied input, not an internal impossibility.
+    if (block.vtx.empty())
     {
-        return state.DoS(100, error("%s: size limits failed", __func__));
+        return state.DoS(100, error("%s: block has no transactions", __func__));
     }
 
-    // Check proof of work matches claimed amount
-    if (fCheckPOW && block.IsProofOfWork() && !CheckProofOfWork(block.GetHash(true), block.nBits, Params().GetConsensus()))
-        return state.DoS(50, error("%s: proof of work failed", __func__));
-
-    //Reject blocks with diff that has grown to an extraordinary level (should never happen)
-    double blockdiff = GRC::GetBlockDifficulty(block.nBits);
-    if (height1 > nGrandfather && blockdiff > 10000000000000000)
-    {
-       return state.DoS(1, error("%s: Block Bits larger than 10000000000000000.", __func__));
-    }
-
-    // First transaction must be coinbase, the rest must not be
-    if (block.vtx.empty() || !block.vtx[0].IsCoinBase())
-        return state.DoS(100, error("%s: first tx is not coinbase", __func__));
-    for (unsigned int i = 1; i < block.vtx.size(); i++)
-        if (block.vtx[i].IsCoinBase())
-            return state.DoS(100, error("%s: more than one coinbase", __func__));
-
+    // Keyed on the BLOCK'S OWN VERSION, not on a height.
+    //
+    // CheckBlock() does not reliably know the height of the block in front of
+    // it: ProcessBlock() passes pindexBest->nHeight + 1, the tip's next height,
+    // which is not this block's height for an orphan, a block arriving out of
+    // order, or a node catching up. ConnectBlock() passes the real height, but
+    // fChecked short-circuits that second call, so the approximate verdict is
+    // the only one that ever runs.
+    //
+    // Getting that wrong around an activation is a consensus split, not a
+    // nuisance: a node whose tip sits below the activation height would judge a
+    // valid post-activation block by the older rule, reject it, and score the
+    // honest peer that relayed it.
+    //
+    // The block's version does not have that problem -- it travels with the
+    // block. AcceptBlock() enforces version against the authoritative height
+    // (pindexPrev->nHeight + 1) and rejects a v15 block below the activation
+    // height as well as a pre-v15 block at or above it, so a block cannot claim
+    // this envelope and also be accepted at a height that does not permit it.
+    // The coinbase claim is established BEFORE anything reads it.
+    //
+    // These are the same checks that have always run, moved ahead of the size
+    // accounting below, which resolves the block's superblock through
+    // CBlock::GetClaim(). Running them first means the claim is known to be
+    // present, singular and of the right type by the time it is read, rather
+    // than after.
+    //
+    // A move, not a new rule: every one of these already refused these blocks,
+    // so the set of acceptable blocks is unchanged and only the order in which
+    // a bad one is reported differs. Deliberately kept that way -- a rule that
+    // does not exist on the current network cannot be added here without an
+    // activation to carry it.
+    //
     // Version 11+ blocks store the Gridcoin claim context as a contract in the
     // coinbase transaction instead of the hashBoinc field.
     //
@@ -1304,6 +1497,66 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
             return state.DoS(100, error("%s: testnet-only claim", __func__));
         }
     }
+
+    const bool v15_rules = block.nVersion >= 15;
+
+    // A claim rides in the coinbase, and only there.
+    //
+    // The accounting below takes that as given. It measures the block with
+    // SER_SKIPSUPERBLOCK, which drops the superblock from every claim the
+    // serializer walks, and then measures the superblock separately through
+    // GetSuperblock() -- which resolves via CBlock::GetClaim() and reads vtx[0].
+    // The two line up only while vtx[0] holds the block's one claim: a claim
+    // anywhere else is subtracted by the first measurement and invisible to the
+    // second, so nothing bounds what it carries.
+    //
+    // Nothing legitimate produces one. The miner puts the claim in the coinbase,
+    // and the checks further down already require it to be there and to be the
+    // only contract in it. This says the rest of the block may not hold one, so
+    // the skip flag means what the accounting assumes it means.
+    if (v15_rules)
+    {
+        for (unsigned int i = 1; i < block.vtx.size(); i++)
+        {
+            for (const auto& contract : block.vtx[i].vContracts)
+            {
+                if (contract.m_type == GRC::ContractType::CLAIM)
+                {
+                    return state.DoS(100, error("%s: claim contract outside the coinbase (tx %u)",
+                                                __func__, i));
+                }
+            }
+        }
+    }
+
+    const int block_size_type = (block.GetSuperblock()->WellFormed() && v15_rules)
+        ? (SER_NETWORK | SER_SKIPSUPERBLOCK)
+        : 0;
+
+    if (block.vtx.size() > MAX_BLOCK_SIZE
+        || ::GetSerializeSize(block, block_size_type, PROTOCOL_VERSION) > MAX_BLOCK_SIZE
+        || ::GetSerializeSize(block.GetSuperblock(), SER_NETWORK, PROTOCOL_VERSION) > GRC::Superblock::MAX_SIZE)
+    {
+        return state.DoS(100, error("%s: size limits failed", __func__));
+    }
+
+    // Check proof of work matches claimed amount
+    if (fCheckPOW && block.IsProofOfWork() && !CheckProofOfWork(block.GetHash(true), block.nBits, Params().GetConsensus()))
+        return state.DoS(50, error("%s: proof of work failed", __func__));
+
+    //Reject blocks with diff that has grown to an extraordinary level (should never happen)
+    double blockdiff = GRC::GetBlockDifficulty(block.nBits);
+    if (height1 > nGrandfather && blockdiff > 10000000000000000)
+    {
+       return state.DoS(1, error("%s: Block Bits larger than 10000000000000000.", __func__));
+    }
+
+    // First transaction must be coinbase, the rest must not be
+    if (block.vtx.empty() || !block.vtx[0].IsCoinBase())
+        return state.DoS(100, error("%s: first tx is not coinbase", __func__));
+    for (unsigned int i = 1; i < block.vtx.size(); i++)
+        if (block.vtx[i].IsCoinBase())
+            return state.DoS(100, error("%s: more than one coinbase", __func__));
 
     // End of Proof Of Research
     if (block.IsProofOfStake())
@@ -1335,7 +1588,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
     // Check transactions
     for (auto const& tx : block.vtx)
     {
-        if (!CheckTransaction(tx, state))
+        if (!CheckTransaction(tx, state, v15_rules))
             return error("%s: CheckTransaction failed", __func__);
 
         // ppcoin: check transaction timestamp
@@ -1879,6 +2132,27 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     // Rather not work on nonstandard transactions
     if (!IsStandardTx(tx))
         return state.Invalid(error("AcceptToMemoryPool : nonstandard transaction type"), "tx-nonstandard");
+
+    // A claim belongs in a coinbase, so it can never belong in a loose one.
+    //
+    // Contract dispatch will not catch this: CLAIM has no handler and falls to
+    // the permissive one, which accepts anything. Without this the transaction
+    // sits in the mempool, gets selected into a block, and CheckBlock() then
+    // refuses the block -- costing the staker the block rather than the sender
+    // the transaction.
+    //
+    // Gated to activate with the block rule it mirrors, so a node stops
+    // RELAYING these and stops ACCEPTING blocks containing them at the same
+    // height. Judged at the height the transaction would be mined at, which is
+    // the next one, for the same reason the script flags are.
+    if (IsV15Enabled(nBestHeight + 1)) {
+        for (const auto& contract : tx.GetContracts()) {
+            if (contract.m_type == GRC::ContractType::CLAIM) {
+                return state.DoS(100, error("%s: claim contract in a non-coinbase transaction", __func__),
+                                 "claim-outside-coinbase");
+            }
+        }
+    }
 
     // Perform contextual validation for any contracts:
 

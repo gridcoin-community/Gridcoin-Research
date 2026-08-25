@@ -853,7 +853,21 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidatio
                 //
                 {
                     LOCK(cs_mapAlreadyAskedFor);
-                    mapAlreadyAskedFor[ancestor_request] = 0;
+
+                    // Zero is deliberate: AskFor() below takes
+                    // max(nRequestTime + 2 minutes, now), so a stale future
+                    // timestamp here would postpone the request. Note that a
+                    // zero-valued entry is also limitedmap's first eviction
+                    // candidate, which is harmless -- AskFor() raises it
+                    // immediately, and losing it in between simply means AskFor
+                    // inserts it fresh.
+                    const auto it = mapAlreadyAskedFor.find(ancestor_request);
+
+                    if (it != mapAlreadyAskedFor.end()) {
+                        mapAlreadyAskedFor.update(it, 0);
+                    } else {
+                        mapAlreadyAskedFor.insert(std::make_pair(ancestor_request, 0));
+                    }
                 }
                 pfrom->AskFor(ancestor_request);
             }

@@ -21,7 +21,24 @@
 
 const GRC::Claim& CBlock::GetClaim() const
 {
-    if (nVersion >= 11 || !vtx[0].vContracts.empty()) {
+    // Take the contract only when there is actually a claim contract to take.
+    //
+    // The version used to be the whole of this test, which made the accessor
+    // partial: a v11+ block with no coinbase contracts indexed an empty vector,
+    // and one whose first contract was some other type reached
+    // SharePayloadAs<Claim>() over a payload that is not a Claim. Blocks are
+    // deserialized from untrusted input and this is reached from CheckBlock()
+    // before the coinbase shape has been established, so neither is a shape the
+    // caller can be assumed to have ruled out first.
+    //
+    // Testing the shape rather than the version keeps every input defined and
+    // decides nothing about validity: a block that lands in the fallback below
+    // is one the coinbase contract checks in CheckBlock() reject anyway. The
+    // blocks that satisfy those checks take the same branch they always did.
+    if (!vtx.empty()
+        && !vtx[0].vContracts.empty()
+        && vtx[0].vContracts[0].m_type == GRC::ContractType::CLAIM)
+    {
         return *vtx[0].vContracts[0].SharePayloadAs<GRC::Claim>();
     }
 
@@ -32,7 +49,7 @@ const GRC::Claim& CBlock::GetClaim() const
     if (m_claim_contract_cache.m_type == GRC::ContractType::UNKNOWN) {
         m_claim_contract_cache = GRC::MakeContract<GRC::Claim>(
             GRC::ContractAction::ADD,
-            GRC::Claim::Parse(vtx[0].hashBoinc, nVersion));
+            vtx.empty() ? GRC::Claim() : GRC::Claim::Parse(vtx[0].hashBoinc, nVersion));
     }
 
     return *m_claim_contract_cache.SharePayloadAs<GRC::Claim>();
@@ -40,10 +57,18 @@ const GRC::Claim& CBlock::GetClaim() const
 
 GRC::Claim CBlock::PullClaim()
 {
-    if (nVersion >= 11 || !vtx[0].vContracts.empty()) {
+    // Shape, not version -- see GetClaim() above for why.
+    if (!vtx.empty()
+        && !vtx[0].vContracts.empty()
+        && vtx[0].vContracts[0].m_type == GRC::ContractType::CLAIM)
+    {
         // PullPayloadAs operates on the shared_ptr within the Contract,
         // not on the vector element itself, so const vContracts is fine.
         return vtx[0].vContracts[0].CopyPayloadAs<GRC::Claim>();
+    }
+
+    if (vtx.empty()) {
+        return GRC::Claim();
     }
 
     // Before block version 11, the Gridcoin reward claim context is stored

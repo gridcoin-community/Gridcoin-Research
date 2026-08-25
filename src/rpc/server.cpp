@@ -26,7 +26,6 @@
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/asio/ssl.hpp>
 #include <boost/shared_ptr.hpp>
 #include <list>
 #include <algorithm>
@@ -47,7 +46,6 @@ static std::string strRPCUserColonPass;
 
 // These are created by StartRPCThreads, destroyed in StopRPCThreads
 static ioContext* rpc_io_service = nullptr;
-static ssl::context* rpc_ssl_context = nullptr;
 static boost::thread_group* rpc_worker_group = nullptr;
 // Acceptors created by StartRPCThreads. Retained so (a) startup can log the
 // bound endpoints and (b) StopRPCThreads can close() them before tearing down
@@ -73,6 +71,15 @@ static bool g_rpc_connections_stopped = false;
 //! Returns false if the server is already shutting down, in which case the
 //! caller must not service the connection (there is no worker-drain left to
 //! wake it).
+//!
+//! Deliberately no connection ceiling here. It would be unreachable: this runs
+//! from RPCAcceptHandler, which is an asio completion handler dispatched by the
+//! workers' io_context::run() and which calls ServiceConnection() synchronously,
+//! so a worker is occupied from accept through service and the size of this set
+//! can never exceed -rpcthreads. A cap above that number can never be hit, and a
+//! cap below it is just a smaller thread count. What actually bounds a hostile
+//! client is the socket deadline applied before servicing; further connections
+//! wait in the kernel accept backlog, not here.
 static bool RegisterRPCConnection(AcceptedConnection* conn)
 {
     std::lock_guard<std::mutex> lock(g_rpc_connections_mutex);
@@ -87,6 +94,56 @@ static void UnregisterRPCConnection(AcceptedConnection* conn)
 {
     std::lock_guard<std::mutex> lock(g_rpc_connections_mutex);
     g_rpc_connections.erase(conn);
+}
+
+//! Put a receive and send deadline on an accepted RPC socket.
+//!
+//! The servicing model is one blocking read per worker thread, so the deadline
+//! has to live on the socket rather than in an asio timer: there is no event
+//! loop watching a worker that is parked inside read(). SO_RCVTIMEO makes that
+//! read return an error instead of waiting forever, which the stream device
+//! already reports as end of sequence, so the worker closes the connection and
+//! moves on with no further plumbing.
+static void SetRPCSocketTimeouts(boost::asio::ip::tcp::socket& socket)
+{
+    // Blocking mode first, and unconditionally.
+    //
+    // Asio may have left the accepted descriptor non-blocking. The stream device
+    // reads with recv(2) directly and treats EAGAIN as end of sequence -- correct
+    // for a deadline expiring, fatal on a non-blocking socket, where EAGAIN just
+    // means the client has not sent yet. That would close every connection before
+    // its first request.
+    //
+    // So this is a requirement of the device, not part of the deadline, and it
+    // has to happen even when the deadline is switched off. Setting it before the
+    // early return below is the whole point: -rpcservertimeout=0 is documented as
+    // "no timeout", not "no RPC".
+    boost::system::error_code ec;
+    socket.non_blocking(false, ec);
+    socket.native_non_blocking(false, ec);
+
+    const int seconds = gArgs.GetArg("-rpcservertimeout", DEFAULT_RPC_SERVER_TIMEOUT);
+    if (seconds <= 0) return;  // deadline explicitly disabled; socket stays blocking
+
+    const auto fd = socket.native_handle();
+
+#ifdef WIN32
+    DWORD tv = static_cast<DWORD>(seconds) * 1000;
+    const char* val = reinterpret_cast<const char*>(&tv);
+    const int len = sizeof(tv);
+#else
+    struct timeval tv;
+    tv.tv_sec = seconds;
+    tv.tv_usec = 0;
+    const void* val = &tv;
+    const socklen_t len = sizeof(tv);
+#endif
+
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, val, len) != 0
+        || setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, val, len) != 0) {
+        // Not fatal: the connection still works, it just has no deadline.
+        LogPrintf("RPC: WARNING - could not set a %ds timeout on an accepted connection\n", seconds);
+    }
 }
 
 const UniValue emptyobj(UniValue::VOBJ);
@@ -640,6 +697,61 @@ void ErrorReply(std::ostream& stream, const UniValue& objError, const UniValue& 
     stream << HTTPReply(nStatus, strReply, false) << std::flush;
 }
 
+//! -rpcallowip, parsed once at RPC start.
+//!
+//! Two forms are kept because two forms are in the field. Anything
+//! LookupSubNet() accepts -- a CIDR prefix, an address/netmask pair, or a bare
+//! address, v4 or v6 -- becomes a CSubNet and is matched numerically. Anything
+//! else stays a string and is matched with WildcardMatch(), which is what this
+//! function did for every entry before, and is what makes forms like
+//! "192.168.1.*" keep working.
+//!
+//! Parsing every entry on every connection would be wasteful, but that is not
+//! the reason this is hoisted: LookupSubNet() reaches LookupHost(), and doing
+//! name resolution on the request path of an ACL is not something to leave
+//! available even with lookups disabled.
+struct RPCAllowEntry
+{
+    CSubNet subnet;         //!< valid when is_subnet
+    std::string pattern;    //!< used when !is_subnet
+    bool is_subnet{false};
+};
+
+static std::vector<RPCAllowEntry> g_rpc_allow_list;
+static bool g_rpc_allow_list_parsed{false};
+
+//! Parse -rpcallowip. Logs what each entry resolved to, because the failure
+//! this replaces was silent: an entry that matched nothing produced a listener
+//! that rejected everything, with nothing in the log to say why.
+void InitRPCAllowList(const std::vector<std::string>& entries)
+{
+    g_rpc_allow_list.clear();
+
+    for (const std::string& strAllow : entries) {
+        RPCAllowEntry entry;
+
+        CSubNet subnet;
+        if (LookupSubNet(strAllow.c_str(), subnet) && subnet.IsValid()) {
+            entry.subnet = subnet;
+            entry.is_subnet = true;
+            LogPrintf("RPC: -rpcallowip %s allows %s\n", strAllow, subnet.ToString());
+        } else {
+            entry.pattern = strAllow;
+            LogPrintf("RPC: -rpcallowip %s is not an address or subnet; matching it as a "
+                      "wildcard pattern against the peer address text\n", strAllow);
+        }
+
+        g_rpc_allow_list.push_back(entry);
+    }
+
+    g_rpc_allow_list_parsed = true;
+}
+
+void InitRPCAllowList()
+{
+    InitRPCAllowList(gArgs.GetArgs("-rpcallowip"));
+}
+
 bool ClientAllowed(const boost::asio::ip::address& address)
 {
     // Make sure that IPv4-compatible and IPv4-mapped IPv6 addresses are treated as IPv4 addresses
@@ -660,11 +772,27 @@ bool ClientAllowed(const boost::asio::ip::address& address)
       && (address.to_v4().to_bytes()[0] == 127)))
         return true;
 
+    // Fail closed if the list was somehow never parsed, rather than falling
+    // back to an unparsed read that would allow nothing anyway but silently.
+    if (!g_rpc_allow_list_parsed) {
+        LogPrintf("RPC: WARNING - allow list consulted before it was parsed; denying %s\n",
+                  address.to_string());
+        return false;
+    }
+
     const string strAddress = address.to_string();
-    const vector<string>& vAllow = gArgs.GetArgs("-rpcallowip");
-    for (auto const& strAllow : vAllow)
-        if (WildcardMatch(strAddress, strAllow))
+
+    CNetAddr netaddr;
+    const bool have_netaddr = LookupHost(strAddress.c_str(), netaddr, false);
+
+    for (const RPCAllowEntry& entry : g_rpc_allow_list) {
+        if (entry.is_subnet) {
+            if (have_netaddr && entry.subnet.Match(netaddr)) return true;
+        } else if (WildcardMatch(strAddress, entry.pattern)) {
             return true;
+        }
+    }
+
     return false;
 }
 
@@ -673,8 +801,6 @@ void ServiceConnection(AcceptedConnection *conn);
 // Forward declaration required for RPCListen
 template <typename Protocol>
 static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
-                             ssl::context& context,
-                             bool fUseSSL,
                              AcceptedConnection* conn,
                              const boost::system::error_code& error);
 
@@ -682,20 +808,16 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
  * Sets up I/O resources to accept and handle a new connection.
  */
 template <typename Protocol>
-static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
-                      ssl::context& context,
-                      const bool fUseSSL)
+static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor)
 {
     // Accept connection
-    AcceptedConnectionImpl<Protocol>* conn = new AcceptedConnectionImpl<Protocol>(GetIOServiceFromPtr(acceptor), context, fUseSSL);
+    AcceptedConnectionImpl<Protocol>* conn = new AcceptedConnectionImpl<Protocol>(GetIOServiceFromPtr(acceptor));
 
     acceptor->async_accept(
-                conn->sslStream.lowest_layer(),
+                conn->socket,
                 conn->peer,
                 boost::bind(&RPCAcceptHandler<Protocol>,
                             acceptor,
-                            boost::ref(context),
-                            fUseSSL,
                             conn,
                             boost::asio::placeholders::error));
 }
@@ -705,14 +827,12 @@ static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > accep
  */
 template <typename Protocol>
 static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
-                             ssl::context& context,
-                             const bool fUseSSL,
                              AcceptedConnection* conn,
                              const boost::system::error_code& error)
 {
     // Immediately start accepting new connections, except when we're cancelled or our socket is closed.
     if (error != asio::error::operation_aborted && acceptor->is_open())
-        RPCListen(acceptor, context, fUseSSL);
+        RPCListen(acceptor);
 
     // TODO : Actually handle errors
     if (!error)
@@ -721,20 +841,42 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
         // do this before starting client thread, to filter out
         // certain DoS and misbehaving clients.
         AcceptedConnectionImpl<ip::tcp>* tcp_conn = dynamic_cast< AcceptedConnectionImpl<ip::tcp>* >(conn);
+
+        // Before the allow-list test, so it covers the rejection path too.
+        //
+        // Two things happen here: the socket is forced into blocking mode, which
+        // the stream device requires to tell a deadline from "nothing yet", and
+        // the read/write deadline is applied. Without the deadline a client that
+        // opens a connection and then sends nothing keeps this worker blocked in
+        // read() for as long as it cares to, and there are only -rpcthreads of
+        // them.
+        //
+        // The rejection path needs it just as much. Writing the 403 below is a
+        // blocking send: a client that stops reading -- letting its receive
+        // window close -- parks this worker there indefinitely. That one costs
+        // an attacker nothing at all, since failing the allow-list means it
+        // never had to present a credential.
+        if (tcp_conn) SetRPCSocketTimeouts(tcp_conn->socket);
+
         if (tcp_conn && !ClientAllowed(tcp_conn->peer.address()))
         {
-            // Only send a 403 if we're not using SSL to prevent a DoS during the SSL handshake.
-            if (!fUseSSL)
-                conn->stream() << HTTPReply(HTTP_FORBIDDEN, "", false) << std::flush;
+            // The 403 was previously suppressed when TLS was in use, to avoid
+            // replying inside a handshake that had not completed. With -rpcssl
+            // gone there is no handshake to be inside, so a rejected client is
+            // always told why rather than seeing an unexplained closed socket.
+            conn->stream() << HTTPReply(HTTP_FORBIDDEN, "", false) << std::flush;
         }
-        // Register before servicing so a concurrent StopRPCThreads() can wake us
-        // out of the blocking read loop. If the server is already stopping,
-        // RegisterRPCConnection() returns false and we skip servicing entirely
-        // rather than park with no drain left to interrupt us (issue #3123).
-        else if (RegisterRPCConnection(conn))
+        else
         {
-            ServiceConnection(conn);
-            UnregisterRPCConnection(conn);
+            // Register before servicing so a concurrent StopRPCThreads() can
+            // wake us out of the blocking read loop. If the server is already
+            // stopping we skip servicing entirely rather than park with no
+            // drain left to interrupt us (issue #3123).
+            if (RegisterRPCConnection(conn))
+            {
+                ServiceConnection(conn);
+                UnregisterRPCConnection(conn);
+            }
         }
 
         conn->close();
@@ -743,12 +885,96 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
     delete conn;
 }
 
+//! Bind one acceptor per -rpcbind entry.
+//!
+//! Each entry is an address, optionally with a port ("10.0.0.5", "[::1]:1234").
+//! Unlike the implicit path this makes no wildcard decision of its own: the
+//! operator gets exactly the addresses they named. An entry that fails to bind
+//! is reported and skipped rather than aborting the rest, so one bad line in a
+//! config does not cost the node every other listener; the caller still treats
+//! "none bound at all" as fatal.
+static bool StartRPCListenersOn(const std::vector<std::string>& binds, std::string& strerr)
+{
+    using namespace boost::asio;
+
+    const int default_port = gArgs.GetArg("-rpcport", GetDefaultRPCPort());
+    bool any = false;
+
+    for (const std::string& spec : binds) {
+        int port = default_port;
+        std::string host;
+        SplitHostPort(spec, port, host);
+
+        if (host.empty()) {
+            strerr = strprintf("-rpcbind entry '%s' has no address", spec);
+            LogPrintf("ERROR: StartRPCThreads: %s\n", strerr);
+            continue;
+        }
+
+        boost::system::error_code ec;
+        const ip::address addr = ip::make_address(host, ec);
+        if (ec) {
+            strerr = strprintf("-rpcbind entry '%s' is not a numeric address: %s", spec, ec.message());
+            LogPrintf("ERROR: StartRPCThreads: %s\n", strerr);
+            continue;
+        }
+
+        try {
+            ip::tcp::endpoint endpoint(addr, static_cast<unsigned short>(port));
+            boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(*rpc_io_service));
+
+            acceptor->open(endpoint.protocol());
+            acceptor->set_option(ip::tcp::acceptor::reuse_address(true));
+
+            // One address per acceptor, so never dual-stack: a v6 entry binds v6
+            // only. Otherwise listing both "::" and "0.0.0.0" -- the natural way
+            // to ask for both families explicitly -- would collide on the second
+            // bind.
+            //
+            // Note this differs from the implicit path below, which sets
+            // v6_only(loopback) and so gives a dual-stack socket for the
+            // wildcard. Moving from -rpcallowip alone to -rpcbind=:: therefore
+            // drops IPv4 unless 0.0.0.0 is listed too; the help text says so.
+            if (addr.is_v6()) {
+                // Throwing overload on purpose: the help text promises an IPv6
+                // entry does NOT also accept IPv4, and on a platform where
+                // IPV6_V6ONLY cannot be set the socket may default to
+                // dual-stack. Swallowing that error would leave the listener
+                // quietly accepting IPv4 while the documentation says it does
+                // not -- worse than not binding, because the operator has no
+                // way to see it. Caught below and reported like any other bind
+                // failure, which skips this listener rather than misrepresenting
+                // it.
+                acceptor->set_option(ip::v6_only(true));
+            }
+
+            acceptor->bind(endpoint);
+            acceptor->listen(socket_base::max_listen_connections);
+
+            RPCListen(acceptor);
+            rpc_acceptors.push_back(acceptor);
+
+            LogPrintf("RPC: bound and listening on %s:%u (-rpcbind)\n",
+                      endpoint.address().to_string(), endpoint.port());
+            any = true;
+        } catch (boost::system::system_error& e) {
+            strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on %s: %s"),
+                               port, host, e.what());
+            LogPrintf("ERROR: StartRPCThreads: %s\n", strerr);
+        }
+    }
+
+    return any;
+}
+
 void StartRPCThreads()
 {
     // Logged unconditionally: the absence of this line in a node's debug.log
     // distinguishes "RPC server never started" from "started but not serving"
     // when diagnosing functional-test RPC-startup timeouts.
     LogPrintf("StartRPCThreads: entered\n");
+
+    InitRPCAllowList();
 
     strRPCUserColonPass = gArgs.GetArg("-rpcuser", "") + ":" + gArgs.GetArg("-rpcpassword", "");
 
@@ -780,7 +1006,17 @@ void StartRPCThreads()
         return;
     }
 
-    const bool fUseSSL = gArgs.GetBoolArg("-rpcssl");
+    // -rpcssl and its three companion options are gone. Warn rather than ignore:
+    // an operator who believed the RPC port was wrapped in TLS must find out
+    // from the log, not from a packet capture.
+    for (const char* removed : {"-rpcssl", "-rpcsslcertificatechainfile",
+                                "-rpcsslprivatekeyfile", "-rpcsslciphers"}) {
+        if (gArgs.IsArgSet(removed)) {
+            LogPrintf("RPC: WARNING - %s is no longer supported and is being ignored. The JSON-RPC "
+                      "port does not speak TLS. Restrict it with -rpcbind and -rpcallowip, and "
+                      "tunnel it if it must cross an untrusted network.\n", removed);
+        }
+    }
 
     assert(rpc_io_service == nullptr);
 
@@ -797,28 +1033,60 @@ void StartRPCThreads()
     }
 
     rpc_io_service = new ioContext();
-    rpc_ssl_context = new ssl::context(ssl::context::sslv23);
 
-    if (fUseSSL)
-    {
-        rpc_ssl_context->set_options(ssl::context::no_sslv2);
+    // Where to listen.
+    //
+    // Historically this was implied by -rpcallowip: setting any allow entry at
+    // all moved the listener from loopback to the wildcard address, on every
+    // interface. That coupling is surprising in the dangerous direction -- an
+    // operator narrowing who may connect simultaneously widens where the socket
+    // is reachable -- and there was no way to say "listen here" independently.
+    //
+    // -rpcbind now says it explicitly. When it is not given the old behaviour is
+    // kept exactly, so no existing deployment changes on upgrade, but the
+    // implicit widening is logged as a warning rather than happening silently.
+    const bool bind_specified = gArgs.IsArgSet("-rpcbind");
+    const bool loopback = !bind_specified && !gArgs.IsArgSet("-rpcallowip");
 
-        fs::path pathCertFile(gArgs.GetArg("-rpcsslcertificatechainfile", "server.cert"));
-        if (!pathCertFile.is_absolute()) pathCertFile = fs::path(GetDataDir()) / pathCertFile;
-        if (fs::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
-        else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
+    if (!bind_specified && !loopback) {
+        LogPrintf("RPC: WARNING - -rpcallowip is set and -rpcbind is not, so the RPC port is "
+                  "being opened on ALL interfaces (%s), not just loopback. Only the allow list "
+                  "restricts who may connect. Set -rpcbind to choose the listening address "
+                  "explicitly.\n", "0.0.0.0 / ::");
+    }
 
-        fs::path pathPKFile(gArgs.GetArg("-rpcsslprivatekeyfile", "server.pem"));
-        if (!pathPKFile.is_absolute()) pathPKFile = fs::path(GetDataDir()) / pathPKFile;
-        if (fs::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
-        else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
+    // The mirror image, and the quieter failure of the two: binding somewhere
+    // reachable while the allow list is empty. Loopback is always permitted, so
+    // the socket comes up and local clients work, but every remote client is
+    // answered 403 -- the port is listening and refusing, which reads like a
+    // credential problem rather than a configuration one.
+    //
+    // Only warn if something non-loopback is actually being bound; -rpcbind
+    // pointed at 127.0.0.1 needs no allow list and should not be nagged about.
+    if (bind_specified && !gArgs.IsArgSet("-rpcallowip")) {
+        for (const std::string& spec : gArgs.GetArgs("-rpcbind")) {
+            int port = 0;
+            std::string host;
+            SplitHostPort(spec, port, host);
+            if (host.empty()) continue;
 
-        string strCiphers = gArgs.GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
-        SSL_CTX_set_cipher_list(rpc_ssl_context->native_handle(), strCiphers.c_str());
+            boost::system::error_code ec;
+            const boost::asio::ip::address addr = boost::asio::ip::make_address(host, ec);
+
+            // An unparseable entry is reported by StartRPCListenersOn; treating
+            // it as remote here would warn twice about one typo.
+            if (ec || addr.is_loopback()) continue;
+
+            LogPrintf("RPC: WARNING - -rpcbind is set to a non-loopback address (%s) but "
+                      "-rpcallowip is not set, so the allow list is empty and every remote "
+                      "client will be refused with 403 Forbidden. Only loopback can connect. "
+                      "Add -rpcallowip for the hosts or subnets that should reach this port.\n",
+                      host);
+            break;
+        }
     }
 
     // Try a dual IPv6/IPv4 socket, falling back to separate IPv4 and IPv6 sockets
-    const bool loopback = !gArgs.IsArgSet("-rpcallowip");
     asio::ip::address bindAddress = loopback ? asio::ip::address_v6::loopback() : asio::ip::address_v6::any();
     ip::tcp::endpoint endpoint(bindAddress, gArgs.GetArg("-rpcport", GetDefaultRPCPort()));
     boost::system::error_code v6_only_error;
@@ -826,6 +1094,14 @@ void StartRPCThreads()
 
     bool fListening = false;
     std::string strerr;
+
+    // Explicit -rpcbind replaces the implicit loopback/wildcard choice entirely.
+    // Both paths fall through to the shared "did anything bind?" check and the
+    // worker-thread startup below -- returning early here would leave the
+    // acceptors armed with nothing running io_context::run().
+    if (bind_specified) {
+        fListening = StartRPCListenersOn(gArgs.GetArgs("-rpcbind"), strerr);
+    } else {
     try
     {
         acceptor->open(endpoint.protocol());
@@ -837,7 +1113,7 @@ void StartRPCThreads()
         acceptor->bind(endpoint);
         acceptor->listen(socket_base::max_listen_connections);
 
-        RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
+        RPCListen(acceptor);
         rpc_acceptors.push_back(acceptor);
         LogPrintf("RPC: bound and listening on [%s]:%u\n", endpoint.address().to_string(), endpoint.port());
 
@@ -862,7 +1138,7 @@ void StartRPCThreads()
             acceptor->bind(endpoint);
             acceptor->listen(socket_base::max_listen_connections);
 
-            RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
+            RPCListen(acceptor);
             rpc_acceptors.push_back(acceptor);
             LogPrintf("RPC: bound and listening on %s:%u\n", endpoint.address().to_string(), endpoint.port());
 
@@ -873,6 +1149,7 @@ void StartRPCThreads()
     {
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv4: %s"), endpoint.port(), e.what());
     }
+    } // !bind_specified
 
     if (!fListening)
     {
@@ -886,6 +1163,7 @@ void StartRPCThreads()
     }
 
     const int nRPCThreads = gArgs.GetArg("-rpcthreads", 4);
+
     rpc_worker_group = new boost::thread_group();
     for (int i = 0; i < nRPCThreads; i++)
         rpc_worker_group->create_thread(boost::bind(&ioContext::run, rpc_io_service));
@@ -940,8 +1218,6 @@ void StopRPCThreads()
 
     delete rpc_worker_group;
     rpc_worker_group = nullptr;
-    delete rpc_ssl_context;
-    rpc_ssl_context = nullptr;
     delete rpc_io_service;
     rpc_io_service = nullptr;
 }
@@ -1034,8 +1310,20 @@ void ServiceConnection(AcceptedConnection *conn)
         if (!ReadHTTPRequestLine(conn->stream(), nProto, strMethod, strURI))
             break;
 
-        // Read HTTP message headers and body
-        ReadHTTPMessage(conn->stream(), mapHeaders, strRequest, nProto);
+        // Read HTTP message headers and body.
+        //
+        // The status matters. Discarding it made an over-long or malformed body
+        // fail only incidentally: the body was never read, strRequest stayed
+        // empty, and the JSON parse further down returned 500 -- so the bound
+        // above worked by accident and reported the wrong thing. Answer with the
+        // status the parser actually produced and close.
+        const int http_status = ReadHTTPMessage(conn->stream(), mapHeaders, strRequest, nProto,
+                                                MAX_RPC_BODY_SIZE);
+
+        if (http_status != HTTP_OK) {
+            conn->stream() << HTTPReply(http_status, "", false) << std::flush;
+            break;
+        }
 
         if (strURI != "/") {
             conn->stream() << HTTPReply(HTTP_NOT_FOUND, "", false) << std::flush;

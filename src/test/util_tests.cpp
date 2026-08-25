@@ -68,6 +68,8 @@ int msb3(const int64_t& n_in)
 }
 } //anonymous namespace
 
+#include <sstream>
+
 BOOST_AUTO_TEST_SUITE(util_tests)
 
 BOOST_AUTO_TEST_CASE(util_criticalsection)
@@ -1847,6 +1849,99 @@ BOOST_AUTO_TEST_CASE(util_ReplaceAll)
     std::string shrink("aaa");
     ReplaceAll(shrink, "a", "");     // empty substitute with consecutive matches terminates
     BOOST_CHECK_EQUAL(shrink, "");
+}
+
+
+//!
+//! ReadLineBounded: the scraper's part parser reads every record through this,
+//! so its edge cases decide whether a project's statistics survive the trip.
+//!
+BOOST_AUTO_TEST_CASE(readlinebounded_splits_on_newlines)
+{
+    std::istringstream in("alpha\nbeta\ngamma\n");
+    std::string line;
+    bool overlong = false;
+
+    BOOST_CHECK(ReadLineBounded(in, line, 64, overlong));
+    BOOST_CHECK_EQUAL(line, "alpha");
+    BOOST_CHECK(!overlong);
+
+    BOOST_CHECK(ReadLineBounded(in, line, 64, overlong));
+    BOOST_CHECK_EQUAL(line, "beta");
+
+    BOOST_CHECK(ReadLineBounded(in, line, 64, overlong));
+    BOOST_CHECK_EQUAL(line, "gamma");
+
+    BOOST_CHECK(!ReadLineBounded(in, line, 64, overlong));
+    BOOST_CHECK(!overlong);
+}
+
+//! A blank line is a line, not the end of the stream. istream::getline() would
+//! set failbit here and silently truncate everything after it, which is why
+//! this helper exists at all.
+BOOST_AUTO_TEST_CASE(readlinebounded_treats_a_blank_line_as_a_line)
+{
+    std::istringstream in("first\n\nthird\n");
+    std::string line;
+    bool overlong = false;
+
+    BOOST_CHECK(ReadLineBounded(in, line, 64, overlong));
+    BOOST_CHECK_EQUAL(line, "first");
+
+    BOOST_CHECK(ReadLineBounded(in, line, 64, overlong));
+    BOOST_CHECK_EQUAL(line, "");
+    BOOST_CHECK(!overlong);
+
+    BOOST_CHECK(ReadLineBounded(in, line, 64, overlong));
+    BOOST_CHECK_EQUAL(line, "third");
+}
+
+//! A final line with no trailing newline is still a line.
+BOOST_AUTO_TEST_CASE(readlinebounded_returns_a_trailing_line_without_a_newline)
+{
+    std::istringstream in("no-newline-at-end");
+    std::string line;
+    bool overlong = false;
+
+    BOOST_CHECK(ReadLineBounded(in, line, 64, overlong));
+    BOOST_CHECK_EQUAL(line, "no-newline-at-end");
+    BOOST_CHECK(!overlong);
+
+    BOOST_CHECK(!ReadLineBounded(in, line, 64, overlong));
+}
+
+//! At the bound exactly, and one over. The point of the helper is that the
+//! over-long case never buffers the rest of the line.
+BOOST_AUTO_TEST_CASE(readlinebounded_flags_an_overlong_line_without_buffering_it)
+{
+    {
+        std::istringstream in(std::string(8, 'x') + "\n");
+        std::string line;
+        bool overlong = false;
+        BOOST_CHECK(ReadLineBounded(in, line, 8, overlong));
+        BOOST_CHECK_EQUAL(line.size(), 8u);
+        BOOST_CHECK(!overlong);
+    }
+    {
+        std::istringstream in(std::string(9, 'x') + "\n");
+        std::string line;
+        bool overlong = false;
+        BOOST_CHECK(!ReadLineBounded(in, line, 8, overlong));
+        BOOST_CHECK(overlong);
+        BOOST_CHECK_EQUAL(line.size(), 8u);   // stopped at the bound
+    }
+}
+
+//! An empty stream yields nothing and is not flagged over-long.
+BOOST_AUTO_TEST_CASE(readlinebounded_handles_an_empty_stream)
+{
+    std::istringstream in("");
+    std::string line;
+    bool overlong = false;
+
+    BOOST_CHECK(!ReadLineBounded(in, line, 64, overlong));
+    BOOST_CHECK(!overlong);
+    BOOST_CHECK(line.empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

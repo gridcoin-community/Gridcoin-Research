@@ -13,6 +13,7 @@
 #include "rpc/server.h"
 #include "rpc/protocol.h"
 #include "rpc/util.h"
+#include "serialize.h"
 #ifdef SCRAPER_NET_PK_AS_ADDRESS
 #include <key_io.h>
 #endif
@@ -36,6 +37,108 @@ extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern AppCacheSectionExt GetExtendedScrapersCache();
 extern bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
 
+namespace {
+//! \brief Maximum number of part hashes a manifest may declare.
+//!
+//! A COUNT of uint256, matching what the CompactSize prefix denotes for a
+//! vector<T> -- not a byte size. 1024 hashes is 32 KiB of vector storage,
+//! against a measured worst case of 20 (640 bytes) across 164 mainnet manifests
+//! spanning the full retention window. Our publisher emits exactly one part per
+//! project dentry plus one for the beacon list (partc and BeaconList_c are
+//! hardcoded 0), so this accommodates 1023 dentries against a current 19.
+//!
+//! This bounds the ALLOCATION only, and exists solely because vph is the first
+//! field on the wire, read before `projects`: at this point there is nothing to
+//! validate the count against.
+//!
+//! Deliberately a flat constant rather than a limit derived from the whitelist.
+//! The derived limit is nMaxProjects below, which is gated on !OutOfSyncByAge()
+//! and so is not in force during initial sync -- which is exactly when this has
+//! to hold.
+constexpr uint64_t MAX_MANIFEST_PART_HASHES = 1024;
+
+//! \brief Maximum number of project entries a manifest may declare.
+//!
+//! The companion to MAX_MANIFEST_PART_HASHES, and deliberately the same value
+//! rather than a second magic number: a manifest cannot carry more dentries than
+//! it carries parts. The publisher emits exactly one part per dentry plus one for
+//! the beacon list (partc and BeaconList_c are hardcoded 0), so parts =
+//! dentries + 1.
+//!
+//! Which means the effective headroom is a little under the constant, and that
+//! is the number worth remembering when judging whether this is generous:
+//!
+//!     1024 parts  ->  1023 dentries  ->  ~1020 real projects
+//!
+//! because three of the dentries are the injected pseudo-projects --
+//! VerifiedBeacons, ProjectsAllCpidTotalCredits and ProjectPublicKeys -- which
+//! ride in this vector without being whitelist entries. Against a current
+//! whitelist of 17-18, that is roughly sixty times over.
+//!
+//! Bounds the ALLOCATION, and has to be a flat constant for the same reason the
+//! part-hash cap is: nMaxProjects below is derived from the whitelist and gated
+//! on !OutOfSyncByAge(), so it is not in force during initial sync, which is
+//! when this needs to hold.
+//!
+//! Without it a dentry vector is bounded only by the message ceiling, and a
+//! dentry costs about 20 bytes on the wire against roughly 88 resident -- two
+//! std::string plus scalars -- so the deserialization amplifies about 4.4x.
+constexpr uint64_t MAX_MANIFEST_PROJECTS = MAX_MANIFEST_PART_HASHES;
+
+//! Longest string field a manifest may carry: sCManifestName, and each dentry's
+//! project and ETag.
+//!
+//! All three deserialize as plain std::string, which sizes the string from a
+//! declared CompactSize before reading anything, so each is a 32 MiB allocation
+//! waiting to be asked for. Real values are short -- BOINC project names and
+//! HTTP entity tags -- so 1 KiB is an order of magnitude of headroom. At the
+//! dentry cap this bounds the string content of a manifest at about 2 MB.
+constexpr size_t MAX_MANIFEST_STRING_BYTES = 1024;
+
+//! \brief Maximum wire size of a single part.
+//!
+//! Deliberately coarse, and NOT the real bound. A part arrives gzipped, so its
+//! compressed size says little about what it expands to; what limits the
+//! expansion is applied where the part is parsed, as a cap on the number of
+//! records (MAX_PART_RECORDS) and on the length of any one of them
+//! (MAX_PART_LINE_BYTES), both in scraper.cpp. There is no ceiling on total
+//! decompressed bytes, and parsing stays streaming so none is needed.
+//!
+//! This exists only to stop the compressed bytes being STORED. mapParts is
+//! process-global and a manifest may declare up to MAX_MANIFEST_PART_HASHES
+//! parts, so without it one peer could park a large multiple of that in memory
+//! before anything is ever decompressed.
+//!
+//! Set well clear of the largest part the derivation admits -- roughly 9 MB
+//! compressed under pessimistic assumptions -- because tripping this rejects an
+//! honest scraper's part and breaks convergence. It is still half the 32 MiB
+//! wire ceiling it replaces for this message type.
+//! This bounds one part, not the total held at once. The total is bounded
+//! elsewhere and by a different mechanism: manifests accepted before the wallet
+//! is in sync carry bCheckedAuthorized = false, and
+//! ScraperDeleteUnauthorizedCScraperManifests() removes those on the transition
+//! to in-sync, with ~CSplitBlob dropping each part's reference and erasing it
+//! from mapParts once the last one goes. Retention for that class is therefore
+//! scoped to the sync window rather than to this constant.
+//!
+//! Worth knowing before adding an aggregate cap here: the parts that a cap
+//! would evict are not the ones convergence reads, and the two classes should
+//! not be conflated. See the scraper notes in the maintainer documentation.
+constexpr size_t MAX_PART_WIRE_BYTES = 16 * 1024 * 1024;
+
+//! \brief The double-SHA256 of zero-length content.
+//!
+//! A manifest that declares a part with this hash is malformed: RecvPart
+//! discards empty parts, so no delivery can ever satisfy such an entry and the
+//! manifest could never complete. Computed rather than hardcoded so it cannot
+//! drift from the hash function actually in use.
+const uint256& EmptyPartHash()
+{
+    static const uint256 hash = Hash(std::vector<unsigned char>{});
+    return hash;
+}
+} // anonymous namespace
+
 bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 {
    /* Part of larger hashed blob. Currently only used for scraper data sharing.
@@ -43,6 +146,41 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     * notify object or ignore if no object found
     * erase from mapAlreadyAskedFor
     */
+    // Bound the part before anything touches its contents. Hashing and storing
+    // are both proportional to size, and nothing upstream of here limits what a
+    // peer may send in a single part message.
+    if (vRecv.size() > MAX_PART_WIRE_BYTES)
+    {
+        if (pfrom)
+        {
+            LOCK(cs_ScraperGlobals);
+
+            pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
+            LogPrintf("WARNING: CSplitBlob::RecvPart: Oversized part (%u bytes) received from %s. Adding %u banscore.",
+                      vRecv.size(), pfrom->addr.ToString(), SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
+        }
+
+        return error("Oversized part received!");
+    }
+
+    // An empty part carries no data and can never satisfy a manifest's part
+    // list. Receiving one is a peer or filesystem condition, not a programming
+    // error, so discard it rather than aborting: the caller reports the failure
+    // and a peer that sent it earns the same banscore as a spurious part.
+    if (vRecv.empty())
+    {
+        if (pfrom)
+        {
+            LOCK(cs_ScraperGlobals);
+
+            pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
+            LogPrintf("WARNING: CSplitBlob::RecvPart: Empty part received from %s. Adding %u banscore.",
+                      pfrom->addr.ToString(), SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
+        }
+
+        return error("Empty part received!");
+    }
+
     auto& ss = vRecv;
     uint256 hash(Hash(ss));
     {
@@ -57,7 +195,6 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     if (ipart != mapParts.end())
     {
         CPart& part = ipart->second;
-        assert(vRecv.size() > 0);
 
         if (!part.present())
         {
@@ -108,8 +245,9 @@ void CSplitBlob::addPart(const uint256& ihash)
 {
     LOCK2(cs_mapParts, cs_manifest);
 
-    assert(ihash != Hash(MakeByteSpan(vParts)));
-
+    // No guard here: addPart() returns void and so cannot reject anything. The
+    // empty-part-hash check that used to sit here as an assert is enforced by
+    // CScraperManifest::UnserializeCheck(), which can refuse the whole manifest.
     unsigned n = vParts.size();
     auto rc = mapParts.emplace(ihash,CPart(ihash));
     CPart& part = rc.first->second;
@@ -128,6 +266,31 @@ int CSplitBlob::addPartData(CDataStream&& vData, const bool& publish_in_progress
     LOCK2(cs_mapParts, cs_manifest);
 
     m_publish_in_progress = publish_in_progress;
+
+    // Our own publishing path. RecvPart's return value is discarded below, so
+    // anything RecvPart would refuse has to be refused HERE -- before mapParts
+    // and vParts are touched -- or the caller gets a valid index for a part
+    // that will never hold data, Complete() is still called, and the manifest
+    // is advertised with a part no peer can ever be served.
+    //
+    // A zero-byte part file: a truncated write, a full disk, an interrupted
+    // gzip.
+    if (vData.empty())
+    {
+        LogPrintf("ERROR: %s: refusing to add an empty part to the manifest.", __func__);
+        return -1;
+    }
+
+    // And oversize, for the same reason in the other direction: a part this
+    // side accepts but every receiver rejects would leave the published
+    // manifest permanently incompletable, project-wide. The write side has to
+    // agree with the read side.
+    if (vData.size() > MAX_PART_WIRE_BYTES)
+    {
+        LogPrintf("ERROR: %s: refusing to add a %u byte part to the manifest; the maximum is %u.",
+                  __func__, vData.size(), MAX_PART_WIRE_BYTES);
+        return -1;
+    }
 
     uint256 hash(Hash(vData));
 
@@ -297,8 +460,12 @@ void CScraperManifest::dentry::Serialize(CDataStream& ss) const
 
 void CScraperManifest::dentry::Unserialize(CDataStream& ss)
 {
-    ss >> project;
-    ss >> ETag;
+    // Bounded at the length prefix. Plain `ss >> project` reads a CompactSize
+    // and resizes the string to it before reading anything back, so a dentry
+    // declaring 32 MiB costs that allocation from a message a few bytes long.
+    // Capping the NUMBER of dentries does nothing about the size of each one.
+    ss >> LIMITED_STRING(project, MAX_MANIFEST_STRING_BYTES);
+    ss >> LIMITED_STRING(ETag, MAX_MANIFEST_STRING_BYTES);
     ss >> LastModified;
     ss >> part1 >> partc;
     ss >> GridcoinTeamID;
@@ -347,6 +514,23 @@ EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 
 // This is the complement to IsScraperAuthorizedToBroadcastManifests in the scraper.
 // It is used to determine whether received manifests are authorized.
+//
+// This check is SKIPPED while the receiving node is out of sync by age, at the
+// OutOfSyncByAge() branch in UnserializeCheck(). That is deliberate and is
+// documented there. It is safe because of a design property that is easy to miss
+// when reading this function alone:
+//
+//   An in-sync node TERMINATES a rogue manifest rather than passing it on.
+//   RecvManifest() emplaces speculatively, UnserializeCheck() rejects an
+//   unauthorized key here, and the caller then erases the entry and scores the
+//   sender. The MSG_SCRAPERINDEX relay runs from Complete(), which is reached
+//   only on success -- so an unauthorized manifest is not stored, not served and
+//   not relayed.
+//
+// Since the great majority of nodes on a working network are in sync, injection
+// cannot propagate through them: every victim needs a direct connection from the
+// attacker. The exposure is point to point, not network wide, which is why the
+// skip is tolerable rather than alarming.
 bool CScraperManifest::IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, unsigned int& banscore_out)
 EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 {
@@ -426,15 +610,47 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
     }
 }
 
-[[nodiscard]] bool CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out)
+[[nodiscard]] bool CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out,
+                                                     const bool v15_project_cap)
 EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manifest)
 {
     const auto pbegin = ss.begin();
 
     std::vector<uint256> vph;
-    ss >> vph;
+
+    {
+        // Read the part-hash vector by hand rather than with `ss >> vph`. The
+        // vector deserializer grows in 5,000,000/sizeof(T) element steps and
+        // allocates against the declared count before reading the data behind
+        // it, so a short message declaring a large count costs a multi-megabyte
+        // allocate-and-memset before the stream runs dry and throws. Checking
+        // the CompactSize prefix is the only point at which that is preventable.
+        const uint64_t part_count = ReadCompactSize(ss);
+
+        if (part_count > MAX_MANIFEST_PART_HASHES) {
+            // Reject the manifest without penalising the peer, and say so
+            // explicitly rather than leaning on RecvManifest's zero
+            // initialisation: a ceiling this far above any legitimate manifest
+            // must not ban if it ever turns out to be wrong. Nothing in this
+            // function has written banscore_out yet -- IsManifestAuthorized()
+            // below is the first -- so this cannot override a decision already
+            // made.
+            banscore_out = 0;
+
+            return error("CScraperManifest::UnserializeCheck: manifest declares %u part hashes, "
+                         "maximum is %u", part_count, MAX_MANIFEST_PART_HASHES);
+        }
+
+        vph.resize(part_count);
+
+        for (uint256& ph : vph) {
+            ss >> ph;
+        }
+    }
+
     ss >> pubkey;
-    ss >> sCManifestName;
+    // Same treatment, same reason.
+    ss >> LIMITED_STRING(sCManifestName, MAX_MANIFEST_STRING_BYTES);
     ss >> nTime;
 
     // This will set the bCheckAuthorized flag to false if a message
@@ -442,9 +658,42 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     // the manifest is authorized, then set the checked flag to true,
     // otherwise terminate the unserializecheck and return false,
     // which will also result in an increase in banscore, if past the grace period.
+    //
+    // THE SKIP BELOW IS DELIBERATE AND LOAD-BEARING. Do not "fix" it by gating
+    // manifest ingest on sync state, and do not add a getmanifests message. Two
+    // separate reasons, both of which cost more than the skip does:
+    //
+    //   1. Authorization is evaluated against the appcache, which is not usable
+    //      while out of sync. Checking anyway would ban a NEWLY AUTHORIZED
+    //      scraper, because this node cannot yet see the authorization.
+    //
+    //   2. Refill precedes housekeeping, and that ORDERING is the safety
+    //      property. PushInvTo() fires at the version handshake and is not gated
+    //      on our own sync state, so a syncing node fills to a complete manifest
+    //      set within seconds of connecting, while housekeeping stays blocked
+    //      until in sync. Housekeeping's first pass therefore always sees a
+    //      COMPLETE set. Gating ingest here inverts that: refill would begin
+    //      after sync, concurrent with housekeeping, so the first pass could run
+    //      on a PARTIAL set. Because the supermajority denominator is the
+    //      locally observed scraper count, a partial set can self-converge on a
+    //      minority view, permanently latch bMinHousekeepingComplete, and
+    //      thereafter return INVALID for legitimate superblocks -- a stall, and
+    //      honest peers banned. Scrapers are also quiescent roughly 20 hours in
+    //      24, so a node syncing in the quiet window would hold no manifests at
+    //      all for hours under such a gate.
+    //
+    // What makes the skip acceptable is documented above IsManifestAuthorized():
+    // an in-sync node terminates a rogue manifest instead of relaying it, so the
+    // exposure is point to point rather than network wide. The bounds checks in
+    // this function are what actually limit what an unauthenticated sender can
+    // cost us.
     if (OutOfSyncByAge())
     {
         bCheckedAuthorized = false;
+
+        LogPrint(BCLog::LogFlags::MANIFEST, "CScraperManifest::UnserializeCheck: accepting manifest "
+                 "\"%s\" without an authorization check: this node is out of sync by age. See the "
+                 "comment above for why this is deliberate.", sCManifestName);
     }
     else if (IsManifestAuthorized(nTime, pubkey, banscore_out))
     {
@@ -465,18 +714,119 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
 
     ss >> ConsensusBlock;
     ss >> BeaconList >> BeaconList_c;
-    ss >> projects;
+    {
+        // Read by hand for the same reason as the part-hash vector above: the
+        // default vector deserializer allocates against the declared count
+        // before reading what backs it, so only a check on the CompactSize
+        // prefix prevents the allocation.
+        const uint64_t project_count = ReadCompactSize(ss);
 
-    if (BeaconList + BeaconList_c > vph.size())
+        if (project_count > MAX_MANIFEST_PROJECTS) {
+            // banscore_out is deliberately NOT set here, unlike the part-hash
+            // cap. That one runs before anything has written it;
+            // IsManifestAuthorized() has already run by this point and may have
+            // recorded a verdict, so assigning would override a decision
+            // already made.
+            return error("CScraperManifest::UnserializeCheck: manifest declares %u projects, "
+                         "maximum is %u", project_count, MAX_MANIFEST_PROJECTS);
+        }
+
+        projects.resize(project_count);
+
+        for (dentry& project_entry : projects) {
+            ss >> project_entry;
+        }
+    }
+
+    // Reference validity. The comparison is >= rather than >: the ranges are
+    // inclusive, so partc == 0 names exactly one part and a reference ending at
+    // vph.size() names one PAST the end. quorum.cpp:1436 guards the index it
+    // reads, but scraper.cpp:5669 indexes vParts[part1] unguarded, so admitting
+    // that value here is not harmless. An empty vph is rejected by the same
+    // comparison, which is correct: a manifest with no parts carries nothing.
+    //
+    // Negative starts are rejected EXPLICITLY, and the range arithmetic is done
+    // in int64_t.
+    //
+    // BeaconList and part1 are int (default -1) while BeaconList_c and partc are
+    // unsigned. Writing this as `part1 + partc >= vph.size()` converts part1 to
+    // unsigned before the addition, so part1 = -1 with partc = 1 wraps to 0 and
+    // PASSES -- and the coverage loop below, iterating an unsigned i from
+    // 0xFFFFFFFF, contributes nothing, so the manifest can still be fully
+    // covered by its other references. The result is an accepted manifest whose
+    // dentry holds part1 = -1, and quorum.cpp guards only the upper bound while
+    // scraper.cpp does not guard at all: vParts[-1], dereferenced.
+    //
+    // int64_t holds every int and every unsigned, so no operand is converted and
+    // a negative start stays negative.
+    if (BeaconList < 0
+        || static_cast<int64_t>(BeaconList) + BeaconList_c >= static_cast<int64_t>(vph.size()))
     {
         return error("CScraperManifest::UnserializeCheck: beacon part out of range");
     }
 
     for (const dentry& prj : projects)
     {
-        if (prj.part1 + prj.partc > vph.size())
+        if (prj.part1 < 0
+            || static_cast<int64_t>(prj.part1) + prj.partc >= static_cast<int64_t>(vph.size()))
         {
             return error("CScraperManifest::UnserializeCheck: project part out of range");
+        }
+    }
+
+    // Coverage. The checks above reject references pointing outside vph; this
+    // rejects the converse -- parts declared and then never referenced by the
+    // beacon list or any project. Without it a manifest may declare parts it
+    // never uses, and every one is registered in the process-global mapParts by
+    // addPart() below and held until the manifest ages out of the retention
+    // window. Reclamation is refcount-driven (~CSplitBlob) and therefore only
+    // happens after the fact, which is sufficient for housekeeping and not
+    // sufficient against a peer constructing manifests to sit in that window.
+    //
+    // This needs no whitelist, no registry and no sync state, so unlike the
+    // project-count cap below it behaves identically during initial sync. It is
+    // also purely intra-message: it reads only fields of this manifest and says
+    // nothing about whether the part DATA has arrived, so it is unaffected by
+    // the order in which parts or manifests are received.
+    //
+    // banscore_out is deliberately not touched, unlike the length-prefix cap
+    // above: IsManifestAuthorized() has already run by this point and may have
+    // set a score, so assigning here would override a decision already made.
+    {
+        std::vector<bool> referenced(vph.size(), false);
+
+        // The bounds test in each loop is belt-and-suspenders. The range checks
+        // above already reject any reference that reaches this far, so it cannot
+        // fire today -- but it is what stands between a weakened check up there
+        // and an out-of-bounds write down here, and an index that is skipped
+        // simply reads as uncovered and is rejected below.
+        // int64_t for the same reason as the range checks above: an unsigned
+        // induction variable starting from a negative index begins at
+        // 0xFFFFFFFF, fails its own condition immediately, and silently marks
+        // nothing -- which reads as "covered by something else" rather than as
+        // the malformed reference it is.
+        for (int64_t i = BeaconList; i <= static_cast<int64_t>(BeaconList) + BeaconList_c
+                                     && i < static_cast<int64_t>(referenced.size()); ++i)
+        {
+            if (i >= 0) referenced[i] = true;
+        }
+
+        for (const dentry& prj : projects)
+        {
+            for (int64_t i = prj.part1; i <= static_cast<int64_t>(prj.part1) + prj.partc
+                                        && i < static_cast<int64_t>(referenced.size()); ++i)
+            {
+                if (i >= 0) referenced[i] = true;
+            }
+        }
+
+        for (size_t i = 0; i < referenced.size(); ++i)
+        {
+            if (!referenced[i])
+            {
+                return error("CScraperManifest::UnserializeCheck: part %u is declared but never "
+                             "referenced by the beacon list or a project", i);
+            }
         }
     }
 
@@ -516,7 +866,38 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
                       std::max(0.5, CONVERGENCE_BY_PROJECT_RATIO)) + 2);
     }
 
-    if (!OutOfSyncByAge() && projects.size() > nMaxProjects)
+    // The two sides of this comparison count different things, and at v15 they
+    // stop doing so.
+    //
+    // projects.size() counts every dentry, including the pseudo-projects the
+    // publisher injects (MANIFEST_PSEUDO_PROJECTS). nMaxProjects is derived from
+    // the whitelist alone, and none of those is a whitelist entry. The +2 and
+    // the divisor above exist to tolerate the whitelist SHRINKING between the
+    // publisher's snapshot and the receiver's without banning an honest scraper;
+    // the pseudo-projects were spending that tolerance instead. Measured on
+    // mainnet: 19 dentries against a limit of 24-25, so three of a five-to-six
+    // margin went to entries the formula never accounted for, and every
+    // pseudo-project added in future narrowed it again.
+    //
+    // Gated because correcting it changes when a node BANS a peer, at
+    // -banscore, immediately. Nodes on either side of the change would disagree
+    // about which manifests are acceptable and would score each other's honest
+    // relays, so it has to roll over together rather than on upgrade.
+    // Taken from the caller rather than read here.
+    //
+    // This runs holding cs_mapManifest and cs_manifest, and nBestHeight is
+    // guarded by cs_main. Reaching for cs_main from inside those is the
+    // ordering net_processing.cpp warns about above its own manifest handling:
+    // the net thread takes cs_main and then cs_mapManifest, while the scraper
+    // thread takes cs_mapManifest first and reaches authorization from there.
+    // Holding both concatenated in the other order is what that comment exists
+    // to prevent, so the height is read in RecvManifest() before any of these
+    // locks are acquired.
+    const unsigned int max_projects = v15_project_cap
+        ? nMaxProjects + MANIFEST_PSEUDO_PROJECTS.size()
+        : nMaxProjects;
+
+    if (!OutOfSyncByAge() && projects.size() > max_projects)
     {
         // Immediately ban the node from which the manifest was received.
         banscore_out = gArgs.GetArg("-banscore", 100);
@@ -528,11 +909,33 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
 
     uint256 hash = Hash(Span<const std::byte>{(std::byte*)&pbegin[0], (std::byte*)&ss.begin()[0]});
 
-    ss >> signature;
+    // Bounded like every other wire-driven length in this function, and for the
+    // same reason: the default vector deserializer reserves against the declared
+    // count before reading what backs it, so a short message can declare a large
+    // signature and charge us the allocation on the way to failing.
+    //
+    // This is reached unauthenticated. The out-of-sync branch above sets
+    // bCheckedAuthorized = false and carries on, which is what makes the bounds
+    // in this function -- rather than the authorization check -- the thing that
+    // limits what an unknown sender can cost.
+    //
+    // CPubKey::SIGNATURE_SIZE is the largest DER signature CKey::Sign() can
+    // produce, so this cannot refuse a signature a scraper actually made.
+    ss >> LIMITED_VECTOR(signature, CPubKey::SIGNATURE_SIZE);
     LogPrint(BCLog::LogFlags::MANIFEST, "CScraperManifest::UnserializeCheck: hash of signature = %s",
              Hash(signature).GetHex());
 
     if (!pubkey.Verify(hash, signature)) return error("CScraperManifest: Invalid manifest signature");
+
+    // Validate the whole part list before registering any of it, so a rejected
+    // manifest never leaves half its parts in the shared mapParts.
+    for (const uint256& ph : vph)
+    {
+        if (ph == EmptyPartHash())
+        {
+            return error("CScraperManifest: manifest declares a part with the empty-content hash");
+        }
+    }
 
     for (const uint256& ph : vph)
     {
@@ -682,6 +1085,13 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     // hash the object
     uint256 hash(Hash(vRecv));
 
+    // Read the chain height BEFORE taking any of the manifest locks, and let go
+    // of cs_main again immediately. UnserializeCheck() needs to know whether the
+    // v15 project-count rule applies, but it runs under cs_mapManifest and
+    // cs_manifest, and taking cs_main from there is the lock ordering
+    // net_processing.cpp explicitly avoids for this same pair.
+    const bool v15_project_cap = WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight));
+
     LOCK(cs_mapManifest);
 
     // see if we do not already have it
@@ -709,7 +1119,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 
         try
         {
-            if (!manifest->UnserializeCheck(vRecv, banscore))
+            if (!manifest->UnserializeCheck(vRecv, banscore, v15_project_cap))
             {
                 mapManifest.erase(hash);
                 LogPrint(BCLog::LogFlags::MANIFEST, "invalid manifest %s received", hash.GetHex());

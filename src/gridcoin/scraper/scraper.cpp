@@ -580,6 +580,14 @@ void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist);
  * @param all_cpid_total_credit
  * @return bool true if successful
  */
+//! Longest a single statistics field may be when a part is WRITTEN.
+//!
+//! total_credit, expavg_time and expavg_credit come straight out of the
+//! project's XML, so nothing upstream bounds them. All three are numbers; 64
+//! bytes is far past any real value and far under MAX_PART_LINE_BYTES, leaving
+//! room for the rest of the record.
+constexpr size_t MAX_RAC_FIELD_BYTES = 64;
+
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
                                  BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
                                  ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit)
@@ -3016,9 +3024,32 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             }
 
             // User beacon verified. Append its statistics to the CSV output.
+            const std::string s_expavg_time = ExtractXML(data, "<expavg_time>", "</expavg_time>");
+            const std::string s_expavg_credit = ExtractXML(data, "<expavg_credit>", "</expavg_credit>");
+
+            // These three are lifted verbatim from the project's XML and nothing
+            // upstream bounds them. A single pathological value would produce a
+            // record that read-back refuses -- and refusing one record refuses
+            // the whole part, so one upstream oddity would drop this project out
+            // of convergence on every node that received it. Skip the record.
+            //
+            // No statistics are lost that were not lost already: all three are
+            // parsed as numbers on read-back, so a value this long has always
+            // failed there and been skipped. This only moves the skip to a place
+            // where it cannot take the part with it.
+            if (s_cpid_total_credit.size() > MAX_RAC_FIELD_BYTES
+                || s_expavg_time.size() > MAX_RAC_FIELD_BYTES
+                || s_expavg_credit.size() > MAX_RAC_FIELD_BYTES)
+            {
+                _log(logattribute::WARNING, "ProcessProjectRacFileByCPID",
+                     "Skipping CPID " + cpid + " in project " + project
+                     + ": a statistics field exceeds " + ToString(MAX_RAC_FIELD_BYTES) + " bytes.");
+                continue;
+            }
+
             out << s_cpid_total_credit << ","
-                << ExtractXML(data, "<expavg_time>", "</expavg_time>") << ","
-                << ExtractXML(data, "<expavg_credit>", "</expavg_credit>") << ","
+                << s_expavg_time << ","
+                << s_expavg_credit << ","
                 << cpid
                 << std::endl;
 
@@ -3843,6 +3874,56 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeD
     return bResult;
 }
 
+//! \brief Maximum number of CPID records a project part may contain.
+//!
+//! Back-solved from the superblock, which is what actually limits how many CPIDs
+//! can carry a magnitude: a superblock is at most Superblock::MAX_SIZE and its
+//! minimum serialized entry is sizeof(Cpid) + 1 byte of magnitude -- the same
+//! bound superblock.h uses to size its own reserve. Assuming a single project
+//! consumed an entire superblock gives the ceiling on records any one part could
+//! legitimately carry.
+//!
+//! Note this is the ceiling ITSELF, not the ceiling plus a margin. A part
+//! carrying the largest record count the superblock format admits sits exactly
+//! at this limit rather than comfortably under it. That is deliberate -- the
+//! figure means something precise, and padding it would make it mean nothing in
+//! particular -- and it is tolerable because the live count is smaller by orders
+//! of magnitude: the bound is on what the FORMAT permits, not on what the
+//! network produces. Anything approaching it is already anomalous.
+//!
+//! The corollary matters when reading a rejection: tripping this is not "a
+//! slightly oversized part", it is a part claiming more CPIDs than a whole
+//! superblock could ever represent.
+//!
+//! Derived rather than hardcoded so it cannot silently disagree with
+//! Superblock::MAX_SIZE. That is convenience, NOT a guarantee: if that basis
+//! changes, re-derive rather than assume this still holds -- the per-record width
+//! below and the compression assumptions behind the wire limit were measured
+//! against today's format and do not follow automatically.
+static constexpr size_t MAX_PART_RECORDS = GRC::Superblock::MAX_SIZE / (sizeof(GRC::Cpid) + 1);
+
+//! \brief Maximum length of one record in a project part.
+//!
+//! A record is "TC,RAT,RAC,cpid": three doubles at six significant digits (widest
+//! observed on live data is 11 characters, e.g. 1.01799e+07), three separators
+//! and a 32-character CPID -- about 72 bytes. 512 is generous headroom while
+//! still bounding what a single line can cost.
+//!
+//! Together with MAX_PART_RECORDS this is what stops a decompression bomb, and it
+//! is why parsing stays STREAMING. A part arrives gzipped, so any wire limit
+//! bounds the compressed bytes only and DEFLATE reaches roughly 1032:1: a part
+//! well inside the wire limit can still expand to gigabytes. Bounding the line
+//! keeps peak memory at one record no matter what the stream produces, and
+//! bounding the record count stops the expansion continuing.
+//!
+//! std::getline cannot do this -- it grows its string until a delimiter or EOF,
+//! so an expansion with no newlines is buffered whole before any check can run.
+//! istream::getline(buf, n) bounds the length but sets failbit on a zero-length
+//! extraction, which is exactly what a blank line produces, so it would silently
+//! truncate parsing at the first empty line. Hence ReadLineBounded (util/string.h).
+static constexpr size_t MAX_PART_LINE_BYTES = 512;
+
+
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
                                          const double& projectmag, ScraperStats& mScraperStats)
 {
@@ -3851,8 +3932,31 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
     // Lets vector the user blocks
     std::string line;
     double dProjectRAC = 0.0;
-    while (std::getline(sUncompressedIn, line))
+    size_t records = 0;
+    bool overlong = false;
+    while (ReadLineBounded(sUncompressedIn, line, MAX_PART_LINE_BYTES, overlong))
     {
+        // Counts EVERY line, including blanks and comments, and does so before
+        // they are filtered below. That is deliberate: this is a bound on WORK,
+        // not on the size of the stats map. Counting only records that parse
+        // would let an expansion made entirely of blank lines run unbounded,
+        // since none of them would ever increment the counter.
+        if (++records > MAX_PART_RECORDS) {
+            _log(logattribute::ERR, __func__, "Project " + project + " part exceeds the maximum of "
+                 + ToString(MAX_PART_RECORDS) + " records; rejecting.");
+
+            // Discard what was parsed so far. Every caller merges this map into
+            // the overall stats and none of them looks at the return value, so
+            // returning false alone did not reject anything -- it stopped
+            // parsing and handed back a truncated PREFIX of the project's
+            // statistics, which is worse than the unbounded parse it replaced.
+            // Emptied here, the project contributes nothing, which is what
+            // rejecting the part has to mean.
+            mScraperStats.clear();
+
+            return false;
+        }
+
         if (line[0] == '#')
             continue;
 
@@ -3922,6 +4026,22 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
 
         // Increment project
         dProjectRAC += statsentry.statsvalue.dRAC;
+    }
+
+    // ReadLineBounded stops rather than buffering an over-long record, so this is
+    // the decompression-bomb case: an expansion with no newlines, or a record far
+    // wider than the format allows. Refuse the part rather than accept a
+    // truncated view of it.
+    if (overlong) {
+        _log(logattribute::ERR, __func__, "Project " + project + " part contains a record longer than "
+             + ToString(MAX_PART_LINE_BYTES) + " bytes; rejecting.");
+
+        // Same reason as the record-count path above: callers merge this map
+        // regardless of the return value, so it has to be emptied for the
+        // rejection to mean anything.
+        mScraperStats.clear();
+
+        return false;
     }
 
     _log(logattribute::INFO, "LoadProjectObjectToStatsByCPID",
@@ -4172,11 +4292,6 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
 
     ScraperStatsVerifiedBeaconsTotalCredits stats_verified_beacons_tc;
 
-    // Enumerate the count of active projects from the dummy converged manifest. One of the parts
-    // is the beacon list, is not a project, which is why that should not be included in the count.
-    // Populate the verified beacons map, and if it is don't count that either.
-    int exclude_parts_from_count = 1;
-
     auto iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("VerifiedBeacons");
     if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
     {
@@ -4190,8 +4305,6 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
         {
             _log(logattribute::WARNING, __func__, "failed to deserialize verified beacons part: " + std::string(e.what()));
         }
-
-        ++exclude_parts_from_count;
     }
 
     iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectsAllCpidTotalCredits");
@@ -4207,16 +4320,28 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
         {
             _log(logattribute::WARNING, __func__, "failed to deserialize ProjectsAllCpidTotalCredits part: " + std::string(e.what()));
         }
-
-        ++exclude_parts_from_count;
     }
 
-    iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectPublicKeys");
-    if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
+    // Count the parts that are not projects, derived from the shared list rather
+    // than named here.
+    //
+    // These two things have to agree: what the loaders SKIP, and what this
+    // denominator EXCLUDES. Naming the pseudo-projects separately in each place
+    // let them disagree -- a name added to the list would be skipped as a source
+    // of statistics while still counting as an active project, which divides the
+    // network magnitude across a project that contributed none of it and quietly
+    // reduces every real project's share.
+    //
+    // The beacon list is the one that is not on the list, and is why this starts
+    // at one rather than zero.
+    int exclude_parts_from_count = 1;
+
+    for (const auto& part : StructConvergedManifest.ConvergedManifestPartPtrsMap)
     {
-        // ProjectPublicKeys is a non-project part; exclude from active project count.
-        // The data is available in the converged manifest for future use.
-        ++exclude_parts_from_count;
+        if (IsManifestPseudoProject(part.first))
+        {
+            ++exclude_parts_from_count;
+        }
     }
 
     unsigned int nActiveProjects = StructConvergedManifest.ConvergedManifestPartPtrsMap.size() - exclude_parts_from_count;
@@ -4244,8 +4369,7 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
 
         // Do not process the BeaconList, VerifiedBeacons, ProjectsAllCpidTotalCredits, or ProjectPublicKeys
         // as a project stats file.
-        if (project != "BeaconList" && project != "VerifiedBeacons" && project != "ProjectsAllCpidTotalCredits"
-                && project != "ProjectPublicKeys")
+        if (project != "BeaconList" && !IsManifestPseudoProject(project))
         {
             _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Processing stats for project: " + project);
 
@@ -4286,12 +4410,7 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScrap
 
     ScraperStatsVerifiedBeaconsTotalCredits stats_verified_beacons_tc {};
 
-    // Enumerate the count of active projects from the dummy converged manifest. One of the parts
-    // is the beacon list, is not a project, which is why that should not be included in the count.
-    // Populate the verified beacons map, and if it is don't count that either.
     ScraperPendingBeaconMap VerifiedBeaconMap;
-
-    int exclude_parts_from_count = 1;
 
     auto iter = StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.find("VerifiedBeacons");
     if (iter != StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.end())
@@ -4306,8 +4425,6 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScrap
         {
             _log(logattribute::WARNING, __func__, "failed to deserialize verified beacons part: " + std::string(e.what()));
         }
-
-        ++exclude_parts_from_count;
     }
 
     stats_verified_beacons_tc.mVerifiedMap = VerifiedBeaconMap;
@@ -4327,16 +4444,30 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScrap
         {
             _log(logattribute::WARNING, __func__, "failed to deserialize ProjectsAllCpidTotalCredits part: " + std::string(e.what()));
         }
-
-        ++exclude_parts_from_count;
     }
 
     stats_verified_beacons_tc.m_total_credit_map = projects_all_cpid_total_credits_map;
 
-    iter = StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectPublicKeys");
-    if (iter != StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.end())
+    // Count the parts that are not projects, derived from the shared list rather
+    // than named here.
+    //
+    // These two things have to agree: what the loaders SKIP, and what this
+    // denominator EXCLUDES. Naming the pseudo-projects separately in each place
+    // let them disagree -- a name added to the list would be skipped as a source
+    // of statistics while still counting as an active project, which divides the
+    // network magnitude across a project that contributed none of it and quietly
+    // reduces every real project's share.
+    //
+    // The beacon list is the one that is not on the list, and is why this starts
+    // at one rather than zero.
+    int exclude_parts_from_count = 1;
+
+    for (const auto& part : StructDummyConvergedManifest.ConvergedManifestPartPtrsMap)
     {
-        ++exclude_parts_from_count;
+        if (IsManifestPseudoProject(part.first))
+        {
+            ++exclude_parts_from_count;
+        }
     }
 
     unsigned int nActiveProjects = StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.size()
@@ -4362,8 +4493,7 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScrap
 
         // Do not process the BeaconList, VerifiedBeacons, ProjectsAllCpidTotalCredits, or ProjectPublicKeys
         // as a project stats file.
-        if (project != "BeaconList" && project != "VerifiedBeacons" && project != "ProjectsAllCpidTotalCredits"
-                && project != "ProjectPublicKeys")
+        if (project != "BeaconList" && !IsManifestPseudoProject(project))
         {
             _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Processing stats for project: " + project);
 
@@ -4859,7 +4989,17 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
         CDataStream part(std::move(vchData), SER_NETWORK, 1);
 
-        manifest->addPartData(std::move(part), true);
+        // The part index was reserved before the part existed, so a refused part
+        // would leave the manifest referencing something never created -- a
+        // manifest its own receipt check would then reject. Abandon the publish
+        // instead, and say which part was empty.
+        if (manifest->addPartData(std::move(part), true) < 0)
+        {
+            _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                 "Empty beacon list part (" + inputfile.string() + "); manifest not published.");
+
+            return false;
+        }
 
         iPartNum++;
 
@@ -4892,7 +5032,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
                 part << ScraperVerifiedBeacons.mVerifiedMap;
 
-                manifest->addPartData(std::move(part), true);
+                // See the beacon list part above: the index is already committed.
+                if (manifest->addPartData(std::move(part), true) < 0)
+                {
+                    _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                         "Empty VerifiedBeacons part; manifest not published.");
+
+                    return false;
+                }
 
                 iPartNum++;
             }
@@ -5003,7 +5150,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
             CDataStream part(vchData, SER_NETWORK, 1);
 
-            manifest->addPartData(std::move(part), true);
+            // See the beacon list part above: the index is already committed.
+            if (manifest->addPartData(std::move(part), true) < 0)
+            {
+                _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                     "Empty part for project " + ProjectEntry.project + "; manifest not published.");
+
+                return false;
+            }
 
             iPartNum++;
         }
@@ -5030,7 +5184,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
             part << total_credit_map;
 
-            manifest->addPartData(std::move(part), true);
+            // See the beacon list part above: the index is already committed.
+            if (manifest->addPartData(std::move(part), true) < 0)
+            {
+                _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                     "Empty ProjectsAllCpidTotalCredits part; manifest not published.");
+
+                return false;
+            }
 
             iPartNum++;
         }
@@ -5059,7 +5220,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
                 part << g_project_public_keys;
 
-                manifest->addPartData(std::move(part), true);
+                // See the beacon list part above: the index is already committed.
+                if (manifest->addPartData(std::move(part), true) < 0)
+                {
+                    _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                         "Empty ProjectPublicKeys part; manifest not published.");
+
+                    return false;
+                }
 
                 iPartNum++;
             }
@@ -5195,6 +5363,20 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
     std::multimap<uint256, std::pair<ScraperID, uint256>> mManifestsBinnedbyContent;
     std::multimap<uint256, std::pair<ScraperID, uint256>>::iterator convergence;
 
+    // The denominator for the supermajority is the LOCALLY OBSERVED scraper
+    // count -- how many scrapers this node actually holds manifests from -- and
+    // that is correct by design, not an approximation to be tightened.
+    //
+    // Using the on-chain authorized scraper count instead would stall superblock
+    // production network wide whenever an authorized scraper is merely offline,
+    // which is routine: deauthorization is a manual governance action, so an
+    // idle or failed scraper stays authorized indefinitely. Measuring who is
+    // actually publishing is what keeps convergence possible in that state.
+    //
+    // This is also why manifest ingest must not be gated on sync state (see the
+    // OutOfSyncByAge branch in CScraperManifest::UnserializeCheck): a partial
+    // manifest set reaching housekeeping would shrink this denominator and let a
+    // minority view self-converge.
     unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
 
     _log(logattribute::INFO, "ScraperConstructConvergedManifest",
@@ -5663,8 +5845,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
                     continue;
                 }
 
-                if (iter.project == "VerifiedBeacons" || iter.project == "ProjectsAllCpidTotalCredits"
-                        || iter.project == "ProjectPublicKeys") {
+                if (IsManifestPseudoProject(iter.project)) {
                     StructConvergedManifest.ConvergedManifestPartPtrsMap.insert(std::make_pair(iter.project,
                                                                                                manifest->vParts[iter.part1]));
                 }
@@ -5718,10 +5899,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
                 for (iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.begin();
                      iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end(); ++iter)
                 {
-                    if (iter->first != "BeaconList"
-                            && iter->first != "VerifiedBeacons"
-                            && iter->first != "ProjectsAllCpidTotalCredits"
-                            && iter->first != "ProjectPublicKeys")
+                    if (iter->first != "BeaconList" && !IsManifestPseudoProject(iter->first))
                     {
                         StructConvergedManifest.CScraperConvergedManifest_ptr->addPart(iter->second->hash);
                     }
@@ -6629,10 +6807,7 @@ UniValue convergencereport(const UniValue& params)
 
         for (const auto& entry : ConvergedScraperStatsCache.Convergence.ConvergedManifestPartPtrsMap)
         {
-            if (entry.first == "BeaconList"
-                || entry.first == "VerifiedBeacons"
-                || entry.first == "ProjectsAllCpidTotalCredits"
-                || entry.first == "ProjectPublicKeys") {
+            if (entry.first == "BeaconList" || IsManifestPseudoProject(entry.first)) {
                 continue;
             }
 

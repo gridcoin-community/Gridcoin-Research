@@ -4,6 +4,7 @@
 
 #include <vector>
 #include <sstream>
+#include <script/interpreter.h>
 #include <util/strencodings.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -623,6 +624,54 @@ BOOST_AUTO_TEST_CASE(script_FindAndDelete)
     expect = ScriptFromHex("03feed");
     BOOST_CHECK_EQUAL(s.FindAndDelete(d), 1);
     BOOST_CHECK(s == expect);
+}
+
+// -maxsigcachesize resolution. The value is operator-supplied and feeds an
+// in-memory set with no other ceiling, so the clamp is the whole point.
+BOOST_AUTO_TEST_CASE(maxsigcachesize_is_resolved_and_clamped)
+{
+    // Capture whether it was set at all. Restoring "" would leave the arg SET to
+    // an empty string, which GetArg(name, int64_t) parses as 0 -- i.e. the cache
+    // disabled for the rest of this test binary.
+    const bool had_arg = gArgs.IsArgSet("-maxsigcachesize");
+    const std::string saved = had_arg ? gArgs.GetArg("-maxsigcachesize", "") : std::string();
+
+    // A sane operator value passes through untouched.
+    gArgs.ForceSetArg("-maxsigcachesize", "120000");
+    BOOST_CHECK_EQUAL(ResolveMaxSigCacheSize(), 120000);
+
+    // Zero and negative disable the cache rather than clamping up.
+    gArgs.ForceSetArg("-maxsigcachesize", "0");
+    BOOST_CHECK_EQUAL(ResolveMaxSigCacheSize(), 0);
+    gArgs.ForceSetArg("-maxsigcachesize", "-1");
+    BOOST_CHECK_EQUAL(ResolveMaxSigCacheSize(), 0);
+
+    // Exactly at the ceiling is allowed; one over is clamped, as is an
+    // absurd value of the shape a mistyped config produces.
+    gArgs.ForceSetArg("-maxsigcachesize", ToString(MAX_SIG_CACHE_ENTRIES));
+    BOOST_CHECK_EQUAL(ResolveMaxSigCacheSize(), MAX_SIG_CACHE_ENTRIES);
+    gArgs.ForceSetArg("-maxsigcachesize", ToString(MAX_SIG_CACHE_ENTRIES + 1));
+    BOOST_CHECK_EQUAL(ResolveMaxSigCacheSize(), MAX_SIG_CACHE_ENTRIES);
+    gArgs.ForceSetArg("-maxsigcachesize", "500000000");
+    BOOST_CHECK_EQUAL(ResolveMaxSigCacheSize(), MAX_SIG_CACHE_ENTRIES);
+
+    // The ceiling must stay a memory budget, not a bare number: if the entry
+    // shape is re-estimated the entry count has to move with it. The division
+    // truncates, so the identity is "fits, and one more would not".
+    BOOST_CHECK(MAX_SIG_CACHE_ENTRIES * SIG_CACHE_ENTRY_BYTES <= MAX_SIG_CACHE_BYTES);
+    BOOST_CHECK((MAX_SIG_CACHE_ENTRIES + 1) * SIG_CACHE_ENTRY_BYTES > MAX_SIG_CACHE_BYTES);
+
+    // The default has to sit under the ceiling, or the clamp would silently
+    // override the documented default for every node.
+    BOOST_CHECK(DEFAULT_MAX_SIG_CACHE_SIZE < MAX_SIG_CACHE_ENTRIES);
+
+    if (had_arg) {
+        gArgs.ForceSetArg("-maxsigcachesize", saved);
+    } else {
+        // No clear-arg API; restore the documented default explicitly rather
+        // than leaving the arg set to an empty string.
+        gArgs.ForceSetArg("-maxsigcachesize", ToString(DEFAULT_MAX_SIG_CACHE_SIZE));
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

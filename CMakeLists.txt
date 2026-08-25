@@ -177,7 +177,17 @@ if(ENABLE_TESTS)
     list(APPEND QT_COMPONENTS Test)
 endif()
 
-set(BOOST_MINIMUM_VERSION 1.63.0)
+# 1.66 is the oldest release this source can actually compile against, and has
+# been for some time: rpc/server.cpp uses boost::asio::ip::make_address_v6()
+# with no version guard, and that entered Boost in 1.66 along with the asio
+# rewrite. The 1.63 declared here was simply never revisited when that landed,
+# so it promised a floor no build has met in a while.
+#
+# 1.66 is the floor the source implies, not a version anyone exercises: CI
+# builds against the distribution Boost and depends pins 1.89. The io_context /
+# io_service shim in rpc/protocol.h still guards at 1.70, so 1.66-1.69 remains
+# intended to work.
+set(BOOST_MINIMUM_VERSION 1.66.0)
 set(BOOST_COMPONENTS filesystem iostreams thread serialization date_time)
 set(BOOST_HUNTER_COMPONENTS system atomic regex ${BOOST_COMPONENTS})
 if(ENABLE_TESTS)

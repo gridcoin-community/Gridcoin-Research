@@ -14,12 +14,14 @@
 
 #include <test/test_gridcoin.h>
 
+#include <net_processing.h>
 #include <stdint.h>
 
 // Tests this internal-to-main.cpp method:
 extern bool AddOrphanTx(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 extern unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-extern std::map<uint256, CTransaction> mapOrphanTransactions GUARDED_BY(cs_main);
+extern std::map<uint256, COrphanTx> mapOrphanTransactions GUARDED_BY(cs_main);
+extern unsigned int ExpireOrphanTransactions(const int64_t now);
 extern std::map<uint256, std::set<uint256> > mapOrphanTransactionsByPrev GUARDED_BY(cs_main);
 
 // The orphan-tx tests below are single-threaded and drive
@@ -138,7 +140,7 @@ CTransaction RandomOrphan() NO_THREAD_SAFETY_ANALYSIS
     auto it = mapOrphanTransactions.lower_bound(InsecureRand256());
     if (it == mapOrphanTransactions.end())
         it = mapOrphanTransactions.begin();
-    return it->second;
+    return it->second.tx;
 }
 
 BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
@@ -210,6 +212,49 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
     LimitOrphanTxSize(0);
     BOOST_CHECK(mapOrphanTransactions.empty());
     BOOST_CHECK(mapOrphanTransactionsByPrev.empty());
+}
+
+//! An orphan past ORPHAN_TX_EXPIRE_SECONDS is swept. The count limit alone does
+//! not reclaim it: LimitOrphanTxSize only runs when something new is inserted,
+//! and EraseOrphanTx only fires when a parent arrives, so a peer that fills the
+//! pool and then falls silent leaves it full. Boundary checked from both sides,
+//! matching the orphan-block and PSGT-pool expiry tests.
+BOOST_AUTO_TEST_CASE(DoS_orphan_tx_expiry) NO_THREAD_SAFETY_ANALYSIS
+{
+    LimitOrphanTxSize(0);
+    BOOST_REQUIRE(mapOrphanTransactions.empty());
+
+    constexpr int64_t received_at = 1700003000;
+
+    SetMockTime(received_at);
+
+    CKey key;
+    key.MakeNewKey(true);
+    CBasicKeyStore keystore;
+    keystore.AddKey(key);
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout.n = 0;
+    mtx.vin[0].prevout.hash = InsecureRand256();     // parent we will never see
+    mtx.vin[0].scriptSig << OP_1;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * CENT;
+    mtx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
+
+    BOOST_REQUIRE(AddOrphanTx(CTransaction(mtx)));
+    BOOST_CHECK_EQUAL(mapOrphanTransactions.size(), 1u);
+
+    // Exactly at the TTL: kept.
+    BOOST_CHECK_EQUAL(ExpireOrphanTransactions(received_at + ORPHAN_TX_EXPIRE_SECONDS), 0u);
+    BOOST_CHECK_EQUAL(mapOrphanTransactions.size(), 1u);
+
+    // One second past: swept, and the by-prev index goes with it.
+    BOOST_CHECK_EQUAL(ExpireOrphanTransactions(received_at + ORPHAN_TX_EXPIRE_SECONDS + 1), 1u);
+    BOOST_CHECK(mapOrphanTransactions.empty());
+    BOOST_CHECK(mapOrphanTransactionsByPrev.empty());
+
+    SetMockTime(0);
 }
 
 BOOST_AUTO_TEST_CASE(DoS_validation_state)

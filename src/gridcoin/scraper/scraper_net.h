@@ -5,6 +5,43 @@
 #ifndef GRIDCOIN_SCRAPER_SCRAPER_NET_H
 #define GRIDCOIN_SCRAPER_SCRAPER_NET_H
 
+#include <array>
+#include <string>
+#include <string_view>
+
+//! \brief The non-whitelist entries a published manifest carries.
+//!
+//! The publisher injects these alongside the real project dentries. They are
+//! not whitelist projects and never have been, which matters in two places that
+//! previously disagreed: the manifest project cap in UnserializeCheck(), which
+//! compares a dentry count against a whitelist-derived limit, and the stats
+//! loader in scraper.cpp, which skips them by name when walking parts.
+//!
+//! One list so those two cannot drift. Adding a pseudo-project here widens the
+//! cap by one automatically, which is what previously did not happen -- each new
+//! one silently ate a share of the margin reserved for whitelist shrinkage.
+//!
+//! BeaconList is deliberately absent: it is carried by its own index rather than
+//! as a dentry, so it does not count against the project cap.
+inline constexpr std::array<std::string_view, 3> MANIFEST_PSEUDO_PROJECTS{
+    "VerifiedBeacons",
+    "ProjectsAllCpidTotalCredits",
+    "ProjectPublicKeys",
+};
+
+//! \brief True if the name is one of the injected pseudo-projects.
+//!
+//! Note this does NOT cover BeaconList, which is carried by its own index and
+//! is excluded separately at the call sites that need to skip it.
+inline bool IsManifestPseudoProject(const std::string& project)
+{
+    for (const std::string_view name : MANIFEST_PSEUDO_PROJECTS) {
+        if (project == name) return true;
+    }
+
+    return false;
+}
+
 /* Maybe the parts system will be useful for other things so let's abstract
  * that to parent class. Since it will be all in one file there will not be any
  * polymorphism.
@@ -61,10 +98,19 @@ public:
     /** Use the node as download source for this Split object. */
     void UseAsSource(CNode* pnode);
 
-    /** Add a part reference to vParts. Creates a CPart if necessary. */
+    /** Add a part reference to vParts. Creates a CPart if necessary.
+     *
+     * Returns void and therefore cannot reject: callers must validate the hash
+     * first. CScraperManifest::UnserializeCheck() screens the whole part list
+     * before calling this.
+     */
     void addPart(const uint256& ihash);
 
-    /** Create a part from specified data and add reference to it into vParts. */
+    /** Create a part from specified data and add reference to it into vParts.
+     *
+     * Returns the index of the new part, or -1 if \p vData is empty, in which
+     * case nothing is registered.
+     */
     int addPartData(CDataStream&& vData, const bool &publish_in_progress = false);
 
     /** Unref all parts referenced by this. Removes parts with no references */
@@ -217,7 +263,13 @@ public: /* public methods */
     /** A combination of unserialization and integrity checking, which includes hash checks, authorization checks, and
      *  signature checks.
      */
-    [[nodiscard]] bool UnserializeCheck(CDataStream& s, unsigned int& banscore_out);
+    //! \param v15_project_cap Whether the v15 project-count rule applies. Passed
+    //! in rather than derived here: this runs under cs_mapManifest and
+    //! cs_manifest, and the chain height is guarded by cs_main, which must not
+    //! be acquired from inside those (see RecvManifest). Defaults to false, the
+    //! pre-v15 rule.
+    [[nodiscard]] bool UnserializeCheck(CDataStream& s, unsigned int& banscore_out,
+                                        bool v15_project_cap = false);
 
     /** Checks to see whether manifest age is current according to the SCRAPER_CMANIFEST_RETENTION_TIME network setting. */
     bool IsManifestCurrent() const;

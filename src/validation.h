@@ -6,6 +6,7 @@
 #ifndef BITCOIN_VALIDATION_H
 #define BITCOIN_VALIDATION_H
 
+#include <atomic>
 #include "amount.h"
 #include "consensus/validation.h"
 #include "index/disktxpos.h"
@@ -65,7 +66,11 @@ bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout, CTxIndex& 
 bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout);
 bool ReadTxFromDisk(CTransaction& tx, COutPoint prevout);
 
-bool CheckTransaction(const CTransaction& tx, CValidationState& state);
+//! v15_rules is the CALLER's determination that block-version-15 rules apply,
+//! not a height: CheckBlock() derives it from the block's own nVersion because
+//! the height it is given is the tip's next height rather than the block's.
+//! Defaults to false, so callers with no block context are unaffected.
+bool CheckTransaction(const CTransaction& tx, CValidationState& state, bool v15_rules = false);
 
 //! \brief Check the validity of any contracts contained in the transaction.
 //!
@@ -135,6 +140,16 @@ bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const s
     @param[in] fMiner	true if called from CreateNewBlock
     @return Returns true if all checks succeed
     */
+//! Count of signature verifications performed inside ConnectInputs().
+//!
+//! Exists so the ordering guarantee is testable: the conflict pre-scan means a
+//! transaction with an already-spent input must cost ZERO verifications, and
+//! without a counter that is only observable by instrumenting a build. A
+//! regression that moved the conflict check back inside the signature loop
+//! would otherwise still pass every test, since the transaction is rejected
+//! either way -- only the cost differs.
+extern std::atomic<uint64_t> g_connectinputs_signature_checks;
+
 bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx, const CBlockIndex* pindexBlock, bool fBlock, bool fMiner) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge) EXCLUSIVE_LOCKS_REQUIRED(cs_main); // ppcoin: get transaction coin age
@@ -164,7 +179,16 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
 bool CheckBlockSignature(const CBlock& block);
 
 // Returns the script flags which should be checked for a given block
-unsigned int GetBlockScriptFlags(const CBlockIndex& block_index);
+//! Script verification flags in force at a given block height.
+//!
+//! Takes a height rather than a CBlockIndex because callers disagree about
+//! which block they mean: connecting a block it is that block, but on the
+//! mempool and miner paths the index in hand is the PREVIOUS one and the
+//! transaction is bound for the next. Passing an index invited each caller to
+//! hand over whichever one it had, which is how two of the three came to be a
+//! height low. Mirrors ComputeBlockVersion, which takes a height for the same
+//! reason.
+unsigned int GetBlockScriptFlags(int nHeight);
 
 unsigned int GetCoinstakeOutputLimit(const int& block_version);
 unsigned int GetMandatorySideStakeOutputLimit(const int& block_version);

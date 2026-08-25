@@ -5,6 +5,7 @@
 #ifndef BITCOIN_NET_PROCESSING_H
 #define BITCOIN_NET_PROCESSING_H
 
+#include <primitives/transaction.h>
 #include "net.h"
 #include "sync.h"
 #include "validationinterface.h"
@@ -40,6 +41,39 @@ void RemoveFromRelayMemory(const uint256& hash);
 //! Intended to be driven periodically by the scheduler (never from SendMessages;
 //! see the definition for the lock-order rationale).
 void ResendUnbroadcastTransactions();
+
+//! \brief One entry in the orphan transaction pool.
+//!
+//! Declared here, rather than privately in net_processing.cpp, so that the tests
+//! that drive the pool name the same type. A private copy in a test satisfies
+//! ODR only for as long as the two stay token-identical, and the failure when
+//! they diverge is a silent type mismatch across translation units.
+struct COrphanTx {
+    CTransaction tx;
+    int64_t time_received;
+};
+
+//! \brief How long an orphan transaction may sit before it is swept.
+//!
+//! Published for the same reason as COrphanTx: a test asserting the boundary
+//! must assert against the value the implementation actually uses.
+static constexpr int64_t ORPHAN_TX_EXPIRE_SECONDS = 20 * 60;
+
+//! \brief Sweep orphan transactions past ORPHAN_TX_EXPIRE_SECONDS.
+//!
+//! The orphan pool's count limit is applied only when a new orphan is inserted,
+//! and an orphan is otherwise erased only when its parent arrives. A peer that
+//! fills the pool and then stops sending therefore leaves it full indefinitely.
+//! This gives reclamation a driver that does not depend on further traffic.
+//!
+//! Takes cs_main. Safe from the scheduler thread, which holds no per-node locks.
+//!
+//! \return the number of orphans swept.
+//! \param now  Current adjusted time; taken as a parameter rather than read
+//!             internally, matching OrphanBlockManager::EraseExpired and
+//!             PSGTPool::EraseExpired, and so that it is testable without
+//!             mocking the clock for the sweep itself.
+unsigned int ExpireOrphanTransactions(const int64_t now);
 
 //! Relay a pooled PSGT revision (#2910) to peers on PSGT_PROTO_VERSION or
 //! later. The object itself is served from the PSGT pool by the getdata loop.

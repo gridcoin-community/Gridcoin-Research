@@ -15,6 +15,7 @@
 
 #include "netbase.h"
 #include "mruset.h"
+#include "limitedmap.h"
 #include "protocol.h"
 #include "streams.h"
 #include "addrman.h"
@@ -117,7 +118,7 @@ extern ServiceFlags nLocalServices;
 //! cs_main. A dedicated leaf-level mutex avoids hoisting cs_main into
 //! the PART path and keeps the lock as narrow as possible.
 extern CCriticalSection cs_mapAlreadyAskedFor;
-extern std::map<CInv, int64_t> mapAlreadyAskedFor GUARDED_BY(cs_mapAlreadyAskedFor);
+extern limitedmap<CInv, int64_t> mapAlreadyAskedFor GUARDED_BY(cs_mapAlreadyAskedFor);
 extern ThreadHandler* netThreads;
 
 
@@ -451,10 +452,16 @@ public:
         // logging / time-formatting / static-counter arithmetic below
         // does not touch mapAlreadyAskedFor and should not hold the
         // global mutex.
-        int64_t nRequestTime;
+        // Absent means never asked, which is a request time of zero. Reading
+        // through find() rather than operator[] also stops the lookup itself
+        // from creating an entry: the write below is what should create it, and
+        // always runs, so the old insert-on-read was redundant as well as
+        // unbounded.
+        int64_t nRequestTime = 0;
         {
             LOCK(cs_mapAlreadyAskedFor);
-            nRequestTime = mapAlreadyAskedFor[inv];
+            const auto it = mapAlreadyAskedFor.find(inv);
+            if (it != mapAlreadyAskedFor.end()) nRequestTime = it->second;
         }
 
         LogPrint(BCLog::LogFlags::NET, "askfor %s   %" PRId64 " (%s)", inv.ToString(), nRequestTime, DateTimeStrFormat("%H:%M:%S", nRequestTime/1000000));
@@ -470,7 +477,13 @@ public:
         const int64_t nNewRequestTime = std::max(nRequestTime + 2 * 60 * 1000000, nNow);
         {
             LOCK(cs_mapAlreadyAskedFor);
-            mapAlreadyAskedFor[inv] = nNewRequestTime;
+            const auto it = mapAlreadyAskedFor.find(inv);
+
+            if (it != mapAlreadyAskedFor.end()) {
+                mapAlreadyAskedFor.update(it, nNewRequestTime);
+            } else {
+                mapAlreadyAskedFor.insert(std::make_pair(inv, nNewRequestTime));
+            }
         }
         mapAskFor.insert(std::make_pair(nNewRequestTime, inv));
     }

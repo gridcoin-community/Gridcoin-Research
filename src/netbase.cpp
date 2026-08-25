@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include <limits>
 #include "netbase.h"
 #include "util.h"
 #include "sync.h"
@@ -198,6 +199,52 @@ bool LookupSubNet(const char* pszName, CSubNet& ret)
     return false;
 }
 
+//! \brief Receive exactly len bytes, or give up at the deadline.
+//!
+//! Every recv() in the SOCKS5 negotiation below was a bare blocking call with
+//! no deadline, so a proxy that accepted the connection and then simply stopped
+//! responding held the connecting thread indefinitely. That is reachable
+//! whenever the configured proxy is unreachable, hung, or hostile, and nothing
+//! else in the negotiation bounds it.
+//!
+//! Bounded with select() and the existing connect timeout, matching the idiom
+//! ConnectSocketDirectly() already uses a few lines below. Chunked rather than
+//! one-shot because the deadline applies to the whole read: a peer that dribbles
+//! one byte per interval must not be able to extend it indefinitely.
+//!
+//! Returns false on timeout, on error, and on a short read -- callers treat all
+//! three the same way, by closing the socket and failing the negotiation.
+static bool InterruptibleRecv(SOCKET hSocket, void* data, size_t len, int timeout_ms)
+{
+    uint8_t* buf = static_cast<uint8_t*>(data);
+    const int64_t deadline = GetTimeMillis() + timeout_ms;
+    size_t have = 0;
+
+    while (have < len)
+    {
+        const int64_t remaining = deadline - GetTimeMillis();
+        if (remaining <= 0) return false;
+
+        struct timeval tv;
+        tv.tv_sec  = remaining / 1000;
+        tv.tv_usec = (remaining % 1000) * 1000;
+
+        fd_set fdset;
+        FD_ZERO(&fdset);
+        FD_SET(hSocket, &fdset);
+
+        const int nRet = select(hSocket + 1, &fdset, nullptr, nullptr, &tv);
+        if (nRet <= 0) return false;   // deadline reached, or select failed
+
+        const ssize_t n = recv(hSocket, (char*)(buf + have), len - have, 0);
+        if (n <= 0) return false;      // closed by peer, or error
+
+        have += static_cast<size_t>(n);
+    }
+
+    return true;
+}
+
 bool static Socks5(string strDest, int port, SOCKET& hSocket)
 {
     LogPrintf("SOCKS5 connecting %s", strDest);
@@ -217,7 +264,7 @@ bool static Socks5(string strDest, int port, SOCKET& hSocket)
         return error("Error sending to proxy");
     }
     char pchRet1[2];
-    if (recv(hSocket, pchRet1, 2, 0) != 2)
+    if (!InterruptibleRecv(hSocket, pchRet1, 2, nConnectTimeout))
     {
         closesocket(hSocket);
         return error("Error reading proxy response");
@@ -240,7 +287,7 @@ bool static Socks5(string strDest, int port, SOCKET& hSocket)
         return error("Error sending to proxy");
     }
     char pchRet2[4];
-    if (recv(hSocket, pchRet2, 4, 0) != 4)
+    if (!InterruptibleRecv(hSocket, pchRet2, 4, nConnectTimeout))
     {
         closesocket(hSocket);
         return error("Error reading proxy response");
@@ -271,20 +318,39 @@ bool static Socks5(string strDest, int port, SOCKET& hSocket)
         closesocket(hSocket);
         return error("Error: malformed proxy response");
     }
-    char pchRet3[256];
+    // uint8_t, not char. For the 0x03 (domain name) reply the length is taken
+    // from the first byte below, and char is signed on the platforms this
+    // matters for: a proxy returning a length byte of 0x80 or above produced a
+    // NEGATIVE nRecv, which POSIX recv() takes as size_t and treats as enormous.
+    // Measured effect was 144 bytes written past this buffer, attacker-sized and
+    // attacker-controlled, with the process exiting 0 and no error returned.
+    // Windows escapes it only by accident: winsock's recv takes int, so a
+    // negative length returns WSAEFAULT and writes nothing.
+    //
+    // With uint8_t the byte is 0..255 and cannot exceed the buffer, which is what
+    // the static_assert below pins -- the safety is a property of the two
+    // declarations together, not of a range check somewhere else.
+    //
+    // The casts are needed because winsock declares recv as taking char*; POSIX
+    // takes void* and would not need them.
+    uint8_t pchRet3[256];
+    static_assert(sizeof(pchRet3) > std::numeric_limits<uint8_t>::max(),
+                  "the domain-name length is read from a single byte, so the buffer "
+                  "must be larger than any value that byte can hold");
+
     switch (pchRet2[3])
     {
-        case 0x01: ret = recv(hSocket, pchRet3, 4, 0) != 4; break;
-        case 0x04: ret = recv(hSocket, pchRet3, 16, 0) != 16; break;
+        case 0x01: ret = !InterruptibleRecv(hSocket, pchRet3, 4, nConnectTimeout); break;
+        case 0x04: ret = !InterruptibleRecv(hSocket, pchRet3, 16, nConnectTimeout); break;
         case 0x03:
         {
-            ret = recv(hSocket, pchRet3, 1, 0) != 1;
+            ret = !InterruptibleRecv(hSocket, pchRet3, 1, nConnectTimeout);
             if (ret) {
                 closesocket(hSocket);
                 return error("Error reading from proxy");
             }
             int nRecv = pchRet3[0];
-            ret = recv(hSocket, pchRet3, nRecv, 0) != nRecv;
+            ret = !InterruptibleRecv(hSocket, pchRet3, nRecv, nConnectTimeout);
             break;
         }
         default: closesocket(hSocket); return error("Error: malformed proxy response");
@@ -294,7 +360,7 @@ bool static Socks5(string strDest, int port, SOCKET& hSocket)
         closesocket(hSocket);
         return error("Error reading from proxy");
     }
-    if (recv(hSocket, pchRet3, 2, 0) != 2)
+    if (!InterruptibleRecv(hSocket, pchRet3, 2, nConnectTimeout))
     {
         closesocket(hSocket);
         return error("Error reading from proxy");

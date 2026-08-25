@@ -805,6 +805,32 @@ public:
  * other node doesn't have the same branch, it can find a recent common trunk.
  * The further back it is, the further before the fork it may be.
  */
+//! \brief Maximum number of hashes a received block locator may declare.
+//!
+//! Set() builds a locator by walking back ten blocks one at a time and then
+//! doubling the step, so its length grows with the LOGARITHM of the chain
+//! height, not the height. Computed against that walk:
+//!
+//!     height  1,000,000 -> 31 entries
+//!     height  3,989,800 -> 33 entries   (v13 activation)
+//!     height 10,000,000 -> 35 entries
+//!     height 2^31 - 1   -> 42 entries
+//!
+//! So 101 -- the same ceiling upstream uses -- is roughly 2.4x the largest
+//! locator this code can produce at any representable height. It cannot reject
+//! a locator an honest peer generates, which is the one property that had to
+//! hold before capping: a cap below the legitimate maximum would partition the
+//! network rather than protect it.
+//!
+//! Without it, a locator is bounded only by the 32 MiB message ceiling, or about
+//! a million hashes. Every entry costs a mapBlockIndex lookup in GetBlockIndex()
+//! and friends, all of which run under cs_main, so an oversized locator is an
+//! attacker-chosen stall of the whole node, repeatable at will. Upstream can
+//! enforce this at the message handler because MAX_PROTOCOL_MESSAGE_LENGTH
+//! already bounds the allocation; this tree has no such ceiling yet, so the
+//! check goes at the length prefix where it also bounds the allocation.
+static const unsigned int MAX_LOCATOR_SZ = 101;
+
 class CBlockLocator
 {
 public:
@@ -836,7 +862,7 @@ public:
             READWRITE(nVersion);
         }
 
-        READWRITE(vHave);
+        READWRITE(LIMITED_VECTOR(vHave, MAX_LOCATOR_SZ));
     }
 
     void SetNull()
