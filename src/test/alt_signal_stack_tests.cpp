@@ -38,9 +38,12 @@ BOOST_AUTO_TEST_CASE(the_pre_main_alternate_stack_meets_the_kernel_minimum)
     BOOST_REQUIRE_MESSAGE(report.attempted,
                           "the static initialiser in alt_signal_stack.cpp did not run");
 
-    BOOST_CHECK_MESSAGE(report.installed,
-                        "sigaltstack(2) rejected our alternate stack of "
-                        << report.requested << " bytes");
+    // REQUIRE, not CHECK: if the install failed there is no stack to size-check,
+    // and letting the comparison below run would add a second failure that says
+    // nothing about the cause.
+    BOOST_REQUIRE_MESSAGE(report.installed,
+                          "sigaltstack(2) rejected our alternate stack of "
+                          << report.requested << " bytes");
 
     // Zero means the kernel did not publish AT_MINSIGSTKSZ. Nothing to compare
     // against, so the size check is skipped rather than failed.

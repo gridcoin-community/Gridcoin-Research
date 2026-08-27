@@ -101,7 +101,22 @@ AltSignalStackReport& MutableReport()
     return report;
 }
 
-const bool g_alt_signal_stack_installed = [] {
+//! Runs during static initialisation, before main() and therefore before Boost's
+//! framework::init(). The value is never read; the side effect is the point, and
+//! [[maybe_unused]] keeps a translation-unit const from drawing
+//! -Wunused-const-variable on toolchains that warn about it.
+[[maybe_unused]] const bool g_alt_signal_stack_installed = [] {
+    AltSignalStackReport& report = MutableReport();
+    report.attempted = true;
+
+    // Nothing below may escape this lambda.
+    //
+    // Dynamic initialisation is not a context that tolerates exceptions: one
+    // escaping here calls std::terminate and kills the binary before a single
+    // test runs, which is exactly the failure this file exists to prevent.
+    // resize() can throw std::bad_alloc, so record a failure rather than
+    // propagate one.
+    try {
     // What the kernel requires on THIS cpu, not what a header hardcodes. Zero
     // means the kernel did not publish it, in which case the constants below
     // are all we have.
@@ -133,13 +148,18 @@ const bool g_alt_signal_stack_installed = [] {
     // situation into an unconditional one.
     const bool ok = ::sigaltstack(&alt_stack, nullptr) == 0;
 
-    AltSignalStackReport& report = MutableReport();
-    report.attempted = true;
     report.installed = ok;
     report.requested = wanted;
     report.kernel_minimum = static_cast<std::size_t>(::getauxval(AT_MINSIGSTKSZ));
 
     return ok;
+
+    } catch (...) {
+        // Same reasoning as the sigaltstack failure above: without this file the
+        // suite was no better off, so record the failure and let Boost proceed.
+        report.installed = false;
+        return false;
+    }
 }();
 } // namespace
 
