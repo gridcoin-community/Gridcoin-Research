@@ -167,7 +167,7 @@ void AutoGreylistService::RefreshWithAndUpdateSuperblock(
                 GetWhitelist().Snapshot(GreylistState::NONE,
                                         GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
                 GetWhitelist().GetProjectsFirstActive(),
-                unit_test_blocks);
+                unit_test_blocks, pindexBest->pprev);
 
             cached = ComputationFromWalk(std::move(result), convergence_id);
         }
@@ -202,6 +202,72 @@ void AutoGreylistService::RefreshWithAndUpdateSuperblock(
     ClearV2Slots();
 
     m_v1->RefreshWithAndUpdateSuperblock(superblock);
+}
+
+void AutoGreylistService::StampProjectStatus(
+    Superblock& superblock, int anchor_height, int64_t anchor_time, CBlockIndex* walk_start,
+    std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks)
+    EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+{
+    if (!IsAutoGreylistRedesignEnabled(anchor_height)) {
+        return;
+    }
+
+    // Bind the candidate to the block being created. There is no CBlockIndex for it yet, so
+    // the binding context is set directly; the validator reconstructs the identical context
+    // from the containing block's index entry once the block exists.
+    SuperblockPtr superblock_ptr;
+    superblock_ptr.Replace(superblock);
+    superblock_ptr.m_height = anchor_height;
+    superblock_ptr.m_timestamp = anchor_time;
+
+    const AutoGreylistV2::Result result = AutoGreylistV2::Compute(
+        superblock_ptr,
+        GetWhitelist().Snapshot(GreylistState::NONE,
+                                GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
+        GetWhitelist().GetProjectsFirstActive(),
+        unit_test_blocks, walk_start);
+
+    superblock.m_project_status = AutoGreylistV2::DeriveProjectStatusRecord(
+        result,
+        GetWhitelist().Snapshot(GreylistState::NONE,
+                                GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED));
+}
+
+bool AutoGreylistService::ValidateProjectStatus(
+    const SuperblockPtr& superblock_ptr, CBlockIndex* walk_start,
+    std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks) const
+    EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+{
+    // The check applies only where the record is read back as authoritative: above the gate,
+    // v3+ superblocks. Below the gate the record stays advisory, exactly as it is today.
+    if (superblock_ptr->m_version < 3
+        || !IsAutoGreylistRedesignEnabled(superblock_ptr.m_height)) {
+        return true;
+    }
+
+    const AutoGreylistV2::Result result = AutoGreylistV2::Compute(
+        superblock_ptr,
+        GetWhitelist().Snapshot(GreylistState::NONE,
+                                GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
+        GetWhitelist().GetProjectsFirstActive(),
+        unit_test_blocks, walk_start);
+
+    const Superblock::ProjectStatus expected = AutoGreylistV2::DeriveProjectStatusRecord(
+        result,
+        GetWhitelist().Snapshot(GreylistState::NONE,
+                                GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED));
+
+    if (expected.m_project_status != superblock_ptr->m_project_status.m_project_status) {
+        error("%s: project status record mismatch: expected %u entries, received %u.",
+              __func__,
+              (unsigned int) expected.m_project_status.size(),
+              (unsigned int) superblock_ptr->m_project_status.m_project_status.size());
+
+        return false;
+    }
+
+    return true;
 }
 
 void AutoGreylistService::Reset()

@@ -17,7 +17,8 @@ AutoGreylistV2::Result AutoGreylistV2::Compute(
     SuperblockPtr head_ptr,
     const WhitelistSnapshot& whitelist,
     const Whitelist::ProjectEntryMap& project_first_actives,
-    std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks)
+    std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks,
+    CBlockIndex* walk_start)
     EXCLUSIVE_LOCKS_REQUIRED (cs_main)
 {
     Result result;
@@ -80,7 +81,8 @@ AutoGreylistV2::Result AutoGreylistV2::Compute(
     CBlockIndex* index_ptr;
     {
         if (unit_test_blocks == nullptr) {
-            index_ptr = GRC::BlockFinder::FindByHeight(head_ptr.m_height - 1);
+            index_ptr = (walk_start != nullptr) ? walk_start
+                                                : GRC::BlockFinder::FindByHeight(head_ptr.m_height - 1);
         } else {
             // This only works if the unit_test_blocks are all superblocks, which they are by
             // the construction of the unit test fixtures.

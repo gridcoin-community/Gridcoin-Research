@@ -133,6 +133,53 @@ public:
                                             unit_test_blocks = nullptr);
 
     //!
+    //! \brief Re-stamp a candidate superblock's m_project_status anchored at the block being
+    //! created (miner bind time). No-op below the redesign gate.
+    //!
+    //! This is the single pending-to-authoritative transition point (DESIGN.md 10.3), made
+    //! mechanical: the cached superblock contract can be built at one tip and staked several
+    //! blocks later, so a record stamped only at convergence time carries an anchor a
+    //! validator cannot recover. Re-stamping at bind time gives producer, validator and any
+    //! later recompute ONE anchor -- the containing block -- and, because the previous
+    //! superblock is roughly a day old at bind time, the record is naturally free of the
+    //! phantom-head shape. The quorum hash excludes m_project_status, so re-stamping cannot
+    //! break contract matching against other nodes' convergences.
+    //!
+    //! \param superblock The candidate about to be bound into the block claim.
+    //! \param anchor_height Height of the block being created (tip height + 1).
+    //! \param anchor_time nTime of the block being created.
+    //! \param walk_start Block index entry the backward walk starts from (the current tip).
+    //!
+    void StampProjectStatus(Superblock& superblock, int anchor_height, int64_t anchor_time,
+                            CBlockIndex* walk_start,
+                            std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>>
+                                unit_test_blocks = nullptr);
+
+    //!
+    //! \brief Validate a received superblock's m_project_status record at acceptance.
+    //!
+    //! The field is serialized but deliberately excluded from the quorum hash, and nothing
+    //! else compares it -- so without this check a staker could ship arbitrary record
+    //! content that every node would consistently adopt once the record is read back as the
+    //! authoritative state. The validator runs the SAME single walker the producer used,
+    //! anchored at the received superblock's containing block, derives the expected record
+    //! through the same DeriveProjectStatusRecord rule, and compares byte-for-byte.
+    //! Deterministic across nodes: the inputs are the hashed candidate total credits, the
+    //! committed chain behind the block, and the contract-driven registry state -- and the
+    //! caller (TryLoadSuperblock) runs BEFORE ApplyContracts, so the validator sees the same
+    //! parent-block registry the producer stamped against.
+    //!
+    //! \param superblock_ptr The received superblock, bound to its containing block.
+    //! \param walk_start The containing block's pprev (reorg-safe walk start).
+    //!
+    //! \return true when the record matches (or the check does not apply: below the gate,
+    //! or a pre-v3 superblock).
+    //!
+    bool ValidateProjectStatus(const SuperblockPtr& superblock_ptr, CBlockIndex* walk_start,
+                               std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>>
+                                   unit_test_blocks = nullptr) const;
+
+    //!
     //! \brief Reset all cached state (both V2 slots and the V1 instance).
     //!
     void Reset();

@@ -2901,6 +2901,134 @@ BOOST_AUTO_TEST_CASE(facade_stamp_respects_manual_and_override_status)
 }
 
 //!
+//! \brief The record produce/validate pair: a bind-time stamp round-trips through
+//! acceptance-time validation, and every tamper shape is rejected.
+//!
+//! The m_project_status field is serialized but excluded from the quorum hash, so this
+//! validation is the ONLY thing standing between a staker and network-wide adoption of an
+//! arbitrary greylist once the record is read back as authoritative. The producer stamp and
+//! the validator recomputation share one walker and one record-derivation rule, so agreement
+//! is structural; these cases pin it and the rejection of each divergence.
+//!
+BOOST_AUTO_TEST_CASE(facade_record_stamp_validates_and_tampering_is_rejected)
+{
+    RedesignHeightGuard gate_guard(/*gate_height=*/0);
+
+    std::map<std::string, std::vector<std::optional<uint64_t>>> fx;
+    fx["flatproj"] = std::vector<std::optional<uint64_t>>(12, std::optional<uint64_t>(500000));
+    std::vector<std::optional<uint64_t>> rising;
+    for (uint64_t i = 1; i <= 12; ++i) rising.push_back(i * 1000);
+    fx["growproj"] = rising;
+
+    FacadeChainFixture chain(fx);
+    std::shared_ptr<GRC::AutoGreylistService> service = GRC::GetAutoGreylistCache();
+
+    // The candidate as a staker would bind it: anchored at tip height + 1.
+    GRC::Superblock candidate = GRC::Superblock();
+    candidate.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+        .insert(std::make_pair("flatproj", 500000));
+    candidate.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+        .insert(std::make_pair("growproj", 13000));
+
+    // Pre-populate the record with garbage: the bind-time stamp must OVERWRITE, not append
+    // (the cached-contract case, where a stale convergence-time record must not survive).
+    candidate.m_project_status.m_project_status.insert(
+        std::make_pair("garbageproject", GRC::ProjectEntryStatus::AUTO_GREYLISTED));
+
+    const int anchor_height = chain.m_tip->nHeight;
+    const int64_t anchor_time = chain.m_tip->nTime;
+
+    service->StampProjectStatus(candidate, anchor_height, anchor_time, /*walk_start=*/nullptr,
+                                chain.m_blocks);
+
+    BOOST_REQUIRE(candidate.m_project_status.m_project_status.count("flatproj") == 1);
+    BOOST_CHECK(candidate.m_project_status.m_project_status.count("garbageproject") == 0);
+
+    // The validator's view: the received superblock bound to its containing block.
+    auto bind_received = [&](const GRC::Superblock& received) {
+        GRC::SuperblockPtr ptr;
+        ptr.Replace(received);
+        ptr.m_height = anchor_height;
+        ptr.m_timestamp = anchor_time;
+        return ptr;
+    };
+
+    // --- Round trip: the honest record validates. ---
+    BOOST_CHECK(service->ValidateProjectStatus(bind_received(candidate), nullptr, chain.m_blocks));
+
+    // --- Tamper: a bogus AUTO_GREYLISTED entry added. ---
+    {
+        GRC::Superblock tampered = candidate;
+        tampered.m_project_status.m_project_status.insert(
+            std::make_pair("growproj", GRC::ProjectEntryStatus::AUTO_GREYLISTED));
+        BOOST_CHECK(!service->ValidateProjectStatus(bind_received(tampered), nullptr, chain.m_blocks));
+    }
+
+    // --- Tamper: the legitimate entry removed (an empty record where non-empty expected). ---
+    {
+        GRC::Superblock tampered = candidate;
+        tampered.m_project_status.m_project_status.clear();
+        BOOST_CHECK(!service->ValidateProjectStatus(bind_received(tampered), nullptr, chain.m_blocks));
+    }
+
+    // --- Tamper: the status flipped AUTO -> MAN. ---
+    {
+        GRC::Superblock tampered = candidate;
+        tampered.m_project_status.m_project_status.erase("flatproj");
+        tampered.m_project_status.m_project_status.insert(
+            std::make_pair("flatproj", GRC::ProjectEntryStatus::MAN_GREYLISTED));
+        BOOST_CHECK(!service->ValidateProjectStatus(bind_received(tampered), nullptr, chain.m_blocks));
+    }
+
+    // --- Registry dependence: validation runs against the registry as it stands, which the
+    // --- ConnectBlock ordering (TryLoadSuperblock BEFORE ApplyContracts) guarantees is the
+    // --- same parent-block state the producer stamped against. Demonstrated by mutating the
+    // --- registry after the stamp: the honest record now fails, because the expected record
+    // --- moved. Same-block project contracts therefore CANNOT affect acceptance -- they are
+    // --- applied only after this check has passed. ---
+    {
+        AddProjectEntryWithStatus("flatproj", "http://flatproj.test",
+                                  GRC::ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE, 600, 600);
+
+        BOOST_CHECK(!service->ValidateProjectStatus(bind_received(candidate), nullptr, chain.m_blocks));
+    }
+}
+
+//!
+//! \brief Below the gate, the record is advisory exactly as it is today: the stamp is a
+//! no-op and validation accepts anything -- including garbage record bytes.
+//!
+BOOST_AUTO_TEST_CASE(facade_record_is_advisory_below_the_gate)
+{
+    RedesignHeightGuard gate_guard(/*gate_height=*/std::numeric_limits<int>::max());
+
+    std::map<std::string, std::vector<std::optional<uint64_t>>> fx;
+    fx["flatproj"] = std::vector<std::optional<uint64_t>>(12, std::optional<uint64_t>(500000));
+
+    FacadeChainFixture chain(fx);
+    std::shared_ptr<GRC::AutoGreylistService> service = GRC::GetAutoGreylistCache();
+
+    GRC::Superblock candidate = GRC::Superblock();
+    candidate.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+        .insert(std::make_pair("flatproj", 500000));
+    candidate.m_project_status.m_project_status.insert(
+        std::make_pair("garbageproject", GRC::ProjectEntryStatus::AUTO_GREYLISTED));
+
+    // The stamp is a no-op: the (garbage) record is untouched.
+    service->StampProjectStatus(candidate, chain.m_tip->nHeight, chain.m_tip->nTime,
+                                /*walk_start=*/nullptr, chain.m_blocks);
+    BOOST_CHECK(candidate.m_project_status.m_project_status.count("garbageproject") == 1);
+
+    // Validation does not apply: garbage is accepted, as it is on today's network.
+    GRC::SuperblockPtr received;
+    received.Replace(candidate);
+    received.m_height = chain.m_tip->nHeight;
+    received.m_timestamp = chain.m_tip->nTime;
+
+    BOOST_CHECK(service->ValidateProjectStatus(received, nullptr, chain.m_blocks));
+}
+
+//!
 //! \brief Snapshot's auto-greylist overlay must NOT mutate the underlying registry entries.
 //!
 //! Reproduces the consensus bug in Whitelist::Snapshot(): the override working copy at

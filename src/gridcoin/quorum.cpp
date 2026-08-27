@@ -1762,6 +1762,22 @@ bool Quorum::ValidateSuperblockClaim(
             return error("%s: quorum hash mismatch.", __func__);
         }
 
+        // Above the redesign gate the m_project_status record is read back as the
+        // authoritative greylist state -- but it is serialized OUTSIDE the quorum hash, so
+        // without this check its bytes would be staker-controlled: every node would
+        // consistently adopt whatever greylist a staker shipped. Recompute the expected
+        // record from the hashed candidate total credits, the committed chain behind this
+        // block and the registry (this runs BEFORE ApplyContracts, so producer and validator
+        // see the same parent-block registry state), and reject a mismatch. Placed at the
+        // claim level rather than inside SuperblockValidator: that path is skippable
+        // (UNKNOWN without a local scraper contract, HISTORICAL past retention), which is
+        // unacceptable for an unhashed field -- this check needs no scraper data and runs
+        // for every v11+ block, including initial sync.
+        if (superblock->m_version >= 3 && IsAutoGreylistRedesignEnabled(pindex->nHeight)
+            && !GetAutoGreylistCache()->ValidateProjectStatus(superblock, pindex->pprev)) {
+            return error("%s: project status record mismatch.", __func__);
+        }
+
         return ValidateSuperblock(superblock, true, 32, pindex->nHeight);
     }
 

@@ -330,12 +330,18 @@ public:
     //! \param project_first_actives First-activation entries (admissibility timestamps).
     //! \param unit_test_blocks Test seam, exactly as the V1 walker's: a height-keyed map of
     //! superblock-bearing block index entries substituting for chain access.
+    //! \param walk_start Optional explicit start of the backward walk (the block index entry
+    //! at head_ptr.m_height - 1). When provided it replaces the BlockFinder main-chain
+    //! search, which matters on validation paths: during a reorg connect the block being
+    //! validated (and its ancestry) need not be on the main chain yet, but pindex->pprev
+    //! always reaches the right history. Ignored when unit_test_blocks is provided.
     //!
     static Result Compute(SuperblockPtr head_ptr,
                           const WhitelistSnapshot& whitelist,
                           const Whitelist::ProjectEntryMap& project_first_actives,
                           std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>>
-                              unit_test_blocks = nullptr);
+                              unit_test_blocks = nullptr,
+                          CBlockIndex* walk_start = nullptr);
 
     //!
     //! \brief Derive the superblock m_project_status record from a computed result and the
