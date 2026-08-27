@@ -19,6 +19,7 @@ struct AltSignalStackReport
     bool installed = false;      //!< sigaltstack(2) returned success
     std::size_t requested = 0;   //!< bytes we asked for
     std::size_t kernel_minimum = 0;  //!< AT_MINSIGSTKSZ, 0 if unpublished
+    bool deferred_to_existing = false;  //!< an adequate stack was already installed; left alone
 };
 
 const AltSignalStackReport& GetAltSignalStackReport();

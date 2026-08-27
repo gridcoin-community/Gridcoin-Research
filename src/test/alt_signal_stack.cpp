@@ -135,7 +135,39 @@ AltSignalStackReport& MutableReport()
     // Boost's runs a longjmp and formats a message.
     wanted += 8192;
 
+    // Record the sizes BEFORE anything that can throw. If resize() below fails,
+    // the report should say what was asked for rather than zero -- a failure
+    // message reporting "0 bytes" describes the uninitialised struct, not what
+    // went wrong.
+    report.requested = wanted;
+    report.kernel_minimum = static_cast<std::size_t>(::getauxval(AT_MINSIGSTKSZ));
+
     AltSignalStackStorage().resize(wanted);
+
+    // Do not clobber an alternate stack somebody else installed.
+    //
+    // A sanitizer runtime or a crash handler may have installed one before this
+    // runs, and replacing it would break whatever depends on it. Query first --
+    // the same courtesy Boost extends, and the absence of which in Boost's
+    // TEARDOWN is what makes this file need the --use_alt_stack=no switch
+    // alongside it.
+    //
+    // The one case worth overriding is an existing stack too small for the
+    // kernel's minimum, which is the very failure this file exists to prevent:
+    // leaving that in place would be deferring to a setting that cannot work.
+    stack_t existing{};
+    const bool queried = ::sigaltstack(nullptr, &existing) == 0;
+    const bool someone_else_has_one = queried && !(existing.ss_flags & SS_DISABLE);
+    const bool theirs_is_adequate = someone_else_has_one
+        && existing.ss_size >= report.kernel_minimum;
+
+    if (theirs_is_adequate) {
+        report.installed = true;
+        report.deferred_to_existing = true;
+        report.requested = existing.ss_size;
+
+        return true;
+    }
 
     stack_t alt_stack{};
     alt_stack.ss_sp = AltSignalStackStorage().data();
@@ -149,8 +181,6 @@ AltSignalStackReport& MutableReport()
     const bool ok = ::sigaltstack(&alt_stack, nullptr) == 0;
 
     report.installed = ok;
-    report.requested = wanted;
-    report.kernel_minimum = static_cast<std::size_t>(::getauxval(AT_MINSIGSTKSZ));
 
     return ok;
 
