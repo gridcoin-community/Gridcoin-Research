@@ -11,6 +11,7 @@
 #include "gridcoin/pool.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/project.h"
+#include "gridcoin/autogreylist.h"
 #include "gridcoin/scraper/scraper_registry.h"
 #include "gridcoin/sidestake.h"
 #include "node/blockstorage.h"
@@ -4041,7 +4042,7 @@ UniValue listprojects(const UniValue& params)
         filter = GRC::Project::ProjectFilterFlag::ALL;
     }
 
-    for (const auto& project : GRC::GetWhitelist().Snapshot(filter).Sorted()) {
+    for (const auto& project : GRC::GetWhitelist().Snapshot(GRC::GreylistState::AUTHORITATIVE, filter).Sorted()) {
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("version", (int)project.m_version);
@@ -4182,7 +4183,7 @@ UniValue getautogreylist(const UniValue& params)
 
     UniValue res(UniValue::VOBJ);
 
-    std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::GetAutoGreylistCache();
+    std::shared_ptr<GRC::AutoGreylistService> greylist_ptr = GRC::GetAutoGreylistCache();
 
     greylist_ptr->Refresh();
 
@@ -4536,7 +4537,10 @@ UniValue projects(const UniValue& params)
 {
     UniValue res(UniValue::VARR);
     const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
-    const GRC::WhitelistSnapshot whitelist = GRC::GetWhitelist().Snapshot();
+    // AUTHORITATIVE: the rows come from the researcher's registry-backed project list, and
+    // the ACTIVE default filter selects on status, so the greylist overlay affects membership
+    // -- the committed superblock's state is the one that matches this data source.
+    const GRC::WhitelistSnapshot whitelist = GRC::GetWhitelist().Snapshot(GRC::GreylistState::AUTHORITATIVE);
 
     for (const auto& project_pair : researcher->Projects()) {
         const GRC::MiningProject& project = project_pair.second;

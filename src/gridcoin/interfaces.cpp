@@ -1049,7 +1049,8 @@ public:
         // whitelist-only pass below (the former GUI took two snapshots; one is
         // more internally consistent and cheaper).
         const GRC::WhitelistSnapshot whitelist =
-            GRC::GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
+            GRC::GetWhitelist().Snapshot(GRC::GreylistState::PENDING,
+                                         GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
 
         std::vector<std::string> excluded_projects;
         {
@@ -1167,7 +1168,7 @@ public:
         // of the wizard's parallel name/url lists, so their indices still align.
         std::vector<WhitelistProject> result;
 
-        for (const auto& project : GRC::GetWhitelist().Snapshot().Sorted()) {
+        for (const auto& project : GRC::GetWhitelist().Snapshot(GRC::GreylistState::PENDING).Sorted()) {
             result.push_back({project.m_name, project.m_url});
         }
 
@@ -1190,6 +1191,7 @@ public:
         }
 
         for (const auto& project : GRC::GetWhitelist().Snapshot(
+                 GRC::GreylistState::PENDING,
                  GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED)) {
             std::string base_url = project.BaseUrl();
             if (!base_url.empty() && base_url.back() != '/') {

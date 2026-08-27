@@ -154,6 +154,7 @@ add_library(gridcoin_util STATIC
     gridcoin/mnemonics.cpp
     gridcoin/mrc.cpp
     gridcoin/pool.cpp
+    gridcoin/autogreylist.cpp
     gridcoin/project.cpp
     gridcoin/protocol.cpp
     gridcoin/quorum.cpp

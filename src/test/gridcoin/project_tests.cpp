@@ -4,6 +4,7 @@
 
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
+#include "gridcoin/autogreylist.h"
 #include "gridcoin/quorum.h"
 #include "util/string.h"
 #include "wallet/generated_type.h"
@@ -572,19 +573,19 @@ BOOST_AUTO_TEST_CASE(it_adds_whitelisted_projects_from_contract_data)
     int height = 0;
     int64_t time = 0;
 
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).size() == 0);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Enigma") == false);
+    BOOST_CHECK(whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE).size() == 0);
+    BOOST_CHECK(whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE).Contains("Enigma") == false);
 
     AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, false);
 
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).size() == 1);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Enigma") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE).size() == 1);
+    BOOST_CHECK(whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE).Contains("Enigma") == true);
 
     AddProjectEntry(2, "Foo", "http://foo.test", false, height++, time++, false);
 
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).size() == 2);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Enigma") == true);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Foo") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE).size() == 2);
+    BOOST_CHECK(whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE).Contains("Enigma") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE).Contains("Foo") == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_removes_whitelisted_projects_from_contract_data)
@@ -596,13 +597,13 @@ BOOST_AUTO_TEST_CASE(it_removes_whitelisted_projects_from_contract_data)
 
     AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
 
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).size() == 1);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Enigma") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE).size() == 1);
+    BOOST_CHECK(whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE).Contains("Enigma") == true);
 
     DeleteProjectEntry(1, "Enigma", height++, time++, false);
 
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).size() == 0);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Enigma") == false);
+    BOOST_CHECK(whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE).size() == 0);
+    BOOST_CHECK(whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE).Contains("Enigma") == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_does_not_mutate_existing_snapshots)
@@ -615,14 +616,14 @@ BOOST_AUTO_TEST_CASE(it_does_not_mutate_existing_snapshots)
     AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
     AddProjectEntry(2, "Foo", "http://foo.test", true, height++, time++, false);
 
-    auto snapshot = whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false);
+    auto snapshot = whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE);
 
     DeleteProjectEntry(1, "Enigma", height, time, false);
 
     BOOST_CHECK(snapshot.Contains("Enigma") == true);
 
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Enigma") == false);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Foo") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE).Contains("Enigma") == false);
+    BOOST_CHECK(whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE).Contains("Foo") == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_overwrites_projects_with_the_same_name)
@@ -635,7 +636,7 @@ BOOST_AUTO_TEST_CASE(it_overwrites_projects_with_the_same_name)
     AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
     AddProjectEntry(2, "Enigma", "http://new.enigma.test", true, height++, time++, false);
 
-    auto snapshot = whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false);
+    auto snapshot = whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ACTIVE);
     BOOST_CHECK(snapshot.size() == 1);
 
     for (const auto& project : snapshot) {
@@ -1382,7 +1383,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
 
     GRC::Whitelist& whitelist = GRC::GetWhitelist();
 
-    std::shared_ptr<GRC::AutoGreylist> auto_greylist = GRC::GetAutoGreylistCache();
+    std::shared_ptr<GRC::AutoGreylistService> auto_greylist = GRC::GetAutoGreylistCache();
 
     whitelist.Reset();
 
@@ -1510,7 +1511,7 @@ BOOST_AUTO_TEST_CASE(no_records_zero_baseline_does_not_collapse_was)
     // Returns {WAS as double, meets_greylist_criteria} for the head/baseline.
     auto run = [](const std::vector<std::optional<uint64_t>>& tc_sequence) {
         GRC::Whitelist& whitelist = GRC::GetWhitelist();
-        std::shared_ptr<GRC::AutoGreylist> auto_greylist = GRC::GetAutoGreylistCache();
+        std::shared_ptr<GRC::AutoGreylistService> auto_greylist = GRC::GetAutoGreylistCache();
 
         whitelist.Reset();
 
@@ -1592,6 +1593,146 @@ BOOST_AUTO_TEST_CASE(no_records_zero_baseline_does_not_collapse_was)
 }
 
 //!
+//! \brief Below the redesign gate, the facade's state selectors must be degenerate.
+//!
+//! Stage 1 of the AutoGreylist V2 redesign converts every consumer to the required
+//! GreylistState selector while all producer writes still go through the frozen V1 class.
+//! The contract this pins: below AutoGreylistRedesignHeight, AUTHORITATIVE and PENDING
+//! resolve to the same (V1) cache -- identical answers from Contains(), IsDeepCopyActive(),
+//! Get() and the Snapshot() overlay -- and NONE applies no overlay at all. This is what makes
+//! the call-site conversion carry no behavioral risk pre-gate.
+//!
+BOOST_AUTO_TEST_CASE(facade_state_selectors_are_degenerate_below_the_gate)
+{
+    GRC::Whitelist& whitelist = GRC::GetWhitelist();
+    std::shared_ptr<GRC::AutoGreylistService> auto_greylist = GRC::GetAutoGreylistCache();
+
+    whitelist.Reset();
+
+    int height = 0;
+    int64_t time = 0;
+
+    auto unit_test_blocks = std::make_shared<std::map<int, std::pair<CBlockIndex*, GRC::SuperblockPtr>>>();
+
+    // Two projects: one with a flat total-credit history (meets the greylist criteria: WAS 0
+    // and 20 zero-credit days) and one healthy riser (does not).
+    AddProjectEntry(3, "flatproj", "http://flat.test", false, height, time, true);
+    AddProjectEntry(3, "growproj", "http://grow.test", false, height, time, false);
+
+    CBlockIndex* whitelist_index_entry = new CBlockIndex;
+    ++height;
+    ++time;
+
+    CBlockIndex* index_ptr = whitelist_index_entry;
+    CBlockIndex* index_ptr_prev = nullptr;
+
+    for (uint64_t i = 1; i <= 12; ++i) {
+        auto_greylist->Reset();
+
+        index_ptr_prev = index_ptr;
+        index_ptr = new CBlockIndex;
+        index_ptr->nHeight = height;
+        index_ptr->nTime = time;
+        index_ptr->MarkAsSuperblock();
+        index_ptr->pprev = index_ptr_prev;
+
+        GRC::Superblock superblock = GRC::Superblock();
+
+        superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+            .insert(std::make_pair("flatproj", 500000));
+        superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+            .insert(std::make_pair("growproj", i * 1000));
+
+        GRC::SuperblockPtr superblock_ptr = GRC::SuperblockPtr();
+        superblock_ptr.Replace(superblock);
+        superblock_ptr.Rebind(index_ptr);
+
+        unit_test_blocks->insert(std::make_pair(height, std::make_pair(index_ptr, superblock_ptr)));
+        auto_greylist->RefreshWithSuperblock(superblock_ptr, unit_test_blocks);
+
+        ++height;
+        ++time;
+    }
+
+    // Precondition on the fixture itself: the V1 walker greylists flatproj and not growproj.
+    bool flat_meets = false;
+    bool grow_meets = false;
+    for (auto iter = auto_greylist->begin(); iter != auto_greylist->end(); ++iter) {
+        if (iter->first == "flatproj") flat_meets = iter->second.m_meets_greylisting_crit;
+        if (iter->first == "growproj") grow_meets = iter->second.m_meets_greylisting_crit;
+    }
+    BOOST_REQUIRE(flat_meets == true);
+    BOOST_REQUIRE(grow_meets == false);
+
+    // ---- Contains: the two overlay selectors agree with each other and with V1 truth; ----
+    // ---- NONE always answers false. ----
+    BOOST_CHECK(auto_greylist->Contains(GRC::GreylistState::PENDING, "flatproj") == true);
+    BOOST_CHECK(auto_greylist->Contains(GRC::GreylistState::AUTHORITATIVE, "flatproj") == true);
+    BOOST_CHECK(auto_greylist->Contains(GRC::GreylistState::PENDING, "growproj") == false);
+    BOOST_CHECK(auto_greylist->Contains(GRC::GreylistState::AUTHORITATIVE, "growproj") == false);
+    BOOST_CHECK(auto_greylist->Contains(GRC::GreylistState::NONE, "flatproj") == false);
+
+    // only_auto_greylisted == false matches any candidate entry (V1 semantics), identically
+    // through either selector.
+    BOOST_CHECK(auto_greylist->Contains(GRC::GreylistState::PENDING, "growproj", false) == true);
+    BOOST_CHECK(auto_greylist->Contains(GRC::GreylistState::AUTHORITATIVE, "growproj", false) == true);
+
+    // ---- IsDeepCopyActive: identical across selectors (heights 1..N are below the ----
+    // ---- deep-copy gate on MAIN, so both report the V1 answer: false). ----
+    BOOST_CHECK(auto_greylist->IsDeepCopyActive(GRC::GreylistState::PENDING)
+                == auto_greylist->IsDeepCopyActive(GRC::GreylistState::AUTHORITATIVE));
+    BOOST_CHECK(auto_greylist->IsDeepCopyActive(GRC::GreylistState::PENDING) == false);
+
+    // ---- Get: both selectors yield an engaged V1-tagged computation with no key, equal ----
+    // ---- membership, and membership matching the V1 criteria flags. ----
+    const auto pending = auto_greylist->Get(GRC::GreylistState::PENDING);
+    const auto authoritative = auto_greylist->Get(GRC::GreylistState::AUTHORITATIVE);
+
+    BOOST_REQUIRE(pending.has_value());
+    BOOST_REQUIRE(authoritative.has_value());
+    BOOST_CHECK(pending->m_version == GRC::GreylistVersion::V1);
+    BOOST_CHECK(authoritative->m_version == GRC::GreylistVersion::V1);
+    BOOST_CHECK(pending->m_key.IsNull());
+    BOOST_CHECK(pending->m_from_record == false);
+    BOOST_CHECK(pending->m_auto_greylisted == authoritative->m_auto_greylisted);
+    BOOST_CHECK(pending->m_auto_greylisted == std::set<std::string>{"flatproj"});
+
+    BOOST_CHECK(auto_greylist->Get(GRC::GreylistState::NONE).has_value() == false);
+
+    // ---- Snapshot: NONE applies no overlay (read FIRST -- below the gate the legacy ----
+    // ---- shallow-copy overlay mutates the registry in place, so overlay snapshots ----
+    // ---- must come after); the two overlay selectors then produce identical views. ----
+    for (const auto& entry : whitelist.Snapshot(GRC::GreylistState::NONE,
+                                                GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED)) {
+        BOOST_CHECK(entry.m_status == GRC::ProjectEntryStatus::ACTIVE);
+    }
+
+    std::map<std::string, GRC::ProjectEntryStatus> pending_status;
+    for (const auto& entry : whitelist.Snapshot(GRC::GreylistState::PENDING,
+                                                GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED)) {
+        pending_status[entry.m_name] = entry.m_status.Value();
+    }
+
+    std::map<std::string, GRC::ProjectEntryStatus> authoritative_status;
+    for (const auto& entry : whitelist.Snapshot(GRC::GreylistState::AUTHORITATIVE,
+                                                GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED)) {
+        authoritative_status[entry.m_name] = entry.m_status.Value();
+    }
+
+    BOOST_CHECK(pending_status == authoritative_status);
+    BOOST_CHECK(pending_status["flatproj"] == GRC::ProjectEntryStatus::AUTO_GREYLISTED);
+    BOOST_CHECK(pending_status["growproj"] == GRC::ProjectEntryStatus::ACTIVE);
+
+    // Clean up the shared singletons and the synthetic chain.
+    for (auto& it : *unit_test_blocks) delete it.second.first;
+    unit_test_blocks->clear();
+    delete whitelist_index_entry;
+
+    auto_greylist->Reset();
+    whitelist.Reset();
+}
+
+//!
 //! \brief Snapshot's auto-greylist overlay must NOT mutate the underlying registry entries.
 //!
 //! Reproduces the consensus bug in Whitelist::Snapshot(): the override working copy at
@@ -1613,7 +1754,7 @@ BOOST_AUTO_TEST_CASE(snapshot_overlay_must_not_mutate_registry_entries)
     using Filter = GRC::ProjectEntry::ProjectFilterFlag;
 
     GRC::Whitelist& whitelist = GRC::GetWhitelist();
-    std::shared_ptr<GRC::AutoGreylist> auto_greylist = GRC::GetAutoGreylistCache();
+    std::shared_ptr<GRC::AutoGreylistService> auto_greylist = GRC::GetAutoGreylistCache();
 
     const std::string name = "snapshot_mutation_test";
     const std::string url = "http://snapshot.mutation.test";
@@ -1697,20 +1838,20 @@ BOOST_AUTO_TEST_CASE(snapshot_overlay_must_not_mutate_registry_entries)
     auto_greylist->RefreshWithSuperblock(superblock_ptr, unit_test_blocks);
 
     // Precondition: the project now meets greylisting criteria (is in the auto-greylist).
-    BOOST_REQUIRE(auto_greylist->Contains(name));
+    BOOST_REQUIRE(auto_greylist->Contains(GRC::GreylistState::PENDING, name));
 
     // Take a Snapshot WITH the overlay applied. On the buggy shallow-copy Snapshot this mutates
     // the shared registry ProjectEntry in place. The test drives RefreshWithSuperblock above so the
     // greylist reflects the synthetic superblock series; the chain-handler-driven Refresh path is
     // bypassed in this unit-test setup.
-    whitelist.Snapshot(Filter::ALL_BUT_DELETED, /*include_override=*/true);
+    whitelist.Snapshot(GRC::GreylistState::PENDING, Filter::ALL_BUT_DELETED);
 
     // Read back the in-memory registry status WITHOUT re-applying the overlay
     // (include_override=false) -- this reflects whatever the previous Snapshot left behind in
     // m_project_entries.
     Status in_memory_status = Status::UNKNOWN;
     bool found = false;
-    for (const auto& entry : whitelist.Snapshot(Filter::ALL_BUT_DELETED, false)) {
+    for (const auto& entry : whitelist.Snapshot(GRC::GreylistState::NONE, Filter::ALL_BUT_DELETED)) {
         if (entry.m_name == name) {
             in_memory_status = entry.m_status.Value();
             found = true;
@@ -1776,7 +1917,7 @@ BOOST_AUTO_TEST_CASE(it_applies_benefit_of_doubt_correctly)
 
     GRC::Whitelist& whitelist = GRC::GetWhitelist();
 
-    std::shared_ptr<GRC::AutoGreylist> auto_greylist = GRC::GetAutoGreylistCache();
+    std::shared_ptr<GRC::AutoGreylistService> auto_greylist = GRC::GetAutoGreylistCache();
 
     whitelist.Reset();
 
@@ -1930,7 +2071,7 @@ BOOST_AUTO_TEST_CASE(push_superblock_heals_corruption_at_gate_crossing)
     using Filter = GRC::ProjectEntry::ProjectFilterFlag;
 
     GRC::Whitelist& whitelist = GRC::GetWhitelist();
-    std::shared_ptr<GRC::AutoGreylist> auto_greylist = GRC::GetAutoGreylistCache();
+    std::shared_ptr<GRC::AutoGreylistService> auto_greylist = GRC::GetAutoGreylistCache();
 
     const std::string name = "push_heal_test_project";
     const std::string url = "http://push.heal.test";
@@ -2031,18 +2172,18 @@ BOOST_AUTO_TEST_CASE(push_superblock_heals_corruption_at_gate_crossing)
 
     auto_greylist->Reset();
     auto_greylist->RefreshWithSuperblock(synth_head_ptr, unit_test_blocks);
-    BOOST_REQUIRE(auto_greylist->Contains(name));
+    BOOST_REQUIRE(auto_greylist->Contains(GRC::GreylistState::PENDING, name));
 
     // Synthetic SBs are at heights 1..N (all pre-gate at 100); m_deep_copy_active should be false.
-    BOOST_REQUIRE(!auto_greylist->IsDeepCopyActive());
+    BOOST_REQUIRE(!auto_greylist->IsDeepCopyActive(GRC::GreylistState::PENDING));
 
     // ---- Step 3: trigger the legacy in-place overlay mutation (corruption simulated) ----
-    whitelist.Snapshot(Filter::ALL_BUT_DELETED, /*include_override=*/true);
+    whitelist.Snapshot(GRC::GreylistState::PENDING, Filter::ALL_BUT_DELETED);
 
     {
         Status in_memory_status = Status::UNKNOWN;
         bool found = false;
-        for (const auto& entry : whitelist.Snapshot(Filter::ALL_BUT_DELETED, /*include_override=*/false)) {
+        for (const auto& entry : whitelist.Snapshot(GRC::GreylistState::NONE, Filter::ALL_BUT_DELETED)) {
             if (entry.m_name == name) {
                 in_memory_status = entry.m_status.Value();
                 found = true;
@@ -2072,13 +2213,13 @@ BOOST_AUTO_TEST_CASE(push_superblock_heals_corruption_at_gate_crossing)
     GRC::Quorum::PushSuperblock(pre_gate_ptr);
 
     // Gate did NOT cross (pre_gate_ptr at height 50 < gate 100); m_deep_copy_active stays false.
-    BOOST_CHECK(!auto_greylist->IsDeepCopyActive());
+    BOOST_CHECK(!auto_greylist->IsDeepCopyActive(GRC::GreylistState::PENDING));
 
     // Corruption persists -- pre-gate push does not cross the gate.
     {
         Status in_memory_status = Status::UNKNOWN;
         bool found = false;
-        for (const auto& entry : whitelist.Snapshot(Filter::ALL_BUT_DELETED, /*include_override=*/false)) {
+        for (const auto& entry : whitelist.Snapshot(GRC::GreylistState::NONE, Filter::ALL_BUT_DELETED)) {
             if (entry.m_name == name) {
                 in_memory_status = entry.m_status.Value();
                 found = true;
@@ -2105,14 +2246,14 @@ BOOST_AUTO_TEST_CASE(push_superblock_heals_corruption_at_gate_crossing)
     // Gate crossed forward; m_deep_copy_active is now true. Asserting this separately from the
     // healed-status check below localizes future regressions: if this fails the gate detector itself
     // is broken; if this passes but the status check fails the ReinitFromDisk side-effect is broken.
-    BOOST_CHECK(auto_greylist->IsDeepCopyActive());
+    BOOST_CHECK(auto_greylist->IsDeepCopyActive(GRC::GreylistState::PENDING));
 
     // Gate crossing fired -> ReinitFromDisk rebuilt m_project_entries from LevelDB ->
     // in-memory status is back to ACTIVE.
     {
         Status in_memory_status = Status::UNKNOWN;
         bool found = false;
-        for (const auto& entry : whitelist.Snapshot(Filter::ALL_BUT_DELETED, /*include_override=*/false)) {
+        for (const auto& entry : whitelist.Snapshot(GRC::GreylistState::NONE, Filter::ALL_BUT_DELETED)) {
             if (entry.m_name == name) {
                 in_memory_status = entry.m_status.Value();
                 found = true;

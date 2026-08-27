@@ -21,9 +21,14 @@
 extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
 extern CCriticalSection cs_ScraperGlobals;
 
+namespace GRC {
+class WhitelistSnapshot; // Forward for the greylist parameter threaded through the stats functions.
+} // namespace GRC
+
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
-extern ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
+extern ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const GRC::WhitelistSnapshot& greylist,
+                                                                                  const ConvergedManifest& StructConvergedManifest);
 
 class CBlockIndex;
 struct ConvergedScraperStats; // Forward for Superblock
@@ -1363,8 +1368,13 @@ public:
     //! \return A new superblock instance that contains the imported scraper
     //! statistics.
     //!
+    //! \param update_pending_cache True when the candidate is built from the convergence at
+    //! the head (superblock construction/validation); false for re-derivations of PAST
+    //! convergences, which must not clobber live pending greylist state. Deliberately not
+    //! defaulted -- a new call site must decide (as must the version).
     static Superblock FromConvergence(const ConvergedScraperStats &stats,
-        const uint32_t version = Superblock::CURRENT_VERSION);
+        const uint32_t version,
+        bool update_pending_cache);
 
     //!
     //! \brief Initialize a superblock from the provided scraper statistics.
@@ -1669,11 +1679,15 @@ struct ConvergedScraperStats
 {
     ConvergedScraperStats() : Convergence(), NewFormatSuperblock() { /* All defaults */ }
 
-    ConvergedScraperStats(const int64_t nTime_in, const ConvergedManifest& Convergence) : Convergence(Convergence)
+    //! The greylist snapshot is a required parameter (rather than fetched from the global
+    //! internally) so this constructor's greylist dependency is explicit at the call site and
+    //! carries the caller's GreylistState selection.
+    ConvergedScraperStats(const int64_t nTime_in, const ConvergedManifest& Convergence,
+                          const GRC::WhitelistSnapshot& greylist) : Convergence(Convergence)
     {
         nTime = nTime_in;
 
-        mScraperConvergedStats = GetScraperStatsByConvergedManifest(Convergence);
+        mScraperConvergedStats = GetScraperStatsByConvergedManifest(greylist, Convergence);
     }
 
     // Flag to indicate cache is clean or dirty (i.e. state change of underlying statistics has occurred.

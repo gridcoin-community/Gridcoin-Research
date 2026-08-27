@@ -6,6 +6,7 @@
 #include <key_io.h>
 #include "chainparams.h"
 #include "gridcoin/project.h"
+#include "gridcoin/autogreylist.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/magnitude.h"
 #include <gridcoin/md5.h>
@@ -21,8 +22,10 @@
 using namespace GRC;
 
 // TODO: use a header
-ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
-ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest);
+ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsByConvergedManifest(const GRC::WhitelistSnapshot& greylist,
+                                                                            const ConvergedManifest& StructConvergedManifest);
+ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsFromSingleManifest(const GRC::WhitelistSnapshot& greylist,
+                                                                           CScraperManifest_shared_ptr& manifest);
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
 mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 Superblock ScraperGetSuperblockContract(
@@ -883,7 +886,11 @@ private: // SuperblockValidator classes
         //!
         QuorumHash ComputeQuorumHash() const
         {
-            const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsByConvergedManifest(m_convergence);
+            // Validator recompute over convergence-derived data: the pending greylist is the
+            // one that matches it (the data-source rule).
+            const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsByConvergedManifest(
+                GetWhitelist().Snapshot(GreylistState::PENDING, GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
+                m_convergence);
 
             return QuorumHash::Hash(stats_and_verified_beacons);
         }
@@ -1576,7 +1583,9 @@ private: // SuperblockValidator methods
     //!
     bool TryManifest(CScraperManifest_shared_ptr& manifest) const
     {
-        const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsFromSingleManifest(manifest);
+        const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsFromSingleManifest(
+            GetWhitelist().Snapshot(GreylistState::PENDING, GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
+            manifest);
 
         return QuorumHash::Hash(stats_and_verified_beacons) == m_quorum_hash;
     }
@@ -1843,7 +1852,7 @@ std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
     CreateSuperblock();
 
     // Get a read-only view of the current project greylist.
-    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED, true);
+    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GreylistState::PENDING, GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED);
 
     const std::string cpid_str = cpid.ToString();
     const Span<const char> cpid_span = Span{cpid_str};

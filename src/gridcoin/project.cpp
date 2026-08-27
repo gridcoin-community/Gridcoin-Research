@@ -6,6 +6,7 @@
 #include "node/blockstorage.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/project.h"
+#include "gridcoin/autogreylist.h"
 #include "gridcoin/quorum.h"
 #include "node/ui_interface.h"
 #include "chain.h"
@@ -29,9 +30,21 @@ Whitelist& GRC::GetWhitelist()
     return g_whitelist;
 }
 
-std::shared_ptr<AutoGreylist> GRC::GetAutoGreylistCache()
+std::shared_ptr<AutoGreylistService> GRC::GetAutoGreylistCache()
 {
     return GRC::GetWhitelist().GetAutoGreylist();
+}
+
+// Out-of-line because constructing m_auto_greylist requires the complete AutoGreylistService
+// type, which project.h only forward-declares.
+Whitelist::Whitelist()
+    : m_project_entries()
+    , m_pending_project_entries()
+    , m_expired_project_entries()
+    , m_project_first_actives()
+    , m_project_db(1)
+    , m_auto_greylist(std::make_shared<AutoGreylistService>())
+{
 }
 
 
@@ -436,10 +449,10 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in,
     }
 
     // We need the current whitelist, including all records except deleted. This will include greylisted projects.
-    // include_override is set to false because each refresh of the auto greylist must start with the underlying
+    // GreylistState::NONE (formerly include_override = false) because each refresh of the auto greylist must start with the underlying
     // whitelist state (the on-Snapshot refresh-recursion that previously required refresh_greylist=false here is
     // now impossible -- Refresh fires explicitly at the chain handler points, not from inside Snapshot).
-    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED, false);
+    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
 
     // Capture the Whitelist first-actives by value BEFORE taking autogreylist_lock. GetProjectsFirstActive()
     // self-acquires cs_lock; calling it while holding autogreylist_lock (as the post-PR2997 code did) formed the
@@ -624,7 +637,7 @@ void AutoGreylist::RefreshWithAndUpdateSuperblock(Superblock& superblock) EXCLUS
     // Here we want to get the whitelist with the greylist override applied. The on-Snapshot refresh-recursion
     // concern that previously required refresh_greylist=false here is now impossible -- Refresh fires explicitly
     // at the chain handler points, not from inside Snapshot.
-    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED, true);
+    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GreylistState::PENDING, GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
 
     // Update the superblock object with the project greylist status.
     for (const auto& project : whitelist) {
@@ -672,8 +685,8 @@ void AutoGreylist::Reset()
 // Class: Whitelist (Registry)
 // -----------------------------------------------------------------------------
 
-WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& filter,
-                                      const bool& include_override) const
+WhitelistSnapshot Whitelist::Snapshot(GreylistState state,
+                                      const ProjectEntry::ProjectFilterFlag& filter) const
 {
     ProjectList projects;
 
@@ -709,7 +722,7 @@ WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& fil
     // private copies and never writes through to the shared registry entries. Pre-gate we retain the legacy shallow
     // copy (whose override mutates the registry entries in place) so pre-gate consensus behavior is unchanged. The
     // gate is carried on the AutoGreylist (set from the active superblock height in RefreshWithSuperblock).
-    const bool deep_copy = m_auto_greylist != nullptr && m_auto_greylist->IsDeepCopyActive();
+    const bool deep_copy = m_auto_greylist != nullptr && m_auto_greylist->IsDeepCopyActive(state);
 
     ProjectEntryMap project_entries;
 
@@ -722,12 +735,12 @@ WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& fil
     }
 
     for (auto& iter : project_entries) {
-        if (include_override) {
+        if (state != GreylistState::NONE) {
             // This is the actual override. The most important thing here is the greylist_ptr->Contains(iter.first) part. This
             // applies the current state of the greylist at the time of the construction of the whitelist snapshot, without
             // disturbing the underlying projects registry.
 
-            bool in_greylist = m_auto_greylist != nullptr ? m_auto_greylist->Contains(iter.first) : false;
+            bool in_greylist = m_auto_greylist != nullptr ? m_auto_greylist->Contains(state, iter.first) : false;
 
             // If the project does NOT have a status of auto greylist override, and it is either active or already manually
             // greylisted, then if it is in the greylist, mark with the status auto greylisted.
@@ -1162,7 +1175,7 @@ Whitelist::ProjectEntryMap Whitelist::GetProjectsFromDisk()
     return m_project_db.GetCurrentEntriesFromDisk();
 }
 
-std::shared_ptr<AutoGreylist> Whitelist::GetAutoGreylist()
+std::shared_ptr<AutoGreylistService> Whitelist::GetAutoGreylist()
 {
     return m_auto_greylist;
 }
