@@ -336,6 +336,25 @@ public:
                           const Whitelist::ProjectEntryMap& project_first_actives,
                           std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>>
                               unit_test_blocks = nullptr);
+
+    //!
+    //! \brief Derive the superblock m_project_status record from a computed result and the
+    //! registry state.
+    //!
+    //! THE ONE RECORD RULE, shared by the producer (candidate stamping) and the validator
+    //! (acceptance-time recomputation) so the two cannot drift: a project's recorded status
+    //! is its registry status with the auto-greylist promotion applied -- ACTIVE or
+    //! MAN_GREYLISTED plus membership in the computed set promotes to AUTO_GREYLISTED,
+    //! AUTO_GREYLIST_OVERRIDE is never promoted -- and only AUTO_GREYLISTED and
+    //! MAN_GREYLISTED entries are recorded (ACTIVE is omitted to conserve space, matching
+    //! the historical write-site behavior).
+    //!
+    //! \param result The computed greylist result for the candidate head.
+    //! \param whitelist A Snapshot(GreylistState::NONE, ALL_BUT_DELETED) view (raw registry
+    //! status, no overlay -- the promotion is applied here, from the result).
+    //!
+    static Superblock::ProjectStatus DeriveProjectStatusRecord(const Result& result,
+                                                               const WhitelistSnapshot& whitelist);
 };
 
 } // namespace GRC

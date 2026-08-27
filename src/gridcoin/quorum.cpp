@@ -1847,9 +1847,16 @@ Magnitude Quorum::GetMagnitude(const MiningId mining_id) EXCLUSIVE_LOCKS_REQUIRE
 
 std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
 {
-    // Force a scraper convergence update if needed:
-    // TODO: unwrap this from ScraperGetSuperblockContract()
-    CreateSuperblock();
+    // Below the redesign gate: force a scraper convergence update if needed, preserving the
+    // pre-redesign display behavior exactly (the historical TODO to unwrap this side effect
+    // from ScraperGetSuperblockContract resolves at the gate). Above the gate the call is
+    // deliberately ABSENT: the pending greylist read below is keyed to the convergence this
+    // function's rows come from, so display stays self-consistent without a display RPC
+    // side-effecting an entire contract rebuild -- and if the convergence is stale, rows and
+    // greylist are stale TOGETHER, which is the data-source rule.
+    if (!IsAutoGreylistRedesignEnabled(nBestHeight)) {
+        CreateSuperblock();
+    }
 
     // Get a read-only view of the current project greylist.
     const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GreylistState::PENDING, GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED);

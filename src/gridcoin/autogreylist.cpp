@@ -4,11 +4,74 @@
 
 #include <gridcoin/autogreylist.h>
 
+#include "chain.h"
+#include "chainparams.h"
+#include "gridcoin/quorum.h"
+
 using namespace GRC;
+
+namespace {
+//!
+//! \brief The authoritative key: the committed superblock's (quorum) hash as a uint256.
+//! v3+ superblocks always carry a SHA256-kind quorum hash; anything else keys as null,
+//! which is harmless -- the key is an identity label, and freshness is push-driven.
+//!
+uint256 AuthoritativeKey(const SuperblockPtr& source)
+{
+    const QuorumHash quorum_hash = source->GetHash();
+
+    if (quorum_hash.Which() != QuorumHash::Kind::SHA256) {
+        return uint256();
+    }
+
+    return uint256(std::vector<unsigned char>(quorum_hash.Raw(), quorum_hash.Raw() + 32));
+}
+
+//!
+//! \brief Build a computation from a superblock's serialized m_project_status record.
+//!
+//! A pure map read: membership is exactly the AUTO_GREYLISTED entries. MAN_GREYLISTED
+//! entries in the record are redundant with the registry (which remains the source for
+//! manual and override status at overlay time) and absence means "not auto greylisted" --
+//! the record's write rule omits ACTIVE entries. No candidate detail: the record does not
+//! carry it, which m_from_record signals to consumers.
+//!
+GreylistComputation ComputationFromRecord(const SuperblockPtr& source)
+{
+    GreylistComputation result;
+    result.m_version = GreylistVersion::V2;
+    result.m_key = AuthoritativeKey(source);
+    result.m_from_record = true;
+
+    for (const auto& iter : source->m_project_status.m_project_status) {
+        if (iter.second.Value() == ProjectEntryStatus::AUTO_GREYLISTED) {
+            result.m_auto_greylisted.insert(iter.first);
+        }
+    }
+
+    return result;
+}
+
+//!
+//! \brief Build a computation from a V2 walker result.
+//!
+GreylistComputation ComputationFromWalk(AutoGreylistV2::Result result, const uint256& key)
+{
+    GreylistComputation computation;
+    computation.m_version = GreylistVersion::V2;
+    computation.m_key = key;
+    computation.m_from_record = false;
+    computation.m_auto_greylisted = std::move(result.m_auto_greylisted);
+    computation.m_candidates = std::move(result.m_candidates);
+
+    return computation;
+}
+} // anonymous namespace
 
 AutoGreylistService::AutoGreylistService()
     : m_v1(std::make_shared<AutoGreylist>())
     , m_authoritative_source()
+    , m_have_authoritative_source(false)
     , m_authoritative(std::nullopt)
     , m_pending(std::nullopt)
 {
@@ -18,10 +81,20 @@ AutoGreylistService::AutoGreylistService()
 
 void AutoGreylistService::Refresh() EXCLUSIVE_LOCKS_REQUIRED (cs_main)
 {
+    // Version dispatch, from the anchor height at write time (the producer holds cs_main and
+    // the anchor; readers never re-derive it). The anchor for the chain-handler refresh is
+    // the current committed superblock.
+    SuperblockPtr superblock_ptr = Quorum::CurrentSuperblock();
+
+    if (!superblock_ptr.IsEmpty() && IsAutoGreylistRedesignEnabled(superblock_ptr.m_height)) {
+        RefreshWithSuperblock(superblock_ptr);
+        return;
+    }
+
     // V1 producer write. Clear the V2 slots FIRST (scoped -- see the class comment: the
     // service lock must not be held across V1 refresh calls, which re-enter
-    // Whitelist::Snapshot and take cs_lock). The V2-producer arm of this dispatch arrives
-    // with the state-separation wiring; until then every anchor selects V1.
+    // Whitelist::Snapshot and take cs_lock). This arm also covers a reorg back across the
+    // gate: the V1 write clears the V2 slots, and no state migrates in either direction.
     ClearV2Slots();
 
     m_v1->Refresh();
@@ -32,21 +105,99 @@ void AutoGreylistService::RefreshWithSuperblock(
     std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks)
     EXCLUSIVE_LOCKS_REQUIRED (cs_main)
 {
+    if (!superblock_ptr_in.IsEmpty() && superblock_ptr_in->m_version >= 3
+        && IsAutoGreylistRedesignEnabled(superblock_ptr_in.m_height)) {
+        // V2 producer write, authoritative anchor: the committed superblock's serialized
+        // record IS the answer (DESIGN.md section 10.1) -- store the owning pointer and let
+        // the first read derive the membership map lazily. No walk, no whitelist dependency:
+        // this works during startup before the contract registry loads, which retires the
+        // "0 greylisted after restart" defect class. The pending slot is left alone (it is
+        // keyed independently, by convergence identity).
+        (void) unit_test_blocks; // The record read requires no chain traversal.
+
+        LOCK(m_service_lock);
+
+        m_authoritative_source = superblock_ptr_in;
+        m_have_authoritative_source = true;
+        m_authoritative = std::nullopt;
+
+        return;
+    }
+
+    // V1 producer write.
     ClearV2Slots();
 
     m_v1->RefreshWithSuperblock(superblock_ptr_in, unit_test_blocks);
 }
 
-void AutoGreylistService::RefreshWithAndUpdateSuperblock(Superblock& superblock,
-                                                         const uint256& convergence_id,
-                                                         bool update_pending_cache)
+void AutoGreylistService::RefreshWithAndUpdateSuperblock(
+    Superblock& superblock, const uint256& convergence_id, bool update_pending_cache,
+    std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks)
     EXCLUSIVE_LOCKS_REQUIRED (cs_main)
 {
-    // The convergence identity and the pending-cache election are consumed by the V2 arm of
-    // this dispatch (state-separation wiring); the V1 arm reproduces the frozen behavior,
-    // which keys and invalidates its single cache internally.
+    // Version dispatch: the pending anchor is the chain tip the candidate is bound to.
+    const int anchor_height = pindexBest != nullptr ? pindexBest->nHeight : 0;
+
+    if (pindexBest != nullptr && IsAutoGreylistRedesignEnabled(anchor_height)) {
+        // V2 producer write, pending anchor.
+        //
+        // Reuse: the pending state is keyed by convergence identity, and the walker is
+        // deterministic given (chain, candidate) -- so a candidate re-derived from the SAME
+        // convergence reuses the cached computation instead of walking again. This is the
+        // workload win of the separation: validation's cached-contract path and repeated
+        // convergence reads stop paying a 40-superblock walk each.
+        std::optional<GreylistComputation> cached;
+
+        {
+            LOCK(m_service_lock);
+
+            if (m_pending && m_pending->m_key == convergence_id) {
+                cached = m_pending;
+            }
+        }
+
+        if (!cached) {
+            // Compute fresh: bind the candidate to the tip, exactly as the V1 path does.
+            SuperblockPtr superblock_ptr;
+            superblock_ptr.Replace(superblock);
+            superblock_ptr.Rebind(pindexBest);
+
+            AutoGreylistV2::Result result = AutoGreylistV2::Compute(
+                superblock_ptr,
+                GetWhitelist().Snapshot(GreylistState::NONE,
+                                        GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
+                GetWhitelist().GetProjectsFirstActive(),
+                unit_test_blocks);
+
+            cached = ComputationFromWalk(std::move(result), convergence_id);
+        }
+
+        // Stamp the candidate's record through the ONE record rule (shared with the
+        // acceptance-time validator so producer and checker cannot drift).
+        {
+            AutoGreylistV2::Result stamp_input;
+            stamp_input.m_auto_greylisted = cached->m_auto_greylisted;
+
+            superblock.m_project_status = AutoGreylistV2::DeriveProjectStatusRecord(
+                stamp_input,
+                GetWhitelist().Snapshot(GreylistState::NONE,
+                                        GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED));
+        }
+
+        if (update_pending_cache) {
+            LOCK(m_service_lock);
+
+            m_pending = cached;
+        }
+
+        return;
+    }
+
+    // V1 producer write: the frozen behavior, including its internal cache-invalidation
+    // reset. The convergence identity and pending election are V2-arm concepts.
     (void) convergence_id;
     (void) update_pending_cache;
+    (void) unit_test_blocks;
 
     ClearV2Slots();
 
@@ -65,8 +216,18 @@ void AutoGreylistService::ClearV2Slots()
     LOCK(m_service_lock);
 
     m_authoritative_source = SuperblockPtr::Empty();
+    m_have_authoritative_source = false;
     m_authoritative = std::nullopt;
     m_pending = std::nullopt;
+}
+
+void AutoGreylistService::PrimeAuthoritativeLocked() const
+{
+    if (m_authoritative || !m_have_authoritative_source) {
+        return;
+    }
+
+    m_authoritative = ComputationFromRecord(m_authoritative_source);
 }
 
 // ---------------------------------------------------------------------------- consumers ----
@@ -80,16 +241,23 @@ bool AutoGreylistService::Contains(GreylistState state, const std::string& name,
 
     LOCK(m_service_lock);
 
+    PrimeAuthoritativeLocked();
+
+    // Pending serves its own slot when filled, and otherwise the authoritative state -- the
+    // base case: absent a convergence, pending equals authoritative (DESIGN.md section 10.7).
     const std::optional<GreylistComputation>& slot =
         (state == GreylistState::PENDING && m_pending) ? m_pending : m_authoritative;
 
     if (slot) {
-        // A V2-backed result. The membership set holds the projects meeting the greylist
-        // criteria, which answers the default (and overlay) question. The candidate-level
-        // "has any entry" question (only_auto_greylisted == false) gains per-project detail
-        // with the V2 walker; a record-derived result can only answer the criteria question.
-        (void) only_auto_greylisted;
-        return slot->m_auto_greylisted.count(name) > 0;
+        if (only_auto_greylisted || slot->m_from_record) {
+            // Membership: the criteria-meeting set. A record-derived result can only answer
+            // this question -- the record carries no non-greylisted candidate entries.
+            return slot->m_auto_greylisted.count(name) > 0;
+        }
+
+        // "Has any candidate entry" (V1's only_auto_greylisted == false semantics), from the
+        // walker's candidate detail.
+        return slot->m_candidates.count(name) > 0;
     }
 
     // V1 fall-through: cs_lock -> m_service_lock -> autogreylist_lock (leafward -- safe).
@@ -100,10 +268,13 @@ bool AutoGreylistService::IsDeepCopyActive(GreylistState state) const
 {
     LOCK(m_service_lock);
 
-    if ((state == GreylistState::PENDING && m_pending)
-        || (state == GreylistState::AUTHORITATIVE && m_authoritative)) {
-        // V2 only runs above the redesign gate, and the deep-copy gate is never above it (the
-        // ordering is enforced at startup), so a V2-backed result always deep-copies.
+    PrimeAuthoritativeLocked();
+
+    const bool v2_backed = (state == GreylistState::PENDING && m_pending) || m_authoritative;
+
+    if (v2_backed) {
+        // V2 only runs above the redesign gate, and the deep-copy gate is never above it
+        // (the ordering is enforced at startup), so a V2-backed result always deep-copies.
         return true;
     }
 
@@ -118,6 +289,8 @@ std::optional<GreylistComputation> AutoGreylistService::Get(GreylistState state)
 
     LOCK(m_service_lock);
 
+    PrimeAuthoritativeLocked();
+
     if (state == GreylistState::PENDING && m_pending) {
         return m_pending;
     }
@@ -131,6 +304,44 @@ std::optional<GreylistComputation> AutoGreylistService::Get(GreylistState state)
     // V1 fall-through: synthesize a computation from the V1 candidate map so the caller sees
     // one result shape either side of the gate. No key -- V1's cache does not expose one, and
     // below the gate no consumer needs it.
+    GreylistComputation result;
+    result.m_version = GreylistVersion::V1;
+    result.m_key = uint256();
+    result.m_from_record = false;
+
+    for (auto iter = m_v1->begin(); iter != m_v1->end(); ++iter) {
+        if (iter->second.m_meets_greylisting_crit) {
+            result.m_auto_greylisted.insert(iter->first);
+        }
+    }
+
+    return result;
+}
+
+// ---------------------------------------------------------------------------- reporting ----
+
+GreylistComputation AutoGreylistService::ComputeReport() const EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+{
+    SuperblockPtr superblock_ptr = Quorum::CurrentSuperblock();
+
+    if (!superblock_ptr.IsEmpty() && superblock_ptr->m_version >= 3
+        && IsAutoGreylistRedesignEnabled(superblock_ptr.m_height)) {
+        // A fresh walk against the committed head -- the same computation a validator runs
+        // to check the record, so this report doubles as an operator-visible cross-check of
+        // the recorded m_project_status. Value-returning: no cached state is touched.
+        AutoGreylistV2::Result result = AutoGreylistV2::Compute(
+            superblock_ptr,
+            GetWhitelist().Snapshot(GreylistState::NONE,
+                                    GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
+            GetWhitelist().GetProjectsFirstActive());
+
+        return ComputationFromWalk(std::move(result), AuthoritativeKey(superblock_ptr));
+    }
+
+    // Below the gate: preserve the pre-redesign getautogreylist behavior exactly (an explicit
+    // V1 refresh; the RPC reads V1 candidate detail through the transitional iterators).
+    m_v1->Refresh();
+
     GreylistComputation result;
     result.m_version = GreylistVersion::V1;
     result.m_key = uint256();

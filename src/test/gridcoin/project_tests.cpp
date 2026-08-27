@@ -2496,6 +2496,410 @@ BOOST_AUTO_TEST_CASE(v2_newly_joined_project_na_then_zero_history)
     }
 }
 
+namespace {
+//!
+//! \brief Guard pinning the redesign (and deep-copy, per the enforced ordering) gate heights
+//! for the state-separation tests, restoring the network defaults on scope exit. Uses the
+//! consensus-params idiom, NOT gArgs.ForceSetArg (an empty-string "clear" there silently
+//! activates a gate from genesis for the rest of the process).
+//!
+struct RedesignHeightGuard {
+    const int m_saved_redesign = Params().GetConsensus().AutoGreylistRedesignHeight;
+    const int m_saved_deep_copy = Params().GetConsensus().AutoGreylistDeepCopyHeight;
+
+    explicit RedesignHeightGuard(int gate_height)
+    {
+        const_cast<Consensus::Params&>(Params().GetConsensus()).AutoGreylistRedesignHeight = gate_height;
+        const_cast<Consensus::Params&>(Params().GetConsensus()).AutoGreylistDeepCopyHeight = gate_height;
+    }
+
+    ~RedesignHeightGuard()
+    {
+        const_cast<Consensus::Params&>(Params().GetConsensus()).AutoGreylistRedesignHeight = m_saved_redesign;
+        const_cast<Consensus::Params&>(Params().GetConsensus()).AutoGreylistDeepCopyHeight = m_saved_deep_copy;
+    }
+};
+
+//!
+//! \brief A synthetic superblock chain for driving the facade producers. Builds SBs at
+//! heights 1..N from per-project total-credit sequences and keeps ownership of the block
+//! index entries. The head SB is at height N; a tip index at height N+1 is provided for
+//! binding candidates (the pending anchor).
+//!
+struct FacadeChainFixture {
+    std::shared_ptr<std::map<int, std::pair<CBlockIndex*, GRC::SuperblockPtr>>> m_blocks;
+    std::vector<CBlockIndex*> m_owned;
+    GRC::SuperblockPtr m_head;
+    CBlockIndex* m_tip = nullptr; //!< Height N+1, pprev = the head SB's index.
+
+    explicit FacadeChainFixture(const std::map<std::string, std::vector<std::optional<uint64_t>>>& fixture)
+    {
+        GRC::Whitelist& whitelist = GRC::GetWhitelist();
+
+        whitelist.Reset();
+
+        m_blocks = std::make_shared<std::map<int, std::pair<CBlockIndex*, GRC::SuperblockPtr>>>();
+
+        int height = 0;
+        int64_t time = 0;
+
+        bool first = true;
+        size_t sequence_length = 0;
+        for (const auto& project : fixture) {
+            AddProjectEntry(3, project.first, "http://" + project.first + ".test", false, height, 0, first);
+            first = false;
+
+            if (sequence_length == 0) sequence_length = project.second.size();
+            BOOST_REQUIRE(project.second.size() == sequence_length);
+        }
+
+        CBlockIndex* base = new CBlockIndex;
+        m_owned.push_back(base);
+        ++height;
+        ++time;
+
+        CBlockIndex* index_ptr = base;
+
+        for (size_t i = 0; i < sequence_length; ++i) {
+            CBlockIndex* prev = index_ptr;
+            index_ptr = new CBlockIndex;
+            m_owned.push_back(index_ptr);
+            index_ptr->nHeight = height;
+            index_ptr->nTime = time;
+            index_ptr->MarkAsSuperblock();
+            index_ptr->pprev = prev;
+
+            GRC::Superblock superblock = GRC::Superblock();
+
+            for (const auto& project : fixture) {
+                if (project.second[i]) {
+                    superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+                        .insert(std::make_pair(project.first, *project.second[i]));
+                }
+            }
+
+            GRC::SuperblockPtr superblock_ptr = GRC::SuperblockPtr();
+            superblock_ptr.Replace(superblock);
+            superblock_ptr.Rebind(index_ptr);
+
+            m_blocks->insert(std::make_pair(height, std::make_pair(index_ptr, superblock_ptr)));
+            m_head = superblock_ptr;
+
+            ++height;
+            ++time;
+        }
+
+        m_tip = new CBlockIndex;
+        m_owned.push_back(m_tip);
+        m_tip->nHeight = height;
+        m_tip->nTime = time;
+        m_tip->pprev = index_ptr;
+    }
+
+    ~FacadeChainFixture()
+    {
+        GRC::GetAutoGreylistCache()->Reset();
+        GRC::GetWhitelist().Reset();
+
+        for (CBlockIndex* index : m_owned) delete index;
+    }
+};
+} // anonymous namespace
+
+//!
+//! \brief Above the gate, AUTHORITATIVE is READ from the superblock's m_project_status
+//! record -- never recomputed -- and the read carries its identity.
+//!
+//! The record-is-truth pin doubles as the vacuity guard for every future authoritative-path
+//! test: this fixture's total-credit history WOULD greylist the flat project if the walker
+//! ran, but the record is empty, and the authoritative read must report exactly what the
+//! record says (nothing greylisted). A synthetic fixture that forgets to populate
+//! m_project_status therefore CANNOT vacuously pass an assertion that expects walker-derived
+//! membership -- the mismatch this case pins is precisely what it would produce.
+//!
+BOOST_AUTO_TEST_CASE(facade_authoritative_is_read_from_the_record_above_the_gate)
+{
+    RedesignHeightGuard gate_guard(/*gate_height=*/0);
+
+    std::map<std::string, std::vector<std::optional<uint64_t>>> fx;
+    fx["flatproj"] = std::vector<std::optional<uint64_t>>(12, std::optional<uint64_t>(500000));
+    std::vector<std::optional<uint64_t>> rising;
+    for (uint64_t i = 1; i <= 12; ++i) rising.push_back(i * 1000);
+    fx["growproj"] = rising;
+
+    std::shared_ptr<GRC::AutoGreylistService> service = GRC::GetAutoGreylistCache();
+
+    // --- Empty record: the walker would greylist flatproj, the record says nothing is. ---
+    {
+        FacadeChainFixture chain(fx);
+
+        service->RefreshWithSuperblock(chain.m_head, chain.m_blocks);
+
+        const auto authoritative = service->Get(GRC::GreylistState::AUTHORITATIVE);
+        BOOST_REQUIRE(authoritative.has_value());
+        BOOST_CHECK(authoritative->m_version == GRC::GreylistVersion::V2);
+        BOOST_CHECK(authoritative->m_from_record == true);
+        BOOST_CHECK(authoritative->m_auto_greylisted.empty());
+        BOOST_CHECK(!service->Contains(GRC::GreylistState::AUTHORITATIVE, "flatproj"));
+
+        // The walker disagrees -- proving the read served the RECORD, not a recompute.
+        const auto walked = GRC::AutoGreylistV2::Compute(
+            chain.m_head,
+            GRC::GetWhitelist().Snapshot(GRC::GreylistState::NONE,
+                                         GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
+            GRC::GetWhitelist().GetProjectsFirstActive(),
+            chain.m_blocks);
+        BOOST_CHECK(walked.m_auto_greylisted.count("flatproj") == 1);
+    }
+
+    // --- Populated record: served verbatim, MAN_GREYLISTED entries excluded from the ---
+    // --- AUTO membership, and the deep-copy answer is hard-coded true for V2 reads. ---
+    {
+        FacadeChainFixture chain(fx);
+
+        GRC::Superblock recorded = *chain.m_head;
+        recorded.m_project_status.m_project_status.insert(
+            std::make_pair("flatproj", GRC::ProjectEntryStatus::AUTO_GREYLISTED));
+        recorded.m_project_status.m_project_status.insert(
+            std::make_pair("somemanual", GRC::ProjectEntryStatus::MAN_GREYLISTED));
+
+        GRC::SuperblockPtr recorded_ptr = chain.m_head;
+        recorded_ptr.Replace(recorded);
+
+        service->RefreshWithSuperblock(recorded_ptr, chain.m_blocks);
+
+        BOOST_CHECK(service->Contains(GRC::GreylistState::AUTHORITATIVE, "flatproj"));
+        BOOST_CHECK(!service->Contains(GRC::GreylistState::AUTHORITATIVE, "somemanual"));
+        BOOST_CHECK(!service->Contains(GRC::GreylistState::AUTHORITATIVE, "growproj"));
+        BOOST_CHECK(service->IsDeepCopyActive(GRC::GreylistState::AUTHORITATIVE));
+
+        // The Snapshot overlay above the gate promotes from the record.
+        std::map<std::string, GRC::ProjectEntryStatus> status;
+        for (const auto& entry : GRC::GetWhitelist().Snapshot(
+                 GRC::GreylistState::AUTHORITATIVE,
+                 GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED)) {
+            status[entry.m_name] = entry.m_status.Value();
+        }
+        BOOST_CHECK(status.at("flatproj") == GRC::ProjectEntryStatus::AUTO_GREYLISTED);
+        BOOST_CHECK(status.at("growproj") == GRC::ProjectEntryStatus::ACTIVE);
+    }
+}
+
+//!
+//! \brief The pending state: keyed by convergence identity with reuse, stamped through the
+//! one record rule, and TOTAL (absent a convergence, pending == authoritative).
+//!
+BOOST_AUTO_TEST_CASE(facade_pending_lifecycle_above_the_gate)
+{
+    RedesignHeightGuard gate_guard(/*gate_height=*/0);
+
+    struct TestStateGuard {
+        CBlockIndex* saved_pindexBest = pindexBest;
+        ~TestStateGuard() { pindexBest = saved_pindexBest; }
+    } test_state_guard;
+
+    std::map<std::string, std::vector<std::optional<uint64_t>>> fx;
+    fx["flatproj"] = std::vector<std::optional<uint64_t>>(12, std::optional<uint64_t>(500000));
+    std::vector<std::optional<uint64_t>> rising;
+    for (uint64_t i = 1; i <= 12; ++i) rising.push_back(i * 1000);
+    fx["growproj"] = rising;
+
+    FacadeChainFixture chain(fx);
+    std::shared_ptr<GRC::AutoGreylistService> service = GRC::GetAutoGreylistCache();
+
+    pindexBest = chain.m_tip;
+
+    // --- Base case first: authoritative primed, no pending -> pending == authoritative. ---
+    service->RefreshWithSuperblock(chain.m_head, chain.m_blocks);
+
+    const auto base_pending = service->Get(GRC::GreylistState::PENDING);
+    const auto base_authoritative = service->Get(GRC::GreylistState::AUTHORITATIVE);
+    BOOST_REQUIRE(base_pending.has_value() && base_authoritative.has_value());
+    BOOST_CHECK(base_pending->m_key == base_authoritative->m_key);
+    BOOST_CHECK(base_pending->m_from_record == base_authoritative->m_from_record);
+    BOOST_CHECK(base_pending->m_auto_greylisted == base_authoritative->m_auto_greylisted);
+
+    // --- Build a candidate from "convergence X": flatproj meets criteria via the walk. ---
+    GRC::Superblock candidate = GRC::Superblock();
+    candidate.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+        .insert(std::make_pair("flatproj", 500000));
+    candidate.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+        .insert(std::make_pair("growproj", 13000));
+
+    const uint256 convergence_x = uint256S("0x1111111111111111111111111111111111111111111111111111111111111111");
+    const uint256 convergence_y = uint256S("0x2222222222222222222222222222222222222222222222222222222222222222");
+
+    service->RefreshWithAndUpdateSuperblock(candidate, convergence_x, /*update_pending_cache=*/true,
+                                            chain.m_blocks);
+
+    // The candidate's record was stamped through the record rule.
+    BOOST_REQUIRE(candidate.m_project_status.m_project_status.count("flatproj") == 1);
+    BOOST_CHECK(candidate.m_project_status.m_project_status.at("flatproj").Value()
+                == GRC::ProjectEntryStatus::AUTO_GREYLISTED);
+    BOOST_CHECK(candidate.m_project_status.m_project_status.count("growproj") == 0);
+
+    const auto pending_x = service->Get(GRC::GreylistState::PENDING);
+    BOOST_REQUIRE(pending_x.has_value());
+    BOOST_CHECK(pending_x->m_key == convergence_x);
+    BOOST_CHECK(pending_x->m_from_record == false);
+    BOOST_CHECK(pending_x->m_auto_greylisted.count("flatproj") == 1);
+    BOOST_CHECK(service->Contains(GRC::GreylistState::PENDING, "flatproj"));
+
+    // The authoritative slot is untouched by the pending write (still the empty record).
+    BOOST_CHECK(!service->Contains(GRC::GreylistState::AUTHORITATIVE, "flatproj"));
+
+    // --- Key reuse: same convergence id with DIFFERENT candidate data must NOT rewalk. ---
+    GRC::Superblock altered = GRC::Superblock();
+    altered.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+        .insert(std::make_pair("flatproj", 999999)); // would change the walk if it ran
+
+    service->RefreshWithAndUpdateSuperblock(altered, convergence_x, /*update_pending_cache=*/true,
+                                            chain.m_blocks);
+
+    const auto pending_x_again = service->Get(GRC::GreylistState::PENDING);
+    BOOST_REQUIRE(pending_x_again.has_value());
+    BOOST_CHECK(pending_x_again->m_auto_greylisted == pending_x->m_auto_greylisted);
+    // And the reuse still stamped the new candidate from the cached membership.
+    BOOST_CHECK(altered.m_project_status.m_project_status.count("flatproj") == 1);
+
+    // --- A NEW convergence id recomputes. ---
+    GRC::Superblock candidate_y = GRC::Superblock();
+    candidate_y.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+        .insert(std::make_pair("flatproj", 500000));
+    candidate_y.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+        .insert(std::make_pair("growproj", 13000));
+
+    service->RefreshWithAndUpdateSuperblock(candidate_y, convergence_y, /*update_pending_cache=*/true,
+                                            chain.m_blocks);
+
+    const auto pending_y = service->Get(GRC::GreylistState::PENDING);
+    BOOST_REQUIRE(pending_y.has_value());
+    BOOST_CHECK(pending_y->m_key == convergence_y);
+
+    // --- update_pending_cache == false (a PAST convergence): stamps but does not clobber. ---
+    GRC::Superblock past_candidate = GRC::Superblock();
+    past_candidate.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+        .insert(std::make_pair("flatproj", 500000));
+
+    const uint256 convergence_past = uint256S("0x3333333333333333333333333333333333333333333333333333333333333333");
+    service->RefreshWithAndUpdateSuperblock(past_candidate, convergence_past,
+                                            /*update_pending_cache=*/false, chain.m_blocks);
+
+    BOOST_CHECK(past_candidate.m_project_status.m_project_status.count("flatproj") == 1);
+    const auto pending_after_past = service->Get(GRC::GreylistState::PENDING);
+    BOOST_REQUIRE(pending_after_past.has_value());
+    BOOST_CHECK(pending_after_past->m_key == convergence_y); // live state not clobbered
+}
+
+//!
+//! \brief The version-dispatch invariant across the gate: a V1-producer write clears both V2
+//! slots (a reorg back across the gate migrates no state in either direction).
+//!
+BOOST_AUTO_TEST_CASE(facade_v1_write_clears_v2_slots_across_the_gate)
+{
+    // Gate at height 100: the synthetic chain (heights 1..N) is BELOW it; a head pinned at
+    // height 150 is above.
+    RedesignHeightGuard gate_guard(/*gate_height=*/100);
+
+    std::map<std::string, std::vector<std::optional<uint64_t>>> fx;
+    fx["flatproj"] = std::vector<std::optional<uint64_t>>(12, std::optional<uint64_t>(500000));
+
+    FacadeChainFixture chain(fx);
+    std::shared_ptr<GRC::AutoGreylistService> service = GRC::GetAutoGreylistCache();
+
+    // Above-gate write: rebind the head to a synthetic index at height 150.
+    CBlockIndex above_gate_index;
+    above_gate_index.nHeight = 150;
+    above_gate_index.nTime = chain.m_head.m_timestamp;
+    above_gate_index.MarkAsSuperblock();
+
+    GRC::SuperblockPtr above_head = chain.m_head;
+    above_head.Rebind(&above_gate_index);
+
+    service->RefreshWithSuperblock(above_head, chain.m_blocks);
+
+    const auto v2_read = service->Get(GRC::GreylistState::AUTHORITATIVE);
+    BOOST_REQUIRE(v2_read.has_value());
+    BOOST_CHECK(v2_read->m_version == GRC::GreylistVersion::V2);
+
+    // Reorg back across the gate: a V1-producer write (head below the gate) clears the V2
+    // slots, and reads fall through to V1.
+    service->RefreshWithSuperblock(chain.m_head, chain.m_blocks);
+
+    const auto v1_read = service->Get(GRC::GreylistState::AUTHORITATIVE);
+    BOOST_REQUIRE(v1_read.has_value());
+    BOOST_CHECK(v1_read->m_version == GRC::GreylistVersion::V1);
+}
+
+//!
+//! \brief The stamp derives through the one record rule: registry manual and override
+//! statuses interact with computed membership exactly as the historical write site did.
+//!
+BOOST_AUTO_TEST_CASE(facade_stamp_respects_manual_and_override_status)
+{
+    RedesignHeightGuard gate_guard(/*gate_height=*/0);
+
+    struct TestStateGuard {
+        CBlockIndex* saved_pindexBest = pindexBest;
+        ~TestStateGuard() { pindexBest = saved_pindexBest; }
+    } test_state_guard;
+
+    // Five projects distinguished by registry status and history. The record rule is V1's
+    // overlay verbatim: ACTIVE or MAN_GREYLISTED plus criteria-met promotes to
+    // AUTO_GREYLISTED (yes, a manual entry that ALSO meets auto criteria records as AUTO --
+    // the historical write-site behavior); MAN_GREYLISTED without auto criteria records as
+    // manual; AUTO_GREYLIST_OVERRIDE is never promoted and never recorded; healthy ACTIVE
+    // is omitted.
+    std::vector<std::optional<uint64_t>> rising;
+    for (uint64_t i = 1; i <= 12; ++i) rising.push_back(i * 1000);
+
+    std::map<std::string, std::vector<std::optional<uint64_t>>> fx;
+    fx["activeproj"] = std::vector<std::optional<uint64_t>>(12, std::optional<uint64_t>(500000));
+    fx["manualproj"] = rising; // healthy: stays MAN_GREYLISTED in the record
+    fx["manualworst"] = std::vector<std::optional<uint64_t>>(12, std::optional<uint64_t>(800000)); // manual AND meets criteria
+    fx["overrideproj"] = std::vector<std::optional<uint64_t>>(12, std::optional<uint64_t>(700000));
+    fx["healthyproj"] = rising;
+
+    FacadeChainFixture chain(fx);
+
+    // Overwrite the registry statuses for the manual and override projects (v4 payloads
+    // through the real contract handler; heights advance past the fixture's adds).
+    AddProjectEntryWithStatus("manualproj", "http://manualproj.test",
+                              GRC::ProjectEntryStatus::MAN_GREYLISTED, 500, 500);
+    AddProjectEntryWithStatus("manualworst", "http://manualworst.test",
+                              GRC::ProjectEntryStatus::MAN_GREYLISTED, 501, 501);
+    AddProjectEntryWithStatus("overrideproj", "http://overrideproj.test",
+                              GRC::ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE, 502, 502);
+
+    std::shared_ptr<GRC::AutoGreylistService> service = GRC::GetAutoGreylistCache();
+
+    pindexBest = chain.m_tip;
+
+    GRC::Superblock candidate = GRC::Superblock();
+    for (const auto& project : fx) {
+        candidate.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+            .insert(std::make_pair(project.first, *project.second.back()));
+    }
+
+    const uint256 convergence_id = uint256S("0x4444444444444444444444444444444444444444444444444444444444444444");
+    service->RefreshWithAndUpdateSuperblock(candidate, convergence_id, /*update_pending_cache=*/true,
+                                            chain.m_blocks);
+
+    const auto& record = candidate.m_project_status.m_project_status;
+
+    BOOST_REQUIRE(record.count("activeproj") == 1);
+    BOOST_CHECK(record.at("activeproj").Value() == GRC::ProjectEntryStatus::AUTO_GREYLISTED);
+
+    BOOST_REQUIRE(record.count("manualproj") == 1);
+    BOOST_CHECK(record.at("manualproj").Value() == GRC::ProjectEntryStatus::MAN_GREYLISTED);
+
+    BOOST_REQUIRE(record.count("manualworst") == 1); // manual AND criteria-met: promotion wins
+    BOOST_CHECK(record.at("manualworst").Value() == GRC::ProjectEntryStatus::AUTO_GREYLISTED);
+
+    BOOST_CHECK(record.count("overrideproj") == 0); // never promoted, never recorded
+    BOOST_CHECK(record.count("healthyproj") == 0);  // ACTIVE, omitted
+}
+
 //!
 //! \brief Snapshot's auto-greylist overlay must NOT mutate the underlying registry entries.
 //!

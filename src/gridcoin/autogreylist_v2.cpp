@@ -351,3 +351,25 @@ AutoGreylistV2::Result AutoGreylistV2::Compute(
 
     return result;
 }
+
+Superblock::ProjectStatus AutoGreylistV2::DeriveProjectStatusRecord(const Result& result,
+                                                                     const WhitelistSnapshot& whitelist)
+{
+    Superblock::ProjectStatus record;
+
+    for (const auto& project : whitelist) {
+        ProjectEntryStatus status = project.m_status.Value();
+
+        if (status != ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE
+            && (status == ProjectEntryStatus::ACTIVE || status == ProjectEntryStatus::MAN_GREYLISTED)
+            && result.m_auto_greylisted.count(project.m_name) > 0) {
+            status = ProjectEntryStatus::AUTO_GREYLISTED;
+        }
+
+        if (status == ProjectEntryStatus::AUTO_GREYLISTED || status == ProjectEntryStatus::MAN_GREYLISTED) {
+            record.m_project_status.insert(std::make_pair(project.m_name, status));
+        }
+    }
+
+    return record;
+}

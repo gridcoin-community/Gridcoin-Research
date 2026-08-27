@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_AUTOGREYLIST_H
 #define GRIDCOIN_AUTOGREYLIST_H
 
+#include <gridcoin/autogreylist_v2.h>
 #include <gridcoin/project.h>
 #include <gridcoin/superblock.h>
 
@@ -40,10 +41,14 @@ struct GreylistComputation
 
     //! \brief Identity of the state this result was computed against.
     //!
-    //! For the authoritative state this is the committed superblock's block hash; for the
-    //! pending state it is the convergence content hash (ConvergedManifest::nContentHash).
-    //! Null for V1-backed views: V1's single cache exposes no key, and below the redesign
-    //! gate no consumer needs one.
+    //! For the authoritative state this is the committed superblock's (quorum) hash, per
+    //! DESIGN.md section 10.2; for the pending state it is the convergence content hash
+    //! (ConvergedManifest::nContentHash). The key is an identity label for consumers and
+    //! diagnostics -- FRESHNESS is guaranteed by the push-model write discipline (every
+    //! superblock push/pop/load replaces the authoritative slot; every convergence install
+    //! replaces the pending slot), never by a reader comparing keys, which would require the
+    //! read path to reach into chain or convergence state. Null for V1-backed views: V1's
+    //! single cache exposes no key, and below the redesign gate no consumer needs one.
     uint256 m_key;
 
     //! \brief True when this result was derived by reading the superblock's serialized
@@ -53,6 +58,10 @@ struct GreylistComputation
 
     //! \brief Names of the projects that meet the auto greylist criteria.
     std::set<std::string> m_auto_greylisted;
+
+    //! \brief Per-project candidate detail (ZCD, WAS, history). Empty when m_from_record --
+    //! the serialized record carries membership only.
+    std::map<std::string, GreylistCandidateV2> m_candidates;
 };
 
 //!
@@ -77,9 +86,12 @@ struct GreylistComputation
 //! cs_lock -> m_service_lock -> autogreylist_lock (consumer reads hold m_service_lock across
 //! the V1 fall-through, whose methods take only autogreylist_lock). Producer paths must NOT
 //! hold m_service_lock while calling into the V1 refresh methods, because those re-enter
-//! Whitelist::Snapshot and take cs_lock -- doing so would invert the chain. Nothing in this
-//! class takes cs_main; the producers are called from cs_main contexts but never derive
-//! heights on behalf of readers.
+//! Whitelist::Snapshot and take cs_lock -- doing so would invert the chain. The producer and
+//! reporting paths REQUIRE cs_main from their callers (they read the current superblock, the
+//! chain tip and, where they walk, the chain) but never acquire it themselves; the consumer
+//! read paths (Contains/IsDeepCopyActive/Get) touch no cs_main-guarded data at all -- version
+//! and state are properties of the already-computed results, never re-derived from a height
+//! on the read side.
 //!
 class AutoGreylistService
 {
@@ -116,7 +128,9 @@ public:
     //! state. Deliberately not defaulted: a new call site must decide.
     //!
     void RefreshWithAndUpdateSuperblock(Superblock& superblock, const uint256& convergence_id,
-                                        bool update_pending_cache);
+                                        bool update_pending_cache,
+                                        std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>>
+                                            unit_test_blocks = nullptr);
 
     //!
     //! \brief Reset all cached state (both V2 slots and the V1 instance).
@@ -151,6 +165,20 @@ public:
     //!
     std::optional<GreylistComputation> Get(GreylistState state) const;
 
+    //!
+    //! \brief Compute a fresh greylist report against the current committed superblock.
+    //!
+    //! Value-returning: mutates no cached state. Above the redesign gate this runs the V2
+    //! walker against the committed head -- the same computation a validator runs to check
+    //! the record, so the report doubles as an operator-visible record cross-check. Below
+    //! the gate it refreshes the V1 cache (preserving the pre-redesign getautogreylist
+    //! behavior) and returns a V1-tagged membership summary; the RPC reads V1 candidate
+    //! detail through the transitional iterators below.
+    //!
+    //! Requires cs_main (reads the current superblock and, above the gate, walks the chain).
+    //!
+    GreylistComputation ComputeReport() const;
+
     // ---------- transitional V1 pass-throughs -------------------------------------------
 
     //! \brief Iteration over the V1 candidate map (getautogreylist and tests). These forward
@@ -167,20 +195,36 @@ private:
     //!
     void ClearV2Slots();
 
+    //!
+    //! \brief Derive the authoritative computation from the stored superblock record if a
+    //! source is present and the slot is not yet derived. Must be called with m_service_lock
+    //! held. A pure map read of the owning SuperblockPtr -- no chain access, no cs_main, so
+    //! lazy priming cannot pull heavyweight work onto a reader thread (the objection that
+    //! killed lazy population in the refresh redesign was source-dependent, not
+    //! laziness-dependent).
+    //!
+    void PrimeAuthoritativeLocked() const EXCLUSIVE_LOCKS_REQUIRED(m_service_lock);
+
     std::shared_ptr<AutoGreylist> m_v1; //!< The frozen V1 instance. Never edited; fronted only.
 
     mutable CCriticalSection m_service_lock; //!< Leaf lock guarding the V2 slots below.
 
     //! \brief Owning pointer to the committed superblock the authoritative state derives
-    //! from. Held so lazy priming is a pure map read with no chain access. Empty below the
-    //! redesign gate.
-    SuperblockPtr m_authoritative_source GUARDED_BY(m_service_lock);
+    //! from. Held so lazy priming is a pure map read with no chain access. Mutable: primed
+    //! lazily from const readers under m_service_lock.
+    mutable SuperblockPtr m_authoritative_source GUARDED_BY(m_service_lock);
+
+    //! \brief Whether m_authoritative_source holds a V2-producer write. An explicit flag
+    //! rather than SuperblockPtr emptiness: a default-constructed SuperblockPtr wraps a
+    //! non-null empty superblock, so pointer emptiness cannot distinguish "cleared" from
+    //! "stored" -- exactly the empty-vs-unpopulated ambiguity this design exists to remove.
+    mutable bool m_have_authoritative_source GUARDED_BY(m_service_lock);
 
     //! \brief Lazily derived authoritative result (from m_authoritative_source's record).
-    std::optional<GreylistComputation> m_authoritative GUARDED_BY(m_service_lock);
+    mutable std::optional<GreylistComputation> m_authoritative GUARDED_BY(m_service_lock);
 
     //! \brief Pending result, keyed by convergence content hash.
-    std::optional<GreylistComputation> m_pending GUARDED_BY(m_service_lock);
+    mutable std::optional<GreylistComputation> m_pending GUARDED_BY(m_service_lock);
 };
 
 } // namespace GRC

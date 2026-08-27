@@ -4185,26 +4185,26 @@ UniValue getautogreylist(const UniValue& params)
 
     std::shared_ptr<GRC::AutoGreylistService> greylist_ptr = GRC::GetAutoGreylistCache();
 
-    greylist_ptr->Refresh();
-
     UniValue autogreylist(UniValue::VARR);
 
-    for (auto iter : *greylist_ptr) {
-        if (!show_all_projects && !iter.second.m_meets_greylisting_crit) {
-            continue;
+    // Emits one candidate entry; generic because the V1 (GreylistCandidateEntry) and V2
+    // (GreylistCandidateV2) types expose the same reporting surface.
+    const auto emit_entry = [&](const std::string& name, auto candidate) {
+        if (!show_all_projects && !candidate.m_meets_greylisting_crit) {
+            return;
         }
 
         UniValue entry(UniValue::VOBJ);
 
-        entry.pushKV("project:", iter.first);
-        entry.pushKV("zcd", iter.second.GetZCD());
-        entry.pushKV("was", iter.second.GetWAS().ToDouble());
-        entry.pushKV("meets_greylist_criteria", iter.second.m_meets_greylisting_crit);
+        entry.pushKV("project:", name);
+        entry.pushKV("zcd", candidate.GetZCD());
+        entry.pushKV("was", candidate.GetWAS().ToDouble());
+        entry.pushKV("meets_greylist_criteria", candidate.m_meets_greylisting_crit);
 
         if (show_history) {
             UniValue entry_history(UniValue::VARR);
 
-            for (const auto& hist_entry : iter.second.GetUpdateHistory()) {
+            for (const auto& hist_entry : candidate.GetUpdateHistory()) {
                 UniValue historical_entry(UniValue::VOBJ);
 
                 historical_entry.pushKV("superblocks_from_baseline", hist_entry.m_sb_from_baseline_processed);
@@ -4222,6 +4222,29 @@ UniValue getautogreylist(const UniValue& params)
         }
 
         autogreylist.push_back(entry);
+    };
+
+    // ComputeReport is a value return: no shared greylist state is mutated by this RPC. It
+    // requires cs_main (it reads the current superblock and, above the redesign gate, walks
+    // the chain) -- which the pre-redesign code needed too but never took.
+    GRC::GreylistComputation report;
+    {
+        LOCK(cs_main);
+
+        report = greylist_ptr->ComputeReport();
+    }
+
+    if (report.m_version == GRC::GreylistVersion::V2) {
+        // Above the gate: fresh V2 candidate detail, doubling as an operator-visible
+        // cross-check of the recorded superblock project status.
+        for (const auto& iter : report.m_candidates) {
+            emit_entry(iter.first, iter.second);
+        }
+    } else {
+        // Below the gate: the pre-redesign display, from the freshly refreshed V1 cache.
+        for (auto iter : *greylist_ptr) {
+            emit_entry(iter.first, iter.second);
+        }
     }
 
     res.pushKV("auto_greylist_projects", autogreylist);
