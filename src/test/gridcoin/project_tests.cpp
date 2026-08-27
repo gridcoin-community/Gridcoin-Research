@@ -1734,18 +1734,20 @@ BOOST_AUTO_TEST_CASE(facade_state_selectors_are_degenerate_below_the_gate)
 }
 
 //!
-//! \brief Stage 2a differential harness: the V2 walker must equal V1 exactly.
+//! \brief Differential harness, equality half: where no V2 correction applies, V2 == V1.
 //!
 //! Drives identical fixtures through the frozen V1 walker (with the audit height pinned to 0,
 //! matching V2's hard-coded benefit-of-the-doubt behavior -- V2 only runs above the redesign
 //! gate, which is never below the audit gate) and through AutoGreylistV2::Compute, and asserts
 //! per-project equality of the greylist criteria flag, ZCD, both WAS endpoint sums, the WAS
-//! value and the update-history length. At this stage V2 carries NO corrections (no zero
-//! normalization, no latch, no divisor contraction, no phantom-head skip), so equality must be
-//! EXACT over every fixture, including the adversarial ones. The corrections stage then flips
-//! this harness to "equal except the enumerated deltas".
+//! value and the update-history length. The fixtures here are exactly those untouched by every
+//! V2 correction: no recorded zeros with an older non-zero (latch), no missing WINDOW ENDPOINT
+//! (divisor contraction -- missing data in the middle telescopes away identically in both),
+//! no WAS truncation residue (sums divisible by their divisors), and no convergence-hint match
+//! behind the head (phantom skip). The enumerated-delta half of the harness is the sibling
+//! case v2_corrections_produce_the_enumerated_deltas.
 //!
-BOOST_AUTO_TEST_CASE(v2_walker_is_exactly_v1_equivalent_before_corrections)
+BOOST_AUTO_TEST_CASE(v2_walker_matches_v1_where_no_correction_applies)
 {
     // Pin the audit gate ON for the V1 side so both walkers run the same benefit-of-the-doubt
     // arm. Uses the consensus-params idiom (NOT gArgs.ForceSetArg -- clearing that with an
@@ -1903,36 +1905,6 @@ BOOST_AUTO_TEST_CASE(v2_walker_is_exactly_v1_equivalent_before_corrections)
         fx["flat"] = Seq(LEN, std::optional<uint64_t>(777777));
         run_and_compare(fx, {}, "healthy+flat");
     }
-    { // 2: chain-resident zero at the head (V1 pathology; V2 must REPRODUCE it at this stage).
-        std::map<std::string, Seq> fx;
-        fx["zerohead"] = riser(1000, 1000, LEN);
-        fx["zerohead"][at_j(0)] = std::optional<uint64_t>(0);
-        run_and_compare(fx, {}, "zero at head");
-    }
-    { // 3: zero at j == 7 (the TC_7 endpoint).
-        std::map<std::string, Seq> fx;
-        fx["zeroj7"] = riser(1000, 1000, LEN);
-        fx["zeroj7"][at_j(7)] = std::optional<uint64_t>(0);
-        run_and_compare(fx, {}, "zero at j=7");
-    }
-    { // 4: zero at j == 40 (the TC_40 endpoint -- the WCG mainnet shape).
-        std::map<std::string, Seq> fx;
-        fx["zeroj40"] = riser(500000000000ULL, 60000000ULL, LEN);
-        fx["zeroj40"][at_j(40)] = std::optional<uint64_t>(0);
-        run_and_compare(fx, {}, "zero at j=40");
-    }
-    { // 5: zero mid-window (telescopes away in the endpoint difference).
-        std::map<std::string, Seq> fx;
-        fx["zeromid"] = riser(1000, 1000, LEN);
-        fx["zeromid"][at_j(20)] = std::optional<uint64_t>(0);
-        run_and_compare(fx, {}, "zero at j=20");
-    }
-    { // 6: absent at the head (benefit-of-the-doubt shape at position 1).
-        std::map<std::string, Seq> fx;
-        fx["absenthead"] = riser(1000, 1000, LEN);
-        fx["absenthead"][at_j(0)] = std::optional<uint64_t>();
-        run_and_compare(fx, {}, "absent head");
-    }
     { // 7: absent at j == 1.
         std::map<std::string, Seq> fx;
         fx["absentj1"] = riser(1000, 1000, LEN);
@@ -1944,13 +1916,6 @@ BOOST_AUTO_TEST_CASE(v2_walker_is_exactly_v1_equivalent_before_corrections)
         fx["absentrun"] = riser(1000, 1000, LEN);
         for (size_t j = 3; j <= 5; ++j) fx["absentrun"][at_j(j)] = std::optional<uint64_t>();
         run_and_compare(fx, {}, "absent j=3..5");
-    }
-    { // 9: absent at both endpoints (j == 7 and j == 40).
-        std::map<std::string, Seq> fx;
-        fx["absentend"] = riser(1000, 1000, LEN);
-        fx["absentend"][at_j(7)] = std::optional<uint64_t>();
-        fx["absentend"][at_j(40)] = std::optional<uint64_t>();
-        run_and_compare(fx, {}, "absent endpoints");
     }
     { // 10: short history (5 superblocks -- inside the 7-SB grace period).
         std::map<std::string, Seq> fx;
@@ -1977,6 +1942,557 @@ BOOST_AUTO_TEST_CASE(v2_walker_is_exactly_v1_equivalent_before_corrections)
         std::map<std::string, uint64_t> fa;
         fa["late"] = 30;
         run_and_compare(fx, fa, "late whitelisting");
+    }
+}
+
+namespace {
+//!
+//! \brief Shared driver for the V2-correction tests: builds a synthetic superblock chain from
+//! per-project total-credit sequences (oldest first; last entry is the head), runs the frozen
+//! V1 walker (via the facade) and AutoGreylistV2::Compute over it, and returns both results.
+//! Convergence hints may be assigned per sequence index to exercise the phantom-head skip.
+//!
+struct WalkerRunResults {
+    std::map<std::string, GRC::AutoGreylist::GreylistCandidateEntry> m_v1;
+    GRC::AutoGreylistV2::Result m_v2;
+};
+
+WalkerRunResults RunBothGreylistWalkers(const std::map<std::string, std::vector<std::optional<uint64_t>>>& fixture,
+                                        const std::map<size_t, uint32_t>& convergence_hints = {},
+                                        const std::map<std::string, uint64_t>& first_active_time = {})
+{
+    GRC::Whitelist& whitelist = GRC::GetWhitelist();
+    std::shared_ptr<GRC::AutoGreylistService> auto_greylist = GRC::GetAutoGreylistCache();
+
+    whitelist.Reset();
+
+    int height = 0;
+    int64_t time = 0;
+
+    auto unit_test_blocks = std::make_shared<std::map<int, std::pair<CBlockIndex*, GRC::SuperblockPtr>>>();
+
+    bool first = true;
+    size_t sequence_length = 0;
+    for (const auto& project : fixture) {
+        const auto fa = first_active_time.find(project.first);
+        const uint64_t add_time = (fa != first_active_time.end()) ? fa->second : 0;
+
+        AddProjectEntry(3, project.first, "http://" + project.first + ".test", false, height, add_time, first);
+        first = false;
+
+        if (sequence_length == 0) sequence_length = project.second.size();
+        BOOST_REQUIRE(project.second.size() == sequence_length);
+    }
+
+    CBlockIndex* whitelist_index_entry = new CBlockIndex;
+    ++height;
+    ++time;
+
+    CBlockIndex* index_ptr = whitelist_index_entry;
+    CBlockIndex* index_ptr_prev = nullptr;
+
+    GRC::SuperblockPtr head_ptr;
+
+    for (size_t i = 0; i < sequence_length; ++i) {
+        index_ptr_prev = index_ptr;
+        index_ptr = new CBlockIndex;
+        index_ptr->nHeight = height;
+        index_ptr->nTime = time;
+        index_ptr->MarkAsSuperblock();
+        index_ptr->pprev = index_ptr_prev;
+
+        GRC::Superblock superblock = GRC::Superblock();
+
+        for (const auto& project : fixture) {
+            if (project.second[i]) {
+                superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+                    .insert(std::make_pair(project.first, *project.second[i]));
+            }
+        }
+
+        const auto hint = convergence_hints.find(i);
+        if (hint != convergence_hints.end()) {
+            superblock.m_convergence_hint = hint->second;
+        }
+
+        GRC::SuperblockPtr superblock_ptr = GRC::SuperblockPtr();
+        superblock_ptr.Replace(superblock);
+        superblock_ptr.Rebind(index_ptr);
+
+        unit_test_blocks->insert(std::make_pair(height, std::make_pair(index_ptr, superblock_ptr)));
+        head_ptr = superblock_ptr;
+
+        ++height;
+        ++time;
+    }
+
+    WalkerRunResults results;
+
+    auto_greylist->Reset();
+    auto_greylist->RefreshWithSuperblock(head_ptr, unit_test_blocks);
+
+    for (auto iter = auto_greylist->begin(); iter != auto_greylist->end(); ++iter) {
+        results.m_v1.insert(std::make_pair(iter->first, iter->second));
+    }
+
+    results.m_v2 = GRC::AutoGreylistV2::Compute(
+        head_ptr,
+        whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
+        whitelist.GetProjectsFirstActive(),
+        unit_test_blocks);
+
+    for (auto& it : *unit_test_blocks) delete it.second.first;
+    unit_test_blocks->clear();
+    delete whitelist_index_entry;
+
+    auto_greylist->Reset();
+    whitelist.Reset();
+
+    return results;
+}
+} // anonymous namespace
+
+//!
+//! \brief Differential harness, delta half: every V2 correction produces exactly the intended
+//! divergence from V1 -- and nothing else.
+//!
+//! The corrections under test (all gated on AutoGreylistRedesignHeight, activating together):
+//!
+//!   1. Chain-resident zeros as missing data, with the initial-state latch: a recorded zero
+//!      with a non-zero at an OLDER position is corruption, and V2 must treat it EXACTLY as
+//!      it treats an absent entry -- pinned by twin fixtures (zero vs absent) at the head,
+//!      j=7 and j=40, equal in every computed field, while the history still records the raw
+//!      zero (the corruption stays diagnosable).
+//!   2. The ZCD arm consumes the effective value too (zeros and NAs both count as ZCDs): a
+//!      corrupt zero mid-window is one ZCD in V2 where V1's raw comparison counted none.
+//!   3. WAS divisor contraction (F8): a missing window ENDPOINT contracts the divisor to the
+//!      deepest position with data, so a uniform riser scores exactly 1.0 where V1's fixed
+//!      divisor understated it; missing data in the MIDDLE still leaves the divisor alone
+//!      (covered by the equality half).
+//!   4. Exact-fraction WAS: (sum7 * d40) / (sum40 * d7), no integer truncation.
+//!   5. The initial-state latch direction: 9 producing superblocks over 31 genuine initial
+//!      zeros score WAS = 13/3 (4.3333...) -- the value only the correct (oldest-non-zero)
+//!      latch with exact fractions produces. A naive newest-non-zero latch would damn the
+//!      initial zeros as corruption and score 1.0.
+//!
+BOOST_AUTO_TEST_CASE(v2_corrections_produce_the_enumerated_deltas)
+{
+    // Pin the audit gate ON for the V1 comparisons (matching V2's hard-coded behavior).
+    struct AuditHeightGuard {
+        const int m_saved = Params().GetConsensus().AutoGreylistAuditHeight;
+        ~AuditHeightGuard()
+        {
+            const_cast<Consensus::Params&>(Params().GetConsensus()).AutoGreylistAuditHeight = m_saved;
+        }
+    } audit_height_guard;
+
+    const_cast<Consensus::Params&>(Params().GetConsensus()).AutoGreylistAuditHeight = 0;
+
+    typedef std::vector<std::optional<uint64_t>> Seq;
+
+    auto riser = [](uint64_t base, uint64_t step, size_t len) {
+        Seq v;
+        for (size_t i = 0; i < len; ++i) v.push_back(base + step * i);
+        return v;
+    };
+    const size_t LEN = 45;
+    auto at_j = [&](size_t j) { return LEN - 1 - j; };
+
+    // Compare two V2 candidates field-by-field (everything except the history contents).
+    auto check_same_computation = [](const GRC::GreylistCandidateV2& a, const GRC::GreylistCandidateV2& b,
+                                     const std::string& label) {
+        BOOST_CHECK_MESSAGE(a.m_meets_greylisting_crit == b.m_meets_greylisting_crit, label + ": criteria");
+        BOOST_CHECK_MESSAGE(a.GetZCD() == b.GetZCD(), label + ": ZCD");
+        BOOST_CHECK_MESSAGE(a.m_TC_7_SB_sum == b.m_TC_7_SB_sum, label + ": TC_7 sum");
+        BOOST_CHECK_MESSAGE(a.m_TC_40_SB_sum == b.m_TC_40_SB_sum, label + ": TC_40 sum");
+        BOOST_CHECK_MESSAGE(a.GetWAS() == b.GetWAS(), label + ": WAS");
+    };
+
+    // ---- 1. Corrupt-zero == absent, at each transit position. ----
+    for (const size_t j : {(size_t) 0, (size_t) 7, (size_t) 40}) {
+        std::map<std::string, Seq> zero_fx, absent_fx;
+        zero_fx["p"] = riser(500000000000ULL, 60000000ULL, LEN);
+        zero_fx["p"][at_j(j)] = std::optional<uint64_t>(0);
+        absent_fx["p"] = riser(500000000000ULL, 60000000ULL, LEN);
+        absent_fx["p"][at_j(j)] = std::optional<uint64_t>();
+
+        const auto zero_run = RunBothGreylistWalkers(zero_fx);
+        const auto absent_run = RunBothGreylistWalkers(absent_fx);
+
+        const std::string label = "twin j=" + ToString(j);
+        BOOST_REQUIRE(zero_run.m_v2.m_candidates.count("p") == 1);
+        BOOST_REQUIRE(absent_run.m_v2.m_candidates.count("p") == 1);
+
+        check_same_computation(zero_run.m_v2.m_candidates.at("p"),
+                               absent_run.m_v2.m_candidates.at("p"), label);
+
+        // Neither twin spuriously greylists: the WAS is computed from the real history.
+        BOOST_CHECK_MESSAGE(zero_run.m_v2.m_auto_greylisted.empty(), label + ": no spurious greylist");
+
+        // The history records the RAW values: the zero twin reports 0 at the transit
+        // position, the absent twin reports NA -- the corruption stays diagnosable.
+        const auto& zero_history = zero_run.m_v2.m_candidates.at("p").GetUpdateHistory();
+        bool found_recorded_zero = false;
+        for (const auto& entry : zero_history) {
+            if (entry.m_sb_from_baseline_processed == j) {
+                BOOST_CHECK_MESSAGE(entry.m_total_credit.has_value() && *entry.m_total_credit == 0,
+                                    label + ": history must record the raw zero");
+                found_recorded_zero = true;
+            }
+        }
+        BOOST_CHECK_MESSAGE(found_recorded_zero, label + ": history entry present");
+
+        // And the V1 comparison confirms these fixtures genuinely diverge (the delta is
+        // real): V1 spuriously greylists on the head and j=40 zeros, and inflates WAS at
+        // j=7. (Head/j40: WAS collapses; j7: WAS explodes. Either way != V2's clean value.)
+        auto v1_zero_entry = zero_run.m_v1.at("p"); // copy: V1 accessors are non-const
+        BOOST_CHECK_MESSAGE(v1_zero_entry.GetWAS().ToDouble()
+                                != zero_run.m_v2.m_candidates.at("p").GetWAS().ToDouble(),
+                            label + ": delta vs V1 must exist");
+    }
+
+    // ---- 2. Corrupt zero mid-window: exactly one extra ZCD, same WAS. ----
+    {
+        std::map<std::string, Seq> fx;
+        fx["p"] = riser(1000, 1000, LEN);
+        fx["p"][at_j(20)] = std::optional<uint64_t>(0);
+
+        const auto run = RunBothGreylistWalkers(fx);
+
+        BOOST_REQUIRE(run.m_v2.m_candidates.count("p") == 1);
+        auto v1_entry = run.m_v1.at("p"); // copy: V1 accessors are non-const
+
+        BOOST_CHECK_EQUAL((int) run.m_v2.m_candidates.at("p").GetZCD(), (int) v1_entry.GetZCD() + 1);
+        BOOST_CHECK(run.m_v2.m_candidates.at("p").GetWAS().ToDouble() == v1_entry.GetWAS().ToDouble());
+    }
+
+    // ---- 3. Divisor contraction at missing endpoints (approved vectors). ----
+    {
+        // Data at j=0..5, NA at 6 and 7: sum7 = bookmark - TC[5] over divisor 5 -> exactly 1.
+        std::map<std::string, Seq> fx;
+        fx["p"] = riser(1000, 1000, LEN);
+        fx["p"][at_j(6)] = std::optional<uint64_t>();
+        fx["p"][at_j(7)] = std::optional<uint64_t>();
+
+        const auto run = RunBothGreylistWalkers(fx);
+
+        BOOST_CHECK(run.m_v2.m_candidates.at("p").GetWAS() == Fraction(1));
+        // V1 divides the 5-position numerator by 7: understated -- the F8 defect this fixes.
+        auto v1_entry = run.m_v1.at("p");
+        BOOST_CHECK(v1_entry.GetWAS().ToDouble() < 1.0);
+    }
+    {
+        // NA at both window endpoints (j=7 and j=40): both divisors contract -> exactly 1.
+        std::map<std::string, Seq> fx;
+        fx["p"] = riser(1000, 1000, LEN);
+        fx["p"][at_j(7)] = std::optional<uint64_t>();
+        fx["p"][at_j(40)] = std::optional<uint64_t>();
+
+        const auto run = RunBothGreylistWalkers(fx);
+
+        BOOST_CHECK(run.m_v2.m_candidates.at("p").GetWAS() == Fraction(1));
+        auto v1_entry = run.m_v1.at("p");
+        BOOST_CHECK(v1_entry.GetWAS().ToDouble() < 1.0);
+    }
+
+    // ---- 4. Exact-fraction WAS (no integer truncation): absent head. ----
+    {
+        // Head absent: initial bookmark repairs to TC[1]; sum7 = TC[1]-TC[7] = 6000 over
+        // divisor 7 (data present at 7); sum40 = 39000 over divisor 40.
+        std::map<std::string, Seq> fx;
+        fx["p"] = riser(1000, 1000, LEN);
+        fx["p"][at_j(0)] = std::optional<uint64_t>();
+
+        const auto run = RunBothGreylistWalkers(fx);
+
+        BOOST_CHECK(run.m_v2.m_candidates.at("p").GetWAS() == Fraction(6000 * 40, 39000 * 7));
+    }
+
+    // ---- 5. The initial-state latch, correct direction: WAS = 13/3 exactly. ----
+    {
+        // 31 genuine initial zeros, then 9 producing superblocks rising by 100 (head 900).
+        // latch_j = 8 (the oldest non-zero), so every zero (j=9..39) is OLDER than the latch
+        // and stays a genuine value: sum7 = 900-200 = 700 over divisor 7; sum40 = 900-0 = 900
+        // over divisor 39. WAS = (700*39)/(900*7) = 13/3. A naive newest-non-zero latch would
+        // treat the initial zeros as corruption and score (700*8)/(800*7) = 1.
+        std::map<std::string, Seq> fx;
+        Seq seq(31, std::optional<uint64_t>(0));
+        for (uint64_t i = 1; i <= 9; ++i) seq.push_back(i * 100);
+        fx["p"] = seq;
+
+        const auto run = RunBothGreylistWalkers(fx);
+
+        BOOST_REQUIRE(run.m_v2.m_candidates.count("p") == 1);
+        BOOST_CHECK(run.m_v2.m_candidates.at("p").GetWAS() == Fraction(13, 3));
+
+        // The project still greylists -- via ZCD (11 zero-credit days in the 20-SB window),
+        // exactly as a project that produced for only 9 of 40 days should. The latch protects
+        // the WAS from misreading genuine initial zeros; it does not excuse inactivity.
+        BOOST_CHECK((int) run.m_v2.m_candidates.at("p").GetZCD() > 7);
+        BOOST_CHECK(run.m_v2.m_auto_greylisted.count("p") == 1);
+    }
+}
+
+//!
+//! \brief The phantom-head skip: a committed superblock built from the SAME convergence as
+//! the candidate head (identified by a matching non-zero convergence hint at the FIRST
+//! committed superblock behind the head) is a re-derivation of identical data. Walking it
+//! double-counts the head: TC[1] == TC[0] fires a false ZCD for every project (DESIGN.md
+//! section 3). V2 skips it -- position 1 becomes the superblock before it -- so the false ZCD
+//! disappears and the window covers 40 REAL superblocks. Deterministic on every node: the
+//! hint is serialized in the superblock both sides compare.
+//!
+BOOST_AUTO_TEST_CASE(v2_skips_the_phantom_head_superblock)
+{
+    struct AuditHeightGuard {
+        const int m_saved = Params().GetConsensus().AutoGreylistAuditHeight;
+        ~AuditHeightGuard()
+        {
+            const_cast<Consensus::Params&>(Params().GetConsensus()).AutoGreylistAuditHeight = m_saved;
+        }
+    } audit_height_guard;
+
+    const_cast<Consensus::Params&>(Params().GetConsensus()).AutoGreylistAuditHeight = 0;
+
+    typedef std::vector<std::optional<uint64_t>> Seq;
+
+    // A rising history whose two newest entries are IDENTICAL (built from one convergence),
+    // marked with the same convergence hint. 12 entries: 1000..10000, then 11000 twice.
+    Seq seq;
+    for (uint64_t i = 1; i <= 10; ++i) seq.push_back(i * 1000);
+    seq.push_back(11000);
+    seq.push_back(11000);
+
+    std::map<std::string, Seq> fx;
+    fx["p"] = seq;
+
+    std::map<size_t, uint32_t> hints;
+    hints[seq.size() - 1] = 0xABCD1234; // the head
+    hints[seq.size() - 2] = 0xABCD1234; // the just-staked superblock from the same convergence
+    hints[seq.size() - 3] = 0x00000001; // older superblocks: distinct hints
+
+    const auto run = RunBothGreylistWalkers(fx, hints);
+
+    BOOST_REQUIRE(run.m_v2.m_candidates.count("p") == 1);
+
+    // V1 counts the phantom: TC[1] == TC[0] -> one false ZCD. V2 skips it: zero.
+    auto v1_entry = run.m_v1.at("p");
+    BOOST_CHECK_EQUAL((int) v1_entry.GetZCD(), 1);
+    BOOST_CHECK_EQUAL((int) run.m_v2.m_candidates.at("p").GetZCD(), 0);
+
+    // With the phantom skipped the window is the uniform riser: WAS is exactly 1.
+    BOOST_CHECK(run.m_v2.m_candidates.at("p").GetWAS() == Fraction(1));
+
+    // Control: the SAME data without matching hints must not skip -- V2 then counts the
+    // duplicate exactly as V1 does (the skip keys on the hint, not on equal values).
+    const auto no_hint_run = RunBothGreylistWalkers(fx);
+    auto no_hint_v1 = no_hint_run.m_v1.at("p");
+    BOOST_CHECK_EQUAL((int) no_hint_run.m_v2.m_candidates.at("p").GetZCD(), (int) no_hint_v1.GetZCD());
+}
+
+//!
+//! \brief The latch evidence scan: boundary behavior of the capped beyond-window extension.
+//!
+//! A zero run touching the window edge cannot be classified from inside the window (the
+//! WCG 2026-08-06 shape: the corrupt zero at position 40 had no older in-window evidence).
+//! The walker therefore scans up to 40 additional superblocks past the window for the first
+//! older admissible non-zero. Pinned here:
+//!
+//!   * evidence one superblock past the edge -> the edge zero is corrupt (the mainnet case);
+//!   * the chain simply ending -> the edge zeros are GENUINE initial state and stay values;
+//!   * evidence past the +40 cap -> not consulted; the zeros stay genuine. The cap trades a
+//!     bounded walk (at most 2x) for a deterministic rule every node evaluates identically.
+//!
+BOOST_AUTO_TEST_CASE(v2_latch_evidence_scan_boundaries)
+{
+    typedef std::vector<std::optional<uint64_t>> Seq;
+
+    auto riser = [](uint64_t base, uint64_t step, size_t len) {
+        Seq v;
+        for (size_t i = 0; i < len; ++i) v.push_back(base + step * i);
+        return v;
+    };
+
+    // ---- Evidence just past the edge: corrupt (already exercised by the twin fixtures; ----
+    // ---- pinned here at the exact +1 shape with a minimal chain: LEN 42, zero at j=40, ----
+    // ---- non-zero evidence at j=41). ----
+    {
+        Seq seq = riser(1000, 1000, 42);
+        const size_t LEN = 42;
+        seq[LEN - 1 - 40] = std::optional<uint64_t>(0);
+
+        std::map<std::string, Seq> fx;
+        fx["p"] = seq;
+
+        const auto run = RunBothGreylistWalkers(fx);
+
+        // Corrupt zero at the endpoint -> treated as missing -> the 40-interval contracts to
+        // the deepest data position (39): sum40 = TC[0]-TC[39] = 39000 over divisor 39;
+        // sum7 = 7000 over 7 -> WAS exactly 1.
+        BOOST_CHECK(run.m_v2.m_candidates.at("p").GetWAS() == Fraction(1));
+        BOOST_CHECK(run.m_v2.m_auto_greylisted.empty());
+    }
+
+    // ---- Chain ends at the zeros: genuine initial state. LEN 41: the three OLDEST ----
+    // ---- entries are zeros (the project's true beginning), then a riser. ----
+    {
+        const size_t LEN = 41;
+        Seq seq;
+        seq.push_back(std::optional<uint64_t>(0));
+        seq.push_back(std::optional<uint64_t>(0));
+        seq.push_back(std::optional<uint64_t>(0));
+        for (uint64_t i = 1; i <= LEN - 3; ++i) seq.push_back(i * 1000);
+
+        std::map<std::string, Seq> fx;
+        fx["p"] = seq;
+
+        const auto run = RunBothGreylistWalkers(fx);
+
+        // Zeros at j=38..40 are genuine values: the 40-sum is assigned at j=40 with tc=0
+        // (initial 38000 - 0) over divisor 40; sum7 = 7000 over 7.
+        // WAS = (7000*40)/(38000*7) = 20/19.
+        BOOST_CHECK(run.m_v2.m_candidates.at("p").GetWAS() == Fraction(20, 19));
+    }
+
+    // ---- The +40 cap: evidence at extension position 41 (past the cap) is not consulted. ----
+    // ---- LEN 86: non-zero at j=81..85, zeros j=40..80, riser j=0..39. The scan covers ----
+    // ---- extension positions 41..80 (40 superblocks), finds only zeros, and stops: the ----
+    // ---- edge zero run stays genuine. ----
+    {
+        const size_t LEN = 86;
+        Seq seq;
+        for (uint64_t i = 1; i <= 5; ++i) seq.push_back(100000 + i);       // j=85..81 (beyond cap)
+        for (size_t i = 0; i < 41; ++i) seq.push_back(std::optional<uint64_t>(0)); // j=80..40
+        for (uint64_t i = 1; i <= 40; ++i) seq.push_back(200000 + i * 1000);       // j=39..0
+        BOOST_REQUIRE(seq.size() == LEN);
+
+        std::map<std::string, Seq> fx;
+        fx["p"] = seq;
+
+        const auto run = RunBothGreylistWalkers(fx);
+
+        // The zero at j=40 stays a genuine value: sum40 = TC[0] - 0 = 240000 over divisor 40;
+        // sum7 = 7000 over 7. WAS = (7000*40)/(240000*7) = 1/6 -- depressed by the genuine
+        // (as far as any node can tell within the cap) inactivity, exactly as intended.
+        BOOST_CHECK(run.m_v2.m_candidates.at("p").GetWAS() == Fraction(1, 6));
+
+        // Variant: move the evidence INSIDE the cap (non-zero at extension position 41,
+        // i.e. j=41) -> the whole zero run becomes corrupt -> missing -> the 40-interval
+        // contracts to 39 and the WAS is the clean riser's exactly.
+        Seq seq_in_cap = seq;
+        seq_in_cap[LEN - 1 - 41] = std::optional<uint64_t>(150000);
+
+        std::map<std::string, Seq> fx2;
+        fx2["p"] = seq_in_cap;
+
+        const auto run2 = RunBothGreylistWalkers(fx2);
+
+        // sum40 = TC[0]-TC[39] = 39000 over 39; sum7 = 7000 over 7 -> exactly 1.
+        BOOST_CHECK(run2.m_v2.m_candidates.at("p").GetWAS() == Fraction(1));
+    }
+}
+
+//!
+//! \brief Newly joined projects: NA-then-zero-then-production histories (forward terms).
+//!
+//! Two properties of the latch make a newcomer safe by construction, pinned here because
+//! they are exactly the shapes the old V1 table test exercised:
+//!
+//!   * NAs never participate in the latch -- only ENGAGED values set evidence -- so a
+//!     convergence-failure prefix (scrapers could not converge on the new project) is inert;
+//!   * corruption requires a non-zero at a strictly OLDER position, so a genuine first-record
+//!     zero (older than all production) can never be normalized away, while a later
+//!     chain-resident zero in the SAME history (newer than production) is -- both classified
+//!     correctly by the one latch.
+//!
+//! The first fixture also pins the first-activation boundary of the latch evidence scan
+//! (a newcomer's trailing zeros resolve GENUINE the moment the scan crosses its
+//! first-activation timestamp -- the erase path, distinct from the chain-end and cap
+//! terminations pinned above).
+//!
+BOOST_AUTO_TEST_CASE(v2_newly_joined_project_na_then_zero_history)
+{
+    typedef std::vector<std::optional<uint64_t>> Seq;
+
+    // ---- A newcomer against a long-running chain: first-active mid-window, then (forward)
+    // ---- NA, NA, genuine zero, production 100..1400. ----
+    {
+        const size_t LEN = 45;
+
+        std::map<std::string, Seq> fx;
+
+        // A long-running healthy project so the chain spans the whole window.
+        Seq old_project;
+        for (uint64_t i = 1; i <= LEN; ++i) old_project.push_back(i * 1000);
+        fx["old"] = old_project;
+
+        // The newcomer: helper superblock times run 1..LEN; first-active at time 30 makes
+        // positions j=0..15 admissible. Forward from its beginning: NA, NA (convergence
+        // failures), a genuine zero (its true initial state), then production rising 100/SB
+        // with a final jump to 2000 (asymmetric, so the expected WAS is a distinctive value
+        // rather than an aliased 1).
+        Seq newcomer(29, std::optional<uint64_t>());   // pre-first-active: no records
+        newcomer.push_back(std::optional<uint64_t>()); // i=29 (j=15): NA
+        newcomer.push_back(std::optional<uint64_t>()); // i=30 (j=14): NA
+        newcomer.push_back(std::optional<uint64_t>(0)); // i=31 (j=13): genuine zero
+        for (uint64_t i = 1; i <= 12; ++i) newcomer.push_back(i * 100); // j=12..1: 100..1200
+        newcomer.push_back(std::optional<uint64_t>(2000));              // j=0 (head): 2000
+        BOOST_REQUIRE(newcomer.size() == LEN);
+        fx["newcomer"] = newcomer;
+
+        std::map<std::string, uint64_t> fa;
+        fa["newcomer"] = 30;
+
+        const auto run = RunBothGreylistWalkers(fx, {}, fa);
+
+        BOOST_REQUIRE(run.m_v2.m_candidates.count("newcomer") == 1);
+        const auto& candidate = run.m_v2.m_candidates.at("newcomer");
+
+        // The genuine zero at j=13 stays a value: sum40 is assigned there (2000 - 0) over
+        // divisor 13 (the deepest effective data); sum7 = 2000 - TC[7] = 2000 - 600 = 1400
+        // over divisor 7. WAS = (1400*13)/(2000*7) = 13/10. ZCD = 2 (the two NAs; the
+        // genuine zero at j=13 is NOT a ZCD -- 0 >= bookmark(100) is false).
+        BOOST_CHECK(candidate.GetWAS() == Fraction(13, 10));
+        BOOST_CHECK_EQUAL((int) candidate.GetZCD(), 2);
+        BOOST_CHECK(!candidate.m_meets_greylisting_crit);
+        BOOST_CHECK(run.m_v2.m_auto_greylisted.count("newcomer") == 0);
+    }
+
+    // ---- One history holding BOTH a genuine initial zero and a later corrupt zero. ----
+    // ---- Forward: NA, NA, 0(genuine), 100..500, 0(corrupt), 600..1200. ----
+    {
+        Seq seq;
+        seq.push_back(std::optional<uint64_t>());  // j=15: NA
+        seq.push_back(std::optional<uint64_t>());  // j=14: NA
+        seq.push_back(std::optional<uint64_t>(0)); // j=13: genuine initial zero
+        for (uint64_t i = 1; i <= 5; ++i) seq.push_back(i * 100);  // j=12..8: 100..500
+        seq.push_back(std::optional<uint64_t>(0)); // j=7: CORRUPT (production exists older)
+        for (uint64_t i = 6; i <= 12; ++i) seq.push_back(i * 100); // j=6..0: 600..1200
+
+        std::map<std::string, Seq> fx;
+        fx["p"] = seq;
+
+        const auto run = RunBothGreylistWalkers(fx);
+
+        BOOST_REQUIRE(run.m_v2.m_candidates.count("p") == 1);
+        const auto& candidate = run.m_v2.m_candidates.at("p");
+
+        // The corrupt zero at j=7 is missing for the WAS: the 7-interval contracts to 6
+        // (sum7 = 1200-600 = 600); the genuine zero at j=13 anchors the 40-side
+        // (sum40 = 1200-0 over divisor 13). WAS = (600*13)/(1200*6) = 13/12.
+        // ZCD = 3: the corrupt zero (as NA) plus the two genuine NAs; the genuine zero is
+        // not a ZCD (0 >= bookmark(100) is false), and the resumption at j=8 is not either
+        // (500 >= bookmark(600) is false -- the bookmark held through the corrupt NA).
+        BOOST_CHECK(candidate.GetWAS() == Fraction(13, 12));
+        BOOST_CHECK_EQUAL((int) candidate.GetZCD(), 3);
+        BOOST_CHECK(!candidate.m_meets_greylisting_crit);
+
+        // Both zeros remain visible in the history exactly as recorded.
+        int raw_zeros_in_history = 0;
+        for (const auto& entry : candidate.GetUpdateHistory()) {
+            if (entry.m_total_credit && *entry.m_total_credit == 0) ++raw_zeros_in_history;
+        }
+        BOOST_CHECK_EQUAL(raw_zeros_in_history, 2);
     }
 }
 

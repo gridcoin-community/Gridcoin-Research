@@ -36,9 +36,30 @@ namespace GRC {
 //!   an ENGAGED optional holding zero. V1's zero-engaged initialization is the corrupt
 //!   "recorded zero" state; this type cannot be born into it.
 //!
-//! The walker-correctness changes (zeros-as-NA with the latch, the WAS divisor contraction)
-//! land in a separate stage; at this stage the arithmetic is V1-equivalent so the
-//! differential harness can assert exact equality.
+//! Walker corrections carried by this type (all consensus-affecting, all riding the single
+//! AutoGreylistRedesignHeight gate; the differential harness enumerates each delta exactly):
+//!
+//! - Zeros as missing data, with the initial-state latch: the CALLER (AutoGreylistV2::Compute)
+//!   derives an EFFECTIVE total credit per position -- a recorded zero is normalized to
+//!   std::nullopt iff a non-zero total credit exists at an OLDER position, in the window or
+//!   in the capped beyond-window evidence scan (at most 40 additional superblocks; see
+//!   Compute) --
+//!   and this type consumes the effective value for the ZCD, bookmark and WAS arms alike,
+//!   while the history records the value as it actually appears on chain. A recorded total
+//!   credit is a cumulative lifetime counter: an OLDER superblock recording non-zero
+//!   lifetime credit contradicts a newer zero (the counter cannot return to zero), so the
+//!   zero is corruption, not data. Genuine initial-state zeros -- those with no non-zero at
+//!   any older position -- stay values.
+//!
+//! - WAS divisor contraction (F8): the divisors are the positions of the deepest effective
+//!   data actually spanned by each endpoint difference (m_TC_7_SB_interval /
+//!   m_TC_40_SB_interval), not min(processed, 7|40) -- a missing ENDPOINT contracts the
+//!   interval, while missing data in the MIDDLE telescopes away and does not shrink the
+//!   divisor.
+//!
+//! - Exact-fraction WAS: (sum7 * d40) / (sum40 * d7) instead of V1's truncated integer
+//!   averages. Required for the contraction to be meaningful (900/39 truncating to 23 is a
+//!   4.5% error at realistic magnitudes) and removes the truncate-to-zero pathology class.
 //!
 class GreylistCandidateV2
 {
@@ -71,6 +92,8 @@ public:
         , m_TC_initial_bookmark(std::nullopt)
         , m_TC_bookmark(std::nullopt)
         , m_sb_from_baseline_processed(0)
+        , m_TC_7_SB_interval(0)
+        , m_TC_40_SB_interval(0)
         , m_update_history()
     {
     }
@@ -78,11 +101,20 @@ public:
     //!
     //! \brief Baseline (head) constructor.
     //!
-    //! \param project_name The whitelist key.
-    //! \param TC_initial_bookmark Total credit recorded for the project in the head
-    //! superblock, or std::nullopt when the project is absent from it.
+    //! The EFFECTIVE and RECORDED values are taken separately and neither is defaulted, so
+    //! every call site must state both. They diverge exactly when the head's recorded zero is
+    //! latched as corruption: the bookmarks (and hence the WAS) see std::nullopt, while the
+    //! history keeps reporting the zero as it appears on chain -- the head is the one
+    //! position the update path's recorded value does not cover, and hiding the datapoint
+    //! that drove a greylisting would make the corruption undiagnosable.
     //!
-    GreylistCandidateV2(std::string project_name, std::optional<uint64_t> TC_initial_bookmark)
+    //! \param project_name The whitelist key.
+    //! \param TC_initial_bookmark Effective head total credit (normalized), or std::nullopt.
+    //! \param recorded_total_credit Total credit as recorded in the head superblock.
+    //!
+    GreylistCandidateV2(std::string project_name,
+                        std::optional<uint64_t> TC_initial_bookmark,
+                        std::optional<uint64_t> recorded_total_credit)
         : m_project_name(project_name)
         , m_zcd_20_SB_count(0)
         , m_TC_7_SB_sum(0)
@@ -91,9 +123,11 @@ public:
         , m_TC_initial_bookmark(TC_initial_bookmark)
         , m_TC_bookmark(TC_initial_bookmark)
         , m_sb_from_baseline_processed(0)
+        , m_TC_7_SB_interval(0)
+        , m_TC_40_SB_interval(0)
         , m_update_history()
     {
-        m_update_history.push_back(UpdateHistoryEntry(0, TC_initial_bookmark));
+        m_update_history.push_back(UpdateHistoryEntry(0, recorded_total_credit));
     }
 
     //!
@@ -106,8 +140,18 @@ public:
 
     //!
     //! \brief Whitelist Activity Score: the 7-superblock average total-credit delta over the
-    //! 40-superblock average. V1-equivalent arithmetic, including the divisor's use of
-    //! min(processed, 7|40) -- the divisor contraction (F8) is a later, gated stage.
+    //! 40-superblock average, as the EXACT fraction
+    //!
+    //!     (m_TC_7_SB_sum * d40) / (m_TC_40_SB_sum * d7)
+    //!
+    //! where d7/d40 are the contracted intervals (the deepest positions with effective data
+    //! actually spanned by each endpoint difference). A missing ENDPOINT contracts its
+    //! interval; missing data in the MIDDLE telescopes away in the endpoint difference and
+    //! leaves the divisor alone. Approved vectors: data at j=0..5 with NA at 6,7 gives
+    //! sum7 = bookmark - TC[5] over divisor 5; NA at j=3 alone leaves divisor 7; the
+    //! initial-state latch case (9 producing superblocks over 31 genuine initial zeros)
+    //! gives exactly 13/3 = 4.3333 -- which only the exact-fraction form can produce
+    //! (900/39 truncates to 23 under integer averaging).
     //!
     Fraction GetWAS() const
     {
@@ -115,34 +159,55 @@ public:
             return Fraction(0);
         }
 
-        uint64_t TC_7_SB_avg = m_TC_7_SB_sum / std::min<uint64_t>(m_sb_from_baseline_processed, 7);
-        uint64_t TC_40_SB_avg = m_TC_40_SB_sum / std::min<uint64_t>(m_sb_from_baseline_processed, 40);
-
-        if (TC_7_SB_avg > (uint64_t) std::numeric_limits<int64_t>::max()
-            || TC_40_SB_avg > (uint64_t) std::numeric_limits<int64_t>::max()) {
-            TC_7_SB_avg /= 2;
-            TC_40_SB_avg /= 2;
-        }
-
-        // Guard on the DENOMINATOR alone (matches V1 as fixed for the truncation-to-zero
-        // divide): a zero 40-SB average means negligible long-term work availability -> 0.0.
-        if (TC_40_SB_avg == 0) {
+        // No effective data spanned by an interval means no computable average: report 0,
+        // consistent with V1's zero-sum behavior (the 40-side also guards the denominator).
+        if (m_TC_7_SB_interval == 0 || m_TC_40_SB_interval == 0) {
             return Fraction(0);
         }
 
-        return Fraction(TC_7_SB_avg, TC_40_SB_avg);
+        uint64_t TC_7_SB_sum = m_TC_7_SB_sum;
+        uint64_t TC_40_SB_sum = m_TC_40_SB_sum;
+
+        // Keep the cross products, and the downstream criteria comparison against 1/10,
+        // comfortably inside int64_t. The bound only triggers at total-credit deltas above
+        // ~1.1e16 -- four orders of magnitude past any real BOINC project -- and the halving
+        // is applied to both sums, so the ratio is preserved to within rounding and remains
+        // deterministic across nodes.
+        while (TC_7_SB_sum > (uint64_t) std::numeric_limits<int64_t>::max() / 800
+               || TC_40_SB_sum > (uint64_t) std::numeric_limits<int64_t>::max() / 800) {
+            TC_7_SB_sum >>= 1;
+            TC_40_SB_sum >>= 1;
+        }
+
+        if (TC_40_SB_sum == 0) {
+            return Fraction(0);
+        }
+
+        return Fraction((int64_t) (TC_7_SB_sum * m_TC_40_SB_interval),
+                        (int64_t) (TC_40_SB_sum * m_TC_7_SB_interval));
     }
 
     //!
-    //! \brief Apply one walk position. V1-equivalent with the audit behavior (benefit of the
-    //! doubt for a missing head at sb_from_baseline == 1) hard-coded on.
+    //! \brief Apply one walk position, with the audit behavior (benefit of the doubt for a
+    //! missing head at sb_from_baseline == 1) hard-coded on.
     //!
-    //! \param total_credit Total credit recorded at this position, or std::nullopt.
+    //! The ZCD, bookmark and WAS arms all consume the EFFECTIVE value; the history records
+    //! the RECORDED one. A latched-corrupt zero therefore behaves exactly like missing data
+    //! everywhere (including the ZCD "no statistics" arm -- zeros and NAs both count as
+    //! ZCDs), while getautogreylist show_history keeps showing the corruption rather than
+    //! hiding it. Neither parameter is defaulted: a call site must state both.
+    //!
+    //! \param effective_total_credit Latch-normalized total credit, or std::nullopt.
+    //! \param recorded_total_credit Total credit as recorded on chain, or std::nullopt.
     //! \param sb_from_baseline Position in the backward walk (1 == the superblock before the
     //! head).
     //!
-    void UpdateGreylistCandidateEntry(std::optional<uint64_t> total_credit, uint8_t sb_from_baseline)
+    void UpdateGreylistCandidateEntry(std::optional<uint64_t> effective_total_credit,
+                                      std::optional<uint64_t> recorded_total_credit,
+                                      uint8_t sb_from_baseline)
     {
+        const std::optional<uint64_t>& total_credit = effective_total_credit;
+
         if (sb_from_baseline > 0) {
             // ZCD arm. Walking backwards: total credit at this (older) position >= the
             // bookmark (newer position) means zero or negative forward credit -> a ZCD, as
@@ -174,6 +239,20 @@ public:
                 }
             }
 
+            // Divisor contraction (F8): the intervals track the deepest position holding
+            // effective data, whether or not the sum assignment above fired -- a deliberate
+            // rollback (data present, endpoint difference non-positive) keeps its V1
+            // penalized-by-omission shape, while genuinely MISSING endpoints contract.
+            if (total_credit) {
+                if (sb_from_baseline <= 7) {
+                    m_TC_7_SB_interval = sb_from_baseline;
+                }
+
+                if (sb_from_baseline <= 40) {
+                    m_TC_40_SB_interval = sb_from_baseline;
+                }
+            }
+
             m_sb_from_baseline_processed = sb_from_baseline;
         }
 
@@ -187,7 +266,7 @@ public:
         // Greylist criteria, with the 7-superblock stabilization grace period.
         m_meets_greylisting_crit = (sb_from_baseline >= 7 && (zcd > 7 || was < Fraction(1, 10)));
 
-        m_update_history.push_back(UpdateHistoryEntry(sb_from_baseline, total_credit));
+        m_update_history.push_back(UpdateHistoryEntry(sb_from_baseline, recorded_total_credit));
     }
 
     //!
@@ -208,6 +287,8 @@ private:
     std::optional<uint64_t> m_TC_initial_bookmark; //!< Head-anchored bookmark (reverse walk).
     std::optional<uint64_t> m_TC_bookmark;         //!< Rolling bookmark of the last seen TC.
     uint8_t m_sb_from_baseline_processed;          //!< Last walk position applied.
+    uint8_t m_TC_7_SB_interval;                    //!< Deepest position <= 7 with effective data.
+    uint8_t m_TC_40_SB_interval;                   //!< Deepest position <= 40 with effective data.
     std::vector<UpdateHistoryEntry> m_update_history; //!< Lookback history.
 };
 
