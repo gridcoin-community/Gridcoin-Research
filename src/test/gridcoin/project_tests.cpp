@@ -5,6 +5,7 @@
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
 #include "gridcoin/autogreylist.h"
+#include "gridcoin/autogreylist_v2.h"
 #include "gridcoin/quorum.h"
 #include "util/string.h"
 #include "wallet/generated_type.h"
@@ -1730,6 +1731,253 @@ BOOST_AUTO_TEST_CASE(facade_state_selectors_are_degenerate_below_the_gate)
 
     auto_greylist->Reset();
     whitelist.Reset();
+}
+
+//!
+//! \brief Stage 2a differential harness: the V2 walker must equal V1 exactly.
+//!
+//! Drives identical fixtures through the frozen V1 walker (with the audit height pinned to 0,
+//! matching V2's hard-coded benefit-of-the-doubt behavior -- V2 only runs above the redesign
+//! gate, which is never below the audit gate) and through AutoGreylistV2::Compute, and asserts
+//! per-project equality of the greylist criteria flag, ZCD, both WAS endpoint sums, the WAS
+//! value and the update-history length. At this stage V2 carries NO corrections (no zero
+//! normalization, no latch, no divisor contraction, no phantom-head skip), so equality must be
+//! EXACT over every fixture, including the adversarial ones. The corrections stage then flips
+//! this harness to "equal except the enumerated deltas".
+//!
+BOOST_AUTO_TEST_CASE(v2_walker_is_exactly_v1_equivalent_before_corrections)
+{
+    // Pin the audit gate ON for the V1 side so both walkers run the same benefit-of-the-doubt
+    // arm. Uses the consensus-params idiom (NOT gArgs.ForceSetArg -- clearing that with an
+    // empty string silently ACTIVATES a gate from genesis for the rest of the process).
+    struct AuditHeightGuard {
+        const int m_saved = Params().GetConsensus().AutoGreylistAuditHeight;
+        ~AuditHeightGuard()
+        {
+            const_cast<Consensus::Params&>(Params().GetConsensus()).AutoGreylistAuditHeight = m_saved;
+        }
+    } audit_height_guard;
+
+    const_cast<Consensus::Params&>(Params().GetConsensus()).AutoGreylistAuditHeight = 0;
+
+    // Run one fixture through both walkers and assert equality. Each project maps to a
+    // total-credit sequence (oldest first; last entry is the head); all sequences must have
+    // equal length. first_active_time optionally delays a project's whitelisting into the
+    // window to exercise the admissibility prefix.
+    auto run_and_compare = [](const std::map<std::string, std::vector<std::optional<uint64_t>>>& fixture,
+                              const std::map<std::string, uint64_t>& first_active_time,
+                              const std::string& label) {
+        GRC::Whitelist& whitelist = GRC::GetWhitelist();
+        std::shared_ptr<GRC::AutoGreylistService> auto_greylist = GRC::GetAutoGreylistCache();
+
+        whitelist.Reset();
+
+        int height = 0;
+        int64_t time = 0;
+
+        auto unit_test_blocks = std::make_shared<std::map<int, std::pair<CBlockIndex*, GRC::SuperblockPtr>>>();
+
+        bool first = true;
+        size_t sequence_length = 0;
+        for (const auto& project : fixture) {
+            const auto fa = first_active_time.find(project.first);
+            const uint64_t add_time = (fa != first_active_time.end()) ? fa->second : 0;
+
+            AddProjectEntry(3, project.first, "http://" + project.first + ".test", false,
+                            height, add_time, first);
+            first = false;
+
+            if (sequence_length == 0) sequence_length = project.second.size();
+            BOOST_REQUIRE(project.second.size() == sequence_length);
+        }
+
+        CBlockIndex* whitelist_index_entry = new CBlockIndex;
+        ++height;
+        ++time;
+
+        CBlockIndex* index_ptr = whitelist_index_entry;
+        CBlockIndex* index_ptr_prev = nullptr;
+
+        GRC::SuperblockPtr head_ptr;
+
+        for (size_t i = 0; i < sequence_length; ++i) {
+            index_ptr_prev = index_ptr;
+            index_ptr = new CBlockIndex;
+            index_ptr->nHeight = height;
+            index_ptr->nTime = time;
+            index_ptr->MarkAsSuperblock();
+            index_ptr->pprev = index_ptr_prev;
+
+            GRC::Superblock superblock = GRC::Superblock();
+
+            for (const auto& project : fixture) {
+                if (project.second[i]) {
+                    superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+                        .insert(std::make_pair(project.first, *project.second[i]));
+                }
+            }
+
+            GRC::SuperblockPtr superblock_ptr = GRC::SuperblockPtr();
+            superblock_ptr.Replace(superblock);
+            superblock_ptr.Rebind(index_ptr);
+
+            unit_test_blocks->insert(std::make_pair(height, std::make_pair(index_ptr, superblock_ptr)));
+            head_ptr = superblock_ptr;
+
+            ++height;
+            ++time;
+        }
+
+        // V1: one full refresh against the head (RefreshWithSuperblock rebuilds from scratch).
+        auto_greylist->Reset();
+        auto_greylist->RefreshWithSuperblock(head_ptr, unit_test_blocks);
+
+        // V2: the pure walker over the same inputs.
+        const GRC::AutoGreylistV2::Result v2 = GRC::AutoGreylistV2::Compute(
+            head_ptr,
+            whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
+            whitelist.GetProjectsFirstActive(),
+            unit_test_blocks);
+
+        // Compare, both directions (same key set, then per-key equality).
+        size_t v1_count = 0;
+
+        for (auto iter = auto_greylist->begin(); iter != auto_greylist->end(); ++iter) {
+            ++v1_count;
+
+            const auto v2_iter = v2.m_candidates.find(iter->first);
+            BOOST_REQUIRE_MESSAGE(v2_iter != v2.m_candidates.end(),
+                                  label + ": V2 missing candidate " + iter->first);
+
+            auto v1_entry = iter->second; // copy: V1 accessors are non-const
+            const GRC::GreylistCandidateV2& v2_entry = v2_iter->second;
+
+            BOOST_CHECK_MESSAGE(v1_entry.m_meets_greylisting_crit == v2_entry.m_meets_greylisting_crit,
+                                label + "/" + iter->first + ": criteria mismatch");
+            BOOST_CHECK_MESSAGE(v1_entry.GetZCD() == v2_entry.GetZCD(),
+                                label + "/" + iter->first + ": ZCD mismatch V1="
+                                    + ToString((int) v1_entry.GetZCD()) + " V2=" + ToString((int) v2_entry.GetZCD()));
+            BOOST_CHECK_MESSAGE(v1_entry.m_TC_7_SB_sum == v2_entry.m_TC_7_SB_sum,
+                                label + "/" + iter->first + ": TC_7 sum mismatch");
+            BOOST_CHECK_MESSAGE(v1_entry.m_TC_40_SB_sum == v2_entry.m_TC_40_SB_sum,
+                                label + "/" + iter->first + ": TC_40 sum mismatch");
+            BOOST_CHECK_MESSAGE(v1_entry.GetWAS().ToDouble() == v2_entry.GetWAS().ToDouble(),
+                                label + "/" + iter->first + ": WAS mismatch V1="
+                                    + ToString(v1_entry.GetWAS().ToDouble())
+                                    + " V2=" + ToString(v2_entry.GetWAS().ToDouble()));
+            BOOST_CHECK_MESSAGE(v1_entry.GetUpdateHistory().size() == v2_entry.GetUpdateHistory().size(),
+                                label + "/" + iter->first + ": history length mismatch");
+
+            BOOST_CHECK_MESSAGE(
+                (v2.m_auto_greylisted.count(iter->first) > 0) == v1_entry.m_meets_greylisting_crit,
+                label + "/" + iter->first + ": membership set disagrees with criteria");
+        }
+
+        BOOST_CHECK_MESSAGE(v1_count == v2.m_candidates.size(),
+                            label + ": candidate count mismatch V1=" + ToString(v1_count)
+                                + " V2=" + ToString(v2.m_candidates.size()));
+
+        for (auto& it : *unit_test_blocks) delete it.second.first;
+        unit_test_blocks->clear();
+        delete whitelist_index_entry;
+
+        auto_greylist->Reset();
+        whitelist.Reset();
+    };
+
+    typedef std::vector<std::optional<uint64_t>> Seq;
+
+    // A healthy 45-entry riser as the shared base shape.
+    auto riser = [](uint64_t base, uint64_t step, size_t len) {
+        Seq v;
+        for (size_t i = 0; i < len; ++i) v.push_back(base + step * i);
+        return v;
+    };
+    const size_t LEN = 45;
+    // Index of the entry sitting j superblocks back from the head.
+    auto at_j = [&](size_t j) { return LEN - 1 - j; };
+
+    { // 1: healthy riser + flat project (flat greylists: WAS 0, 20 ZCD).
+        std::map<std::string, Seq> fx;
+        fx["healthy"] = riser(500000000000ULL, 60000000ULL, LEN);
+        fx["flat"] = Seq(LEN, std::optional<uint64_t>(777777));
+        run_and_compare(fx, {}, "healthy+flat");
+    }
+    { // 2: chain-resident zero at the head (V1 pathology; V2 must REPRODUCE it at this stage).
+        std::map<std::string, Seq> fx;
+        fx["zerohead"] = riser(1000, 1000, LEN);
+        fx["zerohead"][at_j(0)] = std::optional<uint64_t>(0);
+        run_and_compare(fx, {}, "zero at head");
+    }
+    { // 3: zero at j == 7 (the TC_7 endpoint).
+        std::map<std::string, Seq> fx;
+        fx["zeroj7"] = riser(1000, 1000, LEN);
+        fx["zeroj7"][at_j(7)] = std::optional<uint64_t>(0);
+        run_and_compare(fx, {}, "zero at j=7");
+    }
+    { // 4: zero at j == 40 (the TC_40 endpoint -- the WCG mainnet shape).
+        std::map<std::string, Seq> fx;
+        fx["zeroj40"] = riser(500000000000ULL, 60000000ULL, LEN);
+        fx["zeroj40"][at_j(40)] = std::optional<uint64_t>(0);
+        run_and_compare(fx, {}, "zero at j=40");
+    }
+    { // 5: zero mid-window (telescopes away in the endpoint difference).
+        std::map<std::string, Seq> fx;
+        fx["zeromid"] = riser(1000, 1000, LEN);
+        fx["zeromid"][at_j(20)] = std::optional<uint64_t>(0);
+        run_and_compare(fx, {}, "zero at j=20");
+    }
+    { // 6: absent at the head (benefit-of-the-doubt shape at position 1).
+        std::map<std::string, Seq> fx;
+        fx["absenthead"] = riser(1000, 1000, LEN);
+        fx["absenthead"][at_j(0)] = std::optional<uint64_t>();
+        run_and_compare(fx, {}, "absent head");
+    }
+    { // 7: absent at j == 1.
+        std::map<std::string, Seq> fx;
+        fx["absentj1"] = riser(1000, 1000, LEN);
+        fx["absentj1"][at_j(1)] = std::optional<uint64_t>();
+        run_and_compare(fx, {}, "absent j=1");
+    }
+    { // 8: absent stretch j == 3..5 (numerator skips, divisor advances -- the F8 shape).
+        std::map<std::string, Seq> fx;
+        fx["absentrun"] = riser(1000, 1000, LEN);
+        for (size_t j = 3; j <= 5; ++j) fx["absentrun"][at_j(j)] = std::optional<uint64_t>();
+        run_and_compare(fx, {}, "absent j=3..5");
+    }
+    { // 9: absent at both endpoints (j == 7 and j == 40).
+        std::map<std::string, Seq> fx;
+        fx["absentend"] = riser(1000, 1000, LEN);
+        fx["absentend"][at_j(7)] = std::optional<uint64_t>();
+        fx["absentend"][at_j(40)] = std::optional<uint64_t>();
+        run_and_compare(fx, {}, "absent endpoints");
+    }
+    { // 10: short history (5 superblocks -- inside the 7-SB grace period).
+        std::map<std::string, Seq> fx;
+        fx["short"] = riser(1000, 1000, 5);
+        run_and_compare(fx, {}, "short history");
+    }
+    { // 11: rollback to a non-zero value at j == 10.
+        std::map<std::string, Seq> fx;
+        fx["rollback"] = riser(10000, 1000, LEN);
+        fx["rollback"][at_j(10)] = std::optional<uint64_t>(*fx["rollback"][at_j(10)] - 5000);
+        run_and_compare(fx, {}, "rollback j=10");
+    }
+    { // 12: genuinely all-zero project (must greylist identically on both walkers).
+        std::map<std::string, Seq> fx;
+        fx["allzero"] = Seq(LEN, std::optional<uint64_t>(0));
+        fx["healthy"] = riser(1000, 1000, LEN);
+        run_and_compare(fx, {}, "all-zero");
+    }
+    { // 13: a project whitelisted mid-window (admissibility prefix; fixture times ascend
+      //     1,2,3,... so first-active time 30 truncates its walk to the newer positions).
+        std::map<std::string, Seq> fx;
+        fx["old"] = riser(1000, 1000, LEN);
+        fx["late"] = riser(2000, 2000, LEN);
+        std::map<std::string, uint64_t> fa;
+        fa["late"] = 30;
+        run_and_compare(fx, fa, "late whitelisting");
+    }
 }
 
 //!
