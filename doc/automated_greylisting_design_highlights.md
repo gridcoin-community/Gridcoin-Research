@@ -136,19 +136,13 @@ The method computes the average total credit over a 7 superblock lookback and a 
 
 Note that `m_TC_7_SB_sum` and `m_TC_40_SB_sum` are **assignments, not accumulations** — each holds a single endpoint difference from the head bookmark (`m_TC_initial_bookmark - total_credit` at the largest qualifying `sb_from_baseline`), which is equivalent to summing the deltas only while the series is clean. One bad endpoint is therefore diluted by nothing. A known consequence, pre-dating the zero normalization and applying equally to projects simply absent from a superblock: when an endpoint is skipped the numerator spans fewer superblocks while the divisor still advances with `m_sb_from_baseline_processed`, so WAS is understated (a single skipped endpoint at `sb_from_baseline == 7` understates a uniform history by about 14%). This is tracked for the walker-correctness pass gated by `AutoGreylistRedesignHeight`.
 
-##### void UpdateGreylistCandidateEntry(std::optional<uint64_t> total_credit, uint8_t sb_from_baseline, bool use_benefit_of_doubt, bool zero_credit_is_missing)
+##### void UpdateGreylistCandidateEntry(std::optional<uint64_t> total_credit, uint8_t sb_from_baseline, bool use_benefit_of_doubt)
 
 This method is used by the RefreshWithSuperblock method to update each GreylistCandidateEntry and add each update to the entry history.
 
-The two flags are height-gated by the caller and neither is defaulted, so a new call site must decide both:
+`use_benefit_of_doubt` is height-gated by the caller on `AutoGreylistAuditHeight`; it suppresses the ZCD increment for the single interval at `sb_from_baseline == 1` when the head/baseline bookmark is missing, so a transient local scraper failure on one node cannot by itself force a greylist event.
 
-* `use_benefit_of_doubt` (`AutoGreylistAuditHeight`) suppresses the ZCD increment for the single interval at `sb_from_baseline == 1` when the head/baseline bookmark is missing, so a transient local scraper failure on one node cannot by itself force a greylist event.
-
-* `zero_credit_is_missing` (`AutoGreylistRedesignHeight`) treats a recorded total credit of **exactly zero** as missing data rather than an observation, normalizing it to `std::nullopt` once at the top of the method so that the WAS delta guard, the ZCD "no statistics" arm and the bookmark update all see it consistently. A zero is a cumulative lifetime counter asserting the project has never validated any work; where a *newer* superblock records non-zero lifetime credit for the same project, the chain itself contradicts that, so the zero is corruption rather than data. The same normalization is applied to the baseline value in `RefreshWithSuperblock`, because the head (`sb_from_baseline == 0`) is seeded through the parameterized `GreylistCandidateEntry` constructor and never passes through this method.
-
-  Note this does **not** weaken the deliberate penalty for a credit rollback to a non-zero value, which fails the `m_TC_initial_bookmark > total_credit` guard and remains penalized by omission. A rollback to exactly zero *is* suppressed, which is accepted: at the point of observation it is indistinguishable from the corruption signature, and a sustained reset is still caught via ZCD within about eight superblocks.
-
-The value as actually recorded on chain — not the normalized one — is what goes into the update history, so `getautogreylist show_history` continues to show the corruption rather than hiding it.
+Note this class implements the pre-`AutoGreylistRedesignHeight` (V1) consensus behavior and is frozen. The chain-resident-zero normalization (a recorded total credit of exactly zero treated as missing data), the WAS divisor correction, and the pending/authoritative state separation are all implemented in the V2 walker, which activates at `AutoGreylistRedesignHeight` and is documented separately.
 
 ##### struct UpdateHistoryEntry
 

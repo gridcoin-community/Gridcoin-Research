@@ -556,15 +556,8 @@ public:
             , m_TC_7_SB_sum(0)
             , m_TC_40_SB_sum(0)
             , m_meets_greylisting_crit(false)
-            // std::nullopt, NOT 0. These are std::optional; initializing with 0 yields an ENGAGED
-            // optional holding zero -- a default-constructed entry born in exactly the corrupt state
-            // this class now normalizes away, and unrescuable by any gate: the bookmark-repair branch
-            // (!m_TC_initial_bookmark) is dead, no historical credit exceeds zero so both WAS sums stay
-            // 0, and meets_greylisting_crit latches true from sb_from_baseline >= 7. Latent while
-            // RefreshWithSuperblock uses only the parameterized constructor, but this is a public
-            // nested type used as a std::map value, so one operator[] or try_emplace lands there.
-            , m_TC_initial_bookmark(std::nullopt)
-            , m_TC_bookmark(std::nullopt)
+            , m_TC_initial_bookmark(0)
+            , m_TC_bookmark(0)
             , m_sb_from_baseline_processed(0)
             , m_update_history({})
         {}
@@ -573,21 +566,10 @@ public:
         //! \brief This parameterized constructor is used to construct the initial (baseline) greylist candidate
         //! entry with the initial total credit value for the project. This also inserts the baseline history entry.
         //!
-        //! The EFFECTIVE and the RECORDED total credit are taken separately, and neither is defaulted, so
-        //! every call site has to state both. Above AutoGreylistRedesignHeight they diverge: a total credit
-        //! recorded as exactly zero is corruption rather than an observation, so it is normalized to nullopt
-        //! for the bookmark, while the history must keep reporting the zero as it actually appears in the
-        //! chain. This mirrors recorded_total_credit in UpdateGreylistCandidateEntry -- without it the head
-        //! (sb_from_baseline == 0) would be the one position where getautogreylist show_history hides the
-        //! very datapoint that drove the greylisting.
-        //!
         //! \param project_name
-        //! \param TC_initial_bookmark Effective baseline credit; drives the bookmarks and hence the WAS.
-        //! \param recorded_total_credit Credit as recorded in the superblock; drives the history entry only.
+        //! \param TC_initial_bookmark
         //!
-        GreylistCandidateEntry(std::string project_name,
-                               std::optional<uint64_t> TC_initial_bookmark,
-                               std::optional<uint64_t> recorded_total_credit)
+        GreylistCandidateEntry(std::string project_name, std::optional<uint64_t> TC_initial_bookmark)
             : m_project_name(project_name)
             , m_zcd_20_SB_count(0)
             , m_TC_7_SB_sum(0)
@@ -598,10 +580,9 @@ public:
             , m_sb_from_baseline_processed(0)
             , m_update_history()
         {
-            // Populate the initial historical entry from what the superblock RECORDED, not from the
-            // (possibly normalized) bookmark.
+            // Populate the initial historical entry from the initial baseline.
             UpdateHistoryEntry entry = UpdateHistoryEntry(0,
-                                                          recorded_total_credit);
+                                                          TC_initial_bookmark);
 
             m_update_history.push_back(entry);
         }
@@ -680,43 +661,8 @@ public:
         //! \param total_credit
         //! \param sb_from_baseline
         //! \param use_benefit_of_doubt Flag to enable the benefit of the doubt logic for the head superblock.
-        //! \param zero_credit_is_missing Flag to treat a recorded total credit of exactly zero as missing
-        //! data rather than an observation (see the normalization at the top of the body). Height-gated by
-        //! the caller on AutoGreylistRedesignHeight; not defaulted, so a new call site must decide.
-        void UpdateGreylistCandidateEntry(std::optional<uint64_t> total_credit, uint8_t sb_from_baseline,
-                                          bool use_benefit_of_doubt, bool zero_credit_is_missing)
+        void UpdateGreylistCandidateEntry(std::optional<uint64_t> total_credit, uint8_t sb_from_baseline, bool use_benefit_of_doubt)
         {
-            // Keep the value as actually recorded for the history entry at the bottom: the history exists
-            // for diagnosis, and normalizing before recording would erase the very evidence that a
-            // chain-resident zero is present.
-            const std::optional<uint64_t> recorded_total_credit = total_credit;
-
-            // A project total credit of exactly zero is a cumulative lifetime counter asserting the project
-            // has never validated any work. Where a NEWER superblock records non-zero lifetime credit for
-            // the same project, the chain itself contradicts that assertion, so the zero is corruption (the
-            // pre-fix scraper emitted one for any project whose stats export yielded no usable records)
-            // rather than an observation. Treat it as missing data.
-            //
-            // Done ONCE here rather than at each use: every consumer below keys off total_credit having a
-            // value, so normalizing at the top reaches the WAS delta guard, the ZCD "no statistics" arm and
-            // the bookmark update together. Guarding only the WAS branch would stop the spurious WAS
-            // collapse but leave a genuinely zero project incrementing no ZCD and no longer collapsing WAS
-            // -- invisible to both routes, and permanently un-greylistable.
-            //
-            // Interaction with the deliberate penalty for a credit rollback, stated precisely because the
-            // obvious phrasing is wrong. A rollback to a NON-ZERO value fails the "initial bookmark >
-            // total_credit" guard when walking backward and is penalized by omission -- untouched here,
-            // since the predicate below requires exactly zero. A rollback to EXACTLY zero DOES pass that
-            // guard, maximally, and IS suppressed. That is accepted rather than incidental: at the point
-            // of observation a hard reset to zero is byte-identical to the corruption signature, so there
-            // is nothing left to discriminate on -- and a genuine reset is still caught, because
-            // normalizing to nullopt makes the ZCD "no statistics" arm fire on every subsequent
-            // superblock, so ZCD passes 7 within eight of them and the project greylists by that route
-            // instead, roughly a week later.
-            if (zero_credit_is_missing && total_credit && *total_credit == 0) {
-                total_credit = std::nullopt;
-            }
-
             if (sb_from_baseline > 0) {
                 // ZCD part. Remember we are going backwards, so if total_credit is greater than or equal to
                 // the bookmark, then we have zero or even negative project total credit between superblocks, so
@@ -780,7 +726,7 @@ public:
             m_meets_greylisting_crit = (sb_from_baseline >= 7 && (zcd > 7 || was < Fraction(1, 10)));
 
             // Insert historical entry.
-            UpdateHistoryEntry entry(sb_from_baseline, recorded_total_credit);
+            UpdateHistoryEntry entry(sb_from_baseline, total_credit);
             m_update_history.push_back(entry);
         }
 
