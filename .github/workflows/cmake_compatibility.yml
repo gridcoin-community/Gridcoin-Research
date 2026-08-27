@@ -157,6 +157,10 @@ jobs:
 
       - name: Configure CMake (Cross)
         run: |
+          # Set an explicit build type. With none, CMake emits no -O flag and
+          # the tree is compiled unoptimised; every other job in CI sets one.
+          # The cost lands hardest here because ctest runs under emulation, so
+          # the unoptimised code is also the slowest code to execute.
           cmake -B build_arm64 -GNinja \
             -DCMAKE_SYSTEM_NAME=Linux \
             -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
@@ -168,6 +172,7 @@ jobs:
             -DUSE_QT6=ON \
             -DQt6_DIR=/usr/lib/aarch64-linux-gnu/cmake/Qt6 \
             -DENABLE_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/qemu-aarch64-static \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
@@ -243,6 +248,10 @@ jobs:
 
       - name: Configure CMake (Cross)
         run: |
+          # Set an explicit build type. With none, CMake emits no -O flag and
+          # the tree is compiled unoptimised; every other job in CI sets one.
+          # The cost lands hardest here because ctest runs under emulation, so
+          # the unoptimised code is also the slowest code to execute.
           cmake -B build_armhf -GNinja \
             -DCMAKE_SYSTEM_NAME=Linux \
             -DCMAKE_SYSTEM_PROCESSOR=arm \
@@ -252,6 +261,7 @@ jobs:
             -DCMAKE_SYSROOT=/ \
             -DQt6_DIR=/usr/lib/arm-linux-gnueabihf/cmake/Qt6 \
             -DENABLE_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DENABLE_GUI=ON \
             -DUSE_QT6=ON \
             -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/qemu-arm-static \
