@@ -156,6 +156,12 @@ void AutoGreylistService::RefreshWithAndUpdateSuperblock(
             }
         }
 
+        // One snapshot serves both the walker (on a cache miss) and the record derivation
+        // below: identical arguments, and nothing between the uses can mutate the registry
+        // (the caller holds cs_main).
+        const WhitelistSnapshot whitelist_snapshot = GetWhitelist().Snapshot(
+            GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
+
         if (!cached) {
             // Compute fresh: bind the candidate to the tip, exactly as the V1 path does.
             SuperblockPtr superblock_ptr;
@@ -164,8 +170,7 @@ void AutoGreylistService::RefreshWithAndUpdateSuperblock(
 
             AutoGreylistV2::Result result = AutoGreylistV2::Compute(
                 superblock_ptr,
-                GetWhitelist().Snapshot(GreylistState::NONE,
-                                        GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
+                whitelist_snapshot,
                 GetWhitelist().GetProjectsFirstActive(),
                 unit_test_blocks, pindexBest->pprev);
 
@@ -179,9 +184,7 @@ void AutoGreylistService::RefreshWithAndUpdateSuperblock(
             stamp_input.m_auto_greylisted = cached->m_auto_greylisted;
 
             superblock.m_project_status = AutoGreylistV2::DeriveProjectStatusRecord(
-                stamp_input,
-                GetWhitelist().Snapshot(GreylistState::NONE,
-                                        GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED));
+                stamp_input, whitelist_snapshot);
         }
 
         if (update_pending_cache) {
@@ -221,17 +224,16 @@ void AutoGreylistService::StampProjectStatus(
     superblock_ptr.m_height = anchor_height;
     superblock_ptr.m_timestamp = anchor_time;
 
+    const WhitelistSnapshot whitelist_snapshot = GetWhitelist().Snapshot(
+        GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
+
     const AutoGreylistV2::Result result = AutoGreylistV2::Compute(
         superblock_ptr,
-        GetWhitelist().Snapshot(GreylistState::NONE,
-                                GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
+        whitelist_snapshot,
         GetWhitelist().GetProjectsFirstActive(),
         unit_test_blocks, walk_start);
 
-    superblock.m_project_status = AutoGreylistV2::DeriveProjectStatusRecord(
-        result,
-        GetWhitelist().Snapshot(GreylistState::NONE,
-                                GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED));
+    superblock.m_project_status = AutoGreylistV2::DeriveProjectStatusRecord(result, whitelist_snapshot);
 }
 
 bool AutoGreylistService::ValidateProjectStatus(
@@ -246,17 +248,20 @@ bool AutoGreylistService::ValidateProjectStatus(
         return true;
     }
 
+    // One snapshot for the walker and the record derivation: this runs on the validation
+    // thread for every accepted v11+ block above the gate, so the duplicate cs_lock
+    // acquisition and ProjectList allocation are worth removing.
+    const WhitelistSnapshot whitelist_snapshot = GetWhitelist().Snapshot(
+        GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
+
     const AutoGreylistV2::Result result = AutoGreylistV2::Compute(
         superblock_ptr,
-        GetWhitelist().Snapshot(GreylistState::NONE,
-                                GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
+        whitelist_snapshot,
         GetWhitelist().GetProjectsFirstActive(),
         unit_test_blocks, walk_start);
 
     const Superblock::ProjectStatus expected = AutoGreylistV2::DeriveProjectStatusRecord(
-        result,
-        GetWhitelist().Snapshot(GreylistState::NONE,
-                                GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED));
+        result, whitelist_snapshot);
 
     if (expected.m_project_status != superblock_ptr->m_project_status.m_project_status) {
         error("%s: project status record mismatch: expected %u entries, received %u.",
