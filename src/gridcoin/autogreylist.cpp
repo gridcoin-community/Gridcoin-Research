@@ -425,6 +425,29 @@ std::optional<GreylistComputation> AutoGreylistService::Get(GreylistState state)
     return result;
 }
 
+std::optional<GreylistComputation> AutoGreylistService::GetIfV2(GreylistState state) const
+{
+    if (state == GreylistState::NONE) {
+        return std::nullopt;
+    }
+
+    LOCK(m_service_lock);
+
+    PrimeAuthoritativeLocked();
+
+    if (state == GreylistState::PENDING && m_pending) {
+        return m_pending;
+    }
+
+    if (m_authoritative) {
+        // The AUTHORITATIVE selector and the PENDING base case alike.
+        return m_authoritative;
+    }
+
+    // V1-backed: the caller applies V1's own per-project semantics.
+    return std::nullopt;
+}
+
 // ---------------------------------------------------------------------------- reporting ----
 
 GreylistComputation AutoGreylistService::ComputeReport() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)

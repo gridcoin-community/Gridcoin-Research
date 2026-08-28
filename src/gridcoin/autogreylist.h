@@ -222,6 +222,22 @@ public:
     std::optional<GreylistComputation> Get(GreylistState state) const;
 
     //!
+    //! \brief The V2-backed computation for the selected state, or std::nullopt when reads
+    //! resolve to V1 (below the gate, or nothing primed).
+    //!
+    //! This is the overlay's snapshot primitive: Whitelist::Snapshot captures the greylist
+    //! state ONCE through this call -- one lock acquisition, one internally consistent copy
+    //! -- and tests per-project membership against the copy. Per-project Contains() calls
+    //! would take the service lock N times with windows between them, and a pending-slot
+    //! swap (the scraper install runs without cs_main above the gate) could interleave
+    //! mid-overlay, tearing a single snapshot across two greylist states -- unacceptable
+    //! for snapshots that feed magnitude computation. Copies feeding one computation must
+    //! come from one critical section. The V1 fall-through deliberately returns nullopt:
+    //! below the gate the overlay keeps V1's historical per-project lookups bit-identically.
+    //!
+    std::optional<GreylistComputation> GetIfV2(GreylistState state) const;
+
+    //!
     //! \brief Compute a fresh greylist report against the current committed superblock.
     //!
     //! Above the redesign gate this is value-returning -- it runs the V2 walker against the

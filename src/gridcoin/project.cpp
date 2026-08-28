@@ -722,12 +722,25 @@ WhitelistSnapshot Whitelist::Snapshot(GreylistState state,
     // private copies and never writes through to the shared registry entries. Pre-gate we retain the legacy shallow
     // copy (whose override mutates the registry entries in place) so pre-gate consensus behavior is unchanged. The
     // gate is carried on the AutoGreylist (set from the active superblock height in RefreshWithSuperblock).
+    // Capture the greylist state ONCE for the whole overlay (see GetIfV2's doc): one lock
+    // acquisition, one internally consistent copy -- a concurrent pending-slot swap cannot
+    // tear this snapshot across two greylist states. Engaged only when a V2 computation
+    // backs the selected state; below the gate it is disengaged and the overlay keeps V1's
+    // historical per-project lookups bit-identically.
+    const std::optional<GreylistComputation> v2_overlay =
+        (state != GreylistState::NONE && m_auto_greylist != nullptr)
+            ? m_auto_greylist->GetIfV2(state)
+            : std::nullopt;
+
     // No overlay (GreylistState::NONE) means the loop below never mutates the working
     // entries, so the deep-copy protection is unnecessary regardless of the gate -- skip its
     // cost. The returned snapshot is value-copied from the working map either way, so the
-    // output is identical; only the intermediate allocation is saved.
+    // output is identical; only the intermediate allocation is saved. A V2-backed overlay
+    // always deep-copies (derived from the SAME capture as the membership, so the two
+    // cannot disagree); the V1 arm asks the V1 instance as before.
     const bool deep_copy = state != GreylistState::NONE
-                           && m_auto_greylist != nullptr && m_auto_greylist->IsDeepCopyActive(state);
+                           && (v2_overlay.has_value()
+                               || (m_auto_greylist != nullptr && m_auto_greylist->IsDeepCopyActive(state)));
 
     ProjectEntryMap project_entries;
 
@@ -745,7 +758,9 @@ WhitelistSnapshot Whitelist::Snapshot(GreylistState state,
             // applies the current state of the greylist at the time of the construction of the whitelist snapshot, without
             // disturbing the underlying projects registry.
 
-            bool in_greylist = m_auto_greylist != nullptr ? m_auto_greylist->Contains(state, iter.first) : false;
+            bool in_greylist = v2_overlay
+                ? (v2_overlay->m_auto_greylisted.count(iter.first) > 0)
+                : (m_auto_greylist != nullptr ? m_auto_greylist->Contains(state, iter.first) : false);
 
             // If the project does NOT have a status of auto greylist override, and it is either active or already manually
             // greylisted, then if it is in the greylist, mark with the status auto greylisted.
