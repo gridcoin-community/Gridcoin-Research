@@ -231,8 +231,10 @@ public:
     // ---------- transitional V1 pass-throughs -------------------------------------------
 
     //! \brief Iteration over the V1 candidate map (getautogreylist and tests). These forward
-    //! to the V1 instance and are retired when reporting moves to a value-returning API in
-    //! the state-separation stage.
+    //! to the V1 instance, whose begin()/end() release the internal lock before the iterator
+    //! is used -- so they are safe ONLY where every V1 producer is excluded for the duration
+    //! of the iteration. In production that means under cs_main (all producer paths require
+    //! it); single-threaded tests qualify trivially. Retired with V1's deletion.
     AutoGreylist::const_iterator begin() const;
     AutoGreylist::const_iterator end() const;
     AutoGreylist::size_type size() const;

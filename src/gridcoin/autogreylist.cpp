@@ -358,31 +358,47 @@ std::optional<GreylistComputation> AutoGreylistService::Get(GreylistState state)
         return std::nullopt;
     }
 
-    LOCK(m_service_lock);
+    {
+        LOCK(m_service_lock);
 
-    PrimeAuthoritativeLocked();
+        PrimeAuthoritativeLocked();
 
-    if (state == GreylistState::PENDING && m_pending) {
-        return m_pending;
+        if (state == GreylistState::PENDING && m_pending) {
+            return m_pending;
+        }
+
+        if (m_authoritative) {
+            // Serves both the AUTHORITATIVE selector and the PENDING base case: absent a
+            // convergence, pending equals authoritative.
+            return m_authoritative;
+        }
     }
 
-    if (m_authoritative) {
-        // Serves both the AUTHORITATIVE selector and the PENDING base case: absent a
-        // convergence, pending equals authoritative.
-        return m_authoritative;
-    }
-
-    // V1 fall-through: synthesize a computation from the V1 candidate map so the caller sees
-    // one result shape either side of the gate. No key -- V1's cache does not expose one, and
-    // below the gate no consumer needs it.
+    // V1 fall-through: synthesize a computation so the caller sees one result shape either
+    // side of the gate. No key -- V1's cache does not expose one, and below the gate no
+    // consumer needs it.
+    //
+    // Deliberately NOT built by iterating m_v1->begin()/end(): V1's iterators are handed out
+    // with autogreylist_lock already released, so iterating them from a consumer that (by
+    // this API's contract) holds no cs_main could race a producer refresh and dereference
+    // invalidated iterators. Membership is instead derived per project through
+    // V1::Contains(), which takes the V1 lock internally on every call, over the whitelist
+    // names -- every V1 candidate is keyed by a whitelisted project name. A refresh landing
+    // mid-loop can tear the view across projects (each answer is individually consistent),
+    // which is the same transient staleness any unlocked reader of V1 always had -- but
+    // never undefined behavior. The whitelist snapshot is taken with NO facade lock held:
+    // Snapshot() takes cs_lock, and the canonical order is cs_lock -> m_service_lock.
     GreylistComputation result;
     result.m_version = GreylistVersion::V1;
     result.m_key = uint256();
     result.m_from_record = false;
 
-    for (auto iter = m_v1->begin(); iter != m_v1->end(); ++iter) {
-        if (iter->second.m_meets_greylisting_crit) {
-            result.m_auto_greylisted.insert(iter->first);
+    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(
+        GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
+
+    for (const auto& project : whitelist) {
+        if (m_v1->Contains(project.m_name)) {
+            result.m_auto_greylisted.insert(project.m_name);
         }
     }
 
@@ -411,6 +427,10 @@ GreylistComputation AutoGreylistService::ComputeReport() const EXCLUSIVE_LOCKS_R
 
     // Below the gate: preserve the pre-redesign getautogreylist behavior exactly (an explicit
     // V1 refresh; the RPC reads V1 candidate detail through the transitional iterators).
+    // Iterating V1 here (and in the RPC's V1 branch) is safe from iterator invalidation
+    // because this method requires cs_main and EVERY producer path that mutates the V1 map
+    // also requires cs_main -- the iteration cannot interleave with a refresh. That
+    // serialization is the transitional iterators' safety contract; they are retired with V1.
     m_v1->Refresh();
 
     GreylistComputation result;
