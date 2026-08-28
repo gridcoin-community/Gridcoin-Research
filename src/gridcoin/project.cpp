@@ -722,7 +722,12 @@ WhitelistSnapshot Whitelist::Snapshot(GreylistState state,
     // private copies and never writes through to the shared registry entries. Pre-gate we retain the legacy shallow
     // copy (whose override mutates the registry entries in place) so pre-gate consensus behavior is unchanged. The
     // gate is carried on the AutoGreylist (set from the active superblock height in RefreshWithSuperblock).
-    const bool deep_copy = m_auto_greylist != nullptr && m_auto_greylist->IsDeepCopyActive(state);
+    // No overlay (GreylistState::NONE) means the loop below never mutates the working
+    // entries, so the deep-copy protection is unnecessary regardless of the gate -- skip its
+    // cost. The returned snapshot is value-copied from the working map either way, so the
+    // output is identical; only the intermediate allocation is saved.
+    const bool deep_copy = state != GreylistState::NONE
+                           && m_auto_greylist != nullptr && m_auto_greylist->IsDeepCopyActive(state);
 
     ProjectEntryMap project_entries;
 

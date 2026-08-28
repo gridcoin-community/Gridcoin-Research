@@ -11,6 +11,7 @@
 
 #include <map>
 #include <optional>
+#include <type_traits>
 #include <set>
 #include <string>
 #include <vector>
@@ -288,7 +289,13 @@ public:
         return m_update_history;
     }
 
-    const std::string m_project_name;    //!< The whitelist key.
+    //! \brief The whitelist key. NOT const, deviating from V1's member: this type is a
+    //! std::map value inside GreylistComputation, which the facade copies BY ASSIGNMENT when
+    //! caching results -- a const member deletes the copy-assignment operator, and libc++
+    //! (macOS) instantiates map::operator= for that path where libstdc++ happens not to.
+    //! The class still never mutates it after construction.
+    std::string m_project_name;
+
     uint8_t m_zcd_20_SB_count;           //!< Zero Credit Days over the 20-SB lookback.
     uint64_t m_TC_7_SB_sum;              //!< Endpoint TC difference over the 7-SB lookback.
     uint64_t m_TC_40_SB_sum;             //!< Endpoint TC difference over the 40-SB lookback.
@@ -302,6 +309,13 @@ private:
     uint8_t m_TC_40_SB_interval;                   //!< Deepest position <= 40 with effective data.
     std::vector<UpdateHistoryEntry> m_update_history; //!< Lookback history.
 };
+
+//! GreylistCandidateV2 must remain a regular type: it is a std::map value that the facade
+//! copies by assignment when caching computations. A const member (or any other change that
+//! deletes copy assignment) breaks the build only on libc++ (macOS), so pin it here where
+//! every platform checks it.
+static_assert(std::is_copy_assignable<GreylistCandidateV2>::value,
+              "GreylistCandidateV2 must be copy-assignable (std::map value semantics)");
 
 //!
 //! \brief The V2 greylist walker: a single, pure, value-returning entry point.

@@ -1871,7 +1871,15 @@ std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
     // from, so display stays self-consistent without a display RPC side-effecting an entire
     // contract rebuild -- and if the convergence is stale, rows and greylist are stale
     // TOGETHER, which is the data-source rule.
-    if (!IsAutoGreylistRedesignEnabled(nBestHeight)) {
+    int best_height = 0;
+    {
+        // Narrow scoped read: nBestHeight is cs_main-guarded and ExplainMagnitude is not a
+        // cs_main context (CreateSuperblock below takes cs_main internally where it needs it).
+        LOCK(cs_main);
+        best_height = nBestHeight;
+    }
+
+    if (!IsAutoGreylistRedesignEnabled(best_height)) {
         CreateSuperblock();
     }
 

@@ -4188,8 +4188,11 @@ UniValue getautogreylist(const UniValue& params)
     UniValue autogreylist(UniValue::VARR);
 
     // Emits one candidate entry; generic because the V1 (GreylistCandidateEntry) and V2
-    // (GreylistCandidateV2) types expose the same reporting surface.
-    const auto emit_entry = [&](const std::string& name, auto candidate) {
+    // (GreylistCandidateV2) types expose the same reporting surface. Taken by forwarding
+    // reference: V2 candidates bind const (their accessors are const), while the V1 arm
+    // passes a member of its already-copied iteration pair non-const (V1's accessors are
+    // not const) -- no additional candidate copy in either arm.
+    const auto emit_entry = [&](const std::string& name, auto& candidate) {
         if (!show_all_projects && !candidate.m_meets_greylisting_crit) {
             return;
         }
