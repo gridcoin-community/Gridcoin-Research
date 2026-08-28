@@ -1376,9 +1376,14 @@ public:
     //! the head (superblock construction/validation); false for re-derivations of PAST
     //! convergences, which must not clobber live pending greylist state. Deliberately not
     //! defaulted -- a new call site must decide (as must the version).
+    //! \param anchor_index The chain tip the candidate binds to, captured by the caller
+    //! under cs_main. Above the redesign gate the greylist candidate path then runs without
+    //! cs_main; below the gate the frozen V1 path reads pindexBest internally and the call
+    //! site must hold cs_main (see the gate-dispatched locking at the call sites).
     static Superblock FromConvergence(const ConvergedScraperStats &stats,
         const uint32_t version,
-        bool update_pending_cache);
+        bool update_pending_cache,
+        const CBlockIndex* anchor_index);
 
     //!
     //! \brief Initialize a superblock from the provided scraper statistics.

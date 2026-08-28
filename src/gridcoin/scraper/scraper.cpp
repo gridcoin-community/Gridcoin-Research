@@ -6408,15 +6408,20 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
                 Superblock superblock_Prev;
 
+                // Narrow-anchor rule: cs_main pays for anchor capture, never for the walk.
+                // The tip pointer is captured under a brief cs_main; the V2 candidate path
+                // then binds and walks from it with no cs_main (the ancestor topology and
+                // disk blocks it reads are immutable). BELOW the redesign gate the frozen V1
+                // path still reads pindexBest internally, so that arm keeps cs_main held for
+                // the duration (canonical order cs_main -> subsystem locks, as at the
+                // testnewsb site) -- a temporary cost that ends at the gate.
+                const CBlockIndex* anchor_index;
                 {
-                    // FromConvergence below reaches RefreshWithAndUpdateSuperblock, which is
-                    // EXCLUSIVE_LOCKS_REQUIRED(cs_main) (it anchors the candidate at pindexBest
-                    // and, above the redesign gate, walks the chain from it). Canonical order
-                    // is cs_main -> subsystem locks, so acquire cs_main first (the testnewsb
-                    // site does the same). CCriticalSection is recursive, so callers that
-                    // already hold cs_main (the validator path) are unaffected.
-                    LOCK2(cs_main, cs_ConvergedScraperStatsCache);
+                    LOCK(cs_main);
+                    anchor_index = pindexBest;
+                }
 
+                const auto install_convergence = [&]() EXCLUSIVE_LOCKS_REQUIRED(cs_ConvergedScraperStatsCache) {
                     ConvergedScraperStatsCache.AddConvergenceToPastConvergencesMap();
 
                     superblock_Prev = ConvergedScraperStatsCache.NewFormatSuperblock;
@@ -6428,7 +6433,7 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
                     ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
 
                     superblock = Superblock::FromConvergence(ConvergedScraperStatsCache, superblock_contract_version,
-                                                         /*update_pending_cache=*/true);
+                                                         /*update_pending_cache=*/true, anchor_index);
 
                     if (!superblock.WellFormed())
                     {
@@ -6444,6 +6449,19 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
                     // If called from housekeeping, mark bMinHousekeepingComplete true
                     if (bFromHousekeeping) ConvergedScraperStatsCache.bMinHousekeepingComplete = true;
+                };
+
+                // ONE critical section per arm: the convergence fields, the pending greylist
+                // state and bClean must change atomically with respect to readers, exactly as
+                // in the original single-lock block.
+                if (anchor_index != nullptr && IsAutoGreylistRedesignEnabled(anchor_index->nHeight)) {
+                    LOCK(cs_ConvergedScraperStatsCache);
+
+                    install_convergence();
+                } else {
+                    LOCK2(cs_main, cs_ConvergedScraperStatsCache);
+
+                    install_convergence();
                 }
 
                 // Signal UI of SBContract status. cs_ConvergedScraperStatsCache is released before this, because
@@ -6656,7 +6674,8 @@ UniValue archivelog(const UniValue& params)
  * @param ConvergedScraperStatsIn
  * @return JSON representation of input ConvergedScraperStats
  */
-UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStatsIn)
+UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStatsIn,
+                                     const CBlockIndex* anchor_index)
 {
     UniValue ret(UniValue::VOBJ);
 
@@ -6695,7 +6714,7 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
         // A PAST convergence: update_pending_cache = false, so this diagnostic re-derivation
         // cannot clobber the live pending greylist state above the redesign gate.
         Superblock superblock = Superblock::FromConvergence(dummy_converged_stats, Superblock::CURRENT_VERSION,
-                                                            /*update_pending_cache=*/false);
+                                                            /*update_pending_cache=*/false, anchor_index);
 
         entry.pushKV("superblock_from_this_past_convergence_quorumhash", superblock.GetHash().ToString());
 
@@ -6756,17 +6775,25 @@ UniValue convergencereport(const UniValue& params)
 
     UniValue result(UniValue::VOBJ);
 
+    // Narrow-anchor rule: capture the tip under a brief cs_main; above the redesign gate the
+    // past-convergence re-derivations below then run without cs_main, while below the gate
+    // the frozen V1 path reads pindexBest internally and cs_main stays held (canonical
+    // order, cs_main before the subsystem lock).
+    const CBlockIndex* anchor_index;
     {
-        // ConvergedScraperStatsToJson below re-derives superblocks from past convergences
-        // via FromConvergence, which reaches the cs_main-required greylist candidate path.
-        // Canonical order: cs_main before the subsystem lock.
-        LOCK2(cs_main, cs_ConvergedScraperStatsCache);
+        LOCK(cs_main);
+        anchor_index = pindexBest;
+    }
 
+    const bool redesign_active = anchor_index != nullptr
+                                 && IsAutoGreylistRedesignEnabled(anchor_index->nHeight);
+
+    const auto build_report = [&]() EXCLUSIVE_LOCKS_REQUIRED(cs_ConvergedScraperStatsCache) {
         result.pushKV("superblock_well_formed", ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed());
 
         if (params.size() && params[0].get_bool())
         {
-            result.pushKV("detailed_convergence_output", ConvergedScraperStatsToJson(ConvergedScraperStatsCache));
+            result.pushKV("detailed_convergence_output", ConvergedScraperStatsToJson(ConvergedScraperStatsCache, anchor_index));
         }
         else
         {
@@ -6853,6 +6880,16 @@ UniValue convergencereport(const UniValue& params)
         }
 
         result.pushKV("converged_projects", ConvergedProjects);
+    };
+
+    if (redesign_active) {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        build_report();
+    } else {
+        LOCK2(cs_main, cs_ConvergedScraperStatsCache);
+
+        build_report();
     }
 
     return result;
@@ -6921,7 +6958,7 @@ UniValue testnewsb(const UniValue& params)
 
         NewFormatSuperblock = SuperblockPtr::BindShared(
             Superblock::FromConvergence(ConvergedScraperStatsCache, Superblock::CURRENT_VERSION,
-                                        /*update_pending_cache=*/true),
+                                        /*update_pending_cache=*/true, pindexBest),
             pindexBest);
 
         _log(logattribute::INFO, "testnewsb",

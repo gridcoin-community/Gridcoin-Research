@@ -45,9 +45,10 @@ struct GreylistComputation
     //! DESIGN.md section 10.2; for the pending state it is the convergence content hash
     //! (ConvergedManifest::nContentHash). The key is an identity label for consumers and
     //! diagnostics -- FRESHNESS is guaranteed by the push-model write discipline (every
-    //! superblock push/pop/load replaces the authoritative slot; every convergence install
-    //! replaces the pending slot), never by a reader comparing keys, which would require the
-    //! read path to reach into chain or convergence state. Null for V1-backed views: V1's
+    //! superblock push/pop/load replaces the authoritative slot AND clears the pending slot,
+    //! since the pending walk reads the committed superblock set that just changed; every
+    //! convergence install replaces the pending slot), never by a reader comparing keys,
+    //! which would require the read path to reach into chain or convergence state. Null for V1-backed views: V1's
     //! single cache exposes no key, and below the redesign gate no consumer needs one.
     uint256 m_key;
 
@@ -127,8 +128,16 @@ public:
     //! convergences (e.g. the convergencereport RPC), which must not clobber live pending
     //! state. Deliberately not defaulted: a new call site must decide.
     //!
+    //! \param anchor_index The chain tip the candidate binds to, captured by the caller
+    //! under cs_main (the narrow-anchor rule: cs_main pays for the capture, never the walk).
+    //! Above the redesign gate this method then needs NO cs_main. BELOW the gate the frozen
+    //! V1 arm still reads pindexBest internally, so pre-gate call sites must hold cs_main
+    //! across the call -- they do, via the gate-dispatched locking at the FromConvergence
+    //! call sites.
+    //!
     void RefreshWithAndUpdateSuperblock(Superblock& superblock, const uint256& convergence_id,
                                         bool update_pending_cache,
+                                        const CBlockIndex* anchor_index,
                                         std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>>
                                             unit_test_blocks = nullptr);
 

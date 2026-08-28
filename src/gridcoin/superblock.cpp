@@ -597,7 +597,8 @@ Superblock::Superblock(uint32_t version)
 Superblock Superblock::FromConvergence(
     const ConvergedScraperStats& stats,
     const uint32_t version,
-    const bool update_pending_cache)
+    const bool update_pending_cache,
+    const CBlockIndex* anchor_index)
 {
     Superblock superblock = Superblock::FromStats(stats.mScraperConvergedStats, version);
 
@@ -630,7 +631,7 @@ Superblock Superblock::FromConvergence(
         std::shared_ptr<GRC::AutoGreylistService> greylist_ptr = GRC::GetAutoGreylistCache();
 
         greylist_ptr->RefreshWithAndUpdateSuperblock(superblock, stats.Convergence.nContentHash,
-                                                     update_pending_cache);
+                                                     update_pending_cache, anchor_index);
     }
 
     return superblock;

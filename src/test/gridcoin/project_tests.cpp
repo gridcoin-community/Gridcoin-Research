@@ -1839,7 +1839,8 @@ BOOST_AUTO_TEST_CASE(v2_walker_matches_v1_where_no_correction_applies)
             head_ptr,
             whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
             whitelist.GetProjectsFirstActive(),
-            unit_test_blocks);
+            unit_test_blocks,
+        /*walk_start=*/nullptr);
 
         // Compare, both directions (same key set, then per-key equality).
         size_t v1_count = 0;
@@ -2054,7 +2055,8 @@ WalkerRunResults RunBothGreylistWalkers(const std::map<std::string, std::vector<
         head_ptr,
         whitelist.Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
         whitelist.GetProjectsFirstActive(),
-        unit_test_blocks);
+        unit_test_blocks,
+        /*walk_start=*/nullptr);
 
     for (auto& it : *unit_test_blocks) delete it.second.first;
     unit_test_blocks->clear();
@@ -2663,7 +2665,8 @@ BOOST_AUTO_TEST_CASE(facade_authoritative_is_read_from_the_record_above_the_gate
             GRC::GetWhitelist().Snapshot(GRC::GreylistState::NONE,
                                          GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
             GRC::GetWhitelist().GetProjectsFirstActive(),
-            chain.m_blocks);
+            chain.m_blocks,
+        /*walk_start=*/nullptr);
         BOOST_CHECK(walked.m_auto_greylisted.count("flatproj") == 1);
     }
 
@@ -2745,7 +2748,7 @@ BOOST_AUTO_TEST_CASE(facade_pending_lifecycle_above_the_gate)
     const uint256 convergence_y = uint256S("0x2222222222222222222222222222222222222222222222222222222222222222");
 
     service->RefreshWithAndUpdateSuperblock(candidate, convergence_x, /*update_pending_cache=*/true,
-                                            chain.m_blocks);
+                                            chain.m_tip, chain.m_blocks);
 
     // The candidate's record was stamped through the record rule.
     BOOST_REQUIRE(candidate.m_project_status.m_project_status.count("flatproj") == 1);
@@ -2769,7 +2772,7 @@ BOOST_AUTO_TEST_CASE(facade_pending_lifecycle_above_the_gate)
         .insert(std::make_pair("flatproj", 999999)); // would change the walk if it ran
 
     service->RefreshWithAndUpdateSuperblock(altered, convergence_x, /*update_pending_cache=*/true,
-                                            chain.m_blocks);
+                                            chain.m_tip, chain.m_blocks);
 
     const auto pending_x_again = service->Get(GRC::GreylistState::PENDING);
     BOOST_REQUIRE(pending_x_again.has_value());
@@ -2785,7 +2788,7 @@ BOOST_AUTO_TEST_CASE(facade_pending_lifecycle_above_the_gate)
         .insert(std::make_pair("growproj", 13000));
 
     service->RefreshWithAndUpdateSuperblock(candidate_y, convergence_y, /*update_pending_cache=*/true,
-                                            chain.m_blocks);
+                                            chain.m_tip, chain.m_blocks);
 
     const auto pending_y = service->Get(GRC::GreylistState::PENDING);
     BOOST_REQUIRE(pending_y.has_value());
@@ -2797,13 +2800,24 @@ BOOST_AUTO_TEST_CASE(facade_pending_lifecycle_above_the_gate)
         .insert(std::make_pair("flatproj", 500000));
 
     const uint256 convergence_past = uint256S("0x3333333333333333333333333333333333333333333333333333333333333333");
-    service->RefreshWithAndUpdateSuperblock(past_candidate, convergence_past,
-                                            /*update_pending_cache=*/false, chain.m_blocks);
+    service->RefreshWithAndUpdateSuperblock(past_candidate, convergence_past, /*update_pending_cache=*/false,
+                                            chain.m_tip, chain.m_blocks);
 
     BOOST_CHECK(past_candidate.m_project_status.m_project_status.count("flatproj") == 1);
     const auto pending_after_past = service->Get(GRC::GreylistState::PENDING);
     BOOST_REQUIRE(pending_after_past.has_value());
     BOOST_CHECK(pending_after_past->m_key == convergence_y); // live state not clobbered
+
+    // --- A superblock transition CLEARS pending: the pending walk read the committed ---
+    // --- superblock set, and reusing a convergence-keyed computation across a chain ---
+    // --- change would serve a greylist derived from a different chain. After the push, ---
+    // --- pending falls back to the (new) authoritative state until recomputed. ---
+    service->RefreshWithSuperblock(chain.m_head, chain.m_blocks);
+
+    const auto pending_after_push = service->Get(GRC::GreylistState::PENDING);
+    BOOST_REQUIRE(pending_after_push.has_value());
+    BOOST_CHECK(pending_after_push->m_key != convergence_y);
+    BOOST_CHECK(pending_after_push->m_from_record == true); // the authoritative base case
 }
 
 //!
@@ -2898,7 +2912,7 @@ BOOST_AUTO_TEST_CASE(facade_stamp_respects_manual_and_override_status)
 
     const uint256 convergence_id = uint256S("0x4444444444444444444444444444444444444444444444444444444444444444");
     service->RefreshWithAndUpdateSuperblock(candidate, convergence_id, /*update_pending_cache=*/true,
-                                            chain.m_blocks);
+                                            chain.m_tip, chain.m_blocks);
 
     const auto& record = candidate.m_project_status.m_project_status;
 

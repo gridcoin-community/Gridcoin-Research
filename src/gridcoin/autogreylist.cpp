@@ -7,6 +7,7 @@
 #include "chain.h"
 #include "chainparams.h"
 #include "gridcoin/quorum.h"
+#include "gridcoin/support/block_finder.h"
 
 using namespace GRC;
 
@@ -111,8 +112,18 @@ void AutoGreylistService::RefreshWithSuperblock(
         // record IS the answer (DESIGN.md section 10.1) -- store the owning pointer and let
         // the first read derive the membership map lazily. No walk, no whitelist dependency:
         // this works during startup before the contract registry loads, which retires the
-        // "0 greylisted after restart" defect class. The pending slot is left alone (it is
-        // keyed independently, by convergence identity).
+        // "0 greylisted after restart" defect class.
+        //
+        // The PENDING slot is cleared as well: its computation walked the committed
+        // superblock set behind the tip, and this write means that set just changed (a
+        // superblock was pushed, popped, or the index reloaded). Convergence identity alone
+        // cannot see a chain change, so reusing across one would serve a greylist derived
+        // from a different chain -- while a node that computed fresh (restart, late
+        // convergence receipt) would disagree: a real divergence vector. Non-superblock
+        // blocks cannot change the walk (it reads only committed superblocks), so these
+        // chain-handler writes are exactly the right pending invalidation points. The next
+        // candidate derivation recomputes against the new chain -- one walk per superblock
+        // transition, after which reuse resumes within the convergence cycle.
         (void)unit_test_blocks; // The record read requires no chain traversal.
 
         LOCK(m_service_lock);
@@ -120,6 +131,7 @@ void AutoGreylistService::RefreshWithSuperblock(
         m_authoritative_source = superblock_ptr_in;
         m_have_authoritative_source = true;
         m_authoritative = std::nullopt;
+        m_pending = std::nullopt;
 
         return;
     }
@@ -132,13 +144,15 @@ void AutoGreylistService::RefreshWithSuperblock(
 
 void AutoGreylistService::RefreshWithAndUpdateSuperblock(
     Superblock& superblock, const uint256& convergence_id, bool update_pending_cache,
+    const CBlockIndex* anchor_index,
     std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    // Version dispatch: the pending anchor is the chain tip the candidate is bound to.
-    const int anchor_height = pindexBest != nullptr ? pindexBest->nHeight : 0;
+    // Version dispatch: the pending anchor is the chain tip the candidate is bound to,
+    // captured by the caller under cs_main and passed in. Reading immutable fields of a
+    // never-deleted block index entry needs no lock here.
+    const int anchor_height = anchor_index != nullptr ? anchor_index->nHeight : 0;
 
-    if (pindexBest != nullptr && IsAutoGreylistRedesignEnabled(anchor_height)) {
+    if (anchor_index != nullptr && IsAutoGreylistRedesignEnabled(anchor_height)) {
         // V2 producer write, pending anchor.
         //
         // Reuse: the pending state is keyed by convergence identity, and the walker is
@@ -163,16 +177,17 @@ void AutoGreylistService::RefreshWithAndUpdateSuperblock(
             GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
 
         if (!cached) {
-            // Compute fresh: bind the candidate to the tip, exactly as the V1 path does.
+            // Compute fresh: bind the candidate to the captured tip, exactly as the V1 path
+            // binds to pindexBest.
             SuperblockPtr superblock_ptr;
             superblock_ptr.Replace(superblock);
-            superblock_ptr.Rebind(pindexBest);
+            superblock_ptr.Rebind(anchor_index);
 
             AutoGreylistV2::Result result = AutoGreylistV2::Compute(
                 superblock_ptr,
                 whitelist_snapshot,
                 GetWhitelist().GetProjectsFirstActive(),
-                unit_test_blocks, pindexBest->pprev);
+                unit_test_blocks, anchor_index->pprev);
 
             cached = ComputationFromWalk(std::move(result), convergence_id);
         }
@@ -210,8 +225,10 @@ void AutoGreylistService::RefreshWithAndUpdateSuperblock(
 void AutoGreylistService::StampProjectStatus(
     Superblock& superblock, int anchor_height, int64_t anchor_time, CBlockIndex* walk_start,
     std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    // No cs_main requirement of its own: every chain-derived input (anchor height/time and
+    // the walk start) is captured by the caller -- the miner holds cs_main for its own block
+    // assembly -- and the walk reads only immutable ancestor state.
     if (!IsAutoGreylistRedesignEnabled(anchor_height)) {
         return;
     }
@@ -239,8 +256,11 @@ void AutoGreylistService::StampProjectStatus(
 bool AutoGreylistService::ValidateProjectStatus(
     const SuperblockPtr& superblock_ptr, CBlockIndex* walk_start,
     std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks) const
-    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    // No cs_main requirement of its own: the received superblock is already bound to its
+    // containing block and the walk start is that block's pprev, both supplied by the
+    // caller (ConnectBlock, which holds cs_main for its own reasons); the walk reads only
+    // immutable ancestor state, and the registry inputs are cs_lock-guarded snapshots.
     // The check applies only where the record is read back as authoritative: above the gate,
     // v3+ superblocks. Below the gate the record stays advisory, exactly as it is today.
     if (superblock_ptr->m_version < 3
@@ -420,7 +440,9 @@ GreylistComputation AutoGreylistService::ComputeReport() const EXCLUSIVE_LOCKS_R
             superblock_ptr,
             GetWhitelist().Snapshot(GreylistState::NONE,
                                     GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
-            GetWhitelist().GetProjectsFirstActive());
+            GetWhitelist().GetProjectsFirstActive(),
+            nullptr,
+            GRC::BlockFinder::FindByHeight(superblock_ptr.m_height - 1));
 
         return ComputationFromWalk(std::move(result), AuthoritativeKey(superblock_ptr));
     }
