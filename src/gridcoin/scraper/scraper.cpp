@@ -6409,7 +6409,13 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
                 Superblock superblock_Prev;
 
                 {
-                    LOCK(cs_ConvergedScraperStatsCache);
+                    // FromConvergence below reaches RefreshWithAndUpdateSuperblock, which is
+                    // EXCLUSIVE_LOCKS_REQUIRED(cs_main) (it anchors the candidate at pindexBest
+                    // and, above the redesign gate, walks the chain from it). Canonical order
+                    // is cs_main -> subsystem locks, so acquire cs_main first (the testnewsb
+                    // site does the same). CCriticalSection is recursive, so callers that
+                    // already hold cs_main (the validator path) are unaffected.
+                    LOCK2(cs_main, cs_ConvergedScraperStatsCache);
 
                     ConvergedScraperStatsCache.AddConvergenceToPastConvergencesMap();
 
@@ -6751,7 +6757,10 @@ UniValue convergencereport(const UniValue& params)
     UniValue result(UniValue::VOBJ);
 
     {
-        LOCK(cs_ConvergedScraperStatsCache);
+        // ConvergedScraperStatsToJson below re-derives superblocks from past convergences
+        // via FromConvergence, which reaches the cs_main-required greylist candidate path.
+        // Canonical order: cs_main before the subsystem lock.
+        LOCK2(cs_main, cs_ConvergedScraperStatsCache);
 
         result.pushKV("superblock_well_formed", ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed());
 

@@ -4247,8 +4247,12 @@ UniValue getautogreylist(const UniValue& params)
         }
     } else {
         // Below the gate: the pre-redesign display, from the freshly refreshed V1 cache.
-        for (auto iter : *greylist_ptr) {
-            emit_entry(iter.first, iter.second);
+        // Const-reference iteration with ONE explicit candidate copy per emitted row: the
+        // copy is required because the frozen V1 type's reporting accessors are non-const,
+        // but the map pair (key included) need not be copied wholesale.
+        for (const auto& iter : *greylist_ptr) {
+            auto candidate = iter.second;
+            emit_entry(iter.first, candidate);
         }
     }
 
