@@ -4237,22 +4237,28 @@ UniValue getautogreylist(const UniValue& params)
         LOCK(cs_main);
 
         report = greylist_ptr->ComputeReport();
+
+        if (report.m_version != GRC::GreylistVersion::V2) {
+            // Below the gate: the pre-redesign display, from the freshly refreshed V1
+            // cache. The iteration stays INSIDE this cs_main scope: V1's iterators are
+            // handed out with the internal lock released, and their documented safety
+            // contract is that every V1 producer is cs_main-serialized -- which protects
+            // this loop only while cs_main is actually held across it. Const-reference
+            // iteration with ONE explicit candidate copy per emitted row (the copy is
+            // required because the frozen V1 type's reporting accessors are non-const).
+            for (const auto& iter : *greylist_ptr) {
+                auto candidate = iter.second;
+                emit_entry(iter.first, candidate);
+            }
+        }
     }
 
     if (report.m_version == GRC::GreylistVersion::V2) {
-        // Above the gate: fresh V2 candidate detail, doubling as an operator-visible
-        // cross-check of the recorded superblock project status.
+        // Above the gate: fresh V2 candidate detail from the value-returned report -- no
+        // shared state, no lock needed. Doubles as an operator-visible cross-check of the
+        // recorded superblock project status.
         for (const auto& iter : report.m_candidates) {
             emit_entry(iter.first, iter.second);
-        }
-    } else {
-        // Below the gate: the pre-redesign display, from the freshly refreshed V1 cache.
-        // Const-reference iteration with ONE explicit candidate copy per emitted row: the
-        // copy is required because the frozen V1 type's reporting accessors are non-const,
-        // but the map pair (key included) need not be copied wholesale.
-        for (const auto& iter : *greylist_ptr) {
-            auto candidate = iter.second;
-            emit_entry(iter.first, candidate);
         }
     }
 
