@@ -4224,9 +4224,11 @@ UniValue getautogreylist(const UniValue& params)
         autogreylist.push_back(entry);
     };
 
-    // ComputeReport is a value return: no shared greylist state is mutated by this RPC. It
-    // requires cs_main (it reads the current superblock and, above the redesign gate, walks
-    // the chain) -- which the pre-redesign code needed too but never took.
+    // Above the redesign gate ComputeReport is a value return (no shared greylist state is
+    // mutated by this RPC); below the gate it preserves the pre-redesign behavior verbatim,
+    // including the explicit V1 cache refresh that RPC always performed. It requires cs_main
+    // (it reads the current superblock and, above the gate, walks the chain) -- which the
+    // pre-redesign code needed too but never took.
     GRC::GreylistComputation report;
     {
         LOCK(cs_main);

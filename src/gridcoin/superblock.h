@@ -103,10 +103,14 @@ public:
     //! of the Superblock class (SuperblockForHash) with the serialization of that map removed. The reason for this is twofold.
     //! 1) The project status is populated from the AutoGreylist class, which when used in the miner context is using a candidate
     //! superblock generated from the scraper. The QuorumHasher proxies which use the scraper statistics do not have the project
-    //! status information available for all call paths. 2) The project status map is extra information that is not required to
-    //! assure uniqueness and/or validation of a superblock, as it can (and is) derived by the AutoGreylist class. This map is
-    //! provided in the superblock as a convenience so that this does not have to be recalculated if looking at statistics over
-    //! a large block range in reporting.
+    //! status information available for all call paths. 2) The project status map is derivable from the hashed data (the
+    //! all-CPID total credits, the chain history and the registry state), so hashing it is not required for uniqueness.
+    //!
+    //! IMPORTANT: above AutoGreylistRedesignHeight this map is no longer a mere reporting convenience. It is READ BACK as the
+    //! authoritative greylist state, and because it sits outside the quorum hash its bytes are validated INDEPENDENTLY at
+    //! acceptance: Quorum::ValidateSuperblockClaim recomputes the expected record with the V2 walker and rejects a superblock
+    //! whose serialized map does not match (see AutoGreylistService::ValidateProjectStatus). Below the gate the map remains
+    //! advisory, exactly as originally designed.
     //!
     //! \param superblock Superblock object containing the data to hash.
     //!

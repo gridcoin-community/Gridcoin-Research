@@ -254,6 +254,86 @@ The QuorumHash ComputeQuorumHash() was extended (implicitly) to include the proj
 
 The researcher and project table models were extended to deal appropriately with auto greylisted status, following the order of precedence. In the project table displayed in the GUi, automatic greylisting status and manual greylisting status takes precedence over excluded, because if a project has those statuses, it has the same effect as exclusion, but is not a scraper directive.
 
+## The V2 redesign (AutoGreylistRedesignHeight)
+
+At `AutoGreylistRedesignHeight` (set equal to `BlockV15Height` at release; independently
+overridable for testnet via the hidden `-autogreylistredesignheight` argument) the auto
+greylist switches from the class described above (V1, frozen as the pre-gate consensus
+behavior) to a redesigned architecture. The full design of record is maintained in the
+development environment (`autogreylist_state_separation/DESIGN.md`); this section summarizes
+what ships in the tree.
+
+### The facade and the two states
+
+`AutoGreylistService` (`src/gridcoin/autogreylist.h`) is the single owner of greylist state.
+It separates two dispatches the previous design conflated:
+
+* **Version dispatch (V1 vs V2)** belongs to the *producers* at write time, decided from the
+  anchor height of each refresh. There is no global mode flag: a V1-producer write clears
+  the V2 slots, a V2-producer write fills them, and a read serves a filled slot or falls
+  through to V1. Below the gate behavior is bit-identical to V1 by construction.
+* **State dispatch (pending vs authoritative)** belongs to the *consumers* at read time,
+  through the required `GreylistState` selector on `Whitelist::Snapshot()`. The
+  classification rule is mechanical: match the data source. Convergence-derived data reads
+  PENDING; superblock/registry-derived data reads AUTHORITATIVE; data that never reads
+  greylist status passes NONE (which replaces the old `include_override = false`).
+
+**Authoritative** is the greylist as of the last committed superblock, and above the gate it
+is READ from the superblock's serialized `m_project_status` record -- a map lookup, no chain
+walk -- primed lazily and invalidated at the chain handler points (superblock push, pop,
+index load). **Pending** is the greylist for a candidate superblock built from the current
+convergence, keyed by the convergence content hash and recomputed only when the convergence
+changes; a candidate re-derived from the same convergence reuses the cached computation.
+Absent a convergence, pending equals authoritative.
+
+### The record: produced at one anchor, validated at acceptance
+
+`m_project_status` is serialized in v3+ superblocks but deliberately excluded from the
+quorum hash. Because the redesign reads it back as the authoritative state, its bytes are
+consensus-validated above the gate:
+
+* The staking node re-stamps the record at bind time (`AddSuperblockContractOrVote`),
+  anchored at the block being created, through the single record-derivation rule
+  (`AutoGreylistV2::DeriveProjectStatusRecord`).
+* Every validator recomputes the expected record at acceptance
+  (`Quorum::ValidateSuperblockClaim`) with the same walker and the same rule, and rejects a
+  superblock whose record does not match. The check runs before contract application, so
+  producer and validator evaluate against the same parent-block registry state.
+
+Below the gate the record remains advisory, exactly as on the pre-redesign network.
+
+### Walker corrections (V2 only, `src/gridcoin/autogreylist_v2.h`)
+
+* **Chain-resident zeros as missing data, with the initial-state latch.** A recorded total
+  credit of exactly zero is corruption when a non-zero total credit exists at any OLDER
+  position -- a cumulative lifetime counter cannot return to zero -- and is then treated as
+  missing by the ZCD, bookmark and WAS logic alike, while `getautogreylist show_history`
+  keeps reporting the value as recorded. Genuine initial-state zeros (no older non-zero)
+  remain real values, so newly joined projects are unaffected. Because a zero run touching
+  the 40-superblock window edge has no older in-window evidence, the latch scan continues
+  past the window until the first older admissible non-zero, the project's first-activation
+  or pre-v3 boundary, or a cap of 40 additional superblocks.
+* **WAS divisor contraction.** The 7- and 40-superblock divisors are the deepest positions
+  actually holding effective data, so a missing window ENDPOINT contracts its interval while
+  missing data in the middle telescopes away in the endpoint difference. This removes both
+  failure directions of the fixed divisor: spurious understatement (including the
+  truncate-to-zero trigger) and multi-fold overstatement that masks real inactivity.
+* **Exact-fraction WAS.** `(sum7 * d40) / (sum40 * d7)` with no integer truncation of the
+  averages.
+* **Phantom-head skip.** When the first committed superblock behind a candidate carries the
+  candidate's (non-zero) convergence hint, it was built from the same convergence and is
+  skipped in the walk, removing the false ZCD the duplicated data used to produce.
+* The audit-height benefit-of-the-doubt behavior is hard-coded on, and the deep-copy
+  overlay behavior is unconditional (both gates are at or below the redesign gate).
+
+### Validation against mainnet
+
+A differential rehearsal of both walkers over a 110-superblock mainnet capture (16 projects,
+1072 project/head evaluations) produced exactly three membership changes -- all spurious
+V1 greylistings that V2 declines (both World Community Grid firings of the 2026-06/08 zero
+datapoint, and a truncate-to-zero firing for a genuinely stalled project that V2 instead
+greylists one superblock later on the honest ZCD criterion) -- and no new greylistings.
+
 ## RPC changes
 
 ### UniValue SuperblockToJson(const GRC::Superblock& superblock)

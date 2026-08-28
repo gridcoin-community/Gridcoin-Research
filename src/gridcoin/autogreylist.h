@@ -215,12 +215,14 @@ public:
     //!
     //! \brief Compute a fresh greylist report against the current committed superblock.
     //!
-    //! Value-returning: mutates no cached state. Above the redesign gate this runs the V2
-    //! walker against the committed head -- the same computation a validator runs to check
-    //! the record, so the report doubles as an operator-visible record cross-check. Below
-    //! the gate it refreshes the V1 cache (preserving the pre-redesign getautogreylist
-    //! behavior) and returns a V1-tagged membership summary; the RPC reads V1 candidate
-    //! detail through the transitional iterators below.
+    //! Above the redesign gate this is value-returning -- it runs the V2 walker against the
+    //! committed head and mutates NO cached state; it is the same computation a validator
+    //! runs to check the record, so the report doubles as an operator-visible record
+    //! cross-check. Below the gate it deliberately preserves the pre-redesign
+    //! getautogreylist behavior VERBATIM, which includes that RPC's historical side effect:
+    //! an explicit V1 cache refresh (the V1 singleton is mutated, exactly as the old RPC
+    //! mutated it). It then returns a V1-tagged membership summary; the RPC reads V1
+    //! candidate detail through the transitional iterators below.
     //!
     //! Requires cs_main (reads the current superblock and, above the gate, walks the chain).
     //!

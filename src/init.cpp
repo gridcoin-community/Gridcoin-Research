@@ -1625,8 +1625,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     // none of them was previously surfaced -- so a node running a different
     // effective value from its peers had nothing in the log to show it.
     {
-        const int64_t audit_height = gArgs.GetArg("-autogreylistauditheight",
-                                                  Params().GetConsensus().AutoGreylistAuditHeight);
+        // No gArgs override for the audit height: unlike its three siblings it has no hidden
+        // argument and IsAutoGreylistAuditEnabled() consults only the consensus value (the
+        // gate is already crossed on mainnet and testnet, so an override would be a pure
+        // footgun). Reading a nonexistent override here would log a value consensus ignores.
+        const int64_t audit_height = Params().GetConsensus().AutoGreylistAuditHeight;
         const int64_t deep_copy_height = gArgs.GetArg("-autogreylistdeepcopyheight",
                                                       Params().GetConsensus().AutoGreylistDeepCopyHeight);
         const int64_t total_credit_fix_height = gArgs.GetArg("-autogreylisttotalcreditfixheight",

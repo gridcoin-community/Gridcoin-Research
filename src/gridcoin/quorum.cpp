@@ -1864,12 +1864,13 @@ Magnitude Quorum::GetMagnitude(const MiningId mining_id) EXCLUSIVE_LOCKS_REQUIRE
 std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
 {
     // Below the redesign gate: force a scraper convergence update if needed, preserving the
-    // pre-redesign display behavior exactly (the historical TODO to unwrap this side effect
-    // from ScraperGetSuperblockContract resolves at the gate). Above the gate the call is
-    // deliberately ABSENT: the pending greylist read below is keyed to the convergence this
-    // function's rows come from, so display stays self-consistent without a display RPC
-    // side-effecting an entire contract rebuild -- and if the convergence is stale, rows and
-    // greylist are stale TOGETHER, which is the data-source rule.
+    // pre-redesign display behavior exactly -- including its long-standing coupling (the old
+    // TODO: unwrap this from ScraperGetSuperblockContract), which remains as-is on this arm
+    // by the V1 freeze and dies with it. Above the gate the call is deliberately ABSENT: the
+    // pending greylist read below is keyed to the convergence this function's rows come
+    // from, so display stays self-consistent without a display RPC side-effecting an entire
+    // contract rebuild -- and if the convergence is stale, rows and greylist are stale
+    // TOGETHER, which is the data-source rule.
     if (!IsAutoGreylistRedesignEnabled(nBestHeight)) {
         CreateSuperblock();
     }
@@ -2002,13 +2003,14 @@ void Quorum::PushSuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(c
         GetWhitelist().ReinitFromDisk();
     }
 
-    // Refresh the AutoGreylist cache against the newly-activated superblock. Fires deterministically at
-    // this chain-handler point rather than relying on whichever thread happens to read first. Every
-    // PushSuperblock changes the current SB's hash, so the early-bail in AutoGreylist::Refresh()
-    // (which fires only when superblock_ptr->GetHash() == m_superblock_hash) does NOT short-circuit
-    // here -- this call pays the full Snapshot + 40-SB walk-back cost on each push. That cost is
-    // intrinsic to the explicit-trigger redesign; it's paid here on the validation thread rather than
-    // lazily on whichever consumer reads first.
+    // Refresh the AutoGreylist state against the newly-activated superblock. Fires deterministically
+    // at this chain-handler point rather than relying on whichever thread happens to read first.
+    // BELOW the redesign gate this dispatches to the frozen V1 cache: every PushSuperblock changes
+    // the current SB's hash, so V1's early-bail does not short-circuit and each push pays the full
+    // Snapshot + 40-SB walk-back cost, intrinsic to the explicit-trigger design. ABOVE the gate the
+    // V2 arm stores the superblock as the authoritative record source in O(1); the membership map is
+    // derived lazily from the serialized m_project_status on first read (a map read, no walk -- the
+    // walk cost moved to the once-per-accept record validation in ValidateSuperblockClaim).
     GetAutoGreylistCache()->Refresh();
 }
 

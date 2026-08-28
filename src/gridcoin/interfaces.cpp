@@ -1048,6 +1048,9 @@ public:
         // One whitelist snapshot, reused for both TryWhitelist() and the
         // whitelist-only pass below (the former GUI took two snapshots; one is
         // more internally consistent and cheaper).
+        // PENDING: these rows are joined with the excluded-projects list read from the
+        // convergence cache just below, so the greylist must match that convergence (the
+        // data-source rule).
         const GRC::WhitelistSnapshot whitelist =
             GRC::GetWhitelist().Snapshot(GRC::GreylistState::PENDING,
                                          GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
@@ -1168,7 +1171,9 @@ public:
         // of the wizard's parallel name/url lists, so their indices still align.
         std::vector<WhitelistProject> result;
 
-        for (const auto& project : GRC::GetWhitelist().Snapshot(GRC::GreylistState::PENDING).Sorted()) {
+        // AUTHORITATIVE: a pure registry-derived name/url list (no convergence data read),
+        // so the committed-superblock state is the matching source.
+        for (const auto& project : GRC::GetWhitelist().Snapshot(GRC::GreylistState::AUTHORITATIVE).Sorted()) {
             result.push_back({project.m_name, project.m_url});
         }
 
@@ -1190,8 +1195,9 @@ public:
             return result;
         }
 
+        // AUTHORITATIVE: registry-derived (URL matching against the ownership-proof set).
         for (const auto& project : GRC::GetWhitelist().Snapshot(
-                 GRC::GreylistState::PENDING,
+                 GRC::GreylistState::AUTHORITATIVE,
                  GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED)) {
             std::string base_url = project.BaseUrl();
             if (!base_url.empty() && base_url.back() != '/') {

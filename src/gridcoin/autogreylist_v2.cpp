@@ -19,7 +19,7 @@ AutoGreylistV2::Result AutoGreylistV2::Compute(
     const Whitelist::ProjectEntryMap& project_first_actives,
     std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks,
     CBlockIndex* walk_start)
-    EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     Result result;
 

@@ -144,10 +144,13 @@ public:
     //!
     //!     (m_TC_7_SB_sum * d40) / (m_TC_40_SB_sum * d7)
     //!
-    //! where d7/d40 are the contracted intervals (the deepest positions with effective data
-    //! actually spanned by each endpoint difference). A missing ENDPOINT contracts its
-    //! interval; missing data in the MIDDLE telescopes away in the endpoint difference and
-    //! leaves the divisor alone. Approved vectors: data at j=0..5 with NA at 6,7 gives
+    //! where d7/d40 are the contracted intervals: the deepest positions <= 7 / <= 40 HOLDING
+    //! effective data. A missing ENDPOINT therefore contracts its interval, while missing
+    //! data in the MIDDLE telescopes away in the endpoint difference and leaves the divisor
+    //! alone. Note the intervals track data PRESENCE, not the position of the last sum
+    //! assignment: on a deliberate rollback (data present, non-positive delta) the divisor
+    //! stays at the data position while the sum keeps an older endpoint -- preserving V1's
+    //! penalized-by-omission shape rather than softening it. Approved vectors: data at j=0..5 with NA at 6,7 gives
     //! sum7 = bookmark - TC[5] over divisor 5; NA at j=3 alone leaves divisor 7; the
     //! initial-state latch case (9 producing superblocks over 31 genuine initial zeros)
     //! gives exactly 13/3 = 4.3333 -- which only the exact-fraction form can produce
@@ -214,6 +217,14 @@ public:
             // does a missing entry. The head-missing case at position 1 is excused (benefit
             // of the doubt): a project absent from the head superblock alone is most likely
             // a transient scraper failure, not a project outage.
+            //
+            // Known inherited edge (V1-identical, pinned by the differential harness): when
+            // the head AND position 1 are both missing, the bookmark is still disengaged at
+            // the first position carrying real data, and an engaged optional compares >= a
+            // disengaged one -- so that first data point counts as a ZCD even when credit
+            // grew. V1 behaves the same (with raw zeros it additionally counts position 1,
+            // which the latch excuses here). Correcting the comparison-baseline semantics
+            // belongs to the deferred walker-correctness pass (F7 class), not this gate.
             if (sb_from_baseline <= 20) {
                 const bool head_scraper_failure = (sb_from_baseline == 1 && !m_TC_initial_bookmark);
 

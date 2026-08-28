@@ -1911,6 +1911,21 @@ BOOST_AUTO_TEST_CASE(v2_walker_matches_v1_where_no_correction_applies)
         fx["absentj1"][at_j(1)] = std::optional<uint64_t>();
         run_and_compare(fx, {}, "absent j=1");
     }
+    { // 7b: absent at BOTH the head and j == 1 (a 2-superblock scraper gap). Pins the
+      //     inherited first-data-after-gap ZCD edge: with the bookmark still disengaged at
+      //     j == 2, the first real data point counts as a ZCD in BOTH walkers identically
+      //     (the benefit of the doubt excuses only position 1). The semantic question
+      //     belongs to the deferred walker-correctness pass; equality here proves V2 did
+      //     not silently diverge on it.
+        // Step 140 keeps the sums divisor-divisible (sum7 = 5*140 = 700 over 7; sum40 =
+        // 38*140 = 5320 over 40), so the fixture carries no exact-fraction residue and the
+        // comparison is legitimately exact.
+        std::map<std::string, Seq> fx;
+        fx["absentgap"] = riser(1400, 140, LEN);
+        fx["absentgap"][at_j(0)] = std::optional<uint64_t>();
+        fx["absentgap"][at_j(1)] = std::optional<uint64_t>();
+        run_and_compare(fx, {}, "absent head+j=1 gap");
+    }
     { // 8: absent stretch j == 3..5 (numerator skips, divisor advances -- the F8 shape).
         std::map<std::string, Seq> fx;
         fx["absentrun"] = riser(1000, 1000, LEN);

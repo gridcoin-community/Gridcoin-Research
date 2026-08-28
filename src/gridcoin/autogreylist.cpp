@@ -79,7 +79,7 @@ AutoGreylistService::AutoGreylistService()
 
 // ---------------------------------------------------------------------------- producers ----
 
-void AutoGreylistService::Refresh() EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+void AutoGreylistService::Refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Version dispatch, from the anchor height at write time (the producer holds cs_main and
     // the anchor; readers never re-derive it). The anchor for the chain-handler refresh is
@@ -103,7 +103,7 @@ void AutoGreylistService::Refresh() EXCLUSIVE_LOCKS_REQUIRED (cs_main)
 void AutoGreylistService::RefreshWithSuperblock(
     SuperblockPtr superblock_ptr_in,
     std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks)
-    EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!superblock_ptr_in.IsEmpty() && superblock_ptr_in->m_version >= 3
         && IsAutoGreylistRedesignEnabled(superblock_ptr_in.m_height)) {
@@ -113,7 +113,7 @@ void AutoGreylistService::RefreshWithSuperblock(
         // this works during startup before the contract registry loads, which retires the
         // "0 greylisted after restart" defect class. The pending slot is left alone (it is
         // keyed independently, by convergence identity).
-        (void) unit_test_blocks; // The record read requires no chain traversal.
+        (void)unit_test_blocks; // The record read requires no chain traversal.
 
         LOCK(m_service_lock);
 
@@ -133,7 +133,7 @@ void AutoGreylistService::RefreshWithSuperblock(
 void AutoGreylistService::RefreshWithAndUpdateSuperblock(
     Superblock& superblock, const uint256& convergence_id, bool update_pending_cache,
     std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks)
-    EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Version dispatch: the pending anchor is the chain tip the candidate is bound to.
     const int anchor_height = pindexBest != nullptr ? pindexBest->nHeight : 0;
@@ -195,9 +195,9 @@ void AutoGreylistService::RefreshWithAndUpdateSuperblock(
 
     // V1 producer write: the frozen behavior, including its internal cache-invalidation
     // reset. The convergence identity and pending election are V2-arm concepts.
-    (void) convergence_id;
-    (void) update_pending_cache;
-    (void) unit_test_blocks;
+    (void)convergence_id;
+    (void)update_pending_cache;
+    (void)unit_test_blocks;
 
     ClearV2Slots();
 
@@ -207,7 +207,7 @@ void AutoGreylistService::RefreshWithAndUpdateSuperblock(
 void AutoGreylistService::StampProjectStatus(
     Superblock& superblock, int anchor_height, int64_t anchor_time, CBlockIndex* walk_start,
     std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks)
-    EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!IsAutoGreylistRedesignEnabled(anchor_height)) {
         return;
@@ -237,7 +237,7 @@ void AutoGreylistService::StampProjectStatus(
 bool AutoGreylistService::ValidateProjectStatus(
     const SuperblockPtr& superblock_ptr, CBlockIndex* walk_start,
     std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks) const
-    EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // The check applies only where the record is read back as authoritative: above the gate,
     // v3+ superblocks. Below the gate the record stays advisory, exactly as it is today.
@@ -386,7 +386,7 @@ std::optional<GreylistComputation> AutoGreylistService::Get(GreylistState state)
 
 // ---------------------------------------------------------------------------- reporting ----
 
-GreylistComputation AutoGreylistService::ComputeReport() const EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+GreylistComputation AutoGreylistService::ComputeReport() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     SuperblockPtr superblock_ptr = Quorum::CurrentSuperblock();
 

@@ -584,13 +584,26 @@ Via protocol entry `"magnitudeweightfactor"`:
   this is forward-only; it cannot reinterpret zeros already in the chain, and a
   legitimately scraped zero (`no_records == false`) is still emitted by design
 - `AutoGreylistRedesignHeight` -- single gate for the remaining correctness
-  batch: separation of the pending (candidate) greylist state from the
-  authoritative (committed-superblock) state, treating a chain-resident zero
-  total credit as missing data, and the walker corrections that follow.
+  batch, implemented as a V1/V2 class fork behind the `AutoGreylistService`
+  facade (V1 is the frozen pre-gate behavior; V2 activates above the gate):
+  separation of the pending (candidate) greylist state from the authoritative
+  (committed-superblock) state, with authoritative READ from the superblock's
+  serialized `m_project_status` record; treating a chain-resident zero total
+  credit as missing data (with the initial-state latch and its capped
+  beyond-window evidence scan); the WAS divisor contraction and exact-fraction
+  WAS; and the phantom-head convergence skip. Above this gate the
+  `m_project_status` record -- serialized but excluded from the quorum hash --
+  becomes **consensus-validated**: the staking node stamps it at bind time
+  anchored at the containing block, and `Quorum::ValidateSuperblockClaim`
+  recomputes the expected record with the same walker and rejects a superblock
+  whose record does not match (checked before contract application, so producer
+  and validator see the same parent-block registry state). Below the gate the
+  record remains advisory.
   **Must never be set below `AutoGreylistDeepCopyHeight`** -- before that gate
   the Snapshot overlay only ever promotes to `AUTO_GREYLISTED` and there is no
-  demotion arm, so a spuriously greylisted project cannot heal. The release sets
-  all of these coincident with `BlockV15Height`
+  demotion arm, so a spuriously greylisted project cannot heal. `init.cpp`
+  refuses to start on that combination. The release sets all of these
+  coincident with `BlockV15Height`
 
 > These four heights are separate fields so they can be driven independently
 > during testing (`-autogreylist{audit,deepcopy,totalcreditfix,redesign}height`).
