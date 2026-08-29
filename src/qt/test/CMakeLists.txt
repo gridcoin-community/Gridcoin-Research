@@ -21,4 +21,18 @@ ${RUNTIME_LIBS}
     gridcoin_util
     )
 
+# A statically linked Qt only pulls in its default QPA plugin -- xcb on Linux,
+# windows under mingw. Every CI runner exports QT_QPA_PLATFORM=offscreen because
+# it has no display, so without this the binary aborts at QApplication
+# construction with a "Could not find the Qt platform plugin" error.
+# Importing the plugin is additive and a no-op against a shared Qt, where the
+# plugin is already a loadable file on disk.
+if(TARGET ${QT}::QOffscreenIntegrationPlugin)
+    if(COMMAND qt_import_plugins)
+        qt_import_plugins(test_gridcoin-qt INCLUDE ${QT}::QOffscreenIntegrationPlugin)
+    elseif(COMMAND qt5_import_plugins)
+        qt5_import_plugins(test_gridcoin-qt INCLUDE ${QT}::QOffscreenIntegrationPlugin)
+    endif()
+endif()
+
 add_test(NAME gridcoin_qt_tests COMMAND test_gridcoin-qt)
