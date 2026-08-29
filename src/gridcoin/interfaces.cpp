@@ -1981,23 +1981,7 @@ public:
         }
 
         // Does the wallet hold one of the multisig arrangement's keys?
-        txnouttype script_type;
-        std::vector<std::vector<unsigned char>> solutions;
-        if (entry->psgt.inputs.empty()
-            || !Solver(entry->psgt.inputs[0].redeem_script, script_type, solutions)
-            || script_type != TX_MULTISIG) {
-            return false;
-        }
-
-        LOCK(m_wallet->cs_wallet);
-        for (unsigned int i = 1; i + 1 < solutions.size(); ++i) {
-            const CPubKey pubkey(solutions[i]);
-            if (pubkey.IsValid() && m_wallet->HaveKey(pubkey.GetID())) {
-                return true;
-            }
-        }
-
-        return false;
+        return WITH_LOCK(m_wallet->cs_wallet, return PSGTKeyHeldBy(*m_wallet, entry->psgt));
     }
 
 private:
@@ -2057,23 +2041,7 @@ private:
     {
         LOCK(m_wallet->cs_wallet);
 
-        bool is_mine = false;
-        if (!entry.psgt.inputs.empty()) {
-            txnouttype script_type;
-            std::vector<std::vector<unsigned char>> solutions;
-            if (Solver(entry.psgt.inputs[0].redeem_script, script_type, solutions)
-                && script_type == TX_MULTISIG) {
-                for (unsigned int i = 1; i + 1 < solutions.size(); ++i) {
-                    const CPubKey pubkey(solutions[i]);
-                    if (pubkey.IsValid() && m_wallet->HaveKey(pubkey.GetID())) {
-                        is_mine = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!is_mine) {
+        if (!PSGTKeyHeldBy(*m_wallet, entry.psgt)) {
             return PSGTRelevance::NOT_MINE;
         }
         return PSGTSignedBy(*m_wallet, entry.psgt)
