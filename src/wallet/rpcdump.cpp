@@ -297,9 +297,9 @@ static const RPCHelpMan dumpprivkey_help{
         "When dump_hex is false (default), returns the base58 WIF private key as a string. "
         "When dump_hex is true, returns a JSON object with base58 and hex representations."},
     RPCExamples{
-        HelpExampleCli("dumpprivkey", "\"S1Example\"") +
-        HelpExampleCli("dumpprivkey", "\"S1Example\" true") +
-        HelpExampleRpc("dumpprivkey", "\"S1Example\", true")},
+        HelpExampleCli("dumpprivkey", "\"SHRkB34U4BeteDCzqFw6jkckzw5yojyK2t\"") +
+        HelpExampleCli("dumpprivkey", "\"SHRkB34U4BeteDCzqFw6jkckzw5yojyK2t\" true") +
+        HelpExampleRpc("dumpprivkey", "\"SHRkB34U4BeteDCzqFw6jkckzw5yojyK2t\", true")},
 };
 const RPCHelpMan& dumpprivkey_helpman() { return dumpprivkey_help; }
 
