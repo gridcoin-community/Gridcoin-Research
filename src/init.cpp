@@ -1570,10 +1570,6 @@ bool AppInit2(ThreadHandlerPtr threads)
         gArgs.SoftSetBoolArg("-rescan", true);
     }
 
-    // Verify testnet is using the testnet directory for the config file:
-    std::string sTestNetSpecificArg = gArgs.GetArg("-testnetarg", "default");
-    LogPrintf("Using specific arg %s", sTestNetSpecificArg);
-
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
