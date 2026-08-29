@@ -7,6 +7,7 @@
 #include "amount.h"
 #include "arith_uint256.h"
 #include "logging.h"
+#include "tinyformat.h"
 #include "wallet/wallet_event_queue.h"
 #include "wallet/walletcoinstore.h"
 
@@ -137,8 +138,9 @@ SyntheticCoinSourceImpl::SyntheticCoinSourceImpl(int total_coins, int groups)
     total_coins = std::max(total_coins, 1);
     groups = std::max(groups, 1);
 
-    // Group 0 is the pathological single-address case; the rest get 1000
-    // coins each (or an even split when the total is small).
+    // Group 0 is the pathological single-address case; the rest get up to
+    // 1000 coins each, falling to an even split once <groups> is large
+    // relative to <total_coins> (and to 1 apiece when they are equal).
     const int small_group = std::min(1000, total_coins / std::max(groups, 1));
     const int whale = total_coins - (groups - 1) * small_group;
 
@@ -147,10 +149,16 @@ SyntheticCoinSourceImpl::SyntheticCoinSourceImpl(int total_coins, int groups)
 
     int seed = 0;
     for (int g = 0; g < groups; ++g) {
+        // The group index is rendered in full, zero-padded to the same
+        // 34-character width as the whale address. It has to stay
+        // injective: an aliasing scheme (a single letter mod 26, say)
+        // collapses the directory onto 26 addresses no matter what
+        // <groups> asks for, because buildGroups() keys on group_address
+        // -- which silently caps the many-groups axis this harness exists
+        // to exercise.
         const std::string address = (g == 0)
             ? std::string("SynthWhale000000000000000000000000")
-            : std::string("SynthGroup") + std::string(1, static_cast<char>('A' + (g - 1) % 26))
-                  + "00000000000000000000000";
+            : strprintf("SynthGroup%024d", g);
         const int count = (g == 0) ? whale : small_group;
         for (int i = 0; i < count; ++i, ++seed) {
             GRC::CoinRecord r;

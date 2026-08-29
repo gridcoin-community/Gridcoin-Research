@@ -170,9 +170,11 @@ std::shared_ptr<WalletCoinSource> MakeWalletCoinSource(CWallet* wallet);
 //! Because the REAL store, views and queue are underneath (only the wallet
 //! scan is replaced by the synthetic seed), every windowing, epoch/floor and
 //! selection-mirror semantic the production dialog exercises is exercised
-//! here too, at whatever scale the argument requests. Group 0 receives the
-//! bulk of the coins (the pathological single-address case); the remaining
-//! groups get 1000 each.
+//! here too, at whatever scale the argument requests -- on both axes: the
+//! group addresses are distinct for every <groups>, so a large group count
+//! produces a correspondingly large directory. Group 0 receives the bulk of
+//! the coins (the pathological single-address case); the remaining groups
+//! get up to 1000 each, falling to an even split as <groups> grows.
 //!
 //! Limits vs production: the summary labels read 0 (computeCoinControlSummary
 //! resolves outpoints against the real wallet), and there is no live mutation

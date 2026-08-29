@@ -14,6 +14,8 @@
 #include <wallet/walletcoinstore.h>
 #include <wallet/wallet_event_queue.h>
 
+#include <interfaces/wallet_coin_source.h>
+
 #include <arith_uint256.h>
 #include <uint256.h>
 
@@ -21,6 +23,7 @@
 
 #include <chrono>
 #include <climits>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -461,6 +464,35 @@ BOOST_AUTO_TEST_CASE(cleanShutdownWithPendingIntake)
         h.store.enqueueUpsert(h1, {makeCoin(h1, 0, 300, "A")}, false);
     }
     // ~Harness runs ~WalletCoinStore with a possibly non-empty intake.
+}
+
+BOOST_AUTO_TEST_CASE(syntheticHarnessGroupsAreDistinctPerRequestedGroup)
+{
+    // -devsyntheticcoins=<n>:<groups> advertises n coins "spread over <groups>
+    // addresses" (interfaces/wallet_coin_source.h). That contract is only met
+    // if the generated group addresses are injective: WalletCoinStore groups
+    // by group_address, so any aliasing silently folds the directory down and
+    // caps the many-groups axis the harness exists to exercise. A single
+    // letter mod 26 used to cap it at 27 groups no matter what was asked for,
+    // which is why both scales below straddle that boundary.
+    for (const int groups : {30, 500}) {
+        const int total = 5000;
+        auto source = interfaces::MakeSyntheticCoinSource(total, groups);
+        BOOST_REQUIRE(source != nullptr);
+
+        const std::vector<GRC::CoinGroupInfo> dir = source->getGroupDirectory();
+        BOOST_CHECK_EQUAL(static_cast<int>(dir.size()), groups);
+
+        // Injective, and the seeded coins are all still accounted for.
+        std::set<std::string> addresses;
+        int counted = 0;
+        for (const GRC::CoinGroupInfo& g : dir) {
+            addresses.insert(g.address);
+            counted += g.output_count;
+        }
+        BOOST_CHECK_EQUAL(static_cast<int>(addresses.size()), groups);
+        BOOST_CHECK_EQUAL(counted, total);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
