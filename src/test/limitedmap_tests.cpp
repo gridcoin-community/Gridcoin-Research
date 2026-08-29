@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "limitedmap.h"
+#include "net_processing.h"
 
 #include "consensus/consensus.h"
 #include "net.h"
@@ -104,18 +105,20 @@ BOOST_AUTO_TEST_CASE(limitedmap_test)
 }
 
 //!
-//! The deployment that motivated keeping this container: mapAlreadyAskedFor is
-//! global, entries are only removed when the object is received, and AskFor()
-//! used to create them through operator[] on a plain std::map. A peer announcing
-//! inventory it never serves therefore grew state charged to every peer. This
-//! asserts the global is constructed bounded, which is the property that was
-//! missing rather than anything about the container itself.
+//! The deployment that motivated keeping this container: the inventory-request
+//! map behind PeerManager::AskFor has entries removed only when the object is
+//! received, and AskFor used to create them through operator[] on a plain
+//! std::map. A peer announcing inventory it never serves therefore grew state
+//! charged to every peer. This asserts the deployed map is constructed bounded,
+//! which is the property that was missing rather than anything about the
+//! container itself.
+//!
+//! The map moved into net_processing.cpp with AskFor and is file-local there,
+//! so this reaches its capacity through the one accessor rather than the map.
 //!
 BOOST_AUTO_TEST_CASE(map_already_asked_for_is_bounded)
 {
-    LOCK(cs_mapAlreadyAskedFor);
-
-    BOOST_CHECK_EQUAL(mapAlreadyAskedFor.max_size(), (size_t)MAX_INV_SZ);
+    BOOST_CHECK_EQUAL(InventoryRequestMapCapacity(), (size_t)MAX_INV_SZ);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

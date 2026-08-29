@@ -77,6 +77,78 @@ static CCriticalSection cs_mapRelay;
 static map<CInv, CDataStream> mapRelay GUARDED_BY(cs_mapRelay);
 static deque<pair<int64_t, CInv> > vRelayExpiration GUARDED_BY(cs_mapRelay);
 
+// Per-inventory request times, backing the two-minute AskFor backoff. Moved out
+// of net.{h,cpp} together with CNode::AskFor (the #3028 deferral): this is
+// request tracking, which belongs to this layer.
+//
+// A dedicated leaf-level mutex rather than cs_main: the scraper PART path
+// (CSplitBlob::RecvPart) reaches it without holding cs_main, and hoisting
+// cs_main into that path to share a lock would be the wrong trade.
+//
+// Bounded at MAX_INV_SZ, the same ceiling upstream used, and the same number a
+// single peer can announce in one inv message. The map is shared, so without a
+// bound one peer announcing inventory it never serves grows state charged to
+// every peer: entries are only removed on receipt. limitedmap evicts the lowest
+// value first, and the value here is the request time, so the oldest unfulfilled
+// request is what goes.
+static CCriticalSection cs_mapAlreadyAskedFor;
+static limitedmap<CInv, int64_t> mapAlreadyAskedFor GUARDED_BY(cs_mapAlreadyAskedFor){MAX_INV_SZ};
+
+size_t InventoryRequestMapCapacity()
+{
+    LOCK(cs_mapAlreadyAskedFor);
+    return mapAlreadyAskedFor.max_size();
+}
+
+//! Verbatim CNode::AskFor, less the CNode qualification. Kept as a file-local
+//! helper so callers in this TU do not pay a virtual dispatch through
+//! PeerManager to reach a map that is right here.
+static void AskForInv(CNode* pnode, const CInv& inv)
+{
+    // We are using mapAskFor as a priority queue,
+    // the key is the earliest time the request can be sent
+    if (pnode->mapAskFor.size() > 50000) return;
+
+    // Snapshot the current request time under the mutex. The
+    // logging / time-formatting / static-counter arithmetic below
+    // does not touch mapAlreadyAskedFor and should not hold the
+    // mutex.
+    // Absent means never asked, which is a request time of zero. Reading
+    // through find() rather than operator[] also stops the lookup itself
+    // from creating an entry: the write below is what should create it, and
+    // always runs, so the old insert-on-read was redundant as well as
+    // unbounded.
+    int64_t nRequestTime = 0;
+    {
+        LOCK(cs_mapAlreadyAskedFor);
+        const auto it = mapAlreadyAskedFor.find(inv);
+        if (it != mapAlreadyAskedFor.end()) nRequestTime = it->second;
+    }
+
+    LogPrint(BCLog::LogFlags::NET, "askfor %s   %" PRId64 " (%s)", inv.ToString(), nRequestTime, DateTimeStrFormat("%H:%M:%S", nRequestTime/1000000));
+
+    // Make sure not to reuse time indexes to keep things in the same order
+    int64_t nNow = (GetAdjustedTime() - 1) * 1000000;
+    static int64_t nLastTime;
+    ++nLastTime;
+    nNow = std::max(nNow, nLastTime);
+    nLastTime = nNow;
+
+    // Each retry is 2 minutes after the last
+    const int64_t nNewRequestTime = std::max(nRequestTime + 2 * 60 * 1000000, nNow);
+    {
+        LOCK(cs_mapAlreadyAskedFor);
+        const auto it = mapAlreadyAskedFor.find(inv);
+
+        if (it != mapAlreadyAskedFor.end()) {
+            mapAlreadyAskedFor.update(it, nNewRequestTime);
+        } else {
+            mapAlreadyAskedFor.insert(std::make_pair(inv, nNewRequestTime));
+        }
+    }
+    pnode->mapAskFor.insert(std::make_pair(nNewRequestTime, inv));
+}
+
 void RelayTransaction(const CTransaction& tx, const uint256& hash)
 {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -788,7 +860,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     && (!IsV15Enabled(nBestHeight) || OutOfSyncByAge());
 
                 if (!fAlreadyHave && !skip_psgt)
-                    pfrom->AskFor(inv);
+                    AskForInv(pfrom, inv);
                 else if (inv.type == MSG_BLOCK && g_orphan_blocks.Contains(inv.hash)) {
                     const CBlock* pblock_root = g_orphan_blocks.GetRootBlock(inv.hash);
                     if (pblock_root) {
@@ -1834,6 +1906,30 @@ public:
         }
 
         return nZeroed;
+    }
+
+    void AskFor(CNode* pnode, const CInv& inv) override
+    {
+        AskForInv(pnode, inv);
+    }
+
+    void ForgetInventoryRequest(const CInv& inv) override
+    {
+        LOCK(cs_mapAlreadyAskedFor);
+        mapAlreadyAskedFor.erase(inv);
+    }
+
+    void ResetInventoryRequestBackoff(const CInv& inv) override
+    {
+        LOCK(cs_mapAlreadyAskedFor);
+
+        const auto it = mapAlreadyAskedFor.find(inv);
+
+        if (it != mapAlreadyAskedFor.end()) {
+            mapAlreadyAskedFor.update(it, 0);
+        } else {
+            mapAlreadyAskedFor.insert(std::make_pair(inv, 0));
+        }
     }
 
 private:

@@ -9,6 +9,7 @@
 #include "chainparams.h"
 #include "checkpoints.h"
 #include "net.h"
+#include "net_processing.h"
 #include "txdb.h"
 #include "node/blockstorage.h"
 #include "node/orphan_blocks.h"
@@ -850,26 +851,17 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidatio
                 // it never sends the request to download that block. We reset the
                 // request time first to guarantee that the node does not postpone
                 // the message:
-                //
-                {
-                    LOCK(cs_mapAlreadyAskedFor);
-
-                    // Zero is deliberate: AskFor() below takes
-                    // max(nRequestTime + 2 minutes, now), so a stale future
-                    // timestamp here would postpone the request. Note that a
-                    // zero-valued entry is also limitedmap's first eviction
-                    // candidate, which is harmless -- AskFor() raises it
-                    // immediately, and losing it in between simply means AskFor
-                    // inserts it fresh.
-                    const auto it = mapAlreadyAskedFor.find(ancestor_request);
-
-                    if (it != mapAlreadyAskedFor.end()) {
-                        mapAlreadyAskedFor.update(it, 0);
-                    } else {
-                        mapAlreadyAskedFor.insert(std::make_pair(ancestor_request, 0));
-                    }
+                // Zero is deliberate: AskFor() below takes
+                // max(nRequestTime + 2 minutes, now), so a stale future
+                // timestamp here would postpone the request. Note that a
+                // zero-valued entry is also limitedmap's first eviction
+                // candidate, which is harmless -- AskFor() raises it
+                // immediately, and losing it in between simply means AskFor
+                // inserts it fresh.
+                if (g_peerman) {
+                    g_peerman->ResetInventoryRequestBackoff(ancestor_request);
+                    g_peerman->AskFor(pfrom, ancestor_request);
                 }
-                pfrom->AskFor(ancestor_request);
             }
         }
 
