@@ -172,6 +172,11 @@ BASE_SCRIPTS = [
     'wallet_backup.py',
     'wallet_keypool.py',
     'wallet_listtransactions.py',
+    # wallet_splitunspent.py: splitunspent count/size/optimal modes, the
+    # per-piece fee floor, the piece cap in all three modes, the
+    # -minstakesplitvalue floor and the consolidateunspent round trip
+    # (#3192 follow-up).
+    'wallet_splitunspent.py',
     'interface_cli.py',
     'mempool_accept.py',
     'rpc_net.py',
