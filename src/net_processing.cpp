@@ -1435,6 +1435,22 @@ static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRe
                 // Allow exceptions from over-long size
                 LogPrintf("ProcessMessages(%s, %u bytes) : Exception '%s' caught", strCommand, nMessageSize, e.what());
             }
+            else if (strstr(e.what(), "Vector length limit exceeded"))
+            {
+                // Allow exceptions from a vector whose element count exceeds the
+                // limit declared for it (LimitedVector in serialize.h, applied to
+                // the block locator at MAX_LOCATOR_SZ). This is an ordinary
+                // malformed-message rejection and belongs with the two above.
+                //
+                // Without this arm the message matches neither filter and falls
+                // through to PrintExceptionContinue(), which assigns
+                // strMiscWarning; GetWarnings() returns that at priority 1000, so
+                // it surfaces in getinfo, getstakinginfo, getnetworkinfo,
+                // getblockchaininfo and the GUI status bar. That let any peer set
+                // the node's user-visible warning string on demand, unthrottled
+                // and with no misbehavior score, by sending one oversized locator.
+                LogPrintf("ProcessMessages(%s, %u bytes) : Exception '%s' caught", strCommand, nMessageSize, e.what());
+            }
             else
             {
                 PrintExceptionContinue(&e, "ProcessMessages()");
