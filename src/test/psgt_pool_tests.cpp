@@ -10,6 +10,7 @@
 #include <policy/fees.h>
 #include <primitives/transaction.h>
 #include <psgt.h>
+#include <script/interpreter.h>
 #include <test/psgt_test_helpers.h>
 #include <test/test_gridcoin.h>
 #include <txmempool.h>
@@ -443,6 +444,56 @@ BOOST_AUTO_TEST_CASE(pool_expiry)
                   == PSGTPoolAddResult::ACCEPTED_NEW);
 
     BOOST_CHECK_EQUAL(pool.EraseExpired(now), 1u);
+    BOOST_CHECK_EQUAL(pool.Size(), 1u);
+}
+
+BOOST_AUTO_TEST_CASE(pool_no_progress_duplicate_is_damped)
+{
+    mempool.clear();
+    FundedMultisig fixture;
+    PSGTPool pool;
+    std::string error;
+    std::string reject;
+
+    PSGTPoolEntry first;
+    BOOST_REQUIRE(Validate(fixture.Signed({fixture.k1}), first, error) == PSGTPoolReject::NONE);
+    const uint256 pooled_revision = first.revision_hash;
+    BOOST_REQUIRE(pool.Add(std::move(first), reject) == PSGTPoolAddResult::ACCEPTED_NEW);
+
+    // Re-signing with the same key is NOT enough to reach the no-progress
+    // branch: strict DER + low-S leave exactly one valid signature per
+    // (keyid, sighash), and SerializePSGT emits sorted maps, so the revision
+    // hash is canonical for a given (unsigned tx, valid-signer-set) and the
+    // short-circuit at the top of Add() catches it.
+    //
+    // The sighash type is the remaining degree of freedom.
+    // CheckSignatureEncoding accepts any valid hashtype, so a member key can
+    // mint a distinct canonical revision that carries the same valid-signer
+    // set -- which lands on "no new signatures over the pooled revision".
+    PartiallySignedTransaction variant = fixture.Signed({fixture.k1});
+    {
+        const CTransaction variant_tx(variant.tx);
+        const uint256 sighash = SignatureHash(fixture.redeem, variant_tx, 0, SIGHASH_NONE);
+        std::vector<unsigned char> sig;
+        BOOST_REQUIRE(fixture.k1.Sign(sighash, sig));
+        sig.push_back(static_cast<unsigned char>(SIGHASH_NONE));
+        variant.inputs[0].partial_sigs[fixture.k1.GetPubKey().GetID()] = sig;
+    }
+
+    PSGTPoolEntry offered;
+    BOOST_REQUIRE(Validate(variant, offered, error) == PSGTPoolReject::NONE);
+    const uint256 offered_revision = offered.revision_hash;
+    BOOST_REQUIRE(offered_revision != pooled_revision);
+    BOOST_REQUIRE(!pool.HaveRevision(offered_revision));
+
+    BOOST_CHECK(pool.Add(std::move(offered), reject) == PSGTPoolAddResult::DUPLICATE);
+
+    // The offered hash must now be known. Without damping, HaveRevision()
+    // keeps answering false, AlreadyHave() answers "no", and the node
+    // re-downloads, re-deserializes and re-verifies the same rejected
+    // revision on every announcement.
+    BOOST_CHECK(pool.HaveRevision(offered_revision));
+    BOOST_CHECK(pool.HaveRevision(pooled_revision));
     BOOST_CHECK_EQUAL(pool.Size(), 1u);
 }
 

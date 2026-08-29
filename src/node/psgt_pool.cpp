@@ -378,7 +378,15 @@ PSGTPoolAddResult PSGTPool::Add(PSGTPoolEntry&& entry, std::string& reject_reaso
                     return PSGTPoolAddResult::REJECTED_NOT_BETTER;
                 }
                 if (!strictly_larger) {
+                    // Damp the offered revision, not the pooled one. Without
+                    // this, HaveRevision() keeps answering false for a
+                    // no-progress revision, so AlreadyHave() lets the node
+                    // re-download, re-deserialize and re-verify it on every
+                    // announcement. Re-signing the same authorization produces
+                    // different bytes (see the malleability note above), so a
+                    // peer can mint a fresh revision hash indefinitely.
                     reject_reason = "no new signatures over the pooled revision";
+                    RecordRemoved(entry.revision_hash, now);
                     return PSGTPoolAddResult::DUPLICATE;
                 }
             } else {
