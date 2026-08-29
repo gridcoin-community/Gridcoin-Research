@@ -38,6 +38,11 @@ class CoinSelectionView : public QTreeView
 public:
     explicit CoinSelectionView(QWidget* parent = nullptr);
 
+    //! Wires the re-slot restoration (see restoreReslottedBranches) so every
+    //! consumer of this view gets it, the way uniformRowHeights is set in the
+    //! constructor rather than per dialog.
+    void setModel(QAbstractItemModel* model) override;
+
 signals:
     //! The visible index set changed (scroll / resize / expand / collapse).
     void visibleIndexesChanged(const QList<QModelIndex>& visible);
@@ -49,6 +54,9 @@ protected:
 
 private slots:
     void reportViewport();
+    //! Re-expand branches the model reports as re-slotted, restoring the
+    //! scroll offset (#3228 item 3).
+    void restoreReslottedBranches(const QList<int>& group_ids);
 
 private:
     bool m_report_queued{false};

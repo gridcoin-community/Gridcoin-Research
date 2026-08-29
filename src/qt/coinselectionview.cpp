@@ -7,6 +7,7 @@
 #include "qt/coinselectionmodel.h"
 
 #include <QKeyEvent>
+#include <QScrollBar>
 #include <QTimer>
 
 #include <algorithm>
@@ -43,6 +44,46 @@ CoinSelectionView::CoinSelectionView(QWidget* parent)
             }
             reportViewport();
         });
+    });
+}
+
+void CoinSelectionView::setModel(QAbstractItemModel* model)
+{
+    if (auto* previous = qobject_cast<CoinSelectionModel*>(this->model())) {
+        disconnect(previous, &CoinSelectionModel::groupsReslotted, this, nullptr);
+    }
+    QTreeView::setModel(model);
+    if (auto* m = qobject_cast<CoinSelectionModel*>(model)) {
+        connect(m, &CoinSelectionModel::groupsReslotted,
+                this, &CoinSelectionView::restoreReslottedBranches);
+    }
+}
+
+void CoinSelectionView::restoreReslottedBranches(const QList<int>& group_ids)
+{
+    // DEFER, for the same reason the collapse path above defers. The model
+    // emits this after its batch's brackets have closed, but QTreeView::expand()
+    // calls fetchMore() synchronously and Qt can still be mid-dispatch of the
+    // batch's own row signals here; a continuation runs with nothing open, so
+    // the expansion actually realizes instead of being silently suppressed.
+    //
+    // The scroll offset is captured NOW and restored after: re-inserting the
+    // parent at its new slot has already moved rows under the viewport, and
+    // re-expanding a branch above it moves them again. This holds the
+    // scrollbar still rather than reconstructing what was under the cursor --
+    // enough to stop the jump to the top, which is the visible symptom.
+    const int offset = verticalScrollBar()->value();
+    QTimer::singleShot(0, this, [this, group_ids, offset]() {
+        auto* m = qobject_cast<CoinSelectionModel*>(model());
+        if (!m) return;
+        for (const int id : group_ids) {
+            const QModelIndex idx = m->groupIndexForId(id);
+            // Gone again between the emission and this turn (removed for real,
+            // or a Reset renumbered the registry).
+            if (idx.isValid() && !isExpanded(idx)) expand(idx);
+        }
+        verticalScrollBar()->setValue(offset);
+        reportViewport();
     });
 }
 

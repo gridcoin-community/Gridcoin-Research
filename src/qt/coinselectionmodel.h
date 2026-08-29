@@ -85,6 +85,16 @@ public:
                        interfaces::WalletCoinControl* coin_control,
                        int view_id,
                        QObject* parent = nullptr);
+
+    //! TEST SEAM: the same model over a bare source, with no WalletModel.
+    //! WalletModel supplies exactly two things -- the display unit and the
+    //! drain pump -- so a test that injects batches through
+    //! applyCoinEventBatch() itself needs neither. Registers the view and
+    //! seeds from the source directly; never used by the GUI.
+    CoinSelectionModel(interfaces::WalletCoinSource& source,
+                       interfaces::WalletCoinControl* coin_control,
+                       int view_id,
+                       QObject* parent = nullptr);
     //! Unregisters the view node-side (must run while the source is alive —
     //! the dialog is modal and stack-scoped, so this always precedes the
     //! bitcoin.cpp source teardown).
@@ -120,6 +130,13 @@ public:
     //! Un-realize a collapsed group's child cache (bounded memory). The view
     //! calls this from its collapsed() signal.
     void releaseGroup(const QModelIndex& group_index);
+
+    //! The directory index of the group with stable id \p group_id, or an
+    //! invalid index when that id does not currently name a directory row.
+    //! The view resolves a deferred re-expand through this: a stable id
+    //! survives the directory re-slots a queued continuation can race with,
+    //! where a row number would not.
+    QModelIndex groupIndexForId(int group_id) const;
 
     // ---- selection operations (the dialog's buttons) --------------------
 
@@ -157,6 +174,22 @@ signals:
     //! The store's wallet scan completed and was applied (isLoading() flipped
     //! false).
     void loadingFinished();
+    //! Groups the user had expanded were RE-SLOTTED within a drained batch and
+    //! came back collapsed (#3228 item 3). A sort-key move is published as
+    //! GroupRemove + GroupInsert -- an in-place GroupChange would desynchronize
+    //! the consumer's positional coordinates -- and the removal takes the
+    //! realized child cache and QTreeView's expansion with it, though the user
+    //! never collapsed anything. Carries the stable ids of the branches to
+    //! restore.
+    //!
+    //! Emitted ONCE at the end of the batch and never from inside a structural
+    //! bracket: QTreeView::expand() calls fetchMore() synchronously, and
+    //! canFetchMore() answers false while m_structure_locked is nonzero, so an
+    //! expand issued mid-batch would mark the node expanded with the
+    //! realization silently dropped -- and nothing would retry it, the node
+    //! being already in QTreeView's expanded set. Consumers must defer their
+    //! expand past the current event-loop turn.
+    void groupsReslotted(const QList<int>& group_ids);
 
 public slots:
     //! WalletModel fans each drained coin-event batch here; events for other
@@ -232,6 +265,16 @@ private:
     std::vector<std::string> m_id_addr;                 //!< stable id -> address
     //! Realized (expanded) groups, keyed by address.
     std::map<std::string, GroupSlot> m_groups;
+    //! Addresses the USER has expanded -- deliberately not the same thing as
+    //! m_groups. A re-slot drops the realized slot without the user having
+    //! collapsed anything, and this set is what tells a re-slot apart from a
+    //! real collapse. Grows only on expand, so it is bounded by user actions;
+    //! pruned on a real collapse and cleared on Reset (which collapses
+    //! everything anyway).
+    std::set<std::string> m_expanded;
+    //! Stable ids queued for re-expansion, accumulated over one drained batch
+    //! and flushed by the groupsReslotted emission at its end.
+    QList<int> m_pending_reexpand;
 
     //! FLAT mode: the single windowed row universe.
     GRC::WindowCache<GRC::CoinRecord> m_flat;

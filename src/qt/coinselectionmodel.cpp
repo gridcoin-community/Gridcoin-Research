@@ -120,6 +120,31 @@ CoinSelectionModel::CoinSelectionModel(WalletModel* wallet_model,
     m_wallet_model->drainCoinEventQueue();
 }
 
+CoinSelectionModel::CoinSelectionModel(interfaces::WalletCoinSource& source,
+                                       interfaces::WalletCoinControl* coin_control,
+                                       int view_id,
+                                       QObject* parent)
+    : QAbstractItemModel(parent)
+    , m_wallet_model(nullptr)
+    , m_source(source)
+    , m_coin_control(coin_control)
+    , m_view_id(view_id)
+{
+    m_flat_sink = std::make_unique<CoinCacheSink>(this, std::string());
+
+    m_fetch_timer = new QTimer(this);
+    m_fetch_timer->setSingleShot(true);
+    connect(m_fetch_timer, &QTimer::timeout, this, &CoinSelectionModel::onFetchTimeout);
+
+    m_source.registerView(m_view_id, m_mode, GRC::COINCOL_AMOUNT, /*desc*/ 1);
+    m_coin_control->selected = m_source.reconcileSelection(m_coin_control->selected);
+
+    // No drain pump without a WalletModel, so seed straight from the source
+    // rather than waiting for the registration Reset to come back around.
+    m_loading = false;
+    reseedFromSource();
+}
+
 void CoinSelectionModel::onCoinSourceLoadFinished()
 {
     // WalletModel drained the reload's Reset before emitting, so the caches
@@ -166,6 +191,14 @@ QModelIndex CoinSelectionModel::groupIndexByAddress(const std::string& address) 
     const int row = rowForAddress(address);
     if (row < 0) return QModelIndex();
     return createIndex(row, 0, quintptr(0));
+}
+
+QModelIndex CoinSelectionModel::groupIndexForId(int group_id) const
+{
+    if (group_id < 0 || static_cast<std::size_t>(group_id) >= m_id_addr.size()) {
+        return QModelIndex();
+    }
+    return groupIndexByAddress(m_id_addr[static_cast<std::size_t>(group_id)]);
 }
 
 const GRC::CoinGroupInfo* CoinSelectionModel::groupAt(const QModelIndex& index) const
@@ -256,6 +289,9 @@ void CoinSelectionModel::fetchMore(const QModelIndex& parent)
 
     GroupSlot& slot = m_groups[address];
     slot.sink = std::make_unique<CoinCacheSink>(this, address);
+    // Realization IS expansion (the view only ever gets here through expand /
+    // fetchMore), and this outlives the slot across a re-slot.
+    m_expanded.insert(address);
 
     if (result.total_accepted > 0) {
         // The rows are VIRTUAL: the cache holds the first window; the rest
@@ -291,6 +327,9 @@ void CoinSelectionModel::releaseGroup(const QModelIndex& group_index)
     const GRC::CoinGroupInfo* g = groupAt(group_index);
     if (!g) return;
     const std::string address = g->address;
+    // The user collapsed it: forget the expansion even if the slot was never
+    // realized (an empty group has no cache to release).
+    m_expanded.erase(address);
     auto it = m_groups.find(address);
     if (it == m_groups.end()) return;
 
@@ -333,7 +372,7 @@ QVariant CoinSelectionModel::data(const QModelIndex& index, int role) const
 {
     if (!index.isValid()) return QVariant();
 
-    const int unit = m_wallet_model->getOptionsModel()
+    const int unit = (m_wallet_model && m_wallet_model->getOptionsModel())
         ? m_wallet_model->getOptionsModel()->getDisplayUnit()
         : static_cast<int>(BitcoinUnits::BTC);
 
@@ -578,7 +617,7 @@ void CoinSelectionModel::sort(int column, Qt::SortOrder order)
     // unreflected. The Reset still arrives later and reseeds again — the
     // duplicate is harmless (idempotent), an unapplied one is not.
     reseedFromSource();
-    m_wallet_model->drainCoinEventQueue();
+    if (m_wallet_model) m_wallet_model->drainCoinEventQueue();
 }
 
 void CoinSelectionModel::setDisplayMode(GRC::CoinViewMode mode)
@@ -592,7 +631,7 @@ void CoinSelectionModel::setDisplayMode(GRC::CoinViewMode mode)
     // store's Reset is not safe).
     m_pending_mode = mode;
     reseedFromSource();
-    m_wallet_model->drainCoinEventQueue();
+    if (m_wallet_model) m_wallet_model->drainCoinEventQueue();
 }
 
 // ---- event application --------------------------------------------------
@@ -613,6 +652,11 @@ void CoinSelectionModel::reseedFromSource()
     m_id_addr.clear();
     m_directory.clear();
     m_pending_fetch.clear();
+    // A Reset collapses every branch (QTreeView drops expansion on
+    // modelReset), so nothing survives to restore and the id registry the
+    // pending list is keyed on is about to be renumbered.
+    m_expanded.clear();
+    m_pending_reexpand.clear();
 
     if (m_mode == GRC::CoinViewMode::Tree) {
         GRC::CoinGroupsResult result = m_source.getGroups(m_view_id, 0, -1);
@@ -741,7 +785,17 @@ void CoinSelectionModel::applyCoinEventBatch(const std::vector<GRC::WalletCoinEv
             beginInsertRows(QModelIndex(), pos, pos + static_cast<int>(p->groups.size()) - 1);
             m_directory.insert(m_directory.begin() + pos, p->groups.begin(), p->groups.end());
             rebuildDirRows(pos);
-            for (const GRC::CoinGroupInfo& g : p->groups) idForAddress(g.address);
+            for (const GRC::CoinGroupInfo& g : p->groups) {
+                const int id = idForAddress(g.address);
+                // Re-slotted back in while the user had it expanded: the
+                // matching GroupRemove above dropped the realized slot and
+                // QTreeView's expansion with it. Queue the restore -- the
+                // emission waits for the end of the batch, outside this
+                // bracket (see groupsReslotted).
+                if (m_expanded.count(g.address) != 0 && !m_pending_reexpand.contains(id)) {
+                    m_pending_reexpand.append(id);
+                }
+            }
             endInsertRows();
             continue;
         }
@@ -789,6 +843,14 @@ void CoinSelectionModel::applyCoinEventBatch(const std::vector<GRC::WalletCoinEv
 
     if (selection_changed) {
         emit selectionChanged();
+    }
+
+    // Outside every structural bracket the batch opened, which is the whole
+    // point of deferring it to here.
+    if (!m_pending_reexpand.isEmpty()) {
+        const QList<int> ids = m_pending_reexpand;
+        m_pending_reexpand.clear();
+        emit groupsReslotted(ids);
     }
 }
 
@@ -893,7 +955,7 @@ void CoinSelectionModel::fetchScope(const std::string& scope, int first, int cou
     // Drain first so the cache's structural seqno reflects every pushed
     // event, then fetch; a gate rejection means a producer raced the read —
     // re-arm the debounce for a bounded retry.
-    m_wallet_model->drainCoinEventQueue();
+    if (m_wallet_model) m_wallet_model->drainCoinEventQueue();
 
     GRC::CoinRowsResult result = scope.empty()
         ? m_source.getRows(m_view_id, first, count)
