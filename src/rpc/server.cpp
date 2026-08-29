@@ -1162,7 +1162,19 @@ void StartRPCThreads()
         return;
     }
 
-    const int nRPCThreads = gArgs.GetArg("-rpcthreads", 4);
+    // Clamp to at least one worker. These threads are the only ones that run
+    // ioContext::run(), so -rpcthreads=0 installs the acceptors with nothing to
+    // service them: the port listens, no request is ever dispatched, and that
+    // includes the "stop" call an operator would use to recover -- the node has
+    // to be killed. -rpcthreads is registered ALLOW_ANY, so nothing else
+    // rejects the value.
+    const int nRPCThreadsArg = gArgs.GetArg("-rpcthreads", 4);
+    const int nRPCThreads = std::max(1, nRPCThreadsArg);
+
+    if (nRPCThreads != nRPCThreadsArg) {
+        LogPrintf("WARNING: StartRPCThreads: -rpcthreads=%d is below the minimum of 1; using %d.\n",
+                  nRPCThreadsArg, nRPCThreads);
+    }
 
     rpc_worker_group = new boost::thread_group();
     for (int i = 0; i < nRPCThreads; i++)
