@@ -653,7 +653,7 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-paytxfee=<amt>", "Fee per KB to add to transactions you send",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-mintxfee=<amt>", "Minimum transaction fee for transactions you send or process (default: 0.001 GRC)",
+    argsman.AddArg("-mintxfee=<amt>", "Minimum fee rate, per KB, a transaction must pay to be included in a block this node stakes (default: 0.001 GRC). Does not affect transactions you send; use -paytxfee for that.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-mininput=<amt>", "When creating transactions, ignore inputs with value less than this (default: 0.01)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);

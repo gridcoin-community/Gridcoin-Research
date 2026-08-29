@@ -568,6 +568,37 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                 continue;
             }
 
+            // Fee-rate floor from -mintxfee. Both sides are satoshi per 1000
+            // bytes -- see the "Fee-per-kilobyte amount considered the same as
+            // free" comment where nMinTxFee is set -- not absolute amounts.
+            //
+            // Restored here: 1421209a0 removed the free-transaction path and
+            // with it the only read of nMinTxFee, so the option went on being
+            // parsed from -mintxfee while nothing consumed it.
+            //
+            // At the default (GetBaseFee, 100000 sat/KB) this rejects nothing.
+            // Relay already requires (1 + bytes/1000) * MIN_TX_FEE * 10, and
+            // over every size AcceptToMemoryPool admits -- 1 to
+            // MAX_STANDARD_TX_SIZE-1, IsStandardTx being unconditional on that
+            // path -- the resulting rate stays above the floor. The margin is
+            // thinnest at the top: 100001 sat/KB at 99999 bytes, i.e. 1 sat/KB.
+            // dFeePerKb is a double, but its error here is ~1e-11 sat/KB, ten
+            // orders of magnitude inside that margin, so the comparison is not
+            // at risk. The floor bites only when an operator raises the option.
+            //
+            // Note this is stricter than the pre-1421209a0 check, which also
+            // required (nBlockSize + nTxSize >= nBlockMinSize) and so left a
+            // free area at the front of the block. nBlockMinSize went with the
+            // free-transaction path; the floor is unconditional now, which is
+            // what -mintxfee's documented meaning describes.
+            if (dFeePerKb < nMinTxFee)
+            {
+                LogPrint(BCLog::LogFlags::NOISY,
+                         "Not including tx %s: fee rate %.0f below -mintxfee %" PRId64,
+                         tx.GetHash().GetHex(), dFeePerKb, nMinTxFee);
+                continue;
+            }
+
             // Legacy limits on sigOps:
             unsigned int nTxSigOps = GetLegacySigOpCount(tx);
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
@@ -603,9 +634,21 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                          "Not including tx %s  due to TxFees of %" PRId64 ", bare min fee is %" PRId64,
                          tx.GetHash().GetHex(), nTxFees, nMinFee);
 
-                // Since transactions are sorted by fee, the fee of rest must also be lower
-                // than required.
-                break;
+                // continue, not break. This compares an ABSOLUTE fee against
+                // an absolute threshold while the heap is ordered by fee RATE
+                // (dFeePerKb), and the two orders are not the same: a larger
+                // transaction popped later, at a lower rate, can pay more in
+                // total than this one and clear a threshold this one missed.
+                //
+                // The heap is not globally descending either. An orphan is
+                // pushed onto it mid-loop when its parent is included (see
+                // mapDependers below), so a transaction entering after this
+                // point can outrank everything already popped.
+                //
+                // The "sorted by fee" justification for breaking belonged to
+                // the fee-RATE check that 1421209a0 deleted, not to this one;
+                // it came along with the edit and has been wrong since.
+                continue;
             }
 
             nTxSigOps += GetP2SHSigOpCount(tx, mapInputs);
