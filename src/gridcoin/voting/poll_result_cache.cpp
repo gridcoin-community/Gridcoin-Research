@@ -214,9 +214,12 @@ std::vector<PollResultItem> PollResultCache::BuildPollTable(PollFilterFlag flags
             break;
         }
 
-        // Wait for the reorg to clear before retrying. DetectReorg clears the flag
-        // once ReorganizeChain has finished; a failed reorg leaves it set and the
-        // node will shut down, interrupting the sleep.
+        // Wait for the reorg to clear before retrying. The TraversalScope opened
+        // at the top of this function is still held here, so DetectReorg re-arms
+        // reorg_occurred_during_reg_traversal for as long as g_reorg_in_progress
+        // is set: this loop ends when the reorg finishes, or when the next block
+        // is connected successfully, since SetBestChain clears that flag on every
+        // exit including its failure returns.
         while (registry.reorg_occurred_during_reg_traversal) {
             if (!MilliSleep(1000)) {
                 return items;

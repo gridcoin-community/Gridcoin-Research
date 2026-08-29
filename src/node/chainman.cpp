@@ -506,8 +506,41 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     return true;
 }
 
+namespace {
+//!
+//! \brief RAII scope that clears g_reorg_in_progress when SetBestChain returns.
+//!
+//! ReorganizeChain sets the flag, because only it can distinguish a non-trivial
+//! reorg from a trivial single-block extension, and the caller clears it,
+//! because ReorganizeChain can run twice within one SetBestChain call (the
+//! forward reorg and the trust-regression reorg-back).
+//!
+//! Clearing on the success path alone left the flag set on both of the failure
+//! returns below. A stuck flag wedges PollResultCache::BuildPollTable: its
+//! TraversalScope is open across the whole build, so PollRegistry::DetectReorg
+//! keeps re-arming reorg_occurred_during_reg_traversal, and the retry loop
+//! there waits on that flag at 1 Hz until the next block connects successfully.
+//!
+//! The explicit clear before the post-connect fix-up below is deliberately
+//! kept: it releases consumers at the point it always has. This scope only
+//! covers the exits that never reached it.
+//!
+class ReorgInProgressScope
+{
+public:
+    ReorgInProgressScope() = default;
+
+    ~ReorgInProgressScope() { g_reorg_in_progress = false; }
+
+    ReorgInProgressScope(const ReorgInProgressScope&) = delete;
+    ReorgInProgressScope& operator=(const ReorgInProgressScope&) = delete;
+};
+} // anonymous namespace
+
 bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    const ReorgInProgressScope reorg_scope;
+
     unsigned cnt_dis = 0;
     unsigned cnt_con = 0;
     bool success = false;
