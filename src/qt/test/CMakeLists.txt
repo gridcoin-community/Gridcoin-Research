@@ -4,6 +4,7 @@ add_executable(test_gridcoin-qt
     uritests.cpp
     sidestakemodeltests.cpp
     coinselectionmodeltests.cpp
+    coinselectionviewtests.cpp
 )
 
 set_target_properties(test_gridcoin-qt PROPERTIES
