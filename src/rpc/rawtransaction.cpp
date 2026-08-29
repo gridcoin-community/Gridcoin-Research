@@ -1225,8 +1225,10 @@ UniValue splitunspent(const UniValue& params)
                                      FormatMoney(nOptimalPieceSize)));
     }
 
-    // Get the current UTXO's. Only fOnlyConfirmed departs from the defaults: passing false
-    // deliberately includes unconfirmed outputs, matching consolidateunspent. Immature
+    // Get the current UTXO's. Only fOnlyConfirmed departs from the defaults, and it gates on
+    // CWalletTx::IsTrusted() rather than on confirmation count alone: IsTrusted demands three
+    // confirmations for anything not from this wallet, so passing false admits shallow incoming
+    // payments as well as unconfirmed ones. This matches consolidateunspent. Immature
     // coinbase/coinstake outputs, non-final transactions and conflicts are excluded regardless.
     pwalletMain->AvailableCoins(vecInputs, /*fOnlyConfirmed=*/false, /*coinControl=*/nullptr,
                                 /*fIncludeStakingCoins=*/false);
