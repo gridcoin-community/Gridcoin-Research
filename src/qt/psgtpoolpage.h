@@ -62,6 +62,11 @@ private:
 
     QLabel* m_banner = nullptr;
     QTableView* m_table = nullptr;
+
+    //! Image (pool key) of the selected arrangement, held across a model reset
+    //! so the selection can be restored afterwards. Empty when nothing is
+    //! selected or no reset is in flight.
+    std::string m_selected_image;
     QPushButton* m_sign_button = nullptr;
     QPushButton* m_remove_button = nullptr;
     QPushButton* m_details_button = nullptr;
