@@ -177,6 +177,7 @@ BASE_SCRIPTS = [
     'rpc_net.py',
     'rpc_net_connman.py',
     'feature_sidestake.py',
+    'feature_generatesuperblock.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled
