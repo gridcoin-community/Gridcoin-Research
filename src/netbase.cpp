@@ -4,6 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <limits>
+#include <type_traits>
 #include "netbase.h"
 #include "util.h"
 #include "sync.h"
@@ -337,6 +338,11 @@ bool static Socks5(string strDest, int port, SOCKET& hSocket)
     static_assert(sizeof(pchRet3) > std::numeric_limits<uint8_t>::max(),
                   "the domain-name length is read from a single byte, so the buffer "
                   "must be larger than any value that byte can hold");
+    static_assert(std::is_unsigned_v<std::remove_reference_t<decltype(pchRet3[0])>>,
+                  "the length byte is read out of this buffer into an int, so a signed "
+                  "element type sign-extends any value above 0x7f into a negative nRecv "
+                  "-- CVE-2017-18350. The size assert above does not cover this: "
+                  "char pchRet3[256] satisfies it and reintroduces the bug");
 
     switch (pchRet2[3])
     {
