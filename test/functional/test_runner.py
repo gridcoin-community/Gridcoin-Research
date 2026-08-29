@@ -91,6 +91,18 @@ EXTENDED_SCRIPTS = [
     # so it takes tens of seconds and is opt-in rather than in the default suite.
     'feature_stakelimit.py',
     #
+    # mining_fee_policy.py asserts on the contents of a staked block, so it has
+    # to spend most of its wallet's UTXOs and then stake. CWallet marks a parent
+    # spent on TxStateInMempool as well as TxStateConfirmed, so those outputs
+    # leave AvailableCoinsForStaking and CreateCoinStake can fail with "no stake
+    # found (need a mature UTXO with sufficient weight)". Same shared-premine
+    # hazard as feature_reorg.py below. One case per node and a 2x UTXO universe
+    # took it from ~4.5% to ~1.3% (2 failures in 150 runs) but did not remove it,
+    # and a bounded mine retry does not help -- a retry advances the mock clock
+    # one 16 s slot, which adds no stake weight. Unit-testing this needs a chain
+    # fixture with spendable coins, which the tree does not have (issue #3290).
+    'mining_fee_policy.py',
+    #
     # feature_reorg.py exercises a competing-proof-of-stake reorg between two
     # nodes. It is intermittently flaky on the current regtest stack and is NOT
     # in the default CI suite: both nodes share the same deterministic, stakeable
