@@ -5201,21 +5201,17 @@ bool CMerkleTx::AcceptToMemoryPool() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
 bool CWalletTx::AcceptWalletTransaction(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-
+    // Add previous supporting transactions first
+    for (auto& tx : vtxPrev)
     {
-        // Add previous supporting transactions first
-        for (auto tx : vtxPrev)
+        if (!(tx.IsCoinBase() || tx.IsCoinStake()))
         {
-            if (!(tx.IsCoinBase() || tx.IsCoinStake()))
-            {
-                uint256 hash = tx.GetHash();
-                if (!mempool.exists(hash) && !txdb.ContainsTx(hash))
-                    tx.AcceptToMemoryPool();
-            }
+            uint256 hash = tx.GetHash();
+            if (!mempool.exists(hash) && !txdb.ContainsTx(hash))
+                tx.AcceptToMemoryPool();
         }
-        return AcceptToMemoryPool();
     }
-    return false;
+    return AcceptToMemoryPool();
 }
 
 bool CWalletTx::AcceptWalletTransaction() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
