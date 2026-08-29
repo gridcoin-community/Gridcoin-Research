@@ -1215,8 +1215,11 @@ UniValue splitunspent(const UniValue& params)
                                      FormatMoney(nOptimalPieceSize)));
     }
 
-    // Get the current UTXO's. The defaults exclude immature and currently staking coins.
-    pwalletMain->AvailableCoins(vecInputs, false, nullptr, false);
+    // Get the current UTXO's. Only fOnlyConfirmed departs from the defaults: passing false
+    // deliberately includes unconfirmed outputs, matching consolidateunspent. Immature
+    // coinbase/coinstake outputs, non-final transactions and conflicts are excluded regardless.
+    pwalletMain->AvailableCoins(vecInputs, /*fOnlyConfirmed=*/false, /*coinControl=*/nullptr,
+                                /*fIncludeStakingCoins=*/false);
 
     CWalletTx wtxNew;
 
