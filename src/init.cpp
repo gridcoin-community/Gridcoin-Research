@@ -1771,7 +1771,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     CService addrProxy;
     bool fProxy = false;
     if (gArgs.IsArgSet("-proxy")) {
-        CService addrProxy(LookupNumeric(gArgs.GetArg("-proxy", "").c_str(), 9050));
+        addrProxy = LookupNumeric(gArgs.GetArg("-proxy", "").c_str(), 9050);
         if (!addrProxy.IsValid())
             return InitError(strprintf(_("Invalid -proxy address: '%s'"), gArgs.GetArg("-proxy", "")));
 
