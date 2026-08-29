@@ -32,6 +32,7 @@
 #include "server.h"
 #include "streams.h"
 #include "txdb.h"
+#include <util/strencodings.h>
 #include <util/string.h>
 #include "validation.h"
 #include "wallet/coincontrol.h"
@@ -1124,9 +1125,11 @@ static const RPCHelpMan splitunspent_help{
         {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
             "The Gridcoin address whose UTXOs will be split. Pieces and change return to this address."},
         {"piece_size", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
-            "Target value of each piece. 0 (or omitted) means unset; use piece_count or the optimal-size default."},
+            "Target value of each piece. 0, null or omitted means unset; use piece_count or the "
+            "optimal-size default."},
         {"piece_count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-            "Number of pieces to create. 0 (or omitted) means unset; use piece_size or the optimal-size default."},
+            "Number of pieces to create. 0, null or omitted means unset; use piece_size or the "
+            "optimal-size default."},
     },
     RPCResult{RPCResult::Type::OBJ, "", "",
         {
@@ -1163,13 +1166,20 @@ UniValue splitunspent(const UniValue& params)
     int nPieceCount = 0;
 
     // 0 is the unset sentinel and must be handled before conversion, because AmountFromValue
-    // throws on any value <= 0.
-    if (params.size() > 1 && !(params[1].isNum() && params[1].get_real() == 0.0))
+    // throws on any value <= 0. Read the token the same way AmountFromValue reads it, so the
+    // sentinel is honored in either JSON form: 0 and "0" both mean unset.
+    if (params.size() > 1 && !params[1].isNull())
     {
-        nPieceSize = AmountFromValue(params[1]);
+        int64_t nParsed = 0;
+
+        if (!((params[1].isNum() || params[1].isStr())
+              && ParseFixedPoint(params[1].getValStr(), 8, &nParsed) && nParsed == 0))
+        {
+            nPieceSize = AmountFromValue(params[1]);
+        }
     }
 
-    if (params.size() > 2) nPieceCount = params[2].get_int();
+    if (params.size() > 2 && !params[2].isNull()) nPieceCount = params[2].get_int();
 
     if (nPieceCount < 0)
     {
