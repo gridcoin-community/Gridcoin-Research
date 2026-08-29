@@ -45,6 +45,7 @@ using namespace std;
 //
 
 unsigned int nMinerSleep;
+CAmount nMinerMinTxFee = -1;  // -1: -mintxfee unset, use GetBaseFee
 
 // Development-build staking cripple; see miner.h. Extracted from the former
 // util.h global. Set from init (AppInit2 devbuild/testnet gating).
@@ -387,9 +388,15 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
     // a transaction spammer can cheaply fill blocks using
     // 0-satoshi-fee transactions. It should be set above the real
     // cost to you of processing a transaction.
-    int64_t nMinTxFee = GetBaseFee(CTransaction(mtxCoinbase));
-    if (gArgs.IsArgSet("-mintxfee"))
-        ParseMoney(gArgs.GetArg("-mintxfee", "dummy"), nMinTxFee);
+    //
+    // When -mintxfee is unset the floor is GetBaseFee of the COINBASE, not of
+    // each candidate. That is only equivalent because AcceptToMemoryPool
+    // rejects nVersion < 2, so every mempool transaction carries the same x10
+    // multiplier the default-constructed coinbase does. If that ever stops
+    // holding, take the base fee per candidate instead.
+    int64_t nMinTxFee = nMinerMinTxFee >= 0
+            ? nMinerMinTxFee
+            : GetBaseFee(CTransaction(mtxCoinbase));
 
     // Collect memory pool transactions into the block
     int64_t nFees = 0;
@@ -546,6 +553,7 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
         }
 
         int nBlockSigOps = 100;
+    unsigned int nMinTxFeeRejected = 0;
 
         std::make_heap(vecPriority.begin(), vecPriority.end());
 
@@ -593,6 +601,8 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
             // what -mintxfee's documented meaning describes.
             if (dFeePerKb < nMinTxFee)
             {
+                ++nMinTxFeeRejected;
+
                 LogPrint(BCLog::LogFlags::NOISY,
                          "Not including tx %s: fee rate %.0f below -mintxfee %" PRId64,
                          tx.GetHash().GetHex(), dFeePerKb, nMinTxFee);
@@ -768,6 +778,11 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                     }
                 }
             }
+        }
+
+        if (nMinTxFeeRejected > 0) {
+            LogPrintf("CreateNewBlock(): -mintxfee (%s/KB) excluded %u mempool transaction(s)",
+                      FormatMoney(nMinTxFee), nMinTxFeeRejected);
         }
 
         if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || gArgs.GetBoolArg("-printpriority"))

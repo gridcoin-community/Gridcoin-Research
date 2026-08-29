@@ -1609,6 +1609,27 @@ bool AppInit2(ThreadHandlerPtr threads)
             InitWarning(_("Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction."));
     }
 
+    if (gArgs.IsArgSet("-mintxfee"))
+    {
+        // Parse into a local: ParseMoney leaves its out-param untouched on
+        // failure, so parsing straight into nMinerMinTxFee would silently keep
+        // the "unset" sentinel and fall back to the default -- which is how this
+        // option managed to be ignored for years.
+        CAmount fee_rate = 0;
+
+        if (!ParseMoney(gArgs.GetArg("-mintxfee", ""), fee_rate) || fee_rate < 0) {
+            return InitError(strprintf(_("Invalid amount for -mintxfee=<amount>: '%s'"),
+                                       gArgs.GetArg("-mintxfee", "")));
+        }
+
+        nMinerMinTxFee = fee_rate;
+
+        if (nMinerMinTxFee > 0.25 * COIN) {
+            InitWarning(_("Warning: -mintxfee is set very high! Transactions paying less than "
+                          "this per KB will be left out of blocks this node stakes."));
+        }
+    }
+
     fConfChange = gArgs.GetBoolArg("-confchange", false);
     fEnforceCanonical = gArgs.GetBoolArg("-enforcecanonical", true);
 

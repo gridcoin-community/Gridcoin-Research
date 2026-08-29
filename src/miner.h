@@ -19,6 +19,15 @@ typedef std::vector<GRC::SideStake_ptr> SideStakeAlloc;
 
 extern unsigned int nMinerSleep;
 
+//! \brief -mintxfee: the fee-rate floor, in satoshi per 1000 bytes, a
+//! transaction must clear to be selected into a block this node stakes.
+//!
+//! Negative means the option was not set; CreateRestOfTheBlock then falls back
+//! to GetBaseFee. Parsed and validated once at startup (init.cpp), beside
+//! -paytxfee, rather than re-parsed for every block template -- and so that a
+//! malformed value is a startup error instead of a silent fallback.
+extern CAmount nMinerMinTxFee;
+
 //! Extra data appended to the coinbase scriptSig of blocks we create.
 //! Defined in miner.cpp (moved from main.{h,cpp}, issue #3125 C9).
 extern CScript COINBASE_FLAGS;
