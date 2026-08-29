@@ -161,12 +161,28 @@ void CoinControlDialog::setModel(WalletModel *model)
         ui->treeView->setModel(m_selection_model);
         ui->treeView->setAlternatingRowColors(m_selection_model->displayMode() == GRC::CoinViewMode::Flat);
 
-        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_CHECKBOX, 150);
-        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_AMOUNT, 170);
-        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_LABEL, 200);
-        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_ADDRESS, 290);
-        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_DATE, 110);
-        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_CONFIRMATIONS, 100);
+        // These were raw pixels totalling 1020px against the .ui default of
+        // 960px, so the view opened with a horizontal scrollbar. Two changes:
+        //
+        // Trimmed to 910px, leaving room for the frame and a vertical
+        // scrollbar. Scaling alone would not have fixed it -- the dialog is
+        // DPI/font-scaled at construction (the resize() above) and the columns
+        // were not, so an over-wide total stays over-wide once both scale by
+        // the same factor.
+        //
+        // Scaled through the same helper the dialog uses, so the columns track
+        // it. That is also why this was easy to miss: unscaled columns against
+        // a scaled dialog meant the overflow was worst at 100% scaling and
+        // shrank or vanished on a high-DPI display. Verify at 100%.
+        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_CHECKBOX, GRC::ScalePx(this, 140));
+        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_AMOUNT, GRC::ScalePx(this, 160));
+        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_LABEL, GRC::ScalePx(this, 180));
+        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_ADDRESS, GRC::ScalePx(this, 220));
+        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_DATE, GRC::ScalePx(this, 100));
+        // 110, not the previous 100: "Confirmations" is the longest header and
+        // was already clipped at 100. Address gives up the width, so the total
+        // is unchanged.
+        ui->treeView->setColumnWidth(CoinSelectionModel::COLUMN_CONFIRMATIONS, GRC::ScalePx(this, 110));
 
         connect(ui->treeView, &CoinSelectionView::visibleIndexesChanged,
                 m_selection_model, &CoinSelectionModel::onVisibleIndexes);
