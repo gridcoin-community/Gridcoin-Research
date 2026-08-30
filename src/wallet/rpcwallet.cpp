@@ -678,6 +678,12 @@ UniValue listlabels(const UniValue& params)
     return ret;
 }
 
+//! Defined beside the receivedby* tally further down, where its definition belongs; declared
+//! here because migratelabels books exactly the set it returns.
+static void GetQualifyingUnbookedAddresses(set<CTxDestination>& setAddress, int nMinDepth,
+                                           const isminefilter& filter)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet);
+
 static const RPCHelpMan migratelabels_help{
     "migratelabels",
     "One-time maintenance for the accounts -> labels transition: backfill the purpose\n"
@@ -686,13 +692,24 @@ static const RPCHelpMan migratelabels_help{
     "\n"
     "The address-book names themselves need no conversion -- an account name already IS the\n"
     "label -- so this only fills in the missing purpose so entries are first-class labels (e.g.\n"
-    "so `listlabels \"receive\"` finds them). Safe to run repeatedly: entries that already carry a\n"
-    "purpose are left untouched.",
+    "so `listlabels \"receive\"` finds them).\n"
+    "\n"
+    "It also books wallet addresses that have no address-book entry at all but were paid at\n"
+    "least once from outside the wallet, under the default \"\" label with purpose \"receive\" --\n"
+    "the same set listreceivedbylabel already groups under \"\". This is what setlabel <address>\n"
+    "\"\" would do for each of them, and it makes getreceivedbylabel \"\" and the \"\" row of\n"
+    "listreceivedbylabel agree by construction rather than by parallel tallies. Addresses that\n"
+    "only ever received change are not booked.\n"
+    "\n"
+    "Safe to run repeatedly: entries that already carry a purpose are left untouched, and an\n"
+    "address booked by a previous run is no longer unbooked.",
     {},
     RPCResult{RPCResult::Type::OBJ, "", "",
         {
             {RPCResult::Type::NUM, "examined", "Number of address-book entries examined."},
             {RPCResult::Type::NUM, "updated", "Number of entries whose purpose was backfilled."},
+            {RPCResult::Type::NUM, "booked", "Number of previously unbooked addresses with an "
+                                             "external receipt that were added under \"\"."},
         }},
     RPCExamples{
         HelpExampleCli("migratelabels", "") +
@@ -721,9 +738,29 @@ UniValue migratelabels(const UniValue& params)
         pwalletMain->SetAddressBookPurpose(dest,
             (IsMine(*pwalletMain, dest) != ISMINE_NO) ? "receive" : "send");
 
+    // Book what the grouped receivedby views already surface under "": owned addresses with no
+    // address-book entry that were paid at least once from outside the wallet. Booking them is
+    // what makes the default-label views agree by construction -- GetAccountAddresses("") then
+    // returns them, so the twin tally and the grouped "" row read the same address set instead
+    // of arriving at it two ways.
+    //
+    // minconf 0 deliberately: this is a one-time migration over receipts that already exist,
+    // and an address is no less ours for having been paid in an unconfirmed transaction.
+    //
+    // The pair of calls is exactly what setlabel(<address>, "") does. Re-running is a no-op:
+    // GetQualifyingUnbookedAddresses skips anything already in the address book.
+    set<CTxDestination> setUnbooked;
+    GetQualifyingUnbookedAddresses(setUnbooked, 0, ISMINE_ALL);
+
+    for (auto const& dest : setUnbooked) {
+        pwalletMain->SetAddressBookName(dest, "");
+        pwalletMain->SetAddressBookPurpose(dest, "receive");
+    }
+
     UniValue ret(UniValue::VOBJ);
     ret.pushKV("examined", nExamined);
     ret.pushKV("updated", (int)vUpdate.size());
+    ret.pushKV("booked", (int)setUnbooked.size());
     return ret;
 }
 
