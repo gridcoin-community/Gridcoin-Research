@@ -553,7 +553,7 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
         }
 
         int nBlockSigOps = 100;
-    unsigned int nMinTxFeeRejected = 0;
+        unsigned int nMinTxFeeRejected = 0;
 
         std::make_heap(vecPriority.begin(), vecPriority.end());
 
