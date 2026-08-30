@@ -641,7 +641,7 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     int nCheckDepth = gArgs.GetArg( "-checkblocks", 1000);
 
     LogPrintf("Verifying last %i blocks at level %i", nCheckDepth, nCheckLevel);
-    CBlockIndex* pindexFork = nullptr;
+    int nInconsistencies = 0;
     map<pair<unsigned int, unsigned int>, CBlockIndex*> mapBlockPos;
     for (CBlockIndex* pindex = pindexBest; pindex && pindex->pprev; pindex = pindex->pprev)
     {
@@ -665,14 +665,13 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             // Phase 2 hook gets a chance to run. That made Phase 2 a no-op
             // for the very condition it was designed to handle.
             //
-            // Break out of the verification loop without setting pindexFork
-            // -- we deliberately do NOT trigger the legacy rewind path
-            // below (which uses SetBestChain rather than Phase 2's surgical
-            // chainstate cleanup, so it would leave CTxIndex / vSpent
-            // markers from abandoned blocks in place). Phase 2 walks back
-            // from pindexBest, identifies the last coherent block,
-            // AbandonChainTo's there, then CleanAbandonedRange wipes the
-            // stale CTxIndex / vSpent entries surgically.
+            // Break out of the verification loop and leave the tip alone.
+            // Phase 2 walks back from pindexBest, identifies the last coherent
+            // block, AbandonChainTo's there, then CleanAbandonedRange wipes the
+            // stale CTxIndex / vSpent entries surgically -- which the legacy
+            // rewind that used to live below this loop did not do (it used
+            // SetBestChain, leaving those markers in place). That rewind has
+            // since been removed outright; see the note where it was.
             LogPrintf("WARN: LoadBlockIndex() : block.ReadFromDisk failed at height %d (hash %s); "
                       "leaving corruption recovery to Phase 2 startup hook (issue #2865). "
                       "Skipping rest of verification pass.",
@@ -694,7 +693,7 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         if (nCheckLevel>0 && !CheckBlock(block, check_state, pindex->nHeight, true, true, (nCheckLevel>6), true))
         {
             LogPrintf("LoadBlockIndex() : *** found bad block at %d, hash=%s", pindex->nHeight, pindex->GetBlockHash().ToString());
-            pindexFork = pindex->pprev;
+            ++nInconsistencies;
         }
         // check level 2: verify transaction index validity
         if (nCheckLevel>1)
@@ -715,13 +714,13 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                         if (!ReadTxFromDisk(txFound, txindex.pos))
                         {
                             LogPrintf("LoadBlockIndex() : *** cannot read mislocated transaction %s", hashTx.ToString());
-                            pindexFork = pindex->pprev;
+                            ++nInconsistencies;
                         }
                         else
                             if (txFound.GetHash() != hashTx) // not a duplicate tx
                             {
                                 LogPrintf("LoadBlockIndex(): *** invalid tx position for %s", hashTx.ToString());
-                                pindexFork = pindex->pprev;
+                                ++nInconsistencies;
                             }
                     }
                     // check level 4: check whether spent txouts were spent within the main chain
@@ -736,7 +735,7 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                                 if (!mapBlockPos.count(posFind))
                                 {
                                     LogPrintf("LoadBlockIndex(): *** found bad spend at %d, hashBlock=%s, hashTx=%s", pindex->nHeight, pindex->GetBlockHash().ToString(), hashTx.ToString());
-                                    pindexFork = pindex->pprev;
+                                    ++nInconsistencies;
                                 }
                                 // check level 6: check whether spent txouts were spent by a valid transaction that consume them
                                 if (nCheckLevel>5)
@@ -745,12 +744,12 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                                     if (!ReadTxFromDisk(txSpend, txpos))
                                     {
                                         LogPrintf("LoadBlockIndex(): *** cannot read spending transaction of %s:%i from disk", hashTx.ToString(), nOutput);
-                                        pindexFork = pindex->pprev;
+                                        ++nInconsistencies;
                                     }
                                     else if (CValidationState spend_state; !CheckTransaction(txSpend, spend_state))
                                     {
                                         LogPrintf("LoadBlockIndex(): *** spending transaction of %s:%i is invalid", hashTx.ToString(), nOutput);
-                                        pindexFork = pindex->pprev;
+                                        ++nInconsistencies;
                                     }
                                     else
                                     {
@@ -761,7 +760,7 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                                         if (!fFound)
                                         {
                                             LogPrintf("LoadBlockIndex(): *** spending transaction of %s:%i does not spend it", hashTx.ToString(), nOutput);
-                                            pindexFork = pindex->pprev;
+                                            ++nInconsistencies;
                                         }
                                     }
                                 }
@@ -780,7 +779,7 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                             if (txindex.vSpent.size()-1 < txin.prevout.n || txindex.vSpent[txin.prevout.n].IsNull())
                             {
                                 LogPrintf("LoadBlockIndex(): *** found unspent prevout %s:%i in %s", txin.prevout.hash.ToString(), txin.prevout.n, hashTx.ToString());
-                                pindexFork = pindex->pprev;
+                                ++nInconsistencies;
                             }
                     }
                 }
@@ -792,26 +791,34 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     LogPrintf("Time to Verify Blocks %15" PRId64 "ms", GetTimeMillis() - nStart);
 
-    if (pindexFork && !ShutdownRequested())
+    // What the checks above find is reported, not repaired.
+    //
+    // Until this was removed, an inconsistency armed a rewind to the fork point
+    // through SetBestChain(). That could never have completed. LoadBlockIndex()
+    // runs in AppInit2 step 7 and pwalletMain is not constructed until step 8,
+    // while SetBestChain() -> ReorganizeChain() dereferences pwalletMain
+    // unconditionally as soon as it disconnects anything (node/chainman.cpp:348,
+    // and again at :451-452 and :463) -- and a rewind to an ancestor always
+    // disconnects, since pcommon is the fork point and therefore never pindexBest.
+    // So the repair path could only ever segfault a node that reached it. It has
+    // been that way since the rewind was introduced: in that same tree init.cpp
+    // already loaded the block index before constructing the wallet.
+    //
+    // Removing it also makes the two Phase 2 fallthroughs above honest -- they
+    // described deferring to Phase 2 "rather than" a rewind that would have
+    // crashed -- and leaves SetBestChain() with exactly one caller
+    // (validation.cpp), which runs long after the wallet exists.
+    //
+    // Corruption that Phase 2 does cover -- a block that is unreadable or whose
+    // on-disk contents no longer hash to its index entry -- is still recovered
+    // automatically by GRC::RunStartupCoherenceRecovery, which init.cpp calls
+    // immediately after this function returns (issue #2865).
+    if (nInconsistencies > 0)
     {
-        // Reorg back to the fork
-        LogPrintf("LoadBlockIndex() : *** moving best chain pointer back to block %d", pindexFork->nHeight);
-        CBlock block;
-        if (!ReadBlockFromDisk(block, pindexFork, Params().GetConsensus()))
-        {
-            // Same Phase 2 fallthrough as the verification-loop read above
-            // (see comment there): if the fork point's block is itself
-            // unreadable, defer to Phase 2's surgical recovery rather than
-            // hard-failing init and forcing -reindex. See issue #2865.
-            LogPrintf("WARN: LoadBlockIndex() : block.ReadFromDisk failed for legacy-rewind fork point "
-                      "at height %d (hash %s); leaving recovery to Phase 2 startup hook.",
-                      pindexFork->nHeight, pindexFork->GetBlockHash().ToString());
-        }
-        else
-        {
-            CTxDB txdb;
-            SetBestChain(txdb, block, pindexFork);
-        }
+        LogPrintf("WARN: LoadBlockIndex() : verification found %d inconsistency(ies), listed above. The tip "
+                  "has not been moved. Startup coherence recovery handles unreadable or mis-hashed blocks; "
+                  "start with -reindex if the chain does not recover.",
+                  nInconsistencies);
     }
 
     return true;
