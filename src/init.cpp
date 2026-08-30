@@ -576,6 +576,8 @@ void AddLoggingArgs(ArgsManager& argsman)
     argsman.AddArg("-logtimemicros", strprintf("Add microsecond precision to debug timestamps (default: %u)",
                                                DEFAULT_LOGTIMEMICROS),
                    ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-logips", strprintf("Include IP addresses in debug output (default: %u)", DEFAULT_LOGIPS),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-printtoconsole", "Send trace/debug info to console (default: 0) )",
                    ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-printtodebugger", "Send trace/debug info to debugger (default: 0)",
@@ -628,6 +630,8 @@ void SetupServerArgs()
                                             " location. (default: %s)", GRIDCOIN_PID_FILENAME),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-datadir=<dir>", "Specify data directory", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-blocksdir=<dir>", "Specify directory to hold block data (default: <datadir>)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-nonewprivs", strprintf("On Linux, set NO_NEW_PRIVS and drop the capability bounding set at "
                                             "startup so the daemon and its children can never gain privileges "
                                             "(e.g. via a setuid binary). Best-effort defence-in-depth; ignored on "
@@ -658,6 +662,9 @@ void SetupServerArgs()
     argsman.AddArg("-blocknotify=<cmd>", "Execute command when the best block changes (%s in cmd is replaced by block hash)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-walletnotify=<cmd>", "Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-projectnotify=<cmd>", "Execute command when a project is added to or removed from the whitelist, or "
+                                           "an existing project's status changes",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-pollnotify=<cmd>", "Execute command when a poll is added/deleted/expiring (%s1 in cmd is replaced by poll id,"
                                         "%s2 is replaced by status: added, deleted, expiration warning)",
@@ -717,6 +724,8 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-staking", "Allow wallet to stake if conditions to stake are met (default: 1)",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-minersleep=<n>", "Milliseconds the staking loop sleeps between rounds (default: 8000)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
     argsman.AddArg("-sidestake=<address,percent>", "Sidestake destination and allocation entry. There can be as many "
                                                    "specified as desired. Only six per stake can be sent. If more than "
                                                    "six are specified. Six are randomly chosen for each stake. Only active "
@@ -841,6 +850,9 @@ void SetupServerArgs()
     argsman.AddArg("-tor=<ip:port>", "Use proxy to reach Tor onion services (default: same as -proxy)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-dns", "Allow DNS lookups for -addnode, -seednode and -connect",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-addrlifespan=<n>", "Maximum age in days of the peer addresses returned in response to a getaddr "
+                                        "message; older addresses are withheld (default: 7)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-port=<port>", "Listen for connections on <port> (default: 32749 or testnet: 32748)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
@@ -998,6 +1010,13 @@ void SetupServerArgs()
 
     // These probably should be removed
     hidden_args.emplace_back("-printcoinage");
+    // Same family as the four above, and missed when they were registered: each
+    // of these dumps state and then aborts startup, so they are debug tools that
+    // have been unreachable rather than options anyone relies on.
+    hidden_args.emplace_back("-printblock");
+    hidden_args.emplace_back("-printblockindex");
+    hidden_args.emplace_back("-printblocktree");
+    hidden_args.emplace_back("-loadblockindextest");
     hidden_args.emplace_back("-privdb");
 
     // This is hidden because it defaults to true and should NEVER be changed unless you know what you are doing.
@@ -1033,6 +1052,15 @@ void SetupServerArgs()
     hidden_args.emplace_back("-rpcsslcertificatechainfile");
     hidden_args.emplace_back("-rpcsslprivatekeyfile");
     hidden_args.emplace_back("-rpcsslciphers");
+
+    // -socks is also a removed option, but unlike the -rpcssl group it is
+    // refused rather than warned about: AppInit2 returns InitError when it is
+    // set, because silently ignoring a SOCKS-version setting is a privacy risk.
+    // That guard only works if the option parses at all -- while unregistered, a
+    // -socks in the config file is dropped before AppInit2 can test for it, and
+    // on the command line it dies as "Invalid parameter" instead of explaining
+    // itself.
+    hidden_args.emplace_back("-socks");
 
     argsman.AddHiddenArgs(hidden_args);
 }
@@ -1541,10 +1569,6 @@ bool AppInit2(ThreadHandlerPtr threads)
         // -zapwallettx implies a rescan
         gArgs.SoftSetBoolArg("-rescan", true);
     }
-
-    // Verify testnet is using the testnet directory for the config file:
-    std::string sTestNetSpecificArg = gArgs.GetArg("-testnetarg", "default");
-    LogPrintf("Using specific arg %s", sTestNetSpecificArg);
 
 
     // ********************************************************* Step 3: parameter-to-internal-flags
