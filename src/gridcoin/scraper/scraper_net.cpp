@@ -208,7 +208,23 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
                 LOCK(split.cs_manifest);
 
                 ++split.cntPartsRcvd;
-                assert(split.cntPartsRcvd <= split.vParts.size());
+
+                // Was an assert. This runs on peer data -- a PART message, counted against
+                // refs built from a manifest a peer sent -- and an assert on that path is a
+                // crash primitive the moment the invariant is wrong, whether or not it can be
+                // reached today. It does hold today: refs carries one entry per (manifest,
+                // slot) naming this part, and this branch runs only for a part that was not
+                // already present(), so each slot is counted at most once.
+                //
+                // Overshooting is not fatal either way: isComplete() requires
+                // cntPartsRcvd == vParts.size(), so a manifest that overshot simply never
+                // completes and is culled like any other stalled one. Say so and carry on.
+                if (split.cntPartsRcvd > split.vParts.size()) {
+                    LogPrintf("WARN: %s: received %u parts for a manifest with %u; it will never "
+                              "complete and will be culled.",
+                              __func__, (unsigned)split.cntPartsRcvd, (unsigned)split.vParts.size());
+                }
+
                 if (split.isComplete())
                 {
                     split.Complete();
