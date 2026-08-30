@@ -209,7 +209,24 @@ public:
     bool WriteCScript(const uint160& hash, const CScript& redeemScript)
     {
         nWalletDBUpdated++;
-        return Write(std::make_pair(std::string("cscript"), hash), redeemScript, false);
+        //! fOverwrite is TRUE, deliberately. The key is Hash160 of the value, so a
+        //! duplicate key means the identical script is already stored and rewriting it
+        //! leaves the record's contents unchanged. That is a SEMANTIC no-op, not an
+        //! operational one -- BDB still performs the put, wallet.dat is still written,
+        //! and nWalletDBUpdated is still bumped. The cost does not matter here: the
+        //! callers are RPC-driven and rare.
+        //!
+        //! With fOverwrite=false BDB returns DB_KEYEXIST on a repeat add,
+        //! CWallet::AddCScript returns false, and the caller reports failure even though
+        //! the wallet holds the script and can sign with it -- the in-memory
+        //! CCryptoKeyStore::AddCScript assignment is unconditional. That made
+        //! addmultisigaddress, addredeemscript and createhtlc non-idempotent: asking for
+        //! the same script twice threw "AddCScript() failed".
+        //!
+        //! Overwriting (rather than returning early on HaveCScript) is the safer repair:
+        //! it also heals a wallet whose in-memory map holds a script that never reached
+        //! disk, which an early return would mask permanently.
+        return Write(std::make_pair(std::string("cscript"), hash), redeemScript, true);
     }
 
     bool WriteOrderPosNext(int64_t nOrderPosNext)
