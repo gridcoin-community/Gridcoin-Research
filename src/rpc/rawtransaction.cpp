@@ -1108,7 +1108,7 @@ static const RPCHelpMan splitunspent_help{
     "At most one of piece_size and piece_count may be provided (nonzero); for the one not used\n"
     "pass 0 or null, or omit it. piece_size reads its token with the amount grammar, so any number\n"
     "or string an amount parse reads as exactly zero (\"0\", \"0.0\", \"-0\") is the unset sentinel;\n"
-    "piece_count accepts only a JSON number or null.\n"
+    "piece_count accepts only a JSON integer or null.\n"
     "With piece_size, the balance is split into as many pieces of that value as fit after the fee.\n"
     "With piece_count, the balance less the fee is divided into that many equal pieces. With neither,\n"
     "pieces are sized to the efficiency-optimal stake output value for the current network difficulty,\n"
