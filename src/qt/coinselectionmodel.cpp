@@ -289,9 +289,10 @@ void CoinSelectionModel::fetchMore(const QModelIndex& parent)
 
     GroupSlot& slot = m_groups[address];
     slot.sink = std::make_unique<CoinCacheSink>(this, address);
-    // Realization IS expansion (the view only ever gets here through expand /
-    // fetchMore), and this outlives the slot across a re-slot.
-    m_expanded.insert(address);
+    // Realization is deliberately NOT expansion: programmatic walkers
+    // (QAbstractItemModelTester among them) call fetchMore() on every parent,
+    // and must not impersonate a user expansion. The view records the intent
+    // through noteExpanded() from its expanded() signal instead.
 
     if (result.total_accepted > 0) {
         // The rows are VIRTUAL: the cache holds the first window; the rest
@@ -320,6 +321,16 @@ void CoinSelectionModel::fetchMore(const QModelIndex& parent)
                          realized, static_cast<long long>(expand_timer.elapsed()));
         });
     }
+}
+
+void CoinSelectionModel::noteExpanded(const std::string& address)
+{
+    // Intent only, symmetric with noteCollapsed(). This is the ONLY place
+    // m_expanded grows: fetchMore() cannot record it (see the comment there),
+    // and a re-expand of a still-warm slot never reaches fetchMore() at all
+    // (canFetchMore() answers false), so the expanded() signal is also the
+    // only hop that sees that case.
+    m_expanded.insert(address);
 }
 
 void CoinSelectionModel::noteCollapsed(const std::string& address)

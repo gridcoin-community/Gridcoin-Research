@@ -173,6 +173,42 @@ void CoinSelectionViewTests::userCollapseSurvivesAReslotInTheSameTurn()
     QCOMPARE(f.model.rowCount(moved), 0);
 }
 
+
+void CoinSelectionViewTests::reExpandBeforeTheDeferredReleaseKeepsTheBranch()
+{
+    Fixture f;
+    const QModelIndex parent = f.model.index(kMidRow, 0, QModelIndex());
+    const std::string address = f.addressAtRow(kMidRow);
+
+    f.view.expand(parent);
+    QVERIFY(f.model.rowCount(parent) > 0);
+
+    // Collapse and re-expand in the SAME turn, so the deferred un-realize
+    // fires after the re-expand. The slot is still warm, so the re-expand
+    // never reaches fetchMore(): only the expanded() signal sees it. Without
+    // the fire-time isExpanded() re-validation the continuation rips the
+    // children out of a branch the view is showing as open.
+    f.view.collapse(parent);
+    f.view.expand(parent);
+    QVERIFY(f.view.isExpanded(parent));
+    settle();
+
+    QVERIFY(f.view.isExpanded(parent));
+    QVERIFY2(f.model.rowCount(parent) > 0,
+             "the deferred release un-realized a branch the user had re-opened");
+
+    // And the branch is still owned by the restore machinery afterwards: the
+    // same-turn collapse/re-expand must not have desynchronized m_expanded.
+    f.model.applyCoinEventBatch(reslotBatch(address, kMidRow, 0));
+    settle();
+    const QModelIndex moved = f.model.index(0, 0, QModelIndex());
+    QCOMPARE(f.model.addressAt(moved).toStdString(), address);
+    QVERIFY2(f.view.isExpanded(moved),
+             "the same-turn collapse/re-expand left the branch outside "
+             "m_expanded: the re-slot restore no longer fires for it");
+    QVERIFY(f.model.rowCount(moved) > 0);
+}
+
 void CoinSelectionViewTests::resetBetweenEmissionAndContinuationDoesNotReExpand()
 {
     Fixture f;

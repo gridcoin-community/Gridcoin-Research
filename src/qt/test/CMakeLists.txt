@@ -26,7 +26,7 @@ ${RUNTIME_LIBS}
 # the environment does not set it, so this binary selects offscreen ITSELF and
 # needs the plugin whether or not a workflow exported the variable -- including
 # for a developer running ctest locally on a machine that does have a display.
-# (Four of the eight bare ctest invocations across the workflows set nothing.)
+# (Three of the eight bare ctest invocations across the workflows set nothing.)
 # Without the plugin the binary aborts at QApplication construction with a
 # "Could not find the Qt platform plugin" error. Importing it is additive and a
 # no-op against a shared Qt, where the plugin is already a file on disk.

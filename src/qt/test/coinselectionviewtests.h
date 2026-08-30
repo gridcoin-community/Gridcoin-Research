@@ -32,6 +32,7 @@ private slots:
     void reslotOfACollapsedBranchStaysCollapsed();
     void userCollapseIsNotUndoneByAReslot();
     void userCollapseSurvivesAReslotInTheSameTurn();
+    void reExpandBeforeTheDeferredReleaseKeepsTheBranch();
     void resetBetweenEmissionAndContinuationDoesNotReExpand();
     void reslotHoldsTheScrollOffset();
     void swappingTheModelDropsTheOldConnection();

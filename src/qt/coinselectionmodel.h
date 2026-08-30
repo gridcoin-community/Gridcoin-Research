@@ -144,6 +144,15 @@ public:
     //! to call synchronously from the collapse dispatch.
     void noteCollapsed(const std::string& address);
 
+    //! Record that the user expanded \p address, without touching structure.
+    //! The view calls this synchronously from its expanded() signal -- NOT
+    //! from inside fetchMore(): programmatic fetchMore() sweeps
+    //! (QAbstractItemModelTester's, for one) must realize rows without
+    //! impersonating a user expansion, and a re-expand of a still-realized
+    //! slot never reaches fetchMore() at all (canFetchMore() answers false),
+    //! so the signal is the only hop that sees it.
+    void noteExpanded(const std::string& address);
+
     //! Generation of the address <-> stable-id registry. Bumped whenever the
     //! registry is renumbered, so a continuation queued against the old
     //! numbering can tell that its ids no longer mean what they meant.
@@ -286,7 +295,8 @@ private:
     //! Addresses the USER has expanded -- deliberately not the same thing as
     //! m_groups. A re-slot drops the realized slot without the user having
     //! collapsed anything, and this set is what tells a re-slot apart from a
-    //! real collapse. Grows only on expand, so it is bounded by user actions;
+    //! real collapse. Grows only through noteExpanded() (the view's
+    //! expanded() signal -- never fetchMore()), so it is bounded by user actions;
     //! pruned on a real collapse (noteCollapsed / releaseGroup) and cleared on
     //! Reset, which collapses everything anyway.
     //!

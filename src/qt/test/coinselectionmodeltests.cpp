@@ -70,9 +70,11 @@ void CoinSelectionModelTests::reslotOfAnExpandedGroupIsReported()
     const std::string address = f.model.addressAt(parent).toStdString();
     QVERIFY(!address.empty());
 
-    // Expand it, the way the view does.
+    // Expand it, the way the view does: realize AND record the intent
+    // (the view's expanded() signal calls noteExpanded).
     QVERIFY(f.model.canFetchMore(parent));
     f.model.fetchMore(parent);
+    f.model.noteExpanded(address);
     QVERIFY(f.model.rowCount(parent) > 0);
 
     QList<int> reported;
@@ -108,6 +110,7 @@ void CoinSelectionModelTests::realRemovalIsNotReported()
     const QModelIndex parent = f.model.index(kMidRow, 0, QModelIndex());
     QVERIFY(f.model.canFetchMore(parent));
     f.model.fetchMore(parent);
+    f.model.noteExpanded(f.model.addressAt(parent).toStdString());
 
     bool emitted = false;
     QObject::connect(&f.model, &CoinSelectionModel::groupsReslotted,
@@ -128,6 +131,7 @@ void CoinSelectionModelTests::userCollapseForgetsTheExpansion()
 
     QVERIFY(f.model.canFetchMore(parent));
     f.model.fetchMore(parent);
+    f.model.noteExpanded(address);
     // The user collapses it (the view's deferred un-realize).
     f.model.releaseGroup(parent);
 
@@ -147,6 +151,7 @@ void CoinSelectionModelTests::reportedIdResolvesToTheMovedRow()
     const std::string address = f.model.addressAt(parent).toStdString();
     QVERIFY(f.model.canFetchMore(parent));
     f.model.fetchMore(parent);
+    f.model.noteExpanded(address);
 
     QList<int> reported;
     QObject::connect(&f.model, &CoinSelectionModel::groupsReslotted,

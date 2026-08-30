@@ -26,7 +26,14 @@ CoinSelectionView::CoinSelectionView(QWidget* parent)
     // the freshly visible rows would sit blank until the first scroll (found
     // by the 500k synthetic acceptance run). Schedule a second report after
     // the layout has settled.
-    connect(this, &QTreeView::expanded, this, [this](const QModelIndex&) {
+    connect(this, &QTreeView::expanded, this, [this](const QModelIndex& idx) {
+        // Record the INTENT here, on the signal, not in fetchMore(): the
+        // model cannot tell a user expansion from a programmatic fetchMore()
+        // sweep, and a re-expand of a still-warm slot never calls fetchMore()
+        // at all. Symmetric with the noteCollapsed() call below.
+        if (auto* m = qobject_cast<CoinSelectionModel*>(model())) {
+            if (m->isGroup(idx)) m->noteExpanded(m->addressAt(idx).toStdString());
+        }
         reportViewport();
         QTimer::singleShot(150, this, [this]() { reportViewport(); });
     });
@@ -52,6 +59,12 @@ CoinSelectionView::CoinSelectionView(QWidget* parent)
         const QPersistentModelIndex pidx(idx);
         QTimer::singleShot(0, this, [this, pidx]() {
             if (!pidx.isValid()) return;
+            // Re-validate at fire time: a re-expand landing after the
+            // collapse but before this turn (double-click, keyboard
+            // toggling, expandAll) means the user wants the branch open --
+            // un-realizing it now would leave a node the view shows as
+            // expanded with zero rows underneath.
+            if (isExpanded(pidx)) return;
             if (auto* m = qobject_cast<CoinSelectionModel*>(model())) {
                 m->releaseGroup(pidx);
             }
