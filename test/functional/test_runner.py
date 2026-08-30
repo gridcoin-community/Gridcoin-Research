@@ -99,9 +99,18 @@ EXTENDED_SCRIPTS = [
     # hazard as feature_reorg.py below. One case per node and a 2x UTXO universe
     # took it from ~4.5% to ~1.3% (2 failures in 150 runs) but did not remove it,
     # and a bounded mine retry does not help -- a retry advances the mock clock
-    # one 16 s slot, which adds no stake weight. Unit-testing this needs a chain
-    # fixture with spendable coins, which the tree does not have (issue #3290).
+    # one 16 s slot, which adds no stake weight. A chain fixture with spendable
+    # coins (issue #3290) would let a unit test cover block assembly without
+    # staking at all; mining_fee_escalator.py below shows the stake-supply
+    # hazard is also avoidable by keeping the spender and the staker apart.
     'mining_fee_policy.py',
+    #
+    # mining_fee_escalator.py raises -blockmaxsize so the block-fill fee
+    # escalator can fire, then packs ~300 KB of transactions into one staked
+    # block to reach the nTxFees < nMinFee handler. It builds and relays 83
+    # transactions before mining, so it is slower than the default suite
+    # tolerates, and it asserts on staked block contents like the file above.
+    'mining_fee_escalator.py',
     #
     # feature_reorg.py exercises a competing-proof-of-stake reorg between two
     # nodes. It is intermittently flaky on the current regtest stack and is NOT
