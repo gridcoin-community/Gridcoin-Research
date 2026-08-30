@@ -57,7 +57,15 @@ CoinSelectionView::CoinSelectionView(QWidget* parent)
         // changeInFlight != None (found by the 2000:5 tester run). A
         // persistent index survives any intervening directory re-slots.
         const QPersistentModelIndex pidx(idx);
-        QTimer::singleShot(0, this, [this, pidx]() {
+        // Pin the model the collapse belongs to, mirroring
+        // restoreReslottedBranches: pidx refers to THIS model, and if
+        // setModel() swaps models before the turn fires, handing the old
+        // model's index to the new model would resolve a stale row number
+        // against an unrelated directory.
+        const QPointer<CoinSelectionModel> pinned(
+            qobject_cast<CoinSelectionModel*>(model()));
+        QTimer::singleShot(0, this, [this, pidx, pinned]() {
+            if (!pinned || pinned.data() != model()) return;
             if (!pidx.isValid()) return;
             // Re-validate at fire time: a re-expand landing after the
             // collapse but before this turn (double-click, keyboard
@@ -65,9 +73,7 @@ CoinSelectionView::CoinSelectionView(QWidget* parent)
             // un-realizing it now would leave a node the view shows as
             // expanded with zero rows underneath.
             if (isExpanded(pidx)) return;
-            if (auto* m = qobject_cast<CoinSelectionModel*>(model())) {
-                m->releaseGroup(pidx);
-            }
+            pinned->releaseGroup(pidx);
             reportViewport();
         });
     });

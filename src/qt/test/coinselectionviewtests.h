@@ -36,6 +36,7 @@ private slots:
     void resetBetweenEmissionAndContinuationDoesNotReExpand();
     void reslotHoldsTheScrollOffset();
     void swappingTheModelDropsTheOldConnection();
+    void modelSwapBeforeTheDeferredReleaseIsIgnored();
 };
 
 #endif // BITCOIN_QT_TEST_COINSELECTIONVIEWTESTS_H

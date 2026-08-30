@@ -303,3 +303,34 @@ void CoinSelectionViewTests::swappingTheModelDropsTheOldConnection()
     // Detach before the locals above go out of scope.
     f.view.setModel(nullptr);
 }
+
+void CoinSelectionViewTests::modelSwapBeforeTheDeferredReleaseIsIgnored()
+{
+    Fixture f;
+    const QModelIndex parent = f.model.index(kMidRow, 0, QModelIndex());
+    f.view.expand(parent);
+    QVERIFY(f.model.rowCount(parent) > 0);
+
+    auto second_source = interfaces::MakeSyntheticCoinSource(kCoins, kGroups);
+    interfaces::WalletCoinControl second_control;
+    CoinSelectionModel second{*second_source, &second_control, GRC::VIEW_COIN_CONTROL};
+
+    // Collapse and swap the model in the SAME turn, so the deferred release
+    // fires against the replacement. The pinned-model guard must drop the
+    // continuation: pidx belongs to the OLD model, and releaseGroup() on the
+    // new one would resolve its row number against an unrelated directory.
+    f.view.collapse(parent);
+    f.view.setModel(&second);
+    settle();
+
+    // The old model keeps its realized (though collapsed) slot -- the
+    // continuation must not have run against either model.
+    QVERIFY2(f.model.rowCount(parent) > 0,
+             "the deferred release fired across a model swap");
+    for (int row = 0; row < second.rowCount(QModelIndex()); ++row) {
+        QCOMPARE(second.rowCount(second.index(row, 0, QModelIndex())), 0);
+    }
+
+    // Detach before the locals above go out of scope.
+    f.view.setModel(nullptr);
+}
