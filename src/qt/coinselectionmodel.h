@@ -128,8 +128,21 @@ public:
     bool isLoading() const { return m_loading; }
 
     //! Un-realize a collapsed group's child cache (bounded memory). The view
-    //! calls this from its collapsed() signal.
+    //! calls this from its collapsed() signal, on a DEFERRED turn.
     void releaseGroup(const QModelIndex& group_index);
+
+    //! Record that the user collapsed \p address, without touching structure.
+    //!
+    //! Split out of releaseGroup() because the two halves need different
+    //! timing. Un-realizing has to be deferred (beginRemoveRows re-entrantly
+    //! from QTreeView's collapse dispatch overlaps structural-change windows),
+    //! but the INTENT cannot be: releaseGroup resolves a QPersistentModelIndex
+    //! that a re-slot arriving first invalidates, and it then returns before
+    //! pruning m_expanded -- so the GroupInsert half of that same re-slot sees
+    //! the address still expanded and queues a re-expansion of the branch the
+    //! user just closed. Erasing from a std::set opens no bracket and is safe
+    //! to call synchronously from the collapse dispatch.
+    void noteCollapsed(const std::string& address);
 
     //! The directory index of the group with stable id \p group_id, or an
     //! invalid index when that id does not currently name a directory row.

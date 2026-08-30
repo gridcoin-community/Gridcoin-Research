@@ -30,6 +30,18 @@ CoinSelectionView::CoinSelectionView(QWidget* parent)
         QTimer::singleShot(150, this, [this]() { reportViewport(); });
     });
     connect(this, &QTreeView::collapsed, this, [this](const QModelIndex& idx) {
+        // Record the INTENT now, synchronously, and defer only the structural
+        // un-realize below. A persistent index survives a re-slot's coordinate
+        // change but NOT the removal half of it, so if a re-slot lands before
+        // the continuation runs, the continuation returns at the isValid()
+        // check and m_expanded keeps the address — and the insert half of that
+        // same re-slot, seeing it still expanded, queues a re-expansion of the
+        // branch the user just closed. noteCollapsed() opens no bracket, so it
+        // is safe here where releaseGroup() is not.
+        if (auto* m = qobject_cast<CoinSelectionModel*>(model())) {
+            if (m->isGroup(idx)) m->noteCollapsed(m->addressAt(idx).toStdString());
+        }
+
         // DEFER the un-realize: collapsed() is emitted from inside
         // QTreeView's collapse handling, and mutating the model
         // (beginRemoveRows) re-entrantly from that dispatch overlaps

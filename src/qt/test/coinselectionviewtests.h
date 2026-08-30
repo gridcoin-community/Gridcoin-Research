@@ -31,6 +31,7 @@ private slots:
     void reslotReExpandsAndRealizesTheBranch();
     void reslotOfACollapsedBranchStaysCollapsed();
     void userCollapseIsNotUndoneByAReslot();
+    void userCollapseSurvivesAReslotInTheSameTurn();
     void reslotHoldsTheScrollOffset();
     void swappingTheModelDropsTheOldConnection();
 };

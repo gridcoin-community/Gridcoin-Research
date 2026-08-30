@@ -322,13 +322,22 @@ void CoinSelectionModel::fetchMore(const QModelIndex& parent)
     }
 }
 
+void CoinSelectionModel::noteCollapsed(const std::string& address)
+{
+    // Intent only -- no brackets, no signals. See the header for why this
+    // cannot wait for the deferred releaseGroup().
+    m_expanded.erase(address);
+}
+
 void CoinSelectionModel::releaseGroup(const QModelIndex& group_index)
 {
     const GRC::CoinGroupInfo* g = groupAt(group_index);
     if (!g) return;
     const std::string address = g->address;
     // The user collapsed it: forget the expansion even if the slot was never
-    // realized (an empty group has no cache to release).
+    // realized (an empty group has no cache to release). Idempotent with
+    // noteCollapsed(), which the view has normally already called on the
+    // collapse turn itself.
     m_expanded.erase(address);
     auto it = m_groups.find(address);
     if (it == m_groups.end()) return;

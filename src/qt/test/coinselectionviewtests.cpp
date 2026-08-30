@@ -144,6 +144,35 @@ void CoinSelectionViewTests::userCollapseIsNotUndoneByAReslot()
              "a re-slot resurrected an expansion the user had closed");
 }
 
+void CoinSelectionViewTests::userCollapseSurvivesAReslotInTheSameTurn()
+{
+    Fixture f;
+    const QModelIndex parent = f.model.index(kMidRow, 0, QModelIndex());
+    const std::string address = f.addressAtRow(kMidRow);
+
+    f.view.expand(parent);
+    QVERIFY(f.model.rowCount(parent) > 0);
+
+    // The ORDERING userCollapseIsNotUndoneByAReslot deliberately avoids: no
+    // settle() between the collapse and the re-slot, so the deferred
+    // un-realize has not run yet. The removal half invalidates the persistent
+    // index the continuation is holding, so it returns early -- and if the
+    // collapse were recorded only there, the insert half would still see the
+    // address expanded and queue a re-expansion.
+    f.view.collapse(parent);
+    QVERIFY(!f.view.isExpanded(parent));
+    f.model.applyCoinEventBatch(reslotBatch(address, kMidRow, 0));
+    settle();
+
+    const QModelIndex moved = f.model.index(0, 0, QModelIndex());
+    QCOMPARE(f.model.addressAt(moved).toStdString(), address);
+    QVERIFY2(!f.view.isExpanded(moved),
+             "a re-slot arriving on the collapse turn resurrected the branch: "
+             "the collapse was recorded only by the deferred releaseGroup, "
+             "which the removal had already made unreachable");
+    QCOMPARE(f.model.rowCount(moved), 0);
+}
+
 void CoinSelectionViewTests::reslotHoldsTheScrollOffset()
 {
     Fixture f;
