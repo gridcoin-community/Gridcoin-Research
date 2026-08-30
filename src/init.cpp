@@ -1617,6 +1617,12 @@ bool AppInit2(ThreadHandlerPtr threads)
         // option managed to be ignored for years.
         CAmount fee_rate = 0;
 
+        // The fee_rate < 0 arm is defensive depth, not a reachable branch:
+        // ParseMoney stops at the first non-digit (util.cpp), so a leading '-'
+        // fails the parse outright and it cannot return true with a negative.
+        // It is kept so the guard stays correct if ParseMoney ever learns to
+        // accept a sign -- but the negative case in mining_fee_policy.py is
+        // pinning the PARSE failure, not this check.
         if (!ParseMoney(gArgs.GetArg("-mintxfee", ""), fee_rate) || fee_rate < 0) {
             return InitError(strprintf(_("Invalid amount for -mintxfee=<amount>: '%s'"),
                                        gArgs.GetArg("-mintxfee", "")));

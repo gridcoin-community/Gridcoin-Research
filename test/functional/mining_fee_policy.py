@@ -17,7 +17,10 @@ push_back as transactions are selected, so vtx[2:] IS the selection order
      paying exactly the relay minimum -- the shape whose effective rate comes
      closest to the floor in ordinary use;
   3. a raised -mintxfee excludes a below-floor transaction from the block while
-     leaving it in the mempool, and still includes one above the floor.
+     leaving it in the mempool, and still includes one above the floor;
+  4. an unparseable -mintxfee is rejected at startup rather than silently
+     falling back to the default -- the failure path that keeps the option from
+     being ignored, which is what it did for years.
 
 One node per case. Nodes 0 and 1 run the default -mintxfee (cases 1 and 2),
 node 2 a raised one (case 3). They are separate nodes rather than one node
@@ -52,6 +55,7 @@ from decimal import Decimal
 
 from test_framework.authproxy import JSONRPCException
 from test_framework.test_framework import GridcoinTestFramework
+from test_framework.test_node import ErrorMatch
 from test_framework.util import assert_equal
 
 SAT = Decimal("0.00000001")
@@ -64,17 +68,22 @@ RAISED_MIN_TX_FEE = Decimal("0.008")
 # 3 KB, far enough from a 1000-byte boundary to be stable run to run.
 BULK_INPUTS = 20
 
+# Hoisted out of set_test_params because case 4 restarts a node itself, and
+# TestNode.start REPLACES extra_args rather than appending to it -- a restart
+# that passes only "-mintxfee=..." would drop -devbuild=override and fail for
+# an unrelated reason.
+COMMON_ARGS = ["-staking=0", "-connect=0", "-listen=0", "-devbuild=override"]
+
 
 class MiningFeePolicyTest(GridcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 3
         self.chain = "regtest"
         self.setup_clean_chain = True
-        common = ["-staking=0", "-connect=0", "-listen=0", "-devbuild=override"]
         self.extra_args = [
-            common,                                              # case 1
-            common,                                              # case 2
-            common + ["-mintxfee=%s" % RAISED_MIN_TX_FEE],       # case 3
+            COMMON_ARGS,                                              # case 1
+            COMMON_ARGS,                                              # case 2
+            COMMON_ARGS + ["-mintxfee=%s" % RAISED_MIN_TX_FEE],       # case 3
         ]
 
     def setup_network(self):
@@ -292,6 +301,42 @@ class MiningFeePolicyTest(GridcoinTestFramework):
             node1, self.fund(node1, spends=BULK_INPUTS))
         self.test_raised_mintxfee_excludes_below_floor(
             node2, self.fund(node2, spends=2))
+
+        # Last, because it leaves node2 stopped.
+        self.test_bad_mintxfee_refuses_to_start(2)
+
+    def test_bad_mintxfee_refuses_to_start(self, n):
+        """Case 4: an unparseable -mintxfee is rejected at startup.
+
+        The point is the REJECTION, not the arithmetic. Parsing into a local and
+        failing loudly is what stops the option silently falling back to its
+        default, which is how -mintxfee came to be ignored for years -- so the
+        failure path is the load-bearing half of that commit and nothing else
+        exercises it.
+
+        All three inputs fail inside ParseMoney rather than at the fee_rate < 0
+        range check, which is unreachable: ParseMoney stops at the first
+        non-digit, so "-1" fails as a parse and never reaches the comparison.
+        The empty value is a real case and not a curiosity -- "-mintxfee=" is a
+        SET argument whose value is "", ParseMoney accumulates no digits and
+        ParseInt64 rejects the empty string, so the node refuses to start.
+        """
+        self.log.info("case 4: -mintxfee that cannot be parsed refuses to start")
+        self.stop_node(n)
+
+        for value in ("abc", "-1", ""):
+            # Full args, not just the one under test: TestNode.start replaces
+            # extra_args wholesale. PARTIAL_REGEX because the default
+            # FULL_TEXT compares the entire stderr for equality.
+            self.nodes[n].assert_start_raises_init_error(
+                COMMON_ARGS + ["-mintxfee=%s" % value],
+                "Invalid amount for -mintxfee=",
+                match=ErrorMatch.PARTIAL_REGEX)
+
+        # A valid value still starts, so the guard rejects bad input rather
+        # than the option as such.
+        self.start_node(n, COMMON_ARGS + ["-mintxfee=0.01"])
+        self.stop_node(n)
 
 
 if __name__ == "__main__":
