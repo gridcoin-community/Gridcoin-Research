@@ -197,8 +197,13 @@ class WalletSplitUnspentTest(GridcoinTestFramework):
                                 node.splitunspent, addr["E"], 0, 600)
 
         # ---- piece_size as the JSON string "0" is the unset sentinel ----
-        # Must be a Python str: an int 0 takes a different path through
-        # AmountFromValue. Before the sentinel fix this raised -3 "Invalid amount".
+        # Must be a Python str, because the string is the form the old guard
+        # MISSED. That guard was numeric-only -- params[1].isNum() &&
+        # get_real() == 0.0 -- so a JSON number 0 was intercepted before
+        # AmountFromValue ever saw it, while "0" fell through to
+        # AmountFromValue and was rejected -3 "Invalid amount" by its
+        # strictly-positive check. An int 0 would pass here with or without
+        # the fix and pin nothing.
         r = node.splitunspent(addr["D"], "0", 4)
         assert_equal(r["result"], True)
         assert_equal(r["pieces_created"], 4)
@@ -210,9 +215,29 @@ class WalletSplitUnspentTest(GridcoinTestFramework):
         # Assert through the error path rather than by comparing two consecutive
         # splits: the first split consumes the address' UTXOs, so the second call
         # could never return the same thing.
-        for piece_size in (0, "0", None):
+        # "-0" is unset too, and it is the one input whose meaning this
+        # change actually flips -- but only as a STRING. A JSON number -0 was
+        # already the sentinel before the fix, because get_real() returns
+        # -0.0 and -0.0 == 0.0.
+        for piece_size in (0, "0", "-0", None):
             assert_raises_rpc_error(-8, "into 10 pieces results in pieces below the minimum",
                                     node.splitunspent, addr["NUL"], piece_size, 10)
+
+        # The other half of the same contract: what is NOT the sentinel. The
+        # guard reads its token exactly the way AmountFromValue does --
+        # ParseFixedPoint(getValStr(), 8) -- so membership is decided by that
+        # grammar rather than by a string compare against "0", and these three
+        # fail the grammar itself rather than the zero test. "00" is a single
+        # leading zero followed by trailing garbage, " 0" has no leading
+        # digit, "" is empty. All three fall through to AmountFromValue, which
+        # re-runs the same parse and raises -3. Pinning them is the point:
+        # a hand-rolled sentinel would drift the moment either side changed.
+        for piece_size in ("00", " 0", ""):
+            assert_raises_rpc_error(-3, "Invalid amount",
+                                    node.splitunspent, addr["NUL"], piece_size, 10)
+
+        # Every rejection above raises before any wallet work, so NUL still
+        # holds its funding output for the real split here.
         assert_equal(Decimal(node.splitunspent(addr["NUL"], 0, None)["piece_value"]),
                      Decimal("800"))
 
