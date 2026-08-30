@@ -195,6 +195,9 @@ public:
     //! non-consensus pool; revisit if a tighter memory bound is ever needed.
     static constexpr size_t PER_ENTRY_OVERHEAD = 256;
 
+    //! rief Insert an already-validated transaction. Locks cs internally, like
+    //! every other mutator here; "unchecked" refers to transaction validation,
+    //! which the caller must have done (see AcceptToMemoryPool), not to locking.
     bool addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry);
     bool remove(const CTransaction &tx, bool fRecursive = false,
                 MemPoolRemovalReason reason = MemPoolRemovalReason::UNKNOWN);
