@@ -15,6 +15,7 @@
 #include <test/test_gridcoin.h>
 
 #include <net_processing.h>
+#include <stdexcept>
 #include <stdint.h>
 
 // Tests this internal-to-main.cpp method:
@@ -81,6 +82,49 @@ BOOST_AUTO_TEST_CASE(DoS_banscore)
 
     // TODO: Why no ClearArg?
     gArgs.ForceSetArg("-banscore", "100");
+}
+
+BOOST_AUTO_TEST_CASE(DoS_ban_then_clear_lock_order)
+{
+    // Misbehaving() reaches BanMan::m_cs_banned through Ban(); ClearBanned()
+    // reaches m_misbehavior_cs the other way, through the misbehavior-clear
+    // callback. If Misbehaving() bans while still holding m_misbehavior_cs the
+    // two orders form an AB-BA, and the pair below is enough to record both
+    // edges in one thread -- no concurrency needed to show it.
+    //
+    // Structured like sync_tests' potential_deadlock_detected: the detector only
+    // exists in a DEBUG_LOCKORDER build, so ask it to throw rather than warn
+    // there, and let the case degenerate to a plain ban/unban check elsewhere.
+#ifdef DEBUG_LOCKORDER
+    const bool prev_lockorder_abort = GetLockOrderDebugAbort();
+    const bool prev_lockorder_throw_exception = GetLockOrderDebugThrowException();
+
+    SetLockOrderDebugAbort(false);
+    SetLockOrderDebugThrowException(true);
+#endif
+
+    g_banman->ClearBanned();
+
+    CAddress addr(ip(0xa0b0c004));
+    CNode dummyNode(INVALID_SOCKET, addr, "", true);
+
+    dummyNode.Misbehaving(1000); // over -banscore whatever an earlier case left it at
+    BOOST_CHECK(g_banman->IsBanned(addr));
+
+    bool error_thrown = false;
+    try {
+        g_banman->ClearBanned();
+    } catch (const std::logic_error&) {
+        error_thrown = true;
+    }
+
+    BOOST_CHECK(!error_thrown);
+    BOOST_CHECK(!g_banman->IsBanned(addr));
+
+#ifdef DEBUG_LOCKORDER
+    SetLockOrderDebugAbort(prev_lockorder_abort);
+    SetLockOrderDebugThrowException(prev_lockorder_throw_exception);
+#endif
 }
 
 BOOST_AUTO_TEST_CASE(DoS_bantime)

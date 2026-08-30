@@ -1790,13 +1790,33 @@ public:
             return false;
         }
 
-        LOCK(m_misbehavior_cs);
+        // Decide under the lock, ban outside it. Holding m_misbehavior_cs across
+        // Ban() takes BanMan::m_cs_banned second, while ClearBanned / Unban /
+        // SweepBanned take m_cs_banned first and reach m_misbehavior_cs through the
+        // misbehavior-clear callback (BanMan::ZeroMisbehavior ->
+        // ClearMisbehaviorForSubnet). That AB-BA needs no exotic interleaving: a peer
+        // crossing -banscore on a message-handler thread while the periodic banlist
+        // sweep or an RPC clearbanned runs is enough. Keeping m_misbehavior_cs a leaf
+        // removes the edge outright rather than leaving a rule every future caller has
+        // to remember.
+        //
+        // The score is captured here rather than re-read after the lock is dropped:
+        // the ban decision and the transition this call logs must describe the same
+        // update, and another thread may adjust the entry in between.
+        int nMisbehavior;
+        bool fBan;
 
-        int nMisbehavior = GetMisbehaviorScore_(addr) + howmuch;
+        {
+            LOCK(m_misbehavior_cs);
 
-        m_misbehavior[addr] = std::make_pair(nMisbehavior, GetAdjustedTime());
+            nMisbehavior = GetMisbehaviorScore_(addr) + howmuch;
 
-        if (nMisbehavior >= gArgs.GetArg("-banscore", 100))
+            m_misbehavior[addr] = std::make_pair(nMisbehavior, GetAdjustedTime());
+
+            fBan = nMisbehavior >= gArgs.GetArg("-banscore", 100);
+        }
+
+        if (fBan)
         {
             LogPrint(BCLog::LogFlags::NET, "Misbehaving: %s (%d -> %d) BANNING", addr.ToString(), nMisbehavior - howmuch, nMisbehavior);
 
@@ -1871,8 +1891,11 @@ private:
     BanMan* const m_banman;
 
     // Per-address misbehavior scores (relocated from net_processing file scope
-    // in PR 8b). Lock order: cs_main -> cs_wallet -> m_misbehavior_cs ->
-    // BanMan::m_cs_banned (Misbehaving locks this then calls m_banman->Ban).
+    // in PR 8b). m_misbehavior_cs is a LEAF: nothing is called out to while it is
+    // held. Misbehaving() decides under it and releases before m_banman->Ban(), so
+    // the only remaining edge is BanMan::m_cs_banned -> m_misbehavior_cs, taken by
+    // ClearBanned / Unban / SweepBanned through the misbehavior-clear callback.
+    // Lock order: cs_main -> cs_wallet -> BanMan::m_cs_banned -> m_misbehavior_cs.
     mutable CCriticalSection m_misbehavior_cs;
     std::map<CAddress, std::pair<int, int64_t>> m_misbehavior GUARDED_BY(m_misbehavior_cs);
 };
