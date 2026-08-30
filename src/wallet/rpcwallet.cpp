@@ -1145,9 +1145,10 @@ static const RPCHelpMan getreceivedbyaccount_help{
     "Returns the total amount received by addresses with <account> in transactions with at least\n"
     "[minconf] confirmations.\n"
     "\n"
-    "Only addresses carrying <account> in the address book are tallied; payments to wallet\n"
-    "addresses without an address book entry are not included even for the default \"\"\n"
-    "account (listreceivedbyaccount counts those under \"\").\n"
+    "Addresses carrying <account> in the address book are tallied. For the default \"\"\n"
+    "account the tally also includes wallet addresses with no address book entry that were\n"
+    "paid at least once from outside the wallet -- the same set listreceivedbyaccount groups\n"
+    "under \"\". An unbooked address that only ever received change stays excluded.\n"
     "\n"
     "Coinstake receipts are included. A sidestake or MRC payout received from another\n"
     "staker's coinstake counts at face value; a coinstake this wallet staked counts only\n"
@@ -1165,6 +1166,42 @@ static const RPCHelpMan getreceivedbyaccount_help{
         HelpExampleRpc("getreceivedbyaccount", "\"myaccount\", 6")},
 };
 const RPCHelpMan& getreceivedbyaccount_helpman() { return getreceivedbyaccount_help; }
+
+//! Wallet destinations with no address book entry that were paid at least once from outside
+//! the wallet -- exactly the set ListReceived folds into its "" row (see the loop at the end of
+//! ListReceived, and CWallet::IsChange for why a purely internal receipt does not qualify).
+//! Generated value qualifies even though our own coinstake is a transaction this wallet
+//! funded, matching the fGenerated arm there.
+//!
+//! Deliberately a second walk rather than shared code: ListReceived needs the per-address
+//! tally it is already accumulating, so folding this in would either duplicate that work or
+//! reshape a function six RPCs depend on. The two are pinned against each other by
+//! getreceivedby_default_label_matches_grouped_row in addressbook_tests.
+static void GetQualifyingUnbookedAddresses(set<CTxDestination>& setAddress, int nMinDepth,
+                                           const isminefilter& filter)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
+{
+    std::vector<ReceivedOutput> vReceived;
+
+    for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+    {
+        const CWalletTx& wtx = it->second;
+
+        int nDepth = 0;
+        if (!ReceiptTxEligible(wtx, nMinDepth, nDepth)) continue;
+
+        const bool fTxFromMe = wtx.IsFromMe(filter);
+
+        TallyTxReceipts(wtx, filter, vReceived);
+
+        for (auto const& received : vReceived) {
+            if (fTxFromMe && !received.fGenerated) continue;
+            if (pwalletMain->mapAddressBook.count(received.dest)) continue;
+
+            setAddress.insert(received.dest);
+        }
+    }
+}
 
 //! Total received by the given address set in transactions with at least nMinDepth
 //! confirmations. Shared tally for getreceivedbyaccount and its label twin getreceivedbylabel.
@@ -1211,6 +1248,12 @@ UniValue getreceivedbyaccount(const UniValue& params)
     set<CTxDestination> setAddress;
     GetAccountAddresses(strAccount, setAddress);
 
+    // The default account is where the grouped view also puts owned addresses carrying no
+    // address book entry, so tally them here or the two answer the same question differently.
+    // ISMINE_ALL is the ownership set TallyReceivedByAddresses already nets the coinstake
+    // principal over, so the qualification test uses it too.
+    if (strAccount.empty()) GetQualifyingUnbookedAddresses(setAddress, nMinDepth, ISMINE_ALL);
+
     return ValueFromAmount(TallyReceivedByAddresses(setAddress, nMinDepth));
 }
 
@@ -1219,9 +1262,10 @@ static const RPCHelpMan getreceivedbylabel_help{
     "Returns the total amount received by addresses with <label> in transactions with at least\n"
     "[minconf] confirmations.\n"
     "\n"
-    "Only addresses carrying <label> in the address book are tallied; payments to wallet\n"
-    "addresses without an address book entry are not included even for the default \"\"\n"
-    "label (listreceivedbylabel counts those under \"\").\n"
+    "Addresses carrying <label> in the address book are tallied. For the default \"\" label\n"
+    "the tally also includes wallet addresses with no address book entry that were paid at\n"
+    "least once from outside the wallet -- the same set listreceivedbylabel groups under\n"
+    "\"\". An unbooked address that only ever received change stays excluded.\n"
     "\n"
     "Coinstake receipts are included. A sidestake or MRC payout received from another\n"
     "staker's coinstake counts at face value; a coinstake this wallet staked counts only\n"
@@ -1255,6 +1299,9 @@ UniValue getreceivedbylabel(const UniValue& params)
     string strLabel = LabelFromValue(params[0]);
     set<CTxDestination> setAddress;
     GetAccountAddresses(strLabel, setAddress);
+
+    // Same default-label rollup as the account twin above.
+    if (strLabel.empty()) GetQualifyingUnbookedAddresses(setAddress, nMinDepth, ISMINE_ALL);
 
     return ValueFromAmount(TallyReceivedByAddresses(setAddress, nMinDepth));
 }

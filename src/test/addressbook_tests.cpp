@@ -635,6 +635,52 @@ BOOST_AUTO_TEST_CASE(listreceived_shows_unbooked_address_with_external_receipt)
     RemoveMempoolTx(tx);
 }
 
+// getreceivedbylabel "" answers the same question as the "" row of listreceivedbylabel, and
+// must give the same number. It did not: the twin tallied booked addresses only, so an
+// unbooked address with an external receipt counted in the group and not in the twin. The
+// account twin getreceivedbyaccount "" shares this code path exactly (it is gated behind
+// -enableaccounts, off in this fixture, so it cannot be driven from here).
+//
+// This is also the drift guard for the two separate walks: ListReceived accumulates the
+// qualifying-unbooked set inline while the twins call GetQualifyingUnbookedAddresses, so
+// nothing but this assertion keeps the two definitions of "qualifying" together.
+BOOST_AUTO_TEST_CASE(getreceivedby_default_label_matches_grouped_row)
+{
+    UniValue byLabelArgs(UniValue::VARR);
+    byLabelArgs.push_back(UniValue(0));
+    byLabelArgs.push_back(UniValue(true));
+
+    UniValue twinArgs(UniValue::VARR);
+    twinArgs.push_back("");
+    twinArgs.push_back(UniValue(0));
+
+    const double groupBefore = LabelGroupAmount(listreceivedbylabel(byLabelArgs), "");
+    BOOST_CHECK_EQUAL(getreceivedbylabel(twinArgs).get_real(), groupBefore);
+
+    // Owned key, deliberately NOT added to the address book, paid from outside the wallet.
+    CKey key;
+    key.MakeNewKey(false);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));
+    const CTxDestination dest = CTxDestination(key.GetPubKey().GetID());
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE_EQUAL(pwalletMain->mapAddressBook.count(dest), 0u);
+    }
+
+    CTransaction tx = ExternalPaymentTx(dest, 7 * COIN);
+    InjectMempoolTx(tx);
+
+    // The group moves, as listreceived_shows_unbooked_address_with_external_receipt pins.
+    const double groupAfter = LabelGroupAmount(listreceivedbylabel(byLabelArgs), "");
+    BOOST_CHECK_EQUAL(groupAfter, groupBefore + 7.0);
+
+    // ... and now so does the twin. Without the unbooked rollup this stays at groupBefore,
+    // which is what makes the assertion discriminate rather than restate the line above.
+    BOOST_CHECK_EQUAL(getreceivedbylabel(twinArgs).get_real(), groupAfter);
+
+    RemoveMempoolTx(tx);
+}
+
 // An unbooked owned address that only ever received change from the wallet's own spend stays
 // hidden (it is what CWallet::IsChange means by change); one external receipt then surfaces
 // it with its FULL tally, change included. Also pins the booked-address skip of the new
