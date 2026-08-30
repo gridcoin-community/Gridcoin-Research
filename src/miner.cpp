@@ -1891,11 +1891,6 @@ void ThreadStakeMiner(void* parg)
     {
         PrintException(&e, "ThreadStakeMiner()");
     }
-    catch(boost::thread_interrupted&)
-    {
-        LogPrintf("ThreadStakeMiner exited (interrupt)");
-        return;
-    }
     catch (...)
     {
         PrintException(nullptr, "ThreadStakeMiner()");
