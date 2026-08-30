@@ -43,9 +43,15 @@ ordering by rate is not the same as ordering by absolute fee.
 
 NOT covered here: the `nTxFees < nMinFee` handler in CreateRestOfTheBlock. At
 the default -blockmaxsize that branch is unreachable -- AcceptToMemoryPool
-already requires at least the flat fee the miner recomputes -- so no functional
-test can reach it. Covering it needs a unit-test chain fixture with spendable
-coins, which the tree does not have (issue #3290).
+already requires at least the flat fee the miner recomputes, because the miner
+passes nBytes = 0 while relay charges (1 + size/1000) * the same base. Only the
+block-fill escalator can lift the miner's floor above relay's, and it cannot
+fire while -blockmaxsize equals the 250000 threshold it triggers at.
+
+Raising that option does reach it: see mining_fee_escalator.py, which runs a
+connected pair at -blockmaxsize=470000. A unit-test chain fixture with
+spendable coins (issue #3290) is still worth having -- it would cover the
+handler without a staked block -- but it is not the only route.
 
 This test is in EXTENDED_SCRIPTS, not the default suite: it asserts on the
 contents of a staked block, which makes it subject to the regtest stake-supply
