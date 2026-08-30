@@ -71,7 +71,6 @@
 #include <QSettings>
 #include <QGridLayout>
 #include <QDebug>
-#include <QTextCodec>
 #include <QLocale>
 #include <QTranslator>
 #include "qt/splashscreen.h"

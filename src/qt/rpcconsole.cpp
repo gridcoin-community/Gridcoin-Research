@@ -18,7 +18,6 @@
 #include <QMessageBox>
 #include <QScrollBar>
 #include <QSettings>
-#include <QSignalMapper>
 #include <QTime>
 #include <QTimer>
 #include <QStringList>
