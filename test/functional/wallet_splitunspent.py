@@ -219,7 +219,7 @@ class WalletSplitUnspentTest(GridcoinTestFramework):
         # change actually flips -- but only as a STRING. A JSON number -0 was
         # already the sentinel before the fix, because get_real() returns
         # -0.0 and -0.0 == 0.0.
-        for piece_size in (0, "0", "-0", None):
+        for piece_size in (0, "0", "0.0", "-0", "0e9", None):
             assert_raises_rpc_error(-8, "into 10 pieces results in pieces below the minimum",
                                     node.splitunspent, addr["NUL"], piece_size, 10)
 
@@ -232,7 +232,16 @@ class WalletSplitUnspentTest(GridcoinTestFramework):
         # digit, "" is empty. All three fall through to AmountFromValue, which
         # re-runs the same parse and raises -3. Pinning them is the point:
         # a hand-rolled sentinel would drift the moment either side changed.
-        for piece_size in ("00", " 0", ""):
+        # "0e10" pins the one place the grammar is NARROWER than the old
+        # numeric acceptance: ParseFixedPoint's overflow guard fires on the
+        # exponent field alone (a zero mantissa does not cancel an e-notation
+        # exponent the way trailing decimal zeros do), so zero written with an
+        # exponent of 10 or more fails the grammar outright -- while "0e9"
+        # above still parses to zero and is unset. The old guard accepted the
+        # raw JSON token 0e10 as the sentinel (get_real() == 0.0); rejecting
+        # it keeps the sentinel aligned with the amount grammar, which never
+        # accepted 0e10 as an amount either.
+        for piece_size in ("00", " 0", "", "0e10"):
             assert_raises_rpc_error(-3, "Invalid amount",
                                     node.splitunspent, addr["NUL"], piece_size, 10)
 
