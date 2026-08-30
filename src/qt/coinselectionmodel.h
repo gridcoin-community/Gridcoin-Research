@@ -287,8 +287,19 @@ private:
     //! m_groups. A re-slot drops the realized slot without the user having
     //! collapsed anything, and this set is what tells a re-slot apart from a
     //! real collapse. Grows only on expand, so it is bounded by user actions;
-    //! pruned on a real collapse and cleared on Reset (which collapses
-    //! everything anyway).
+    //! pruned on a real collapse (noteCollapsed / releaseGroup) and cleared on
+    //! Reset, which collapses everything anyway.
+    //!
+    //! A genuine GroupRemove deliberately does NOT prune it. That is
+    //! load-bearing rather than an oversight: the removal half of a re-slot is
+    //! indistinguishable from a real removal at that point, and it has to
+    //! leave the entry intact for the insert half to find. The consequence is
+    //! that expansion is sticky BY ADDRESS for the model's lifetime -- if a
+    //! group is removed for real (its last coin spent) and the same address
+    //! later returns as a new group, it comes back expanded without the user
+    //! having expanded that incarnation. Nothing can tell that apart from a
+    //! re-slot by construction, and it is the friendlier of the two
+    //! behaviours, so it is accepted rather than worked around.
     std::set<std::string> m_expanded;
     //! Stable ids queued for re-expansion, accumulated over one drained batch
     //! and flushed by the groupsReslotted emission at its end.

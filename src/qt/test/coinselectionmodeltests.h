@@ -18,8 +18,10 @@
 //!
 //! Driven through the model's test seam (a bare interfaces::WalletCoinSource,
 //! no WalletModel) over the synthetic coin source, with batches injected
-//! straight into applyCoinEventBatch. The view half -- QTreeView re-expansion
-//! and the scroll restore -- needs a QApplication and stays manual.
+//! straight into applyCoinEventBatch. The view half -- QTreeView re-expansion,
+//! the scroll restore, and the continuation guards -- is covered separately by
+//! CoinSelectionViewTests, which drives a real QTreeView under a real
+//! QApplication on the offscreen platform.
 class CoinSelectionModelTests : public QObject
 {
     Q_OBJECT
