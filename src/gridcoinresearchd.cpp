@@ -322,6 +322,10 @@ bool AppInit(int argc, char* argv[])
         // Per-connection auth: a new ServeInit is built per connection; the Ipc
         // lives for the run, torn down after the wait loop.
         std::unique_ptr<interfaces::Ipc> ipc;
+        // Whether this run minted an IPC cookie, so shutdown knows to remove it.
+        // Tracked separately from `ipc`: WriteCookie runs before the Ipc is built,
+        // so a failure in between would otherwise leave the credential on disk.
+        bool cookie_written = false;
         // Note the default: this block runs only when -multiprocess was explicitly
         // set (command line or config file). There is no implicit/optional MP mode
         // in the daemon, so a failure here is a failure to honor an explicit
@@ -329,6 +333,7 @@ bool AppInit(int argc, char* argv[])
         if (gArgs.GetBoolArg("-multiprocess", false)) {
             try {
                 std::string cookie = ipc::WriteCookie(GetDataDir());
+                cookie_written = true;
                 interfaces::NodeIdentity identity;
                 identity.network = Params().NetworkIDString();
                 // Fingerprint the wallet this node serves. Empty when there is no
@@ -390,6 +395,11 @@ bool AppInit(int argc, char* argv[])
         }
 #ifdef ENABLE_MULTIPROCESS
         if (ipc) ipc->disconnectIncoming();
+        // The cookie is a live credential for as long as the file exists, so it goes
+        // when the socket does -- mirroring upstream's DeleteAuthCookie(). It is also
+        // what ReadCookie() uses to mean "a node is running", so leaving it behind
+        // sends the next GUI to a socket nobody is listening on.
+        if (cookie_written) ipc::DeleteCookie(GetDataDir());
 #endif
     }
 
