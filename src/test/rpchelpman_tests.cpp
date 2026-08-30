@@ -983,20 +983,57 @@ bool IsVariadicRpc(const std::string& method)
 
 } // anonymous namespace
 
-BOOST_AUTO_TEST_CASE(every_helpman_renders)
+// Every registered command must render its help without throwing, and must actually emit a
+// Result section. Two silent failure modes hide here, and neither is caught anywhere else:
+//
+//   - RPCArg::ToStringObj() asserts on an object nested inside another object's m_inner, so a
+//     spec author can register a command whose `help <cmd>` returns "Internal bug detected".
+//     The daemon survives (CHECK_NONFATAL throws and the RPC layer catches it), which is
+//     exactly why nothing notices. The existing loop below calls GetArgs() and never
+//     ToString(), so it walks straight past that.
+//
+//   - RPCResults::ToDescriptionString() used to skip Type::ANY, so four commands emitted no
+//     Result section despite carrying descriptions. rpc_help.py did not catch it either: its
+//     marker check looks for the literal "Result", so it silently reclassified those four as
+//     legacy, unconverted commands.
+BOOST_AUTO_TEST_CASE(every_helpman_renders_help)
 {
-    // ToStringObj() refuses a nested object argument (see rpc/util.cpp) by
-    // throwing NonFatalCheckError, which reaches a user as an "Internal bug
-    // detected" error from `help <cmd>`. The functional rpc_help.py cannot
-    // catch that: it wraps node.help(name) in `except Exception` and silently
-    // reclassifies the command as legacy. Render every registered command's
-    // help here so a spec that trips the limitation fails a test instead.
     for (const std::string& name : tableRPC.listCommands(/*include_deprecated=*/true)) {
         const CRPCCommand* cmd = tableRPC[name];
         BOOST_REQUIRE_MESSAGE(cmd != nullptr && cmd->helpman != nullptr,
                               name + ": registered command must carry a helpman accessor");
 
-        BOOST_REQUIRE_NO_THROW(cmd->helpman().ToString());
+        std::string rendered;
+        BOOST_CHECK_NO_THROW(rendered = cmd->helpman().ToString());
+
+        BOOST_CHECK_MESSAGE(rendered.find("Result") != std::string::npos,
+                            name + ": help renders no Result section");
+    }
+}
+
+// The four commands whose result is genuinely polymorphic declare RPCResult::Type::ANY. Their
+// descriptions are written for a reader and must reach the rendered help.
+BOOST_AUTO_TEST_CASE(any_result_commands_render_their_description)
+{
+    const std::vector<std::pair<std::string, std::string>> expected{
+        {"dumpprivkey", "base58 WIF"},
+        {"getaddednodeinfo", ""},
+        {"sendalert2", "Summary of what was done"},
+        {"versionreport", "Per-version tally"},
+    };
+
+    for (const auto& [name, snippet] : expected) {
+        const CRPCCommand* cmd = tableRPC[name];
+        BOOST_REQUIRE_MESSAGE(cmd != nullptr && cmd->helpman != nullptr, name + ": not registered");
+
+        const std::string rendered = cmd->helpman().ToString();
+        BOOST_CHECK_MESSAGE(rendered.find("Result") != std::string::npos,
+                            name + ": ANY result renders no Result section");
+
+        if (!snippet.empty()) {
+            BOOST_CHECK_MESSAGE(rendered.find(snippet) != std::string::npos,
+                                name + ": ANY result description is missing from the rendered help");
+        }
     }
 }
 
@@ -1026,6 +1063,7 @@ BOOST_AUTO_TEST_CASE(example_address_is_synthetic_and_valid)
         .Finalize(digest);
     BOOST_CHECK(std::equal(decoded.begin() + 1, decoded.end(), digest));
 }
+
 
 BOOST_AUTO_TEST_CASE(every_helpman_arg_type_matches_client_conversion_table)
 {
