@@ -7,6 +7,7 @@
 #include "qt/coinselectionmodel.h"
 
 #include <QKeyEvent>
+#include <QPointer>
 #include <QScrollBar>
 #include <QTimer>
 
@@ -84,14 +85,27 @@ void CoinSelectionView::restoreReslottedBranches(const QList<int>& group_ids)
     // re-expanding a branch above it moves them again. This holds the
     // scrollbar still rather than reconstructing what was under the cursor --
     // enough to stop the jump to the top, which is the visible symptom.
+    //
+    // The ids are only meaningful against the registry that issued them, so
+    // pin both the model and that registry's generation. Neither a model swap
+    // nor a reseed can cancel an already-queued singleShot: setModel() only
+    // disconnects the signal, and a reseed renumbers m_id_addr in place. An
+    // unpinned continuation would then resolve these integers against whatever
+    // registry is current and expand rows nobody asked for -- and a reseed has
+    // just collapsed everything, so that is a branch the user watched close.
+    auto* emitter = qobject_cast<CoinSelectionModel*>(model());
+    if (!emitter) return;
+    const QPointer<CoinSelectionModel> pinned(emitter);
+    const quint64 generation = emitter->registryGeneration();
+
     const int offset = verticalScrollBar()->value();
-    QTimer::singleShot(0, this, [this, group_ids, offset]() {
-        auto* m = qobject_cast<CoinSelectionModel*>(model());
-        if (!m) return;
+    QTimer::singleShot(0, this, [this, group_ids, offset, pinned, generation]() {
+        if (!pinned) return;
+        if (qobject_cast<CoinSelectionModel*>(model()) != pinned.data()) return;
+        if (pinned->registryGeneration() != generation) return;
         for (const int id : group_ids) {
-            const QModelIndex idx = m->groupIndexForId(id);
-            // Gone again between the emission and this turn (removed for real,
-            // or a Reset renumbered the registry).
+            const QModelIndex idx = pinned->groupIndexForId(id);
+            // Gone again between the emission and this turn (removed for real).
             if (idx.isValid() && !isExpanded(idx)) expand(idx);
         }
         verticalScrollBar()->setValue(offset);

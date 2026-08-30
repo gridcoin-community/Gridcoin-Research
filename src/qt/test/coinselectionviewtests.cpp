@@ -173,6 +173,41 @@ void CoinSelectionViewTests::userCollapseSurvivesAReslotInTheSameTurn()
     QCOMPARE(f.model.rowCount(moved), 0);
 }
 
+void CoinSelectionViewTests::resetBetweenEmissionAndContinuationDoesNotReExpand()
+{
+    Fixture f;
+    const QModelIndex parent = f.model.index(kMidRow, 0, QModelIndex());
+    const std::string address = f.addressAtRow(kMidRow);
+
+    f.view.expand(parent);
+    QVERIFY(f.model.rowCount(parent) > 0);
+
+    // Queue the restore, then reset before it runs. The Reset has to be its
+    // OWN batch: in the same batch, reseedFromSource clears m_pending_reexpand
+    // before the end-of-batch emission, groupsReslotted never fires, and this
+    // would pass without testing anything.
+    f.model.applyCoinEventBatch(reslotBatch(address, kMidRow, 0));
+
+    std::vector<GRC::WalletCoinEvent> reset;
+    reset.push_back({/*seqno=*/3, /*emit_time_us=*/0,
+                     GRC::CoinResetPayload{GRC::VIEW_COIN_CONTROL, /*epoch=*/0}});
+    f.model.applyCoinEventBatch(reset);
+    settle();
+
+    // A Reset collapses every branch and clears m_expanded, so the user is
+    // looking at a fully collapsed tree. The queued continuation must not
+    // re-open one behind them: it holds ids issued by a registry that has
+    // since been renumbered, and nothing about a queued singleShot is
+    // cancelled by the reseed.
+    for (int row = 0; row < f.model.rowCount(QModelIndex()); ++row) {
+        const QModelIndex idx = f.model.index(row, 0, QModelIndex());
+        QVERIFY2(!f.view.isExpanded(idx),
+                 "a continuation queued before the Reset re-expanded a branch "
+                 "the Reset had closed");
+        QCOMPARE(f.model.rowCount(idx), 0);
+    }
+}
+
 void CoinSelectionViewTests::reslotHoldsTheScrollOffset()
 {
     Fixture f;

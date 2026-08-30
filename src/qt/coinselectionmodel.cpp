@@ -666,6 +666,12 @@ void CoinSelectionModel::reseedFromSource()
     // pending list is keyed on is about to be renumbered.
     m_expanded.clear();
     m_pending_reexpand.clear();
+    // The id registry is renumbered a few lines down, so any continuation
+    // already queued against the old numbering has to be told its ids are
+    // stale. Bumped HERE and deliberately not in rebuildDirRows(): that runs
+    // on every re-slot and never touches m_id_addr, so a bump there would
+    // leave this guard a silent no-op while everything still appeared to work.
+    ++m_registry_generation;
 
     if (m_mode == GRC::CoinViewMode::Tree) {
         GRC::CoinGroupsResult result = m_source.getGroups(m_view_id, 0, -1);

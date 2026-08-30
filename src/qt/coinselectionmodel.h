@@ -144,6 +144,11 @@ public:
     //! to call synchronously from the collapse dispatch.
     void noteCollapsed(const std::string& address);
 
+    //! Generation of the address <-> stable-id registry. Bumped whenever the
+    //! registry is renumbered, so a continuation queued against the old
+    //! numbering can tell that its ids no longer mean what they meant.
+    quint64 registryGeneration() const { return m_registry_generation; }
+
     //! The directory index of the group with stable id \p group_id, or an
     //! invalid index when that id does not currently name a directory row.
     //! The view resolves a deferred re-expand through this: a stable id
@@ -288,6 +293,8 @@ private:
     //! Stable ids queued for re-expansion, accumulated over one drained batch
     //! and flushed by the groupsReslotted emission at its end.
     QList<int> m_pending_reexpand;
+    //! Bumped on every renumber of m_addr_id / m_id_addr (reseedFromSource).
+    quint64 m_registry_generation{0};
 
     //! FLAT mode: the single windowed row universe.
     GRC::WindowCache<GRC::CoinRecord> m_flat;
