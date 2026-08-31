@@ -308,6 +308,14 @@ bool LockStackEmpty()
 
 bool GetLockOrderDebugAbort() { return g_debug_lockorder_abort; }
 void SetLockOrderDebugAbort(bool enable) { g_debug_lockorder_abort = enable; }
+void ResetLockOrderTracking()
+{
+    LockData& lockdata = GetLockData();
+    std::lock_guard<std::mutex> lock(lockdata.dd_mutex);
+    lockdata.lockorders.clear();
+    lockdata.invlockorders.clear();
+}
+
 bool GetLockOrderDebugThrowException() { return g_debug_lockorder_throw_exception; }
 void SetLockOrderDebugThrowException(bool enable) { g_debug_lockorder_throw_exception = enable; }
 

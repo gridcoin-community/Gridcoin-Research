@@ -1816,6 +1816,15 @@ public:
             fBan = nMisbehavior >= gArgs.GetArg("-banscore", 100);
         }
 
+        // The ban lands OUTSIDE m_misbehavior_cs -- holding it across Ban()
+        // was the m_misbehavior_cs -> m_cs_banned half of an AB-BA against
+        // the clear-callback path. Accepted trade-off of the release: a
+        // clearbanned/Unban/sweep that fully completes in this window zeroes
+        // a score this thread already counted, and the Ban() below still
+        // lands afterwards -- a decision made microseconds before the clear
+        // is not unwound by it. Benign (the operator can clear again;
+        // Ban() itself is last-writer-wins under m_cs_banned), and strictly
+        // better than the deadlock.
         if (fBan)
         {
             LogPrint(BCLog::LogFlags::NET, "Misbehaving: %s (%d -> %d) BANNING", addr.ToString(), nMisbehavior - howmuch, nMisbehavior);

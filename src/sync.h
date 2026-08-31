@@ -74,6 +74,14 @@ bool GetLockOrderDebugAbort();
 void SetLockOrderDebugAbort(bool enable);
 bool GetLockOrderDebugThrowException();
 void SetLockOrderDebugThrowException(bool enable);
+
+//! Forget every lock-order edge recorded so far. The detector registers each
+//! ordered pair once and short-circuits on repeats, so a pair whose conflict
+//! was already reported (or merely registered) earlier in the process is
+//! invisible to later tests. A test that wants to prove a specific inversion
+//! fires must clear the table first, then drive both legs itself. Detection
+//! for subsequently-run code re-registers pairs as they occur.
+void ResetLockOrderTracking();
 #else
 inline void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry = false) {}
 inline void LeaveCritical() {}

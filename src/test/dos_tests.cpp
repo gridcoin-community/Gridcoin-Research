@@ -101,6 +101,14 @@ BOOST_AUTO_TEST_CASE(DoS_ban_then_clear_lock_order)
 
     SetLockOrderDebugAbort(false);
     SetLockOrderDebugThrowException(true);
+
+    // The detector registers each ordered pair once and short-circuits on
+    // repeats -- and the earlier DoS cases have already driven both legs
+    // non-fatally, so without a reset this case can never observe the
+    // conflict and would pass on the unfixed code too (verified by building
+    // the old Misbehaving() against this test). Clear the table so the two
+    // legs below are the pair's first registrations.
+    ResetLockOrderTracking();
 #endif
 
     g_banman->ClearBanned();
