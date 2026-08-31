@@ -1185,7 +1185,9 @@ static const RPCHelpMan getreceivedbyaccount_help{
     "Addresses carrying <account> in the address book are tallied. For the default \"\"\n"
     "account the tally also includes wallet addresses with no address book entry that were\n"
     "paid at least once from outside the wallet -- the same set listreceivedbyaccount groups\n"
-    "under \"\". An unbooked address that only ever received change stays excluded.\n"
+    "under \"\" when called with includeWatchonly=true (this tally, like this RPC's booked\n"
+    "tally, has always included watch-only). An unbooked address that only ever received\n"
+    "change stays excluded.\n"
     "\n"
     "Coinstake receipts are included. A sidestake or MRC payout received from another\n"
     "staker's coinstake counts at face value; a coinstake this wallet staked counts only\n"
@@ -1205,8 +1207,12 @@ static const RPCHelpMan getreceivedbyaccount_help{
 const RPCHelpMan& getreceivedbyaccount_helpman() { return getreceivedbyaccount_help; }
 
 //! Wallet destinations with no address book entry that were paid at least once from outside
-//! the wallet -- exactly the set ListReceived folds into its "" row (see the loop at the end of
-//! ListReceived, and CWallet::IsChange for why a purely internal receipt does not qualify).
+//! the wallet -- the set ListReceived folds into its "" row when invoked over the same
+//! ownership filter (see the loop at the end of ListReceived, and CWallet::IsChange for why a
+//! purely internal receipt does not qualify). Callers here pass ISMINE_ALL, matching the
+//! twins' historical inclusion of watch-only; the list variants include watch-only only with
+//! includeWatchonly=true, so a purely watch-only unbooked address appears in the twins but
+//! not in a default list invocation -- the same asymmetry the booked "" tally has always had.
 //! Generated value qualifies even though our own coinstake is a transaction this wallet
 //! funded, matching the fGenerated arm there.
 //!
@@ -1302,7 +1308,9 @@ static const RPCHelpMan getreceivedbylabel_help{
     "Addresses carrying <label> in the address book are tallied. For the default \"\" label\n"
     "the tally also includes wallet addresses with no address book entry that were paid at\n"
     "least once from outside the wallet -- the same set listreceivedbylabel groups under\n"
-    "\"\". An unbooked address that only ever received change stays excluded.\n"
+    "\"\" when called with includeWatchonly=true (this tally, like this RPC's booked tally,\n"
+    "has always included watch-only). An unbooked address that only ever received change\n"
+    "stays excluded.\n"
     "\n"
     "Coinstake receipts are included. A sidestake or MRC payout received from another\n"
     "staker's coinstake counts at face value; a coinstake this wallet staked counts only\n"
