@@ -1900,11 +1900,16 @@ private:
     BanMan* const m_banman;
 
     // Per-address misbehavior scores (relocated from net_processing file scope
-    // in PR 8b). m_misbehavior_cs is a LEAF: nothing is called out to while it is
-    // held. Misbehaving() decides under it and releases before m_banman->Ban(), so
-    // the only remaining edge is BanMan::m_cs_banned -> m_misbehavior_cs, taken by
+    // in PR 8b). m_misbehavior_cs is a leaf with ONE deliberate exception:
+    // gArgs.GetArg (-banscore/-bantime for the decay math) is read while it is
+    // held, taking ArgsManager's cs_args nested. cs_args is itself a terminal
+    // leaf that calls nothing, so the edge cannot form a cycle. Nothing else
+    // is called out to under this lock -- in particular Misbehaving() decides
+    // under it and releases before m_banman->Ban(), so the only cross-
+    // subsystem edge is BanMan::m_cs_banned -> m_misbehavior_cs, taken by
     // ClearBanned / Unban / SweepBanned through the misbehavior-clear callback.
-    // Lock order: cs_main -> cs_wallet -> BanMan::m_cs_banned -> m_misbehavior_cs.
+    // Lock order: cs_main -> cs_wallet -> BanMan::m_cs_banned -> m_misbehavior_cs
+    // (-> cs_args).
     mutable CCriticalSection m_misbehavior_cs;
     std::map<CAddress, std::pair<int, int64_t>> m_misbehavior GUARDED_BY(m_misbehavior_cs);
 };
