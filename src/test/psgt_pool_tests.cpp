@@ -28,7 +28,6 @@ BOOST_AUTO_TEST_SUITE(psgt_pool_tests)
 //! transactions are made visible.
 static void AddToMempool(const CTransaction& tx)
 {
-    LOCK(mempool.cs);
     mempool.addUnchecked(tx.GetHash(),
                          CTxMemPoolEntry(tx, 0, 1700000000, 1,
                                          ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION)));
