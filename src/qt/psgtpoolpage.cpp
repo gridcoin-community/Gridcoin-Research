@@ -122,6 +122,12 @@ void PSGTPoolPage::createTableModelIfReady()
     // Keyed on the image, which is the pool key, rather than the revision hash:
     // a co-signer signing mints a new revision for the same arrangement, and
     // the selection should survive that.
+    //
+    // ORDER MATTERS: these connects must stay after setModel() above and
+    // before the updateButtons hookup below. Same-thread connections fire in
+    // registration order, so the view's internal reset() (registered inside
+    // setModel) silently clears the selection first, the restore below
+    // re-selects second, and updateButtons recomputes from the final state.
     connect(m_table_model, &QAbstractItemModel::modelAboutToBeReset, this, [this]() {
         m_selected_image.clear();
 
