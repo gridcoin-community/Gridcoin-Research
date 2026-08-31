@@ -738,7 +738,8 @@ UniValue migratelabels(const UniValue& params)
         pwalletMain->SetAddressBookPurpose(dest,
             (IsMine(*pwalletMain, dest) != ISMINE_NO) ? "receive" : "send");
 
-    // Book what the grouped receivedby views already surface under "": owned addresses with no
+    // Book what the grouped receivedby views already surface under "": wallet addresses
+    // (including watch-only, per ISMINE_ALL below) with no
     // address-book entry that were paid at least once from outside the wallet. Booking them is
     // what makes the default-label views agree by construction -- GetAccountAddresses("") then
     // returns them, so the twin tally and the grouped "" row read the same address set instead
