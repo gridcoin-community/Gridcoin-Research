@@ -95,6 +95,13 @@ BOOST_AUTO_TEST_CASE(DoS_ban_then_clear_lock_order)
     // Structured like sync_tests' potential_deadlock_detected: the detector only
     // exists in a DEBUG_LOCKORDER build, so ask it to throw rather than warn
     // there, and let the case degenerate to a plain ban/unban check elsewhere.
+    // Setup clear runs BEFORE the throw flag and the table reset: with
+    // leftover bans from earlier cases it drives the clear-callback leg,
+    // and on the old nesting a conflict here (or in Misbehaving below)
+    // would throw OUTSIDE the try/catch and fail the case as an uncaught
+    // exception instead of through the assertion it exists for.
+    g_banman->ClearBanned();
+
 #ifdef DEBUG_LOCKORDER
     const bool prev_lockorder_abort = GetLockOrderDebugAbort();
     const bool prev_lockorder_throw_exception = GetLockOrderDebugThrowException();
@@ -106,12 +113,13 @@ BOOST_AUTO_TEST_CASE(DoS_ban_then_clear_lock_order)
     // repeats -- and the earlier DoS cases have already driven both legs
     // non-fatally, so without a reset this case can never observe the
     // conflict and would pass on the unfixed code too (verified by building
-    // the old Misbehaving() against this test). Clear the table so the two
-    // legs below are the pair's first registrations.
+    // the old Misbehaving() against this test). Clear the table HERE, after
+    // the setup clear: Misbehaving below then makes the pair's first
+    // registration (the old nesting's A leg), and the ClearBanned inside the
+    // try/catch is what first drives the reverse order -- so the
+    // discriminating throw lands exactly where the catch is waiting.
     ResetLockOrderTracking();
 #endif
-
-    g_banman->ClearBanned();
 
     CAddress addr(ip(0xa0b0c004));
     CNode dummyNode(INVALID_SOCKET, addr, "", true);
