@@ -31,10 +31,15 @@ jobs:
   functional-tests-extended:
     name: Functional Tests, extended (Linux)
     runs-on: ubuntu-24.04
-    # Wall-clock bound rather than CPU bound: feature_stakelimit alone takes
-    # about a minute locally. Generous headroom over that, well under the 6h
-    # default.
-    timeout-minutes: 45
+    # Hang protection for an unattended job, sized for the COLD case, not the
+    # warm one: the base functional job's measured wall time is 2-7 minutes,
+    # but it is always cache-warm (it runs on every push). This job runs
+    # weekly; one quiet week can evict the ccache, and a cold Release build
+    # of the daemon on a 2-core runner has historically taken well over an
+    # hour -- and a mid-build timeout also skips the cache save, wedging
+    # every following Sunday cold. 180 minutes clears the cold build with
+    # margin while still bounding a hung wall-clock test.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v5
 
