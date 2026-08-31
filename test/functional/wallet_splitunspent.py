@@ -50,9 +50,10 @@ class WalletSplitUnspentTest(GridcoinTestFramework):
         self.num_nodes = 1
         self.chain = "regtest"
         self.setup_clean_chain = True
-        # -paytxfee pins nTransactionFee to the current default explicitly:
-        # the exact-fee assertions below (per-piece floor, conservation sums)
-        # depend on it, and this keeps them valid if the default ever moves.
+        # -paytxfee=0.001 fixes nTransactionFee for this run (0.001 happens
+        # to be today's default). The exact-fee assertions below (per-piece
+        # floor, conservation sums) are written against this value, so a
+        # change to the daemon default cannot shift them.
         self.extra_args = [["-staking=0", "-connect=0", "-listen=0", "-devbuild=override",
                             "-paytxfee=0.001"]]
 
