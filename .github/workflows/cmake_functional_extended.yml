@@ -1,0 +1,170 @@
+name: CMake Functional Tests (extended)
+
+# The EXTENDED_SCRIPTS set in test/functional/test_runner.py never runs in CI:
+# the default suite skips it, and nothing else invokes it. Issue #3057.
+#
+# Deliberately NOT on push/pull_request. These tests are opt-in because they are
+# slow and wall-clock bound -- feature_stakelimit drives the background
+# ThreadStakeMiner at ~16s block spacing via STAKE_TIMESTAMP_MASK, and is opt-in
+# by design rather than pending a fix. A schedule plus manual dispatch gives them
+# coverage without putting that on every push.
+on:
+  schedule:
+    # 04:17 UTC on Sundays: off-peak, and weekly matches how slowly this set
+    # changes. workflow_dispatch covers the on-demand case.
+    - cron: '17 4 * * 0'
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+  # Pin ccache's dir to the actions/cache path below. ccache's default dir is
+  # version/state-dependent (~/.ccache vs ~/.cache/ccache), so without this the
+  # cache can silently miss. Mirrors cmake_functional.yml.
+  CCACHE_DIR: /home/runner/.ccache
+
+jobs:
+  # ----------------------------------------------------------------------
+  # Same daemon-only build as cmake_functional.yml, but runs the two
+  # EXTENDED_SCRIPTS by name instead of the `functional_tests` CTest case,
+  # which is registered without them.
+  # ----------------------------------------------------------------------
+  functional-tests-extended:
+    name: Functional Tests, extended (Linux)
+    runs-on: ubuntu-24.04
+    # Hang protection for an unattended job, sized for the COLD case, not the
+    # warm one: the base functional job's measured wall time is 2-7 minutes,
+    # but it is always cache-warm (it runs on every push). This job runs
+    # weekly; one quiet week can evict the ccache, and a cold Release build
+    # of the daemon on a 2-core runner has historically taken well over an
+    # hour -- and a mid-build timeout also skips the cache save, wedging
+    # every following Sunday cold. 180 minutes clears the cold build with
+    # margin while still bounding a hung wall-clock test.
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v5
+
+      # Guarantee a Python 3 interpreter so config.ini is generated and the
+      # runner below can drive the suite.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Dependencies
+        run: |
+          source ./install_dependencies.sh
+          # WITH_GUI=false: this is a daemon-only (-DENABLE_GUI=OFF) build, so skip
+          # the Qt/GUI dependency set.
+          install_deps native true false
+
+      - name: Setup Concurrency
+        run: |
+          if [ -z "$CMAKE_BUILD_PARALLEL_LEVEL" ]; then
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "Concurrency: Auto-detected $(nproc) cores."
+          else
+            echo "Concurrency: Limit set externally to $CMAKE_BUILD_PARALLEL_LEVEL."
+          fi
+
+      - name: Configure Ccache
+        uses: actions/cache@v5
+        with:
+          path: ~/.ccache
+          key: ccache-functional-extended-${{ github.sha }}
+          restore-keys: |
+            ccache-functional-extended-
+            ccache-functional-
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -DENABLE_GUI=OFF \
+            -DENABLE_TESTS=ON \
+            -DENABLE_DAEMON=ON \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build gridcoinresearchd
+        run: cmake --build build --target gridcoinresearchd
+
+      # Only the EXTENDED_SCRIPTS are run, by name. --extended would run the base
+      # suite as well, which already runs on every push: re-running it weekly
+      # adds no signal and doubles the flake surface (a local --extended run
+      # tripped two unrelated base tests that pass in isolation).
+      #
+      # The GRIDCOIND / GRIDCOINCLI overrides are the ones the `functional_tests`
+      # CTest case supplies. The daemon doubles as the CLI.
+      # test_runner.py drops an unknown script name with a WARNING and
+      # exits 0 even when NO requested script survives -- so a rename or
+      # removal of either EXTENDED script would leave this weekly job green
+      # while silently running nothing. Fail red instead, before running.
+      - name: Verify the extended scripts are still registered
+        run: |
+          for s in feature_stakelimit.py feature_reorg.py; do
+            # Anchored to line start (whitespace only) so a commented-out
+            # list entry does not satisfy the check; the dot is escaped.
+            grep -qE "^[[:space:]]*'${s//./\\.}'" test/functional/test_runner.py || {
+              echo "::error::$s is no longer in test_runner.py's script lists; this job would silently run nothing for it."
+              exit 1
+            }
+          done
+
+      - name: Run feature_stakelimit
+        env:
+          GRIDCOIND: ${{ github.workspace }}/build/bin/gridcoinresearchd
+          GRIDCOINCLI: ${{ github.workspace }}/build/bin/gridcoinresearchd
+        run: >-
+          python3 test/functional/test_runner.py
+          "--configfile=${{ github.workspace }}/build/test/config.ini"
+          feature_stakelimit.py
+          --ci --quiet --combinedlogslen=4000 --attempts=3
+
+      # Non-gating. --attempts only retries the known transient daemon
+      # RPC-startup signature; sync failures are never retried, and feature_reorg
+      # fails by sync_blocks timeout in roughly 13% of runs (see its note in
+      # EXTENDED_SCRIPTS: both nodes share the deterministic premine and can draw
+      # the same coinstake kernel). Gating a scheduled job on that would leave the
+      # workflow red about one week in eight with nobody watching, so it reports
+      # instead. Once invalidateblock or disconnectnode lands and the test returns
+      # to BASE_SCRIPTS, this step goes away.
+      - name: Run feature_reorg (non-gating, known flaky)
+        id: reorg
+        continue-on-error: true
+        env:
+          GRIDCOIND: ${{ github.workspace }}/build/bin/gridcoinresearchd
+          GRIDCOINCLI: ${{ github.workspace }}/build/bin/gridcoinresearchd
+        run: >-
+          python3 test/functional/test_runner.py
+          "--configfile=${{ github.workspace }}/build/test/config.ini"
+          feature_reorg.py
+          --ci --quiet --combinedlogslen=4000 --attempts=3
+
+      # continue-on-error makes a reorg failure invisible by default: the job
+      # stays green, GitHub sends no notification, and failure() below would
+      # stay false. Surface it as a warning annotation and a step-summary line
+      # so the run page says what happened without opening the step list.
+      - name: Report a feature_reorg failure
+        if: steps.reorg.outcome == 'failure'
+        run: |
+          echo "::warning title=feature_reorg failed (non-gating)::known ~13% sync_blocks flake; debug.log artifact uploaded"
+          echo "feature_reorg FAILED (non-gating; known ~13% sync_blocks flake). Debug logs are in the run artifacts." >> "$GITHUB_STEP_SUMMARY"
+
+      # On failure, keep the per-node datadirs (each holds <chain>/debug.log) so an
+      # intermittent flake -- which often vanishes on the next run -- leaves a
+      # debuggable artifact instead of only the truncated console log. This matters
+      # more here than on the default suite: a scheduled run has no author watching
+      # it.
+      #
+      # failure() reads step CONCLUSIONS, and continue-on-error forces the
+      # reorg step's conclusion to success -- so the reorg outcome must be
+      # checked explicitly or the artifact vanishes in exactly the scenario
+      # this step exists for.
+      - name: Upload functional test logs on failure
+        if: failure() || steps.reorg.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: functional-extended-test-logs-${{ github.run_id }}
+          path: /tmp/test_runner_*/**/debug.log
+          if-no-files-found: ignore
+          retention-days: 7
