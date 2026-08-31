@@ -109,6 +109,7 @@ jobs:
       # instead. Once invalidateblock or disconnectnode lands and the test returns
       # to BASE_SCRIPTS, this step goes away.
       - name: Run feature_reorg (non-gating, known flaky)
+        id: reorg
         continue-on-error: true
         env:
           GRIDCOIND: ${{ github.workspace }}/build/bin/gridcoinresearchd
@@ -119,13 +120,28 @@ jobs:
           feature_reorg.py
           --ci --quiet --combinedlogslen=4000 --attempts=3
 
+      # continue-on-error makes a reorg failure invisible by default: the job
+      # stays green, GitHub sends no notification, and failure() below would
+      # stay false. Surface it as a warning annotation and a step-summary line
+      # so the run page says what happened without opening the step list.
+      - name: Report a feature_reorg failure
+        if: steps.reorg.outcome == 'failure'
+        run: |
+          echo "::warning title=feature_reorg failed (non-gating)::known ~13% sync_blocks flake; debug.log artifact uploaded"
+          echo "feature_reorg FAILED (non-gating; known ~13% sync_blocks flake). Debug logs are in the run artifacts." >> "$GITHUB_STEP_SUMMARY"
+
       # On failure, keep the per-node datadirs (each holds <chain>/debug.log) so an
       # intermittent flake -- which often vanishes on the next run -- leaves a
       # debuggable artifact instead of only the truncated console log. This matters
       # more here than on the default suite: a scheduled run has no author watching
       # it.
+      #
+      # failure() reads step CONCLUSIONS, and continue-on-error forces the
+      # reorg step's conclusion to success -- so the reorg outcome must be
+      # checked explicitly or the artifact vanishes in exactly the scenario
+      # this step exists for.
       - name: Upload functional test logs on failure
-        if: failure()
+        if: failure() || steps.reorg.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: functional-extended-test-logs-${{ github.run_id }}
