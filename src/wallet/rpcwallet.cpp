@@ -678,6 +678,12 @@ UniValue listlabels(const UniValue& params)
     return ret;
 }
 
+//! Defined beside the receivedby* tally further down, where its definition belongs; declared
+//! here because migratelabels books exactly the set it returns.
+static void GetQualifyingUnbookedAddresses(set<CTxDestination>& setAddress, int nMinDepth,
+                                           const isminefilter& filter)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet);
+
 static const RPCHelpMan migratelabels_help{
     "migratelabels",
     "One-time maintenance for the accounts -> labels transition: backfill the purpose\n"
@@ -686,13 +692,24 @@ static const RPCHelpMan migratelabels_help{
     "\n"
     "The address-book names themselves need no conversion -- an account name already IS the\n"
     "label -- so this only fills in the missing purpose so entries are first-class labels (e.g.\n"
-    "so `listlabels \"receive\"` finds them). Safe to run repeatedly: entries that already carry a\n"
-    "purpose are left untouched.",
+    "so `listlabels \"receive\"` finds them).\n"
+    "\n"
+    "It also books wallet addresses that have no address-book entry at all but were paid at\n"
+    "least once from outside the wallet, under the default \"\" label with purpose \"receive\" --\n"
+    "the same set listreceivedbylabel already groups under \"\". This is what setlabel <address>\n"
+    "\"\" would do for each of them, and it makes getreceivedbylabel \"\" and the \"\" row of\n"
+    "listreceivedbylabel agree by construction rather than by parallel tallies. Addresses that\n"
+    "only ever received change are not booked.\n"
+    "\n"
+    "Safe to run repeatedly: entries that already carry a purpose are left untouched, and an\n"
+    "address booked by a previous run is no longer unbooked.",
     {},
     RPCResult{RPCResult::Type::OBJ, "", "",
         {
             {RPCResult::Type::NUM, "examined", "Number of address-book entries examined."},
             {RPCResult::Type::NUM, "updated", "Number of entries whose purpose was backfilled."},
+            {RPCResult::Type::NUM, "booked", "Number of previously unbooked addresses with an "
+                                             "external receipt that were added under \"\"."},
         }},
     RPCExamples{
         HelpExampleCli("migratelabels", "") +
@@ -721,9 +738,30 @@ UniValue migratelabels(const UniValue& params)
         pwalletMain->SetAddressBookPurpose(dest,
             (IsMine(*pwalletMain, dest) != ISMINE_NO) ? "receive" : "send");
 
+    // Book what the grouped receivedby views already surface under "": wallet addresses
+    // (including watch-only, per ISMINE_ALL below) with no
+    // address-book entry that were paid at least once from outside the wallet. Booking them is
+    // what makes the default-label views agree by construction -- GetAccountAddresses("") then
+    // returns them, so the twin tally and the grouped "" row read the same address set instead
+    // of arriving at it two ways.
+    //
+    // minconf 0 deliberately: this is a one-time migration over receipts that already exist,
+    // and an address is no less ours for having been paid in an unconfirmed transaction.
+    //
+    // The pair of calls is exactly what setlabel(<address>, "") does. Re-running is a no-op:
+    // GetQualifyingUnbookedAddresses skips anything already in the address book.
+    set<CTxDestination> setUnbooked;
+    GetQualifyingUnbookedAddresses(setUnbooked, 0, ISMINE_ALL);
+
+    for (auto const& dest : setUnbooked) {
+        pwalletMain->SetAddressBookName(dest, "");
+        pwalletMain->SetAddressBookPurpose(dest, "receive");
+    }
+
     UniValue ret(UniValue::VOBJ);
     ret.pushKV("examined", nExamined);
     ret.pushKV("updated", (int)vUpdate.size());
+    ret.pushKV("booked", (int)setUnbooked.size());
     return ret;
 }
 
@@ -1145,9 +1183,12 @@ static const RPCHelpMan getreceivedbyaccount_help{
     "Returns the total amount received by addresses with <account> in transactions with at least\n"
     "[minconf] confirmations.\n"
     "\n"
-    "Only addresses carrying <account> in the address book are tallied; payments to wallet\n"
-    "addresses without an address book entry are not included even for the default \"\"\n"
-    "account (listreceivedbyaccount counts those under \"\").\n"
+    "Addresses carrying <account> in the address book are tallied. For the default \"\"\n"
+    "account the tally also includes wallet addresses with no address book entry that were\n"
+    "paid at least once from outside the wallet -- the same set listreceivedbyaccount groups\n"
+    "under \"\" when called with includeWatchonly=true (this tally, like this RPC's booked\n"
+    "tally, has always included watch-only). An unbooked address that only ever received\n"
+    "change stays excluded.\n"
     "\n"
     "Coinstake receipts are included. A sidestake or MRC payout received from another\n"
     "staker's coinstake counts at face value; a coinstake this wallet staked counts only\n"
@@ -1165,6 +1206,46 @@ static const RPCHelpMan getreceivedbyaccount_help{
         HelpExampleRpc("getreceivedbyaccount", "\"myaccount\", 6")},
 };
 const RPCHelpMan& getreceivedbyaccount_helpman() { return getreceivedbyaccount_help; }
+
+//! Wallet destinations with no address book entry that were paid at least once from outside
+//! the wallet -- the set ListReceived folds into its "" row when invoked over the same
+//! ownership filter (see the loop at the end of ListReceived, and CWallet::IsChange for why a
+//! purely internal receipt does not qualify). Callers here pass ISMINE_ALL, matching the
+//! twins' historical inclusion of watch-only; the list variants include watch-only only with
+//! includeWatchonly=true, so a purely watch-only unbooked address appears in the twins but
+//! not in a default list invocation -- the same asymmetry the booked "" tally has always had.
+//! Generated value qualifies even though our own coinstake is a transaction this wallet
+//! funded, matching the fGenerated arm there.
+//!
+//! Deliberately a second walk rather than shared code: ListReceived needs the per-address
+//! tally it is already accumulating, so folding this in would either duplicate that work or
+//! reshape a function six RPCs depend on. The two are pinned against each other by
+//! getreceivedby_default_label_matches_grouped_row in addressbook_tests.
+static void GetQualifyingUnbookedAddresses(set<CTxDestination>& setAddress, int nMinDepth,
+                                           const isminefilter& filter)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
+{
+    std::vector<ReceivedOutput> vReceived;
+
+    for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+    {
+        const CWalletTx& wtx = it->second;
+
+        int nDepth = 0;
+        if (!ReceiptTxEligible(wtx, nMinDepth, nDepth)) continue;
+
+        const bool fTxFromMe = wtx.IsFromMe(filter);
+
+        TallyTxReceipts(wtx, filter, vReceived);
+
+        for (auto const& received : vReceived) {
+            if (fTxFromMe && !received.fGenerated) continue;
+            if (pwalletMain->mapAddressBook.count(received.dest)) continue;
+
+            setAddress.insert(received.dest);
+        }
+    }
+}
 
 //! Total received by the given address set in transactions with at least nMinDepth
 //! confirmations. Shared tally for getreceivedbyaccount and its label twin getreceivedbylabel.
@@ -1211,6 +1292,12 @@ UniValue getreceivedbyaccount(const UniValue& params)
     set<CTxDestination> setAddress;
     GetAccountAddresses(strAccount, setAddress);
 
+    // The default account is where the grouped view also puts owned addresses carrying no
+    // address book entry, so tally them here or the two answer the same question differently.
+    // ISMINE_ALL is the ownership set TallyReceivedByAddresses already nets the coinstake
+    // principal over, so the qualification test uses it too.
+    if (strAccount.empty()) GetQualifyingUnbookedAddresses(setAddress, nMinDepth, ISMINE_ALL);
+
     return ValueFromAmount(TallyReceivedByAddresses(setAddress, nMinDepth));
 }
 
@@ -1219,9 +1306,12 @@ static const RPCHelpMan getreceivedbylabel_help{
     "Returns the total amount received by addresses with <label> in transactions with at least\n"
     "[minconf] confirmations.\n"
     "\n"
-    "Only addresses carrying <label> in the address book are tallied; payments to wallet\n"
-    "addresses without an address book entry are not included even for the default \"\"\n"
-    "label (listreceivedbylabel counts those under \"\").\n"
+    "Addresses carrying <label> in the address book are tallied. For the default \"\" label\n"
+    "the tally also includes wallet addresses with no address book entry that were paid at\n"
+    "least once from outside the wallet -- the same set listreceivedbylabel groups under\n"
+    "\"\" when called with includeWatchonly=true (this tally, like this RPC's booked tally,\n"
+    "has always included watch-only). An unbooked address that only ever received change\n"
+    "stays excluded.\n"
     "\n"
     "Coinstake receipts are included. A sidestake or MRC payout received from another\n"
     "staker's coinstake counts at face value; a coinstake this wallet staked counts only\n"
@@ -1255,6 +1345,9 @@ UniValue getreceivedbylabel(const UniValue& params)
     string strLabel = LabelFromValue(params[0]);
     set<CTxDestination> setAddress;
     GetAccountAddresses(strLabel, setAddress);
+
+    // Same default-label rollup as the account twin above.
+    if (strLabel.empty()) GetQualifyingUnbookedAddresses(setAddress, nMinDepth, ISMINE_ALL);
 
     return ValueFromAmount(TallyReceivedByAddresses(setAddress, nMinDepth));
 }
