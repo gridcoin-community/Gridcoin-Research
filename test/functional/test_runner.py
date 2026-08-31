@@ -197,6 +197,7 @@ BASE_SCRIPTS = [
     # can collide, reconnect, and assert the shorter node reorganizes. It was
     # in EXTENDED_SCRIPTS while it raced two stakers on the shared premine.
     'feature_reorg.py',
+    'feature_beacon_activation.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled
