@@ -503,6 +503,48 @@ BOOST_AUTO_TEST_CASE(multisig_combine_partial)
 // multisig address (as addmultisigaddress produces) where no single wallet can
 // complete the spend, so the combine step is genuinely exercised.
 // ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(arrangement_key_membership)
+{
+    CKey key1 = MakeKey();
+    CKey key2 = MakeKey();
+    CKey key3 = MakeKey();
+
+    CScript redeem;
+    redeem << OP_2
+           << key1.GetPubKey() << key2.GetPubKey() << key3.GetPubKey()
+           << OP_3 << OP_CHECKMULTISIG;
+
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.vin.resize(1);
+    mtx.vout.push_back(CTxOut(1 * COIN, P2PKH(MakeKey().GetPubKey().GetID())));
+
+    PartiallySignedTransaction psgt(mtx);
+    psgt.inputs[0].redeem_script = redeem;
+
+    const std::vector<CPubKey> arrangement = PSGTArrangementKeys(psgt);
+    BOOST_REQUIRE_EQUAL(arrangement.size(), 3u);
+    BOOST_CHECK(arrangement[0] == key1.GetPubKey());
+    BOOST_CHECK(arrangement[2] == key3.GetPubKey());
+
+    // Membership, not authorship: any one held key answers true.
+    CBasicKeyStore holds_one;
+    holds_one.AddKey(key2);
+    BOOST_CHECK(PSGTKeyHeldBy(holds_one, arrangement));
+
+    CBasicKeyStore holds_none;
+    holds_none.AddKey(MakeKey());
+    BOOST_CHECK(!PSGTKeyHeldBy(holds_none, arrangement));
+
+    // Non-multisig and inputless PSGTs have no arrangement.
+    PartiallySignedTransaction p2pkh_psgt(mtx);
+    p2pkh_psgt.inputs[0].redeem_script = P2PKH(key1.GetPubKey().GetID());
+    BOOST_CHECK(PSGTArrangementKeys(p2pkh_psgt).empty());
+
+    CMutableTransaction no_inputs;
+    BOOST_CHECK(PSGTArrangementKeys(PartiallySignedTransaction(no_inputs)).empty());
+}
+
 BOOST_AUTO_TEST_CASE(multisig_p2sh_combine_roundtrip)
 {
     CKey key1 = MakeKey();
