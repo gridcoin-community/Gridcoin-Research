@@ -798,11 +798,12 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     // runs in AppInit2 step 7 and pwalletMain is not constructed until step 8
     // (a zero-initialized global, so provably null here), while SetBestChain()
     // -> ReorganizeChain() dereferences pwalletMain the moment it disconnects
-    // anything: FixSpentCoins in the disconnect batch (node/chainman.cpp:348)
-    // fires on every disconnect with no null check. (The connect-side
-    // dereferences at :451-452/:463 are gated on stale mempool MRCs and cannot
-    // fire during startup.) A rewind to an ancestor always disconnects, since
-    // pcommon is the fork point and therefore never pindexBest.
+    // anything: the FixSpentCoins call in ReorganizeChain's disconnect branch
+    // (node/chainman.cpp) fires on every disconnect with no null check. (The
+    // connect-side dereferences in the same function are gated on stale
+    // mempool MRCs and cannot fire during startup.) A rewind to an ancestor
+    // always disconnects, since pcommon is the fork point and therefore never
+    // pindexBest.
     // So the repair path could only ever segfault a node that reached it. It has
     // been that way since the rewind was introduced: in that same tree init.cpp
     // already loaded the block index before constructing the wallet.
@@ -818,10 +819,10 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     // immediately after this function returns (issue #2865).
     if (nInconsistencies > 0)
     {
-        LogPrintf("WARN: LoadBlockIndex() : verification found %d inconsistency(ies), listed above. The tip "
+        LogPrintf("WARN: LoadBlockIndex() : verification found %d %s, listed above. The tip "
                   "has not been moved. Startup coherence recovery handles unreadable or mis-hashed blocks; "
                   "start with -reindex if the chain does not recover.",
-                  nInconsistencies);
+                  nInconsistencies, nInconsistencies == 1 ? "inconsistency" : "inconsistencies");
     }
 
     return true;
