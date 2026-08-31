@@ -43,9 +43,11 @@ pattern check runs against them. No edits to this file are required.
 
 Regression guard
 ----------------
-`src/rpc/server.cpp` asserts at startup that every registered command carries
-an `RPCHelpMan` accessor, so every discovered command must classify as
-converted -- except category aliases, whose help cannot be introspected through
+`CRPCCommand`'s constructor takes the `RPCHelpMan` accessor as a required
+parameter, and the C++ unit test `rpchelpman_tests/every_helpman_renders`
+fails on any registered command whose accessor is null or does not render
+(nothing asserts it at daemon startup). So every discovered command must
+classify as converted -- except category aliases, whose help cannot be introspected through
 the help RPC, and `ANY_RESULT_COMMANDS`, which render no Result section. Any
 other command classified as legacy means a conversion was reverted or the
 discovery walk broke. The guard scales with the command table and needs no

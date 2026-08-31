@@ -2,6 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include <base58.h>
+#include <crypto/sha256.h>
 #include <rpc/util.h>
 
 #include <rpc/client.h>
@@ -996,6 +998,32 @@ BOOST_AUTO_TEST_CASE(every_helpman_renders)
 
         BOOST_REQUIRE_NO_THROW(cmd->helpman().ToString());
     }
+}
+
+BOOST_AUTO_TEST_CASE(example_address_is_synthetic_and_valid)
+{
+    // The help-text example address must base58check-validate as a mainnet
+    // address, and its "no private key corresponds to it" property must be
+    // CHECKABLE, not asserted: the hash160 payload is the first 20 bytes of
+    // the SHA256 of the sentence below, not of any public key. Anyone can
+    // recompute it. The address appears verbatim in the help examples of
+    // listunspent, createrawtransaction, dumpprivkey, setaccount/getaccount
+    // and setlabel.
+    const std::string derivation =
+        "Gridcoin RPC help example address: the hash160 payload is the first "
+        "20 bytes of the SHA256 of this sentence, so no private key "
+        "corresponds to it.";
+
+    std::vector<unsigned char> decoded;
+    BOOST_REQUIRE(DecodeBase58Check("SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz", decoded));
+    BOOST_REQUIRE_EQUAL(decoded.size(), 21U);
+    BOOST_CHECK_EQUAL(decoded[0], 62); // mainnet PUBKEY_ADDRESS version byte
+
+    unsigned char digest[CSHA256::OUTPUT_SIZE];
+    CSHA256()
+        .Write(reinterpret_cast<const unsigned char*>(derivation.data()), derivation.size())
+        .Finalize(digest);
+    BOOST_CHECK(std::equal(decoded.begin() + 1, decoded.end(), digest));
 }
 
 BOOST_AUTO_TEST_CASE(every_helpman_arg_type_matches_client_conversion_table)

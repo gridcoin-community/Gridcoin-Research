@@ -443,8 +443,8 @@ static const RPCHelpMan setaccount_help{
     },
     RPCResult{RPCResult::Type::NONE, "", ""},
     RPCExamples{
-        HelpExampleCli("setaccount", "\"SHRkB34U4BeteDCzqFw6jkckzw5yojyK2t\" \"myaccount\"") +
-        HelpExampleRpc("setaccount", "\"SHRkB34U4BeteDCzqFw6jkckzw5yojyK2t\", \"myaccount\"")},
+        HelpExampleCli("setaccount", "\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\" \"myaccount\"") +
+        HelpExampleRpc("setaccount", "\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\", \"myaccount\"")},
 };
 const RPCHelpMan& setaccount_helpman() { return setaccount_help; }
 
@@ -489,8 +489,8 @@ static const RPCHelpMan getaccount_help{
     },
     RPCResult{RPCResult::Type::STR, "", "The account name (empty string for the default account)."},
     RPCExamples{
-        HelpExampleCli("getaccount", "\"SHRkB34U4BeteDCzqFw6jkckzw5yojyK2t\"") +
-        HelpExampleRpc("getaccount", "\"SHRkB34U4BeteDCzqFw6jkckzw5yojyK2t\"")},
+        HelpExampleCli("getaccount", "\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\"") +
+        HelpExampleRpc("getaccount", "\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\"")},
 };
 const RPCHelpMan& getaccount_helpman() { return getaccount_help; }
 
@@ -559,8 +559,8 @@ static const RPCHelpMan setlabel_help{
     },
     RPCResult{RPCResult::Type::NONE, "", ""},
     RPCExamples{
-        HelpExampleCli("setlabel", "\"SHRkB34U4BeteDCzqFw6jkckzw5yojyK2t\" \"tabby\"") +
-        HelpExampleRpc("setlabel", "\"SHRkB34U4BeteDCzqFw6jkckzw5yojyK2t\", \"tabby\"")},
+        HelpExampleCli("setlabel", "\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\" \"tabby\"") +
+        HelpExampleRpc("setlabel", "\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\", \"tabby\"")},
 };
 const RPCHelpMan& setlabel_helpman() { return setlabel_help; }
 
