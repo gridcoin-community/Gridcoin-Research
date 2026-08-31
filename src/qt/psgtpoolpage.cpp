@@ -151,8 +151,9 @@ void PSGTPoolPage::createTableModelIfReady()
 
             if (!row || row->image_hex != m_selected_image) continue;
 
-            m_table->setCurrentIndex(m_table_model->index(i, 0));
-            m_table->selectionModel()->select(
+            // One call sets the current index and the row selection
+            // together (a single selectionChanged emission).
+            m_table->selectionModel()->setCurrentIndex(
                 m_table_model->index(i, 0),
                 QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
             break;
