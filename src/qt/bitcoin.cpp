@@ -71,7 +71,6 @@
 #include <QSettings>
 #include <QGridLayout>
 #include <QDebug>
-#include <QTextCodec>
 #include <QLocale>
 #include <QTranslator>
 #include "qt/splashscreen.h"
@@ -185,7 +184,8 @@ static void SetupUIArgs(ArgsManager& argsman)
                    ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
     argsman.AddArg("-devsyntheticcoins=<n>[:<groups>]",
                    "DEV ONLY: substitute a synthetic coin-control source with <n> coins over "
-                   "<groups> address groups (default groups: 3) for windowed-model testing",
+                   "<groups> address groups (<groups> is clamped to <n>; default groups: 3) "
+                   "for windowed-model testing",
                    ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
     argsman.AddArg("-showorphans", "Include stale (orphaned) coinstake transactions in the transaction list",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);

@@ -731,11 +731,6 @@ void CConnman::ThreadSocketHandler()
     {
         PrintException(&e, "ThreadSocketHandler()");
     }
-    catch(boost::thread_interrupted&)
-    {
-        LogPrintf("ThreadSocketHandler exited (interrupt)");
-        return;
-    }
     catch (...)
     {
         throw; // support pthread_cancel()
@@ -1314,11 +1309,6 @@ void ThreadDNSAddressSeed(void* parg)
     {
         PrintException(&e, "ThreadDNSAddressSeed()");
     }
-    catch(boost::thread_interrupted&)
-    {
-        LogPrint(BCLog::LogFlags::NET, "ThreadDNSAddressSeed exited (interrupt)");
-        return;
-    }
     catch (...)
     {
         throw; // support pthread_cancel()
@@ -1414,11 +1404,6 @@ void ThreadDumpAddress(void* parg)
     {
         PrintException(&e, "ThreadDumpAddress()");
     }
-    catch(boost::thread_interrupted&)
-    {
-        LogPrintf("ThreadDumpAddress exited (interrupt)");
-        return;
-    }
     catch (...)
     {
         PrintException(nullptr, "ThreadDumpAddress");
@@ -1439,11 +1424,6 @@ void CConnman::ThreadOpenConnections()
     catch (std::exception& e)
     {
         PrintException(&e, "ThreadOpenConnections()");
-    }
-    catch(boost::thread_interrupted&)
-    {
-        LogPrintf("ThreadOpenConnections exited (interrupt)");
-        return;
     }
     catch (...)
     {
@@ -1620,11 +1600,6 @@ void CConnman::ThreadOpenAddedConnections()
     {
         PrintException(&e, "ThreadOpenAddedConnections()");
     }
-    catch(boost::thread_interrupted&)
-    {
-        LogPrintf("ThreadOpenAddedConnections exited (interrupt)");
-        return;
-    }
     catch (...)
     {
         PrintException(nullptr, "ThreadOpenAddedConnections()");
@@ -1741,11 +1716,6 @@ void CConnman::ThreadMessageHandler()
     catch (std::exception& e)
     {
         PrintException(&e, "ThreadMessageHandler()");
-    }
-    catch(boost::thread_interrupted&)
-    {
-        LogPrintf("ThreadMessageHandler exited (interrupt)");
-        return;
     }
     catch (...)
     {

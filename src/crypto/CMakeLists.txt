@@ -12,7 +12,6 @@ add_library(gridcoin_crypto_base STATIC
     sha256.cpp
     sha3.cpp
     sha512.cpp
-    siphash.cpp
     ../gridcoin/md5.c
 )
 
