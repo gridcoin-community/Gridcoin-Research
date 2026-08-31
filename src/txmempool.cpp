@@ -63,9 +63,11 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry)
         // on this class -- remove(), removeConflicts(), TrimToSize(),
         // DynamicMemoryUsage() -- already locks internally; this was the one whose
         // locking contract existed only in a comment. cs is a recursive mutex, so
-        // the single production caller (AcceptToMemoryPool, which holds pool.cs
-        // across its check-then-add so that mapNextTx cannot change underneath it)
-        // is unaffected.
+        // the single production caller (AcceptToMemoryPool, which calls from
+        // inside its own pool.cs store scope) is unaffected. What serializes
+        // that caller's exists()-check against this insert is cs_main, held
+        // for its whole call -- its pool.cs acquisitions are three separate
+        // scopes, not one continuous hold.
         LOCK(cs);
 
         // The rest of the caller contract stands, and is not about locking:
