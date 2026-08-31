@@ -1004,7 +1004,7 @@ BOOST_AUTO_TEST_CASE(example_address_is_synthetic_and_valid)
 {
     // The help-text example address must base58check-validate as a mainnet
     // address, and its synthetic provenance must be CHECKABLE, not asserted:
-    // the hash160 payload is the first 20 bytes of the SHA256 of the sentence
+    // the 20-byte pubkey-hash slot carries the first 20 bytes of the SHA256 of the sentence
     // below, not the hash of any public key. Anyone can recompute it. (This
     // proves the address was not derived from a key; producing a private key
     // that maps to it anyway would require a hash160 preimage attack.) The address appears verbatim in the help examples of
