@@ -342,11 +342,25 @@ class RpcHelpTest(GridcoinTestFramework):
             ", ".join(category_aliases) if category_aliases else "(none)",
         )
         if legacy:
-            self.log.info("Commands rendering no Result section: %s",
-                          ", ".join(sorted(legacy)))
+            self.log.info("Allowlisted ANY-result commands (no Result section): %s",
+                          ", ".join(sorted(set(legacy) & ANY_RESULT_COMMANDS)) or "(none)")
+            self.log.info("Unexpected legacy-classified commands: %s",
+                          ", ".join(sorted(set(legacy) - ANY_RESULT_COMMANDS)) or "(none)")
 
-        # Regression guard: every registered command carries an RPCHelpMan
-        # accessor (asserted in src/rpc/server.cpp), so anything classified as
+        # Vacuity guard first: an empty or broken discovery walk would satisfy
+        # the legacy check below with nothing discovered at all. The four
+        # allowlisted commands are pinned by name, so discovery must have seen
+        # every one of them.
+        discovered = set(name for name, _ in converted) | set(legacy)
+        missing = sorted(ANY_RESULT_COMMANDS - discovered)
+        assert not missing, (
+            f"Discovery walk did not find pinned commands {missing}; "
+            f"the walk itself is broken, so the legacy guard below is vacuous."
+        )
+
+        # Regression guard: CRPCCommand's constructor takes the RPCHelpMan
+        # accessor as a required parameter (the every_helpman_renders unit
+        # test enforces it renders), so anything classified as
         # legacy is either a reverted conversion, a broken discovery walk, or a
         # new ANY-result command that belongs in the allowlist above.
         # category-alias commands are excluded because their help text cannot
