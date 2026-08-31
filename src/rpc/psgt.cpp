@@ -962,8 +962,12 @@ static bool PoolEntryIsMine(const PSGTPoolEntry& entry)
 {
     if (!pwalletMain) return false;
 
+    // Decode outside the lock (pure computation); hold cs_wallet only for
+    // the key scan, as the inline predecessor did.
+    const std::vector<CPubKey> arrangement = PSGTArrangementKeys(entry.psgt);
+
     LOCK(pwalletMain->cs_wallet);
-    return PSGTKeyHeldBy(*pwalletMain, entry.psgt);
+    return PSGTKeyHeldBy(*pwalletMain, arrangement);
 }
 
 //! Render a pool entry for listpsgtpool/submitpsgt output.

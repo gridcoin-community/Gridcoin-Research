@@ -1981,7 +1981,10 @@ public:
         }
 
         // Does the wallet hold one of the multisig arrangement's keys?
-        return WITH_LOCK(m_wallet->cs_wallet, return PSGTKeyHeldBy(*m_wallet, entry->psgt));
+        // Decode outside the lock; scan under it (the inline predecessor's
+        // scopes, preserved).
+        const std::vector<CPubKey> arrangement = PSGTArrangementKeys(entry->psgt);
+        return WITH_LOCK(m_wallet->cs_wallet, return PSGTKeyHeldBy(*m_wallet, arrangement));
     }
 
 private:
@@ -2041,7 +2044,7 @@ private:
     {
         LOCK(m_wallet->cs_wallet);
 
-        if (!PSGTKeyHeldBy(*m_wallet, entry.psgt)) {
+        if (!PSGTKeyHeldBy(*m_wallet, PSGTArrangementKeys(entry.psgt))) {
             return PSGTRelevance::NOT_MINE;
         }
         return PSGTSignedBy(*m_wallet, entry.psgt)
