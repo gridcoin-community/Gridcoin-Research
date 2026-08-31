@@ -105,6 +105,19 @@ jobs:
           feature_stakelimit.py
           --ci --quiet --combinedlogslen=4000 --attempts=3
 
+      # test_runner.py drops an unknown script name with a WARNING and
+      # exits 0 even when NO requested script survives -- so a rename or
+      # removal of either EXTENDED script would leave this weekly job green
+      # while silently running nothing. Fail red instead, before running.
+      - name: Verify the extended scripts are still registered
+        run: |
+          for s in feature_stakelimit.py feature_reorg.py; do
+            grep -q "'$s'" test/functional/test_runner.py || {
+              echo "::error::$s is no longer in test_runner.py's script lists; this job would silently run nothing for it."
+              exit 1
+            }
+          done
+
       # Non-gating. --attempts only retries the known transient daemon
       # RPC-startup signature; sync failures are never retried, and feature_reorg
       # fails by sync_blocks timeout in roughly 13% of runs (see its note in
