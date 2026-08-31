@@ -795,11 +795,14 @@ bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     //
     // Until this was removed, an inconsistency armed a rewind to the fork point
     // through SetBestChain(). That could never have completed. LoadBlockIndex()
-    // runs in AppInit2 step 7 and pwalletMain is not constructed until step 8,
-    // while SetBestChain() -> ReorganizeChain() dereferences pwalletMain
-    // unconditionally as soon as it disconnects anything (node/chainman.cpp:348,
-    // and again at :451-452 and :463) -- and a rewind to an ancestor always
-    // disconnects, since pcommon is the fork point and therefore never pindexBest.
+    // runs in AppInit2 step 7 and pwalletMain is not constructed until step 8
+    // (a zero-initialized global, so provably null here), while SetBestChain()
+    // -> ReorganizeChain() dereferences pwalletMain the moment it disconnects
+    // anything: FixSpentCoins in the disconnect batch (node/chainman.cpp:348)
+    // fires on every disconnect with no null check. (The connect-side
+    // dereferences at :451-452/:463 are gated on stale mempool MRCs and cannot
+    // fire during startup.) A rewind to an ancestor always disconnects, since
+    // pcommon is the fork point and therefore never pindexBest.
     // So the repair path could only ever segfault a node that reached it. It has
     // been that way since the rewind was introduced: in that same tree init.cpp
     // already loaded the block index before constructing the wallet.
