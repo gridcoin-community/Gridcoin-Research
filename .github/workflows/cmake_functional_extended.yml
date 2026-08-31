@@ -95,16 +95,6 @@ jobs:
       #
       # The GRIDCOIND / GRIDCOINCLI overrides are the ones the `functional_tests`
       # CTest case supplies. The daemon doubles as the CLI.
-      - name: Run feature_stakelimit
-        env:
-          GRIDCOIND: ${{ github.workspace }}/build/bin/gridcoinresearchd
-          GRIDCOINCLI: ${{ github.workspace }}/build/bin/gridcoinresearchd
-        run: >-
-          python3 test/functional/test_runner.py
-          "--configfile=${{ github.workspace }}/build/test/config.ini"
-          feature_stakelimit.py
-          --ci --quiet --combinedlogslen=4000 --attempts=3
-
       # test_runner.py drops an unknown script name with a WARNING and
       # exits 0 even when NO requested script survives -- so a rename or
       # removal of either EXTENDED script would leave this weekly job green
@@ -117,6 +107,16 @@ jobs:
               exit 1
             }
           done
+
+      - name: Run feature_stakelimit
+        env:
+          GRIDCOIND: ${{ github.workspace }}/build/bin/gridcoinresearchd
+          GRIDCOINCLI: ${{ github.workspace }}/build/bin/gridcoinresearchd
+        run: >-
+          python3 test/functional/test_runner.py
+          "--configfile=${{ github.workspace }}/build/test/config.ini"
+          feature_stakelimit.py
+          --ci --quiet --combinedlogslen=4000 --attempts=3
 
       # Non-gating. --attempts only retries the known transient daemon
       # RPC-startup signature; sync failures are never retried, and feature_reorg
