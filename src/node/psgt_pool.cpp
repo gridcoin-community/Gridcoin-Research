@@ -386,7 +386,8 @@ PSGTPoolAddResult PSGTPool::Add(PSGTPoolEntry&& entry, std::string& reject_reaso
                     // re-download, re-deserialize and re-verify it on every
                     // announcement. Re-signing the same authorization produces
                     // different bytes (see the malleability note above), so a
-                    // peer can mint a fresh revision hash indefinitely.
+                    // member key holder can mint a fresh revision hash for
+                    // every defined sighash type per signed input.
                     //
                     // Damped in its own baseline-keyed set, NOT in
                     // m_recently_removed: this revision was never pooled, and
@@ -836,7 +837,11 @@ bool PSGTPool::IsDampedNoProgress(const uint256& revision_hash) const
     if (it == m_damped_no_progress.end()) return false;
     // Damp only while the baseline is still pooled under the same revision:
     // once it is evicted, replaced or removed, the comparison this entry
-    // records is stale and the offered revision must be revalidated.
+    // records is stale and the offered revision must be revalidated. The
+    // read path deliberately ignores the stored time -- while the baseline
+    // holds, the recorded comparison stays accurate, so age never makes the
+    // answer wrong. The TTL is garbage collection only, applied at insert
+    // time like m_recently_removed's.
     return m_by_revision.count(it->second.first) != 0;
 }
 
