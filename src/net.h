@@ -111,12 +111,6 @@ enum
 
 extern bool fDiscover;
 extern ServiceFlags nLocalServices;
-//! \brief Guards \ref mapAlreadyAskedFor. Written and read from
-//! ProcessMessage handlers (under cs_main) for the TX / BLOCK paths,
-//! from ProcessBlock, from SendMessages' getdata loop, and from
-//! CSplitBlob::RecvPart on the scraper PART path which does NOT hold
-//! cs_main. A dedicated leaf-level mutex avoids hoisting cs_main into
-//! the PART path and keeps the lock as narrow as possible.
 extern ThreadHandler* netThreads;
 
 

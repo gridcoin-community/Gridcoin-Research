@@ -124,6 +124,13 @@ public:
     //! in net_processing (it is request tracking, which is this layer's job, and
     //! net.h must not depend on this header). Applies the two-minute per-item
     //! backoff and pushes onto the peer's own mapAskFor priority queue.
+    //!
+    //! Lifetime contract for the null guards at external call sites
+    //! (scraper_net, chainman): g_peerman outlives every calling thread --
+    //! StopNode() joins the net and scraper threads before init resets the
+    //! pointer -- so `if (g_peerman)` there is defensive, never load-bearing.
+    //! A change to shutdown ordering must revisit those guards: a null here
+    //! silently drops a request rather than failing.
     virtual void AskFor(CNode* pnode, const CInv& inv) = 0;
 
     //! \brief Forget that an inventory item was requested.
