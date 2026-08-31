@@ -112,4 +112,40 @@ BOOST_AUTO_TEST_CASE(it_returns_empty_for_empty_candidate_list)
     BOOST_CHECK(GRC::ResolveBoincDataDir(candidates).empty());
 }
 
+//! A candidate the process is not allowed to stat has to read as absent.
+//!
+//! boost::filesystem::exists() throws filesystem_error on EACCES rather than
+//! returning false. The distro BOINC packages install /var/lib/boinc-client owned
+//! by the boinc user with mode 0750, so a wallet running as an ordinary user
+//! cannot probe it -- and the exception unwound all the way out of AppInit and
+//! aborted the daemon at startup.
+BOOST_AUTO_TEST_CASE(it_skips_a_candidate_it_cannot_probe)
+{
+    BoincDataDirTestSetup setup;
+
+    fs::path unreadable = setup.CreateActiveDir("unreadable");
+    fs::path readable = setup.CreateActiveDir("readable");
+
+    fs::permissions(unreadable, fs::no_perms);
+
+    // Root ignores the mode bits, and not every filesystem carries them, so
+    // confirm the probe really is blocked before asserting on the consequence.
+    boost::system::error_code probe;
+    fs::exists(unreadable / "client_state.xml", probe);
+
+    if (!probe) {
+        fs::permissions(unreadable, fs::owner_all);
+        BOOST_TEST_MESSAGE("skipped: this process can still probe a no-perms directory");
+        return;
+    }
+
+    std::vector<fs::path> candidates = {unreadable, readable};
+    const fs::path resolved = GRC::ResolveBoincDataDir(candidates);
+
+    // Restore before the assertion so the fixture can always clean up.
+    fs::permissions(unreadable, fs::owner_all);
+
+    BOOST_CHECK_EQUAL(resolved, readable);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
