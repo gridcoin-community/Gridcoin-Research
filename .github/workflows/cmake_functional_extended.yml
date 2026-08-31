@@ -112,7 +112,7 @@ jobs:
       - name: Verify the extended scripts are still registered
         run: |
           for s in feature_stakelimit.py feature_reorg.py; do
-            grep -q "'$s'" test/functional/test_runner.py || {
+            grep -qF "'$s'" test/functional/test_runner.py || {
               echo "::error::$s is no longer in test_runner.py's script lists; this job would silently run nothing for it."
               exit 1
             }
