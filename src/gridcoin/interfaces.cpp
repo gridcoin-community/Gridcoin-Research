@@ -1984,6 +1984,7 @@ public:
         // Decode outside the lock; scan under it (the inline predecessor's
         // scopes, preserved).
         const std::vector<CPubKey> arrangement = PSGTArrangementKeys(entry->psgt);
+        if (arrangement.empty()) return false;
         return WITH_LOCK(m_wallet->cs_wallet, return PSGTKeyHeldBy(*m_wallet, arrangement));
     }
 

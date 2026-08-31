@@ -255,8 +255,9 @@ std::vector<CPubKey> PSGTArrangementKeys(const PartiallySignedTransaction& psgt)
  * not authorship. Says nothing about whether that key has signed; pair it
  * with PSGTSignedBy for that. Feed it PSGTArrangementKeys' result.
  *
- * The caller must hold the provider's lock (cs_wallet for a CWallet) so the
- * scan is atomic against key-set changes.
+ * The caller must hold whatever lock guards the provider's key set --
+ * cs_wallet for a CWallet; a plain CBasicKeyStore in a single-threaded test
+ * needs none -- so the scan is atomic against key-set changes.
  */
 bool PSGTKeyHeldBy(const SigningProvider& provider,
                    const std::vector<CPubKey>& arrangement_keys);
