@@ -31,7 +31,7 @@
 #include <QDesktopServices>
 #include <QThread>
 #include <QStandardPaths>
-#include <QRegExp>
+#include <QRegularExpression>
 
 #ifdef WIN32
 #ifdef _WIN32_IE
@@ -384,11 +384,16 @@ QString getSaveFileName(QWidget *parent, const QString &caption,
     QString result = QFileDialog::getSaveFileName(parent, caption, myDir, filter, &selectedFilter);
 
     /* Extract first suffix from filter pattern "Description (*.foo)" or "Description (*.foo *.bar ...) */
-    QRegExp filter_re(".* \\(\\*\\.(.*)[ \\)]");
+    // \A...\z reproduces QRegExp::exactMatch, which anchored the whole subject
+    // implicitly where QRegularExpression::match does not. This is the form
+    // QRegularExpression::anchoredPattern() generates; it is spelled out because
+    // that helper is Qt 5.12 and this tree still builds against 5.9.5.
+    QRegularExpression filter_re("\\A(?:.* \\(\\*\\.(.*)[ \\)])\\z");
     QString selectedSuffix;
-    if(filter_re.exactMatch(selectedFilter))
+    const QRegularExpressionMatch filter_match = filter_re.match(selectedFilter);
+    if(filter_match.hasMatch())
     {
-        selectedSuffix = filter_re.cap(1);
+        selectedSuffix = filter_match.captured(1);
     }
 
     /* Add suffix if needed */

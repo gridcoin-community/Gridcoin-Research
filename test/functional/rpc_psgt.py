@@ -38,10 +38,10 @@ class RpcPsgtTest(GridcoinTestFramework):
 
         # stake so we have a mature, tx-indexed coinstake output to spend
         node.generatetoaddress(10, node.getnewaddress())
-        utxo = min(node.listunspent(0), key=lambda u: u["confirmations"])
+        utxo, amount = self.newest_coinstake_utxo(node)
         inputs = [{"txid": utxo["txid"], "vout": utxo["vout"]}]
         dest = node.getnewaddress()
-        outputs = {dest: utxo["amount"] - 1}  # amounts are Decimal from authproxy
+        outputs = {dest: amount}
 
         # --- createpsgt + decodepsgt round-trip ---
         psgt = node.createpsgt(inputs, outputs)

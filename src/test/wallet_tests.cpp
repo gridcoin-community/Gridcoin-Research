@@ -765,6 +765,51 @@ BOOST_AUTO_TEST_CASE(wallet_update_spent_does_not_notify_the_transaction_itself)
     pwalletMain->EraseFromWallet(hash);
 }
 
+//!
+//! \brief CWallet::AddCScript must be idempotent.
+//!
+//! Regression for the non-idempotency shared by addmultisigaddress, addredeemscript and
+//! createhtlc. CCryptoKeyStore::AddCScript assigns into mapScripts unconditionally, so a
+//! repeat add always succeeds in memory; the failure came from CWalletDB::WriteCScript
+//! writing with fOverwrite=false, which makes BDB return DB_KEYEXIST on the duplicate key.
+//! AddCScript then returned false and the RPCs threw "AddCScript() failed" -- even though
+//! the wallet held the script and could sign with it.
+//!
+//! This exercises the real path: the fixture's wallet is file-backed (CWallet("wallet.dat")
+//! over bitdb.MakeMock()), so WriteCScript is actually reached. A wallet with
+//! fFileBacked == false would return true early and the test would pass vacuously.
+//!
+BOOST_AUTO_TEST_CASE(addcscript_is_idempotent)
+{
+    BOOST_REQUIRE(pwalletMain != nullptr);
+
+    // A distinctive, valid redeem script. Content does not matter, only that it is stable
+    // so every add hashes to the same key.
+    CScript redeem_script = CScript() << OP_1 << OP_DROP << OP_TRUE;
+    const CScriptID script_id{redeem_script};
+
+    // Deliberately NOT asserting initial absence. pwalletMain is a shared
+    // BOOST_GLOBAL_FIXTURE, so asserting the script is missing would make this case
+    // order-dependent if any other test ever adds the same script id. It would also add
+    // no coverage: if the script were already present, every add below is a duplicate
+    // add, which is precisely the path under test. Seed it, then repeat.
+    BOOST_CHECK(pwalletMain->AddCScript(redeem_script));
+    BOOST_CHECK(pwalletMain->HaveCScript(script_id));
+
+    // Second add of the IDENTICAL script must also succeed. This is the regression: it
+    // previously returned false because the duplicate BDB write was rejected.
+    BOOST_CHECK(pwalletMain->AddCScript(redeem_script));
+
+    // ...and a third, to show it is not a one-shot tolerance.
+    BOOST_CHECK(pwalletMain->AddCScript(redeem_script));
+
+    // The script is still retrievable and unchanged after the repeat adds.
+    BOOST_CHECK(pwalletMain->HaveCScript(script_id));
+    CScript fetched;
+    BOOST_CHECK(pwalletMain->GetCScript(script_id, fetched));
+    BOOST_CHECK(fetched == redeem_script);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(wallet_integration_tests)

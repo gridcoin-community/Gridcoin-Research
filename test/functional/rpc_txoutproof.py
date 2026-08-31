@@ -86,10 +86,10 @@ class RpcTxoutProofTest(GridcoinTestFramework):
         # stack generatetoaddress excludes mempool txs, so it stays unconfirmed and
         # has no containing block. (sendtoaddress is avoided: its coin selection can
         # pick the non-tx-indexed premine coinbase, which the wallet then rejects.)
-        cs = min(node.listunspent(0), key=lambda u: u["confirmations"])
+        cs, amount = self.newest_coinstake_utxo(node)
         dest = node.getnewaddress()
         raw = node.createrawtransaction(
-            [{"txid": cs["txid"], "vout": cs["vout"]}], {dest: cs["amount"] - 1})
+            [{"txid": cs["txid"], "vout": cs["vout"]}], {dest: amount})
         signed = node.signrawtransactionwithwallet(raw)
         assert signed.get("complete"), signed
         mempool_txid = node.sendrawtransaction(signed["hex"])
