@@ -517,10 +517,10 @@ BOOST_AUTO_TEST_CASE(pool_registry_active_pools_contains_grandfathered_builtins)
     GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
 
     // The registry boots with the 5 builtin pools seeded by the
-    // constructor (plan §3). All 5 are ACTIVE. (Registry::Add path
-    // exercising via real contracts requires ContractContext +
-    // CBlockIndex mocking — tracked as follow-up work in the test
-    // plan / PR body.)
+    // constructor (plan §3). All 5 are ACTIVE. The Registry::Add path
+    // through real contracts is exercised by the PoolLifecycleFixture
+    // cases below, which do the ContractContext + CBlockIndex mocking
+    // this note used to defer.
     const std::vector<GRC::Pool> active = registry.ActivePools();
     BOOST_CHECK_EQUAL(active.size(), GRC::PoolRegistry::BuiltinPoolSeeds().size());
 }
@@ -862,6 +862,55 @@ BOOST_FIXTURE_TEST_CASE(register_on_nonbuiltin_reverts_cleanly_without_touching_
         BOOST_CHECK(registry.IsActivePool(builtin));
         BOOST_CHECK_EQUAL(registry.ActivePools().size(), builtin_count);
     }
+}
+
+BOOST_FIXTURE_TEST_CASE(pool_contract_rejected_while_v15_inert, PoolLifecycleFixture)
+{
+    // The V15 activation gate itself. Every other consensus-path case in this
+    // file forces it open with -blockv15height=0, so nothing asserted that a
+    // POOL contract is REJECTED while V15 is inert -- which is the behaviour
+    // actually in force on mainnet and testnet today, both of which still carry
+    // the INT_MAX sentinel in chainparams.
+    //
+    // Third bullet of the #2955 lifecycle-test deferral; the other two shipped
+    // inside #2955 itself.
+
+    LOCK(cs_main);
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    const GRC::Cpid cpid = PoolTestKey::Cpid(); // non-builtin
+    BOOST_REQUIRE(!registry.IsBuiltin(cpid));
+
+    CBlockIndex pindex;
+    pindex.nHeight = 100;
+
+    // Same setup as the takeover case: a live operator-claimed entry, then a
+    // routine operator-signed update. That combination is known to be accepted
+    // when V15 is active, which is what makes the gate the only variable here.
+    CKey operator_key = PoolTestKey::Private();
+    GRC::Pool entry(cpid, "legitpool", "https://legit.example/", operator_key.GetPubKey());
+    entry.m_status = GRC::PoolStatus::ACTIVE;
+    entry.m_height = 50;
+    entry.m_hash = GRC::PoolRegistry::BuiltinSeedHash(cpid);
+    registry.SeedForTests(entry);
+
+    GRC::PoolRegisterPayload payload(cpid, "legitpool", "https://legit.example/",
+                                     operator_key.GetPubKey());
+    BOOST_REQUIRE(payload.Sign(operator_key, GRC::ContractAction::ADD, entry.m_hash));
+    GRC::Contract contract = GRC::MakeContract<GRC::PoolRegisterPayload>(
+        GRC::ContractAction::ADD, std::move(payload));
+    const CTransaction tx = MakePoolTx(std::move(contract), 31);
+
+    // The fixture leaves -blockv15height at the chainparams sentinel.
+    int dos_inert = 0;
+    BOOST_CHECK(!GRC::BlockValidateContracts(&pindex, tx, dos_inert));
+
+    // The same contract against the same registry state, with V15 active, is
+    // accepted. Without this half the rejection above would pass just as well
+    // for a malformed payload or a bad signature, and would pin nothing.
+    gArgs.ForceSetArg("-blockv15height", "0");
+    int dos_active = 0;
+    BOOST_CHECK(GRC::BlockValidateContracts(&pindex, tx, dos_active));
 }
 
 BOOST_FIXTURE_TEST_CASE(takeover_register_rejected_operator_register_accepted, PoolLifecycleFixture)

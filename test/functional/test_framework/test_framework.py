@@ -832,6 +832,41 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         peer.version_time = node.mock_now()
         return node.add_p2p_connection(peer)
 
+    def newest_coinstake_utxo(self, node, fee=Decimal("1.0")):
+        """Return (utxo, spend_amount) for the most-recently-staked output.
+
+        Several tests independently did:
+
+            u = min(node.listunspent(0), key=lambda x: x["confirmations"])
+            amount = u["amount"] - 1
+
+        The output with the fewest confirmations is a coinstake, which is
+        tx-indexed -- never the height-0 premine coinbase, which the wallet
+        refuses to spend. None of those call sites checked that `amount` stayed
+        positive.
+
+        It is positive today only because sidestaking is off by default. Stake
+        splitting cannot drive it negative: MIN_STAKE_SPLIT_VALUE_GRC
+        (src/amount.h) is a hard 800 GRC clamp applied with max() in
+        src/miner.cpp, so every split output is at least 800 GRC. Sidestake
+        outputs have no such floor -- src/miner.cpp computes `allocation *
+        nReward` with no clamp, and the regtest constant block reward is 10 GRC
+        (src/chainparams.cpp) -- so `-enablesidestaking=1 -sidestake=<addr>,5`
+        puts a 0.5 GRC output at the same confirmation depth and `amount - fee`
+        goes negative.
+
+        Assert rather than silently build a negative-value transaction.
+        """
+        utxo = min(node.listunspent(0), key=lambda u: u["confirmations"])
+        amount = utxo["amount"] - fee
+        assert amount > 0, (
+            f"newest coinstake output {utxo['txid']}:{utxo['vout']} holds "
+            f"{utxo['amount']} GRC, which cannot cover a {fee} GRC fee. "
+            f"If this node runs with -enablesidestaking, a sidestake output "
+            f"shares the coinstake's confirmation count and has no minimum size."
+        )
+        return utxo, amount
+
     def grow_utxo_universe(self, funder, count=48, *, agree_with=None, confirm_on=None):
         """Fan one mature premine UTXO on `funder` into `count` ordinary,
         consensus-agreed outputs so a test's mature-UTXO funding scan never runs

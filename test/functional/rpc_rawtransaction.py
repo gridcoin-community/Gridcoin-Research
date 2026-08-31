@@ -38,9 +38,8 @@ class RpcRawTransactionTest(GridcoinTestFramework):
 
         # stake so we have a mature, tx-indexed coinstake output to spend
         node.generatetoaddress(10, node.getnewaddress())
-        utxo = min(node.listunspent(0), key=lambda u: u["confirmations"])
+        utxo, amount = self.newest_coinstake_utxo(node)  # ~1 GRC fee
         dest = node.getnewaddress()
-        amount = utxo["amount"] - 1  # ~1 GRC fee (amounts are Decimal from authproxy)
 
         # --- createrawtransaction ---
         raw = node.createrawtransaction(
