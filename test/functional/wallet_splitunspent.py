@@ -50,7 +50,11 @@ class WalletSplitUnspentTest(GridcoinTestFramework):
         self.num_nodes = 1
         self.chain = "regtest"
         self.setup_clean_chain = True
-        self.extra_args = [["-staking=0", "-connect=0", "-listen=0", "-devbuild=override"]]
+        # -paytxfee pins nTransactionFee to the current default explicitly:
+        # the exact-fee assertions below (per-piece floor, conservation sums)
+        # depend on it, and this keeps them valid if the default ever moves.
+        self.extra_args = [["-staking=0", "-connect=0", "-listen=0", "-devbuild=override",
+                            "-paytxfee=0.001"]]
 
     def setup_network(self):
         # Single isolated regtest node; bypass the base regtest createwallet path
@@ -299,6 +303,9 @@ class WalletSplitUnspentTest(GridcoinTestFramework):
         # no-op rather than an error.
         assert_equal(node.splitunspent(node.getnewaddress(), 0, 10),
                      {"result": False, "utxos_swept": 0})
+        info = node.validateaddress(FOREIGN_ADDRESS)
+        assert_equal(info["isvalid"], True)   # self-check the constant's claim
+        assert_equal(info["ismine"], False)
         assert_equal(node.splitunspent(FOREIGN_ADDRESS, 0, 10),
                      {"result": False, "utxos_swept": 0})
 

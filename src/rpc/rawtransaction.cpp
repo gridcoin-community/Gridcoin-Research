@@ -1131,8 +1131,8 @@ static const RPCHelpMan splitunspent_help{
             "Target value of each piece. 0, null or omitted means unset; use piece_count or the "
             "optimal-size default."},
         {"piece_count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-            "Number of pieces to create. 0, null or omitted means unset; use piece_size or the "
-            "optimal-size default."},
+            "Number of pieces to create, as a JSON integer (strings are not accepted). 0, null or "
+            "omitted means unset; use piece_size or the optimal-size default."},
     },
     RPCResult{RPCResult::Type::OBJ, "", "",
         {
