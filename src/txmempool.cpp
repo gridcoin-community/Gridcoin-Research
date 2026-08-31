@@ -172,7 +172,7 @@ bool CTxMemPool::removeConflicts(const CTransaction &tx)
         if (it != mapNextTx.end()) {
             const CTransaction &txConflict = *it->second.ptx;
             if (txConflict != tx)
-                remove(txConflict, true);
+                remove(txConflict, true, MemPoolRemovalReason::CONFLICT);
         }
     }
     return true;

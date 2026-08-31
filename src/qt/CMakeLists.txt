@@ -180,10 +180,6 @@ target_link_libraries(gridcoinqt PUBLIC
     gridcoin_util
 )
 
-if(USE_QT6)
-    target_link_libraries(gridcoinqt PUBLIC ${QT}::Core5Compat)
-endif()
-
 # Dev-only (#3183): run QAbstractItemModelTester over the coin-selection model
 # on every mutation. Needs the QtTest module; NEVER enable at pathological
 # -devsyntheticcoins scales — the tester re-walks the model per signal.

@@ -16,12 +16,20 @@ name: CMake Multiprocess Builds
 #                     not runnable under Wine (see below), so build_targets.sh skips
 #                     ctest for MP win64. The monolithic win64 job in
 #                     cmake_production.yml still runs the full suite under Wine.
-#   - Linux ARMhf   — 32-bit, emulated-native (the ODROID-XU4 environment where
-#                     the MP build was first exercised on armv7l).
+#   - Linux ARMhf   — 32-bit armv7l (the ODROID-XU4 environment where the MP build
+#                     was first exercised). CROSS-COMPILED, with only ctest run under
+#                     QEMU. It was originally built emulated-native because a
+#                     cross-built mpgen cannot run on the amd64 runner; that is now
+#                     solved by building mpgen for the host and passing
+#                     MPGEN_EXECUTABLE, the same way cmake_production.yml cross-builds
+#                     ARM64 with multiprocess. Emulating the compiler cost ~4h20m per
+#                     run and bought nothing over cross-compiling.
 #
-# All four call build_targets.sh with ENABLE_MULTIPROCESS=true, which installs
-# Cap'n Proto (install_deps 4th arg), passes MULTIPROCESS=1 to depends, sets
-# -DENABLE_MULTIPROCESS=ON and builds. The three Linux jobs also run ctest
+# The native, depends and win64 jobs call build_targets.sh with
+# ENABLE_MULTIPROCESS=true, which installs Cap'n Proto (install_deps 4th arg), passes
+# MULTIPROCESS=1 to depends, sets -DENABLE_MULTIPROCESS=ON and builds. ARMhf configures
+# cmake directly instead, because a cross build needs the toolchain, the :armhf runtime
+# packages and MPGEN_EXECUTABLE wired up explicitly. The three Linux jobs also run ctest
 # (compile + link + test_gridcoin); win64 is build + link only because the MP
 # runtime (kj event loop + socket/wakeup-pipe IPC) trips Wine's incomplete
 # emulation while running fine on native Windows. The monolithic matrix in the
@@ -129,35 +137,145 @@ jobs:
             ENABLE_MULTIPROCESS=true
 
   # ----------------------------------------------------------------------
-  # Linux ARMhf — 32-bit, emulated-native (the ODROID-XU4 environment).
-  # Runs the standard native build_targets path inside a linux/arm/v7 container
-  # via binfmt/QEMU — the same "everything is armhf" model as the odroid, which
-  # sidesteps the host/target Cap'n Proto generator split a cross build needs.
-  # Slower than the cross jobs (full build under emulation); zero errors on the
-  # odroid, so this is regression coverage for the 32-bit MP surface.
+  # Linux ARMhf — 32-bit (the ODROID-XU4 environment). Regression coverage for the
+  # 32-bit MP surface; zero errors on the odroid.
+  #
+  # CROSS-COMPILED on the amd64 runner; only the armhf BINARIES run under QEMU. This
+  # job previously ran the whole build_targets path inside a linux/arm/v7 container,
+  # which sidestepped the host/target Cap'n Proto generator split — at the cost of
+  # emulating gcc, and ~4h20m per run. That split is now handled the same way
+  # cmake_production.yml handles it for ARM64: build mpgen for the host and pass
+  # MPGEN_EXECUTABLE to the cross configure.
+  #
+  # Both test layers still execute as armhf: ctest via qemu-arm-static, and the
+  # functional suite via the check-functional target, whose daemon runs through the
+  # binfmt handler. That second step is load-bearing — functional_tests is registered
+  # only when NOT CMAKE_CROSSCOMPILING, and this is the only job in CI running the
+  # functional suite on a non-x86-64, 32-bit target.
   # ----------------------------------------------------------------------
   mp-linux-armhf:
-    name: MP Linux ARMhf (emulated native)
+    name: MP Linux ARMhf (cross-compiled)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up QEMU
+      # QEMU is needed to RUN the armhf binaries, not to build them: it backs both the
+      # emulated ctest and the functional suite, whose daemon executes through the binfmt
+      # handler this registers. The build itself is a native cross-compile.
+      #
+      # The previous form ran install_dependencies.sh AND build_targets.sh inside a
+      # linux/arm/v7 container, so gcc itself executed under emulation and the job took
+      # ~4h20m -- the longest in the whole matrix. Emulating the compiler bought nothing;
+      # emulating the test binaries is the part that actually needs armhf.
+      - name: Set up QEMU (binfmt handler for the armhf test binaries)
         uses: docker/setup-qemu-action@v3
         with:
           platforms: linux/arm/v7
 
-      - name: Build + Test (multiprocess, armhf container)
+      - name: Add ARMhf Architecture
         run: |
-          docker run --rm --platform linux/arm/v7 \
-            -v "${{ github.workspace }}":/mnt/host_source:ro \
-            ubuntu:24.04 \
-            /bin/bash -c ' \
-              export DEBIAN_FRONTEND=noninteractive && \
-              apt-get update && apt-get install -y sudo which git ca-certificates && \
-              mkdir -p /work && cp -r /mnt/host_source/. /work && cd /work && \
-              chmod +x install_dependencies.sh build_targets.sh && \
-              ./build_targets.sh \
-                TARGET=native \
-                BUILD_TYPE=${{ env.BUILD_TYPE }} \
-                ENABLE_MULTIPROCESS=true'
+          sudo dpkg --add-architecture armhf
+          sudo add-apt-repository -y universe
+          sudo add-apt-repository -y multiverse
+          sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
+          cat <<EOF | sudo tee /etc/apt/sources.list.d/armhf.list
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-security main universe multiverse restricted
+          EOF
+          sudo apt-get update
+
+      # Same set as the compatibility ARMhf job (which is proven to build and TEST armhf),
+      # plus Cap'n Proto. libcapnp-dev:armhf is the target library; libcapnp-dev and
+      # capnproto are the HOST ones, needed to build mpgen for the host below.
+      - name: Install ARMhf Toolchain, Qt6 and Cap'n Proto
+        run: |
+          sudo dpkg --remove --force-all libcurl4-openssl-dev libcurl4-gnutls-dev libcups2 libcups2t64 || true
+          sudo apt-get update
+          sudo apt-get -f install -y
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build zipcmp zipmerge ziptool qemu-user-static \
+            g++-arm-linux-gnueabihf qt6-base-dev:armhf qt6-charts-dev:armhf qt6-svg-dev:armhf \
+            qt6-l10n-tools:armhf qt6-tools-dev:armhf qt6-tools-dev-tools:armhf \
+            libqt6core5compat6-dev:armhf libssl-dev:armhf libzip-dev:armhf \
+            libcurl4-openssl-dev:armhf libboost-system-dev:armhf libboost-filesystem-dev:armhf \
+            libboost-thread-dev:armhf libboost-iostreams-dev:armhf libboost-program-options-dev:armhf \
+            libboost-serialization-dev:armhf libboost-chrono-dev:armhf libboost-test-dev:armhf \
+            libminiupnpc-dev:armhf libqrencode-dev:armhf libxkbcommon-dev:armhf \
+            libcups2t64:armhf \
+            libcapnp-dev:armhf libcapnp-dev capnproto \
+            ccache
+
+      - name: Setup Concurrency
+        run: |
+          if [ -z "$CMAKE_BUILD_PARALLEL_LEVEL" ]; then
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "CTEST_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+          fi
+
+      - name: Configure Ccache
+        uses: actions/cache@v5
+        with:
+          path: ~/.ccache
+          key: ccache-mp-armhf-cross-${{ github.sha }}
+          restore-keys: ccache-mp-armhf-cross-
+
+      # mpgen is a code generator that must RUN on the build host. A cross build would
+      # produce an armhf mpgen that cannot execute on the amd64 runner; the build then
+      # invokes the target NAME as a command and dies with
+      # "Libmultiprocess::mpgen: not found". Build it for the host first and hand the
+      # cross configure the path via MPGEN_EXECUTABLE, which the subtree exposes for
+      # exactly this case. Same approach as the ARM64 cross job in cmake_production.yml.
+      - name: Build native mpgen (cross-build code generator)
+        run: |
+          cmake -B build_mpgen_native -S src/ipc/libmultiprocess -GNinja \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build_mpgen_native --target mpgen -j"${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}"
+          MPGEN_BIN=$(find build_mpgen_native -name mpgen -type f -perm -u+x | head -n 1)
+          test -x "$MPGEN_BIN" || { echo "native mpgen not found"; exit 1; }
+          echo "MPGEN_BIN=$MPGEN_BIN" >> $GITHUB_ENV
+
+      - name: Configure CMake (Cross, multiprocess)
+        env:
+          PKG_CONFIG_PATH: /usr/lib/arm-linux-gnueabihf/pkgconfig
+        run: |
+          cmake -B build_armhf -GNinja \
+            -DMPGEN_EXECUTABLE="${MPGEN_BIN}" \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=arm \
+            -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
+            -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
+            -DCMAKE_C_COMPILER_TARGET=arm-linux-gnueabihf \
+            -DCMAKE_FIND_ROOT_PATH="/usr/lib/arm-linux-gnueabihf;/usr/include/arm-linux-gnueabihf" \
+            -DCMAKE_SYSROOT=/ \
+            -DENABLE_GUI=ON \
+            -DUSE_QT6=ON \
+            -DQt6_DIR=/usr/lib/arm-linux-gnueabihf/cmake/Qt6 \
+            -DENABLE_TESTS=ON \
+            -DENABLE_MULTIPROCESS=ON \
+            -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/qemu-arm-static \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build build_armhf
+
+      - name: Test (QEMU Emulation)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build_armhf --output-on-failure
+
+      # The unit suites above come from ctest. functional_tests is NOT auto-registered
+      # for a cross build (CMakeLists.txt guards the add_test on NOT CMAKE_CROSSCOMPILING),
+      # so run it explicitly via the check-functional target, which IS defined for cross
+      # builds and drives the same test_runner.py.
+      #
+      # This is the coverage the previous emulated-native job provided and must not be
+      # lost: this is the ONLY job in CI that runs the functional suite on a non-x86-64,
+      # 32-bit target. Host python3 drives the runner while the armhf gridcoinresearchd it
+      # spawns executes through the binfmt handler registered by setup-qemu-action above.
+      - name: Functional tests (armhf daemon under QEMU binfmt)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: cmake --build build_armhf --target check-functional

@@ -32,6 +32,7 @@
 #include "server.h"
 #include "streams.h"
 #include "txdb.h"
+#include <util/strencodings.h>
 #include <util/string.h>
 #include "validation.h"
 #include "wallet/coincontrol.h"
@@ -695,8 +696,8 @@ static const RPCHelpMan listunspent_help{
         }},
     RPCExamples{
         HelpExampleCli("listunspent", "") +
-        HelpExampleCli("listunspent", "6 9999999 \"[\\\"S1Example\\\"]\"") +
-        HelpExampleRpc("listunspent", "6, 9999999, [\"S1Example\"]")},
+        HelpExampleCli("listunspent", "6 9999999 \"[\\\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\\\"]\"") +
+        HelpExampleRpc("listunspent", "6, 9999999, [\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\"]")},
 };
 const RPCHelpMan& listunspent_helpman() { return listunspent_help; }
 
@@ -1104,7 +1105,10 @@ static const RPCHelpMan splitunspent_help{
     "sent back to the same address. Any remainder is returned to the same address as change, so the\n"
     "entire balance stays on the address. This is the inverse of consolidateunspent.\n"
     "\n"
-    "At most one of piece_size and piece_count may be provided (nonzero); pass 0 for the one not used.\n"
+    "At most one of piece_size and piece_count may be provided (nonzero); for the one not used\n"
+    "pass 0 or null, or omit it. piece_size reads its token with the amount grammar, so any number\n"
+    "or string an amount parse reads as exactly zero (\"0\", \"0.0\", \"-0\") is the unset sentinel;\n"
+    "piece_count accepts only a JSON integer or null.\n"
     "With piece_size, the balance is split into as many pieces of that value as fit after the fee.\n"
     "With piece_count, the balance less the fee is divided into that many equal pieces. With neither,\n"
     "pieces are sized to the efficiency-optimal stake output value for the current network difficulty,\n"
@@ -1124,9 +1128,11 @@ static const RPCHelpMan splitunspent_help{
         {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
             "The Gridcoin address whose UTXOs will be split. Pieces and change return to this address."},
         {"piece_size", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
-            "Target value of each piece. 0 (or omitted) means unset; use piece_count or the optimal-size default."},
+            "Target value of each piece. 0, null or omitted means unset; use piece_count or the "
+            "optimal-size default."},
         {"piece_count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-            "Number of pieces to create. 0 (or omitted) means unset; use piece_size or the optimal-size default."},
+            "Number of pieces to create, as a JSON integer (strings are not accepted). 0, null or "
+            "omitted means unset; use piece_size or the optimal-size default."},
     },
     RPCResult{RPCResult::Type::OBJ, "", "",
         {
@@ -1163,13 +1169,20 @@ UniValue splitunspent(const UniValue& params)
     int nPieceCount = 0;
 
     // 0 is the unset sentinel and must be handled before conversion, because AmountFromValue
-    // throws on any value <= 0.
-    if (params.size() > 1 && !(params[1].isNum() && params[1].get_real() == 0.0))
+    // throws on any value <= 0. Read the token the same way AmountFromValue reads it, so the
+    // sentinel is honored in either JSON form: 0 and "0" both mean unset.
+    if (params.size() > 1 && !params[1].isNull())
     {
-        nPieceSize = AmountFromValue(params[1]);
+        int64_t nParsed = 0;
+
+        if (!((params[1].isNum() || params[1].isStr())
+              && ParseFixedPoint(params[1].getValStr(), 8, &nParsed) && nParsed == 0))
+        {
+            nPieceSize = AmountFromValue(params[1]);
+        }
     }
 
-    if (params.size() > 2) nPieceCount = params[2].get_int();
+    if (params.size() > 2 && !params[2].isNull()) nPieceCount = params[2].get_int();
 
     if (nPieceCount < 0)
     {
@@ -1215,8 +1228,13 @@ UniValue splitunspent(const UniValue& params)
                                      FormatMoney(nOptimalPieceSize)));
     }
 
-    // Get the current UTXO's. The defaults exclude immature and currently staking coins.
-    pwalletMain->AvailableCoins(vecInputs, false, nullptr, false);
+    // Get the current UTXO's. Only fOnlyConfirmed departs from the defaults, and it gates on
+    // CWalletTx::IsTrusted() rather than on confirmation count alone: IsTrusted demands three
+    // confirmations for anything not from this wallet, so passing false admits shallow incoming
+    // payments as well as unconfirmed ones. This matches consolidateunspent. Immature
+    // coinbase/coinstake outputs, non-final transactions and conflicts are excluded regardless.
+    pwalletMain->AvailableCoins(vecInputs, /*fOnlyConfirmed=*/false, /*coinControl=*/nullptr,
+                                /*fIncludeStakingCoins=*/false);
 
     CWalletTx wtxNew;
 
@@ -2132,9 +2150,9 @@ static const RPCHelpMan createrawtransaction_help{
     RPCResult{RPCResult::Type::STR_HEX, "", "Hex-encoded serialized raw transaction."},
     RPCExamples{
         HelpExampleCli("createrawtransaction",
-            "\"[{\\\"txid\\\":\\\"<txid>\\\",\\\"vout\\\":0}]\" \"{\\\"S1Example\\\":0.01}\"") +
+            "\"[{\\\"txid\\\":\\\"<txid>\\\",\\\"vout\\\":0}]\" \"{\\\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\\\":0.01}\"") +
         HelpExampleRpc("createrawtransaction",
-            "[{\"txid\":\"<txid>\",\"vout\":0}], {\"S1Example\":0.01}")},
+            "[{\"txid\":\"<txid>\",\"vout\":0}], {\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\":0.01}")},
 };
 const RPCHelpMan& createrawtransaction_helpman() { return createrawtransaction_help; }
 
