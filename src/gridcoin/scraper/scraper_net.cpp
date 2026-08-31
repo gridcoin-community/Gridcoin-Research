@@ -13,6 +13,7 @@
 #include "rpc/server.h"
 #include "rpc/protocol.h"
 #include "rpc/util.h"
+#include "util/check.h"
 #include "serialize.h"
 #ifdef SCRAPER_NET_PK_AS_ADDRESS
 #include <key_io.h>
@@ -209,20 +210,35 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 
                 ++split.cntPartsRcvd;
 
-                // Was an assert. This runs on peer data -- a PART message, counted against
-                // refs built from a manifest a peer sent -- and an assert on that path is a
-                // crash primitive the moment the invariant is wrong, whether or not it can be
-                // reached today. It does hold today: refs carries one entry per (manifest,
-                // slot) naming this part, and this branch runs only for a part that was not
-                // already present(), so each slot is counted at most once.
+                // Invariant: cntPartsRcvd <= vParts.size(). This is a theorem of
+                // the counter's two writers, not an assumption: addPart() pairs
+                // each new vParts slot with at most one immediate count (part
+                // already present) or exactly one refs entry, and this branch
+                // counts each ref exactly once, on the part's single
+                // absent-to-present transition (part data is never cleared while
+                // refs exist). So the count equals the number of slots whose
+                // parts are present.
                 //
-                // Overshooting is not fatal either way: isComplete() requires
-                // cntPartsRcvd == vParts.size(), so a manifest that overshot simply never
-                // completes and is culled like any other stalled one. Say so and carry on.
-                if (split.cntPartsRcvd > split.vParts.size()) {
-                    LogPrintf("WARN: %s: received %u parts for a manifest with %u; it will never "
-                              "complete and will be culled.",
-                              __func__, (unsigned)split.cntPartsRcvd, (unsigned)split.vParts.size());
+                // Assume() rather than a bare assert: it halts in
+                // ABORT_ON_FAILED_ASSUME builds, so a future edit that breaks the
+                // writer discipline fails loudly in development, and it is a
+                // no-abort identity in production -- this runs on peer data, and
+                // the failure mode is benign anyway: isComplete() compares with
+                // equality, so an overshot manifest never completes and is culled
+                // like any other stalled one.
+                //
+                // The counts are read into locals under cs_manifest first:
+                // Assume() wraps its argument in a lambda, and thread-safety
+                // analysis does not carry lock-held state across lambda
+                // boundaries.
+                const size_t parts_received = split.cntPartsRcvd;
+                const size_t parts_declared = split.vParts.size();
+                if (!Assume(parts_received <= parts_declared)) {
+                    LogPrintf("WARN: %s: part %s pushed a manifest to %u received parts "
+                              "against %u declared; the count is corrupt, so the manifest "
+                              "will never complete and will be culled.",
+                              __func__, hash.GetHex(),
+                              (unsigned)parts_received, (unsigned)parts_declared);
                 }
 
                 if (split.isComplete())
