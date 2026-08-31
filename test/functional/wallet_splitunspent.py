@@ -35,7 +35,7 @@ supply into depth-0 outputs, after which the node can never stake again
 from decimal import Decimal
 
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_equal, assert_raises_rpc_error
+from test_framework.util import assert_equal, assert_greater_than_or_equal, assert_raises_rpc_error
 
 # A deliberately generous flat fee for the funding transactions, which are
 # hand-built and never fee-estimated.
@@ -87,7 +87,9 @@ class WalletSplitUnspentTest(GridcoinTestFramework):
             consumed += 1
             if gathered >= total + FUNDING_FEE:
                 break
-        assert gathered >= total + FUNDING_FEE, "funding source does not cover the plan"
+        # Framework helper rather than a bare assert: survives python -O and
+        # prints both operands on failure.
+        assert_greater_than_or_equal(gathered, total + FUNDING_FEE)
 
         outputs = {addr[name]: value for name, value in amounts.items()}
         outputs[node.getnewaddress()] = gathered - total - FUNDING_FEE
