@@ -960,23 +960,15 @@ static PSGTPoolEntry ResolvePoolEntry(const std::string& hash)
 //! Does the local wallet hold a key of the entry's multisig arrangement?
 static bool PoolEntryIsMine(const PSGTPoolEntry& entry)
 {
-    if (!pwalletMain || entry.psgt.inputs.empty()) return false;
+    if (!pwalletMain) return false;
 
-    txnouttype script_type;
-    std::vector<std::vector<unsigned char>> vSolutions;
-    if (!Solver(entry.psgt.inputs[0].redeem_script, script_type, vSolutions)
-        || script_type != TX_MULTISIG) {
-        return false;
-    }
+    // Decode outside the lock (pure computation); hold cs_wallet only for
+    // the key scan, as the inline predecessor did.
+    const std::vector<CPubKey> arrangement = PSGTArrangementKeys(entry.psgt);
+    if (arrangement.empty()) return false;
 
     LOCK(pwalletMain->cs_wallet);
-    for (unsigned int i = 1; i + 1 < vSolutions.size(); ++i) {
-        const CPubKey pubkey(vSolutions[i]);
-        if (pubkey.IsValid() && pwalletMain->HaveKey(pubkey.GetID())) {
-            return true;
-        }
-    }
-    return false;
+    return PSGTKeyHeldBy(*pwalletMain, arrangement);
 }
 
 //! Render a pool entry for listpsgtpool/submitpsgt output.

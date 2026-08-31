@@ -179,7 +179,8 @@ PSGTPoolReject ValidatePSGTForPool(const PSGTPool& pool,
     // -- Add() re-checks under cs_psgt_pool -- so the read here is a pure
     // optimization; a race merely means we do work we would have done anyway.
     if (pool.HaveRevision(out_entry.revision_hash)) {
-        error = "revision already present in or recently removed from the pool";
+        error = "revision already known to the pool (pooled, recently removed,"
+                " or a no-progress duplicate of the pooled revision)";
         return PSGTPoolReject::DUPLICATE_REVISION;
     }
 
@@ -314,7 +315,8 @@ PSGTPoolAddResult PSGTPool::Add(PSGTPoolEntry&& entry, std::string& reject_reaso
         const int64_t now = entry.time_received;
 
         if (m_by_revision.count(entry.revision_hash)
-            || m_recently_removed.count(entry.revision_hash)) {
+            || m_recently_removed.count(entry.revision_hash)
+            || IsDampedNoProgress(entry.revision_hash)) {
             reject_reason = "already have this revision";
             return PSGTPoolAddResult::DUPLICATE;
         }
@@ -378,7 +380,21 @@ PSGTPoolAddResult PSGTPool::Add(PSGTPoolEntry&& entry, std::string& reject_reaso
                     return PSGTPoolAddResult::REJECTED_NOT_BETTER;
                 }
                 if (!strictly_larger) {
+                    // Damp the offered revision, not the pooled one. Without
+                    // this, HaveRevision() keeps answering false for a
+                    // no-progress revision, so AlreadyHave() lets the node
+                    // re-download, re-deserialize and re-verify it on every
+                    // announcement. Re-signing the same authorization produces
+                    // different bytes (see the malleability note above), so a
+                    // member key holder can mint a fresh revision hash for
+                    // every defined sighash type per signed input.
+                    //
+                    // Damped in its own baseline-keyed set, NOT in
+                    // m_recently_removed: this revision was never pooled, and
+                    // its uselessness holds only while the baseline it was
+                    // compared against stays pooled. See m_damped_no_progress.
                     reject_reason = "no new signatures over the pooled revision";
+                    RecordDampedNoProgress(entry.revision_hash, existing.revision_hash, now);
                     return PSGTPoolAddResult::DUPLICATE;
                 }
             } else {
@@ -483,7 +499,8 @@ std::optional<PSGTPoolEntry> PSGTPool::GetByTxHash(const uint256& tx_hash) const
 bool PSGTPool::HaveRevision(const uint256& revision_hash) const
 {
     LOCK(cs_psgt_pool);
-    return m_by_revision.count(revision_hash) || m_recently_removed.count(revision_hash);
+    return m_by_revision.count(revision_hash) || m_recently_removed.count(revision_hash)
+        || IsDampedNoProgress(revision_hash);
 }
 
 std::vector<PSGTPoolEntry> PSGTPool::GetAll() const
@@ -567,6 +584,7 @@ void PSGTPool::Clear()
     m_by_txhash.clear();
     m_by_prevout.clear();
     m_recently_removed.clear();
+    m_damped_no_progress.clear();
     m_orphans.clear();
     m_orphans_by_prevout.clear();
 }
@@ -787,6 +805,44 @@ void PSGTPool::RecordRemoved(const uint256& revision_hash, int64_t now)
     }
 
     m_recently_removed[revision_hash] = now;
+}
+
+void PSGTPool::RecordDampedNoProgress(const uint256& offered, const uint256& baseline, int64_t now)
+{
+    // Prune entries that are TTL-dead or whose baseline already left the
+    // pool, then a hard cap as a safety net (evict oldest).
+    for (auto it = m_damped_no_progress.begin(); it != m_damped_no_progress.end();) {
+        if (now - it->second.second > RECENTLY_REMOVED_TTL
+            || m_by_revision.count(it->second.first) == 0) {
+            it = m_damped_no_progress.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    while (m_damped_no_progress.size() >= MAX_DAMPED_NO_PROGRESS) {
+        auto oldest = m_damped_no_progress.begin();
+        for (auto it = m_damped_no_progress.begin(); it != m_damped_no_progress.end(); ++it) {
+            if (it->second.second < oldest->second.second) oldest = it;
+        }
+        m_damped_no_progress.erase(oldest);
+    }
+
+    m_damped_no_progress[offered] = {baseline, now};
+}
+
+bool PSGTPool::IsDampedNoProgress(const uint256& revision_hash) const
+{
+    const auto it = m_damped_no_progress.find(revision_hash);
+    if (it == m_damped_no_progress.end()) return false;
+    // Damp only while the baseline is still pooled under the same revision:
+    // once it is evicted, replaced or removed, the comparison this entry
+    // records is stale and the offered revision must be revalidated. The
+    // read path deliberately ignores the stored time -- while the baseline
+    // holds, the recorded comparison stays accurate, so age never makes the
+    // answer wrong. The TTL is garbage collection only, applied at insert
+    // time like m_recently_removed's.
+    return m_by_revision.count(it->second.first) != 0;
 }
 
 void PSGTPool::Notify(const PSGTPoolEntry& entry, PSGTPoolChangeType change,

@@ -21,13 +21,6 @@
 // (RPCHelpMan::HandleRequest, Arg<T>/MaybeArg<T>, GetArgMap, MatchesType) is
 // intentionally omitted — see src/rpc/util.h for rationale.
 
-// TODO(#2922): replace with real Gridcoin example addresses before the first
-// Tier 1 conversion PR that references EXAMPLE_ADDRESS lands.
-const std::string EXAMPLE_ADDRESS[2] = {
-    "S1ExampleGridcoinAddressPlaceholder1",
-    "S1ExampleGridcoinAddressPlaceholder2",
-};
-
 namespace {
 
 /**
@@ -597,15 +590,20 @@ void RPCResult::CheckInnerDoc() const
     CHECK_NONFATAL(inner_needed != m_inner.empty());
 }
 
-// WARNING: ToStringObj() asserts on Type::OBJ / OBJ_NAMED_PARAMS / OBJ_USER_KEYS.
+// WARNING: ToStringObj() refuses Type::OBJ / OBJ_NAMED_PARAMS / OBJ_USER_KEYS.
 // RPCArg::ToString() routes object-typed args' inner elements through
 // ToStringObj(), so any spec that nests an object inside another object's
-// m_inner will trip CHECK_NONFATAL(false) when help is rendered. This matches
-// upstream Bitcoin Core v26.0 (which has the same NONFATAL_UNREACHABLE() and
-// the same de facto "no nested objects" constraint). Spec authors must avoid
-// nesting object-typed args until this implementation is extended.
-// TODO(#2922): implement object-type rendering here when the first command
-// that needs nested objects in m_inner is converted to RPCHelpMan.
+// m_inner trips CHECK_NONFATAL(false) when help is rendered. That throws
+// NonFatalCheckError, which the RPC entry points catch and return to the
+// caller as an "Internal bug detected" error -- `help <cmd>` fails, the daemon
+// does not. This matches upstream Bitcoin Core v26.0, which has the same
+// de facto "no nested objects" constraint. Spec authors must avoid nesting
+// object-typed args until this implementation is extended.
+//
+// TODO: implement object-type rendering here when a command first needs
+// nested objects in m_inner. rpchelpman_tests' every_helpman_renders case
+// walks every registered command through ToString(), so a spec that trips
+// this fails a test rather than a user's help request.
 std::string RPCArg::ToStringObj(const bool oneline) const
 {
     std::string res;
@@ -638,7 +636,7 @@ std::string RPCArg::ToStringObj(const bool oneline) const
     case Type::OBJ:
     case Type::OBJ_NAMED_PARAMS:
     case Type::OBJ_USER_KEYS:
-        // See TODO(#2922) above the function definition.
+        // See the TODO above the function definition.
         CHECK_NONFATAL(false);
     } // no default case, so the compiler can warn about missing cases
     CHECK_NONFATAL(false);
