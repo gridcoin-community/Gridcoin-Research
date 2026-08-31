@@ -458,6 +458,7 @@ BOOST_AUTO_TEST_CASE(pool_no_progress_duplicate_is_damped)
     PSGTPoolEntry first;
     BOOST_REQUIRE(Validate(fixture.Signed({fixture.k1}), first, error) == PSGTPoolReject::NONE);
     const uint256 pooled_revision = first.revision_hash;
+    const CScriptID image = first.image;
     BOOST_REQUIRE(pool.Add(std::move(first), reject) == PSGTPoolAddResult::ACCEPTED_NEW);
 
     // Re-signing with the same key is NOT enough to reach the no-progress
@@ -494,6 +495,21 @@ BOOST_AUTO_TEST_CASE(pool_no_progress_duplicate_is_damped)
     // revision on every announcement.
     BOOST_CHECK(pool.HaveRevision(offered_revision));
     BOOST_CHECK(pool.HaveRevision(pooled_revision));
+    BOOST_CHECK_EQUAL(pool.Size(), 1u);
+
+    // The damp is conditional on its baseline. When the pooled revision
+    // leaves -- eviction, replacement, local removal -- the recorded
+    // comparison is stale, and holding the damp anyway would reject a
+    // legitimate resubmission against an empty slot for the rest of the TTL,
+    // on both transports (AlreadyHave and the ValidatePSGTForPool gate).
+    BOOST_REQUIRE(pool.Remove(image, PSGTRemovalReason::LOCAL_REMOVE));
+    BOOST_CHECK(!pool.HaveRevision(offered_revision));
+    // The baseline itself stays damped through its own removal record.
+    BOOST_CHECK(pool.HaveRevision(pooled_revision));
+
+    PSGTPoolEntry offered_again;
+    BOOST_REQUIRE(Validate(variant, offered_again, error) == PSGTPoolReject::NONE);
+    BOOST_CHECK(pool.Add(std::move(offered_again), reject) == PSGTPoolAddResult::ACCEPTED_NEW);
     BOOST_CHECK_EQUAL(pool.Size(), 1u);
 }
 
