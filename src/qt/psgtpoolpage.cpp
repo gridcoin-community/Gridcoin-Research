@@ -113,6 +113,55 @@ void PSGTPoolPage::createTableModelIfReady()
     m_table->horizontalHeader()->setSectionResizeMode(
         PSGTPoolTableModel::Image, QHeaderView::Stretch);
 
+    // refresh() is a full model reset -- it rebuilds the live pool rows and the
+    // appended history tail -- so the view drops its selection every time. It
+    // also runs on every numBlocksChanged (see setClientModel), so a user
+    // reading a row loses it roughly once a block. Save the selected
+    // arrangement across the reset and restore it after.
+    //
+    // Keyed on the image, which is the pool key, rather than the revision hash:
+    // a co-signer signing mints a new revision for the same arrangement, and
+    // the selection should survive that.
+    //
+    // ORDER MATTERS: these connects must stay after setModel() above and
+    // before the updateButtons hookup below. Same-thread connections fire in
+    // registration order, so the view's internal reset() (registered inside
+    // setModel) silently clears the selection first, the restore below
+    // re-selects second, and updateButtons recomputes from the final state.
+    connect(m_table_model, &QAbstractItemModel::modelAboutToBeReset, this, [this]() {
+        m_selected_image.clear();
+
+        if (!m_table->selectionModel()) return;
+
+        const QModelIndexList selected = m_table->selectionModel()->selectedRows();
+        if (selected.isEmpty()) return;
+
+        if (const PSGTPoolTableModel::Row* row = m_table_model->rowAt(selected.first().row())) {
+            m_selected_image = row->image_hex;
+        }
+    });
+
+    connect(m_table_model, &QAbstractItemModel::modelReset, this, [this]() {
+        if (m_selected_image.empty() || !m_table->selectionModel()) return;
+
+        // The row may legitimately be gone (completed, expired, removed), in
+        // which case there is nothing to restore and the view stays cleared.
+        for (int i = 0; i < m_table_model->rowCount(); ++i) {
+            const PSGTPoolTableModel::Row* row = m_table_model->rowAt(i);
+
+            if (!row || row->image_hex != m_selected_image) continue;
+
+            // One call sets the current index and the row selection
+            // together (a single selectionChanged emission).
+            m_table->selectionModel()->setCurrentIndex(
+                m_table_model->index(i, 0),
+                QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            break;
+        }
+
+        m_selected_image.clear();
+    });
+
     connect(m_refresh_button, &QPushButton::clicked, m_table_model, &PSGTPoolTableModel::refresh);
     connect(m_table->selectionModel(), &QItemSelectionModel::selectionChanged,
             this, &PSGTPoolPage::updateButtons);
