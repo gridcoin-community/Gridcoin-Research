@@ -13,6 +13,7 @@
 #include "rpc/server.h"
 #include "rpc/protocol.h"
 #include "rpc/util.h"
+#include "util/check.h"
 #include "serialize.h"
 #ifdef SCRAPER_NET_PK_AS_ADDRESS
 #include <key_io.h>
@@ -208,7 +209,38 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
                 LOCK(split.cs_manifest);
 
                 ++split.cntPartsRcvd;
-                assert(split.cntPartsRcvd <= split.vParts.size());
+
+                // Invariant: cntPartsRcvd <= vParts.size(). This is a theorem of
+                // the counter's two writers, not an assumption: addPart() pairs
+                // each new vParts slot with at most one immediate count (part
+                // already present) or exactly one refs entry, and this branch
+                // counts each ref exactly once, on the part's single
+                // absent-to-present transition (part data is never cleared while
+                // refs exist). So the count equals the number of slots whose
+                // parts are present.
+                //
+                // Assume() rather than a bare assert: it halts in
+                // ABORT_ON_FAILED_ASSUME builds, so a future edit that breaks the
+                // writer discipline fails loudly in development, and it is a
+                // no-abort identity in production -- this runs on peer data, and
+                // the failure mode is benign anyway: isComplete() compares with
+                // equality, so an overshot manifest never completes and is culled
+                // like any other stalled one.
+                //
+                // The counts are read into locals under cs_manifest first:
+                // Assume() wraps its argument in a lambda, and thread-safety
+                // analysis does not carry lock-held state across lambda
+                // boundaries.
+                const size_t parts_received = split.cntPartsRcvd;
+                const size_t parts_declared = split.vParts.size();
+                if (!Assume(parts_received <= parts_declared)) {
+                    LogPrintf("WARN: %s: part %s pushed a manifest to %u received parts "
+                              "against %u declared; the count is corrupt, so the manifest "
+                              "will never complete and will be culled.",
+                              __func__, hash.GetHex(),
+                              (unsigned)parts_received, (unsigned)parts_declared);
+                }
+
                 if (split.isComplete())
                 {
                     split.Complete();
