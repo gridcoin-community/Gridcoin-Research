@@ -14,6 +14,8 @@
 #include <wallet/walletcoinstore.h>
 #include <wallet/wallet_event_queue.h>
 
+#include <interfaces/wallet_coin_source.h>
+
 #include <arith_uint256.h>
 #include <uint256.h>
 
@@ -21,6 +23,7 @@
 
 #include <chrono>
 #include <climits>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -461,6 +464,71 @@ BOOST_AUTO_TEST_CASE(cleanShutdownWithPendingIntake)
         h.store.enqueueUpsert(h1, {makeCoin(h1, 0, 300, "A")}, false);
     }
     // ~Harness runs ~WalletCoinStore with a possibly non-empty intake.
+}
+
+BOOST_AUTO_TEST_CASE(syntheticHarnessGroupsAreDistinctPerRequestedGroup)
+{
+    // -devsyntheticcoins=<n>:<groups> advertises n coins "spread over <groups>
+    // addresses" (interfaces/wallet_coin_source.h). That contract is only met
+    // if the generated group addresses are injective: WalletCoinStore groups
+    // by group_address, so any aliasing silently folds the directory down and
+    // caps the many-groups axis the harness exists to exercise. A single
+    // letter mod 26 used to cap it at 27 groups no matter what was asked for,
+    // which is why both scales below straddle that boundary.
+    // 5000 is not shortfall coverage -- at groups == total the directory
+    // already reaches <groups> rows without the clamp. It is an off-by-one
+    // guard on the clamp BOUND: it is the only input here that fails against a
+    // mutated std::min(groups, total_coins - 1).
+    for (const int groups : {30, 500, 5000}) {
+        const int total = 5000;
+        auto source = interfaces::MakeSyntheticCoinSource(total, groups);
+        BOOST_REQUIRE(source != nullptr);
+
+        const std::vector<GRC::CoinGroupInfo> dir = source->getGroupDirectory();
+        BOOST_CHECK_EQUAL(static_cast<int>(dir.size()), groups);
+
+        // Injective, and the seeded coins are all still accounted for.
+        std::set<std::string> addresses;
+        int counted = 0;
+        for (const GRC::CoinGroupInfo& g : dir) {
+            addresses.insert(g.address);
+            counted += g.output_count;
+        }
+        BOOST_CHECK_EQUAL(static_cast<int>(addresses.size()), groups);
+        BOOST_CHECK_EQUAL(counted, total);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(syntheticHarnessClampsGroupsToTheCoinCount)
+{
+    // Distinct addresses are not enough on their own. small_group is
+    // total_coins / groups, an integer division, so a group count above the
+    // coin count used to leave every non-whale group with zero records --
+    // and a group with no records never becomes a directory row, however
+    // unique its address is. -devsyntheticcoins=5000:6000 built a one-row
+    // directory and logged 6000 groups: the same silent shortfall the
+    // aliasing case above is about, one regime over.
+    //
+    // Asserted against `total`, deliberately NOT against `groups`: the
+    // contract post-clamp is a group per coin, which is the most that can be
+    // seeded. Checking dir.size() == groups here would fail by construction.
+    const int total = 5000;
+    const int groups = 6000;
+
+    auto source = interfaces::MakeSyntheticCoinSource(total, groups);
+    BOOST_REQUIRE(source != nullptr);
+
+    const std::vector<GRC::CoinGroupInfo> dir = source->getGroupDirectory();
+    BOOST_CHECK_EQUAL(static_cast<int>(dir.size()), total);
+
+    std::set<std::string> addresses;
+    int counted = 0;
+    for (const GRC::CoinGroupInfo& g : dir) {
+        addresses.insert(g.address);
+        counted += g.output_count;
+    }
+    BOOST_CHECK_EQUAL(static_cast<int>(addresses.size()), total);
+    BOOST_CHECK_EQUAL(counted, total);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -762,7 +762,7 @@ bool AskForOutstandingBlocks(uint256 hashStart)
             // Once 10 nodes have been asked, skip the rest. ForEachNodeUnderLock
             // has no early-exit, so this keeps iterating (cheaply) rather than
             // break-ing as the pre-API loop did -- same set of nodes asked.
-            if (iAsked > 10) return;
+            if (iAsked >= 10) return;
             if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeightLocal - 144)))
             {
                 pNode->PushGetBlocks(pindexStart, uint256());

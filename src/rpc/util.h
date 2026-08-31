@@ -75,16 +75,6 @@ struct Sections;
 //! A constexpr string_view over a literal has no initializer to order.
 inline constexpr std::string_view UNIX_EPOCH_TIME{"UNIX epoch time"};
 
-/**
- * Example addresses for the RPCExamples help documentation. They are
- * intentionally invalid placeholder strings — Tier 1 conversion PRs should
- * replace these with real Gridcoin addresses before the first command that
- * references EXAMPLE_ADDRESS lands.
- *
- * TODO(#2922): replace with real Gridcoin example addresses.
- */
-extern const std::string EXAMPLE_ADDRESS[2];
-
 using RPCArgList = std::vector<std::pair<std::string, UniValue>>;
 
 std::string HelpExampleCli(const std::string& methodname, const std::string& args);

@@ -1187,6 +1187,45 @@ bool VerifyPSGTPartialSigs(const PartiallySignedTransaction& psgt,
     return true;
 }
 
+std::vector<CPubKey> PSGTArrangementKeys(const PartiallySignedTransaction& psgt)
+{
+    std::vector<CPubKey> keys;
+
+    if (psgt.inputs.empty()) {
+        return keys;
+    }
+
+    txnouttype script_type;
+    std::vector<std::vector<unsigned char>> solutions;
+
+    if (!Solver(psgt.inputs[0].redeem_script, script_type, solutions)
+        || script_type != TX_MULTISIG)
+    {
+        return keys;
+    }
+
+    // vSolutions for TX_MULTISIG is [m, pubkey..., n]: skip the two bounds.
+    for (unsigned int i = 1; i + 1 < solutions.size(); ++i)
+    {
+        keys.emplace_back(solutions[i]);
+    }
+
+    return keys;
+}
+
+bool PSGTKeyHeldBy(const SigningProvider& provider,
+                   const std::vector<CPubKey>& arrangement_keys)
+{
+    for (const CPubKey& pubkey : arrangement_keys)
+    {
+        if (pubkey.IsValid() && provider.HaveKey(pubkey.GetID())) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool PSGTSignedBy(const SigningProvider& provider,
                   const PartiallySignedTransaction& psgt)
 {

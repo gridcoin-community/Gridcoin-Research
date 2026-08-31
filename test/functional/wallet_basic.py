@@ -54,10 +54,10 @@ class WalletBasicTest(GridcoinTestFramework):
         # --- raw spend of a recent coinstake output is accepted into the mempool ---
         # (Most-recently-staked output = fewest confirmations = a coinstake, which
         # is tx-indexed; never the height-0 premine coinbase.)
-        cs = min(node.listunspent(0), key=lambda u: u["confirmations"])
+        cs, amount = self.newest_coinstake_utxo(node)
         dest = node.getnewaddress()
         raw = node.createrawtransaction(
-            [{"txid": cs["txid"], "vout": cs["vout"]}], {dest: cs["amount"] - 1})
+            [{"txid": cs["txid"], "vout": cs["vout"]}], {dest: amount})
         signed = node.signrawtransactionwithwallet(raw)
         assert signed.get("complete"), signed
         txid = node.sendrawtransaction(signed["hex"])

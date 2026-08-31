@@ -202,6 +202,12 @@ public:
     //! Hard cap on the recently-removed set (safety net; TTL is the normal bound).
     static constexpr size_t MAX_RECENTLY_REMOVED = 1000;
 
+    //! Hard cap on the no-progress damp set. Its own cap, deliberately not
+    //! shared with MAX_RECENTLY_REMOVED: damp insertions cost no pool slot,
+    //! so sharing the cap would let a member key minting sighash-type
+    //! variants evict genuine anti-replay records early.
+    static constexpr size_t MAX_DAMPED_NO_PROGRESS = 1000;
+
     //! Orphan holding pool for a PSGT whose funding transaction this node has
     //! not seen yet (the unconfirmed-funding relay race: a peer relays the PSGT
     //! before the funding tx reaches this node's mempool). Bounded (oldest
@@ -259,8 +265,9 @@ public:
     std::optional<PSGTPoolEntry> GetByRevision(const uint256& revision_hash) const;
     std::optional<PSGTPoolEntry> GetByTxHash(const uint256& tx_hash) const;
 
-    //! True if the revision is pooled OR was recently removed (relay
-    //! damping: recently completed/evicted revisions read as "already have").
+    //! True if the revision is pooled, was recently removed (relay damping:
+    //! recently completed/evicted revisions read as "already have"), or is a
+    //! damped no-progress duplicate whose baseline is still pooled.
     bool HaveRevision(const uint256& revision_hash) const;
 
     //! Snapshot of all entries (RPC/GUI listing).
@@ -320,6 +327,17 @@ private:
     std::map<COutPoint, CScriptID> m_by_prevout GUARDED_BY(cs_psgt_pool);
     //! Removed revision hash -> removal time (TTL-pruned, hard-capped).
     std::map<uint256, int64_t> m_recently_removed GUARDED_BY(cs_psgt_pool);
+    //! No-progress duplicate damping: offered revision hash -> (the pooled
+    //! baseline revision it carried nothing over, rejection time). Kept OUT
+    //! of m_recently_removed on purpose: that set records revisions that
+    //! were pooled and durably removed, while an entry here is useless only
+    //! WHILE its baseline stays pooled. The damp checks the baseline at read
+    //! time and dissolves the moment the baseline leaves the pool for any
+    //! reason, so a legitimate resubmission is revalidated like any fresh
+    //! submission instead of stalling for the TTL against a slot the
+    //! baseline no longer occupies (and one revalidation re-damps it against
+    //! whatever the new baseline is, if it is still no-progress).
+    std::map<uint256, std::pair<uint256, int64_t>> m_damped_no_progress GUARDED_BY(cs_psgt_pool);
 
     //! A PSGT held pending its (unconfirmed) funding transaction.
     struct OrphanPSGT {
@@ -342,6 +360,16 @@ private:
 
     //! TTL-prune and cap m_recently_removed, then record a removal.
     void RecordRemoved(const uint256& revision_hash, int64_t now)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_psgt_pool);
+
+    //! Prune and cap m_damped_no_progress, then damp an offered no-progress
+    //! revision against the pooled baseline it was compared to.
+    void RecordDampedNoProgress(const uint256& offered, const uint256& baseline, int64_t now)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_psgt_pool);
+
+    //! True while the offered revision is damped AND its baseline is still
+    //! pooled under the same revision hash.
+    bool IsDampedNoProgress(const uint256& revision_hash) const
         EXCLUSIVE_LOCKS_REQUIRED(cs_psgt_pool);
 
     //! Shared body of the two eviction triggers.

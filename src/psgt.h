@@ -239,6 +239,30 @@ bool VerifyPSGTPartialSigs(const PartiallySignedTransaction& psgt,
                            std::string& error);
 
 /**
+ * The member public keys of the PSGT's multisig arrangement, read from
+ * input 0's redeem script: Phase I only accumulates partial_sigs for
+ * multisig scripts, so a PSGT eligible for the pool carries one arrangement
+ * across its inputs. Empty for an inputless or non-multisig PSGT.
+ *
+ * Pure decode -- no provider, no lock. Split from PSGTKeyHeldBy so call
+ * sites can decode outside their wallet lock and hold it only for the key
+ * scan, preserving the lock scopes the inline predecessors had.
+ */
+std::vector<CPubKey> PSGTArrangementKeys(const PartiallySignedTransaction& psgt);
+
+/**
+ * True iff the provider holds one of the arrangement's keys -- membership,
+ * not authorship. Says nothing about whether that key has signed; pair it
+ * with PSGTSignedBy for that. Feed it PSGTArrangementKeys' result.
+ *
+ * The caller must hold whatever lock guards the provider's key set --
+ * cs_wallet for a CWallet; a plain CBasicKeyStore in a single-threaded test
+ * needs none -- so the scan is atomic against key-set changes.
+ */
+bool PSGTKeyHeldBy(const SigningProvider& provider,
+                   const std::vector<CPubKey>& arrangement_keys);
+
+/**
  * True iff some input carries a cryptographically valid partial signature
  * from a key the provider holds — verified against the input's sighash, not
  * merely present under an owned key id. Tolerant of other signers' invalid

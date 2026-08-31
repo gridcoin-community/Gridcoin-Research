@@ -7,6 +7,7 @@
 #include "amount.h"
 #include "arith_uint256.h"
 #include "logging.h"
+#include "tinyformat.h"
 #include "wallet/wallet_event_queue.h"
 #include "wallet/walletcoinstore.h"
 
@@ -137,8 +138,25 @@ SyntheticCoinSourceImpl::SyntheticCoinSourceImpl(int total_coins, int groups)
     total_coins = std::max(total_coins, 1);
     groups = std::max(groups, 1);
 
-    // Group 0 is the pathological single-address case; the rest get 1000
-    // coins each (or an even split when the total is small).
+    // CLAMP to <total_coins>. Injective addresses are necessary for the
+    // directory to reach <groups> rows, but not sufficient: small_group is an
+    // integer division, so once <groups> exceeds <total_coins> it is 0, every
+    // non-whale group seeds no records, and buildGroups() -- which only ever
+    // sees records -- never gives them a row. -devsyntheticcoins=100:500 built
+    // a ONE-row directory and reported 500.
+    //
+    // That is the same silent shortfall as the aliasing bug below, one regime
+    // over, so it is fixed the same way: by making the advertised contract
+    // true rather than by reporting its violation. A group count above the
+    // coin count has no meaning here -- there are not enough coins to put one
+    // in each group -- so clamping loses nothing.
+    const int requested_groups = groups;
+    groups = std::min(groups, total_coins);
+
+    // Group 0 is the pathological single-address case; the rest get up to
+    // 1000 coins each, falling to an even split once <groups> is large
+    // relative to <total_coins> (and to 1 apiece when they are equal, which
+    // post-clamp is the floor: small_group is now always >= 1).
     const int small_group = std::min(1000, total_coins / std::max(groups, 1));
     const int whale = total_coins - (groups - 1) * small_group;
 
@@ -147,10 +165,16 @@ SyntheticCoinSourceImpl::SyntheticCoinSourceImpl(int total_coins, int groups)
 
     int seed = 0;
     for (int g = 0; g < groups; ++g) {
+        // The group index is rendered in full, zero-padded to the same
+        // 34-character width as the whale address. It has to stay
+        // injective: an aliasing scheme (a single letter mod 26, say)
+        // collapses the directory onto 26 addresses no matter what
+        // <groups> asks for, because buildGroups() keys on group_address
+        // -- which silently caps the many-groups axis this harness exists
+        // to exercise.
         const std::string address = (g == 0)
             ? std::string("SynthWhale000000000000000000000000")
-            : std::string("SynthGroup") + std::string(1, static_cast<char>('A' + (g - 1) % 26))
-                  + "00000000000000000000000";
+            : strprintf("SynthGroup%024d", g);
         const int count = (g == 0) ? whale : small_group;
         for (int i = 0; i < count; ++i, ++seed) {
             GRC::CoinRecord r;
@@ -171,6 +195,14 @@ SyntheticCoinSourceImpl::SyntheticCoinSourceImpl(int total_coins, int groups)
 
     m_store.seedSynthetic(std::move(records), /*tip_height=*/300000);
 
+    if (requested_groups != groups) {
+        LogPrintf("SyntheticCoinSource: clamped %d requested groups to %d, the coin count "
+                  "(a group per coin is the most that can be seeded)",
+                  requested_groups, groups);
+    }
+
+    // Reports the shape actually seeded: <groups> is the clamped value, so
+    // this line can no longer advertise a directory the store does not hold.
     LogPrintf("SyntheticCoinSource: seeded %d coins over %d groups (whale group: %d)",
               total_coins, groups, whale);
 }
