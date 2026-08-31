@@ -92,6 +92,11 @@ static deque<pair<int64_t, CInv> > vRelayExpiration GUARDED_BY(cs_mapRelay);
 // value first, and the value here is the request time, so the oldest unfulfilled
 // request is what goes.
 static CCriticalSection cs_mapAlreadyAskedFor;
+//! Monotonic tiebreaker for AskForInv's request-time priority keys. Guarded
+//! by the map mutex: every caller runs on ThreadMessageHandler today, but
+//! AskFor is public PeerManager surface and the counter's monotonicity must
+//! not depend on callers remembering that.
+static int64_t nAskForLastTime GUARDED_BY(cs_mapAlreadyAskedFor) = 0;
 static limitedmap<CInv, int64_t> mapAlreadyAskedFor GUARDED_BY(cs_mapAlreadyAskedFor){MAX_INV_SZ};
 
 size_t InventoryRequestMapCapacity()
@@ -109,10 +114,9 @@ static void AskForInv(CNode* pnode, const CInv& inv)
     // the key is the earliest time the request can be sent
     if (pnode->mapAskFor.size() > 50000) return;
 
-    // Snapshot the current request time under the mutex. The
-    // logging / time-formatting / static-counter arithmetic below
-    // does not touch mapAlreadyAskedFor and should not hold the
-    // mutex.
+    // Snapshot the current request time under the mutex; the logging and
+    // time formatting between the two locked blocks touch neither the map
+    // nor the tiebreaker and run unlocked.
     // Absent means never asked, which is a request time of zero. Reading
     // through find() rather than operator[] also stops the lookup itself
     // from creating an entry: the write below is what should create it, and
@@ -127,17 +131,19 @@ static void AskForInv(CNode* pnode, const CInv& inv)
 
     LogPrint(BCLog::LogFlags::NET, "askfor %s   %" PRId64 " (%s)", inv.ToString(), nRequestTime, DateTimeStrFormat("%H:%M:%S", nRequestTime/1000000));
 
-    // Make sure not to reuse time indexes to keep things in the same order
     int64_t nNow = (GetAdjustedTime() - 1) * 1000000;
-    static int64_t nLastTime;
-    ++nLastTime;
-    nNow = std::max(nNow, nLastTime);
-    nLastTime = nNow;
-
-    // Each retry is 2 minutes after the last
-    const int64_t nNewRequestTime = std::max(nRequestTime + 2 * 60 * 1000000, nNow);
+    int64_t nNewRequestTime;
     {
         LOCK(cs_mapAlreadyAskedFor);
+
+        // Make sure not to reuse time indexes to keep things in the same order
+        ++nAskForLastTime;
+        nNow = std::max(nNow, nAskForLastTime);
+        nAskForLastTime = nNow;
+
+        // Each retry is 2 minutes after the last
+        nNewRequestTime = std::max(nRequestTime + 2 * 60 * 1000000, nNow);
+
         const auto it = mapAlreadyAskedFor.find(inv);
 
         if (it != mapAlreadyAskedFor.end()) {
