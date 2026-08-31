@@ -696,8 +696,8 @@ static const RPCHelpMan listunspent_help{
         }},
     RPCExamples{
         HelpExampleCli("listunspent", "") +
-        HelpExampleCli("listunspent", "6 9999999 \"[\\\"S1Example\\\"]\"") +
-        HelpExampleRpc("listunspent", "6, 9999999, [\"S1Example\"]")},
+        HelpExampleCli("listunspent", "6 9999999 \"[\\\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\\\"]\"") +
+        HelpExampleRpc("listunspent", "6, 9999999, [\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\"]")},
 };
 const RPCHelpMan& listunspent_helpman() { return listunspent_help; }
 
@@ -2150,9 +2150,9 @@ static const RPCHelpMan createrawtransaction_help{
     RPCResult{RPCResult::Type::STR_HEX, "", "Hex-encoded serialized raw transaction."},
     RPCExamples{
         HelpExampleCli("createrawtransaction",
-            "\"[{\\\"txid\\\":\\\"<txid>\\\",\\\"vout\\\":0}]\" \"{\\\"S1Example\\\":0.01}\"") +
+            "\"[{\\\"txid\\\":\\\"<txid>\\\",\\\"vout\\\":0}]\" \"{\\\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\\\":0.01}\"") +
         HelpExampleRpc("createrawtransaction",
-            "[{\"txid\":\"<txid>\",\"vout\":0}], {\"S1Example\":0.01}")},
+            "[{\"txid\":\"<txid>\",\"vout\":0}], {\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\":0.01}")},
 };
 const RPCHelpMan& createrawtransaction_helpman() { return createrawtransaction_help; }
 
