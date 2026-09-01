@@ -653,7 +653,7 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-paytxfee=<amt>", "Fee per KB to add to transactions you send",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-mintxfee=<amt>", "Minimum transaction fee for transactions you send or process (default: 0.001 GRC)",
+    argsman.AddArg("-mintxfee=<amt>", "Minimum fee rate, per KB, a transaction must pay to be included in a block this node stakes (default: 0.001 GRC). Does not affect transactions you send; use -paytxfee for that.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-mininput=<amt>", "When creating transactions, ignore inputs with value less than this (default: 0.01)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -1607,6 +1607,33 @@ bool AppInit2(ThreadHandlerPtr threads)
             return InitError(strprintf(_("Invalid amount for -paytxfee=<amount>: '%s'"), gArgs.GetArg("-paytxfee", "")));
         if (nTransactionFee > 0.25 * COIN)
             InitWarning(_("Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction."));
+    }
+
+    if (gArgs.IsArgSet("-mintxfee"))
+    {
+        // Parse into a local: ParseMoney leaves its out-param untouched on
+        // failure, so parsing straight into nMinerMinTxFee would silently keep
+        // the "unset" sentinel and fall back to the default -- which is how this
+        // option managed to be ignored for years.
+        CAmount fee_rate = 0;
+
+        // The fee_rate < 0 arm is defensive depth, not a reachable branch:
+        // ParseMoney stops at the first non-digit (util.cpp), so a leading '-'
+        // fails the parse outright and it cannot return true with a negative.
+        // It is kept so the guard stays correct if ParseMoney ever learns to
+        // accept a sign -- but the negative case in mining_fee_policy.py is
+        // pinning the PARSE failure, not this check.
+        if (!ParseMoney(gArgs.GetArg("-mintxfee", ""), fee_rate) || fee_rate < 0) {
+            return InitError(strprintf(_("Invalid amount for -mintxfee=<amount>: '%s'"),
+                                       gArgs.GetArg("-mintxfee", "")));
+        }
+
+        nMinerMinTxFee = fee_rate;
+
+        if (nMinerMinTxFee > 0.25 * COIN) {
+            InitWarning(_("Warning: -mintxfee is set very high! Transactions paying less than "
+                          "this per KB will be left out of blocks this node stakes."));
+        }
     }
 
     fConfChange = gArgs.GetBoolArg("-confchange", false);
