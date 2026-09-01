@@ -1006,7 +1006,10 @@ BOOST_AUTO_TEST_CASE(every_helpman_renders_help)
         std::string rendered;
         BOOST_CHECK_NO_THROW(rendered = cmd->helpman().ToString());
 
-        BOOST_CHECK_MESSAGE(rendered.find("Result") != std::string::npos,
+        // Anchor on the newline: the section header renders as "\nResult:" (or
+        // "\nResult (cond):"), while a bare "Result" can match incidental prose
+        // in a command's description.
+        BOOST_CHECK_MESSAGE(rendered.find("\nResult") != std::string::npos,
                             name + ": help renders no Result section");
     }
 }
@@ -1030,7 +1033,7 @@ BOOST_AUTO_TEST_CASE(any_result_commands_render_their_description)
         BOOST_REQUIRE_MESSAGE(cmd != nullptr && cmd->helpman != nullptr, name + ": not registered");
 
         const std::string rendered = cmd->helpman().ToString();
-        BOOST_CHECK_MESSAGE(rendered.find("Result") != std::string::npos,
+        BOOST_CHECK_MESSAGE(rendered.find("\nResult") != std::string::npos,
                             name + ": ANY result renders no Result section");
 
         if (!snippet.empty()) {
