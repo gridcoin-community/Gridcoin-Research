@@ -542,8 +542,9 @@ jobs:
       # "no bottle available". Source-build it once per formula version and
       # carry the built keg between runs: the version comes from the formulae
       # API (no brew needed before the bootstrap below), and a restored,
-      # current keg makes the install line a fast no-op. Everything else in
-      # this job still has Intel bottles today; if another formula loses its
+      # current keg makes the install line a fast no-op. pcre2 (below) lost
+      # its bottle the same way; a sweep of the full recursive dependency
+      # tree found no other formula without one today. If another loses its
       # bottle, give it the same treatment.
       - name: Determine openssl@3 version for the Intel build cache
         id: sslver
@@ -557,6 +558,20 @@ jobs:
         with:
           path: /usr/local/Cellar/openssl@3
           key: openssl3-intel-${{ steps.sslver.outputs.version }}
+
+      # pcre2 lost its x86_64 macOS bottle the same way (it reaches this job
+      # as a transitive dependency of qt), so it gets the same treatment as
+      # openssl@3 above: source-build once per formula version, cache the keg.
+      - name: Determine pcre2 version for the Intel build cache
+        id: pcrever
+        run: |
+          echo "version=$(curl -fsSL https://formulae.brew.sh/api/formula/pcre2.json | /usr/bin/python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["versions"]["stable"] + ("_" + str(d["revision"]) if d.get("revision") else ""))')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the source-built Intel pcre2
+        uses: actions/cache@v5
+        with:
+          path: /usr/local/Cellar/pcre2
+          key: pcre2-intel-${{ steps.pcrever.outputs.version }}
 
       - name: Install x86_64 Homebrew and Dependencies
         run: |
@@ -573,6 +588,10 @@ jobs:
           # so linking needs --force; no fallback swallow -- a link failure
           # here must fail the job, not surface later as a configure mystery.
           arch -x86_64 /usr/local/bin/brew link --force --overwrite openssl@3
+          # Same dance for pcre2 (not keg-only, so a plain relink suffices);
+          # a restored keg makes both of these fast no-ops.
+          arch -x86_64 /usr/local/bin/brew install --build-from-source pcre2
+          arch -x86_64 /usr/local/bin/brew link --overwrite pcre2
           arch -x86_64 /usr/local/bin/brew install qt boost libevent miniupnpc qrencode libzip ccache cmake capnp
 
       - name: Configure Ccache
