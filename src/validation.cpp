@@ -460,11 +460,22 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
         // block validity at the same height -- a coordinated change rather than
         // a staggered one, and no window where a staker builds from its own
         // mempool a block its peers reject.
-        // When a flag is added it belongs behind (!fBlock && !fMiner), i.e.
-        // mempool acceptance only -- never when connecting a block, where it
-        // would change which chain this node follows, and never for the miner,
-        // which is assembling a block and must judge by validity alone.
-        const unsigned int policy_flags = 0;
+        // The set itself. Empty today; adding to it is a separate decision each
+        // time, and the comment above is the standard that decision has to meet.
+        static constexpr unsigned int POLICY_SCRIPT_VERIFY_FLAGS = 0;
+
+        // The scoping, in code rather than in a comment: policy applies to mempool
+        // acceptance ONLY. fBlock is connecting a block, where a local flag would
+        // change which chain this node follows; fMiner is assembling one, which must
+        // judge by validity alone. Written as a branch while the set is still empty
+        // precisely so that whoever adds the first flag cannot reach either path by
+        // forgetting to -- which a comment saying "it belongs behind (!fBlock &&
+        // !fMiner)" could not prevent.
+        //
+        // The blame branch below is scoped through this same value rather than
+        // repeating the condition: it runs only when policy_flags != 0, which is
+        // already false on both paths.
+        const unsigned int policy_flags = (!fBlock && !fMiner) ? POLICY_SCRIPT_VERIFY_FLAGS : 0;
 
         int64_t nValueIn = 0;
         int64_t nFees = 0;

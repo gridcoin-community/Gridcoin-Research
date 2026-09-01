@@ -57,7 +57,11 @@ static constexpr unsigned int V15_SCRIPT_VERIFY_FLAGS{SCRIPT_VERIFY_LOW_S |
                                                       SCRIPT_VERIFY_MINIMALDATA |
                                                       SCRIPT_VERIFY_CLEANSTACK};
 
-/** For convenience, standard but not mandatory verify flags. */
+/** For convenience, standard but not mandatory verify flags. These feed wallet
+ *  signing, PSGT, and raw-transaction sanity checks only. The mempool's
+ *  policy-tier script flags for input connection live in
+ *  POLICY_SCRIPT_VERIFY_FLAGS (validation.cpp) -- extend that set, not this
+ *  one, to add a relay-policy script rule. */
 static constexpr unsigned int STANDARD_NOT_MANDATORY_VERIFY_FLAGS{STANDARD_SCRIPT_VERIFY_FLAGS & ~MANDATORY_SCRIPT_VERIFY_FLAGS};
 
 bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType);
