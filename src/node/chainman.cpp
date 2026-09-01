@@ -508,11 +508,12 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
 namespace {
 //!
-//! \brief RAII scope that clears g_reorg_in_progress when SetBestChain returns.
+//! \brief RAII scope that clears g_reorg_in_progress when its holder exits --
+//! held by SetBestChain and ForceReorganizeToHash for their full extent.
 //!
 //! ReorganizeChain sets the flag, because only it can distinguish a non-trivial
-//! reorg from a trivial single-block extension, and the caller clears it,
-//! because ReorganizeChain can run twice within one SetBestChain call (the
+//! reorg from a trivial single-block extension, and the calling scope clears
+//! it, because ReorganizeChain can run twice within one SetBestChain call (the
 //! forward reorg and the trust-regression reorg-back).
 //!
 //! Clearing on the success path alone left the flag set on both of the failure
