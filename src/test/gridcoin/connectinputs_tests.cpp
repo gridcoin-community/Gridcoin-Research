@@ -11,6 +11,9 @@
 #include <gridcoin/tx_message.h>
 #include <consensus/consensus.h>
 #include <limits>
+#include <string>
+#include <tinyformat.h>
+#include <util/system.h>
 #include <script/interpreter.h>
 #include <script/script.h>
 #include <txdb.h>
@@ -212,6 +215,106 @@ BOOST_AUTO_TEST_CASE(v15_script_flags_close_malleability_at_activation)
     BOOST_CHECK((at & SCRIPT_VERIFY_P2SH) != 0);
     BOOST_CHECK((at & SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY) != 0);
     BOOST_CHECK((at & SCRIPT_VERIFY_CHECKSEQUENCEVERIFY) != 0);
+}
+
+
+//!
+//! A CONSENSUS script failure scores the relayer 100. This is the half of the
+//! policy/consensus split that is writable today, and it is the half that has to
+//! keep working: the point of the split is that policy failures stop scoring
+//! peers, not that consensus failures stop doing so.
+//!
+//! CLEANSTACK is the cheapest v15 flag to violate deliberately and needs no
+//! signature at all. `OP_1` as the output script, spent by `OP_1`, leaves two
+//! items on the stack: the top is true, so the spend is valid under the pre-v15
+//! flags, and invalid once CLEANSTACK is in the consensus set. Same transaction,
+//! same inputs -- only the activation height moves, which is what makes the DoS
+//! score attributable to the flag rather than to anything else about the input.
+//!
+//! The policy tier in ConnectInputs() (validation.cpp) is still empty, so the
+//! nDoS == 0 half cannot be written yet: nothing can fail policy without also
+//! failing consensus. That needs a seam in the flag set first, and is the other
+//! half of this row.
+//!
+BOOST_AUTO_TEST_CASE(a_consensus_script_failure_scores_the_relayer)
+{
+    LOCK(cs_main);
+
+    // Restored before leaving: three suites in this binary assert that v15 is
+    // unscheduled, and pool_tests forces this same argument in the other
+    // direction. Leaving it set would make this file's own earlier cases order
+    // dependent.
+    struct V15HeightGuard {
+        const bool was_set{gArgs.IsArgSet("-blockv15height")};
+        const std::string previous{gArgs.GetArg("-blockv15height", "")};
+        ~V15HeightGuard()
+        {
+            if (was_set) {
+                gArgs.ForceSetArg("-blockv15height", previous);
+            } else {
+                gArgs.ForceSetArg("-blockv15height", strprintf("%d", std::numeric_limits<int>::max()));
+            }
+        }
+    } guard;
+
+    CBlockIndex index;
+    index.nHeight = nGrandfather + 1;
+
+    CMutableTransaction prev;
+    prev.vout.resize(1);
+    prev.vout[0].nValue = 1 * COIN;
+    prev.vout[0].scriptPubKey = CScript() << OP_1;   // anyone-can-spend, leaves one item
+
+    const CTransaction prev_tx(prev);
+    const uint256 prev_hash = prev_tx.GetHash();
+
+    CTxIndex txindex;
+    txindex.vSpent.resize(1);          // unspent
+    MapPrevTx inputs;
+    inputs[prev_hash] = {txindex, prev_tx};
+
+    CMutableTransaction spender;
+    spender.vin.emplace_back();
+    spender.vin.back().prevout = COutPoint(prev_hash, 0);
+    spender.vin.back().scriptSig = CScript() << OP_1;  // one item too many at the end
+    spender.vout.resize(1);
+    // Leaves half a coin as fee. A zero-fee spend fails ConnectInputs' own
+    // GetMinFee() check first -- and on the !fBlock path that returns false with
+    // NO DoS score, which would make the control below pass for the wrong reason.
+    spender.vout[0].nValue = COIN / 2;
+
+    CTransaction tx(spender);   // ConnectInputs takes a non-const reference
+    CTxDB txdb("r");
+
+    // Control: v15 inert. CLEANSTACK is not in the flag set, the top of the stack
+    // is true, and the spend is accepted. Without this the assertion below would
+    // pass for a transaction that was invalid for some unrelated reason.
+    {
+        gArgs.ForceSetArg("-blockv15height", strprintf("%d", std::numeric_limits<int>::max()));
+        BOOST_REQUIRE_EQUAL(GetBlockV15Height(), std::numeric_limits<int>::max());
+
+        CValidationState state;
+        std::map<uint256, CTxIndex> test_pool;
+
+        BOOST_CHECK(ConnectInputs(tx, state, txdb, inputs, test_pool,
+                                  CDiskTxPos(1, 1, 1), &index, /*fBlock=*/false, /*fMiner=*/false));
+        BOOST_CHECK_EQUAL(state.GetDoS(), 0);
+    }
+
+    // Activated: the same transaction now fails a consensus rule, and the peer
+    // that relayed it is scored the full 100.
+    {
+        gArgs.ForceSetArg("-blockv15height", "0");
+        BOOST_REQUIRE_EQUAL(GetBlockV15Height(), 0);
+
+        CValidationState state;
+        std::map<uint256, CTxIndex> test_pool;
+
+        BOOST_CHECK(!ConnectInputs(tx, state, txdb, inputs, test_pool,
+                                   CDiskTxPos(1, 1, 1), &index, /*fBlock=*/false, /*fMiner=*/false));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 100);
+    }
 }
 
 
