@@ -1845,6 +1845,13 @@ bool TryMineRegtestBlock(CWallet* pwallet,
         return false;
     }
 
+    // Snapshot any staged regtest superblock before the attach step consumes
+    // it. The two failure exits below (signing, ProcessBlock) return to a
+    // caller that retries with a new stake timestamp; without restoring the
+    // slot, the retry would mine a plain block and silently drop the staged
+    // superblock while the RPC still reported success.
+    std::optional<GRC::Superblock> staged_backup = g_regtest_staged_superblock;
+
     AddSuperblockContractOrVote(mtxCoinbase, StakeBlock.nTime);
 
     // Copy back coinbase AFTER CreateMRCRewards and AddSuperblockContractOrVote
@@ -1878,12 +1885,14 @@ bool TryMineRegtestBlock(CWallet* pwallet,
     StakeBlock.vtx[1] = CTransaction(mtxCoinstake);
 
     if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) {
+        g_regtest_staged_superblock = std::move(staged_backup);
         err = "SignStakeBlock failed (check beacon / investor mode)";
         return false;
     }
 
     CValidationState stake_state;
     if (!ProcessBlock(nullptr, &StakeBlock, true, stake_state)) {
+        g_regtest_staged_superblock = std::move(staged_backup);
         err = "ProcessBlock rejected the block: " + stake_state.GetRejectReason();
         return false;
     }

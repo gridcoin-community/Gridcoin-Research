@@ -1181,7 +1181,10 @@ static const RPCHelpMan generatesuperblock_help{
     "Scrapers are disabled under -regtest, so there is no convergence for\n"
     "Quorum::CreateSuperblock() to build from and the miner suppresses\n"
     "auto-attach. This RPC is the only path: it stages the superblock given\n"
-    "here, and the next block the miner assembles consumes it.",
+    "here, and the next block the miner assembles consumes it. Run the node\n"
+    "with -staking=0 so the background stake miner cannot assemble that block\n"
+    "first; calling this RPC again before a block is mined replaces the\n"
+    "pending superblock (last writer wins).",
     {
         {"magnitudes", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
             "Magnitudes keyed by CPID. At least one is required: a superblock\n"

@@ -57,7 +57,10 @@ namespace GRC { class Superblock; }
 //! Regtest only. Scrapers are disabled under -regtest, so Quorum::CreateSuperblock()
 //! has nothing to build from and AddSuperblockContractOrVote suppresses auto-attach.
 //! The generatesuperblock RPC stages a caller-specified superblock here; the next
-//! call to AddSuperblockContractOrVote consumes it exactly once.
+//! call to AddSuperblockContractOrVote consumes it exactly once. If the block
+//! attempt that consumed it fails to sign or be accepted, TryMineRegtestBlock
+//! restores the staged value so the retry attempt carries it. Staging again
+//! before consumption replaces the pending value (last writer wins).
 void StageRegtestSuperblock(GRC::Superblock superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 bool GetDevbuildCripple();
