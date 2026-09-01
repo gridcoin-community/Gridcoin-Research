@@ -656,6 +656,14 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
 bool ForceReorganizeToHash(uint256 NewHash)
 {
     LOCK(cs_main);
+
+    // Same guard as SetBestChain: the flag clears on EVERY exit -- the two
+    // early failure returns below never set it (ReorganizeChain does), so
+    // clearing false there is a no-op, and the returns after ReorganizeChain
+    // are covered without a manual clear that an exception or a future early
+    // return could bypass.
+    const ReorgInProgressScope reorg_scope;
+
     CTxDB txdb;
 
     auto mapItem = mapBlockIndex.find(NewHash);
@@ -690,18 +698,10 @@ bool ForceReorganizeToHash(uint256 NewHash)
         LogPrintf("WARN: %s: Chain trust is now less than before!", __func__);
     }
 
-    // g_reorg_in_progress is set in ReorganizeChain, which is what decides whether the move
-    // was a trivial extension, and cleared by the caller -- so this is the only place that can
-    // clear it on this path.
-    //
-    // Cleared unconditionally, and that is the decision rather than an oversight: once this
-    // function returns, no reorg is in progress, whatever the trust outcome above was. A
-    // regression means the reorganize we forced left the chain worse off, which is what the
-    // warning is for; it does not leave a reorg running. Holding the flag would tell every
-    // later reader -- the GUI and the poll-registry RPCs, which read it without cs_main --
-    // that one still was.
-    g_reorg_in_progress = false;
-
+    // The flag (set in ReorganizeChain) is cleared by the ReorgInProgressScope
+    // guard at every exit of this function -- unconditionally, and that is the
+    // decision rather than an oversight: once this function returns, no reorg
+    // is in progress, whatever the trust outcome above was.
     if (!success) {
         return error("%s: Fatal Error while setting best chain.", __func__);
     }
