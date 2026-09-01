@@ -1016,8 +1016,11 @@ BOOST_AUTO_TEST_CASE(every_helpman_renders_help)
 BOOST_AUTO_TEST_CASE(any_result_commands_render_their_description)
 {
     const std::vector<std::pair<std::string, std::string>> expected{
-        {"dumpprivkey", "base58 WIF"},
-        {"getaddednodeinfo", ""},
+        // Snippets must be unique to the RESULT description: "base58 WIF" also
+        // appears in dumpprivkey's dump_hex argument text, so a missing Result
+        // section would still find it there and pass vacuously.
+        {"dumpprivkey", "returns a JSON object with base58 and hex"},
+        {"getaddednodeinfo", "Shape depends on the 'dns' argument"},
         {"sendalert2", "Summary of what was done"},
         {"versionreport", "Per-version tally"},
     };

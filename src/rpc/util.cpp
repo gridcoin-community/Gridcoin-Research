@@ -508,14 +508,17 @@ void RPCResult::ToSections(Sections& sections, const OuterType outer_type, const
         return;
     }
     case Type::ANY: {
-        // Upstream reserves ANY for testing and never renders it, which is why this
-        // asserted and why RPCResults::ToDescriptionString used to skip it outright.
-        // Here it is used for genuinely polymorphic returns -- dumpprivkey,
-        // getaddednodeinfo, sendalert2 and versionreport -- each of which carries a
-        // description written for a reader. Skipping meant those four commands printed
-        // no Result section at all while the text sat in the spec unused. Render the
-        // description with an elided shape, since there is no single shape to give.
-        sections.PushSection({indent + maybe_key + "..." + maybe_separator, Description("any")});
+        // Upstream v26.0 (this port's baseline) reserved ANY for testing and never
+        // rendered it, which is why this asserted and why
+        // RPCResults::ToDescriptionString used to skip it outright. Upstream has
+        // since converged on rendering it (master commits 6a1a66c180cb and
+        // fa2264791490). Here it is used for genuinely polymorphic
+        // returns -- dumpprivkey, getaddednodeinfo, sendalert2 and versionreport --
+        // each of which carries a description written for a reader. Skipping meant
+        // those four commands printed no Result section at all while the text sat in
+        // the spec unused. Render the description against upstream's "xxx" value
+        // placeholder ("..." would collide with the ELISION rendering above).
+        sections.PushSection({indent + maybe_key + "xxx" + maybe_separator, Description("any")});
         return;
     }
     case Type::NONE: {

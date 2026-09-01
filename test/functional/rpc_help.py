@@ -44,13 +44,12 @@ pattern check runs against them. No edits to this file are required.
 Regression guard
 ----------------
 `CRPCCommand`'s constructor takes the `RPCHelpMan` accessor as a required
-parameter, and the C++ unit test `rpchelpman_tests/every_helpman_renders`
+parameter, and the C++ unit test `rpchelpman_tests/every_helpman_renders_help`
 fails on any registered command whose accessor is null or does not render
 (nothing asserts it at daemon startup). So every discovered command must
 classify as converted -- except category aliases, whose help cannot be introspected through
-the help RPC, and `ANY_RESULT_COMMANDS`, which render no Result section. Any
-other command classified as legacy means a conversion was reverted or the
-discovery walk broke. The guard scales with the command table and needs no
+the help RPC. Any command classified as legacy means a conversion was
+reverted or the discovery walk broke. The guard scales with the command table and needs no
 hand-maintained floor.
 
 What it catches per converted command
@@ -127,13 +126,12 @@ VARIADIC_ACCEPTS_EXTRA_ARGS = {
 # skips Type::ANY entirely -- upstream Bitcoin Core marks that type "for testing
 # only". The description the spec author wrote is therefore never rendered.
 # These are RPCHelpMan-converted regardless: their synopsis line is
-# RPCHelpMan-rendered, which is what the first-line check in classify_command
-# confirms.
-#
-# Listed by name rather than skipped by rule so that a genuinely un-converted
-# command cannot hide among them. Whether ANY should render its description at
-# all is a separate question about src/rpc/util.cpp, not about this test.
-ANY_RESULT_COMMANDS = frozenset({
+# Four commands declare RPCResult::Type::ANY; since src/rpc/util.cpp renders
+# ANY (it used to skip it), they classify as converted like everything else.
+# They stay pinned by name purely as a discovery-walk vacuity guard: a broken
+# walk that discovers nothing would otherwise satisfy the no-legacy assertion
+# below with a vacuously empty set.
+PINNED_DISCOVERY_COMMANDS = frozenset({
     "dumpprivkey",       # src/wallet/rpcdump.cpp
     "getaddednodeinfo",  # src/rpc/net.cpp
     "sendalert2",        # src/rpc/net.cpp
@@ -342,36 +340,32 @@ class RpcHelpTest(GridcoinTestFramework):
             ", ".join(category_aliases) if category_aliases else "(none)",
         )
         if legacy:
-            self.log.info("Allowlisted ANY-result commands (no Result section): %s",
-                          ", ".join(sorted(set(legacy) & ANY_RESULT_COMMANDS)) or "(none)")
-            self.log.info("Unexpected legacy-classified commands: %s",
-                          ", ".join(sorted(set(legacy) - ANY_RESULT_COMMANDS)) or "(none)")
+            self.log.info("Legacy-classified commands: %s", ", ".join(sorted(legacy)))
 
         # Vacuity guard first: an empty or broken discovery walk would satisfy
         # the legacy check below with nothing discovered at all. The four
         # allowlisted commands are pinned by name, so discovery must have seen
         # every one of them.
         discovered = set(name for name, _ in converted) | set(legacy)
-        missing = sorted(ANY_RESULT_COMMANDS - discovered)
+        missing = sorted(PINNED_DISCOVERY_COMMANDS - discovered)
         assert not missing, (
             f"Discovery walk did not find pinned commands {missing}; "
             f"the walk itself is broken, so the legacy guard below is vacuous."
         )
 
         # Regression guard: CRPCCommand's constructor takes the RPCHelpMan
-        # accessor as a required parameter (the every_helpman_renders unit
-        # test enforces it renders), so anything classified as
-        # legacy is either a reverted conversion, a broken discovery walk, or a
-        # new ANY-result command that belongs in the allowlist above.
-        # category-alias commands are excluded because their help text cannot
-        # be introspected through the help RPC alone (see classify_command).
-        unexpected_legacy = sorted(set(legacy) - ANY_RESULT_COMMANDS)
+        # accessor as a required parameter (the every_helpman_renders_help unit
+        # test enforces it renders, Result section included), so anything
+        # classified as legacy is either a reverted conversion or a broken
+        # discovery walk. category-alias commands are excluded because their
+        # help text cannot be introspected through the help RPC alone (see
+        # classify_command).
+        unexpected_legacy = sorted(set(legacy))
         assert not unexpected_legacy, (
-            f"Commands classified as legacy that are not known ANY-result "
-            f"commands: {unexpected_legacy}.\n"
-            f"Either a conversion was reverted, discovery is broken, or these "
-            f"declare RPCResult::Type::ANY and should be added to "
-            f"ANY_RESULT_COMMANDS.\n"
+            f"Commands classified as legacy: {unexpected_legacy}.\n"
+            f"Either a conversion was reverted or discovery is broken -- "
+            f"RPCResult::Type::ANY renders a Result section, so ANY commands "
+            f"classify as converted and no allowlist exists.\n"
             f"All legacy commands seen: {sorted(legacy)}\n"
             f"Category-alias commands seen: {category_aliases}"
         )
