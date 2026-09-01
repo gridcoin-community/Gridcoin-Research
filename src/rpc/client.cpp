@@ -181,6 +181,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "claimhtlc"              , 1 },
     { "createhtlc"             , 3 },
     { "createhtlc"             , 4 },
+    { "generatesuperblock"     , 0 },
+    { "generatesuperblock"     , 1 },
     { "createrawtransaction"   , 0 },
     { "createrawtransaction"   , 1 },
     { "consolidatemsunspent"   , 1 },

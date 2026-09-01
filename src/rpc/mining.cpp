@@ -1176,22 +1176,36 @@ UniValue generate(const UniValue& params)
 
 static const RPCHelpMan generatesuperblock_help{
     "generatesuperblock",
-    "Mine one regtest block carrying the current local superblock contract\n"
-    "(built from scraper convergence or, on -regtest where scrapers are\n"
-    "disabled, from any local quorum state). Auto-attach is disabled under\n"
-    "-regtest; this RPC is the only path.\n"
+    "Mine one regtest block carrying an explicit superblock contract.\n"
     "\n"
-    "TODO: accept JSON params to construct a synthetic superblock directly\n"
-    "rather than relying on Quorum::CreateSuperblock() state. For now, this\n"
-    "mines one block and the regtest miner code path skips superblock attach\n"
-    "(Phase 2A gate) -- so this is a stub until the 2B follow-up wires the\n"
-    "explicit-attach path.",
-    {},
+    "Scrapers are disabled under -regtest, so there is no convergence for\n"
+    "Quorum::CreateSuperblock() to build from and the miner suppresses\n"
+    "auto-attach. This RPC is the only path: it stages the superblock given\n"
+    "here, and the next block the miner assembles consumes it. Run the node\n"
+    "with -staking=0 so the background stake miner cannot assemble that block\n"
+    "first; calling this RPC again before a block is mined replaces the\n"
+    "pending superblock (last writer wins).",
+    {
+        {"magnitudes", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
+            "Magnitudes keyed by CPID. At least one is required: a superblock\n"
+            "with no CPIDs is not well formed and is refused.",
+            {
+                {"cpid", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                    "Magnitude for this CPID."},
+            }},
+        {"projects", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "Project names to record. Defaults to a single synthetic project.\n"
+            "Statistics are synthetic: regtest has no project data, and the\n"
+            "superblock only needs a non-empty project index to be well formed.",
+            {
+                {"name", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Project name."},
+            }},
+    },
     RPCResult{RPCResult::Type::ARR, "", "Hashes of the blocks generated",
         {{RPCResult::Type::STR_HEX, "", "Block hash."}}},
     RPCExamples{
-        HelpExampleCli("generatesuperblock", "") +
-        HelpExampleRpc("generatesuperblock", "")},
+        HelpExampleCli("generatesuperblock", "\"{\\\"00010203040506070809101112131415\\\":100}\"") +
+        HelpExampleRpc("generatesuperblock", "{\"00010203040506070809101112131415\":100}")},
 };
 const RPCHelpMan& generatesuperblock_helpman() { return generatesuperblock_help; }
 
@@ -1200,10 +1214,72 @@ UniValue generatesuperblock(const UniValue& params)
     if (!Params().IsMockableChain()) {
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "generatesuperblock only available on -regtest");
     }
-    // TODO(2B): Construct a GRC::Superblock from caller-supplied JSON, bypass
-    // the IsMockableChain() short-circuit in AddSuperblockContractOrVote for
-    // this one call, and attach. For now, just mines a plain block so the
-    // RPC surface is reachable.
+
+    GRC::Superblock superblock(GRC::Superblock::CURRENT_VERSION);
+
+    const UniValue& magnitudes = params[0].get_obj();
+    const std::vector<std::string> cpid_keys = magnitudes.getKeys();
+
+    if (cpid_keys.empty()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "at least one CPID magnitude is required");
+    }
+
+    for (const std::string& cpid_hex : cpid_keys) {
+        const GRC::CpidOption cpid = GRC::MiningId::Parse(cpid_hex).TryCpid();
+
+        if (!cpid) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("invalid CPID: %s", cpid_hex));
+        }
+
+        if (!magnitudes[cpid_hex].isNum()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               strprintf("magnitude for CPID %s must be a number", cpid_hex));
+        }
+
+        const double magnitude = magnitudes[cpid_hex].get_real();
+
+        if (magnitude < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               strprintf("negative magnitude for CPID %s", cpid_hex));
+        }
+
+        superblock.m_cpids.Add(*cpid, GRC::Magnitude::RoundFrom(magnitude));
+    }
+
+    // Synthetic statistics: regtest has no project data, and the superblock
+    // only needs a non-empty project index to be well formed.
+    const GRC::Superblock::ProjectStats stats(1, 1, 1);
+
+    if (params.size() > 1 && !params[1].isNull()) {
+        const std::vector<UniValue>& names = params[1].get_array().getValues();
+
+        if (names.empty()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               "projects must contain at least one name");
+        }
+
+        for (const UniValue& name : names) {
+            if (!name.isStr() || name.get_str().empty()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                                   "project name must be a non-empty string");
+            }
+
+            superblock.m_projects.Add(name.get_str(), stats);
+        }
+    } else {
+        superblock.m_projects.Add("regtest", stats);
+    }
+
+    if (!superblock.WellFormed()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           "the resulting superblock is not well formed");
+    }
+
+    {
+        LOCK(cs_main);
+        StageRegtestSuperblock(std::move(superblock));
+    }
+
     return MineNBlocks(1, "");
 }
 

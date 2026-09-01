@@ -59,6 +59,19 @@ extern std::atomic<int> g_stakelimit_height;
 //! hidden `devbuild=override` setting is passed. State lives in miner.cpp;
 //! extracted from the former util.h fDevbuildCripple global so util.h is
 //! stateless. Set from init.
+namespace GRC { class Superblock; }
+
+//! \brief Stage an explicit superblock for the next block the miner assembles.
+//!
+//! Regtest only. Scrapers are disabled under -regtest, so Quorum::CreateSuperblock()
+//! has nothing to build from and AddSuperblockContractOrVote suppresses auto-attach.
+//! The generatesuperblock RPC stages a caller-specified superblock here; the next
+//! call to AddSuperblockContractOrVote consumes it exactly once. If the block
+//! attempt that consumed it fails to sign or be accepted, TryMineRegtestBlock
+//! restores the staged value so the retry attempt carries it. Staging again
+//! before consumption replaces the pending value (last writer wins).
+void StageRegtestSuperblock(GRC::Superblock superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
 bool GetDevbuildCripple();
 void SetDevbuildCripple(bool crippled);
 

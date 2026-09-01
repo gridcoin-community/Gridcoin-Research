@@ -1412,27 +1412,45 @@ bool SignStakeBlock(CBlock &block, CKey &key,
     return true;
 }
 
+//! Explicit superblock staged by the regtest-only generatesuperblock RPC.
+//! Consumed exactly once by the next AddSuperblockContractOrVote call.
+static std::optional<GRC::Superblock> g_regtest_staged_superblock GUARDED_BY(cs_main);
+
+void StageRegtestSuperblock(GRC::Superblock superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    assert(Params().IsMockableChain()); // LINT-OK-ASSERT: regtest-only entry guard, unreachable via the RPC gate; abort beats staging a synthetic superblock on a live chain
+    g_regtest_staged_superblock = std::move(superblock);
+}
+
 void AddSuperblockContractOrVote(CMutableTransaction& mtxCoinbase, int64_t nBlockTime) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    GRC::Superblock superblock;
+
     if (Params().IsMockableChain()) {
         // Under -regtest, the only path to a superblock is the explicit
-        // `generatesuperblock` RPC (Phase 2B). Suppress auto-attach so blocks
-        // produced by the deterministic staker stay free of synthetic quorum
-        // payloads driven by absent scrapers.
-        return;
-    }
+        // `generatesuperblock` RPC. Scrapers are disabled, so auto-attach has
+        // nothing to attach: consume a staged superblock if the RPC left one,
+        // and otherwise stay silent exactly as before, so blocks produced by
+        // the deterministic staker carry no synthetic quorum payloads.
+        if (!g_regtest_staged_superblock) {
+            return;
+        }
 
-    if (OutOfSyncByAge()) {
-        LogPrintf("AddSuperblockContractOrVote: Out of sync.");
-        return;
-    }
+        superblock = std::move(*g_regtest_staged_superblock);
+        g_regtest_staged_superblock.reset();
+    } else {
+        if (OutOfSyncByAge()) {
+            LogPrintf("AddSuperblockContractOrVote: Out of sync.");
+            return;
+        }
 
-    if (!GRC::Quorum::SuperblockNeeded(nBlockTime)) {
-        LogPrintf("AddSuperblockContractOrVote: Not needed.");
-        return;
-    }
+        if (!GRC::Quorum::SuperblockNeeded(nBlockTime)) {
+            LogPrintf("AddSuperblockContractOrVote: Not needed.");
+            return;
+        }
 
-    GRC::Superblock superblock = GRC::Quorum::CreateSuperblock();
+        superblock = GRC::Quorum::CreateSuperblock();
+    }
 
     if (!superblock.WellFormed()) {
         LogPrintf("AddSuperblockContractOrVote: Local contract empty.");
@@ -1894,6 +1912,13 @@ bool TryMineRegtestBlock(CWallet* pwallet,
         return false;
     }
 
+    // Snapshot any staged regtest superblock before the attach step consumes
+    // it. The two failure exits below (signing, ProcessBlock) return to a
+    // caller that retries with a new stake timestamp; without restoring the
+    // slot, the retry would mine a plain block and silently drop the staged
+    // superblock while the RPC still reported success.
+    std::optional<GRC::Superblock> staged_backup = g_regtest_staged_superblock;
+
     AddSuperblockContractOrVote(mtxCoinbase, StakeBlock.nTime);
 
     // Copy back coinbase AFTER CreateMRCRewards and AddSuperblockContractOrVote
@@ -1927,12 +1952,14 @@ bool TryMineRegtestBlock(CWallet* pwallet,
     StakeBlock.vtx[1] = CTransaction(mtxCoinstake);
 
     if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) {
+        g_regtest_staged_superblock = std::move(staged_backup);
         err = "SignStakeBlock failed (check beacon / investor mode)";
         return false;
     }
 
     CValidationState stake_state;
     if (!ProcessBlock(nullptr, &StakeBlock, true, stake_state)) {
+        g_regtest_staged_superblock = std::move(staged_backup);
         err = "ProcessBlock rejected the block: " + stake_state.GetRejectReason();
         return false;
     }
