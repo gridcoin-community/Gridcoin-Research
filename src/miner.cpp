@@ -16,6 +16,7 @@
 #include "gridcoin/claim.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/autogreylist.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/difficulty.h"
@@ -1379,6 +1380,14 @@ void AddSuperblockContractOrVote(CMutableTransaction& mtxCoinbase, int64_t nBloc
         LogPrintf("AddSuperblockContractOrVote: Local contract empty.");
         return;
     }
+
+    // Re-stamp the greylist record anchored at the block being created (no-op below the
+    // redesign gate). The cached contract can have been built at an earlier tip; the record
+    // must carry the ONE anchor a validator can recover -- the containing block. Verified
+    // safe here: StakeBlock.nTime is final before this call, and the quorum hash excludes
+    // m_project_status, so re-stamping cannot change the contract hash other nodes match.
+    GRC::GetAutoGreylistCache()->StampProjectStatus(superblock, pindexBest->nHeight + 1,
+                                                    nBlockTime, pindexBest);
 
     GRC::Claim claim = mtxCoinbase.vContracts[0].CopyPayloadAs<GRC::Claim>();
 

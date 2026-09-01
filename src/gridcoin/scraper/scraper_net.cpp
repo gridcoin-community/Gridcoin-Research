@@ -893,8 +893,13 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     {
         LOCK(cs_ScraperGlobals);
 
+        // GreylistState::NONE: this is a pure ALL_BUT_DELETED membership COUNT (the overlay
+        // rewrites status, never membership of this filter, so the integer is identical
+        // either way) -- and it removes a live greylist-cache dependency from a path that
+        // feeds a peer-banning decision.
         nMaxProjects = static_cast<unsigned int>(
-            std::ceil(static_cast<double>(GRC::GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED).size()) /
+            std::ceil(static_cast<double>(GRC::GetWhitelist().Snapshot(GRC::GreylistState::NONE,
+                          GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED).size()) /
                       std::max(0.5, CONVERGENCE_BY_PROJECT_RATIO)) + 2);
     }
 

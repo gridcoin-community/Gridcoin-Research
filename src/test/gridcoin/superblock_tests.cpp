@@ -709,7 +709,8 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics_v3
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence)
 {
     const ScraperStatsMeta meta;
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta), 2);
+    GRC::Superblock superblock = GRC::Superblock::FromConvergence(
+        GetTestConvergence(meta), 2, /*update_pending_cache=*/true, pindexBest);
 
     BOOST_CHECK(superblock.m_version == 2);
 
@@ -775,7 +776,8 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence_v3)
     nBestHeight = 1;
 
     const ScraperStatsMeta meta(3);
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta), 3);
+    GRC::Superblock superblock = GRC::Superblock::FromConvergence(
+        GetTestConvergence(meta), 3, /*update_pending_cache=*/true, pindexBest);
 
     BOOST_CHECK(superblock.m_version == 3);
 
@@ -846,7 +848,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergen
 {
     const ScraperStatsMeta meta;
     GRC::Superblock superblock = GRC::Superblock::FromConvergence(
-        GetTestConvergence(meta, true), 2); // Set fallback by project flag
+        GetTestConvergence(meta, true), 2, /*update_pending_cache=*/true, pindexBest); // Set fallback by project flag
 
     BOOST_CHECK(superblock.m_version == 2);
     BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
@@ -925,7 +927,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergen
 
     const ScraperStatsMeta meta(3);
     GRC::Superblock superblock = GRC::Superblock::FromConvergence(
-        GetTestConvergence(meta, true), 3); // Set fallback by project flag
+        GetTestConvergence(meta, true), 3, /*update_pending_cache=*/true, pindexBest); // Set fallback by project flag
 
     BOOST_CHECK(superblock.m_version == 3);
     BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
@@ -1295,7 +1297,8 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
         << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta), 2);
+    GRC::Superblock superblock = GRC::Superblock::FromConvergence(
+        GetTestConvergence(meta), 2, /*update_pending_cache=*/true, pindexBest);
 
     BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
 
@@ -1435,7 +1438,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
         << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     GRC::Superblock superblock = GRC::Superblock::FromConvergence(
-        GetTestConvergence(meta, true), 2); // Set fallback by project flag
+        GetTestConvergence(meta, true), 2, /*update_pending_cache=*/true, pindexBest); // Set fallback by project flag
 
     BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
 

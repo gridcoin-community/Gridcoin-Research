@@ -223,6 +223,13 @@ inline bool IsAutoGreylistTotalCreditFixEnabled(int nHeight)
     return nHeight >= gArgs.GetArg("-autogreylisttotalcreditfixheight", Params().GetConsensus().AutoGreylistTotalCreditFixHeight);
 }
 
+inline bool IsAutoGreylistRedesignEnabled(int nHeight)
+{
+    // The argument driven override temporarily here to facilitate isolated/public testnet testing
+    // ahead of the v15 activation height.
+    return nHeight >= gArgs.GetArg("-autogreylistredesignheight", Params().GetConsensus().AutoGreylistRedesignHeight);
+}
+
 inline bool IsSuperblockV3Enabled(int nHeight)
 {
     return nHeight >= Params().GetConsensus().SuperblockV3Height;

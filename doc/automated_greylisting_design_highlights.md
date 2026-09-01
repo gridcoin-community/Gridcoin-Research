@@ -134,9 +134,15 @@ This method simply returns the m_zcd_20_SB_count member variable, which is a cou
 
 The method computes the average total credit over a 7 superblock lookback and a 40  superblock lookback and then constructs a Fraction of the result. Note that if the lookback is less than 40, the number of superblocks in the average is reduced for the 40 superblock lookback and similarly if the lookback is less than 7, the number of superblocks in the average is reduced for the 7 superblock lookback. Given that when data is first being collected for a newly listed project, this can lead to odd behavior of WAS, there is a grace period implemented in the application of the rules for setting the m_meets_greylisting_crit flag in the GreylistCandidateEntry. This grace period is currently set at 7 superblocks.
 
-##### void UpdateGreylistCandidateEntry(std::optional<uint64_t> total_credit, uint8_t sb_from_baseline)
+Note that `m_TC_7_SB_sum` and `m_TC_40_SB_sum` are **assignments, not accumulations** — each holds a single endpoint difference from the head bookmark (`m_TC_initial_bookmark - total_credit` at the largest qualifying `sb_from_baseline`), which is equivalent to summing the deltas only while the series is clean. One bad endpoint is therefore diluted by nothing. A known consequence, pre-dating the zero normalization and applying equally to projects simply absent from a superblock: when an endpoint is skipped the numerator spans fewer superblocks while the divisor still advances with `m_sb_from_baseline_processed`, so WAS is understated (a single skipped endpoint at `sb_from_baseline == 7` understates a uniform history by about 14%). This is tracked for the walker-correctness pass gated by `AutoGreylistRedesignHeight`.
+
+##### void UpdateGreylistCandidateEntry(std::optional<uint64_t> total_credit, uint8_t sb_from_baseline, bool use_benefit_of_doubt)
 
 This method is used by the RefreshWithSuperblock method to update each GreylistCandidateEntry and add each update to the entry history.
+
+`use_benefit_of_doubt` is height-gated by the caller on `AutoGreylistAuditHeight`; it suppresses the ZCD increment for the single interval at `sb_from_baseline == 1` when the head/baseline bookmark is missing, so a transient local scraper failure on one node cannot by itself force a greylist event.
+
+Note this class implements the pre-`AutoGreylistRedesignHeight` (V1) consensus behavior and is frozen. The chain-resident-zero normalization (a recorded total credit of exactly zero treated as missing data), the WAS divisor correction, and the pending/authoritative state separation are all implemented in the V2 walker, which activates at `AutoGreylistRedesignHeight` and is documented separately.
 
 ##### struct UpdateHistoryEntry
 
@@ -247,6 +253,86 @@ The QuorumHash ComputeQuorumHash() was extended (implicitly) to include the proj
 ## GUI - ResearcherModel and ProjectTableModel changes
 
 The researcher and project table models were extended to deal appropriately with auto greylisted status, following the order of precedence. In the project table displayed in the GUi, automatic greylisting status and manual greylisting status takes precedence over excluded, because if a project has those statuses, it has the same effect as exclusion, but is not a scraper directive.
+
+## The V2 redesign (AutoGreylistRedesignHeight)
+
+At `AutoGreylistRedesignHeight` (set equal to `BlockV15Height` at release; independently
+overridable for testnet via the hidden `-autogreylistredesignheight` argument) the auto
+greylist switches from the class described above (V1, frozen as the pre-gate consensus
+behavior) to a redesigned architecture. The full design of record is maintained in the
+development environment (`autogreylist_state_separation/DESIGN.md`); this section summarizes
+what ships in the tree.
+
+### The facade and the two states
+
+`AutoGreylistService` (`src/gridcoin/autogreylist.h`) is the single owner of greylist state.
+It separates two dispatches the previous design conflated:
+
+* **Version dispatch (V1 vs V2)** belongs to the *producers* at write time, decided from the
+  anchor height of each refresh. There is no global mode flag: a V1-producer write clears
+  the V2 slots, a V2-producer write fills them, and a read serves a filled slot or falls
+  through to V1. Below the gate behavior is bit-identical to V1 by construction.
+* **State dispatch (pending vs authoritative)** belongs to the *consumers* at read time,
+  through the required `GreylistState` selector on `Whitelist::Snapshot()`. The
+  classification rule is mechanical: match the data source. Convergence-derived data reads
+  PENDING; superblock/registry-derived data reads AUTHORITATIVE; data that never reads
+  greylist status passes NONE (which replaces the old `include_override = false`).
+
+**Authoritative** is the greylist as of the last committed superblock, and above the gate it
+is READ from the superblock's serialized `m_project_status` record -- a map lookup, no chain
+walk -- primed lazily and invalidated at the chain handler points (superblock push, pop,
+index load). **Pending** is the greylist for a candidate superblock built from the current
+convergence, keyed by the convergence content hash and recomputed only when the convergence
+changes; a candidate re-derived from the same convergence reuses the cached computation.
+Absent a convergence, pending equals authoritative.
+
+### The record: produced at one anchor, validated at acceptance
+
+`m_project_status` is serialized in v3+ superblocks but deliberately excluded from the
+quorum hash. Because the redesign reads it back as the authoritative state, its bytes are
+consensus-validated above the gate:
+
+* The staking node re-stamps the record at bind time (`AddSuperblockContractOrVote`),
+  anchored at the block being created, through the single record-derivation rule
+  (`AutoGreylistV2::DeriveProjectStatusRecord`).
+* Every validator recomputes the expected record at acceptance
+  (`Quorum::ValidateSuperblockClaim`) with the same walker and the same rule, and rejects a
+  superblock whose record does not match. The check runs before contract application, so
+  producer and validator evaluate against the same parent-block registry state.
+
+Below the gate the record remains advisory, exactly as on the pre-redesign network.
+
+### Walker corrections (V2 only, `src/gridcoin/autogreylist_v2.h`)
+
+* **Chain-resident zeros as missing data, with the initial-state latch.** A recorded total
+  credit of exactly zero is corruption when a non-zero total credit exists at any OLDER
+  position -- a cumulative lifetime counter cannot return to zero -- and is then treated as
+  missing by the ZCD, bookmark and WAS logic alike, while `getautogreylist show_history`
+  keeps reporting the value as recorded. Genuine initial-state zeros (no older non-zero)
+  remain real values, so newly joined projects are unaffected. Because a zero run touching
+  the 40-superblock window edge has no older in-window evidence, the latch scan continues
+  past the window until the first older admissible non-zero, the project's first-activation
+  or pre-v3 boundary, or a cap of 40 additional superblocks.
+* **WAS divisor contraction.** The 7- and 40-superblock divisors are the deepest positions
+  actually holding effective data, so a missing window ENDPOINT contracts its interval while
+  missing data in the middle telescopes away in the endpoint difference. This removes both
+  failure directions of the fixed divisor: spurious understatement (including the
+  truncate-to-zero trigger) and multi-fold overstatement that masks real inactivity.
+* **Exact-fraction WAS.** `(sum7 * d40) / (sum40 * d7)` with no integer truncation of the
+  averages.
+* **Phantom-head skip.** When the first committed superblock behind a candidate carries the
+  candidate's (non-zero) convergence hint, it was built from the same convergence and is
+  skipped in the walk, removing the false ZCD the duplicated data used to produce.
+* The audit-height benefit-of-the-doubt behavior is hard-coded on, and the deep-copy
+  overlay behavior is unconditional (both gates are at or below the redesign gate).
+
+### Validation against mainnet
+
+A differential rehearsal of both walkers over a 110-superblock mainnet capture (16 projects,
+1072 project/head evaluations) produced exactly three membership changes -- all spurious
+V1 greylistings that V2 declines (both World Community Grid firings of the 2026-06/08 zero
+datapoint, and a truncate-to-zero firing for a genuinely stalled project that V2 instead
+greylists one superblock later on the honest ZCD criterion) -- and no new greylistings.
 
 ## RPC changes
 

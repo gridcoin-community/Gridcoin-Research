@@ -879,6 +879,28 @@ private:
 };
 
 //!
+//! \brief Selects which greylist overlay a whitelist snapshot is computed against.
+//!
+//! REQUIRED at every Snapshot() call site -- deliberately not defaulted, so a new call site
+//! does not compile until its author has decided which question it is asking. The
+//! classification rule is mechanical: match the DATA SOURCE, not the caller's purpose.
+//! Convergence-derived data -> PENDING; superblock/registry-derived data -> AUTHORITATIVE;
+//! data that never reads greylist status -> NONE.
+//! (~/GridcoinDev/autogreylist_state_separation/DESIGN.md section 10.7.)
+//!
+//! Below AutoGreylistRedesignHeight the AUTHORITATIVE and PENDING selectors are degenerate:
+//! both resolve to the single V1 greylist cache, so selecting between them carries no
+//! behavioral risk pre-gate.
+//!
+enum class GreylistState : uint8_t {
+    NONE,           //!< No overlay applied (replaces the old include_override = false).
+    AUTHORITATIVE,  //!< Overlay from the committed superblock's greylist state.
+    PENDING,        //!< Overlay matching the current scraper convergence.
+};
+
+class AutoGreylistService; // Facade over the V1/V2 greylist implementations (autogreylist.h).
+
+//!
 //! \brief Registry that manages the collection of BOINC projects in the Gridcoin whitelist.
 //!
 class Whitelist : public IContractHandler
@@ -893,14 +915,9 @@ public:
     //! Version 0: <= 5.4.5.0 where there was no backing db.
     //! Version 1: >= 5.4.6.0.
     //!
-    Whitelist()
-        : m_project_entries()
-        , m_pending_project_entries()
-        , m_expired_project_entries()
-        , m_project_first_actives()
-        , m_project_db(1)
-        , m_auto_greylist(std::make_shared<AutoGreylist>())
-    {}
+    //! Defined out-of-line (project.cpp): constructing m_auto_greylist requires the complete
+    //! AutoGreylistService type, which this header only forward-declares.
+    Whitelist();
 
     //!
     //! \brief The type that keys project entries by their key strings. Note that the entries
@@ -924,7 +941,7 @@ public:
 
     //!
     //! \brief Get a read-only view of the projects in the whitelist. The default filter is ACTIVE, which
-    //! provides the original ACTIVE project only view. The auto-greylist overlay (toggled by include_override)
+    //! provides the original ACTIVE project only view. The auto-greylist overlay (selected by GreylistState)
     //! is computed from the current AutoGreylist cache; the cache is refreshed explicitly at the chain handler
     //! points (Quorum::PushSuperblock for v2+ activation, Quorum::PopSuperblock on reorg,
     //! Quorum::LoadSuperblockIndex on startup) and additionally via Superblock::FromConvergence's
@@ -935,8 +952,13 @@ public:
     //! legacy behavior the deep-copy gate is designed to neutralize, not a contract Snapshot() honors
     //! pre-gate.
     //!
-    WhitelistSnapshot Snapshot(const ProjectEntry::ProjectFilterFlag& filter = ProjectEntry::ProjectFilterFlag::ACTIVE,
-                               const bool &include_override = true) const;
+    //! \param state REQUIRED greylist state selector -- see GreylistState. GreylistState::NONE
+    //! replaces the old include_override = false form; the other two select which computed
+    //! greylist the overlay is applied from (degenerate below the redesign gate).
+    //! \param filter Project status filter; the default preserves the original ACTIVE view.
+    //!
+    WhitelistSnapshot Snapshot(GreylistState state,
+                               const ProjectEntry::ProjectFilterFlag& filter = ProjectEntry::ProjectFilterFlag::ACTIVE) const;
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical
@@ -1065,7 +1087,7 @@ public:
     //!
     //! \return shared pointer to the auto greylist global cache object.
     //!
-    std::shared_ptr<AutoGreylist> GetAutoGreylist();
+    std::shared_ptr<AutoGreylistService> GetAutoGreylist();
 
     //!
     //! \brief Specializes the template RegistryDB for the ScraperEntry class. Note that std::set<ProjectEntry> is not
@@ -1111,8 +1133,8 @@ private:
     ProjectEntryDB m_project_db;                         //!< The project db member
 
     //! \note No GUARDED_BY: m_auto_greylist (the shared_ptr) is set once in the ctor and never replaced;
-    //! only the pointed-to AutoGreylist's internal state changes, guarded by its own autogreylist_lock.
-    std::shared_ptr<AutoGreylist> m_auto_greylist;       //!< Smart shared pointer to the AutoGreylist cache object
+    //! only the pointed-to service's internal state changes, guarded by its own internal locks.
+    std::shared_ptr<AutoGreylistService> m_auto_greylist; //!< Facade over the V1/V2 greylist implementations.
 public:
 
     ProjectEntryDB& GetProjectDB();
@@ -1131,7 +1153,7 @@ Whitelist& GetWhitelist();
 //!
 //! \return shared pointer to the auto greylist global cache object.
 //!
-std::shared_ptr<AutoGreylist> GetAutoGreylistCache();
+std::shared_ptr<AutoGreylistService> GetAutoGreylistCache();
 
 } // namespace GRC
 

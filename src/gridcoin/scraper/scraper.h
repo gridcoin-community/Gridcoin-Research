@@ -138,7 +138,8 @@ uint256 GetFileHash(const fs::path& inputfile);
  * @param StructConvergedManifest
  * @return ScraperStatsVerifiedBeaconsTotalCredits
  */
-ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const GRC::WhitelistSnapshot& greylist,
+                                                                           const ConvergedManifest& StructConvergedManifest);
 /**
  * @brief Gets a copy of the extended scrapers cache global. This global is an extension of the appcache in that it
  * retains deleted entries with a deleted flag.

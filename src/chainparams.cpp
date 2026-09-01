@@ -188,6 +188,9 @@ public:
         // TBD: set coincident with BlockV15Height when v15 is scheduled. numeric_limits max keeps the
         // scraper no_records total-credit fix inactive on mainnet until then (mirrors the deep-copy fix).
         consensus.AutoGreylistTotalCreditFixHeight = std::numeric_limits<int>::max();
+        // TBD: set coincident with BlockV15Height when v15 is scheduled. Must never be set
+        // below AutoGreylistDeepCopyHeight (see Consensus::Params).
+        consensus.AutoGreylistRedesignHeight = std::numeric_limits<int>::max();
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
         consensus.ConstantBlockRewardCeiling = 500 * COIN;
@@ -321,6 +324,9 @@ public:
         // Inactive by default; activated on the isolated mesh / public testnet via the
         // -autogreylisttotalcreditfixheight override ahead of v15.
         consensus.AutoGreylistTotalCreditFixHeight = std::numeric_limits<int>::max();
+        // TBD: set coincident with BlockV15Height when v15 is scheduled. Must never be set
+        // below AutoGreylistDeepCopyHeight (see Consensus::Params).
+        consensus.AutoGreylistRedesignHeight = std::numeric_limits<int>::max();
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
         consensus.ConstantBlockRewardCeiling = 500 * COIN;
@@ -425,6 +431,7 @@ public:
         consensus.AutoGreylistAuditHeight = 0;
         consensus.AutoGreylistDeepCopyHeight = 0;
         consensus.AutoGreylistTotalCreditFixHeight = 0;
+        consensus.AutoGreylistRedesignHeight = 0;
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
         consensus.ConstantBlockRewardCeiling = 500 * COIN;

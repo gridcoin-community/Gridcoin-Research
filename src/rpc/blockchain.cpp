@@ -11,6 +11,7 @@
 #include "gridcoin/pool.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/project.h"
+#include "gridcoin/autogreylist.h"
 #include "gridcoin/scraper/scraper_registry.h"
 #include "gridcoin/sidestake.h"
 #include "node/blockstorage.h"
@@ -4041,7 +4042,7 @@ UniValue listprojects(const UniValue& params)
         filter = GRC::Project::ProjectFilterFlag::ALL;
     }
 
-    for (const auto& project : GRC::GetWhitelist().Snapshot(filter).Sorted()) {
+    for (const auto& project : GRC::GetWhitelist().Snapshot(GRC::GreylistState::AUTHORITATIVE, filter).Sorted()) {
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("version", (int)project.m_version);
@@ -4182,28 +4183,31 @@ UniValue getautogreylist(const UniValue& params)
 
     UniValue res(UniValue::VOBJ);
 
-    std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::GetAutoGreylistCache();
-
-    greylist_ptr->Refresh();
+    std::shared_ptr<GRC::AutoGreylistService> greylist_ptr = GRC::GetAutoGreylistCache();
 
     UniValue autogreylist(UniValue::VARR);
 
-    for (auto iter : *greylist_ptr) {
-        if (!show_all_projects && !iter.second.m_meets_greylisting_crit) {
-            continue;
+    // Emits one candidate entry; generic because the V1 (GreylistCandidateEntry) and V2
+    // (GreylistCandidateV2) types expose the same reporting surface. Taken by forwarding
+    // reference: V2 candidates bind const (their accessors are const), while the V1 arm
+    // passes a member of its already-copied iteration pair non-const (V1's accessors are
+    // not const) -- no additional candidate copy in either arm.
+    const auto emit_entry = [&](const std::string& name, auto& candidate) {
+        if (!show_all_projects && !candidate.m_meets_greylisting_crit) {
+            return;
         }
 
         UniValue entry(UniValue::VOBJ);
 
-        entry.pushKV("project:", iter.first);
-        entry.pushKV("zcd", iter.second.GetZCD());
-        entry.pushKV("was", iter.second.GetWAS().ToDouble());
-        entry.pushKV("meets_greylist_criteria", iter.second.m_meets_greylisting_crit);
+        entry.pushKV("project:", name);
+        entry.pushKV("zcd", candidate.GetZCD());
+        entry.pushKV("was", candidate.GetWAS().ToDouble());
+        entry.pushKV("meets_greylist_criteria", candidate.m_meets_greylisting_crit);
 
         if (show_history) {
             UniValue entry_history(UniValue::VARR);
 
-            for (const auto& hist_entry : iter.second.GetUpdateHistory()) {
+            for (const auto& hist_entry : candidate.GetUpdateHistory()) {
                 UniValue historical_entry(UniValue::VOBJ);
 
                 historical_entry.pushKV("superblocks_from_baseline", hist_entry.m_sb_from_baseline_processed);
@@ -4221,6 +4225,41 @@ UniValue getautogreylist(const UniValue& params)
         }
 
         autogreylist.push_back(entry);
+    };
+
+    // Above the redesign gate ComputeReport is a value return (no shared greylist state is
+    // mutated by this RPC); below the gate it preserves the pre-redesign behavior verbatim,
+    // including the explicit V1 cache refresh that RPC always performed. It requires cs_main
+    // (it reads the current superblock and, above the gate, walks the chain) -- which the
+    // pre-redesign code needed too but never took.
+    GRC::GreylistComputation report;
+    {
+        LOCK(cs_main);
+
+        report = greylist_ptr->ComputeReport();
+
+        if (report.m_version != GRC::GreylistVersion::V2) {
+            // Below the gate: the pre-redesign display, from the freshly refreshed V1
+            // cache. The iteration stays INSIDE this cs_main scope: V1's iterators are
+            // handed out with the internal lock released, and their documented safety
+            // contract is that every V1 producer is cs_main-serialized -- which protects
+            // this loop only while cs_main is actually held across it. Const-reference
+            // iteration with ONE explicit candidate copy per emitted row (the copy is
+            // required because the frozen V1 type's reporting accessors are non-const).
+            for (const auto& iter : *greylist_ptr) {
+                auto candidate = iter.second;
+                emit_entry(iter.first, candidate);
+            }
+        }
+    }
+
+    if (report.m_version == GRC::GreylistVersion::V2) {
+        // Above the gate: fresh V2 candidate detail from the value-returned report -- no
+        // shared state, no lock needed. Doubles as an operator-visible cross-check of the
+        // recorded superblock project status.
+        for (const auto& iter : report.m_candidates) {
+            emit_entry(iter.first, iter.second);
+        }
     }
 
     res.pushKV("auto_greylist_projects", autogreylist);
@@ -4536,7 +4575,10 @@ UniValue projects(const UniValue& params)
 {
     UniValue res(UniValue::VARR);
     const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
-    const GRC::WhitelistSnapshot whitelist = GRC::GetWhitelist().Snapshot();
+    // AUTHORITATIVE: the rows come from the researcher's registry-backed project list, and
+    // the ACTIVE default filter selects on status, so the greylist overlay affects membership
+    // -- the committed superblock's state is the one that matches this data source.
+    const GRC::WhitelistSnapshot whitelist = GRC::GetWhitelist().Snapshot(GRC::GreylistState::AUTHORITATIVE);
 
     for (const auto& project_pair : researcher->Projects()) {
         const GRC::MiningProject& project = project_pair.second;

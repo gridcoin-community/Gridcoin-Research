@@ -6,6 +6,7 @@
 #include <key_io.h>
 #include "chainparams.h"
 #include "gridcoin/project.h"
+#include "gridcoin/autogreylist.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/magnitude.h"
 #include <gridcoin/md5.h>
@@ -21,8 +22,10 @@
 using namespace GRC;
 
 // TODO: use a header
-ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
-ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest);
+ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsByConvergedManifest(const GRC::WhitelistSnapshot& greylist,
+                                                                            const ConvergedManifest& StructConvergedManifest);
+ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsFromSingleManifest(const GRC::WhitelistSnapshot& greylist,
+                                                                           CScraperManifest_shared_ptr& manifest);
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
 mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 Superblock ScraperGetSuperblockContract(
@@ -883,7 +886,11 @@ private: // SuperblockValidator classes
         //!
         QuorumHash ComputeQuorumHash() const
         {
-            const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsByConvergedManifest(m_convergence);
+            // Validator recompute over convergence-derived data: the pending greylist is the
+            // one that matches it (the data-source rule).
+            const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsByConvergedManifest(
+                GetWhitelist().Snapshot(GreylistState::PENDING, GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
+                m_convergence);
 
             return QuorumHash::Hash(stats_and_verified_beacons);
         }
@@ -1576,7 +1583,9 @@ private: // SuperblockValidator methods
     //!
     bool TryManifest(CScraperManifest_shared_ptr& manifest) const
     {
-        const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsFromSingleManifest(manifest);
+        const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsFromSingleManifest(
+            GetWhitelist().Snapshot(GreylistState::PENDING, GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
+            manifest);
 
         return QuorumHash::Hash(stats_and_verified_beacons) == m_quorum_hash;
     }
@@ -1753,6 +1762,22 @@ bool Quorum::ValidateSuperblockClaim(
             return error("%s: quorum hash mismatch.", __func__);
         }
 
+        // Above the redesign gate the m_project_status record is read back as the
+        // authoritative greylist state -- but it is serialized OUTSIDE the quorum hash, so
+        // without this check its bytes would be staker-controlled: every node would
+        // consistently adopt whatever greylist a staker shipped. Recompute the expected
+        // record from the hashed candidate total credits, the committed chain behind this
+        // block and the registry (this runs BEFORE ApplyContracts, so producer and validator
+        // see the same parent-block registry state), and reject a mismatch. Placed at the
+        // claim level rather than inside SuperblockValidator: that path is skippable
+        // (UNKNOWN without a local scraper contract, HISTORICAL past retention), which is
+        // unacceptable for an unhashed field -- this check needs no scraper data and runs
+        // for every v11+ block, including initial sync.
+        if (superblock->m_version >= 3 && IsAutoGreylistRedesignEnabled(pindex->nHeight)
+            && !GetAutoGreylistCache()->ValidateProjectStatus(superblock, pindex->pprev)) {
+            return error("%s: project status record mismatch.", __func__);
+        }
+
         return ValidateSuperblock(superblock, true, 32, pindex->nHeight);
     }
 
@@ -1838,12 +1863,28 @@ Magnitude Quorum::GetMagnitude(const MiningId mining_id) EXCLUSIVE_LOCKS_REQUIRE
 
 std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
 {
-    // Force a scraper convergence update if needed:
-    // TODO: unwrap this from ScraperGetSuperblockContract()
-    CreateSuperblock();
+    // Below the redesign gate: force a scraper convergence update if needed, preserving the
+    // pre-redesign display behavior exactly -- including its long-standing coupling (the old
+    // TODO: unwrap this from ScraperGetSuperblockContract), which remains as-is on this arm
+    // by the V1 freeze and dies with it. Above the gate the call is deliberately ABSENT: the
+    // pending greylist read below is keyed to the convergence this function's rows come
+    // from, so display stays self-consistent without a display RPC side-effecting an entire
+    // contract rebuild -- and if the convergence is stale, rows and greylist are stale
+    // TOGETHER, which is the data-source rule.
+    int best_height = 0;
+    {
+        // Narrow scoped read: nBestHeight is cs_main-guarded and ExplainMagnitude is not a
+        // cs_main context (CreateSuperblock below takes cs_main internally where it needs it).
+        LOCK(cs_main);
+        best_height = nBestHeight;
+    }
+
+    if (!IsAutoGreylistRedesignEnabled(best_height)) {
+        CreateSuperblock();
+    }
 
     // Get a read-only view of the current project greylist.
-    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED, true);
+    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GreylistState::PENDING, GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED);
 
     const std::string cpid_str = cpid.ToString();
     const Span<const char> cpid_span = Span{cpid_str};
@@ -1970,13 +2011,14 @@ void Quorum::PushSuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(c
         GetWhitelist().ReinitFromDisk();
     }
 
-    // Refresh the AutoGreylist cache against the newly-activated superblock. Fires deterministically at
-    // this chain-handler point rather than relying on whichever thread happens to read first. Every
-    // PushSuperblock changes the current SB's hash, so the early-bail in AutoGreylist::Refresh()
-    // (which fires only when superblock_ptr->GetHash() == m_superblock_hash) does NOT short-circuit
-    // here -- this call pays the full Snapshot + 40-SB walk-back cost on each push. That cost is
-    // intrinsic to the explicit-trigger redesign; it's paid here on the validation thread rather than
-    // lazily on whichever consumer reads first.
+    // Refresh the AutoGreylist state against the newly-activated superblock. Fires deterministically
+    // at this chain-handler point rather than relying on whichever thread happens to read first.
+    // BELOW the redesign gate this dispatches to the frozen V1 cache: every PushSuperblock changes
+    // the current SB's hash, so V1's early-bail does not short-circuit and each push pays the full
+    // Snapshot + 40-SB walk-back cost, intrinsic to the explicit-trigger design. ABOVE the gate the
+    // V2 arm stores the superblock as the authoritative record source in O(1); the membership map is
+    // derived lazily from the serialized m_project_status on first read (a map read, no walk -- the
+    // walk cost moved to the once-per-accept record validation in ValidateSuperblockClaim).
     GetAutoGreylistCache()->Refresh();
 }
 

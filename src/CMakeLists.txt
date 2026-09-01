@@ -138,6 +138,8 @@ add_library(gridcoin_util STATIC
     dbwrapper.cpp
     fs.cpp
     htlc.cpp
+    gridcoin/autogreylist.cpp
+    gridcoin/autogreylist_v2.cpp
     gridcoin/backup.cpp
     gridcoin/beacon.cpp
     gridcoin/block_claims.cpp

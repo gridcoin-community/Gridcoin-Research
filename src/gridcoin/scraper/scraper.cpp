@@ -424,14 +424,23 @@ void AlignScraperFileManifestEntries(const fs::path& file, const std::string& fi
  * time the function is called
  * @return ScraperStatsVerifiedBeaconsTotalCredits
  */
-ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByCurrentFileManifestState();
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByCurrentFileManifestState(const GRC::WhitelistSnapshot& greylist);
+/**
+ * @brief Diagnostic-export variant of GetScraperStatsByCurrentFileManifestState (Stats.csv.gz).
+ * Split from the consensus-path function so a future divergence between the export and the
+ * superblock-construction path is an explicit decision rather than a silent coupling.
+ * @param greylist read-only view of the current project greylist
+ * @return ScraperStatsVerifiedBeaconsTotalCredits
+ */
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsForExport(const GRC::WhitelistSnapshot& greylist);
 /**
  * @brief Computes the scraper statistics from a single CScraperManifest. This function should only be used as part of the
  * superblock validation in bv11+.
  * @param manifest
  * @return ScraperStatsVerifiedBeaconsTotalCredits
  */
-ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest);
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(const GRC::WhitelistSnapshot& greylist,
+                                                                          CScraperManifest_shared_ptr& manifest);
 /**
  * @brief Loads a project manifest file from disk and computes statistics for that project
  * @param project
@@ -522,7 +531,8 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests();
  * @param StructConvergedManifest (out parameter)
  * @return bool true if successful
  */
-bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
+bool ScraperConstructConvergedManifest(const GRC::WhitelistSnapshot& projectWhitelist,
+                                       ConvergedManifest& StructConvergedManifest);
 /**
  * @brief Attempts to construct a converged manifest at the project level from the projects which are contained in the
  * inventory of CScraperManifests on the node. Note that this function is called by ScraperConstructConvergedManifest if the
@@ -1661,8 +1671,14 @@ void Scraper(bool bSingleShot)
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_UPDATING, {});
 
-            // Get a read-only view of the current project whitelist:
-            const WhitelistSnapshot projectWhitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
+            // Get a read-only view of the current project whitelist. GreylistState::NONE, and
+            // the full ALL_BUT_DELETED filter, are REQUIRED here, not incidental: the scraper
+            // must collect project-level statistics for greylisted projects, because their
+            // total credit is precisely the input that decides whether they stay greylisted.
+            // If greylist status ever gated collection, greylisting would become a one-way
+            // door: excluded -> no TC -> NA -> ZCD accrues -> stays excluded, permanently.
+            const WhitelistSnapshot projectWhitelist = GetWhitelist().Snapshot(GreylistState::NONE,
+                GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
 
             // Delete manifest entries not on whitelist. Take a lock on cs_StructScraperFileManifest for this.
             {
@@ -1712,7 +1728,9 @@ void Scraper(bool bSingleShot)
             _log(logattribute::INFO, "Scraper", "download size so far: " + ToString(ndownloadsize) + " upload size so far: "
                  + ToString(nuploadsize));
 
-            ScraperStats mScraperStats = GetScraperStatsByCurrentFileManifestState().mScraperStats;
+            ScraperStats mScraperStats = GetScraperStatsForExport(
+                GetWhitelist().Snapshot(GreylistState::PENDING,
+                                        GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED)).mScraperStats;
 
             _log(logattribute::INFO, "Scraper", "mScraperStats has the following number of elements: "
                  + ToString(mScraperStats.size()));
@@ -4198,12 +4216,9 @@ bool ProcessNetworkWideFromProjectStats(ScraperStats& mScraperStats)
     return true;
 }
 
-ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByCurrentFileManifestState()
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByCurrentFileManifestState(const GRC::WhitelistSnapshot& greylist)
 {
     _log(logattribute::INFO, "GetScraperStatsByCurrentFileManifestState", "Beginning stats processing.");
-
-    // Get a read-only view of the current project greylist
-    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED);
 
     // Enumerate the count of active projects from the file manifest. Since the manifest is
     // constructed starting with the whitelist, and then using only the current files, this
@@ -4283,12 +4298,19 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByCurrentFileManifestStat
     return stats_verified_beacons_tc;
 }
 
-ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest)
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsForExport(const GRC::WhitelistSnapshot& greylist)
+{
+    // Same computation as the consensus path today, by delegation. The named split exists so
+    // that the Stats.csv.gz export and superblock construction are separate call surfaces: if
+    // they ever need to diverge, the divergence is made here explicitly instead of silently
+    // coupling a diagnostic to a consensus path.
+    return GetScraperStatsByCurrentFileManifestState(greylist);
+}
+
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const GRC::WhitelistSnapshot& greylist,
+                                                                           const ConvergedManifest& StructConvergedManifest)
 {
     _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Beginning stats processing.");
-
-    // Get a read-only view of the current project greylist
-    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED);
 
     ScraperStatsVerifiedBeaconsTotalCredits stats_verified_beacons_tc;
 
@@ -4397,12 +4419,10 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
     return stats_verified_beacons_tc;
 }
 
-ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest)
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(const GRC::WhitelistSnapshot& greylist,
+                                                                          CScraperManifest_shared_ptr& manifest)
 {
     _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Beginning stats processing.");
-
-    // Get a read-only view of the current project greylist
-    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED);
 
     // Create a dummy converged manifest and fill out the dummy ConvergedManifest structure from the provided
     // manifest.
@@ -5349,7 +5369,8 @@ void ConvergedManifest::ComputeConvergedContentHash()
 }
 
 // ------------------------------------ This an out parameter.
-bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest)
+bool ScraperConstructConvergedManifest(const GRC::WhitelistSnapshot& projectWhitelist,
+                                       ConvergedManifest& StructConvergedManifest)
 {
     bool bConvergenceSuccessful = false;
 
@@ -5499,10 +5520,6 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             break;
         }
     }
-
-    // Get a read-only view of the current project whitelist to fill out the
-    // excluded projects vector later on:
-    const WhitelistSnapshot projectWhitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
 
     if (bConvergenceSuccessful)
     {
@@ -6367,11 +6384,15 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
             // ScraperConstructConvergedManifest also culls old CScraperManifests. If no convergence, then
             // you can't make a SB core and you can't make a contract, so return the empty string. Also check
             // to make sure the BeaconMap has been populated properly.
-            if (ScraperConstructConvergedManifest(StructConvergedManifest)
+            if (ScraperConstructConvergedManifest(GetWhitelist().Snapshot(GreylistState::PENDING,
+                                                      GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
+                                                  StructConvergedManifest)
                     && LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap))
             {
                 ScraperStatsVerifiedBeaconsTotalCredits mScraperConvergedStats
-                        = GetScraperStatsByConvergedManifest(StructConvergedManifest);
+                        = GetScraperStatsByConvergedManifest(GetWhitelist().Snapshot(GreylistState::PENDING,
+                                                                 GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
+                                                             StructConvergedManifest);
 
                 _log(logattribute::INFO, "ScraperGetSuperblockContract",
                      "mScraperStats has the following number of elements: "
@@ -6387,9 +6408,20 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
                 Superblock superblock_Prev;
 
+                // Narrow-anchor rule: cs_main pays for anchor capture, never for the walk.
+                // The tip pointer is captured under a brief cs_main; the V2 candidate path
+                // then binds and walks from it with no cs_main (the ancestor topology and
+                // disk blocks it reads are immutable). BELOW the redesign gate the frozen V1
+                // path still reads pindexBest internally, so that arm keeps cs_main held for
+                // the duration (canonical order cs_main -> subsystem locks, as at the
+                // testnewsb site) -- a temporary cost that ends at the gate.
+                const CBlockIndex* anchor_index;
                 {
-                    LOCK(cs_ConvergedScraperStatsCache);
+                    LOCK(cs_main);
+                    anchor_index = pindexBest;
+                }
 
+                const auto install_convergence = [&]() EXCLUSIVE_LOCKS_REQUIRED(cs_ConvergedScraperStatsCache) {
                     ConvergedScraperStatsCache.AddConvergenceToPastConvergencesMap();
 
                     superblock_Prev = ConvergedScraperStatsCache.NewFormatSuperblock;
@@ -6400,7 +6432,8 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
                     ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
 
-                    superblock = Superblock::FromConvergence(ConvergedScraperStatsCache, superblock_contract_version);
+                    superblock = Superblock::FromConvergence(ConvergedScraperStatsCache, superblock_contract_version,
+                                                         /*update_pending_cache=*/true, anchor_index);
 
                     if (!superblock.WellFormed())
                     {
@@ -6416,6 +6449,19 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
                     // If called from housekeeping, mark bMinHousekeepingComplete true
                     if (bFromHousekeeping) ConvergedScraperStatsCache.bMinHousekeepingComplete = true;
+                };
+
+                // ONE critical section per arm: the convergence fields, the pending greylist
+                // state and bClean must change atomically with respect to readers, exactly as
+                // in the original single-lock block.
+                if (anchor_index != nullptr && IsAutoGreylistRedesignEnabled(anchor_index->nHeight)) {
+                    LOCK(cs_ConvergedScraperStatsCache);
+
+                    install_convergence();
+                } else {
+                    LOCK2(cs_main, cs_ConvergedScraperStatsCache);
+
+                    install_convergence();
                 }
 
                 // Signal UI of SBContract status. cs_ConvergedScraperStatsCache is released before this, because
@@ -6456,7 +6502,9 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
             // Notice there is NO update to the ConvergedScraperStatsCache here, as that is not
             // appropriate for the single shot.
-            ScraperStatsVerifiedBeaconsTotalCredits stats_verified_beacons_tc = GetScraperStatsByCurrentFileManifestState();
+            ScraperStatsVerifiedBeaconsTotalCredits stats_verified_beacons_tc = GetScraperStatsByCurrentFileManifestState(
+                GetWhitelist().Snapshot(GreylistState::PENDING,
+                                        GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED));
             superblock = Superblock::FromStats(stats_verified_beacons_tc, superblock_contract_version);
 
             // Signal the UI there is a contract.
@@ -6626,7 +6674,8 @@ UniValue archivelog(const UniValue& params)
  * @param ConvergedScraperStatsIn
  * @return JSON representation of input ConvergedScraperStats
  */
-UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStatsIn)
+UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStatsIn,
+                                     const CBlockIndex* anchor_index)
 {
     UniValue ret(UniValue::VOBJ);
 
@@ -6658,9 +6707,14 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
         entry.pushKV("past_convergence_content_hash", iter.second.first.ToString());
         entry.pushKV("past_convergence_reduced_content_hash", (uint64_t) iter.first);
 
-        const ConvergedScraperStats dummy_converged_stats(PastConvergence.timestamp, PastConvergence);
+        const ConvergedScraperStats dummy_converged_stats(PastConvergence.timestamp, PastConvergence,
+                                                          GetWhitelist().Snapshot(GreylistState::PENDING,
+                                                              GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED));
 
-        Superblock superblock = Superblock::FromConvergence(dummy_converged_stats);
+        // A PAST convergence: update_pending_cache = false, so this diagnostic re-derivation
+        // cannot clobber the live pending greylist state above the redesign gate.
+        Superblock superblock = Superblock::FromConvergence(dummy_converged_stats, Superblock::CURRENT_VERSION,
+                                                            /*update_pending_cache=*/false, anchor_index);
 
         entry.pushKV("superblock_from_this_past_convergence_quorumhash", superblock.GetHash().ToString());
 
@@ -6721,14 +6775,25 @@ UniValue convergencereport(const UniValue& params)
 
     UniValue result(UniValue::VOBJ);
 
+    // Narrow-anchor rule: capture the tip under a brief cs_main; above the redesign gate the
+    // past-convergence re-derivations below then run without cs_main, while below the gate
+    // the frozen V1 path reads pindexBest internally and cs_main stays held (canonical
+    // order, cs_main before the subsystem lock).
+    const CBlockIndex* anchor_index;
     {
-        LOCK(cs_ConvergedScraperStatsCache);
+        LOCK(cs_main);
+        anchor_index = pindexBest;
+    }
 
+    const bool redesign_active = anchor_index != nullptr
+                                 && IsAutoGreylistRedesignEnabled(anchor_index->nHeight);
+
+    const auto build_report = [&]() EXCLUSIVE_LOCKS_REQUIRED(cs_ConvergedScraperStatsCache) {
         result.pushKV("superblock_well_formed", ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed());
 
         if (params.size() && params[0].get_bool())
         {
-            result.pushKV("detailed_convergence_output", ConvergedScraperStatsToJson(ConvergedScraperStatsCache));
+            result.pushKV("detailed_convergence_output", ConvergedScraperStatsToJson(ConvergedScraperStatsCache, anchor_index));
         }
         else
         {
@@ -6815,6 +6880,16 @@ UniValue convergencereport(const UniValue& params)
         }
 
         result.pushKV("converged_projects", ConvergedProjects);
+    };
+
+    if (redesign_active) {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        build_report();
+    } else {
+        LOCK2(cs_main, cs_ConvergedScraperStatsCache);
+
+        build_report();
     }
 
     return result;
@@ -6882,7 +6957,8 @@ UniValue testnewsb(const UniValue& params)
         LOCK2(cs_main, cs_ConvergedScraperStatsCache);
 
         NewFormatSuperblock = SuperblockPtr::BindShared(
-            Superblock::FromConvergence(ConvergedScraperStatsCache),
+            Superblock::FromConvergence(ConvergedScraperStatsCache, Superblock::CURRENT_VERSION,
+                                        /*update_pending_cache=*/true, pindexBest),
             pindexBest);
 
         _log(logattribute::INFO, "testnewsb",
@@ -6984,7 +7060,9 @@ UniValue testnewsb(const UniValue& params)
     if (!bPastConvergencesEmpty)
     {
         ScraperStatsVerifiedBeaconsTotalCredits RandomPastSBStatsAndVerifiedBeacons =
-                GetScraperStatsByConvergedManifest(RandomPastConvergedManifest);
+                GetScraperStatsByConvergedManifest(GetWhitelist().Snapshot(GreylistState::PENDING,
+                                                       GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
+                                                   RandomPastConvergedManifest);
 
         Superblock RandomPastSB = Superblock::FromStats(RandomPastSBStatsAndVerifiedBeacons);
 
