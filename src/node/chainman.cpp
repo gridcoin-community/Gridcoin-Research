@@ -506,8 +506,43 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     return true;
 }
 
+namespace {
+//!
+//! \brief RAII scope that clears g_reorg_in_progress when its holder exits --
+//! held by SetBestChain and ForceReorganizeToHash for their full extent.
+//!
+//! ReorganizeChain sets the flag, because only it can distinguish a non-trivial
+//! reorg from a trivial single-block extension, and the calling scope clears
+//! it, because ReorganizeChain can run twice within one SetBestChain call (the
+//! forward reorg and the trust-regression reorg-back).
+//!
+//! Clearing on the success path alone left the flag set on both of the failure
+//! returns below. A stuck flag wedges PollResultCache::BuildPollTable: its
+//! TraversalScope is open across the whole build, so PollRegistry::DetectReorg
+//! keeps re-arming reorg_occurred_during_reg_traversal, and the retry loop
+//! there waits on that flag at 1 Hz -- before this guard, with no way out
+//! until some later block connected successfully and cleared it.
+//!
+//! The explicit clear before the post-connect fix-up below is deliberately
+//! kept: it releases consumers at the point it always has. This scope only
+//! covers the exits that never reached it.
+//!
+class ReorgInProgressScope
+{
+public:
+    ReorgInProgressScope() = default;
+
+    ~ReorgInProgressScope() { g_reorg_in_progress = false; }
+
+    ReorgInProgressScope(const ReorgInProgressScope&) = delete;
+    ReorgInProgressScope& operator=(const ReorgInProgressScope&) = delete;
+};
+} // anonymous namespace
+
 bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    const ReorgInProgressScope reorg_scope;
+
     unsigned cnt_dis = 0;
     unsigned cnt_con = 0;
     bool success = false;
@@ -623,6 +658,14 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
 bool ForceReorganizeToHash(uint256 NewHash)
 {
     LOCK(cs_main);
+
+    // Same guard as SetBestChain: the flag clears on EVERY exit -- the two
+    // early failure returns below never set it (ReorganizeChain does), so
+    // clearing false there is a no-op, and the returns after ReorganizeChain
+    // are covered without a manual clear that an exception or a future early
+    // return could bypass.
+    const ReorgInProgressScope reorg_scope;
+
     CTxDB txdb;
 
     auto mapItem = mapBlockIndex.find(NewHash);
@@ -657,10 +700,10 @@ bool ForceReorganizeToHash(uint256 NewHash)
         LogPrintf("WARN: %s: Chain trust is now less than before!", __func__);
     }
 
-    // g_reorg_in_progress is set in ReorganizeChain, but cleared by the caller. It is debatable whether this should
-    // be cleared here if g_chain_trust.Best() < previous_chain_trust.
-    g_reorg_in_progress = false;
-
+    // The flag (set in ReorganizeChain) is cleared by the ReorgInProgressScope
+    // guard at every exit of this function -- unconditionally, and that is the
+    // decision rather than an oversight: once this function returns, no reorg
+    // is in progress, whatever the trust outcome above was.
     if (!success) {
         return error("%s: Fatal Error while setting best chain.", __func__);
     }
