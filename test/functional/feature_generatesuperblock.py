@@ -77,6 +77,8 @@ class GenerateSuperblockTest(GridcoinTestFramework):
             -8, "must be a number", node.generatesuperblock, {CPID_A: "high"})
         assert_raises_rpc_error(
             -8, "at least one name", node.generatesuperblock, {CPID_A: 100}, [])
+        assert_raises_rpc_error(
+            -8, "non-empty string", node.generatesuperblock, {CPID_A: 100}, [1])
 
         # A failed call must not leave anything staged behind it.
         node.generatetoaddress(1, node.getnewaddress())

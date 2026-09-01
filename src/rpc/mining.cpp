@@ -1259,6 +1259,11 @@ UniValue generatesuperblock(const UniValue& params)
         }
 
         for (const UniValue& name : names) {
+            if (!name.isStr() || name.get_str().empty()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                                   "project name must be a non-empty string");
+            }
+
             superblock.m_projects.Add(name.get_str(), stats);
         }
     } else {
