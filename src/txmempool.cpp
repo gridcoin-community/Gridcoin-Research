@@ -59,12 +59,22 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry)
     // Add to memory pool without checking anything.  Don't call this directly,
     // call AcceptToMemoryPool to properly check the transaction first.
     {
-        // Caller contract: AcceptToMemoryPool holds cs and has already rejected a
-        // tx that exists() in the pool, so this is a fresh txid. insert_or_assign
-        // would only "overwrite" on a duplicate txid -- and an identical txid
-        // implies identical vins, so re-pointing mapNextTx below to the new node
-        // is still correct. (Other mutators lock internally; this one relies on
-        // the caller holding cs, matching the "unchecked = caller-locked" idiom.)
+        // Take cs here rather than requiring it of the caller. Every other mutator
+        // on this class -- remove(), removeConflicts(), TrimToSize(),
+        // DynamicMemoryUsage() -- already locks internally; this was the one whose
+        // locking contract existed only in a comment. cs is a recursive mutex, so
+        // the single production caller (AcceptToMemoryPool, which calls from
+        // inside its own pool.cs store scope) is unaffected. What serializes
+        // that caller's exists()-check against this insert is cs_main, held
+        // for its whole call -- its pool.cs acquisitions are three separate
+        // scopes, not one continuous hold.
+        LOCK(cs);
+
+        // The rest of the caller contract stands, and is not about locking:
+        // AcceptToMemoryPool has already rejected a tx that exists() in the pool,
+        // so this is a fresh txid. insert_or_assign would only "overwrite" on a
+        // duplicate txid -- and an identical txid implies identical vins, so
+        // re-pointing mapNextTx below to the new node is still correct.
         auto it = mapTx.insert_or_assign(hash, entry).first;
         // Point mapNextTx at the transaction stored inside the pool's own map
         // node (std::map never relocates nodes, so the pointer stays valid until

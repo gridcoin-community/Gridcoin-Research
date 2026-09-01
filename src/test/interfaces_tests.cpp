@@ -540,10 +540,6 @@ struct CoinControlSetup
             CWalletTx orphaned(&test_wallet, orphan);
             test_wallet.mapWallet[orphan.GetHash()] = orphaned;
 
-            // addUnchecked does no internal locking (unlike remove/clear/exists):
-            // the caller must hold mempool.cs, acquired last per the canonical
-            // cs_main -> cs_wallet -> subsystem order.
-            LOCK(mempool.cs);
             mempool.addUnchecked(funding.GetHash(), CTxMemPoolEntry(
                 funding, /*fee=*/0, /*time=*/0, /*height=*/0,
                 ::GetSerializeSize(funding, SER_NETWORK, PROTOCOL_VERSION)));

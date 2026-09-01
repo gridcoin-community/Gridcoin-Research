@@ -319,10 +319,6 @@ void InjectMempoolTx(const CTransaction& tx)
     CWalletTx wtx(pwalletMain, tx);
     wtx.SetTxState(TxStateInMempool{});
     pwalletMain->mapWallet[tx.GetHash()] = wtx;
-    // addUnchecked's contract requires the caller hold mempool.cs (it does no internal
-    // locking, unlike mempool.remove in RemoveMempoolTx below); acquire it after cs_wallet
-    // per the canonical lock order.
-    LOCK(mempool.cs);
     mempool.addUnchecked(tx.GetHash(), CTxMemPoolEntry(
         tx, /*fee=*/0, /*time=*/0, /*height=*/0,
         ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION)));
