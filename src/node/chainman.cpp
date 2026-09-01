@@ -520,7 +520,8 @@ namespace {
 //! returns below. A stuck flag wedges PollResultCache::BuildPollTable: its
 //! TraversalScope is open across the whole build, so PollRegistry::DetectReorg
 //! keeps re-arming reorg_occurred_during_reg_traversal, and the retry loop
-//! there waits on that flag at 1 Hz until the next block connects successfully.
+//! there waits on that flag at 1 Hz -- before this guard, with no way out
+//! until some later block connected successfully and cleared it.
 //!
 //! The explicit clear before the post-connect fix-up below is deliberately
 //! kept: it releases consumers at the point it always has. This scope only
