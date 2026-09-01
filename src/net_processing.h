@@ -117,8 +117,45 @@ public:
     //! Clear misbehavior scores for all addresses matching sub_net (registered
     //! as BanMan's clear callback). Returns the number of entries cleared.
     virtual unsigned int ClearMisbehaviorForSubnet(const CSubNet& sub_net) = 0;
+
+    //! \brief Queue an inventory request on this peer.
+    //!
+    //! Was CNode::AskFor. The per-inventory request-time map it consults lives
+    //! in net_processing (it is request tracking, which is this layer's job, and
+    //! net.h must not depend on this header). Applies the two-minute per-item
+    //! backoff and pushes onto the peer's own mapAskFor priority queue.
+    //!
+    //! Lifetime contract for the null guards at external call sites
+    //! (scraper_net, chainman): g_peerman outlives every calling thread --
+    //! StopNode() joins the net and scraper threads before init resets the
+    //! pointer -- so `if (g_peerman)` there is defensive, never load-bearing.
+    //! A change to shutdown ordering must revisit those guards: a null here
+    //! silently drops a request rather than failing.
+    virtual void AskFor(CNode* pnode, const CInv& inv) = 0;
+
+    //! \brief Forget that an inventory item was requested.
+    //!
+    //! Call when the item arrives or the request is abandoned, so it stops being
+    //! re-asked. Absence is meaningful: SendMessages treats a missing entry as a
+    //! satisfied request and will not re-arm it.
+    virtual void ForgetInventoryRequest(const CInv& inv) = 0;
+
+    //! \brief Clear an inventory item's backoff without forgetting it.
+    //!
+    //! Leaves the entry present with a zero request time, so the next AskFor
+    //! sends immediately instead of two minutes out. Distinct from
+    //! ForgetInventoryRequest because presence is load-bearing (see above).
+    virtual void ResetInventoryRequestBackoff(const CInv& inv) = 0;
 };
 
 extern std::unique_ptr<PeerManager> g_peerman;
+
+//! \brief Capacity of the inventory-request map behind PeerManager::AskFor.
+//!
+//! The map itself is private to net_processing.cpp. This exists so the bound is
+//! still assertable: an unbounded map here is the regression that motivated
+//! keeping limitedmap at all (a peer announcing inventory it never serves grows
+//! state charged to every peer, since entries are only removed on receipt).
+size_t InventoryRequestMapCapacity();
 
 #endif // BITCOIN_NET_PROCESSING_H

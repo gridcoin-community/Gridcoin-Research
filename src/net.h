@@ -111,14 +111,6 @@ enum
 
 extern bool fDiscover;
 extern ServiceFlags nLocalServices;
-//! \brief Guards \ref mapAlreadyAskedFor. Written and read from
-//! ProcessMessage handlers (under cs_main) for the TX / BLOCK paths,
-//! from ProcessBlock, from SendMessages' getdata loop, and from
-//! CSplitBlob::RecvPart on the scraper PART path which does NOT hold
-//! cs_main. A dedicated leaf-level mutex avoids hoisting cs_main into
-//! the PART path and keeps the lock as narrow as possible.
-extern CCriticalSection cs_mapAlreadyAskedFor;
-extern limitedmap<CInv, int64_t> mapAlreadyAskedFor GUARDED_BY(cs_mapAlreadyAskedFor);
 extern ThreadHandler* netThreads;
 
 
@@ -442,51 +434,6 @@ public:
         }
     }
 
-    void AskFor(const CInv& inv)
-    {
-        // We're using mapAskFor as a priority queue,
-        // the key is the earliest time the request can be sent
-        if (mapAskFor.size() > 50000) return;
-
-        // Snapshot the current request time under the mutex. The
-        // logging / time-formatting / static-counter arithmetic below
-        // does not touch mapAlreadyAskedFor and should not hold the
-        // global mutex.
-        // Absent means never asked, which is a request time of zero. Reading
-        // through find() rather than operator[] also stops the lookup itself
-        // from creating an entry: the write below is what should create it, and
-        // always runs, so the old insert-on-read was redundant as well as
-        // unbounded.
-        int64_t nRequestTime = 0;
-        {
-            LOCK(cs_mapAlreadyAskedFor);
-            const auto it = mapAlreadyAskedFor.find(inv);
-            if (it != mapAlreadyAskedFor.end()) nRequestTime = it->second;
-        }
-
-        LogPrint(BCLog::LogFlags::NET, "askfor %s   %" PRId64 " (%s)", inv.ToString(), nRequestTime, DateTimeStrFormat("%H:%M:%S", nRequestTime/1000000));
-
-        // Make sure not to reuse time indexes to keep things in the same order
-        int64_t nNow = (GetAdjustedTime() - 1) * 1000000;
-        static int64_t nLastTime;
-        ++nLastTime;
-        nNow = std::max(nNow, nLastTime);
-        nLastTime = nNow;
-
-        // Each retry is 2 minutes after the last
-        const int64_t nNewRequestTime = std::max(nRequestTime + 2 * 60 * 1000000, nNow);
-        {
-            LOCK(cs_mapAlreadyAskedFor);
-            const auto it = mapAlreadyAskedFor.find(inv);
-
-            if (it != mapAlreadyAskedFor.end()) {
-                mapAlreadyAskedFor.update(it, nNewRequestTime);
-            } else {
-                mapAlreadyAskedFor.insert(std::make_pair(inv, nNewRequestTime));
-            }
-        }
-        mapAskFor.insert(std::make_pair(nNewRequestTime, inv));
-    }
 
     void BeginMessage(const char* pszCommand) EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
     {

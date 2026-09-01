@@ -10,6 +10,7 @@
 #include <atomic>
 #include <stdexcept>
 #include "net.h"
+#include "net_processing.h"
 #include "rpc/server.h"
 #include "rpc/protocol.h"
 #include "rpc/util.h"
@@ -184,10 +185,7 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 
     auto& ss = vRecv;
     uint256 hash(Hash(ss));
-    {
-        LOCK(cs_mapAlreadyAskedFor);
-        mapAlreadyAskedFor.erase(CInv(MSG_PART, hash));
-    }
+    if (g_peerman) g_peerman->ForgetInventoryRequest(CInv(MSG_PART, hash));
 
     LOCK(cs_mapParts);
 
@@ -369,7 +367,7 @@ void CSplitBlob::UseAsSource(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::
             if (!part->present())
             {
                 /*Actually request the part. Inventory system will prevent redundant requests.*/
-                pfrom->AskFor(CInv(MSG_PART, part->hash));
+                if (g_peerman) g_peerman->AskFor(pfrom, CInv(MSG_PART, part->hash));
             }
         }
     }
