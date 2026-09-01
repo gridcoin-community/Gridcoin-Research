@@ -1162,7 +1162,19 @@ void StartRPCThreads()
         return;
     }
 
-    const int nRPCThreads = gArgs.GetArg("-rpcthreads", 4);
+    // Clamp to at least one worker. These threads are the only ones that run
+    // ioContext::run(), so -rpcthreads=0 installs the acceptors with nothing to
+    // service them: the port listens, no request is ever dispatched, and that
+    // includes the "stop" call an operator would use to recover -- the node has
+    // to be killed. -rpcthreads is registered ALLOW_ANY, so nothing else
+    // rejects the value.
+    const int nRPCThreadsArg = gArgs.GetArg("-rpcthreads", 4);
+    const int nRPCThreads = std::max(1, nRPCThreadsArg);
+
+    if (nRPCThreads != nRPCThreadsArg) {
+        LogPrintf("WARNING: StartRPCThreads: -rpcthreads=%d is below the minimum of 1; using %d.\n",
+                  nRPCThreadsArg, nRPCThreads);
+    }
 
     rpc_worker_group = new boost::thread_group();
     for (int i = 0; i < nRPCThreads; i++)
@@ -1342,7 +1354,14 @@ void ServiceConnection(AcceptedConnection *conn)
             /* Deter brute-forcing short passwords.
                If this results in a DOS the user really
                shouldn't have their RPC port exposed.*/
-            if (gArgs.GetArgs("-rpcpassword").size() < 20)
+            // GetArg, not GetArgs: the intent is the length of the configured
+            // password, but GetArgs returns one element per occurrence of the
+            // option, so .size() was the number of times -rpcpassword appeared.
+            // That is 0 or 1 in every real configuration, so the test was always
+            // true and the sleep always ran -- burning one of only nRPCThreads
+            // workers on each failed attempt, which is the denial of service the
+            // comment above is willing to accept only for short passwords.
+            if (gArgs.GetArg("-rpcpassword", "").size() < 20)
                 UninterruptibleSleep(std::chrono::milliseconds{250});
 
             conn->stream() << HTTPReply(HTTP_UNAUTHORIZED, "", false) << std::flush;
