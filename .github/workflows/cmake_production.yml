@@ -537,13 +537,43 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Homebrew stopped shipping x86_64 macOS bottles for openssl@3 (Tier 3
+      # platform demotion), and qt depends on it, so a plain install aborts on
+      # "no bottle available". Source-build it once per formula version and
+      # carry the built keg between runs: the version comes from the formulae
+      # API (no brew needed before the bootstrap below), and a restored,
+      # current keg makes the install line a fast no-op. Everything else in
+      # this job still has Intel bottles today; if another formula loses its
+      # bottle, give it the same treatment.
+      - name: Determine openssl@3 version for the Intel build cache
+        id: sslver
+        run: |
+          # versions.stable alone misses Homebrew revision bumps (rebuilds
+          # against new deps, e.g. 3.x.y_1), which must invalidate the cache.
+          echo "version=$(curl -fsSL https://formulae.brew.sh/api/formula/openssl@3.json | /usr/bin/python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["versions"]["stable"] + ("_" + str(d["revision"]) if d.get("revision") else ""))')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the source-built Intel openssl@3
+        uses: actions/cache@v5
+        with:
+          path: /usr/local/Cellar/openssl@3
+          key: openssl3-intel-${{ steps.sslver.outputs.version }}
+
       - name: Install x86_64 Homebrew and Dependencies
         run: |
           # Install a separate x86_64 Homebrew at /usr/local (Intel prefix).
           # The ARM64 runner has Rosetta 2, so x86_64 binaries run transparently.
           arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
           arch -x86_64 /usr/local/bin/brew update
-          arch -x86_64 /usr/local/bin/brew install qt boost openssl libevent miniupnpc qrencode libzip ccache cmake capnp
+          # No-op when the cached keg matches the current formula version;
+          # a source build (~15 min) only on a cache miss or a version bump.
+          arch -x86_64 /usr/local/bin/brew install --build-from-source openssl@3
+          # The cache carries only the keg: a restored run has no
+          # /usr/local/opt/openssl@3 symlink, and the configure step resolves
+          # OPENSSL_ROOT_DIR through exactly that path. openssl@3 is keg-only,
+          # so linking needs --force; no fallback swallow -- a link failure
+          # here must fail the job, not surface later as a configure mystery.
+          arch -x86_64 /usr/local/bin/brew link --force --overwrite openssl@3
+          arch -x86_64 /usr/local/bin/brew install qt boost libevent miniupnpc qrencode libzip ccache cmake capnp
 
       - name: Configure Ccache
         uses: actions/cache@v5
