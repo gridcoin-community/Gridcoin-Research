@@ -231,7 +231,7 @@ BOOST_AUTO_TEST_CASE(v15_script_flags_close_malleability_at_activation)
 //! same inputs -- only the activation height moves, which is what makes the DoS
 //! score attributable to the flag rather than to anything else about the input.
 //!
-//! `policy_flags` is still the empty literal at validation.cpp:467, so the
+//! The policy tier in ConnectInputs() (validation.cpp) is still empty, so the
 //! nDoS == 0 half cannot be written yet: nothing can fail policy without also
 //! failing consensus. That needs a seam in the flag set first, and is the other
 //! half of this row.
