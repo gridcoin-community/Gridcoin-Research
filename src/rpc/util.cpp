@@ -292,7 +292,6 @@ std::string RPCResults::ToDescriptionString() const
 {
     std::string result;
     for (const auto& r : m_results) {
-        if (r.m_type == RPCResult::Type::ANY) continue; // for testing only
         if (r.m_cond.empty()) {
             result += "\nResult:\n";
         } else {
@@ -509,7 +508,18 @@ void RPCResult::ToSections(Sections& sections, const OuterType outer_type, const
         return;
     }
     case Type::ANY: {
-        CHECK_NONFATAL(false); // Only for testing
+        // Upstream v26.0 (this port's baseline) reserved ANY for testing and never
+        // rendered it, which is why this asserted and why
+        // RPCResults::ToDescriptionString used to skip it outright. Upstream has
+        // since converged on rendering it (master commits 6a1a66c180cb and
+        // fa2264791490). Here it is used for genuinely polymorphic
+        // returns -- dumpprivkey, getaddednodeinfo, sendalert2 and versionreport --
+        // each of which carries a description written for a reader. Skipping meant
+        // those four commands printed no Result section at all while the text sat in
+        // the spec unused. Render the description against upstream's "xxx" value
+        // placeholder ("..." would collide with the ELISION rendering above).
+        sections.PushSection({indent + maybe_key + "xxx" + maybe_separator, Description("any")});
+        return;
     }
     case Type::NONE: {
         sections.PushSection({indent + "null" + maybe_separator, Description("json null")});
@@ -601,7 +611,7 @@ void RPCResult::CheckInnerDoc() const
 // object-typed args until this implementation is extended.
 //
 // TODO: implement object-type rendering here when a command first needs
-// nested objects in m_inner. rpchelpman_tests' every_helpman_renders case
+// nested objects in m_inner. rpchelpman_tests' every_helpman_renders_help case
 // walks every registered command through ToString(), so a spec that trips
 // this fails a test rather than a user's help request.
 std::string RPCArg::ToStringObj(const bool oneline) const
