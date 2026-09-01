@@ -64,6 +64,18 @@ std::string WriteCookie(const fs::path& dir);
 //! file is absent (the node is not running -- do not dial).
 std::optional<std::string> ReadCookie(const fs::path& dir);
 
+//! Node side: remove <dir>/ipc.cookie at shutdown, mirroring upstream's
+//! DeleteAuthCookie(). The cookie is a live 256-bit credential for as long as the
+//! file exists, and it outlived the process that minted it: a stale file is
+//! readable by anything that can read the datadir, and its presence is also what
+//! ReadCookie() uses to mean "the node is running", so a GUI dials a socket nobody
+//! is listening on and reports a connection failure instead of "not running".
+//!
+//! Never throws: shutdown is the wrong place to raise, and the file legitimately
+//! may not be there (an unclean previous exit, or a user who removed it by hand).
+//! A failure to remove is logged.
+void DeleteCookie(const fs::path& dir);
+
 //! Compute the node identity token: HEX(SHA256(domain-tag ‖ LE32(len) ‖ uuid)).
 //! Deterministic in \p wallet_uuid; returns "" (identity unavailable) when the
 //! UUID is empty. The raw UUID never crosses the wire -- only this hash does.

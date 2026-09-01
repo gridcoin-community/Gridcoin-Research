@@ -6,6 +6,7 @@
 
 #include "clientversion.h"
 #include "crypto/sha256.h"
+#include "logging.h"
 #include "random.h"
 #include "tinyformat.h"
 #include "util/strencodings.h"
@@ -290,6 +291,20 @@ std::optional<std::string> ReadCookie(const fs::path& dir)
         contents->pop_back();
     }
     return contents;
+}
+
+void DeleteCookie(const fs::path& dir)
+{
+    boost::system::error_code ec;
+    fs::remove(dir / COOKIE_FILE, ec);
+
+    // Absent is the expected case after an unclean exit, and fs::remove reports
+    // that by returning false with no error, not by setting ec. Only a real
+    // failure -- a permission problem, or a non-empty directory in the way -- lands here.
+    if (ec) {
+        LogPrintf("WARN: %s: could not remove the IPC cookie %s (%s)", __func__,
+                  (dir / COOKIE_FILE).string(), ec.message());
+    }
 }
 
 std::string ComputeIdentityToken(const std::vector<unsigned char>& wallet_uuid)

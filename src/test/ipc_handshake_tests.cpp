@@ -2,8 +2,11 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "fs.h"
+#include "tinyformat.h"
 #include "interfaces/init.h"
 #include "ipc/handshake.h"
+#include "util/time.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -54,6 +57,59 @@ bool HasSoft(const ipc::HandshakeResult& r, ipc::SoftWarn w)
 BOOST_AUTO_TEST_SUITE(ipc_handshake_tests)
 
 // ---- ComputeIdentityToken ----
+
+BOOST_AUTO_TEST_CASE(cookie_round_trip_and_delete)
+{
+    // Own temp directory rather than GetDataDir(): this only needs somewhere to put a
+    // file, and the datadir path applies an owner-only DACL on first creation.
+    const fs::path dir = fs::temp_directory_path() / strprintf("grc_ipc_cookie_%d", GetTimeMillis());
+    fs::create_directories(dir);
+
+    // Seeded directly rather than through WriteCookie(). WriteCookie applies an
+    // owner-only DACL to the temp file it renames into place and THROWS where the
+    // platform cannot -- which is the case under Wine, where the Windows
+    // cross-compile leg runs this suite ("could not be restricted to the current
+    // user -- its DACL is not protected"). The delete path is what this case is
+    // about, and it has to be testable on every platform the suite runs on.
+    const std::string cookie(64, 'a');
+    {
+        fsbridge::ofstream out(dir / "ipc.cookie", std::ios::binary);
+        out << cookie;
+    }
+
+    const std::optional<std::string> read_back = ipc::ReadCookie(dir);
+    BOOST_REQUIRE(read_back.has_value());
+    BOOST_CHECK_EQUAL(*read_back, cookie);
+
+    ipc::DeleteCookie(dir);
+
+    // Gone from disk, and gone as far as a GUI is concerned -- ReadCookie returning
+    // nullopt is what "no node is running" means to ipc::connect.
+    BOOST_CHECK(!fs::exists(dir / "ipc.cookie"));
+    BOOST_CHECK(!ipc::ReadCookie(dir).has_value());
+
+    // Removing an absent cookie is not an error. Shutdown must stay quiet after an
+    // unclean previous exit, or when a user removed the file by hand.
+    BOOST_CHECK_NO_THROW(ipc::DeleteCookie(dir));
+
+    // And the real writer where the platform allows it, so the pair is covered
+    // end to end on the platforms that can express the permission.
+    try {
+        const std::string written = ipc::WriteCookie(dir);
+        BOOST_CHECK_EQUAL(written.size(), 64u); // 256 bits, hex
+
+        const std::optional<std::string> written_back = ipc::ReadCookie(dir);
+        BOOST_REQUIRE(written_back.has_value());
+        BOOST_CHECK_EQUAL(*written_back, written);
+
+        ipc::DeleteCookie(dir);
+        BOOST_CHECK(!ipc::ReadCookie(dir).has_value());
+    } catch (const std::runtime_error& e) {
+        BOOST_TEST_MESSAGE(std::string("WriteCookie is not available here: ") + e.what());
+    }
+
+    fs::remove_all(dir);
+}
 
 BOOST_AUTO_TEST_CASE(identity_token_empty_uuid_is_empty)
 {
