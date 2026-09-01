@@ -60,8 +60,8 @@ from test_framework.util import assert_equal
 
 SAT = Decimal("0.00000001")
 
-# -mintxfee for node 1, in GRC per KB. Sits between the two probe transactions
-# in case 3 (~0.0051 and ~0.0102 GRC/KB).
+# -mintxfee for node 2 (the third node, which runs case 3), in GRC per KB. Sits
+# between the two probe transactions in case 3 (~0.0051 and ~0.0102 GRC/KB).
 RAISED_MIN_TX_FEE = Decimal("0.008")
 
 # Inputs in the "bulk" transaction. ~148 bytes per P2PKH input puts it near
