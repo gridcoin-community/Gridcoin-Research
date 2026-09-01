@@ -1231,6 +1231,11 @@ UniValue generatesuperblock(const UniValue& params)
             throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("invalid CPID: %s", cpid_hex));
         }
 
+        if (!magnitudes[cpid_hex].isNum()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               strprintf("magnitude for CPID %s must be a number", cpid_hex));
+        }
+
         const double magnitude = magnitudes[cpid_hex].get_real();
 
         if (magnitude < 0) {
@@ -1246,7 +1251,14 @@ UniValue generatesuperblock(const UniValue& params)
     const GRC::Superblock::ProjectStats stats(1, 1, 1);
 
     if (params.size() > 1 && !params[1].isNull()) {
-        for (const UniValue& name : params[1].get_array().getValues()) {
+        const std::vector<UniValue>& names = params[1].get_array().getValues();
+
+        if (names.empty()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               "projects must contain at least one name");
+        }
+
+        for (const UniValue& name : names) {
             superblock.m_projects.Add(name.get_str(), stats);
         }
     } else {

@@ -73,6 +73,10 @@ class GenerateSuperblockTest(GridcoinTestFramework):
             -8, "invalid CPID", node.generatesuperblock, {"not-a-cpid": 1})
         assert_raises_rpc_error(
             -8, "negative magnitude", node.generatesuperblock, {CPID_A: -1})
+        assert_raises_rpc_error(
+            -8, "must be a number", node.generatesuperblock, {CPID_A: "high"})
+        assert_raises_rpc_error(
+            -8, "at least one name", node.generatesuperblock, {CPID_A: 100}, [])
 
         # A failed call must not leave anything staged behind it.
         node.generatetoaddress(1, node.getnewaddress())
