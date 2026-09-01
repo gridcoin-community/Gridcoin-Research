@@ -300,7 +300,7 @@ void DeleteCookie(const fs::path& dir)
 
     // Absent is the expected case after an unclean exit, and fs::remove reports
     // that by returning false with no error, not by setting ec. Only a real
-    // failure -- a permission problem, or a directory in the way -- lands here.
+    // failure -- a permission problem, or a non-empty directory in the way -- lands here.
     if (ec) {
         LogPrintf("WARN: %s: could not remove the IPC cookie %s (%s)", __func__,
                   (dir / COOKIE_FILE).string(), ec.message());
