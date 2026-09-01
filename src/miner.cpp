@@ -1359,7 +1359,7 @@ static std::optional<GRC::Superblock> g_regtest_staged_superblock GUARDED_BY(cs_
 
 void StageRegtestSuperblock(GRC::Superblock superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    assert(Params().IsMockableChain());
+    assert(Params().IsMockableChain()); // LINT-OK-ASSERT: regtest-only entry guard, unreachable via the RPC gate; abort beats staging a synthetic superblock on a live chain
     g_regtest_staged_superblock = std::move(superblock);
 }
 
