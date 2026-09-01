@@ -118,14 +118,6 @@ VARIADIC_ACCEPTS_EXTRA_ARGS = {
     "parselegacysb",  # src/rpc/blockchain.cpp: body uses params[0] only
 }
 
-# Converted commands whose rendered help carries no "Result" section, so the
-# marker check below cannot see them as converted.
-#
-# All four declare RPCResult{RPCResult::Type::ANY, ...} because their return
-# shape is polymorphic, and RPCResults::ToDescriptionString (src/rpc/util.cpp)
-# skips Type::ANY entirely -- upstream Bitcoin Core marks that type "for testing
-# only". The description the spec author wrote is therefore never rendered.
-# These are RPCHelpMan-converted regardless: their synopsis line is
 # Four commands declare RPCResult::Type::ANY; since src/rpc/util.cpp renders
 # ANY (it used to skip it), they classify as converted like everything else.
 # They stay pinned by name purely as a discovery-walk vacuity guard: a broken
@@ -344,8 +336,7 @@ class RpcHelpTest(GridcoinTestFramework):
 
         # Vacuity guard first: an empty or broken discovery walk would satisfy
         # the legacy check below with nothing discovered at all. The four
-        # allowlisted commands are pinned by name, so discovery must have seen
-        # every one of them.
+        # pinned commands must therefore all have been seen by discovery.
         discovered = set(name for name, _ in converted) | set(legacy)
         missing = sorted(PINNED_DISCOVERY_COMMANDS - discovered)
         assert not missing, (
