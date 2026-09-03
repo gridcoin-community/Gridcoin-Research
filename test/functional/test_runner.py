@@ -96,28 +96,12 @@ EXTENDED_SCRIPTS = [
     # spent on TxStateInMempool as well as TxStateConfirmed, so those outputs
     # leave AvailableCoinsForStaking and CreateCoinStake can fail with "no stake
     # found (need a mature UTXO with sufficient weight)". Same shared-premine
-    # hazard as feature_reorg.py below. One case per node and a 2x UTXO universe
+    # hazard feature_reorg.py used to carry. One case per node and a 2x UTXO universe
     # took it from ~4.5% to ~1.3% (2 failures in 150 runs) but did not remove it,
     # and a bounded mine retry does not help -- a retry advances the mock clock
     # one 16 s slot, which adds no stake weight. Unit-testing this needs a chain
     # fixture with spendable coins, which the tree does not have (issue #3290).
     'mining_fee_policy.py',
-    #
-    # feature_reorg.py exercises a competing-proof-of-stake reorg between two
-    # nodes. It is intermittently flaky on the current regtest stack and is NOT
-    # in the default CI suite: both nodes share the same deterministic, stakeable
-    # premine, so their independently-staked block-1s can draw the same coinstake
-    # kernel. When the kernel (proof-of-stake hash = stake modifier + prevout +
-    # 16s-masked time) collides, the duplicate-proof-of-stake guard
-    # (validation.cpp) makes each node reject the other's block, so the shorter
-    # node never reorganizes and sync_blocks times out (~13% of runs locally).
-    # It cannot be made deterministic from Python without one of: a setmocktime
-    # RPC (to put the two nodes in different stake-time slots), invalidateblock
-    # (to force a reorg from a single staker), or disconnectnode (to split a
-    # shared chain). setmocktime and disconnectnode now exist; the test has not
-    # yet been rewritten around them. Re-promote to BASE_SCRIPTS once it is and
-    # repeated runs show it stable.
-    'feature_reorg.py',
 ]
 
 BASE_SCRIPTS = [
@@ -139,8 +123,6 @@ BASE_SCRIPTS = [
     #   - mempool_accept.py: sendrawtransaction accept + double-spend rejection
     #   - rpc_net.py: two-node getpeerinfo/addnode + block propagation
     #   - feature_sidestake.py: local sidestaking config + reward split
-    # (feature_reorg.py is in EXTENDED_SCRIPTS — flaky on the shared-premine
-    #  regtest stack; see the note there.)
     # Phase 4A.2 adds RPCHelpMan-surface tests (investor-mode, no beacon/CPID):
     #   - rpc_signmessage.py: signmessage/verifymessage/validateaddress
     #   - rpc_rawtransaction.py: createrawtransaction/decode/decodescript/sign
@@ -197,6 +179,11 @@ BASE_SCRIPTS = [
     'rpc_net_connman.py',
     'feature_sidestake.py',
     'feature_generatesuperblock.py',
+    # feature_reorg.py: split two nodes with disconnectnode, build competing
+    # branches with node1's clock two stake slots ahead so no coinstake kernel
+    # can collide, reconnect, and assert the shorter node reorganizes. It was
+    # in EXTENDED_SCRIPTS while it raced two stakers on the shared premine.
+    'feature_reorg.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled
