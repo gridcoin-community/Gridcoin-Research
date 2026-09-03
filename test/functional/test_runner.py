@@ -198,6 +198,7 @@ BASE_SCRIPTS = [
     # in EXTENDED_SCRIPTS while it raced two stakers on the shared premine.
     'feature_reorg.py',
     'feature_beacon_activation.py',
+    'feature_research_reward.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled
