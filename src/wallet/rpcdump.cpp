@@ -123,6 +123,13 @@ const RPCHelpMan& importprivkey_helpman() { return importprivkey_help; }
 
 UniValue importprivkey(const UniValue& params)
 {
+    // Same enforce-first shape as importwallet, dumpprivkey and dumpwallet.
+    // Without it a locked wallet failed later inside AddKey with
+    // RPC_WALLET_ERROR, after MarkDirty and a mapKeyMetadata entry had
+    // already been written, and a re-import of a key the wallet already held
+    // returned success without ever consulting the lock.
+    EnsureWalletIsUnlocked();
+
     string strSecret = params[0].get_str();
     string strLabel = "";
     if (params.size() > 1)
@@ -139,9 +146,6 @@ UniValue importprivkey(const UniValue& params)
     {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
     }
-
-    if (fWalletUnlockStakingOnly)
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is unlocked for staking only.");
 
     CKeyID vchAddress = key.GetPubKey().GetID();
     {
