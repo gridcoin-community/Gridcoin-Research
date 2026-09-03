@@ -417,6 +417,34 @@ BOOST_AUTO_TEST_CASE(a_transaction_newer_than_the_block_is_skipped)
 //! heap, and no fixture state can change that -- the coinbase half of the guard
 //! has no reachable behaviour to pin.
 //!
+namespace {
+
+//! Registers the wallet with the validation signals for one case. The
+//! signals are inert in this binary until a scheduler is registered
+//! (chain_setup.cpp explains why); every signal used here is invoked
+//! synchronously, so the scheduler never has to run.
+struct SignalsForThisCase {
+    CScheduler m_scheduler;
+    SignalsForThisCase()
+    {
+        GetMainSignals().RegisterBackgroundSignalScheduler(m_scheduler);
+        RegisterValidationInterface(pwalletMain);
+    }
+    ~SignalsForThisCase()
+    {
+        UnregisterValidationInterface(pwalletMain);
+        GetMainSignals().UnregisterBackgroundSignalScheduler();
+    }
+};
+
+//! Puts the -maxmempool cap back however the case exits.
+struct MaxSizeRestorer {
+    size_t m_saved{mempool.GetMaxSize()};
+    ~MaxSizeRestorer() { mempool.SetMaxSize(m_saved); }
+};
+
+} // anonymous namespace
+
 //!
 //! A size-limit eviction inside AcceptToMemoryPool reaches the wallet.
 //!
@@ -437,24 +465,8 @@ BOOST_AUTO_TEST_CASE(a_size_limit_eviction_reaches_the_wallet)
 {
     mempool.clear();
 
-    struct SignalsForThisCase {
-        CScheduler m_scheduler;
-        SignalsForThisCase()
-        {
-            GetMainSignals().RegisterBackgroundSignalScheduler(m_scheduler);
-            RegisterValidationInterface(pwalletMain);
-        }
-        ~SignalsForThisCase()
-        {
-            UnregisterValidationInterface(pwalletMain);
-            GetMainSignals().UnregisterBackgroundSignalScheduler();
-        }
-    } signals;
-
-    struct MaxSizeRestorer {
-        size_t m_saved{mempool.GetMaxSize()};
-        ~MaxSizeRestorer() { mempool.SetMaxSize(m_saved); }
-    } max_size;
+    const SignalsForThisCase signals;
+    const MaxSizeRestorer max_size;
 
     std::vector<std::pair<uint256, ChangeType>> seen;
     boost::signals2::scoped_connection watch = pwalletMain->NotifyTransactionChanged.connect(
@@ -502,6 +514,76 @@ BOOST_AUTO_TEST_CASE(a_size_limit_eviction_reaches_the_wallet)
     }
 
     mempool.clear();
+
+    // The spends are deterministic, so the next case builds the same two
+    // transactions; leave it a wallet that has never seen them.
+    pwalletMain->EraseFromWallet(first_hash);
+    pwalletMain->EraseFromWallet(second.GetHash());
+}
+
+//!
+//! An evicted own spend is the input ResendWalletTransactions exists for:
+//! unconfirmed, no longer in the mempool, and not conflicted. The forced
+//! resend must relay exactly that spend, and nothing while it is still pooled
+//! or once it is marked inactive.
+//!
+//! Discriminates on the relayed count. While the spend is in the pool it reads
+//! depth 0 and is skipped; after the eviction it reads -1 and is revalidated
+//! against the tx index and relayed; marked conflicted it is refused by
+//! RelayWalletTransaction. Had the eviction handler marked it conflicted, the
+//! count after the eviction would be 0. The wallet must have nothing to
+//! re-announce before the case starts, or the counts would not be this case's.
+//!
+BOOST_AUTO_TEST_CASE(a_size_limit_evicted_own_spend_is_rebroadcast)
+{
+    mempool.clear();
+
+    const SignalsForThisCase signals;
+    const MaxSizeRestorer max_size;
+
+    CAmount fee_first = 0, fee_second = 0;
+    CTransaction first = MakeCandidate(0, 1, 2000, fee_first);
+    CTransaction second = MakeCandidate(1, 1, 2000, fee_second);
+    const uint256 first_hash = first.GetHash();
+
+    LOCK(cs_main);
+
+    BOOST_REQUIRE_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+
+    CValidationState state_first;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, first, state_first, nullptr),
+                          "first spend rejected: " + state_first.GetRejectReason());
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->mapWallet.count(first_hash));
+    }
+
+    // Still in the pool: nothing to re-announce.
+    BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+
+    mempool.SetMaxSize(mempool.DynamicMemoryUsage());
+    CValidationState state_second;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, second, state_second, nullptr),
+                          "second spend rejected: " + state_second.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(!mempool.exists(first_hash), "the size limit did not evict the first spend");
+
+    // Evicted: exactly the first spend is relayed; the second is still pooled.
+    BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 1u);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_CHECK(pwalletMain->mapWallet.count(first_hash));
+    }
+
+    // Conflicted: refused, whatever depth says.
+    {
+        LOCK(pwalletMain->cs_wallet);
+        pwalletMain->mapWallet.at(first_hash).SetTxState(TxStateInactive{false});
+    }
+    BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+
+    mempool.clear();
+    pwalletMain->EraseFromWallet(first_hash);
+    pwalletMain->EraseFromWallet(second.GetHash());
 }
 
 BOOST_AUTO_TEST_CASE(a_coinstake_in_the_mempool_is_never_selected)

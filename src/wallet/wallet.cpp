@@ -2495,13 +2495,13 @@ void CWallet::ReacceptWalletTransactions()
 }
 
 
-void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
+bool CWalletTx::RelayWalletTransaction(CTxDB& txdb)
 {
     // Don't relay inactive (abandoned/conflicted) transactions
     if (isInactive()) {
         LogPrint(BCLog::LogFlags::VERBOSE, "RelayWalletTransaction: skipping inactive tx %s\n",
                  GetHash().ToString().substr(0,10));
-        return;
+        return false;
     }
 
     for (auto const& tx : vtxPrev)
@@ -2523,15 +2523,17 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
             RelayTransaction((CTransaction)*this, hash);
         }
     }
+
+    return true;
 }
 
-void CWalletTx::RelayWalletTransaction()
+bool CWalletTx::RelayWalletTransaction()
 {
     CTxDB txdb("r");
-    RelayWalletTransaction(txdb);
+    return RelayWalletTransaction(txdb);
 }
 
-void CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+unsigned int CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!fForce)
     {
@@ -2540,23 +2542,23 @@ void CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQUIRED(cs_
         // is in sync. During initial block loads, etc. using a transferred
         // wallet.dat file, the unconfirmed status of the transactions may not be correct.
         if (IsInitialBlockDownload() || OutOfSyncByAge()) {
-            return;
+            return 0;
         }
 
         static int64_t nNextTime;
         if ( GetAdjustedTime() < nNextTime)
-            return;
+            return 0;
         bool fFirst = (nNextTime == 0);
 
         // Choose a random time up to about 10 blocks at target spacing.
         nNextTime =  GetAdjustedTime() + GetRand(GetTargetSpacing(nBestHeight) * 10);
         if (fFirst)
-            return;
+            return 0;
 
         // Only do it if there's been a new block since last time
         static int64_t nLastTime;
         if (g_nTimeBestReceived < nLastTime)
-            return;
+            return 0;
         nLastTime =  GetAdjustedTime();
     }
 
@@ -2598,10 +2600,11 @@ void CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQUIRED(cs_
             CWalletTx& wtx = *item.second;
 
             if (wtx.RevalidateTransaction(txdb)) {
-                // Transaction is valid for relaying.
-                wtx.RelayWalletTransaction(txdb);
-
-                ++txns_relayed;
+                // Transaction is valid for relaying; an inactive one is still
+                // refused by RelayWalletTransaction and does not count.
+                if (wtx.RelayWalletTransaction(txdb)) {
+                    ++txns_relayed;
+                }
             } else {
                 LogPrintf("WARNING: %s: CheckTransaction failed for transaction %s. Transaction will be "
                           "erased.",
@@ -2641,6 +2644,8 @@ void CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQUIRED(cs_
              txns_relayed,
              txns_failed_validation,
              txns_erased_from_wallet);
+
+    return txns_relayed;
 }
 
 bool CWalletTx::RevalidateTransaction(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
