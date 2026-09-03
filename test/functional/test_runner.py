@@ -195,6 +195,10 @@ BASE_SCRIPTS = [
     'rpc_net_connman.py',
     'feature_sidestake.py',
     'feature_generatesuperblock.py',
+    # feature_reorg_resurrect.py: a wallet transaction whose block is
+    # disconnected returns to the mempool and stays unconfirmed, not
+    # conflicted, and is mined again by the next block.
+    'feature_reorg_resurrect.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled

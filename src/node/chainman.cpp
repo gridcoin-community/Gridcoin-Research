@@ -191,7 +191,16 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
     /* fix up after disconnecting, prepare for new blocks */
     if (cnt_dis > 0)
     {
+        if (!txdb.TxnCommit())
+            return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
+
         // Resurrect memory transactions that were in the disconnected branch.
+        //
+        // This must run after the commit above. AcceptToMemoryPool opens its own
+        // read-only CTxDB, which sees only committed state: with the disconnect
+        // batch still pending, the transaction's own index entry is still on
+        // disk (so ContainsTx refuses it) and its inputs are still marked spent.
+        // Every resurrection was silently refused that way.
         // Note: these are re-accepted but NOT re-added to the unbroadcast set --
         // provenance ("was this ours?") is not tracked here. A locally-originated
         // non-wallet tx (e.g. sendrawtransaction/HTLC) that had briefly confirmed
@@ -200,11 +209,14 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
         // ResendWalletTransactions. Acceptable given how rare a same-tx reorg is.
         for( CTransaction& tx : vResurrect) {
             CValidationState resurrect_state;
-            AcceptToMemoryPool(mempool, tx, resurrect_state, nullptr);
+            bool missing_inputs = false;
+            if (!AcceptToMemoryPool(mempool, tx, resurrect_state, &missing_inputs)) {
+                LogPrint(BCLog::LogFlags::MEMPOOL, "%s: transaction %s not resurrected%s%s",
+                         __func__, tx.GetHash().ToString(),
+                         missing_inputs ? ": missing inputs" : "",
+                         resurrect_state.GetRejectReason().empty() ? "" : ": " + resurrect_state.GetRejectReason());
+            }
         }
-
-        if (!txdb.TxnCommit())
-            return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
 
         // Record new best height (the common block) in the registries that have a backing DB. This is important
         // to ensure that if the wallet is shutdown, on the next start, the contract replay (if any) is done from
@@ -454,16 +466,6 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                 }
             }
 
-            // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This
-            // is ugly and heavyweight and should be replaced when the upstream wallet code is ported. Unlike the
-            // repairwallet rpc, this is silent.
-            if (!to_be_erased.empty()) {
-                int nMisMatchFound = 0;
-                CAmount nBalanceInQuestion = 0;
-
-                pwalletMain->FixSpentCoins(nMisMatchFound, nBalanceInQuestion);
-            }
-
             if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
                 txdb.TxnAbort();
                 return error("%s: WriteHashBestChain failed", __func__);
@@ -472,6 +474,20 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             // Make sure it's successfully written to disk before changing memory structure
             if (!txdb.TxnCommit()) {
                 return error("%s: TxnCommit failed", __func__);
+            }
+
+            // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This
+            // is ugly and heavyweight and should be replaced when the upstream wallet code is ported. Unlike the
+            // repairwallet rpc, this is silent.
+            //
+            // After the commit, deliberately: FixSpentCoins reads the tx index through its own CTxDB, which sees
+            // only committed state. Run before the commit it would not see this block's spends and would hand
+            // back every wallet output the block just consumed.
+            if (!to_be_erased.empty()) {
+                int nMisMatchFound = 0;
+                CAmount nBalanceInQuestion = 0;
+
+                pwalletMain->FixSpentCoins(nMisMatchFound, nBalanceInQuestion);
             }
 
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk unlocked", __func__);
