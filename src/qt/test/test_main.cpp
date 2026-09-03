@@ -5,6 +5,7 @@
 #include "bitcoinunitstests.h"
 #include "coinselectionmodeltests.h"
 #include "coinselectionviewtests.h"
+#include "psgttoastdamptests.h"
 #include "sidestakemodeltests.h"
 #include "uritests.h"
 
@@ -56,6 +57,10 @@ int main(int argc, char *argv[])
 
     CoinSelectionViewTests test5;
     if (QTest::qExec(&test5) != 0)
+        fInvalid = true;
+
+    PSGTToastDampTests test6;
+    if (QTest::qExec(&test6) != 0)
         fInvalid = true;
 
     return fInvalid;

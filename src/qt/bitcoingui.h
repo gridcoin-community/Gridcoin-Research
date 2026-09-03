@@ -9,6 +9,7 @@
 #include <vector>
 #include "guiconstants.h"
 #include "guiipcinfo.h"
+#include "psgttoastdamp.h"
 #include "interfaces/wallet_tx_channel.h" // GRC::WalletEvent for processDrainedTransactions
 
 #ifdef Q_OS_MAC
@@ -140,6 +141,12 @@ private:
     ClientModel *clientModel;
     WalletModel *walletModel;
     interfaces::PSGTPoolContext *m_psgt_pool_context = nullptr;
+    //! Keeps one multisig arrangement from toasting once per co-signer's
+    //! revision while this wallet's own signature is still outstanding.
+    PSGTToastDamp m_psgt_toast_damp;
+
+    //! The pool as the damp needs to see it: revision -> arrangement.
+    std::vector<PSGTToastDamp::Entry> currentPSGTPoolEntries() const;
     ResearcherModel *researcherModel;
     MRCModel *m_mrc_model;
     VotingModel *votingModel;
