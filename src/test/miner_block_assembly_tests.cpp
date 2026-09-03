@@ -36,16 +36,24 @@
 #include "consensus/tx_verify.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/mrc.h"
+#include "init.h"
 #include "miner.h"
 #include "policy/fees.h"
 #include "primitives/block.h"
 #include "primitives/transaction.h"
+#include "scheduler.h"
 #include "script/script.h"
 #include "test/chain_setup.h"
 #include "txmempool.h"
 #include "validation.h"
+#include "validationinterface.h"
+#include "wallet/wallet.h"
 
+#include <boost/signals2/connection.hpp>
 #include <boost/test/unit_test.hpp>
+
+#include <algorithm>
+#include <string>
 
 #include <map>
 #include <vector>
@@ -409,6 +417,93 @@ BOOST_AUTO_TEST_CASE(a_transaction_newer_than_the_block_is_skipped)
 //! heap, and no fixture state can change that -- the coinbase half of the guard
 //! has no reachable behaviour to pin.
 //!
+//!
+//! A size-limit eviction inside AcceptToMemoryPool reaches the wallet.
+//!
+//! Lives in this suite because it needs the same chain: AcceptToMemoryPool
+//! resolves inputs through the tx index, which only the fixture provides.
+//! The validation signals are inert in this binary until a scheduler is
+//! registered (chain_setup.cpp explains why), so the case registers one for
+//! its own duration; every signal used here is invoked synchronously, so the
+//! scheduler never has to run.
+//!
+//! Discriminates on the wallet's NotifyTransactionChanged for the EVICTED
+//! transaction after the second accept. Without the emission in
+//! AcceptToMemoryPool the wallet never hears about the eviction and no such
+//! notification exists; depth alone would not do, since it is derived live
+//! from mempool.exists() and reads -1 either way.
+//!
+BOOST_AUTO_TEST_CASE(a_size_limit_eviction_reaches_the_wallet)
+{
+    mempool.clear();
+
+    struct SignalsForThisCase {
+        CScheduler m_scheduler;
+        SignalsForThisCase()
+        {
+            GetMainSignals().RegisterBackgroundSignalScheduler(m_scheduler);
+            RegisterValidationInterface(pwalletMain);
+        }
+        ~SignalsForThisCase()
+        {
+            UnregisterValidationInterface(pwalletMain);
+            GetMainSignals().UnregisterBackgroundSignalScheduler();
+        }
+    } signals;
+
+    struct MaxSizeRestorer {
+        size_t m_saved{mempool.GetMaxSize()};
+        ~MaxSizeRestorer() { mempool.SetMaxSize(m_saved); }
+    } max_size;
+
+    std::vector<std::pair<uint256, ChangeType>> seen;
+    boost::signals2::scoped_connection watch = pwalletMain->NotifyTransactionChanged.connect(
+        [&seen](CWallet*, const uint256& hash, ChangeType status) { seen.emplace_back(hash, status); });
+
+    CAmount fee_first = 0, fee_second = 0;
+    CTransaction first = MakeCandidate(0, 1, 2000, fee_first);
+    CTransaction second = MakeCandidate(1, 1, 2000, fee_second);
+    const uint256 first_hash = first.GetHash();
+
+    LOCK(cs_main);
+
+    CValidationState state_first;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, first, state_first, nullptr),
+                          "first spend rejected: " + state_first.GetRejectReason());
+    BOOST_REQUIRE(mempool.exists(first_hash));
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE_MESSAGE(pwalletMain->mapWallet.count(first_hash),
+                              "the wallet did not pick up its own spend from the add signal");
+    }
+
+    // Room for exactly what is in the pool now, so the next accept has to evict.
+    mempool.SetMaxSize(mempool.DynamicMemoryUsage());
+    const size_t seen_before = seen.size();
+
+    CValidationState state_second;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, second, state_second, nullptr),
+                          "second spend rejected: " + state_second.GetRejectReason());
+    BOOST_REQUIRE(mempool.exists(second.GetHash()));
+    BOOST_REQUIRE_MESSAGE(!mempool.exists(first_hash), "the size limit did not evict the first spend");
+
+    const auto evicted_notice = std::count_if(seen.begin() + seen_before, seen.end(),
+        [&](const std::pair<uint256, ChangeType>& e) { return e.first == first_hash && e.second == CT_UPDATED; });
+    BOOST_CHECK_MESSAGE(evicted_notice == 1,
+        "expected exactly one CT_UPDATED for the evicted tx, saw " + std::to_string(evicted_notice));
+
+    // Eviction is not a conflict: the state is untouched and depth reads -1 live.
+    {
+        LOCK(pwalletMain->cs_wallet);
+        const CWalletTx& wtx = pwalletMain->mapWallet.at(first_hash);
+        BOOST_CHECK(wtx.isInMempool());
+        BOOST_CHECK(!wtx.isInactive());
+        BOOST_CHECK_EQUAL(wtx.GetDepthInMainChain(), -1);
+    }
+
+    mempool.clear();
+}
+
 BOOST_AUTO_TEST_CASE(a_coinstake_in_the_mempool_is_never_selected)
 {
     mempool.clear();

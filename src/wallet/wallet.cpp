@@ -1487,13 +1487,17 @@ void CWallet::TransactionRemovedFromMempool(const CTransactionRef& tx,
 
         case MemPoolRemovalReason::EXPIRY:
         case MemPoolRemovalReason::SIZELIMIT:
-            // Transaction is still valid, just evicted from mempool.
-            // Don't mark as conflicted — ReacceptWalletTransactions will
-            // attempt to re-accept it on the next pass.
+            // Still valid, just evicted: the state stays TxStateInMempool. Depth
+            // is derived live from mempool.exists(), so it already reads -1, and
+            // that is exactly the state the scheduled ResendWalletTransactions()
+            // re-announces. Only the GUI needs telling now rather than at the
+            // next tip refresh: a row that has aged into Offline is a terminal
+            // status in WalletTxStore and is not re-derived on its own.
             LogPrint(BCLog::LogFlags::VERBOSE,
                     "CWallet::TransactionRemovedFromMempool: tx %s evicted (reason: %d), "
-                    "not marking conflicted - eligible for re-acceptance\n",
+                    "not marking conflicted - left for rebroadcast\n",
                     hash.ToString(), static_cast<int>(reason));
+            NotifyTransactionChanged(this, hash, CT_UPDATED);
             break;
 
         case MemPoolRemovalReason::REORG:
