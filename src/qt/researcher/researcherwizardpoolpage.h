@@ -28,6 +28,10 @@ public:
     void initializePage() override;
 
 private:
+    //! Fills poolTableWidget from the pool registry. The .ui carries the
+    //! column and the widget's properties; the rows are data.
+    void populatePoolTable();
+
     Ui::ResearcherWizardPoolPage *ui;
     ResearcherModel* m_researcher_model;
     WalletModel* m_wallet_model;

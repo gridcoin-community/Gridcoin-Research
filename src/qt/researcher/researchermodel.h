@@ -137,6 +137,11 @@ public:
     bool isV14Enabled() const;
     bool hasV3CapableProjects() const;
     std::vector<std::pair<QString, QString>> buildV3ProjectList() const;
+
+    //! The pools a researcher can join, as (name, website URL) pairs, one per
+    //! operator site. Backs the wizard pool page's table, which used to carry
+    //! the same two rows hardcoded in its .ui.
+    std::vector<std::pair<QString, QString>> buildPoolList() const;
     QString generateBeaconKeyForV3();
     BeaconStatus advertiseBeaconV3(const QString& ownership_proof_xml);
     QString cachedBeaconPubKeyHex() const;

@@ -14,6 +14,7 @@
 #include "util/system.h"
 
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <map>
 #include <set>
 #include <vector>
@@ -528,6 +529,54 @@ BOOST_AUTO_TEST_CASE(pool_registry_active_pools_contains_grandfathered_builtins)
 // -----------------------------------------------------------------------------
 // Grandfathered builtin pools (issue #1783 / plan §3, §3.5, §6, Q3, Q4)
 // -----------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(active_pools_by_operator_collapses_the_shared_grcpool_site)
+{
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    // Four of the five seeds are grcpool.com under one URL; the fifth is
+    // arikado. A researcher joins a site, not a CPID, so the wizard wants two
+    // rows where ActivePools() answers five.
+    const std::vector<GRC::Pool> by_operator = registry.ActivePoolsByOperator();
+
+    std::set<std::string> urls;
+
+    for (const auto& seed : GRC::PoolRegistry::BuiltinPoolSeeds()) {
+        urls.insert(seed.url);
+    }
+
+    BOOST_CHECK_EQUAL(registry.ActivePools().size(), GRC::PoolRegistry::BuiltinPoolSeeds().size());
+    BOOST_CHECK_EQUAL(by_operator.size(), urls.size());
+
+    // Every surviving row carries a distinct URL.
+    std::set<std::string> seen;
+
+    for (const auto& pool : by_operator) {
+        BOOST_CHECK(seen.insert(pool.m_url).second);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(active_pools_by_operator_keeps_the_lowest_name_of_each_group)
+{
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    const std::vector<GRC::Pool> by_operator = registry.ActivePoolsByOperator();
+
+    // grcpool.com sorts ahead of grcpool.com-2/-3/-5, so it is the label the
+    // group keeps -- not whichever CPID the map happened to yield first.
+    auto grcpool = std::find_if(by_operator.begin(), by_operator.end(), [](const GRC::Pool& pool) {
+        return pool.m_url == "https://grcpool.com/";
+    });
+
+    BOOST_REQUIRE(grcpool != by_operator.end());
+    BOOST_CHECK_EQUAL(grcpool->m_name, "grcpool.com");
+
+    // And the result is sorted by name, so it does not depend on CPID order.
+    BOOST_CHECK(std::is_sorted(by_operator.begin(), by_operator.end(),
+                               [](const GRC::Pool& lhs, const GRC::Pool& rhs) {
+                                   return lhs.m_name < rhs.m_name;
+                               }));
+}
 
 BOOST_AUTO_TEST_CASE(builtin_pools_match_g_mining_pools_pre_v15)
 {

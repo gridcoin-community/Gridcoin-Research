@@ -18,6 +18,7 @@
 #include "gridcoin/contract/message.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/mrc.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
@@ -1175,6 +1176,21 @@ public:
         // so the committed-superblock state is the matching source.
         for (const auto& project : GRC::GetWhitelist().Snapshot(GRC::GreylistState::AUTHORITATIVE).Sorted()) {
             result.push_back({project.m_name, project.m_url});
+        }
+
+        return result;
+    }
+
+    std::vector<PoolRow> activePools() override
+    {
+        // ActivePoolsByOperator collapses the CPIDs an operator holds into the
+        // one site a researcher joins, so the four grandfathered grcpool.com
+        // seeds present as a single row. The registry is seeded at construction
+        // and re-seeded by Reset(), so this is never empty.
+        std::vector<PoolRow> result;
+
+        for (const auto& pool : GRC::GetPoolRegistry().ActivePoolsByOperator()) {
+            result.push_back({pool.m_name, pool.m_url});
         }
 
         return result;
