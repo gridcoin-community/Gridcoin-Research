@@ -24,9 +24,12 @@ Each step asserts the state that only its inverse (or its replay) produces, so
 a missing Revert, a missing Deactivate, or a registry that refuses the replayed
 contract each fails a different line.
 
-Observed and not asserted either way: the disconnected advertisement does not
-come back into the mempool on its own (the mempool is empty after the second
-roll-back), so the replay resubmits the transaction's own bytes.
+Whether the disconnected advertisement comes back into the mempool on its own
+is not asserted either way: DisconnectBlocksBatch resurrects it once its
+re-acceptance runs after the disconnect batch commits, and before that fix
+the mempool is empty here. The replay resubmits the transaction's own bytes
+only when it has to; either way the identical transaction is what the next
+block carries.
 """
 
 import os
@@ -123,10 +126,10 @@ class ContractReplayTest(GridcoinTestFramework):
         active, pending = self.beacon_status(node)
         assert_equal(active, [])
         assert_equal(pending, [])
-        assert_equal(node.getrawmempool(), [])
 
         self.log.info("the identical advertisement is accepted again and replayed by the next block")
-        assert_equal(node.sendrawtransaction(advert_hex), advert_txid)
+        if advert_txid not in node.getrawmempool():
+            assert_equal(node.sendrawtransaction(advert_hex), advert_txid)
         assert_equal(node.getrawmempool(), [advert_txid])
         self.advance_to_slot(node)
         node.generatetoaddress(1, node.getnewaddress())
