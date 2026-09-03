@@ -44,6 +44,7 @@ interface ResearcherContext $Proxy.wrap("interfaces::ResearcherContext") {
     handleBeaconChanged @16 (context :Proxy.Context, callback :Node.VoidCallback) -> (result :Handler.Handler);
     handleAccrualChanged @17 (context :Proxy.Context, callback :Node.VoidCallback) -> (result :Handler.Handler);
     handleBlocksChanged @18 (context :Proxy.Context, callback :Node.NotifyBlocksChangedCallback) -> (result :Handler.Handler);
+    activePools @19 (context :Proxy.Context) -> (result :List(PoolRow));
 }
 
 struct ResearcherSnapshot $Proxy.wrap("interfaces::ResearcherSnapshot") {
@@ -102,6 +103,11 @@ struct BeaconAdvertiseResult $Proxy.wrap("interfaces::BeaconAdvertiseResult") {
 }
 
 struct WhitelistProject $Proxy.wrap("interfaces::WhitelistProject") {
+    name @0 :Text;
+    url @1 :Text;
+}
+
+struct PoolRow $Proxy.wrap("interfaces::PoolRow") {
     name @0 :Text;
     url @1 :Text;
 }

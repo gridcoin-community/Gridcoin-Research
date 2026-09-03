@@ -169,6 +169,15 @@ struct WhitelistProject
     std::string url;
 };
 
+//! One row of the researcher wizard's pool table: the pool registry's ACTIVE
+//! entries reduced to one per operator site, so the four grandfathered
+//! grcpool.com CPIDs present as the one pool a researcher can join.
+struct PoolRow
+{
+    std::string name;
+    std::string url;
+};
+
 //! Called when the researcher context changes (uiInterface.ResearcherChanged).
 //! Payload-free (decision B): the consumer refetches snapshot() on its own thread,
 //! which drops the former cross-thread marshal of a GRC::ResearcherPtr.
@@ -222,6 +231,11 @@ public:
 
     //! The whitelisted projects (name + url) for the poll-wizard pickers.
     virtual std::vector<WhitelistProject> whitelistProjects() = 0;
+
+    //! The pools a researcher can join (name + url), one row per operator site.
+    //! Replaces the researcher wizard's hardcoded pool table; the registry is
+    //! never empty, since PoolRegistry seeds the grandfathered pools at boot.
+    virtual std::vector<PoolRow> activePools() = 0;
 
     //! Maximum on-chain project name / URL lengths (GRC::Project::MAX_NAME_SIZE /
     //! MAX_URL_SIZE). The poll wizard's project-entry fields cap their Qt input at

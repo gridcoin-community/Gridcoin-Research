@@ -138,31 +138,11 @@
      <attribute name="verticalHeaderStretchLastSection">
       <bool>false</bool>
      </attribute>
-     <row>
-      <property name="text">
-       <string>grcpool</string>
-      </property>
-     </row>
-     <row>
-      <property name="text">
-       <string>Arikado Pool</string>
-      </property>
-     </row>
      <column>
       <property name="text">
        <string>Website URL</string>
       </property>
      </column>
-     <item row="0" column="0">
-      <property name="text">
-       <string notr="true">https://grcpool.com/</string>
-      </property>
-     </item>
-     <item row="1" column="0">
-      <property name="text">
-       <string notr="true">https://grc.arikado.ru/</string>
-      </property>
-     </item>
     </widget>
    </item>
    <item>
