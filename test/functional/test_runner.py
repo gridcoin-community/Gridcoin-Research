@@ -114,7 +114,9 @@ EXTENDED_SCRIPTS = [
     # It cannot be made deterministic from Python without one of: a setmocktime
     # RPC (to put the two nodes in different stake-time slots), invalidateblock
     # (to force a reorg from a single staker), or disconnectnode (to split a
-    # shared chain). Re-promote to BASE_SCRIPTS once one of those lands.
+    # shared chain). setmocktime and disconnectnode now exist; the test has not
+    # yet been rewritten around them. Re-promote to BASE_SCRIPTS once it is and
+    # repeated runs show it stable.
     'feature_reorg.py',
 ]
 

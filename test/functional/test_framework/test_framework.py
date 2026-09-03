@@ -639,35 +639,51 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         connect_nodes_helper(self.nodes[a], b)
 
     def disconnect_nodes(self, a, b):
-        def disconnect_nodes_helper(from_connection, node_num):
-            def get_peer_ids():
-                result = []
-                for peer in from_connection.getpeerinfo():
-                    if "testnode{}".format(node_num) in peer['subver']:
-                        result.append(peer['id'])
-                return result
+        """Disconnect every P2P link between nodes a and b and wait for both
+        sides to drop it.
 
-            peer_ids = get_peer_ids()
-            if not peer_ids:
-                self.log.warning("disconnect_nodes: {} and {} were not connected".format(
-                    from_connection.index,
-                    node_num,
-                ))
-                return
-            for peer_id in peer_ids:
+        Bitcoin Core's helper tags each node with -uacomment=testnode<n> and
+        picks peers out of getpeerinfo by subver; this daemon does not take
+        -uacomment, so the link is found from the address the dialing side
+        connected to instead. connect_nodes(x, y) makes x dial
+        127.0.0.1:<p2p_port(y)>, and x's getpeerinfo reports exactly that
+        string as "addr". The accepting side only sees an ephemeral port, so
+        the disconnect is issued from whichever side dialed, and completion is
+        checked by both connection counts falling by the number of links. The
+        RPC server takes positional params only, so nodeid is passed with an
+        empty address in front of it.
+
+        Re-dialing a node within 5 s of its last inbound accept from the same
+        IP is dropped by the daemon's inbound rate limit (and scored as
+        misbehaviour), so a test that disconnects and reconnects must move the
+        accepting node's clock forward with setmocktime, or wait, in between.
+        """
+        def dialed_peer_ids(node, target_num):
+            target = "127.0.0.1:" + str(p2p_port(target_num))
+            return [peer['id'] for peer in node.getpeerinfo() if peer['addr'] == target]
+
+        node_a, node_b = self.nodes[a], self.nodes[b]
+        ids_a = dialed_peer_ids(node_a, b)
+        ids_b = dialed_peer_ids(node_b, a)
+        links = len(ids_a) + len(ids_b)
+        if links == 0:
+            self.log.warning("disconnect_nodes: {} and {} were not connected".format(a, b))
+            return
+
+        expected_a = node_a.getconnectioncount() - links
+        expected_b = node_b.getconnectioncount() - links
+        for node, ids in ((node_a, ids_a), (node_b, ids_b)):
+            for peer_id in ids:
                 try:
-                    from_connection.disconnectnode(nodeid=peer_id)
+                    node.disconnectnode("", peer_id)
                 except JSONRPCException as e:
-                    # If this node is disconnected between calculating the peer id
-                    # and issuing the disconnect, don't worry about it.
-                    # This avoids a race condition if we're mass-disconnecting peers.
+                    # The peer can vanish between the getpeerinfo above and
+                    # the disconnect; that is the outcome we wanted.
                     if e.error['code'] != -29:  # RPC_CLIENT_NODE_NOT_CONNECTED
                         raise
 
-            # wait to disconnect
-            wait_until_helper(lambda: not get_peer_ids(), timeout=5)
-
-        disconnect_nodes_helper(self.nodes[a], b)
+        wait_until_helper(lambda: node_a.getconnectioncount() <= expected_a
+                          and node_b.getconnectioncount() <= expected_b, timeout=5)
 
     def split_network(self):
         """
