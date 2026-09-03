@@ -33,6 +33,7 @@
 #include "node/coherence.h"
 #include "node/mempool_persist.h"
 #include "node/psgt_pool.h"
+#include <util/check.h>
 #include <util/proc_hardening.h>
 #include <util/string.h>
 #include <util/syserror.h>
@@ -1439,7 +1440,7 @@ CKey GetRegtestPremineKey()
 
 void PlantRegtestPremineKey(CWallet* pwallet)
 {
-    assert(pwallet);
+    Assert(pwallet);
 
     // Plant the private key matching the regtest genesis premine into the
     // wallet on every -regtest start so the staker can spend it. The BDB env
