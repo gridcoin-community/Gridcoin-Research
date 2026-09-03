@@ -4566,6 +4566,21 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
     // repairwallet RPC).
     std::set<uint256> repaired;
 
+    // An output consumed by a mempool transaction is spent whatever the tx
+    // index says: a mempool spend has no index entry, so the chain has no
+    // opinion to defer to. Without this, every own transaction sitting in the
+    // mempool -- one resurrected by a reorganize, or simply unconfirmed when
+    // repairwallet runs -- has its inputs handed back as spendable, and the
+    // wallet can build a transaction, or a coinstake, that double-spends its
+    // own pending transaction.
+    std::set<COutPoint> spent_in_mempool;
+    {
+        LOCK(mempool.cs);
+        for (const auto& [outpoint, inpoint] : mempool.mapNextTx) {
+            spent_in_mempool.insert(outpoint);
+        }
+    }
+
     CTxDB txdb("r");
     for (auto const& pcoin : vCoins)
     {
@@ -4576,7 +4591,8 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
         }
         for (unsigned int n=0; n < pcoin->vout.size(); n++)
         {
-            if ((IsMine(pcoin->vout[n]) != ISMINE_NO) && pcoin->IsSpent(n) && (txindex.vSpent.size() <= n || txindex.vSpent[n].IsNull()))
+            if ((IsMine(pcoin->vout[n]) != ISMINE_NO) && pcoin->IsSpent(n) && (txindex.vSpent.size() <= n || txindex.vSpent[n].IsNull())
+                && !spent_in_mempool.count(COutPoint(pcoin->GetHash(), n)))
             {
                 LogPrintf("FixSpentCoins found lost coin %s gC %s[%d], %s",
                     FormatMoney(pcoin->vout[n].nValue).c_str(), pcoin->GetHash().ToString().c_str(), n, fCheckOnly? "repair not attempted" : "repairing");
