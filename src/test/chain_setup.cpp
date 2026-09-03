@@ -11,6 +11,7 @@
 #include "fs.h"
 #include "gridcoin/staking/kernel.h"
 #include "init.h"
+#include "gridcoin/staking/status.h"
 #include "miner.h"
 #include "net.h"
 #include "node/blockstorage.h"
@@ -304,6 +305,12 @@ ChainState::~ChainState()
     }
 
     mempool.clear();
+
+    // CreateAndProcessBlock() drives the real miner, which records its kernel
+    // search in the process-global miner status; StakingActive() then answers
+    // true for the rest of the run, and interfaces_tests pins it false.
+    g_miner_status.ClearLastSearch();
+    g_miner_status.ClearLastStake();
 
     // The restorers unwind in reverse declaration order from here.
 }
