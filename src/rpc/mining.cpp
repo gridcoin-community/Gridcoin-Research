@@ -34,7 +34,7 @@ static const RPCHelpMan getstakinginfo_help{
     RPCResult{RPCResult::Type::OBJ, "", "",
         {
             {RPCResult::Type::NUM, "blocks", "Current best block height."},
-            {RPCResult::Type::OBJ, "stakeweight", "",
+            {RPCResult::Type::OBJ, "stakeweight", "Stake-weight detail derived from MinerStatus::SearchReport.",
                 {{RPCResult::Type::ELISION, "", "Stake-weight detail (minimum/maximum/combined/valuesum/legacy)."}}},
             {RPCResult::Type::NUM, "netstakeweight", "Estimated network stake weight."},
             {RPCResult::Type::NUM, "netstakingGRCvalue", "Network stake value in GRC."},
@@ -52,9 +52,9 @@ static const RPCHelpMan getstakinginfo_help{
             {RPCResult::Type::NUM, "actual_cumulative_weight", "Cumulative effective weight observed."},
             {RPCResult::Type::NUM, "ideal_cumulative_weight", "Cumulative ideal weight."},
             {RPCResult::Type::NUM, "staking_efficiency", "Overall staking efficiency."},
-            {RPCResult::Type::OBJ, "stake-splitting", "",
+            {RPCResult::Type::OBJ, "stake-splitting", "Stake-splitting enabled flag and (when enabled) parameters.",
                 {{RPCResult::Type::ELISION, "", "Stake-splitting enabled flag and (when enabled) parameters."}}},
-            {RPCResult::Type::OBJ, "side_staking", "",
+            {RPCResult::Type::OBJ, "side_staking", "Local side-staking enabled flag and active side-stake allocations.",
                 {{RPCResult::Type::ELISION, "", "Local side-staking enabled flag and active side-stake allocations."}}},
             {RPCResult::Type::OBJ, "difficulty", "",
                 {

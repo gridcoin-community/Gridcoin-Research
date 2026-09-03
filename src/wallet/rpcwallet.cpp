@@ -521,7 +521,7 @@ static const RPCHelpMan getaddressesbyaccount_help{
     {
         {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name."},
     },
-    RPCResult{RPCResult::Type::ARR, "", "",
+    RPCResult{RPCResult::Type::ARR, "", "Addresses associated with the given account.",
         {{RPCResult::Type::STR, "address", "An address in the account."}}},
     RPCExamples{
         HelpExampleCli("getaddressesbyaccount", "\"myaccount\"") +
@@ -4297,7 +4297,7 @@ UniValue burn(const UniValue& params)
 
 static const RPCHelpMan sethdseed_help{
     "sethdseed",
-    "Set or generate a new HD wallet seed. Non-HD wallets will not be upgraded to being a HD wallet. "
+    "Set or generate a new HD wallet seed. Non-HD wallets will not be upgraded to being an HD wallet. "
     "Wallets that are already HD will have a new HD seed set so that new keys added to the keypool "
     "will be derived from this new seed. "
     "Note that you will need to MAKE A NEW BACKUP of your wallet after setting the HD wallet seed. "
