@@ -79,7 +79,7 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry)
         // Point mapNextTx at the transaction stored inside the pool's own map
         // node (std::map never relocates nodes, so the pointer stays valid until
         // the entry is removed).
-        CTransaction& stored_tx = it->second.GetTxMutable();
+        const CTransaction& stored_tx = it->second.GetTx();
         for (unsigned int i = 0; i < stored_tx.vin.size(); i++)
             mapNextTx[stored_tx.vin[i].prevout] = CInPoint(&stored_tx, i);
 

@@ -83,11 +83,11 @@ namespace {
 class COrphan
 {
 public:
-    CTransaction* ptx;
+    const CTransaction* ptx;
     set<uint256> setDependsOn;
     double dFeePerKb;
 
-    COrphan(CTransaction* ptxIn)
+    COrphan(const CTransaction* ptxIn)
     {
         ptx = ptxIn;
         dFeePerKb = 0;
@@ -409,14 +409,14 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
         map<uint256, vector<COrphan*> > mapDependers;
 
         // This vector will be sorted into a priority queue:
-        std::vector<std::pair<double, CTransaction*>> vecPriority;
+        std::vector<std::pair<double, const CTransaction*>> vecPriority;
         vecPriority.reserve(mempool.mapTx.size());
 
         Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
 
-        for (auto& [_, entry] : mempool.mapTx)
+        for (const auto& [_, entry] : mempool.mapTx)
         {
-            CTransaction& tx = entry.GetTxMutable();
+            const CTransaction& tx = entry.GetTx();
             if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight))
                 continue;
 
@@ -561,7 +561,7 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
         {
             // Take highest priority transaction off the priority queue:
             double dFeePerKb = vecPriority.front().first;
-            CTransaction& tx = *(vecPriority.front().second);
+            const CTransaction& tx = *(vecPriority.front().second);
 
             std::pop_heap(vecPriority.begin(), vecPriority.end());
             vecPriority.pop_back();
