@@ -116,13 +116,21 @@ this table mirrors it.
 | `feature_stakelimit.py` | background staker honors + resumes the `stakelimit` height ceiling | wall-clock bound (~16s/block via `STAKE_TIMESTAMP_MASK`) |
 | `feature_reorg.py` | two-node divergent chains + reorg on connect | flaky on shared-premine regtest (duplicate coinstake kernel); see note in `test_runner.py` |
 
-### Deferred to Phase 4B (need the synthetic beacon + RSA trust anchor, 2B.3/2B.4)
+### Researcher flows (Phase 4B)
 
-`feature_beacon_inject.py`, `feature_superblock_inject.py` (also needs
-`generatesuperblock` un-stubbed), `feature_mrc.py`, and the beacon flavor of
-`feature_contract_replay.py`. These require an active regtest beacon/CPID, which
-investor-mode staking does not (see the staking path: `TrySignClaim` skips the
-beacon signature for non-crunchers).
+No RSA trust anchor is needed: a beacon advertised under `-forcecpid` is
+activated by a `generatesuperblock` call that names its public key (see
+`doc/regtest.md`). Landed so far, all in the default suite:
+
+| Test | Exercises |
+|---|---|
+| `feature_generatesuperblock.py` | explicit superblock attach (the former `feature_superblock_inject.py`) |
+| `feature_beacon_activation.py` | beacon advertisement -> pending -> activated by a superblock (the former `feature_beacon_inject.py`) |
+| `feature_research_reward.py` | the activated CPID's own coinstake pays its accrued research subsidy; a pending beacon pays none |
+
+Still to write: `feature_mrc.py` (an MRC request paid by another node's
+coinstake) and the beacon flavor of `feature_contract_replay.py` (beacon state
+across a `reorganize`).
 
 ## Cherry-pick log (post-v0.21.2 utilities)
 
