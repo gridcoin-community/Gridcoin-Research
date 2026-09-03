@@ -2337,9 +2337,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         }
         // entry_time is non-zero only when reloading from unbroadcast.dat: preserve
         // the original pool-entry time so tx age and eviction ordering survive a
-        // restart. In practice this only affects the node's non-wallet reloaded txs;
-        // a wallet tx is re-pooled with a fresh time by ReacceptWalletTransactions
-        // before LoadUnbroadcast runs, so its persisted time is not applied.
+        // restart. This applies to the wallet's own transactions too:
+        // ReacceptWalletTransactions runs before LoadUnbroadcast but does not
+        // re-pool anything (it only reconciles wallet state), so the reload is
+        // what puts them back, with their persisted time.
         CTxMemPoolEntry entry(tx, nFees, entry_time != 0 ? entry_time : GetAdjustedTime(),
                               nBestHeight, nSize);
         pool.addUnchecked(hash, entry);
