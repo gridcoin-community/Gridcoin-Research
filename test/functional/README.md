@@ -128,9 +128,7 @@ activated by a `generatesuperblock` call that names its public key (see
 | `feature_beacon_activation.py` | beacon advertisement -> pending -> activated by a superblock (the former `feature_beacon_inject.py`) |
 | `feature_research_reward.py` | the activated CPID's own coinstake pays its accrued research subsidy; a pending beacon pays none |
 | `feature_mrc.py` | two nodes: the researcher's MRC request is paid by the investor node's coinstake to the beacon address |
-
-Still to write: the beacon flavor of `feature_contract_replay.py` (beacon state
-across a `reorganize`).
+| `feature_contract_replay.py` | beacon contract state across `reorganize`: activation reverted, advertisement reverted and resurrected, replayed and re-activated |
 
 ## Cherry-pick log (post-v0.21.2 utilities)
 
