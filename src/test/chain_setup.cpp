@@ -273,7 +273,18 @@ ChainState::ChainState()
 
     // Give the wallet the premine key and let it see the genesis outputs, so
     // CreateAndProcessBlock() has something to stake.
-    if (pwalletMain) PlantRegtestPremineKey(pwalletMain);
+    //
+    // The plant helper rescans only when it adds the key. A second fixture in
+    // the same process finds the key already there, because keys are never
+    // erased, while WalletTxRestorer removed the coinbase entry the first
+    // fixture's rescan added. So rescan here unconditionally; the helper's own
+    // rescan, when it runs, is repeated harmlessly.
+    if (pwalletMain) {
+        PlantRegtestPremineKey(pwalletMain);
+
+        LOCK(cs_main);
+        pwalletMain->ScanForWalletTransactions(pindexGenesisBlock, /*fUpdate=*/true);
+    }
 }
 
 ChainState::~ChainState()
