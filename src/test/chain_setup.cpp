@@ -94,6 +94,11 @@ struct ChainTipRestorer
     CBlockIndex* m_pindex_genesis;
     uint256 m_hash_best;
     int m_best_height;
+    //! Set by UpdateSyncTime on every connect and read by OutOfSyncByAge, which
+    //! gates the scraper's unauthenticated manifest path among others. A suite
+    //! that mines leaves it at a fresh block's time, and every later suite then
+    //! believes the node is in sync.
+    int64_t m_previous_block_time;
     //! Whatever an earlier suite left in mapBlockIndex, held aside for the
     //! fixture's lifetime. LoadBlockIndex() only creates genesis into an empty
     //! map, and which suites leave entries behind depends on link order: the
@@ -110,6 +115,7 @@ struct ChainTipRestorer
         m_pindex_genesis = pindexGenesisBlock;
         m_hash_best = hashBestChain;
         m_best_height = nBestHeight;
+        m_previous_block_time = g_previous_block_time.load();
         m_preexisting_index = std::move(mapBlockIndex);
         mapBlockIndex.clear();
 
@@ -135,6 +141,7 @@ struct ChainTipRestorer
         pindexGenesisBlock = m_pindex_genesis;
         hashBestChain = m_hash_best;
         nBestHeight = m_best_height;
+        g_previous_block_time.store(m_previous_block_time);
     }
 };
 
