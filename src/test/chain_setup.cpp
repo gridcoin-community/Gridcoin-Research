@@ -457,11 +457,17 @@ CTransaction CreateCoinstakeShaped(const CTransaction& txFrom, uint32_t n, CAmou
 
 void AddToMempool(const CTransaction& tx, CAmount fee)
 {
-    LOCK(mempool.cs);
+    int height;
+    {
+        LOCK(cs_main);
+        height = nBestHeight;
+    }
 
+    // addUnchecked locks mempool.cs internally; a caller-side lock here would
+    // be the redundant pattern #3314 removed.
     mempool.addUnchecked(
         tx.GetHash(),
-        CTxMemPoolEntry(tx, fee, tx.nTime, nBestHeight,
+        CTxMemPoolEntry(tx, fee, tx.nTime, height,
                         ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION)));
 }
 
@@ -474,7 +480,10 @@ void MakeBlockAndCoinstake(CBlock& block, CMutableTransaction& coinbase,
     // version the chain actually runs, and it is >= 12, which is what makes
     // CreateRestOfTheBlock compute the coinstake size reserve rather than
     // starting from a flat 1000 bytes.
-    block.nVersion = ComputeBlockVersion(nBestHeight + 1);
+    {
+        LOCK(cs_main);
+        block.nVersion = ComputeBlockVersion(nBestHeight + 1);
+    }
     block.nTime = static_cast<unsigned int>(FIXTURE_TX_TIME + 1000);
     block.vtx.resize(2);
 

@@ -54,11 +54,15 @@ namespace grc_test {
 //! consensus globals shared with every other suite in this binary. Every
 //! restore lives in an RAII sub-object constructed before the mutating work, so
 //! a throw out of the constructor still unwinds it -- no destructor runs for a
-//! partially constructed object. One residue is irreversible and accepted: the
-//! genesis block-index record, hashBestChain and the tx-index entries stay in
-//! the memenv LevelDB. They are inert for other suites (nothing else calls
-//! LoadBlockIndex, and lookups are by hash), which is precisely why the lifetime
-//! is once per suite.
+//! partially constructed object. Residue that is irreversible and accepted:
+//! the genesis block-index record, hashBestChain and the tx-index entries stay
+//! in the memenv LevelDB; LoadBlockIndex also initializes g_chain_trust (which
+//! retains a pointer to the fixture's leaked genesis index entry) and refills
+//! g_seen_stakes, and neither is set aside and restored. All of it is inert for
+//! other suites (nothing else calls LoadBlockIndex, nothing reads g_chain_trust
+//! or g_seen_stakes in this binary, lookups are by hash, and each fixture
+//! construction re-initializes both globals), which is precisely why the
+//! lifetime is once per suite.
 //!
 struct RegtestChainSetup
 {
