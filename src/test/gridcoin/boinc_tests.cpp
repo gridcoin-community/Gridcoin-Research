@@ -23,7 +23,19 @@ struct BoincDataDirTestSetup
 
     ~BoincDataDirTestSetup()
     {
-        fs::remove_all(test_root);
+        // A test that fails mid-case can leave a permission-stripped
+        // directory behind; restore access before removing, and never throw
+        // from a destructor during unwind -- a throwing remove_all here turns
+        // a clean test failure into SIGABRT plus a leaked no-perms directory
+        // under /tmp.
+        boost::system::error_code ec;
+        for (fs::recursive_directory_iterator it(test_root, ec), end; !ec && it != end; it.increment(ec)) {
+            fs::permissions(it->path(), fs::owner_all, ec);
+            ec.clear();
+        }
+        fs::permissions(test_root, fs::owner_all, ec);
+        ec.clear();
+        fs::remove_all(test_root, ec);
     }
 
     //! Create a candidate directory (installed but not active).
