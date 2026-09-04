@@ -383,6 +383,35 @@ def copyFramework(framework: FrameworkInfo, path: str, verbose: int) -> Optional
         if os.path.exists(headers_dir):
             shutil.rmtree(headers_dir)
 
+        # Seal the framework root: codesign refuses a framework whose root
+        # holds real entries other than Versions ("unsealed contents present
+        # in the root directory of an embedded framework"). Bottled Qt kegs
+        # ship clean roots, but source-built kegs -- what Homebrew now
+        # produces on Intel under its Tier 3 fallback -- can leave real
+        # files or directories (build artifacts such as .prl files) at the
+        # root. Re-home them under the versioned directory and leave the
+        # symlink the sealed layout expects.
+        versions_dir = os.path.join(to_dir, "Versions")
+        if os.path.isdir(versions_dir):
+            versioned_root = os.path.join(versions_dir, framework.version)
+            for entry in os.listdir(to_dir):
+                if entry == "Versions":
+                    continue
+                entry_path = os.path.join(to_dir, entry)
+                if os.path.islink(entry_path):
+                    continue
+                versioned_path = os.path.join(versioned_root, entry)
+                if os.path.exists(versioned_path):
+                    if os.path.isdir(entry_path):
+                        shutil.rmtree(entry_path)
+                    else:
+                        os.remove(entry_path)
+                else:
+                    shutil.move(entry_path, versioned_path)
+                os.symlink(os.path.join("Versions", framework.version, entry), entry_path)
+                if verbose:
+                    print("Sealed framework root entry:", entry)
+
     permissions = os.stat(toPath)
     if not permissions.st_mode & stat.S_IWRITE:
       os.chmod(toPath, permissions.st_mode | stat.S_IWRITE)
