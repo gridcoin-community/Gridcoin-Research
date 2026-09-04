@@ -115,16 +115,20 @@ stash_keg() {
 }
 
 brew_install_with_apisource_retry() {
-    local output status
-    output="$(run_brew install "$@" 2>&1)"
-    status=$?
-    printf '%s\n' "${output}"
-    if [ "${status}" -ne 0 ] && printf '%s' "${output}" | grep -q "source code not found at .*api-source"; then
+    # Stream output while it happens -- a source build can run for hours, and
+    # a captured command substitution would show a silent step the whole time
+    # -- but keep a copy to detect the api-source staleness afterwards.
+    local log status
+    log="$(mktemp)"
+    run_brew install "$@" 2>&1 | tee "${log}"
+    status="${PIPESTATUS[0]}"
+    if [ "${status}" -ne 0 ] && grep -q "source code not found at .*api-source" "${log}"; then
         echo "keg-cache: clearing stale brew api-source cache and retrying"
         rm -rf "$(run_brew --cache)/api-source"
         run_brew install "$@"
         status=$?
     fi
+    rm -f "${log}"
     return "${status}"
 }
 
@@ -195,7 +199,10 @@ while read -r name version; do
         continue
     fi
     echo "=== source-building ${name} ${version} (no Intel bottle)"
-    brew_install_with_apisource_retry "${name}" || exit 1
+    # --build-from-source is redundant on brew >= 6.0.21 (Intel installs
+    # already fall back to source silently) but keeps this working if the
+    # Tier 3 gate is ever tightened to raise for Rosetta prefixes too.
+    brew_install_with_apisource_retry --build-from-source "${name}" || exit 1
     stash_keg "${name}"
     link_formula "${name}" || exit 1
 done <<EOF_NEED
