@@ -100,15 +100,10 @@ public:
     CTxMemPoolEntry(const CTransaction& tx, CAmount fee, int64_t time,
                     int height, size_t tx_size);
 
+    //! The stored transaction is exposed read-only: the cached fee/size/sigops/
+    //! contract-tag metadata this entry carries is computed once in the constructor and would
+    //! silently go stale if the transaction could be mutated in place.
     const CTransaction& GetTx() const { return tx; }
-    //! Non-const access to the stored transaction, used ONLY to obtain a stable
-    //! CTransaction* for legacy non-const APIs: addUnchecked()'s mapNextTx wiring
-    //! and the miner's COrphan / vecPriority structures (which hold CTransaction*).
-    //! Callers MUST NOT mutate the transaction -- doing so would silently
-    //! invalidate this entry's cached fee/size/sigops/contract-tag metadata.
-    //! (Making those legacy consumers const-correct so this can be removed is a
-    //! tracked follow-up.)
-    CTransaction& GetTxMutable() { return tx; }
 
     CAmount GetFee() const { return nFee; }
     size_t GetTxSize() const { return nTxSize; }
