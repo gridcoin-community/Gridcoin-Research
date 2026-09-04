@@ -504,6 +504,81 @@ BOOST_AUTO_TEST_CASE(a_size_limit_eviction_reaches_the_wallet)
     mempool.clear();
 }
 
+BOOST_AUTO_TEST_CASE(a_size_limit_eviction_signals_the_victims_descendants_too)
+{
+    mempool.clear();
+
+    struct SignalsForThisCase {
+        CScheduler m_scheduler;
+        SignalsForThisCase()
+        {
+            GetMainSignals().RegisterBackgroundSignalScheduler(m_scheduler);
+            RegisterValidationInterface(pwalletMain);
+        }
+        ~SignalsForThisCase()
+        {
+            UnregisterValidationInterface(pwalletMain);
+            GetMainSignals().UnregisterBackgroundSignalScheduler();
+        }
+    } signals;
+
+    struct MaxSizeRestorer {
+        size_t m_saved{mempool.GetMaxSize()};
+        ~MaxSizeRestorer() { mempool.SetMaxSize(m_saved); }
+    } max_size;
+
+    std::vector<std::pair<uint256, ChangeType>> seen;
+    boost::signals2::scoped_connection watch = pwalletMain->NotifyTransactionChanged.connect(
+        [&seen](CWallet*, const uint256& hash, ChangeType status) { seen.emplace_back(hash, status); });
+
+    // The parent takes the LOWEST feerate in the pool so the trim selects it as
+    // the primary victim; the child (spending the parent's in-pool output)
+    // rides a higher rate and is erased only through remove()'s recursive
+    // descendant branch -- the path whose signal this case pins.
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+    CTransaction parent = CreateSpend(PremineCoinbase(), coins[0].n, 100000, 1);
+    CTransaction child = CreateSpend(parent, 0, 300000, 1);
+    BOOST_REQUIRE_GE(CAmount{100000}, GetMinFee(parent));
+    const uint256 parent_hash = parent.GetHash();
+    const uint256 child_hash = child.GetHash();
+
+    LOCK(cs_main);
+
+    CValidationState state_parent, state_child;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, parent, state_parent, nullptr),
+                          "parent rejected: " + state_parent.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, child, state_child, nullptr),
+                          "child rejected: " + state_child.GetRejectReason());
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->mapWallet.count(parent_hash));
+        BOOST_REQUIRE(pwalletMain->mapWallet.count(child_hash));
+    }
+
+    // Room for exactly what is in the pool now, so the next accept has to evict.
+    mempool.SetMaxSize(mempool.DynamicMemoryUsage());
+    const size_t seen_before = seen.size();
+
+    CAmount fee_third = 0;
+    CTransaction third = MakeCandidate(1, 1, 2000, fee_third);
+    CValidationState state_third;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, third, state_third, nullptr),
+                          "third spend rejected: " + state_third.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(!mempool.exists(parent_hash), "the size limit did not evict the parent");
+    BOOST_REQUIRE_MESSAGE(!mempool.exists(child_hash),
+                          "the recursive removal did not take the child with the parent");
+
+    for (const uint256& hash : {parent_hash, child_hash}) {
+        const auto notices = std::count_if(seen.begin() + seen_before, seen.end(),
+            [&](const std::pair<uint256, ChangeType>& e) { return e.first == hash && e.second == CT_UPDATED; });
+        BOOST_CHECK_MESSAGE(notices == 1,
+            "expected exactly one CT_UPDATED for " + hash.GetHex() + ", saw " + std::to_string(notices));
+    }
+
+    mempool.clear();
+}
+
 BOOST_AUTO_TEST_CASE(a_coinstake_in_the_mempool_is_never_selected)
 {
     mempool.clear();
