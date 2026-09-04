@@ -615,6 +615,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getblockchaininfo",       &getblockchaininfo,       cat_network, &getblockchaininfo_helpman, heritage_mixed, "1d89fd23ddb0" },
     { "getnetworkinfo",          &getnetworkinfo,          cat_network, &getnetworkinfo_helpman, heritage_mixed, "54255a461949" },
     { "clearbanned",             &clearbanned,             cat_network, &clearbanned_helpman, heritage_pure_upstream, "e169db2f48c0" },
+    { "disconnectnode",          &disconnectnode,          cat_network, &disconnectnode_helpman, heritage_pure_upstream, "b194f6d2d2e2" },
     { "currenttime",             &currenttime,             cat_network, &currenttime_helpman, heritage_pure_gridcoin, "" },
     { "getaddednodeinfo",        &getaddednodeinfo,        cat_network, &getaddednodeinfo_helpman, heritage_mixed, "3825ee523156" },
     { "getnodeaddresses",        &getnodeaddresses,        cat_network, &getnodeaddresses_helpman, heritage_mixed, "c696e3da4da2" },

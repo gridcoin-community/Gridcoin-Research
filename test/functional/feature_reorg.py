@@ -2,41 +2,36 @@
 # Copyright (c) 2014-2026 The Gridcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://opensource.org/licenses/mit-license.php.
-"""Phase 4A chain reorganization across two regtest nodes.
+"""Chain reorganization across two regtest nodes, driven deterministically.
 
-KNOWN-FLAKY / OPT-IN: this test is in EXTENDED_SCRIPTS, not the default suite.
-Both nodes share the same deterministic, stakeable premine, so their
-independently-staked block-1s can draw the same coinstake kernel; when the
-proof-of-stake hashes collide (~13% of runs) the duplicate-proof-of-stake guard
-makes each node reject the other's block and the shorter node never reorganizes.
-It cannot be made deterministic from Python without a setmocktime RPC,
-invalidateblock, or disconnectnode (none currently exposed). See the note in
-test_runner.py's EXTENDED_SCRIPTS. The logic below is the best-effort reference
-implementation for when one of those primitives lands.
+Two nodes share a chain, are split with disconnectnode, build competing
+branches while apart, and are reconnected; the node on the shorter branch
+must reorganize onto the longer one. With trivial regtest difficulty, more
+proof-of-stake blocks means more cumulative chain trust, so node0's longer
+branch outweighs node1's.
 
-Investor-mode only (no beacon/CPID). Gridcoin's RPC surface has no
-disconnectnode, so instead of split-then-reconnect we build divergent chains on
-two nodes that start ISOLATED, then connect them and assert the node on the
-shorter/lower-trust chain reorganizes onto the longer one.
+Why this is deterministic where the previous version was not. Both nodes
+stake from the same premine, so two blocks staked at the same 16-second slot
+can draw the same coinstake kernel; the duplicate-proof-of-stake guard then
+makes each node reject the other's block and the shorter node never
+reorganizes (about 13% of runs). The kernel hash includes the masked block
+time, so node1's clock is moved two slots past node0's tip before it stakes:
+every block on node0's branch is older than node1's, no two proofs can
+collide, and the retry slots the miner may step through keep node1's block
+within the 128-second future limit node0 enforces on a peer's block.
 
-Two things make the reorg propagate reliably (relying on connect-time header sync
-alone intermittently stalls on a loaded CI runner):
-
-  1. node1 (the downloader) dials node0 (the block source) via connect_nodes(1,
-     0), matching the framework's default fPreferredDownload topology, so node1
-     actively pulls from node0 instead of passively waiting for a push.
-  2. After the link is fully established (both nodes report the connection),
-     node0 stakes one more block. A fresh post-connect block announcement over an
-     established link is the propagation path that reliably works here (the same
-     pattern rpc_net.py depends on); node1 follows it and, in doing so, pulls
-     node0's whole chain and reorganizes off its own shorter tip.
-
-With trivial regtest difficulty, more PoS blocks means more cumulative chain
-trust, so node0's chain outweighs node1's.
+Reconnecting needs two things the framework documents: the accepting node's
+clock is moved past the inbound rate limit, since a re-dial within 5 s of the
+last accept from the same IP is dropped; and a fresh block is staked on node0
+after the link is up, because connect-time sync alone does not pull blocks
+the peer already has. Following that announcement brings node0's whole branch
+and triggers the reorganize.
 """
 
 from test_framework.test_framework import GridcoinTestFramework
 from test_framework.util import assert_equal
+
+STAKE_SLOT = 16
 
 
 class ReorgTest(GridcoinTestFramework):
@@ -47,44 +42,63 @@ class ReorgTest(GridcoinTestFramework):
         self.extra_args = [["-staking=0"], ["-staking=0"]]
 
     def setup_network(self):
-        # Start unconnected so each node builds its own chain in isolation.
+        # node1 dials node0: the downloader toward the block source, matching
+        # the framework's default topology, so node1 pulls actively.
         self.add_nodes(self.num_nodes, self.extra_args)
         self.start_nodes()
+        self.connect_nodes(1, 0)
+
+    def wait_for_link(self, node0, node1):
+        self.wait_until(lambda: node0.getconnectioncount() > 0
+                        and node1.getconnectioncount() > 0)
 
     def run_test(self):
         node0, node1 = self.nodes
-        assert_equal(node0.getblockcount(), 0)
-        assert_equal(node1.getblockcount(), 0)
+        self.wait_for_link(node0, node1)
 
-        # --- build divergent chains in isolation, before connecting ---
-        # node0 longer (h=4), node1 shorter (h=1).
-        node0.generatetoaddress(4, node0.getnewaddress())
+        self.log.info("shared chain: node0 stakes two blocks, node1 syncs them")
+        node0.generatetoaddress(2, node0.getnewaddress())
+        self.sync_blocks([node0, node1])
+        fork_point = node0.getbestblockhash()
+        assert_equal(node1.getblockcount(), 2)
+
+        self.log.info("split, and build competing branches")
+        self.disconnect_nodes(1, 0)
+        assert_equal(node0.getconnectioncount(), 0)
+        assert_equal(node1.getconnectioncount(), 0)
+
+        node0.generatetoaddress(3, node0.getnewaddress())
+        assert_equal(node0.getblockcount(), 5)
+        node0_tip_time = node0.getblock(node0.getbestblockhash())["time"]
+
+        # Two slots past everything node0 staked: no kernel can collide, and
+        # the miner's retry slots stay under node0's 128 s future limit.
+        node1.advance_mocktime_to(node0_tip_time + 2 * STAKE_SLOT)
         node1_tip = node1.generatetoaddress(1, node1.getnewaddress())[0]
-        assert node0.getbestblockhash() != node1_tip, "chains did not diverge"
-        self.log.info("divergent chains: node0 h=%d, node1 h=%d",
-                      node0.getblockcount(), node1.getblockcount())
+        assert_equal(node1.getblockcount(), 3)
+        assert_equal(node1.getblock(node1_tip)["previousblockhash"], fork_point)
+        assert node1_tip != node0.getblockhash(3), "branches did not diverge"
 
-        # --- connect downloader (node1) -> source (node0) ---
-        # connect_nodes(a, b) dials from a to b; the framework's default topology
-        # connects each downloader toward the block source (fPreferredDownload),
-        # so node1 (shorter) dials node0 (longer) and pulls from it actively.
+        self.log.info("reconnect; node1 reorganizes onto node0's longer branch")
+        # node0 accepted node1's dial before, so open its inbound window.
+        node0.advance_mocktime_to(node0.mock_now() + 6)
         self.connect_nodes(1, 0)
-        # Wait for the link to be established in BOTH directions before relying
-        # on it; node1 dialed node0, so node0 must also register the inbound peer.
-        self.wait_until(
-            lambda: node0.getconnectioncount() > 0 and node1.getconnectioncount() > 0)
+        self.wait_for_link(node0, node1)
 
-        # --- stake a fresh block on node0 to trigger reliable propagation ---
-        # A new block announced over the now-established link reliably reaches
-        # node1 (cf. rpc_net.py); following it pulls node0's whole chain, so
-        # node1 reorganizes off its height-1 tip onto node0's chain.
         node0.generatetoaddress(1, node0.getnewaddress())
-        tip0 = node0.getbestblockhash()  # node0 at height 5
+        tip0 = node0.getbestblockhash()
+        assert_equal(node0.getblockcount(), 6)
         self.sync_blocks([node0, node1], timeout=120)
+
         assert_equal(node1.getbestblockhash(), tip0)
-        assert_equal(node1.getblockcount(), 5)
-        assert node1.getbestblockhash() != node1_tip, "node1 did not abandon its original tip"
-        self.log.info("node1 reorganized onto node0's chain; common tip=%s", tip0)
+        assert_equal(node1.getblockcount(), 6)
+        assert_equal(node1.getblockhash(2), fork_point)
+        assert_equal(node1.getblockhash(3), node0.getblockhash(3))
+        # node1's own block is still known, but off the main chain.
+        assert_equal(node1.getblock(node1_tip)["confirmations"], -1)
+        # node0 never left its branch.
+        assert node0.getblockhash(3) != node1_tip
+        self.log.info("node1 reorganized onto node0's chain; tip=%s", tip0)
 
 
 if __name__ == "__main__":
