@@ -15,6 +15,7 @@
 #include "miner.h"
 #include "net.h"
 #include "node/blockstorage.h"
+#include "node/chainman.h"
 #include "primitives/block.h"
 #include "script/sign.h"
 #include "test/psgt_test_helpers.h"
@@ -27,6 +28,7 @@
 
 #include <memory>
 #include <set>
+#include <string>
 
 namespace grc_test {
 
@@ -297,6 +299,28 @@ ChainState::ChainState()
 
 ChainState::~ChainState()
 {
+    // Put the committed chain back to genesis.
+    //
+    // ChainTipRestorer below restores the in-memory chain, but a case that
+    // drove real block connection has also committed its blocks: SetBestChain
+    // writes through CTxDB and WriteHashBestChain, and that index is a
+    // process-global handle opened once on the shared datadir. The next
+    // construction's LoadBlockIndex() reads whatever the last one committed, so
+    // its nBestHeight == 0 precondition fires on a chain this fixture left
+    // behind. Restoring memory is not enough for a fixture that commits.
+    //
+    // Rewinding through the same path that wrote it keeps the index consistent,
+    // and leaves the disk where the next construction expects it. Done here
+    // rather than by deleting the database: the handle is global and shared,
+    // and dropping it underneath the wallet is not this fixture's call.
+    {
+        LOCK(cs_main);
+
+        if (pindexGenesisBlock != nullptr && nBestHeight > 0) {
+            ForceReorganizeToHash(pindexGenesisBlock->GetBlockHash());
+        }
+    }
+
     // AppendBlockFile caches a FILE* and the current block file number; both
     // are process-global and must not outlive the datadir this fixture used.
     {
