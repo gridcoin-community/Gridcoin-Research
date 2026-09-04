@@ -23,6 +23,23 @@ extern CWallet* pwalletMain;
 
 void InitLogging();
 
+//! \brief The private key behind the regtest genesis premine.
+//!
+//! The regtest genesis coinbase pays 10 UTXOs to the P2PKH of the secp256k1
+//! privkey-scalar=1 compressed pubkey. Exposed so that test fixtures can sign
+//! spends of the premine without restating the constant.
+CKey GetRegtestPremineKey();
+
+//! \brief Plant the regtest premine key into \p pwallet and surface its coins.
+//!
+//! Idempotent: does nothing if the wallet already holds the key. On a fresh
+//! plant it also nudges nTimeFirstKey below the genesis timestamp and rescans
+//! from pindexGenesisBlock, because genesis is loaded before the key exists and
+//! the wallet-birthday optimisation would otherwise skip it.
+//!
+//! Callers must NOT hold cs_main or pwallet->cs_wallet; both are taken here.
+void PlantRegtestPremineKey(CWallet* pwallet);
+
 void StartShutdown();
 
 void Shutdown(void* parg);
