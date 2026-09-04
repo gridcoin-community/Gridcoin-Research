@@ -16,7 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import sys, re, os, platform, shutil, stat, subprocess, os.path
+import sys, re, os, platform, shutil, stat, subprocess, os.path, time
 from argparse import ArgumentParser
 try:
     from ds_store import DSStore
@@ -804,11 +804,27 @@ if config.dmg is not None:
 
     tempname: str = dmg_basename + ".temp.dmg"
 
-    run(["hdiutil", "create", tempname, "-srcfolder", "dist", "-format", "UDRW", "-size", str(size), "-volname", appname], check=True, universal_newlines=True)
+    def run_hdiutil_with_retry(args, attempts=4, delay=15, **kwargs):
+        # hdiutil races against Spotlight/fseventsd still indexing freshly
+        # written files on CI runners and fails transiently with "Resource
+        # busy" or "Resource temporarily unavailable"; a short pause and a
+        # retry clears it. The final attempt raises like check=True would.
+        for attempt in range(1, attempts + 1):
+            result = run(["hdiutil"] + args, universal_newlines=True, **kwargs)
+            if result.returncode == 0:
+                return result
+            if attempt < attempts:
+                print(f"hdiutil {args[0]} failed (attempt {attempt}/{attempts}), retrying in {delay}s...")
+                time.sleep(delay)
+        result.check_returncode()
+
+    # -ov: a failed attempt can leave a partial temp image behind; overwrite
+    # it so the retry does not die on "File exists".
+    run_hdiutil_with_retry(["create", tempname, "-ov", "-srcfolder", "dist", "-format", "UDRW", "-size", str(size), "-volname", appname])
 
     if verbose:
         print("Attaching temp image...")
-    output = run(["hdiutil", "attach", tempname, "-readwrite"], check=True, universal_newlines=True, stdout=PIPE).stdout
+    output = run_hdiutil_with_retry(["attach", tempname, "-readwrite"], stdout=PIPE).stdout
 
     m = re.search(r"/Volumes/(.+$)", output)
     disk_root = m.group(0)
@@ -831,7 +847,7 @@ if config.dmg is not None:
 
     run(["hdiutil", "detach", f"/Volumes/{appname}"], universal_newlines=True)
 
-    run(["hdiutil", "convert", tempname, "-format", "UDZO", "-o", dmg_basename, "-imagekey", "zlib-level=9"], check=True, universal_newlines=True)
+    run_hdiutil_with_retry(["convert", tempname, "-format", "UDZO", "-o", dmg_basename, "-imagekey", "zlib-level=9"])
 
     os.unlink(tempname)
 
