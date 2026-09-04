@@ -120,12 +120,12 @@ brew_install_with_apisource_retry() {
     # -- but keep a copy to detect the api-source staleness afterwards.
     local log status
     log="$(mktemp)"
-    run_brew install "$@" 2>&1 | tee "${log}"
+    run_brew install "$@" </dev/null 2>&1 | tee "${log}"
     status="${PIPESTATUS[0]}"
     if [ "${status}" -ne 0 ] && grep -q "source code not found at .*api-source" "${log}"; then
         echo "keg-cache: clearing stale brew api-source cache and retrying"
         rm -rf "$(run_brew --cache)/api-source"
-        run_brew install "$@"
+        run_brew install "$@" </dev/null
         status=$?
     fi
     rm -f "${log}"
@@ -188,7 +188,10 @@ done
 
 # Sequential on purpose: topological order guarantees each formula's
 # bottle-less dependencies were built (or restored) by the time it starts.
-while read -r name version; do
+# The list is fed through fd 3: brew (and anything else the loop body runs)
+# reads stdin, and on the first cold run it ate the heredoc after one entry,
+# leaving every remaining casualty to phase 4's silent unstashed builds.
+while read -r name version <&3; do
     [ -n "${name}" ] || continue
     if [ -d "${CELLAR}/${name}/${version}" ]; then
         # Restored (or built earlier this run). Its bottled dependencies are
@@ -205,7 +208,7 @@ while read -r name version; do
     brew_install_with_apisource_retry --build-from-source "${name}" || exit 1
     stash_keg "${name}"
     link_formula "${name}" || exit 1
-done <<EOF_NEED
+done 3<<EOF_NEED
 ${NEED_SOURCE}
 EOF_NEED
 
