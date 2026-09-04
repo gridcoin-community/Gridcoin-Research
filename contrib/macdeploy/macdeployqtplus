@@ -809,8 +809,12 @@ if config.dmg is not None:
         # written files on CI runners and fails transiently with "Resource
         # busy" or "Resource temporarily unavailable"; a short pause and a
         # retry clears it. The final attempt raises like check=True would.
+        # check must not sneak in through kwargs: it would raise on the
+        # first failure and silently bypass the retry this helper exists for.
+        kwargs.pop("check", None)
+        kwargs.setdefault("universal_newlines", True)
         for attempt in range(1, attempts + 1):
-            result = run(["hdiutil"] + args, universal_newlines=True, **kwargs)
+            result = run(["hdiutil"] + args, **kwargs)
             if result.returncode == 0:
                 return result
             if attempt < attempts:
