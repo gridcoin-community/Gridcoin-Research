@@ -21,13 +21,12 @@
 //!
 //! FEE RULE FOR EVERY CANDIDATE HERE. Any transaction that is meant to be
 //! evaluated past the size guard is funded at >= 100 satoshi per serialized
-//! byte. On this branch the miner's only floor is ABSOLUTE (GetMinFee with
-//! nBytes = 0 is size-independent, so a flat 100,000), but PR #3291 adds a
-//! fee-RATE floor defaulting to the same 100,000 per KILOBYTE. The two coincide
-//! at exactly 1000 bytes and diverge above it, and AddToMempool uses
-//! addUnchecked, which bypasses the size-scaled relay floor that makes the rate
-//! floor inert for real traffic. Funding by rate keeps these cases valid across
-//! that merge instead of quietly emptying the block.
+//! byte. The miner applies two floors: the ABSOLUTE GetMinFee floor (nBytes = 0
+//! is size-independent, a flat 100,000) and, since #3291, a fee-RATE floor
+//! defaulting to the same 100,000 per KILOBYTE. The two coincide at exactly
+//! 1000 bytes and diverge above it, and AddToMempool uses addUnchecked, which
+//! bypasses the size-scaled relay floor that makes the rate floor inert for
+//! real traffic. Funding by rate keeps every candidate above both floors.
 //!
 
 #include "amount.h"
@@ -100,9 +99,9 @@ CTransaction MakeCandidate(size_t index, int n_outputs, CAmount sat_per_byte, CA
     // fee against GetMinFee(tx, nBlockSize, GMF_BLOCK), which passes nBytes = 0
     // and is therefore a flat MIN_TX_FEE * 10 regardless of size, and
     // ConnectInputs applies the same flat floor a second time. A candidate that
-    // misses it is not merely excluded -- on this branch it aborts the whole
-    // selection loop -- so a case that funds too thinly must fail here as bad
-    // setup rather than silently assert on an empty block.
+    // misses it is skipped (the selection loop continues past it since #3291),
+    // so a case that funds too thinly would surface as a confusing assertion
+    // on the block's contents; fail it here as bad setup instead.
     BOOST_REQUIRE_MESSAGE(fee_out >= GetMinFee(tx),
         "candidate underfunded for the miner's absolute floor: a small transaction "
         "needs roughly 520 satoshi per byte to clear a flat 100000");
