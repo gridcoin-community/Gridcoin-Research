@@ -1275,6 +1275,12 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
     }
 
     const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();
+    // GetBaseline() is null until snapshot accrual has a baseline, which on a
+    // fresh chain (regtest) it never gets; there is no history to correct then.
+    if (!pindex_baseline) {
+        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: no accrual baseline; no correction.", __func__);
+        return accrual;
+    }
 
     // Start at the tip.
     const CBlockIndex* pindex_high = mapBlockIndex[hashBestChain];
@@ -1291,7 +1297,9 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
     SuperblockPtr superblock;
     unsigned int period_num = 0;
 
-    while (pindex->nHeight >= pindex_baseline->nHeight)
+    // The walk steps pprev and re-tests the height, so it must also stop at the
+    // end of the chain: with the baseline at genesis, the step past genesis is null.
+    while (pindex && pindex->nHeight >= pindex_baseline->nHeight)
     {
         if (pindex->IsSuperblock())
         {

@@ -1509,6 +1509,18 @@ public:
     //!
     bool ApplyLatest(ResearchAccountMap& accounts) const
     {
+        // No snapshot left to apply. That is the state of a fresh chain whose
+        // first superblock was just disconnected: nothing was ever stored
+        // before it, and there is no baseline to fall back to. The
+        // pre-superblock state is no snapshot accrual for anyone, so restore
+        // that rather than trying to open a snapshot at height 0.
+        if (m_registry.LatestHeight() == 0) {
+            LogPrint(LogFlags::TALLY, "Tally: no accrual snapshot to apply; clearing snapshot accrual.");
+            for (auto& account_pair : accounts) {
+                account_pair.second.m_accrual = 0;
+            }
+            return true;
+        }
         return Apply(m_registry.LatestHeight(), accounts);
     }
 
