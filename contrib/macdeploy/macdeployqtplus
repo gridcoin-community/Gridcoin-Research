@@ -16,7 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import sys, re, os, platform, shutil, stat, subprocess, os.path
+import sys, re, os, platform, shutil, stat, subprocess, os.path, time
 from argparse import ArgumentParser
 try:
     from ds_store import DSStore
@@ -382,6 +382,35 @@ def copyFramework(framework: FrameworkInfo, path: str, verbose: int) -> Optional
         headers_dir = os.path.join(to_dir, framework.binaryDirectory, "Headers")
         if os.path.exists(headers_dir):
             shutil.rmtree(headers_dir)
+
+        # Seal the framework root: codesign refuses a framework whose root
+        # holds real entries other than Versions ("unsealed contents present
+        # in the root directory of an embedded framework"). Bottled Qt kegs
+        # ship clean roots, but source-built kegs -- what Homebrew now
+        # produces on Intel under its Tier 3 fallback -- can leave real
+        # files or directories (build artifacts such as .prl files) at the
+        # root. Re-home them under the versioned directory and leave the
+        # symlink the sealed layout expects.
+        versions_dir = os.path.join(to_dir, "Versions")
+        if os.path.isdir(versions_dir):
+            versioned_root = os.path.join(versions_dir, framework.version)
+            for entry in os.listdir(to_dir):
+                if entry == "Versions":
+                    continue
+                entry_path = os.path.join(to_dir, entry)
+                if os.path.islink(entry_path):
+                    continue
+                versioned_path = os.path.join(versioned_root, entry)
+                if os.path.exists(versioned_path):
+                    if os.path.isdir(entry_path):
+                        shutil.rmtree(entry_path)
+                    else:
+                        os.remove(entry_path)
+                else:
+                    shutil.move(entry_path, versioned_path)
+                os.symlink(os.path.join("Versions", framework.version, entry), entry_path)
+                if verbose:
+                    print("Sealed framework root entry:", entry)
 
     permissions = os.stat(toPath)
     if not permissions.st_mode & stat.S_IWRITE:
@@ -804,11 +833,31 @@ if config.dmg is not None:
 
     tempname: str = dmg_basename + ".temp.dmg"
 
-    run(["hdiutil", "create", tempname, "-srcfolder", "dist", "-format", "UDRW", "-size", str(size), "-volname", appname], check=True, universal_newlines=True)
+    def run_hdiutil_with_retry(args, attempts=4, delay=15, **kwargs):
+        # hdiutil races against Spotlight/fseventsd still indexing freshly
+        # written files on CI runners and fails transiently with "Resource
+        # busy" or "Resource temporarily unavailable"; a short pause and a
+        # retry clears it. The final attempt raises like check=True would.
+        # check must not sneak in through kwargs: it would raise on the
+        # first failure and silently bypass the retry this helper exists for.
+        kwargs.pop("check", None)
+        kwargs.setdefault("universal_newlines", True)
+        for attempt in range(1, attempts + 1):
+            result = run(["hdiutil"] + args, **kwargs)
+            if result.returncode == 0:
+                return result
+            if attempt < attempts:
+                print(f"hdiutil {args[0]} failed (attempt {attempt}/{attempts}), retrying in {delay}s...")
+                time.sleep(delay)
+        result.check_returncode()
+
+    # -ov: a failed attempt can leave a partial temp image behind; overwrite
+    # it so the retry does not die on "File exists".
+    run_hdiutil_with_retry(["create", tempname, "-ov", "-srcfolder", "dist", "-format", "UDRW", "-size", str(size), "-volname", appname])
 
     if verbose:
         print("Attaching temp image...")
-    output = run(["hdiutil", "attach", tempname, "-readwrite"], check=True, universal_newlines=True, stdout=PIPE).stdout
+    output = run_hdiutil_with_retry(["attach", tempname, "-readwrite"], stdout=PIPE).stdout
 
     m = re.search(r"/Volumes/(.+$)", output)
     disk_root = m.group(0)
@@ -831,7 +880,7 @@ if config.dmg is not None:
 
     run(["hdiutil", "detach", f"/Volumes/{appname}"], universal_newlines=True)
 
-    run(["hdiutil", "convert", tempname, "-format", "UDZO", "-o", dmg_basename, "-imagekey", "zlib-level=9"], check=True, universal_newlines=True)
+    run_hdiutil_with_retry(["convert", tempname, "-format", "UDZO", "-o", dmg_basename, "-imagekey", "zlib-level=9"])
 
     os.unlink(tempname)
 
