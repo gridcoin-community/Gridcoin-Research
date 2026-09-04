@@ -137,7 +137,8 @@ void CTxMemPool::eraseIndexes(const CTxMemPoolEntry& entry)
 }
 
 
-bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive, MemPoolRemovalReason reason)
+bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive, MemPoolRemovalReason reason,
+                        std::vector<CTransaction>* removed_out)
 {
     // NOTE: `reason` is threaded through (including into the recursive call below)
     // as groundwork for a future TransactionRemovedFromMempool validation signal.
@@ -159,9 +160,11 @@ bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive, MemPoolRemovalR
                 for (unsigned int i = 0; i < tx.vout.size(); i++) {
                     std::map<COutPoint, CInPoint>::iterator it = mapNextTx.find(COutPoint(hash, i));
                     if (it != mapNextTx.end())
-                        remove(*it->second.ptx, true, reason);
+                        remove(*it->second.ptx, true, reason, removed_out);
                 }
             }
+            // Copy before the erase below invalidates the entry's storage.
+            if (removed_out) removed_out->push_back(entry_it->second.GetTx());
             // Tear down the secondary indexes before erasing the entry.
             eraseIndexes(entry_it->second);
             for (auto const& txin : tx.vin)
@@ -226,11 +229,12 @@ void CTxMemPool::TrimToSize(size_t limit, std::vector<CTransaction>* removed,
         }
 
         const CTransaction victim = it->second.GetTx();
-        if (removed) removed->push_back(victim);
 
         // Route through remove() so every index (and the running size total)
-        // stays consistent. Recursive so dependents go too.
-        remove(victim, /*fRecursive=*/true, MemPoolRemovalReason::SIZELIMIT);
+        // stays consistent. Recursive so dependents go too, and the collector
+        // is threaded through so descendants are reported alongside the
+        // victim -- their removal signals must not be silently dropped.
+        remove(victim, /*fRecursive=*/true, MemPoolRemovalReason::SIZELIMIT, removed);
     }
 }
 
