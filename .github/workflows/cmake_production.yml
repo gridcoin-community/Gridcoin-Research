@@ -20,6 +20,12 @@ env:
   BUILD_TYPE: Release
   OS_REF: ubuntu-24.04
   USE_CCACHE: true
+  # The non-Qt Homebrew dependencies shared by both macOS jobs. The Qt head
+  # differs on purpose: ARM64 installs the qt meta-formula (bottled); Intel
+  # installs the qtbase/qttools/qtsvg/qttranslations subset (see the Intel
+  # job's keg-cache comment). doc/build-macos.md and the install helper carry
+  # the user-facing copies of this list.
+  MACOS_BREW_DEPS: boost libevent miniupnpc qrencode libzip ccache cmake capnp
 
 jobs:
   # ----------------------------------------------------------------------
@@ -297,7 +303,7 @@ jobs:
       - name: Install Dependencies
         run: |
           brew update
-          brew install qt boost openssl libevent miniupnpc qrencode libzip ccache cmake capnp
+          brew install qt openssl $MACOS_BREW_DEPS
 
       - name: Configure Ccache
         uses: actions/cache@v5
@@ -549,7 +555,14 @@ jobs:
       # installed: it drags in every Qt satellite (qtwebengine is a Chromium
       # build no runner can source-build); qtbase/qttools/qtsvg cover the
       # QT_COMPONENTS list in CMakeLists.txt, plus qttranslations for the
-      # bundled translations.
+      # bundled translations. Note qttools still pulls qtdeclarative (and its
+      # build-only satellites) as bottle-less source builds -- part of the
+      # cold-run budget. Kegs are stashed and the manifest rewritten after
+      # every build, and the save below runs on failure too, so repeated runs
+      # converge monotonically even if one run cannot finish the whole set
+      # inside the job limit. If a saved keg is ever broken (the cache key
+      # only tracks versions, not build health), bump the v1 in the key to
+      # start a fresh cache generation.
       - name: Restore the Intel source-built keg cache
         uses: actions/cache/restore@v5
         with:
@@ -563,10 +576,10 @@ jobs:
           # The ARM64 runner has Rosetta 2, so x86_64 binaries run transparently.
           arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
           arch -x86_64 /usr/local/bin/brew update
+          # shellcheck disable=SC2086
           BREW_ARCH="arch -x86_64" contrib/devtools/brew-install-with-source-fallback.sh \
             "$HOME/intel-kegs" \
-            qtbase qttools qtsvg qttranslations openssl@3 \
-            boost libevent miniupnpc qrencode libzip ccache cmake capnp
+            qtbase qttools qtsvg qttranslations openssl@3 $MACOS_BREW_DEPS
 
       - name: Compute the keg cache key
         id: kegkey
@@ -655,7 +668,10 @@ jobs:
         run: |
           export CC_LAUNCHER='-DCMAKE_C_COMPILER_LAUNCHER=ccache'
           export CXX_LAUNCHER='-DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
-          QT6_PATH=$(arch -x86_64 /usr/local/bin/brew --prefix qtbase)
+          # With the split Qt kegs, qtbase's Qt6Config cannot resolve the Svg
+          # and LinguistTools components living in the qtsvg/qttools kegs;
+          # the brew prefix exposes the aggregate linked lib/cmake view.
+          QT6_PATH=$(arch -x86_64 /usr/local/bin/brew --prefix)
           OPENSSL_ROOT=$(arch -x86_64 /usr/local/bin/brew --prefix openssl)
 
           arch -x86_64 /usr/local/bin/cmake -B build \

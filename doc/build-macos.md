@@ -75,6 +75,20 @@ brew install qt boost openssl libevent miniupnpc qrencode libzip ccache cmake
 
 Note: Homebrew installs Qt6 by default when you request qt.
 
+Note for Intel Macs: Homebrew no longer ships x86_64 bottles for many
+formulae (Tier 3 wind-down), and modern brew builds those from source
+automatically, which for the qt meta-formula means an infeasible
+qtwebengine build. Install the Qt subset instead of qt:
+
+```
+brew install qtbase qttools qtsvg qttranslations boost openssl libevent miniupnpc qrencode libzip ccache cmake
+```
+
+and pass the brew prefix (e.g. `-DCMAKE_PREFIX_PATH=$(brew --prefix)`) so
+CMake sees the aggregate linked Qt view. CI uses
+contrib/devtools/brew-install-with-source-fallback.sh to source-build and
+cache the bottle-less formulae; it works locally too.
+
 ### 2. Get the Source Code
 
 Clone the repository and enter the directory (substitute the desired branch if not master):
