@@ -83,6 +83,11 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
 {
     set<string> vRereadCPIDs;
 
+    // The wallet's own transactions the disconnected blocks had conflicted.
+    // Local to the batch: re-offered below like vResurrect, but with no
+    // unbroadcast bookkeeping to reconcile afterwards.
+    list<CTransaction> vReconflicted;
+
     GRC::RegistryBookmarks registries;
 
     // Count superblocks crossed during this disconnect. BeaconRegistry::Deactivate
@@ -119,6 +124,17 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
         for (auto const& tx : boost::adaptors::reverse(block.vtx))
             if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Params().Checkpoints().GetHeight())
                 vResurrect.push_front(tx);
+
+        // Queue the wallet's own transactions this block's connect had
+        // conflicted. They are not in the block -- they lost the outpoint to
+        // something that is -- so the loop above never sees them, and
+        // nothing records which block displaced them, so nothing else can
+        // tell that the reason they are conflicted has just been disconnected.
+        if (pwalletMain) {
+            for (CTransaction& tx : pwalletMain->TakeConflictedBy(pindexBest->GetBlockHash())) {
+                vReconflicted.push_back(tx);
+            }
+        }
 
         // TODO: Implement flag in CBlockIndex for mrcs?
         if (pindexBest->IsUserCPID() || !pindexBest->m_mrc_researchers.empty()) {
@@ -215,6 +231,27 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
                          __func__, tx.GetHash().ToString(),
                          missing_inputs ? ": missing inputs" : "",
                          resurrect_state.GetRejectReason().empty() ? "" : ": " + resurrect_state.GetRejectReason());
+            }
+        }
+
+        // Re-evaluate the conflicts the disconnected blocks caused, after the
+        // resurrect loop so the transaction that won the outpoint gets it back
+        // first. A refusal here is the ordinary answer -- the conflict was real
+        // and still is -- and the wallet transaction stays conflicted. It
+        // succeeds when whatever displaced it went with the block: a coinstake,
+        // which is never resurrected, or a transaction whose own inputs the
+        // block created.
+        for (CTransaction& tx : vReconflicted) {
+            CValidationState reconflicted_state;
+            bool missing_inputs = false;
+            if (AcceptToMemoryPool(mempool, tx, reconflicted_state, &missing_inputs)) {
+                LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s is pending again",
+                         __func__, tx.GetHash().ToString());
+            } else {
+                LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s stays conflicted%s%s",
+                         __func__, tx.GetHash().ToString(),
+                         missing_inputs ? ": missing inputs" : "",
+                         reconflicted_state.GetRejectReason().empty() ? "" : ": " + reconflicted_state.GetRejectReason());
             }
         }
 
@@ -431,9 +468,20 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             }
 
             // Delete redundant memory transactions
+            std::vector<uint256> displaced;
+
             for (auto const& tx : block.vtx) {
                 mempool.remove(tx);
-                mempool.removeConflicts(tx);
+                mempool.removeConflicts(tx, &displaced);
+            }
+
+            // Tell the wallet which of its transactions this block displaced.
+            // remove() emits no validation signal, so this is the only point at
+            // which the pairing of transaction and responsible block exists;
+            // without it a disconnect cannot tell that the reason one of its
+            // own transactions is being reported conflicted has just gone away.
+            if (pwalletMain && !displaced.empty()) {
+                pwalletMain->RecordConflictedBy(displaced, pindex->GetBlockHash());
             }
 
 

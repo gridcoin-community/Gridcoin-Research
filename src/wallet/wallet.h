@@ -248,6 +248,24 @@ public:
     uint256 m_last_block_processed GUARDED_BY(cs_wallet);
     int m_last_block_processed_height GUARDED_BY(cs_wallet) = 0;
 
+    //! Which block's connect displaced each transaction the wallet is holding
+    //! conflicted, keyed by txid. Read by TakeConflictedBy when that block is
+    //! disconnected.
+    //!
+    //! Deliberately transient. The on-disk wallet format carries one hashBlock
+    //! slot per transaction, holding the null hash for an in-mempool entry
+    //! (and CONFLICTED_HASH_SENTINEL for the inactive state),
+    //! and transaction.h reserves the sentinel range so a future state stays
+    //! downgrade-safe -- writing a real block hash into that slot is exactly
+    //! the failure the range exists to prevent, since an older client would
+    //! read the transaction as confirmed in that block. A restart therefore
+    //! starts empty, and a conflict recorded before it is not re-evaluated.
+    //! An entry leaves only when its block is disconnected, so the map holds
+    //! one record per displaced own transaction for the rest of the session.
+    //! That is the intended scope: a reorg is a within-session event, and the
+    //! conflicts worth re-evaluating are the ones this session recorded.
+    std::map<uint256, uint256> m_conflicting_block GUARDED_BY(cs_wallet);
+
     CPubKey vchDefaultKey GUARDED_BY(cs_wallet);
     int64_t nTimeFirstKey GUARDED_BY(cs_wallet);
 
@@ -367,6 +385,49 @@ public:
     //! Persist the best-block locator so a restored wallet can detect its
     //! position. Writes wallet DB only; takes no cs_wallet.
     void ChainStateFlushed(const CBlockLocator& locator) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+
+    //!
+    //! \brief Note that a block's connect displaced these transactions from the
+    //! mempool.
+    //!
+    //! A block that spends an input of a pooled transaction evicts it through
+    //! CTxMemPool::removeConflicts. remove() emits no validation signal, so the
+    //! wallet is never told: the entry keeps TxStateInMempool and only
+    //! GetDepthInMainChain notices, turning depth 0 into -1 because the mempool
+    //! no longer holds it. Nothing anywhere records which block did it, so when
+    //! that block is disconnected the transaction stays at -1 for the rest of
+    //! the session -- rendered Conflicted by every depth-based reader, and
+    //! absent from the local mempool -- though the reason it was displaced is
+    //! gone.
+    //!
+    //! Hashes that are not the wallet's are ignored.
+    //!
+    //! \param hashes The transactions removeConflicts took out.
+    //! \param block_hash The block being connected.
+    //!
+    void RecordConflictedBy(const std::vector<uint256>& hashes, const uint256& block_hash)
+        LOCKS_EXCLUDED(cs_wallet);
+
+    //!
+    //! \brief Take the transactions a block's connect had displaced, forgetting
+    //! the records.
+    //!
+    //! The disconnect asks for its own hash back and re-offers what it gets to
+    //! the mempool, after the resurrect loop so a transaction that legitimately
+    //! still holds the outpoint gets it first. A refusal is the ordinary
+    //! answer, and leaves the wallet exactly as it was; it succeeds when
+    //! whatever displaced the transaction went with the block, which is always
+    //! the case for a coinstake.
+    //!
+    //! Only a transaction the wallet still holds and the mempool does not is
+    //! returned: one that has since confirmed, been abandoned, or found its way
+    //! back into the pool was resolved by another path.
+    //!
+    //! \param block_hash The block being disconnected.
+    //!
+    //! \return The transactions to re-offer, in no particular order.
+    //!
+    std::vector<CTransaction> TakeConflictedBy(const uint256& block_hash) LOCKS_EXCLUDED(cs_wallet);
 
     // -- Conflict tracking & abandonment -------------------------------------
     /** Return txids that spend the same inputs as @p txid. */

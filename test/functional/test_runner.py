@@ -219,6 +219,10 @@ BASE_SCRIPTS = [
     # CScheduler runs on the real clock and setmocktime cannot reach the
     # 60-second delay.
     'feature_no_update_check_on_regtest.py',
+    # feature_reorg_conflicted.py: a wallet transaction conflicted by a block
+    # stops being conflicted when that block is disconnected, provided whatever
+    # took its outpoint went with the block.
+    'feature_reorg_conflicted.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled

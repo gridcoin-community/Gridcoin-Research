@@ -191,7 +191,7 @@ bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive, MemPoolRemovalR
     return true;
 }
 
-bool CTxMemPool::removeConflicts(const CTransaction &tx)
+bool CTxMemPool::removeConflicts(const CTransaction &tx, std::vector<uint256>* removed_out)
 {
     // Remove transactions which depend on inputs of tx, recursively
     LOCK(cs);
@@ -200,8 +200,17 @@ bool CTxMemPool::removeConflicts(const CTransaction &tx)
         std::map<COutPoint, CInPoint>::iterator it = mapNextTx.find(txin.prevout);
         if (it != mapNextTx.end()) {
             const CTransaction &txConflict = *it->second.ptx;
-            if (txConflict != tx)
+            if (txConflict != tx) {
+                // Copy the hash before remove() erases the entry the reference
+                // above points into.
+                const uint256 conflicted_hash = txConflict.GetHash();
+
                 remove(txConflict, true, MemPoolRemovalReason::CONFLICT);
+
+                if (removed_out != nullptr) {
+                    removed_out->push_back(conflicted_hash);
+                }
+            }
         }
     }
     return true;
