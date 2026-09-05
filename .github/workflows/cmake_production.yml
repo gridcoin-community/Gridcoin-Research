@@ -20,6 +20,12 @@ env:
   BUILD_TYPE: Release
   OS_REF: ubuntu-24.04
   USE_CCACHE: true
+  # The non-Qt Homebrew dependencies shared by both macOS jobs. The Qt head
+  # differs on purpose: ARM64 installs the qt meta-formula (bottled); Intel
+  # installs the qtbase/qttools/qtsvg/qttranslations subset (see the Intel
+  # job's keg-cache comment). doc/build-macos.md and the install helper carry
+  # the user-facing copies of this list.
+  MACOS_BREW_DEPS: boost libevent miniupnpc qrencode libzip ccache cmake capnp
 
 jobs:
   # ----------------------------------------------------------------------
@@ -297,7 +303,7 @@ jobs:
       - name: Install Dependencies
         run: |
           brew update
-          brew install qt boost openssl libevent miniupnpc qrencode libzip ccache cmake capnp
+          brew install qt openssl $MACOS_BREW_DEPS
 
       - name: Configure Ccache
         uses: actions/cache@v5
@@ -537,41 +543,32 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Homebrew stopped shipping x86_64 macOS bottles for openssl@3 (Tier 3
-      # platform demotion), and qt depends on it, so a plain install aborts on
-      # "no bottle available". Source-build it once per formula version and
-      # carry the built keg between runs: the version comes from the formulae
-      # API (no brew needed before the bootstrap below), and a restored,
-      # current keg makes the install line a fast no-op. pcre2 (below) lost
-      # its bottle the same way; a sweep of the full recursive dependency
-      # tree found no other formula without one today. If another loses its
-      # bottle, give it the same treatment.
-      - name: Determine openssl@3 version for the Intel build cache
-        id: sslver
-        run: |
-          # versions.stable alone misses Homebrew revision bumps (rebuilds
-          # against new deps, e.g. 3.x.y_1), which must invalidate the cache.
-          echo "version=$(curl -fsSL https://formulae.brew.sh/api/formula/openssl@3.json | /usr/bin/python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["versions"]["stable"] + ("_" + str(d["revision"]) if d.get("revision") else ""))')" >> "$GITHUB_OUTPUT"
-
-      - name: Cache the source-built Intel openssl@3
-        uses: actions/cache@v5
+      # Homebrew is winding down x86_64 macOS bottles (Tier 3 platform
+      # demotion): formulae keep working but lose their Intel bottles one by
+      # one. Instead of chasing each casualty with a bespoke step (openssl@3
+      # and pcre2 got that treatment before the demotion went wholesale),
+      # contrib/devtools/brew-install-with-source-fallback.sh converges
+      # generically -- it source-builds whatever formula brew names in a
+      # missing-bottle error and stashes the keg here, keyed by the manifest
+      # of built name-versions, so each casualty is built once per version
+      # and restored thereafter. The qt meta-formula is deliberately NOT
+      # installed: it drags in every Qt satellite (qtwebengine is a Chromium
+      # build no runner can source-build); qtbase/qttools/qtsvg cover the
+      # QT_COMPONENTS list in CMakeLists.txt, plus qttranslations for the
+      # bundled translations. Note qttools still pulls qtdeclarative (and its
+      # build-only satellites) as bottle-less source builds -- part of the
+      # cold-run budget. Kegs are stashed and the manifest rewritten after
+      # every build, and the save below runs on failure too, so repeated runs
+      # converge monotonically even if one run cannot finish the whole set
+      # inside the job limit. If a saved keg is ever broken (the cache key
+      # only tracks versions, not build health), bump the v1 in the key to
+      # start a fresh cache generation.
+      - name: Restore the Intel source-built keg cache
+        uses: actions/cache/restore@v5
         with:
-          path: /usr/local/Cellar/openssl@3
-          key: openssl3-intel-${{ steps.sslver.outputs.version }}
-
-      # pcre2 lost its x86_64 macOS bottle the same way (it reaches this job
-      # as a transitive dependency of qt), so it gets the same treatment as
-      # openssl@3 above: source-build once per formula version, cache the keg.
-      - name: Determine pcre2 version for the Intel build cache
-        id: pcrever
-        run: |
-          echo "version=$(curl -fsSL https://formulae.brew.sh/api/formula/pcre2.json | /usr/bin/python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["versions"]["stable"] + ("_" + str(d["revision"]) if d.get("revision") else ""))')" >> "$GITHUB_OUTPUT"
-
-      - name: Cache the source-built Intel pcre2
-        uses: actions/cache@v5
-        with:
-          path: /usr/local/Cellar/pcre2
-          key: pcre2-intel-${{ steps.pcrever.outputs.version }}
+          path: ~/intel-kegs
+          key: intel-kegs-v1-${{ github.run_id }}
+          restore-keys: intel-kegs-v1-
 
       - name: Install x86_64 Homebrew and Dependencies
         run: |
@@ -579,20 +576,27 @@ jobs:
           # The ARM64 runner has Rosetta 2, so x86_64 binaries run transparently.
           arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
           arch -x86_64 /usr/local/bin/brew update
-          # No-op when the cached keg matches the current formula version;
-          # a source build (~15 min) only on a cache miss or a version bump.
-          arch -x86_64 /usr/local/bin/brew install --build-from-source openssl@3
-          # The cache carries only the keg: a restored run has no
-          # /usr/local/opt/openssl@3 symlink, and the configure step resolves
-          # OPENSSL_ROOT_DIR through exactly that path. openssl@3 is keg-only,
-          # so linking needs --force; no fallback swallow -- a link failure
-          # here must fail the job, not surface later as a configure mystery.
-          arch -x86_64 /usr/local/bin/brew link --force --overwrite openssl@3
-          # Same dance for pcre2 (not keg-only, so a plain relink suffices);
-          # a restored keg makes both of these fast no-ops.
-          arch -x86_64 /usr/local/bin/brew install --build-from-source pcre2
-          arch -x86_64 /usr/local/bin/brew link --overwrite pcre2
-          arch -x86_64 /usr/local/bin/brew install qt boost libevent miniupnpc qrencode libzip ccache cmake capnp
+          # shellcheck disable=SC2086
+          BREW_ARCH="arch -x86_64" contrib/devtools/brew-install-with-source-fallback.sh \
+            "$HOME/intel-kegs" \
+            qtbase qttools qtsvg qttranslations openssl@3 $MACOS_BREW_DEPS
+
+      - name: Compute the keg cache key
+        id: kegkey
+        if: ${{ always() }}
+        run: |
+          if [ -s "$HOME/intel-kegs/manifest.txt" ]; then
+            echo "key=intel-kegs-v1-$(shasum -a 256 "$HOME/intel-kegs/manifest.txt" | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          else
+            echo "key=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save the Intel source-built keg cache
+        if: ${{ always() && steps.kegkey.outputs.key != '' }}
+        uses: actions/cache/save@v5
+        with:
+          path: ~/intel-kegs
+          key: ${{ steps.kegkey.outputs.key }}
 
       - name: Configure Ccache
         uses: actions/cache@v5
@@ -664,7 +668,10 @@ jobs:
         run: |
           export CC_LAUNCHER='-DCMAKE_C_COMPILER_LAUNCHER=ccache'
           export CXX_LAUNCHER='-DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
-          QT6_PATH=$(arch -x86_64 /usr/local/bin/brew --prefix qt)
+          # With the split Qt kegs, qtbase's Qt6Config cannot resolve the Svg
+          # and LinguistTools components living in the qtsvg/qttools kegs;
+          # the brew prefix exposes the aggregate linked lib/cmake view.
+          QT6_PATH=$(arch -x86_64 /usr/local/bin/brew --prefix)
           OPENSSL_ROOT=$(arch -x86_64 /usr/local/bin/brew --prefix openssl)
 
           arch -x86_64 /usr/local/bin/cmake -B build \
