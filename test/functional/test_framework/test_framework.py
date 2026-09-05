@@ -670,8 +670,6 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
             self.log.warning("disconnect_nodes: {} and {} were not connected".format(a, b))
             return
 
-        expected_a = node_a.getconnectioncount() - links
-        expected_b = node_b.getconnectioncount() - links
         for node, ids in ((node_a, ids_a), (node_b, ids_b)):
             for peer_id in ids:
                 try:
@@ -682,8 +680,16 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
                     if e.error['code'] != -29:  # RPC_CLIENT_NODE_NOT_CONNECTED
                         raise
 
-        wait_until_helper(lambda: node_a.getconnectioncount() <= expected_a
-                          and node_b.getconnectioncount() <= expected_b, timeout=5)
+        # Wait on the specific peer ids disappearing, not on connection
+        # counts: counts can hit the target through unrelated churn (another
+        # peer dropping, a new inbound arriving) while the a<->b link lives.
+        def links_gone():
+            live_a = {p['id'] for p in node_a.getpeerinfo()}
+            live_b = {p['id'] for p in node_b.getpeerinfo()}
+            return not (set(ids_a) & live_a) and not (set(ids_b) & live_b)
+
+        wait_until_helper(links_gone, timeout=5,
+                          timeout_factor=self.options.timeout_factor)
 
     def split_network(self):
         """

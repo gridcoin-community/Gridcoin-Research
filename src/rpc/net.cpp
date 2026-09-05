@@ -309,7 +309,8 @@ const RPCHelpMan& setban_helpman() { return setban_help; }
 static const RPCHelpMan disconnectnode_help{
     "disconnectnode",
     "Immediately disconnects from the specified peer node.\n"
-    "Strictly one out of 'address' and 'nodeid' can be provided to identify the node.",
+    "Strictly one out of 'address' and 'nodeid' can be provided to identify the node.\n"
+    "To disconnect by nodeid, set 'address' to the empty string.",
     {
         {"address", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
             "The IP address/port of the node, as shown in getpeerinfo's \"addr\" field. "
