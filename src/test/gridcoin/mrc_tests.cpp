@@ -13,10 +13,17 @@
 #include <miner.h>
 #include <primitives/transaction.h>
 #include <rpc/blockchain.h>
+#include <test/state_guard.h>
 #include <test/test_gridcoin.h>
 
 namespace {
 struct Setup {
+    // First member: restores the tip globals, mock time and the arguments
+    // this fixture forces, after the members below are gone. The destructor
+    // used to leave pindexGenesisBlock pointing at the index it had just
+    // freed and to write empty strings where the arguments were absent.
+    grc_test::StateGuard guard;
+
     CBlockIndex* pindex{nullptr};
     GRC::Cpid cpid = GRC::Cpid(InsecureRandBytes(16));
     GRC::ResearchAccount& account = GRC::Tally::CreateAccount(cpid);
@@ -101,8 +108,8 @@ struct Setup {
         gArgs.ForceSetArg("email", "");
         GRC::Tally::RemoveAccount(cpid);
 
-        SetMockTime(0);
-
+        // Mock time and the tip pointers are restored by `guard` once this
+        // destructor has freed the mock chain.
         for (CBlockIndex* tip = pindex; tip->pprev; tip = tip->pprev) {
             mapBlockIndex.erase(tip->GetBlockHash());
             delete tip->phashBlock;

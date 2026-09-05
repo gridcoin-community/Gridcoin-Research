@@ -50,21 +50,9 @@ struct KnownLeak
 // isolation, and --random seeds 3 and 7 on the commit that introduced it.
 // Each entry is removed by the commit that fixes the leak at source.
 const std::vector<KnownLeak> kKnownLeaks = {
-    // Chain-tip globals left pointing at freed or stack memory.
-    {"block_finder_tests", "pindexBest", "BlockChain<N> points the tip at a stack array and has no destructor"},
-    {"block_finder_tests", "pindexGenesisBlock", "BlockChain<N> points the tip at a stack array and has no destructor"},
-    {"block_finder_tests", "nBestHeight", "BlockChain<N> points the tip at a stack array and has no destructor"},
-    {"Superblock", "pindexBest", "two cases new/delete CBlockIndex into the tip without nulling"},
-    {"Superblock", "pindexGenesisBlock", "two cases new/delete CBlockIndex into the tip without nulling"},
-    {"Superblock", "nBestHeight", "two cases new/delete CBlockIndex into the tip without nulling"},
-    {"coinstake_construction_tests", "pindexBest", "fixture restores neither tip pointer after freeing the index"},
-    {"coinstake_construction_tests", "pindexGenesisBlock", "fixture restores neither tip pointer after freeing the index"},
-    {"mrc_tests", "pindexGenesisBlock", "fixture frees the genesis index and leaves the pointer"},
-
     // Determinism and mock time.
     {"random_tests", "g_mock_deterministic_tests", "fastrandom_tests turns determinism off and never back on"},
     {"DoS_tests", "GetMockTime()", "DoS_bantime and DoS_misbehavior_decay never reset mock time"},
-    {"mrc_tests", "GetMockTime()", "fixture sets mock time and resets it only on the happy path"},
 
     // -blockv15height: both suites exit with the INT_MAX sentinel PRESENT
     // where it was absent, so whichever runs first is the one that fires.
@@ -72,8 +60,6 @@ const std::vector<KnownLeak> kKnownLeaks = {
     {"connectinputs_tests", "settings[forced:blockv15height]", "local V15HeightGuard writes the sentinel instead of erasing the key"},
 
     // Settings restored to a value where the key used to be absent.
-    {"coinstake_construction_tests", "settings[", "fixture restores forcecpid/email/stake args to empty strings"},
-    {"mrc_tests", "settings[", "fixture restores forcecpid/email to empty strings"},
     {"Researcher", "settings[", "cases restore email/forcecpid/noncruncher/pooloperator by hand"},
     {"MiningProject", "settings[forced:email]", "cases restore email by hand"},
     {"MiningProjectMap", "settings[forced:email]", "cases restore email by hand"},
