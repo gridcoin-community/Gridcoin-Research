@@ -691,7 +691,9 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
         // Need to completely rewrite the wallet file; if we don't, bdb might keep
         // bits of the unencrypted private key in slack space in the database file.
-        CDB::Rewrite(strWalletFile);
+        // An in-memory wallet has no file: rewriting an empty name would create
+        // a stray ".rewrite" in the working directory instead.
+        if (fFileBacked) CDB::Rewrite(strWalletFile);
 
     }
     NotifyStatusChanged(this);

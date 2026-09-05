@@ -6,6 +6,9 @@
 #include "init.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
+#include "key_io.h"
+#include "rpc/protocol.h"
+#include "rpc/server.h"
 
 #include <algorithm>
 
@@ -808,6 +811,77 @@ BOOST_AUTO_TEST_CASE(addcscript_is_idempotent)
     CScript fetched;
     BOOST_CHECK(pwalletMain->GetCScript(script_id, fetched));
     BOOST_CHECK(fetched == redeem_script);
+}
+
+BOOST_AUTO_TEST_CASE(importprivkey_requires_an_unlocked_wallet)
+{
+    // importprivkey works on the process-global wallet, and regtest cannot
+    // reach a locked one (the functional framework rebuilds the wallet on
+    // every start), so an encrypted, locked wallet is swapped in for this case.
+    // In-memory rather than file-backed: EncryptWallet on a file-backed wallet
+    // rewrites wallet.dat, which the mocked Berkeley DB of this binary refuses,
+    // and the RPC only touches the database when the wallet is file-backed.
+    CWallet locked;
+    struct SwapWallet {
+        CWallet* m_saved;
+        explicit SwapWallet(CWallet* replacement) : m_saved(pwalletMain) { pwalletMain = replacement; }
+        ~SwapWallet() { pwalletMain = m_saved; }
+    } swap(&locked);
+
+    // One key before encryption: Unlock() proves the passphrase by decrypting
+    // a crypted key, so an empty wallet can never be unlocked again.
+    {
+        CKey seed;
+        seed.MakeNewKey(true);
+        LOCK(locked.cs_wallet);
+        BOOST_REQUIRE(locked.AddKey(seed));
+    }
+    const SecureString passphrase("importprivkey-test");
+    BOOST_REQUIRE(locked.EncryptWallet(passphrase));
+    locked.Lock();
+    BOOST_REQUIRE(locked.IsCrypted());
+    BOOST_REQUIRE(locked.IsLocked());
+
+    CKey key;
+    key.MakeNewKey(true);
+    const CKeyID id = key.GetPubKey().GetID();
+
+    UniValue params(UniValue::VARR);
+    params.push_back(EncodeSecret(key));
+    params.push_back("");
+    params.push_back(false); // no rescan: there is no chain in this binary
+
+    auto expect_unlock_needed = [&](const char* what) {
+        try {
+            importprivkey(params);
+            BOOST_FAIL(std::string(what) + ": importprivkey did not throw on a locked wallet");
+        } catch (const UniValue& err) {
+            BOOST_CHECK_EQUAL(find_value(err, "code").get_int(), RPC_WALLET_UNLOCK_NEEDED);
+        }
+    };
+
+    // Locked: refused with the unlock code, and nothing is left behind.
+    expect_unlock_needed("first import");
+    {
+        LOCK(locked.cs_wallet);
+        BOOST_CHECK(!locked.HaveKey(id));
+        BOOST_CHECK_EQUAL(locked.mapKeyMetadata.count(id), 0u);
+    }
+
+    // Unlocked: the same call imports.
+    BOOST_REQUIRE(locked.Unlock(passphrase));
+    importprivkey(params);
+    {
+        LOCK(locked.cs_wallet);
+        BOOST_CHECK(locked.HaveKey(id));
+    }
+
+    // Locked again, re-importing a key the wallet already holds: this is the
+    // call that used to return success without consulting the lock, and the
+    // behaviour change reviewed on its own. It is refused like any other.
+    locked.Lock();
+    BOOST_REQUIRE(locked.IsLocked());
+    expect_unlock_needed("re-import of a held key");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
