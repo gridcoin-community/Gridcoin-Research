@@ -51,7 +51,6 @@ struct KnownLeak
 // Each entry is removed by the commit that fixes the leak at source.
 const std::vector<KnownLeak> kKnownLeaks = {
     // Determinism and mock time.
-    {"random_tests", "g_mock_deterministic_tests", "fastrandom_tests turns determinism off and never back on"},
     {"DoS_tests", "GetMockTime()", "DoS_bantime and DoS_misbehavior_decay never reset mock time"},
 
     // -blockv15height: both suites exit with the INT_MAX sentinel PRESENT
