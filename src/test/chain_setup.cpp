@@ -414,8 +414,8 @@ CTransaction CreateSpendToScript(const CTransaction& txFrom, uint32_t n, CAmount
         mtx.vout[i].scriptPubKey = script_pub_key;
     }
 
-    // Any rounding remainder goes to the fee rather than to an output, so the
-    // fee a test asks for is the fee the miner will compute.
+    // Any rounding remainder goes to the first output rather than to the fee,
+    // so the fee a test asks for is exactly the fee the miner will compute.
     mtx.vout[0].nValue += value_out - each * n_outputs;
 
     BOOST_REQUIRE_MESSAGE(SignSignature(PremineKeystore(), txFrom, mtx, 0),
