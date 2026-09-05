@@ -154,7 +154,6 @@ class BeaconActivationTest(GridcoinTestFramework):
         assert_equal(active[0]["magnitude"], 100)
 
         self.log.info("input validation")
-        node = self.nodes[0]
         assert_raises_rpc_error(
             -8, "must be a hex string",
             node.generatesuperblock, {CPID: 100}, ["regtest"], [12345])
