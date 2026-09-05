@@ -1283,6 +1283,11 @@ UniValue generatesuperblock(const UniValue& params)
 
     if (params.size() > 2 && !params[2].isNull()) {
         for (const UniValue& key : params[2].get_array().getValues()) {
+            if (!key.isStr()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                                   "beacon public key must be a hex string");
+            }
+
             const std::string public_key_hex = key.get_str();
 
             if (!IsHex(public_key_hex)) {

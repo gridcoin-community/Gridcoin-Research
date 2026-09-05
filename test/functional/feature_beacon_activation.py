@@ -19,7 +19,7 @@ also pass if activation happened for some unrelated reason.
 import os
 
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_equal
+from test_framework.util import assert_equal, assert_raises_rpc_error
 
 CPID = "00010203040506070809101112131415"
 
@@ -152,6 +152,15 @@ class BeaconActivationTest(GridcoinTestFramework):
 
         self.log.info("the activated beacon carries the superblock magnitude")
         assert_equal(active[0]["magnitude"], 100)
+
+        self.log.info("input validation")
+        node = self.nodes[0]
+        assert_raises_rpc_error(
+            -8, "must be a hex string",
+            node.generatesuperblock, {CPID: 100}, ["regtest"], [12345])
+        assert_raises_rpc_error(
+            -8, "invalid beacon public key",
+            node.generatesuperblock, {CPID: 100}, ["regtest"], ["nothex"])
 
 
 if __name__ == "__main__":
