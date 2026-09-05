@@ -19,6 +19,8 @@
 #include <set>
 #include <vector>
 
+#include "test/state_guard.h"
+
 extern GRC::MiningPools g_mining_pools;
 
 namespace {
@@ -92,15 +94,13 @@ struct PoolLifecycleFixture
     PoolLifecycleFixture()  { Restore(); }
     ~PoolLifecycleFixture() { Restore(); }
 
-    // Leave the registry booted-clean and V15 inert (some tests force
-    // -blockv15height=0 to exercise the validation gate; reset it so the
-    // override never leaks into another case via the global gArgs).
+    // Leave the registry booted-clean. The cases that force
+    // -blockv15height=0 to exercise the validation gate hold a
+    // grc_test::V15HeightGuard, which puts the argument back exactly as it
+    // found it -- absent, normally. Writing the INT_MAX sentinel here instead
+    // left the key present for every later suite.
     static void Restore()
     {
-        // "2147483647" == INT_MAX, the same V15-inert sentinel the chainparams
-        // default uses. A string literal avoids the locale-dependent
-        // integer-to-string conversion flagged by lint-locale-dependence.sh.
-        gArgs.ForceSetArg("-blockv15height", "2147483647");
         LOCK(cs_main);
         GRC::GetPoolRegistry().Reset();
     }
@@ -1020,7 +1020,7 @@ BOOST_FIXTURE_TEST_CASE(pool_contract_rejected_while_v15_inert, PoolLifecycleFix
     // The same contract against the same registry state, with V15 active, is
     // accepted. Without this half the rejection above would pass just as well
     // for a malformed payload or a bad signature, and would pin nothing.
-    gArgs.ForceSetArg("-blockv15height", "0");
+    grc_test::V15HeightGuard v15(0);
     int dos_active = 0;
     BOOST_CHECK(GRC::BlockValidateContracts(&pindex, tx, dos_active));
 }
@@ -1036,7 +1036,7 @@ BOOST_FIXTURE_TEST_CASE(takeover_register_rejected_operator_register_accepted, P
     // the verifier. BlockValidateContracts is used (not ValidateContracts) so
     // the activation height comes from the block index we control rather than
     // the global nBestHeight, which is unset under the test harness.
-    gArgs.ForceSetArg("-blockv15height", "0"); // V15 active at every height >= 0
+    grc_test::V15HeightGuard v15(0); // V15 active at every height >= 0
 
     LOCK(cs_main);
     GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
@@ -1153,7 +1153,7 @@ BOOST_FIXTURE_TEST_CASE(captured_register_add_replayed_as_remove_rejected, PoolL
     // because the signature is bound to the action; and a correctly REMOVE-signed
     // withdrawal by the same operator must be accepted (the path the new
     // withdrawpool RPC drives).
-    gArgs.ForceSetArg("-blockv15height", "0"); // V15 active at every height >= 0
+    grc_test::V15HeightGuard v15(0); // V15 active at every height >= 0
 
     LOCK(cs_main);
     GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
@@ -1214,7 +1214,7 @@ BOOST_FIXTURE_TEST_CASE(builtin_path2_claim_requires_matching_open_authorization
     // VerifyRegisterAuth Path 2) — the sticky takeover defense that governs who
     // may claim the 5 builtin grcpool CPIDs (real magnitude / AVW). The existing
     // takeover test uses a NON-builtin CPID and so never exercises Path 2.
-    gArgs.ForceSetArg("-blockv15height", "0"); // V15 active at every height >= 0
+    grc_test::V15HeightGuard v15(0); // V15 active at every height >= 0
 
     LOCK(cs_main);
     GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
@@ -1309,7 +1309,7 @@ BOOST_FIXTURE_TEST_CASE(expired_pending_nonbuiltin_superseded_by_fresh_key, Pool
     // PENDING stays protected by takeover defense. Exercise that documented
     // consensus consequence through BlockValidateContracts, not just the
     // IsPendingExpired predicate in isolation.
-    gArgs.ForceSetArg("-blockv15height", "0");
+    grc_test::V15HeightGuard v15(0);
 
     LOCK(cs_main);
     GRC::PoolRegistry& registry = GRC::GetPoolRegistry();

@@ -53,11 +53,6 @@ const std::vector<KnownLeak> kKnownLeaks = {
     // Determinism and mock time.
     {"DoS_tests", "GetMockTime()", "DoS_bantime and DoS_misbehavior_decay never reset mock time"},
 
-    // -blockv15height: both suites exit with the INT_MAX sentinel PRESENT
-    // where it was absent, so whichever runs first is the one that fires.
-    {"pool_tests", "settings[forced:blockv15height]", "PoolLifecycleFixture writes the sentinel instead of erasing the key"},
-    {"connectinputs_tests", "settings[forced:blockv15height]", "local V15HeightGuard writes the sentinel instead of erasing the key"},
-
     // Settings restored to a value where the key used to be absent.
     {"Researcher", "settings[", "cases restore email/forcecpid/noncruncher/pooloperator by hand"},
     {"MiningProject", "settings[forced:email]", "cases restore email by hand"},
