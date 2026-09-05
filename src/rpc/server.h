@@ -381,6 +381,7 @@ extern UniValue ping(const UniValue& params);
 extern UniValue rpc_exportstats(const UniValue& params);
 extern UniValue rpc_getrecentblocks(const UniValue& params);
 extern UniValue setban(const UniValue& params);
+extern UniValue disconnectnode(const UniValue& params);
 extern UniValue showblock(const UniValue& params);
 
 // Voting
@@ -591,6 +592,7 @@ extern const RPCHelpMan& sendscraperfilemanifest_helpman();
 extern const RPCHelpMan& sendtoaddress_helpman();
 extern const RPCHelpMan& setaccount_helpman();
 extern const RPCHelpMan& setban_helpman();
+extern const RPCHelpMan& disconnectnode_helpman();
 extern const RPCHelpMan& sethdseed_helpman();
 extern const RPCHelpMan& setlabel_helpman();
 extern const RPCHelpMan& settxfee_helpman();

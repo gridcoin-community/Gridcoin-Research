@@ -10,13 +10,14 @@ independently-staked block-1s can draw the same coinstake kernel; when the
 proof-of-stake hashes collide (~13% of runs) the duplicate-proof-of-stake guard
 makes each node reject the other's block and the shorter node never reorganizes.
 It cannot be made deterministic from Python without a setmocktime RPC,
-invalidateblock, or disconnectnode (none currently exposed). See the note in
-test_runner.py's EXTENDED_SCRIPTS. The logic below is the best-effort reference
-implementation for when one of those primitives lands.
+invalidateblock, or disconnectnode. setmocktime and disconnectnode now exist;
+invalidateblock does not. See the note in test_runner.py's EXTENDED_SCRIPTS.
+The logic below is the best-effort reference implementation, written before
+those primitives landed and not yet rewritten to use them.
 
-Investor-mode only (no beacon/CPID). Gridcoin's RPC surface has no
-disconnectnode, so instead of split-then-reconnect we build divergent chains on
-two nodes that start ISOLATED, then connect them and assert the node on the
+Investor-mode only (no beacon/CPID). This predates disconnectnode, so instead
+of split-then-reconnect it builds divergent chains on two nodes that start
+ISOLATED, then connect them and assert the node on the
 shorter/lower-trust chain reorganizes onto the longer one.
 
 Two things make the reorg propagate reliably (relying on connect-time header sync

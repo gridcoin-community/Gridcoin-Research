@@ -114,7 +114,9 @@ EXTENDED_SCRIPTS = [
     # It cannot be made deterministic from Python without one of: a setmocktime
     # RPC (to put the two nodes in different stake-time slots), invalidateblock
     # (to force a reorg from a single staker), or disconnectnode (to split a
-    # shared chain). Re-promote to BASE_SCRIPTS once one of those lands.
+    # shared chain). setmocktime and disconnectnode now exist; the test has not
+    # yet been rewritten around them. Re-promote to BASE_SCRIPTS once it is and
+    # repeated runs show it stable.
     'feature_reorg.py',
 ]
 
@@ -135,7 +137,7 @@ BASE_SCRIPTS = [
     #   - wallet_basic.py: raw-tx + sendtoaddress spend, balance, confirmations
     #   - wallet_backup.py: backupwallet + dumpprivkey/importprivkey round-trip
     #   - mempool_accept.py: sendrawtransaction accept + double-spend rejection
-    #   - rpc_net.py: two-node getpeerinfo/addnode + block propagation
+    #   - rpc_net.py: two-node peer state, disconnectnode, disconnect_nodes
     #   - feature_sidestake.py: local sidestaking config + reward split
     # (feature_reorg.py is in EXTENDED_SCRIPTS — flaky on the shared-premine
     #  regtest stack; see the note there.)
