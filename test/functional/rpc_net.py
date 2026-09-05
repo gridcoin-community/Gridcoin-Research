@@ -49,7 +49,10 @@ class RpcNetTest(GridcoinTestFramework):
         sleeping. Blocks staked on the unmocked node carry real timestamps,
         which are in this node's past and accepted as such.
         """
-        self.mock_time += 6
+        # Derive from the call-time clock, never only the run_test baseline:
+        # the rate-limit entry is stamped at accept time with real time, and a
+        # slow (sanitizer/valgrind) run can eat a start-time-anchored margin.
+        self.mock_time = max(self.mock_time, int(time.time())) + 6
         node.setmocktime(self.mock_time)
 
     def run_test(self):
@@ -77,10 +80,10 @@ class RpcNetTest(GridcoinTestFramework):
 
         # --- disconnectnode: argument validation, none of which touches the link ---
         both = "Only one of address and nodeid should be provided."
-        assert_raises_rpc_error(-32602, both, node0.disconnectnode)
-        assert_raises_rpc_error(-32602, both, node0.disconnectnode, "")
-        assert_raises_rpc_error(-32602, both, node0.disconnectnode, "127.0.0.1:1", 0)
         not_found = "Node not found in connected nodes"
+        assert_raises_rpc_error(-32602, both, node0.disconnectnode)
+        assert_raises_rpc_error(-29, not_found, node0.disconnectnode, "")
+        assert_raises_rpc_error(-32602, both, node0.disconnectnode, "127.0.0.1:1", 0)
         assert_raises_rpc_error(-29, not_found, node0.disconnectnode, "", 999999)
         assert_raises_rpc_error(-29, not_found, node0.disconnectnode, "127.0.0.1:1")
         # Control: every reject above left the link alone.

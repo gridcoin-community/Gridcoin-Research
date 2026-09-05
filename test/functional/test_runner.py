@@ -137,7 +137,7 @@ BASE_SCRIPTS = [
     #   - wallet_basic.py: raw-tx + sendtoaddress spend, balance, confirmations
     #   - wallet_backup.py: backupwallet + dumpprivkey/importprivkey round-trip
     #   - mempool_accept.py: sendrawtransaction accept + double-spend rejection
-    #   - rpc_net.py: two-node getpeerinfo/addnode + block propagation
+    # rpc_net.py: two-node peer state, disconnectnode, and disconnect_nodes coverage
     #   - feature_sidestake.py: local sidestaking config + reward split
     # (feature_reorg.py is in EXTENDED_SCRIPTS — flaky on the shared-premine
     #  regtest stack; see the note there.)
