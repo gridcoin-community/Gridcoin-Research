@@ -175,9 +175,12 @@ protected:
         std::string unused;
 
         if (activeBatch) {
+            // A pending Delete for this key has to answer "absent" without
+            // falling through to the disk copy, which is still there until
+            // the batch commits. Read() below already treats it that way.
             bool deleted;
-            if (ScanBatch(ssKey, &unused, &deleted) && !deleted) {
-                return true;
+            if (ScanBatch(ssKey, &unused, &deleted)) {
+                return !deleted;
             }
         }
 
