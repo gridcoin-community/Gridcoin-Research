@@ -657,6 +657,10 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         IP is dropped by the daemon's inbound rate limit (and scored as
         misbehaviour), so a test that disconnects and reconnects must move the
         accepting node's clock forward with setmocktime, or wait, in between.
+
+        Completion is detected by the captured peer ids disappearing from both
+        nodes' getpeerinfo -- not by connection counts, which unrelated churn
+        can satisfy while the link still lives.
         """
         def dialed_peer_ids(node, target_num):
             target = "127.0.0.1:" + str(p2p_port(target_num))
