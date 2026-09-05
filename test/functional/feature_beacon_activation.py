@@ -87,6 +87,10 @@ class BeaconActivationTest(GridcoinTestFramework):
         """
         tip_time = node.getblock(node.getbestblockhash())["time"]
         slot = (tip_time + seconds) & ~STAKE_TIMESTAMP_MASK
+        if slot <= tip_time:
+            # The masking floors; keep the docstring's promise of moving
+            # forward even for a small `seconds`.
+            slot += STAKE_TIMESTAMP_MASK + 1
         node.setmocktime(slot)
 
         return slot
