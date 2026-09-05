@@ -13,6 +13,8 @@ add_executable(test_gridcoin
     csv_tests.cpp
     dos_tests.cpp
     accounting_tests.cpp
+    chain_setup.cpp
+    miner_block_assembly_tests.cpp
     addressbook_tests.cpp
     addrman_tests.cpp
     allocator_tests.cpp
