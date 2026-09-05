@@ -199,8 +199,13 @@ public:
     //! every other mutator here; "unchecked" refers to transaction validation,
     //! which the caller must have done (see AcceptToMemoryPool), not to locking.
     bool addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry);
+    //! \p removed_out, when non-null, receives a copy of every transaction this
+    //! call erases -- the named transaction and, with \p fRecursive, its in-pool
+    //! descendants -- so callers that emit removal signals can cover the whole
+    //! set instead of only the entry they named.
     bool remove(const CTransaction &tx, bool fRecursive = false,
-                MemPoolRemovalReason reason = MemPoolRemovalReason::UNKNOWN);
+                MemPoolRemovalReason reason = MemPoolRemovalReason::UNKNOWN,
+                std::vector<CTransaction>* removed_out = nullptr);
     bool removeConflicts(const CTransaction &tx);
     void clear();
     void queryHashes(std::vector<uint256>& vtxid);
@@ -222,8 +227,10 @@ public:
     //! self-evicted (which, given Gridcoin's flat feerate and the newest-first
     //! tie-break, it otherwise always would be), while the pool still stays bounded.
     //!
-    //! \p removed, when non-null, receives the primary victims chosen here; it does
-    //! NOT include transactions dropped as recursive descendants of a victim.
+    //! \p removed, when non-null, receives every transaction the trim erases:
+    //! the victims chosen here AND their in-pool descendants, which remove()
+    //! drops recursively -- a wallet child spending an evicted parent's change
+    //! must see the same removal signal as the parent.
     void TrimToSize(size_t limit, std::vector<CTransaction>* removed = nullptr,
                     const uint256* protect = nullptr);
 

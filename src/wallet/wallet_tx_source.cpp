@@ -199,7 +199,9 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
     // Invoked via the weak_ptr-locking lambda in subscribe(), on the emitting
     // core thread, under the cs_main + cs_wallet the emitter already holds (all
     // CT_NEW/CT_UPDATED callsites: AddToWallet / CommitTransaction /
-    // WalletUpdateSpent). The analyzer cannot see those locks across the signals2
+    // WalletUpdateSpent / TransactionRemovedFromMempool's SIZELIMIT arm, which
+    // takes cs_wallet itself under ATMP's cs_main). The analyzer cannot see
+    // those locks across the signals2
     // dispatch, hence NO_THREAD_SAFETY_ANALYSIS; the AssertLockHeld() calls below
     // enforce the contract at runtime under DEBUG_LOCKORDER, exactly as the prior
     // EXCLUSIVE_LOCKS_REQUIRED annotation did for the analyzer.

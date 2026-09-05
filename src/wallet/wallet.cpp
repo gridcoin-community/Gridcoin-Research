@@ -1471,8 +1471,9 @@ void CWallet::TransactionRemovedFromMempool(const CTransactionRef& tx,
 
     // Handle removal based on the reason
     // Only mark as inactive/conflicted for genuine conflicts and replacements.
-    // Transactions evicted for size limits or expiry are still valid and can be
-    // retried — they will be picked up by ReacceptWalletTransactions.
+    // Transactions evicted for size limits or expiry are still valid and keep
+    // their in-mempool tag, which makes them resend candidates (depth reads -1
+    // live once the pool no longer holds them).
     switch (reason) {
         case MemPoolRemovalReason::CONFLICT:
         case MemPoolRemovalReason::REPLACED:
@@ -1487,13 +1488,17 @@ void CWallet::TransactionRemovedFromMempool(const CTransactionRef& tx,
 
         case MemPoolRemovalReason::EXPIRY:
         case MemPoolRemovalReason::SIZELIMIT:
-            // Transaction is still valid, just evicted from mempool.
-            // Don't mark as conflicted — ReacceptWalletTransactions will
-            // attempt to re-accept it on the next pass.
+            // Still valid, just evicted: the state stays TxStateInMempool. Depth
+            // is derived live from mempool.exists(), so it already reads -1, and
+            // that is exactly the state the scheduled ResendWalletTransactions()
+            // re-announces. Only the GUI needs telling now rather than at the
+            // next tip refresh: a row that has aged into Offline is a terminal
+            // status in WalletTxStore and is not re-derived on its own.
             LogPrint(BCLog::LogFlags::VERBOSE,
                     "CWallet::TransactionRemovedFromMempool: tx %s evicted (reason: %d), "
-                    "not marking conflicted - eligible for re-acceptance\n",
+                    "not marking conflicted; in-mempool state kept",
                     hash.ToString(), static_cast<int>(reason));
+            NotifyTransactionChanged(this, hash, CT_UPDATED);
             break;
 
         case MemPoolRemovalReason::REORG:
