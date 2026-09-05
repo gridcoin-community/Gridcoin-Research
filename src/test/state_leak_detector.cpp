@@ -50,8 +50,6 @@ struct KnownLeak
 // isolation, and --random seeds 3 and 7 on the commit that introduced it.
 // Each entry is removed by the commit that fixes the leak at source.
 const std::vector<KnownLeak> kKnownLeaks = {
-    // Mempool.
-    {"psgt_pool_tests", "mempool.size()", "a case leaves its funding transaction in the pool"},
 };
 
 bool Matches(const KnownLeak& known, const std::string& suite, const std::string& invariant)
