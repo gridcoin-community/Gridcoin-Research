@@ -2,9 +2,13 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/test/unit_test.hpp>
 
+#include "test/state_guard.h"
+
 #include "util/system.h"
 
-BOOST_AUTO_TEST_SUITE(getarg_tests)
+// Suite-level guard: ResetArgs re-parses test arguments into the global
+// ArgsManager and never removes them.
+BOOST_AUTO_TEST_SUITE(getarg_tests, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 static void AddArgs(const std::string& strArg)
 {

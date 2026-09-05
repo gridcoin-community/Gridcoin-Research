@@ -12,6 +12,8 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
 #include <iostream>
 #include <vector>
 
@@ -216,7 +218,9 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
 // MiningProject
 // -----------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_SUITE(MiningProject)
+// Suite-level guard: cases force email / forcecpid / noncruncher /
+// pooloperator and restore them by hand to values, not to absent.
+BOOST_AUTO_TEST_SUITE(MiningProject, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_project_data)
 {
@@ -449,7 +453,9 @@ BOOST_AUTO_TEST_SUITE_END()
 // MiningProjectMap
 // -----------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_SUITE(MiningProjectMap)
+// Suite-level guard: cases force email / forcecpid / noncruncher /
+// pooloperator and restore them by hand to values, not to absent.
+BOOST_AUTO_TEST_SUITE(MiningProjectMap, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_collection)
 {
@@ -738,7 +744,9 @@ BOOST_AUTO_TEST_SUITE_END()
 // Researcher
 // -----------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_SUITE(Researcher)
+// Suite-level guard: cases force email / forcecpid / noncruncher /
+// pooloperator and restore them by hand to values, not to absent.
+BOOST_AUTO_TEST_SUITE(Researcher, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 // Researcher::Reload/Refresh are EXCLUSIVE_LOCKS_REQUIRED(cs_main). Tests
 // invoke them directly on the single-threaded test fixture without acquiring

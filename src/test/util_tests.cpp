@@ -6,6 +6,8 @@
 #include "random.h"
 #include <vector>
 #include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
 #include "univalue/include/univalue.h"
 
 #include <wallet/wallet.h>
@@ -70,7 +72,10 @@ int msb3(const int64_t& n_in)
 
 #include <sstream>
 
-BOOST_AUTO_TEST_SUITE(util_tests)
+// Suite-level guard: util_GetArg and util_ParseParameters leave their test
+// arguments in the global ArgsManager (ClearArgs() clears only the
+// registered-argument table, not the settings).
+BOOST_AUTO_TEST_SUITE(util_tests, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 BOOST_AUTO_TEST_CASE(util_criticalsection)
 {

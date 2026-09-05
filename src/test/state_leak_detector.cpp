@@ -50,21 +50,6 @@ struct KnownLeak
 // isolation, and --random seeds 3 and 7 on the commit that introduced it.
 // Each entry is removed by the commit that fixes the leak at source.
 const std::vector<KnownLeak> kKnownLeaks = {
-    // Determinism and mock time.
-    {"DoS_tests", "GetMockTime()", "DoS_bantime and DoS_misbehavior_decay never reset mock time"},
-
-    // Settings restored to a value where the key used to be absent.
-    {"Researcher", "settings[", "cases restore email/forcecpid/noncruncher/pooloperator by hand"},
-    {"MiningProject", "settings[forced:email]", "cases restore email by hand"},
-    {"MiningProjectMap", "settings[forced:email]", "cases restore email by hand"},
-    {"DoS_tests", "settings[forced:banscore]", "DoS_banscore restores -banscore to 100 rather than absent"},
-    {"script_tests", "settings[forced:maxsigcachesize]", "restores -maxsigcachesize to the default rather than absent"},
-    {"Whitelist", "settings[forced:autogreylistdeepcopyheight]", "DeepCopyHeightGuard writes the chainparams value on exit"},
-    {"addressbook_tests", "settings[forced:rescan]", "a case forces -rescan and never clears it"},
-    {"sidestake_tests", "settings[rw:", "sidestake editors write rw settings that are never removed"},
-    {"util_tests", "settings[", "util_GetArg / util_ParseParameters leave test arguments behind"},
-    {"getarg_tests", "settings[cmdline:", "ResetArgs re-parses test arguments and never clears them"},
-
     // Registries reset on entry only.
     {"gridcoin_cbr_tests", "GetProtocolRegistry().ProtocolEntries().size()", "AddProtocolEntry resets on entry only"},
     {"protocol_tests", "GetProtocolRegistry().ProtocolEntries().size()", "cases reset the registry on entry only"},
