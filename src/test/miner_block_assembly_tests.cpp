@@ -576,6 +576,15 @@ BOOST_AUTO_TEST_CASE(a_size_limit_eviction_signals_the_victims_descendants_too)
             "expected exactly one CT_UPDATED for " + hash.GetHex() + ", saw " + std::to_string(notices));
     }
 
+    // Leave no wallet residue: later cases in this suite assert preconditions
+    // on the wallet's resend-candidate set, and the evicted entries here are
+    // exactly that shape (in-mempool tag, absent from the pool).
+    {
+        LOCK(pwalletMain->cs_wallet);
+        pwalletMain->EraseFromWallet(parent_hash);
+        pwalletMain->EraseFromWallet(child_hash);
+        pwalletMain->EraseFromWallet(third.GetHash());
+    }
     mempool.clear();
 }
 

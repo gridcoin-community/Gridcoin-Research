@@ -1471,8 +1471,9 @@ void CWallet::TransactionRemovedFromMempool(const CTransactionRef& tx,
 
     // Handle removal based on the reason
     // Only mark as inactive/conflicted for genuine conflicts and replacements.
-    // Transactions evicted for size limits or expiry are still valid and can be
-    // retried — they will be picked up by ReacceptWalletTransactions.
+    // Transactions evicted for size limits or expiry are still valid and keep
+    // their in-mempool tag, which makes them resend candidates (depth reads -1
+    // live once the pool no longer holds them).
     switch (reason) {
         case MemPoolRemovalReason::CONFLICT:
         case MemPoolRemovalReason::REPLACED:
