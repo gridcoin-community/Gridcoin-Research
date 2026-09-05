@@ -334,13 +334,15 @@ UniValue disconnectnode(const UniValue& params)
 
     const UniValue& address_arg = params[0];
     const UniValue& id_arg = params[1];
-    const bool have_address = !address_arg.isNull() && !address_arg.get_str().empty();
-    const bool have_id = !id_arg.isNull();
-
     bool success = false;
-    if (have_address && !have_id) {
+    // Branch conditions copied from upstream verbatim so the error surface
+    // stays backport-safe: a non-null address with no id takes the address
+    // branch even when empty (DisconnectNode("") finds nothing and reports
+    // not-connected), and an empty address with an id is the positional-CLI
+    // spelling of disconnect-by-id.
+    if (!address_arg.isNull() && id_arg.isNull()) {
         success = g_connman->DisconnectNode(address_arg.get_str());
-    } else if (!have_address && have_id) {
+    } else if (!id_arg.isNull() && (address_arg.isNull() || address_arg.get_str().empty())) {
         success = g_connman->DisconnectNode(static_cast<NodeId>(id_arg.get_int64()));
     } else {
         throw JSONRPCError(RPC_INVALID_PARAMS, "Only one of address and nodeid should be provided.");
