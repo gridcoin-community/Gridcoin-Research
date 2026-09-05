@@ -295,14 +295,18 @@ std::pair<bool, bool> ValidateMempoolTx(CWalletTx& wtx, const CTxIndex& txindex,
     }
 
     if (!fTxIndexFound) {
-        // Not in the mempool and not in the chain is depth -1, the state
-        // ResendWalletTransactions() exists to rebroadcast. It is also what
-        // every own unconfirmed transaction looks like at this point of
-        // startup: AppInit2 runs this pass before the persisted unbroadcast
-        // set is reloaded, so an empty mempool proves nothing. Only an input
-        // that another confirmed transaction has already spent makes it
-        // conflicted; RelayWalletTransaction() refuses inactive transactions,
-        // so marking it inactive here would end its rebroadcast for good.
+        // Reached for a transaction still tagged in-mempool that the pool no
+        // longer holds: an EXPIRY or SIZELIMIT eviction keeps the tag, and the
+        // import/rescan RPCs (importprivkey, importwallet, restoreseedphrase)
+        // run this pass afterwards. A restarted wallet's own transactions do
+        // not come here: the in-mempool tag does not survive the wallet.dat
+        // round trip, so they reload as unrecognized and take
+        // ResolveUnrecognizedTx instead. Not in the mempool and not in the
+        // chain is depth -1, the state ResendWalletTransactions() exists to
+        // rebroadcast. Only an input that another confirmed transaction has
+        // already spent makes it conflicted; RelayWalletTransaction() refuses
+        // inactive transactions, so marking it inactive here would end its
+        // rebroadcast for good.
         if (HasChainSpentInput(wtx, txdb)) {
             LogPrint(BCLog::LogFlags::VERBOSE,
                     "ReacceptWalletTransactions: tx %s not in mempool or chain and an input is "
