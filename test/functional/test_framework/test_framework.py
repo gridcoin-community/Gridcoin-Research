@@ -658,9 +658,10 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         misbehaviour), so a test that disconnects and reconnects must move the
         accepting node's clock forward with setmocktime, or wait, in between.
 
-        Completion is detected by the captured peer ids disappearing from both
-        nodes' getpeerinfo -- not by connection counts, which unrelated churn
-        can satisfy while the link still lives.
+        Completion is detected by the captured peer ids disappearing from the
+        dialing sides' getpeerinfo, plus each accepting side's connection
+        count dropping by the links it accepted (an accepted link cannot be
+        identified by address -- the acceptor sees an ephemeral port).
         """
         def dialed_peer_ids(node, target_num):
             target = "127.0.0.1:" + str(p2p_port(target_num))
@@ -674,6 +675,9 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
             self.log.warning("disconnect_nodes: {} and {} were not connected".format(a, b))
             return
 
+        count_a_before = node_a.getconnectioncount()
+        count_b_before = node_b.getconnectioncount()
+
         for node, ids in ((node_a, ids_a), (node_b, ids_b)):
             for peer_id in ids:
                 try:
@@ -684,13 +688,19 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
                     if e.error['code'] != -29:  # RPC_CLIENT_NODE_NOT_CONNECTED
                         raise
 
-        # Wait on the specific peer ids disappearing, not on connection
-        # counts: counts can hit the target through unrelated churn (another
-        # peer dropping, a new inbound arriving) while the a<->b link lives.
+        # Two-part completion check. The dialing side of each link is waited on
+        # by peer id -- precise, immune to unrelated churn. The ACCEPTING side
+        # of a dialed link cannot be identified by address (it sees an
+        # ephemeral source port), so that side is bounded by its connection
+        # count dropping by the number of links it accepted; id-precision
+        # where identifiable, count-bound where not.
         def links_gone():
             live_a = {p['id'] for p in node_a.getpeerinfo()}
             live_b = {p['id'] for p in node_b.getpeerinfo()}
-            return not (set(ids_a) & live_a) and not (set(ids_b) & live_b)
+            if (set(ids_a) & live_a) or (set(ids_b) & live_b):
+                return False
+            return (node_a.getconnectioncount() <= count_a_before - len(ids_b)
+                    and node_b.getconnectioncount() <= count_b_before - len(ids_a))
 
         wait_until_helper(links_gone, timeout=5,
                           timeout_factor=self.options.timeout_factor)
