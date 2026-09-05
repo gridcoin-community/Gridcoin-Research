@@ -41,9 +41,13 @@ CLI (`gridcoinresearchd -regtest <command>`); there is no separate `gridcoin-cli
 - **Default ports.** P2P `32747`, RPC `35715` (mainnet uses `32749`/`15715`,
   testnet `32748`/`25715`). The functional framework allocates per-node ports
   dynamically when running multiple instances.
-- **Investor-mode only (today).** Researcher rewards (beacon/CPID claims, MRC
-  payouts, superblock magnitude) require a regtest beacon + RSA trust anchor
-  that are not yet wired up; staked blocks are non-cruncher (investor) claims.
+- **Researcher flows need no trust anchor.** A beacon advertised with
+  `-forcecpid=<cpid>` is activated by a `generatesuperblock` call that names its
+  public key in the `verified_beacons` argument; no scraper, project RSA key or
+  ownership proof is involved (see `test/functional/feature_beacon_activation.py`).
+  MRC payouts are covered by `test/functional/feature_mrc.py` (a two-node
+  request-and-payout round trip). Blocks staked without an active beacon are
+  non-cruncher (investor) claims.
 
 ## Local sidestaking
 

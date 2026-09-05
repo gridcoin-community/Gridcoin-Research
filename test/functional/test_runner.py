@@ -195,6 +195,9 @@ BASE_SCRIPTS = [
     'rpc_net_connman.py',
     'feature_sidestake.py',
     'feature_generatesuperblock.py',
+    'feature_beacon_activation.py',
+    'feature_research_reward.py',
+    'feature_mrc.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled
