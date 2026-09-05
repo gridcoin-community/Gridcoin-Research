@@ -127,7 +127,10 @@ UniValue importprivkey(const UniValue& params)
     // Without it a locked wallet failed later inside AddKey with
     // RPC_WALLET_ERROR, after MarkDirty and a mapKeyMetadata entry had
     // already been written, and a re-import of a key the wallet already held
-    // returned success without ever consulting the lock.
+    // returned success without ever consulting the lock. The check runs with
+    // cs_wallet already held (walletlock takes the same lock before Lock()),
+    // so the lock state cannot flip between this check and AddKey below.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
     EnsureWalletIsUnlocked();
 
     string strSecret = params[0].get_str();
@@ -149,8 +152,6 @@ UniValue importprivkey(const UniValue& params)
 
     CKeyID vchAddress = key.GetPubKey().GetID();
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-
         pwalletMain->MarkDirty();
 
         // Don't throw error in case a key is already there
