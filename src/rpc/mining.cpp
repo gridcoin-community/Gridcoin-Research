@@ -1282,6 +1282,11 @@ UniValue generatesuperblock(const UniValue& params)
     }
 
     if (params.size() > 2 && !params[2].isNull()) {
+        if (!params[2].isArray()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               "verified_beacons must be an array of hex strings");
+        }
+
         for (const UniValue& key : params[2].get_array().getValues()) {
             if (!key.isStr()) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER,
