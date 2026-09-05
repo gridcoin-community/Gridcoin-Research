@@ -144,6 +144,10 @@ class MrcTest(GridcoinTestFramework):
         paid = self.stake_and_sync()
         claim = paid["claim"]
         assert_equal(claim["m_mrc_tx_map_size"], 1)
+        # The bound MRC must be node1's, not merely counted: the claim decodes
+        # the paid requests under "mrcs", each carrying its CPID.
+        assert_equal(len(claim["mrcs"]), 1)
+        assert_equal(claim["mrcs"][0]["cpid"], CPID)
         assert_equal(node0.getrawmempool(), [])
 
         # getblock's verbose "tx" entries are objects here, not txid strings.

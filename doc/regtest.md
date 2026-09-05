@@ -45,8 +45,9 @@ CLI (`gridcoinresearchd -regtest <command>`); there is no separate `gridcoin-cli
   `-forcecpid=<cpid>` is activated by a `generatesuperblock` call that names its
   public key in the `verified_beacons` argument; no scraper, project RSA key or
   ownership proof is involved (see `test/functional/feature_beacon_activation.py`).
-  MRC payouts have no regtest coverage yet. Blocks staked without an active
-  beacon are non-cruncher (investor) claims.
+  MRC payouts are covered by `test/functional/feature_mrc.py` (a two-node
+  request-and-payout round trip). Blocks staked without an active beacon are
+  non-cruncher (investor) claims.
 
 ## Local sidestaking
 
