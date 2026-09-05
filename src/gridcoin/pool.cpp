@@ -11,7 +11,10 @@
 #include "sync.h"
 #include "chain.h"
 
+#include <algorithm>
 #include <cassert>
+#include <set>
+#include <string>
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
@@ -395,6 +398,27 @@ std::vector<Pool> PoolRegistry::ActivePools() const
             out.push_back(*iter.second);
         }
     }
+
+    return out;
+}
+
+std::vector<Pool> PoolRegistry::ActivePoolsByOperator() const
+{
+    std::vector<Pool> out = ActivePools();
+
+    // Sort by name first so the surviving entry of each URL group is the
+    // lowest-named one, and so the result order does not depend on the CPID
+    // map's iteration order.
+    std::sort(out.begin(), out.end(), [](const Pool& lhs, const Pool& rhs) {
+        return lhs.m_name < rhs.m_name;
+    });
+
+    std::set<std::string> seen_urls;
+
+    out.erase(std::remove_if(out.begin(), out.end(), [&seen_urls](const Pool& pool) {
+                  return !seen_urls.insert(pool.m_url).second;
+              }),
+              out.end());
 
     return out;
 }
