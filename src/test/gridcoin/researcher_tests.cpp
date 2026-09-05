@@ -746,7 +746,9 @@ BOOST_AUTO_TEST_SUITE_END()
 
 // Suite-level guard: cases force email / forcecpid / noncruncher /
 // pooloperator and restore them by hand to values, not to absent.
-BOOST_AUTO_TEST_SUITE(Researcher, *boost::unit_test::fixture<grc_test::StateGuard>())
+BOOST_AUTO_TEST_SUITE(Researcher,
+                      *boost::unit_test::fixture<grc_test::StateGuard>()
+                      * boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::PROTOCOL>>())
 
 // Researcher::Reload/Refresh are EXCLUSIVE_LOCKS_REQUIRED(cs_main). Tests
 // invoke them directly on the single-threaded test fixture without acquiring

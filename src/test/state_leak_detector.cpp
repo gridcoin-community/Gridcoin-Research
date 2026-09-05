@@ -50,17 +50,6 @@ struct KnownLeak
 // isolation, and --random seeds 3 and 7 on the commit that introduced it.
 // Each entry is removed by the commit that fixes the leak at source.
 const std::vector<KnownLeak> kKnownLeaks = {
-    // Registries reset on entry only.
-    {"gridcoin_cbr_tests", "GetProtocolRegistry().ProtocolEntries().size()", "AddProtocolEntry resets on entry only"},
-    {"protocol_tests", "GetProtocolRegistry().ProtocolEntries().size()", "cases reset the registry on entry only"},
-    {"Researcher", "GetProtocolRegistry().ProtocolEntries().size()", "cases reset the registry on entry only"},
-    {"scraper_registry_tests", "GetScraperRegistry().Scrapers().size()", "cases reset the registry on entry only"},
-    {"BeaconPayload", "GetBeaconRegistry().Beacons().size()", "BeaconRegistryTest resets on entry only"},
-
-    // Mock chains never torn down.
-    {"BeaconPayload", "mapBlockIndex", "BeaconRegistryTest inserts every block of the fixture file and erases none"},
-    {"BeaconPayload", "hashBestChain", "BeaconRegistryTest advances hashBestChain per block and never restores it"},
-
     // Mempool.
     {"psgt_pool_tests", "mempool.size()", "a case leaves its funding transaction in the pool"},
 };

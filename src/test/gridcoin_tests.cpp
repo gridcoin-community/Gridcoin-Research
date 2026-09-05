@@ -9,6 +9,8 @@
 #include "gridcoin/staking/reward.h"
 
 #include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
 #include <boost/algorithm/hex.hpp>
 #include <map>
 #include <string>
@@ -105,7 +107,10 @@ BOOST_AUTO_TEST_SUITE_END()
 #pragma clang diagnostic ignored "-Wthread-safety-analysis"
 #endif
 
-BOOST_AUTO_TEST_SUITE(gridcoin_cbr_tests)
+// Symmetric reset: the cases reset the protocol registry on entry only, and
+// the ACTIVE blockreward1 entry the last case leaves behind changes the
+// reward every later suite that mines a block is paid.
+BOOST_AUTO_TEST_SUITE(gridcoin_cbr_tests, *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::PROTOCOL>>())
 
 BOOST_AUTO_TEST_CASE(gridcoin_DefaultCBRShouldBe10PreV13)
 {
