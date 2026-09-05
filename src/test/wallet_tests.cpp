@@ -1946,14 +1946,17 @@ BOOST_AUTO_TEST_CASE(mempool_removal_expiry_preserves_mempool_state)
 
 BOOST_AUTO_TEST_CASE(reaccept_keeps_own_unconfirmed_tx_rebroadcastable)
 {
-    // ReacceptWalletTransactions() runs during init before the persisted
-    // unbroadcast set is reloaded (AppInit2 order), so the mempool is empty
-    // when it inspects the wallet. An own transaction that is unconfirmed and
-    // not in the mempool is exactly the state ResendWalletTransactions()
-    // handles (depth -1). If re-accept declares it conflicted on the strength
-    // of that empty mempool, RelayWalletTransaction() refuses it from then on
-    // and nothing ever rebroadcasts it. Uses the fixture's file-backed wallet
-    // because re-accept writes any state change back through CWalletDB.
+    // An own transaction still tagged in-mempool but absent from the pool is
+    // what an EXPIRY or SIZELIMIT eviction leaves behind (both keep the tag),
+    // and the import/rescan RPCs run ReacceptWalletTransactions() afterwards.
+    // Unconfirmed and not in the mempool is exactly the state
+    // ResendWalletTransactions() handles (depth -1). If re-accept declares it
+    // conflicted on the strength of the empty pool, RelayWalletTransaction()
+    // refuses it from then on and nothing ever rebroadcasts it. The input's
+    // parent is indexed with its output unspent, so the chain-spent guard
+    // evaluates a real slot rather than passing on an empty vin. Uses the
+    // global TestingSetup wallet because re-accept writes any state change
+    // back through CWalletDB.
     CKey key;
     key.MakeNewKey(true);
     {
@@ -1961,7 +1964,24 @@ BOOST_AUTO_TEST_CASE(reaccept_keeps_own_unconfirmed_tx_rebroadcastable)
         BOOST_REQUIRE(pwalletMain->AddKey(key));
     }
 
+    // A fabricated confirmed parent whose only output nobody has spent (a
+    // null vSpent slot); the wtx below spends it.
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(1);
+    parent_mtx.vout[0].nValue = 2 * COIN;
+    parent_mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction parent(parent_mtx);
+    {
+        CTxIndex parent_index(CDiskTxPos(1, 1, 1), 1);
+        CTxDB txdb("r+");
+        BOOST_REQUIRE(txdb.TxnBegin());
+        BOOST_REQUIRE(txdb.UpdateTxIndex(parent.GetHash(), parent_index));
+        BOOST_REQUIRE(txdb.TxnCommit());
+    }
+
     CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(parent.GetHash(), 0);
     mtx.vout.resize(1);
     mtx.vout[0].nValue = 1 * COIN;
     mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
@@ -1987,6 +2007,12 @@ BOOST_AUTO_TEST_CASE(reaccept_keeps_own_unconfirmed_tx_rebroadcastable)
         BOOST_CHECK(wtx.isInMempool());
         pwalletMain->mapWallet.erase(hash);
     }
+    {
+        CTxDB txdb("r+");
+        BOOST_REQUIRE(txdb.TxnBegin());
+        BOOST_REQUIRE(txdb.EraseTxIndex(parent));
+        BOOST_REQUIRE(txdb.TxnCommit());
+    }
 }
 
 BOOST_AUTO_TEST_CASE(reaccept_marks_own_unconfirmed_tx_conflicted_when_input_spent_in_chain)
@@ -2003,19 +2029,23 @@ BOOST_AUTO_TEST_CASE(reaccept_marks_own_unconfirmed_tx_conflicted_when_input_spe
 
     // A fabricated confirmed parent whose only output is already spent by
     // someone else (a non-null vSpent slot); the wtx below spends it too.
-    const uint256 parent_hash = uint256S("41000000000000000000000000000000000000000000000000000000000000c1");
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(1);
+    parent_mtx.vout[0].nValue = 3 * COIN;
+    parent_mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction parent(parent_mtx);
     {
         CTxIndex parent_index(CDiskTxPos(1, 1, 1), 1);
         parent_index.vSpent[0] = CDiskTxPos(2, 2, 2);
         CTxDB txdb("r+");
         BOOST_REQUIRE(txdb.TxnBegin());
-        BOOST_REQUIRE(txdb.UpdateTxIndex(parent_hash, parent_index));
+        BOOST_REQUIRE(txdb.UpdateTxIndex(parent.GetHash(), parent_index));
         BOOST_REQUIRE(txdb.TxnCommit());
     }
 
     CMutableTransaction mtx;
     mtx.vin.resize(1);
-    mtx.vin[0].prevout = COutPoint(parent_hash, 0);
+    mtx.vin[0].prevout = COutPoint(parent.GetHash(), 0);
     mtx.vout.resize(1);
     mtx.vout[0].nValue = 1 * COIN;
     mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
@@ -2039,6 +2069,12 @@ BOOST_AUTO_TEST_CASE(reaccept_marks_own_unconfirmed_tx_conflicted_when_input_spe
         BOOST_CHECK(wtx.isInactive());
         BOOST_CHECK(!pwalletMain->IsAbandoned(hash));
         pwalletMain->mapWallet.erase(hash);
+    }
+    {
+        CTxDB txdb("r+");
+        BOOST_REQUIRE(txdb.TxnBegin());
+        BOOST_REQUIRE(txdb.EraseTxIndex(parent));
+        BOOST_REQUIRE(txdb.TxnCommit());
     }
 }
 
