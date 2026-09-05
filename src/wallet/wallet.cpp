@@ -263,9 +263,25 @@ std::pair<bool, bool> ValidateConfirmedTx(CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIR
     return {false, false};
 }
 
+//! True when one of wtx's inputs is recorded in the tx index as already spent.
+//! The caller has established that wtx itself is not in the index, so the
+//! spender is a different, chain-confirmed transaction: wtx is genuinely
+//! conflicted, not merely absent from the mempool.
+bool HasChainSpentInput(const CWalletTx& wtx, CTxDB& txdb)
+{
+    for (const CTxIn& txin : wtx.vin) {
+        CTxIndex prev;
+        if (!txdb.ReadTxIndex(txin.prevout.hash, prev)) continue;
+        if (txin.prevout.n < prev.vSpent.size() && !prev.vSpent[txin.prevout.n].IsNull()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 //! Validate a mempool tx: verify still in mempool, try to confirm from index if not.
 //! Returns {updated, repeat}.
-std::pair<bool, bool> ValidateMempoolTx(CWalletTx& wtx, const CTxIndex& txindex, bool fTxIndexFound) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+std::pair<bool, bool> ValidateMempoolTx(CWalletTx& wtx, const CTxIndex& txindex, bool fTxIndexFound, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (mempool.exists(wtx.GetHash()))
         return {false, false}; // Still in mempool, nothing to do
@@ -279,11 +295,31 @@ std::pair<bool, bool> ValidateMempoolTx(CWalletTx& wtx, const CTxIndex& txindex,
     }
 
     if (!fTxIndexFound) {
+        // Reached for a transaction still tagged in-mempool that the pool no
+        // longer holds: an EXPIRY or SIZELIMIT eviction keeps the tag, and the
+        // import/rescan RPCs (importprivkey, importwallet, restoreseedphrase)
+        // run this pass afterwards. A restarted wallet's own transactions do
+        // not come here: the in-mempool tag does not survive the wallet.dat
+        // round trip, so they reload as unrecognized and take
+        // ResolveUnrecognizedTx instead. Not in the mempool and not in the
+        // chain is depth -1, the state ResendWalletTransactions() exists to
+        // rebroadcast. Only an input that another confirmed transaction has
+        // already spent makes it conflicted; RelayWalletTransaction() refuses
+        // inactive transactions, so marking it inactive here would end its
+        // rebroadcast for good.
+        if (HasChainSpentInput(wtx, txdb)) {
+            LogPrint(BCLog::LogFlags::VERBOSE,
+                    "ReacceptWalletTransactions: tx %s not in mempool or chain and an input is "
+                    "spent by a confirmed transaction, marking inactive\n",
+                    wtx.GetHash().ToString());
+            wtx.SetTxState(TxStateInactive{false});
+            return {true, false};
+        }
         LogPrint(BCLog::LogFlags::VERBOSE,
-                "ReacceptWalletTransactions: tx %s not in mempool or chain, marking inactive\n",
+                "ReacceptWalletTransactions: tx %s not in mempool or chain, left unconfirmed "
+                "for rebroadcast\n",
                 wtx.GetHash().ToString());
-        wtx.SetTxState(TxStateInactive{false});
-        return {true, false};
+        return {false, false};
     }
 
     return {false, false};
@@ -2438,7 +2474,7 @@ void CWallet::ReacceptWalletTransactions()
                 fRepeat |= repeat;
             }
             else if (wtx.isInMempool()) {
-                auto [updated, repeat] = ValidateMempoolTx(wtx, txindex, fTxIndexFound);
+                auto [updated, repeat] = ValidateMempoolTx(wtx, txindex, fTxIndexFound, txdb);
                 fUpdated |= updated;
                 fRepeat |= repeat;
             }
