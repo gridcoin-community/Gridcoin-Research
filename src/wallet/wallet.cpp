@@ -1496,7 +1496,7 @@ void CWallet::TransactionRemovedFromMempool(const CTransactionRef& tx,
             // status in WalletTxStore and is not re-derived on its own.
             LogPrint(BCLog::LogFlags::VERBOSE,
                     "CWallet::TransactionRemovedFromMempool: tx %s evicted (reason: %d), "
-                    "not marking conflicted - left for rebroadcast\n",
+                    "not marking conflicted; in-mempool state kept",
                     hash.ToString(), static_cast<int>(reason));
             NotifyTransactionChanged(this, hash, CT_UPDATED);
             break;
