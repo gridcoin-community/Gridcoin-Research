@@ -159,6 +159,9 @@ class BeaconActivationTest(GridcoinTestFramework):
             -8, "must be a hex string",
             node.generatesuperblock, {CPID: 100}, ["regtest"], [12345])
         assert_raises_rpc_error(
+            -8, "must be an array",
+            node.generatesuperblock, {CPID: 100}, ["regtest"], "notanarray")
+        assert_raises_rpc_error(
             -8, "invalid beacon public key",
             node.generatesuperblock, {CPID: 100}, ["regtest"], ["nothex"])
 
