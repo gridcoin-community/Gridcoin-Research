@@ -24,6 +24,11 @@
 #       | sudo systemd-creds encrypt --name=wallet-passphrase --tpm2-pcrs="" \
 #             - /etc/gridcoin/wallet-passphrase.cred
 #
+#   (on a host with sudo I/O logging, the same from a root login shell, no sudo:
+#       systemd-ask-password 'Wallet passphrase:' \
+#           | systemd-creds encrypt --name=wallet-passphrase --tpm2-pcrs="" \
+#                 - /etc/gridcoin/wallet-passphrase.cred)
+#
 #   (or, without systemd-ask-password:
 #       read -rs -p 'Wallet passphrase: ' pw && printf '%s' "$pw" \
 #           | sudo systemd-creds encrypt --name=wallet-passphrase --tpm2-pcrs="" \

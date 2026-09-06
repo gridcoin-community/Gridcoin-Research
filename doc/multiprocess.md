@@ -443,8 +443,10 @@ Set it up once, then enable:
 # Let the terminal prompt for it -- never put it in the command line, where it
 # would land in ~/.bash_history (and, unless printf is a shell builtin, in
 # process listings). sudo I/O logging with log_input captures the command's
-# stdin too; on such a host run the same pipeline without sudo from a root
-# login shell (e.g. after `su -`).
+# stdin too; on such a host run this from a root login shell (e.g. after
+# `su -`) and drop the `sudo`:
+#   systemd-ask-password 'Wallet passphrase:' | systemd-creds encrypt \
+#       --name=wallet-passphrase --tpm2-pcrs="" - /etc/gridcoin/wallet-passphrase.cred
 systemd-ask-password 'Wallet passphrase:' | sudo systemd-creds encrypt \
     --name=wallet-passphrase --tpm2-pcrs="" - /etc/gridcoin/wallet-passphrase.cred
 sudo chown gridcoin:gridcoin /etc/gridcoin/wallet-passphrase.cred
