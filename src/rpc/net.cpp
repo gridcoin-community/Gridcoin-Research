@@ -306,6 +306,56 @@ static const RPCHelpMan setban_help{
 };
 const RPCHelpMan& setban_helpman() { return setban_help; }
 
+static const RPCHelpMan disconnectnode_help{
+    "disconnectnode",
+    "Immediately disconnects from the specified peer node.\n"
+    "Strictly one out of 'address' and 'nodeid' can be provided to identify the node.\n"
+    "To disconnect by nodeid, set 'address' to the empty string.",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "The IP address/port of the node, as shown in getpeerinfo's \"addr\" field. "
+            "Pass \"\" to select the node by nodeid instead."},
+        {"nodeid", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "The node ID (see getpeerinfo for node IDs)."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("disconnectnode", "\"192.168.0.6:32749\"") +
+        HelpExampleCli("disconnectnode", "\"\" 1") +
+        HelpExampleRpc("disconnectnode", "\"192.168.0.6:32749\"") +
+        HelpExampleRpc("disconnectnode", "\"\", 1")},
+};
+const RPCHelpMan& disconnectnode_helpman() { return disconnectnode_help; }
+
+UniValue disconnectnode(const UniValue& params)
+{
+    if (!g_connman) {
+        throw JSONRPCError(RPC_CLIENT_P2P_DISABLED, "Error: Peer-to-peer functionality missing or disabled");
+    }
+
+    const UniValue& address_arg = params[0];
+    const UniValue& id_arg = params[1];
+    bool success = false;
+    // Branch conditions copied from upstream verbatim so the error surface
+    // stays backport-safe: a non-null address with no id takes the address
+    // branch even when empty (DisconnectNode("") finds nothing and reports
+    // not-connected), and an empty address with an id is the positional-CLI
+    // spelling of disconnect-by-id.
+    if (!address_arg.isNull() && id_arg.isNull()) {
+        success = g_connman->DisconnectNode(address_arg.get_str());
+    } else if (!id_arg.isNull() && (address_arg.isNull() || address_arg.get_str().empty())) {
+        success = g_connman->DisconnectNode(static_cast<NodeId>(id_arg.get_int64()));
+    } else {
+        throw JSONRPCError(RPC_INVALID_PARAMS, "Only one of address and nodeid should be provided.");
+    }
+
+    if (!success) {
+        throw JSONRPCError(RPC_CLIENT_NODE_NOT_CONNECTED, "Node not found in connected nodes");
+    }
+
+    return NullUniValue;
+}
+
 UniValue setban(const UniValue& params)
 {
     const std::string strCommand = params[1].get_str();
