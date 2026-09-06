@@ -28,6 +28,8 @@
 
 #include <univalue.h>
 
+#include <type_traits>
+
 namespace {
 //! Build a v2 transaction carrying the supplied contracts (if any).
 CTransaction MakeTx(const std::vector<GRC::Contract>& contracts = {},
@@ -152,7 +154,10 @@ BOOST_AUTO_TEST_CASE(addunchecked_preserves_mapnexttx_and_lookup)
     CTxMemPoolEntry entry(tx, 0, 0, 0, ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION));
     BOOST_CHECK(pool.addUnchecked(hash, entry));
 
-    // mapNextTx points back at the stored transaction.
+    // mapNextTx points back at the stored transaction, through a pointer that
+    // cannot be used to mutate it (the entry's cached metadata depends on that).
+    static_assert(std::is_same_v<decltype(CInPoint::ptx), const CTransaction*>,
+                  "CInPoint::ptx must not grant mutable access to a pooled transaction");
     auto it = pool.mapNextTx.find(vin.prevout);
     BOOST_REQUIRE(it != pool.mapNextTx.end());
     BOOST_REQUIRE(it->second.ptx != nullptr);

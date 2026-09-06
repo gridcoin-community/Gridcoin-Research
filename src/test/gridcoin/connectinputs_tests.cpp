@@ -283,7 +283,7 @@ BOOST_AUTO_TEST_CASE(a_consensus_script_failure_scores_the_relayer)
     // NO DoS score, which would make the control below pass for the wrong reason.
     spender.vout[0].nValue = COIN / 2;
 
-    CTransaction tx(spender);   // ConnectInputs takes a non-const reference
+    const CTransaction tx(spender);
     CTxDB txdb("r");
 
     // Control: v15 inert. CLEANSTACK is not in the flag set, the top of the stack

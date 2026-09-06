@@ -304,7 +304,7 @@ bool HasMasterKeyInput(const CTransaction& tx, const MapPrevTx& inputs, int bloc
     return false;
 }
 
-bool DisconnectInputs(CTransaction& tx, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool DisconnectInputs(const CTransaction& tx, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Relinquish previous transactions' spent pointers
     if (!tx.IsCoinBase())
@@ -339,7 +339,7 @@ bool DisconnectInputs(CTransaction& tx, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs
 }
 
 
-bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const std::map<uint256, CTxIndex>& mapTestPool,
+bool FetchInputs(const CTransaction& tx, CValidationState& state, CTxDB& txdb, const std::map<uint256, CTxIndex>& mapTestPool,
                  bool fBlock, bool fMiner, MapPrevTx& inputsRet, bool& fInvalid)
 {
     // FetchInputs can return false either because we just haven't seen some inputs
@@ -415,7 +415,7 @@ bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const s
 
 std::atomic<uint64_t> g_connectinputs_signature_checks{0};
 
-bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx,
+bool ConnectInputs(const CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx,
     const CBlockIndex* pindexBlock, bool fBlock, bool fMiner)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
@@ -2207,7 +2207,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     }
 
     // Check for conflicts with in-memory transactions
-    CTransaction* ptxOld = nullptr;
+    const CTransaction* ptxOld = nullptr;
     {
         LOCK(pool.cs); // protect pool.mapNextTx
         for (unsigned int i = 0; i < tx.vin.size(); i++)

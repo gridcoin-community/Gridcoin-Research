@@ -109,7 +109,7 @@ const CTxOut& GetOutputFor(const CTxIn& input, const MapPrevTx& inputs);
 */
 CAmount GetValueIn(const CTransaction& tx, const MapPrevTx& inputs);
 
-bool DisconnectInputs(CTransaction& tx, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool DisconnectInputs(const CTransaction& tx, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 /** Fetch from memory and/or disk. inputsRet keys are transaction hashes.
     @param[in] tx The transaction to fetch inputs for
@@ -127,7 +127,7 @@ bool DisconnectInputs(CTransaction& tx, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs
 // nBestHeight. Block-processing callers (ConnectInputs / CreateNewBlock)
 // hold cs_main for other reasons, but FetchInputs itself is callable
 // from RPC paths (signrawtransaction*) without cs_main.
-bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const std::map<uint256, CTxIndex>& mapTestPool, bool fBlock, bool fMiner, MapPrevTx& inputsRet, bool& fInvalid);
+bool FetchInputs(const CTransaction& tx, CValidationState& state, CTxDB& txdb, const std::map<uint256, CTxIndex>& mapTestPool, bool fBlock, bool fMiner, MapPrevTx& inputsRet, bool& fInvalid);
 
 /** Sanity check previous transactions, then, if all checks succeed,
     mark them as spent by tx.
@@ -150,7 +150,7 @@ bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const s
 //! either way -- only the cost differs.
 extern std::atomic<uint64_t> g_connectinputs_signature_checks;
 
-bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx, const CBlockIndex* pindexBlock, bool fBlock, bool fMiner) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool ConnectInputs(const CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx, const CBlockIndex* pindexBlock, bool fBlock, bool fMiner) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge) EXCLUSIVE_LOCKS_REQUIRED(cs_main); // ppcoin: get transaction coin age
 
