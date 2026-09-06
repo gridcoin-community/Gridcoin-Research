@@ -209,7 +209,7 @@ handshake (`ipc/handshake.h`):
 
 ```cpp
 constexpr uint32_t IPC_SCHEMA_MAJOR   = 3;
-constexpr uint32_t IPC_SCHEMA_MINOR   = 0;
+constexpr uint32_t IPC_SCHEMA_MINOR   = 1;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 ```
 
@@ -229,7 +229,11 @@ Rules a client must honor (from `ClientHandshake` and design §4.2):
 - **`schema_minor`** — additive schema changes. Asymmetric:
   *client minor > node minor* is a **hard fail** ("update the node"); *client
   minor < node minor* is a **soft, forward-compatible** finding (the node has
-  features the client does not use).
+  features the client does not use). **Minor 1** (under major 3) adds
+  `PSGTPoolRow.txHashHex`, the unsigned-transaction hash the GUI's
+  signature-request toast damp keys on; an older node would send it empty and
+  the damp would silence every request after the first, which the minor turns
+  into the "update the node" hard fail.
 - **`protocol_version`** — the transport/handshake shape. Must match exactly.
 - **`git_commit`** / **`built_at`** — not compatibility gates; a `git_commit`
   mismatch is a soft mixed-build warning, `built_at` is informational.
@@ -388,7 +392,11 @@ type. Pool: `entries`, `signPoolEntry`, `removePoolEntry`, `poolStatus`,
 `submitPSGTToPool`, `finalizeToRawTxHex`, `decodePSGT`, `walletHasSignature`,
 `walletMustSignRevision`. Rich result DTOs (`PSGTDescription`, `PSGTSignResult`,
 `PSGTSubmitResult`, …) plus the several status enums mirror the core results.
-Pool *change* notifications arrive via `Node::handlePSGTPoolChanged`.
+A `PSGTPoolRow` carries three identities: `image_hex` (the arrangement's
+redeem-script id, the pool key), `revision_hex` (the relayed bytes, matched
+against the change signal) and `tx_hash_hex` (the unsigned transaction, i.e. the
+pending spend -- shared by every signature revision, changed by an initiator
+supersede). Pool *change* notifications arrive via `Node::handlePSGTPoolChanged`.
 
 ### 4.9 SideStakeManager — `src/interfaces/sidestake.h` (no capnp schema)
 

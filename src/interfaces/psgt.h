@@ -108,6 +108,9 @@ struct PSGTPoolRow
     std::string image_hex;     //!< The pool key / command id (CScriptID::ToString(), raw Hash160).
     std::string image_address; //!< The arrangement's P2SH address (EncodeDestination), for the Image column.
     std::string revision_hex;  //!< The revision hash (matched against the removal signal).
+    std::string tx_hash_hex;   //!< Hash of the unsigned transaction: the pending spend's identity.
+                               //!< Every signature revision of a spend shares it; an initiator
+                               //!< supersede (PSGTPool::Add, same image, different tx) changes it.
     std::string destination;   //!< Largest-non-change-output address, precomputed.
     CAmount amount = 0;
     int valid_sigs = 0;

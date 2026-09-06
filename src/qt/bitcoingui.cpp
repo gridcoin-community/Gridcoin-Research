@@ -1756,26 +1756,65 @@ void BitcoinGUI::gotoPSGTPoolPage()
     disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
 }
 
+std::vector<PSGTToastDamp::Entry> BitcoinGUI::currentPSGTPoolEntries() const
+{
+    std::vector<PSGTToastDamp::Entry> pool;
+
+    for (const auto& row : m_psgt_pool_context->entries()) {
+        pool.push_back({row.revision_hex, row.tx_hash_hex});
+    }
+
+    return pool;
+}
+
 void BitcoinGUI::handlePSGTPoolChanged(QString revision_hash, quint8 change_type, int reason)
 {
-    // The toast fires only on add/update, so the removal reason is unused here;
-    // the table model consumes it (to label the history row).
+    // The removal reason is unused here; the table model consumes it (to label
+    // the history row).
     Q_UNUSED(reason);
 
-    // Toast only for an entry that newly needs THIS wallet's signature.
-    if (change_type == CT_DELETED || !clientModel || !m_psgt_pool_context) {
+    if (!clientModel || !m_psgt_pool_context) {
         return;
     }
 
-    const bool needs_me = m_psgt_pool_context->walletMustSignRevision(revision_hash.toStdString());
+    const std::string revision_hex = revision_hash.toStdString();
 
-    if (needs_me && notificator) {
-        notificator->notify(
-            Notificator::Information,
-            tr("Multisig signature requested"),
-            tr("A multisig transaction is waiting for your signature. Open the "
-               "PSGT pool to review and sign it."));
+    // A removal is the only point at which the pool shrinks. Forget the spends
+    // that left with it. Every GUI wallet sees every network PSGT leave the
+    // pool, so skip the pool fetch when there is nothing remembered.
+    if (change_type == CT_DELETED) {
+        if (m_psgt_toast_damp.AnnouncedCount() > 0) {
+            m_psgt_toast_damp.Prune(currentPSGTPoolEntries());
+        }
+        return;
     }
+
+    // Toast only for an entry that needs THIS wallet's signature.
+    if (!m_psgt_pool_context->walletMustSignRevision(revision_hex) || !notificator) {
+        return;
+    }
+
+    // Every co-signer's revision fires this handler, and walletMustSignRevision
+    // answers true for all of them until this wallet signs, so the predicate
+    // alone would announce the same request once per co-signer ahead of this
+    // wallet (at most m-1 times for an m-of-n; never twice for a 2-of-3). The
+    // damp keys on the unsigned transaction, so an initiator superseding the
+    // pending spend with a different transaction (delivered as an update under
+    // the same image) is announced as the new request it is. CT_NEW means the
+    // pool's image slot was empty when this revision arrived, i.e. a new
+    // request by the pool's own definition: it is announced regardless of what
+    // the damp remembers, so the decision does not depend on the order in
+    // which a removal and a resubmission reach this thread.
+    if (!m_psgt_toast_damp.ShouldToastRevision(currentPSGTPoolEntries(), revision_hex,
+                                               /*first_revision=*/change_type == CT_NEW)) {
+        return;
+    }
+
+    notificator->notify(
+        Notificator::Information,
+        tr("Multisig signature requested"),
+        tr("A multisig transaction is waiting for your signature. Open the "
+           "PSGT pool to review and sign it."));
 }
 
 void BitcoinGUI::dragEnterEvent(QDragEnterEvent *event)
