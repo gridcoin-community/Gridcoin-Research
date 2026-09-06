@@ -578,7 +578,9 @@ BOOST_AUTO_TEST_CASE(active_pools_by_operator_keeps_the_lowest_name_of_each_grou
                                }));
 }
 
-BOOST_AUTO_TEST_CASE(active_pools_by_operator_applies_its_rules_beyond_the_seed_family)
+// PoolLifecycleFixture leaves the shared registry booted-clean before and after:
+// this case mutates it, so it must not depend on, or leak into, its neighbours.
+BOOST_FIXTURE_TEST_CASE(active_pools_by_operator_applies_its_rules_beyond_the_seed_family, PoolLifecycleFixture)
 {
     GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
 
@@ -637,9 +639,6 @@ BOOST_AUTO_TEST_CASE(active_pools_by_operator_applies_its_rules_beyond_the_seed_
         BOOST_CHECK(row.m_name != "000-grcpool");
         BOOST_CHECK(row.m_name != "blank");
     }
-
-    // Restore the seeded boot state for the cases that follow.
-    registry.ClearForTests();
 }
 
 BOOST_AUTO_TEST_CASE(builtin_pools_match_g_mining_pools_pre_v15)

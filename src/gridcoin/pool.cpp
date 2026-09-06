@@ -414,19 +414,26 @@ std::vector<Pool> PoolRegistry::ActivePoolsByOperator() const
         return std::tie(lhs.m_name, lhs.m_url) < std::tie(rhs.m_name, rhs.m_url);
     });
 
-    std::set<std::string> seen_urls;
-
+    // One explicit pass over the sorted list: keep the first entry seen for
+    // each URL, which the sort above made the lowest-named one.
+    //
     // An ACTIVE entry with no URL has nothing a researcher can join. It is
     // reachable: an operator's POOL_REGISTER REMOVE may carry an empty URL,
     // and a later Foundation POOL_APPROVE ADD flips that entry back to ACTIVE
     // as it stands. Drop it rather than render a blank row (and collapse every
     // such entry into one).
-    out.erase(std::remove_if(out.begin(), out.end(), [&seen_urls](const Pool& pool) {
-                  return pool.m_url.empty() || !seen_urls.insert(pool.m_url).second;
-              }),
-              out.end());
+    std::vector<Pool> result;
+    std::set<std::string> seen_urls;
 
-    return out;
+    for (Pool& pool : out) {
+        if (pool.m_url.empty() || !seen_urls.insert(pool.m_url).second) {
+            continue;
+        }
+
+        result.push_back(std::move(pool));
+    }
+
+    return result;
 }
 
 std::vector<Pool> PoolRegistry::ActivePoolsAtHeight(int height) const

@@ -108,7 +108,17 @@ void ResearcherWizardPoolPage::openLink(int row, int column) const
         return;
     }
 
-    QDesktopServices::openUrl(QUrl(item->text()));
+    // The cell text is on-chain registry data now, not a string from the .ui:
+    // an operator registers the URL and the Foundation approves it. Hand the
+    // desktop only a well-formed web address; anything else (a bare host, a
+    // file: or custom scheme) is not something this page should launch.
+    const QUrl url(item->text());
+
+    if (!url.isValid() || (url.scheme() != QStringLiteral("http") && url.scheme() != QStringLiteral("https"))) {
+        return;
+    }
+
+    QDesktopServices::openUrl(url);
 }
 
 void ResearcherWizardPoolPage::getNewAddress()
