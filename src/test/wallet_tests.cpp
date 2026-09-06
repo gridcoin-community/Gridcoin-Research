@@ -2079,8 +2079,11 @@ BOOST_AUTO_TEST_CASE(reaccept_keeps_own_unconfirmed_tx_rebroadcastable)
         BOOST_CHECK_MESSAGE(!wtx.isInactive(),
             "re-accept marked an own unconfirmed tx conflicted against an empty mempool");
         BOOST_CHECK(wtx.isInMempool());
-        pwalletMain->mapWallet.erase(hash);
     }
+    // Drop the entry from mapWallet and from the wallet DB in one call:
+    // re-accept writes a state change through CWalletDB, so erasing the map
+    // alone would leave the record on disk for whatever loads it next.
+    BOOST_REQUIRE(pwalletMain->EraseFromWallet(hash));
     {
         CTxDB txdb("r+");
         BOOST_REQUIRE(txdb.TxnBegin());
@@ -2142,8 +2145,11 @@ BOOST_AUTO_TEST_CASE(reaccept_marks_own_unconfirmed_tx_conflicted_when_input_spe
         const CWalletTx& wtx = pwalletMain->mapWallet[hash];
         BOOST_CHECK(wtx.isInactive());
         BOOST_CHECK(!pwalletMain->IsAbandoned(hash));
-        pwalletMain->mapWallet.erase(hash);
     }
+    // Drop the entry from mapWallet and from the wallet DB in one call:
+    // re-accept writes a state change through CWalletDB, so erasing the map
+    // alone would leave the record on disk for whatever loads it next.
+    BOOST_REQUIRE(pwalletMain->EraseFromWallet(hash));
     {
         CTxDB txdb("r+");
         BOOST_REQUIRE(txdb.TxnBegin());
