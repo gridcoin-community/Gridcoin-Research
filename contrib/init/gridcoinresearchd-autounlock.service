@@ -16,7 +16,9 @@
 # NEVER type the passphrase as a literal on the command line: even with a shell
 # builtin (which keeps it out of `ps`), the whole command line lands in
 # ~/.bash_history -- and in sudo's I/O log if log_input is enabled. Have the
-# terminal prompt for it instead, so it is never part of any command:
+# terminal prompt for it instead, so it is never part of any command (sudo's
+# log_input captures stdin as well: on such a host run this from a root login
+# shell rather than through sudo):
 #
 #   systemd-ask-password 'Wallet passphrase:' \
 #       | sudo systemd-creds encrypt --name=wallet-passphrase --tpm2-pcrs="" \
@@ -35,7 +37,8 @@
 # firmware update, or Secure Boot toggle then changes PCR 7 and the TPM refuses
 # to unseal the credential ever again; the unit fails at credential setup with
 # exit 243/CREDENTIALS and the wallet silently stops staking after the next
-# restart. Binding to the host key and the TPM without a PCR policy keeps the
+# restart. Binding to the host key (and the TPM when present -- the default key
+# selection handles both kinds of host) without a PCR policy keeps the
 # protection that matters here -- only PID 1 on THIS machine can decrypt it --
 # while surviving ordinary firmware maintenance. A credential that has already
 # been sealed with the default cannot be recovered; re-encrypt the passphrase

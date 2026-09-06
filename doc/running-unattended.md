@@ -56,14 +56,17 @@ sudo systemctl enable --now gridcoinresearchd-autounlock.service
 > *restore factory keys*, dbx update (fwupd ships those routinely), firmware update, or Secure
 > Boot toggle then changes PCR 7 and the TPM refuses to unseal the credential for good: the unit
 > fails with `status=243/CREDENTIALS` and the wallet silently stops staking after the next
-> restart. Binding to the host key and the TPM without a PCR policy keeps the protection that
-> matters (only this machine can decrypt it) and survives ordinary firmware maintenance. A
-> credential already sealed with the default cannot be recovered — re-run the command above.
+> restart. Binding to the host key (and the TPM when one is present — the default key selection
+> handles both kinds of host) without a PCR policy keeps the protection that matters (only this
+> machine can decrypt it) and survives ordinary firmware maintenance. A credential already
+> sealed with the default cannot be recovered — re-run the command above.
 
 > **Never put the passphrase in the command itself** (`printf '%s' 'MY-PASSPHRASE' | …`). Even though a shell
 > builtin keeps it out of `ps`, the whole command line is written to `~/.bash_history`, and to sudo's I/O log if
-> `log_input` is enabled. `systemd-ask-password` prompts for it, so it is never part of any command. Without
-> `systemd-ask-password`, use a shell prompt instead:
+> `log_input` is enabled. `systemd-ask-password` prompts for it, so it is never part of any command — though
+> note sudo's `log_input` also captures the command's stdin, so on a host with sudo I/O logging run the
+> encryption from a root login shell rather than through sudo. Without `systemd-ask-password`, use a shell
+> prompt instead:
 > `read -rs -p 'Wallet passphrase: ' pw && printf '%s' "$pw" | sudo systemd-creds encrypt …; unset pw`.
 
 The autounlock unit runs whenever the core starts (boot, restart, upgrade), unlocks **stake-only**, and exits.

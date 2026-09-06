@@ -440,8 +440,10 @@ Set it up once, then enable:
 
 ```bash
 # Encrypt the wallet passphrase, bound to this host (and its TPM, if present).
-# Let the terminal prompt for it -- never put it in the command line (it would
-# land in ~/.bash_history and sudo's I/O log):
+# Let the terminal prompt for it -- never put it in the command line, where it
+# would land in ~/.bash_history and in `ps`. (sudo I/O logging with log_input
+# captures the command's stdin too; on such a host run this from a root login
+# shell rather than through sudo.)
 systemd-ask-password 'Wallet passphrase:' | sudo systemd-creds encrypt \
     --name=wallet-passphrase --tpm2-pcrs="" - /etc/gridcoin/wallet-passphrase.cred
 sudo chown gridcoin:gridcoin /etc/gridcoin/wallet-passphrase.cred
@@ -454,8 +456,10 @@ sudo systemctl enable --now gridcoinresearchd-autounlock.service
 seals the credential to PCR 7, which measures the Secure Boot keys and dbx, and any
 BIOS key reset, dbx or firmware update, or Secure Boot toggle then makes the
 credential permanently undecryptable (the unit fails with `status=243/CREDENTIALS`).
-Host-plus-TPM binding without a PCR policy keeps the protection that matters — only
-this machine can decrypt it — and survives ordinary firmware maintenance.
+Binding to the host key (and the TPM, when one is present — the default key
+selection picks that automatically, so the same command serves both kinds of host)
+without a PCR policy keeps the protection that matters — only this machine can
+decrypt it — and survives ordinary firmware maintenance.
 
 `systemctl enable` links the unit into `gridcoinresearchd.service.wants/`, so it runs
 whenever the core starts (boot, restart, deploy) without modifying the core unit;
