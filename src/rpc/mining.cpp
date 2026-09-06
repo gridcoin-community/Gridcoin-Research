@@ -1200,6 +1200,17 @@ static const RPCHelpMan generatesuperblock_help{
             {
                 {"name", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Project name."},
             }},
+        {"verified_beacons", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "Beacon public keys, hex, to record as verified by this superblock.\n"
+            "Committing the superblock activates the pending beacon for each one\n"
+            "(BeaconRegistry::ActivatePending). Off-chain scraper convergence is\n"
+            "what supplies this list on mainnet; regtest has no scrapers, so the\n"
+            "caller names them. A key with no matching pending beacon is ignored,\n"
+            "which is the same thing ActivatePending does with it.",
+            {
+                {"public_key", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
+                    "Beacon public key, as reported by beaconstatus or advertisebeacon."},
+            }},
     },
     RPCResult{RPCResult::Type::ARR, "", "Hashes of the blocks generated",
         {{RPCResult::Type::STR_HEX, "", "Block hash."}}},
@@ -1268,6 +1279,40 @@ UniValue generatesuperblock(const UniValue& params)
         }
     } else {
         superblock.m_projects.Add("regtest", stats);
+    }
+
+    if (params.size() > 2 && !params[2].isNull()) {
+        if (!params[2].isArray()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               "verified_beacons must be an array of hex strings");
+        }
+
+        for (const UniValue& key : params[2].get_array().getValues()) {
+            if (!key.isStr()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                                   "beacon public key must be a hex string");
+            }
+
+            const std::string public_key_hex = key.get_str();
+
+            if (!IsHex(public_key_hex)) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                                   strprintf("invalid beacon public key: %s", public_key_hex));
+            }
+
+            const std::vector<uint8_t> public_key_bytes = ParseHex(public_key_hex);
+            const CPubKey public_key(public_key_bytes);
+
+            if (!public_key.IsValid()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                                   strprintf("invalid beacon public key: %s", public_key_hex));
+            }
+
+            // ActivatePending matches against BeaconRegistry::m_pending, which is
+            // keyed by Beacon::GetId() -- the Hash160 (RIPEMD-160 of SHA-256) of the
+            // beacon public key.
+            superblock.m_verified_beacons.m_verified.push_back(public_key.GetID());
+        }
     }
 
     if (!superblock.WellFormed()) {
