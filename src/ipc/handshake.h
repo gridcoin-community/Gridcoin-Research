@@ -46,8 +46,16 @@ namespace ipc {
 //! Additive, and the same silent-degradation shape: an old node sends the field
 //! empty, every row collapses onto one key, and the damp then silences every
 //! signature request after the first.
+//!
+//! Minor 2 (under major 3): ResearcherContext gained `activePools @19`
+//! (researcher.capnp), the registry-driven pool list behind the researcher
+//! wizard's pool page. Additive, so an old node still talks to a new GUI -- until
+//! that page opens and calls a method the node does not serve: the UNIMPLEMENTED
+//! reply is rethrown client-side as std::runtime_error out of initializePage(),
+//! which the GUI can only treat as a runaway exception. The minor turns that
+//! into the "Update the node" hard fail at connect.
 constexpr uint32_t IPC_SCHEMA_MAJOR = 3;
-constexpr uint32_t IPC_SCHEMA_MINOR = 1;
+constexpr uint32_t IPC_SCHEMA_MINOR = 2;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 
 //! Domain-separation tag hashed into the node identity token. Bump the suffix if
