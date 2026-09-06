@@ -13,11 +13,12 @@ class PSGTToastDampTests : public QObject
     Q_OBJECT
 
 private slots:
-    void oneArrangementAnnouncesOnceAcrossItsRevisions();
-    void separateArrangementsEachAnnounce();
+    void oneSpendAnnouncesOnceAcrossItsRevisions();
+    void separateSpendsEachAnnounce();
     void anUnknownRevisionIsAnnouncedNotSwallowed();
     void removalForgetsOnlyTheEntriesThatLeft();
-    void aResubmittedArrangementAnnouncesAgain();
+    void aResubmittedSpendAnnouncesAgain();
+    void aSupersedeUnderTheSameImageAnnouncesAgain();
 };
 
 #endif // GRIDCOIN_QT_TEST_PSGTTOASTDAMPTESTS_H

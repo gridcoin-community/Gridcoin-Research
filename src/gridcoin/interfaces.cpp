@@ -1612,6 +1612,7 @@ public:
             row.image_hex = entry.image.ToString();
             row.image_address = EncodeDestination(CTxDestination(entry.image));
             row.revision_hex = entry.revision_hash.GetHex();
+            row.tx_hash_hex = entry.tx_hash.GetHex();
             row.valid_sigs = entry.valid_sigs;
             row.sigs_required = entry.sigs_required;
             row.sigs_total = entry.sigs_total;

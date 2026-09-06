@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <iterator>
 #include <set>
 #include <string>
 #include <vector>
@@ -15,12 +16,20 @@
 //! \brief Decides whether a PSGT pool change should raise a "needs your
 //! signature" toast.
 //!
-//! One multisig arrangement collects a revision per co-signer, and each of them
-//! fires the pool-changed notification. walletMustSignRevision only stops the
-//! toast once this wallet has signed, so up to that point the same request is
-//! announced once per co-signer who signs ahead of it. Keying on the
-//! arrangement instead of the revision announces it once: the revisions of one
-//! arrangement share a pool image, which is what identifies the arrangement.
+//! One pending spend collects a revision per co-signer, and each of them fires
+//! the pool-changed notification. walletMustSignRevision only stops the toast
+//! once this wallet has signed, so up to that point the same request is
+//! announced once per co-signer who signs ahead of it. Keying on the spend
+//! instead of the revision announces it once.
+//!
+//! The spend is identified by the hash of its UNSIGNED transaction
+//! (PSGTPoolRow::tx_hash_hex), not by the pool image. The image is the
+//! arrangement's redeem-script id, and the pool lets an initiator supersede a
+//! pending spend with a DIFFERENT transaction under the same image
+//! (PSGTPool::Add, "same image, different unsigned tx"), delivered as the same
+//! UPDATED change as signature progress. That is a new request and must be
+//! announced, so the image would be the wrong key. Every signature revision of
+//! one spend shares its unsigned-transaction hash; a supersede changes it.
 //!
 //! Session-scoped and deliberately not persisted. The behaviour being damped is
 //! repetition within one sitting; a restart re-announcing a request the wallet
@@ -33,27 +42,31 @@ public:
     struct Entry
     {
         std::string revision_hex; //!< The revision the notification names.
-        std::string image_hex;    //!< The arrangement the revision belongs to.
+        std::string tx_hash_hex;  //!< The unsigned transaction: the spend the revision belongs to.
     };
 
     //!
     //! \brief Whether a pool change naming \p revision_hex should be announced.
     //!
-    //! Records the arrangement when it answers true, so the co-signer revisions
-    //! that follow are silent.
+    //! Forgets spends that are no longer in \p pool first, so a spend that was
+    //! superseded or removed and is later submitted again counts as the new
+    //! request it is. Then records the named revision's spend when it answers
+    //! true, so the co-signer revisions that follow are silent.
     //!
-    //! \param pool The pool as it stands, used to resolve the arrangement.
+    //! \param pool The pool as it stands, used to resolve the spend.
     //! \param revision_hex The revision the notification named.
     //!
-    //! \return \c true for the first revision of an arrangement. A revision
-    //! that does not resolve to an arrangement is announced rather than
-    //! swallowed on the strength of a lookup that failed. The caller gates on
+    //! \return \c true for the first revision of a spend. A revision that does
+    //! not resolve to a spend is announced rather than swallowed on the
+    //! strength of a lookup that failed. The caller gates on
     //! walletMustSignRevision first, and that already answers false for a
     //! revision the pool has dropped, so what reaches this is the narrow race
     //! between those two calls.
     //!
     bool ShouldToastRevision(const std::vector<Entry>& pool, const std::string& revision_hex)
     {
+        Prune(pool);
+
         const auto entry = std::find_if(pool.begin(), pool.end(), [&revision_hex](const Entry& candidate) {
             return candidate.revision_hex == revision_hex;
         });
@@ -62,24 +75,25 @@ public:
             return true;
         }
 
-        return m_announced.insert(entry->image_hex).second;
+        return m_announced.insert(entry->tx_hash_hex).second;
     }
 
     //!
-    //! \brief Forgets arrangements that are no longer in the pool.
+    //! \brief Forgets spends that are no longer in the pool.
     //!
-    //! An arrangement that leaves the pool and is later submitted again is a
-    //! new request, and is announced again. Called on removal, the only point
-    //! at which the pool shrinks.
+    //! A spend that leaves the pool -- removed, expired, completed, evicted by a
+    //! conflict, or superseded by a different transaction -- and is later
+    //! submitted again is a new request, and is announced again. Called on
+    //! removal, and by ShouldToastRevision before every decision.
     //!
-    //! \param pool The pool as it stands after the removal.
+    //! \param pool The pool as it stands.
     //!
     void Prune(const std::vector<Entry>& pool)
     {
         std::set<std::string> live;
 
         for (const Entry& entry : pool) {
-            live.insert(entry.image_hex);
+            live.insert(entry.tx_hash_hex);
         }
 
         for (auto it = m_announced.begin(); it != m_announced.end();) {
@@ -87,7 +101,7 @@ public:
         }
     }
 
-    //! \brief How many arrangements are currently remembered. For tests.
+    //! \brief How many spends are currently remembered. For tests.
     std::size_t AnnouncedCount() const { return m_announced.size(); }
 
 private:

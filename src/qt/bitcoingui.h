@@ -141,11 +141,11 @@ private:
     ClientModel *clientModel;
     WalletModel *walletModel;
     interfaces::PSGTPoolContext *m_psgt_pool_context = nullptr;
-    //! Keeps one multisig arrangement from toasting once per co-signer's
+    //! Keeps one pending multisig spend from toasting once per co-signer's
     //! revision while this wallet's own signature is still outstanding.
     PSGTToastDamp m_psgt_toast_damp;
 
-    //! The pool as the damp needs to see it: revision -> arrangement.
+    //! The pool as the damp needs to see it: revision -> unsigned transaction.
     std::vector<PSGTToastDamp::Entry> currentPSGTPoolEntries() const;
     ResearcherModel *researcherModel;
     MRCModel *m_mrc_model;

@@ -54,6 +54,7 @@ struct PSGTPoolRow $Proxy.wrap("interfaces::PSGTPoolRow") {
     timeReceived @8 :Int64 $Proxy.name("time_received");
     inPool @9 :Bool $Proxy.name("in_pool");
     relevance @10 :Int32;
+    txHashHex @11 :Text $Proxy.name("tx_hash_hex");
 }
 
 struct PSGTInputInfo $Proxy.wrap("interfaces::PSGTInputInfo") {

@@ -1761,7 +1761,7 @@ std::vector<PSGTToastDamp::Entry> BitcoinGUI::currentPSGTPoolEntries() const
     std::vector<PSGTToastDamp::Entry> pool;
 
     for (const auto& row : m_psgt_pool_context->entries()) {
-        pool.push_back({row.revision_hex, row.image_hex});
+        pool.push_back({row.revision_hex, row.tx_hash_hex});
     }
 
     return pool;
@@ -1779,9 +1779,9 @@ void BitcoinGUI::handlePSGTPoolChanged(QString revision_hash, quint8 change_type
 
     const std::string revision_hex = revision_hash.toStdString();
 
-    // A removal is the only point at which the pool shrinks. Forget the
-    // arrangements that left with it, so an image submitted again later is a
-    // new request and is announced again.
+    // A removal is the only point at which the pool shrinks. Forget the spends
+    // that left with it, so a transaction submitted again later is a new
+    // request and is announced again.
     if (change_type == CT_DELETED) {
         m_psgt_toast_damp.Prune(currentPSGTPoolEntries());
         return;
@@ -1794,7 +1794,10 @@ void BitcoinGUI::handlePSGTPoolChanged(QString revision_hash, quint8 change_type
 
     // Every co-signer's revision fires this handler, and walletMustSignRevision
     // answers true for all of them until this wallet signs, so the predicate
-    // alone would announce the same request once per co-signer.
+    // alone would announce the same request once per co-signer. The damp keys
+    // on the unsigned transaction, so an initiator superseding the pending
+    // spend with a different transaction (delivered as an update under the
+    // same image) is announced as the new request it is.
     if (!m_psgt_toast_damp.ShouldToastRevision(currentPSGTPoolEntries(), revision_hex)) {
         return;
     }
