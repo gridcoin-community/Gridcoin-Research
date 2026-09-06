@@ -412,7 +412,10 @@ public:
     //!
     //! \param fForce
     //!
-    void ResendWalletTransactions(bool fForce = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    //! Re-announce own transactions that are unconfirmed and no longer in the
+    //! mempool. Returns how many were relayed; the rate-limit and sync guards
+    //! that fForce bypasses return 0 without looking at the wallet.
+    unsigned int ResendWalletTransactions(bool fForce = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     int64_t GetBalance() const;
     int64_t GetUnconfirmedBalance() const;
     int64_t GetImmatureBalance() const;
@@ -1288,8 +1291,10 @@ public:
     bool AcceptWalletTransaction(CTxDB& txdb);
     bool AcceptWalletTransaction();
 
-    void RelayWalletTransaction(CTxDB& txdb);
-    void RelayWalletTransaction();
+    //! Announce this transaction (and its unindexed parents) to peers. Returns
+    //! false when the transaction is inactive and nothing was relayed.
+    bool RelayWalletTransaction(CTxDB& txdb);
+    bool RelayWalletTransaction();
 
     bool RevalidateTransaction(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
