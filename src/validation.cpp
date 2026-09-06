@@ -2324,6 +2324,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
 
     // Store transaction in memory
     CTransactionRef replaced_tx; // copy of the replaced tx, captured before remove() frees it
+    std::vector<CTransaction> evicted; // what TrimToSize removed to make room, signalled below
     {
         LOCK(pool.cs);
         if (ptxOld)
@@ -2338,8 +2339,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         // entry_time is non-zero only when reloading from unbroadcast.dat: preserve
         // the original pool-entry time so tx age and eviction ordering survive a
         // restart. In practice this only affects the node's non-wallet reloaded txs;
-        // a wallet tx is re-pooled with a fresh time by ReacceptWalletTransactions
-        // before LoadUnbroadcast runs, so its persisted time is not applied.
+        // a wallet tx is re-pooled with a fresh time during the startup re-accept
+        // pass (ReacceptWalletTransactions resolves the reloaded state through a
+        // re-accept that reaches this function with entry_time 0), which init runs
+        // before LoadUnbroadcast, so its persisted time is not applied.
         CTxMemPoolEntry entry(tx, nFees, entry_time != 0 ? entry_time : GetAdjustedTime(),
                               nBestHeight, nSize);
         pool.addUnchecked(hash, entry);
@@ -2352,7 +2355,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         // this transaction alone exceeds it -- only possible with an unreasonably
         // small -maxmempool, which the init-time floor already rejects; treat that
         // as a "mempool full" rejection.
-        pool.TrimToSize(pool.GetMaxSize(), /*removed=*/nullptr, /*protect=*/&hash);
+        pool.TrimToSize(pool.GetMaxSize(), &evicted, /*protect=*/&hash);
         if (!pool.exists(hash)) {
             return state.Invalid(error("AcceptToMemoryPool : transaction %s rejected, mempool full",
                                        hash.ToString()),
@@ -2365,6 +2368,16 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     // 0 confirmations. Emitted synchronously under cs_main (held on entry),
     // preserving the cs_main -> signals -> cs_wallet order.
     GetMainSignals().TransactionAddedToMempool(MakeTransactionRef(tx));
+
+    // Then the transactions TrimToSize evicted to make room for it. Emitted from
+    // here, like the add above, rather than from CTxMemPool::remove(): the pool
+    // lock is released, so the wallet slot can take cs_wallet in the usual
+    // cs_main -> signals -> cs_wallet order, and remove()'s other callers (block
+    // connection, conflicts) keep their own, narrower notifications.
+    for (const CTransaction& victim : evicted) {
+        GetMainSignals().TransactionRemovedFromMempool(MakeTransactionRef(victim),
+                                                       MemPoolRemovalReason::SIZELIMIT);
+    }
 
     ///// are we sure this is ok when loading transactions or restoring block txes
     // If updated, erase old tx from wallet
