@@ -57,9 +57,13 @@ sudo systemctl enable --now gridcoinresearchd-autounlock.service
 > Boot toggle then changes PCR 7 and the TPM refuses to unseal the credential for good: the unit
 > fails with `status=243/CREDENTIALS` and the wallet silently stops staking after the next
 > restart. Binding to the host key (and the TPM when one is present — the default key selection
-> handles both kinds of host) without a PCR policy keeps the protection that matters (only this
-> machine can decrypt it) and survives ordinary firmware maintenance. A credential already
-> sealed with the default cannot be recovered — re-run the command above.
+> handles both kinds of host) without a PCR policy keeps the credential tied to this machine's key
+> material (decrypting it needs the host key plus this machine's TPM, so root on this host can and
+> nothing elsewhere can) and survives ordinary firmware maintenance. The trade-off: without the PCR
+> policy the TPM no longer refuses to unseal after a Secure Boot state change, so that
+> defense-in-depth is given up. To keep it, drop `--tpm2-pcrs=""` and re-encrypt the passphrase
+> after every BIOS key, dbx, or firmware change instead. A credential already sealed with the
+> default cannot be recovered — re-run the command above.
 
 > **Never put the passphrase in the command itself** (`printf '%s' 'MY-PASSPHRASE' | …`). Even though a shell
 > builtin keeps it out of `ps`, the whole command line is written to `~/.bash_history`, and to sudo's I/O log if

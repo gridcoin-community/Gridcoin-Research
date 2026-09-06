@@ -461,8 +461,13 @@ BIOS key reset, dbx or firmware update, or Secure Boot toggle then makes the
 credential permanently undecryptable (the unit fails with `status=243/CREDENTIALS`).
 Binding to the host key (and the TPM, when one is present — the default key
 selection picks that automatically, so the same command serves both kinds of host)
-without a PCR policy keeps the protection that matters — only this machine can
-decrypt it — and survives ordinary firmware maintenance.
+without a PCR policy keeps the credential tied to this machine's key material
+(decrypting it needs the host key plus this machine's TPM, so root on this host can
+and nothing elsewhere can) and survives ordinary firmware maintenance. The
+trade-off: without the PCR policy the TPM no longer refuses to unseal after a
+Secure Boot state change, so that defense-in-depth is given up. To keep it, drop
+`--tpm2-pcrs=""` and re-encrypt the passphrase after every BIOS key, dbx, or
+firmware change instead.
 
 `systemctl enable` links the unit into `gridcoinresearchd.service.wants/`, so it runs
 whenever the core starts (boot, restart, deploy) without modifying the core unit;
@@ -516,7 +521,7 @@ must run as the account that ran setup. Remove with `.\Set-GridcoinAutounlock.ps
   the passphrase with `--tpm2-pcrs=""` as shown in the setup above, then
   `sudo systemctl restart gridcoinresearchd-autounlock.service`. Unlock the wallet by
   hand in the meantime (`walletpassphrase` stake-only) — the core keeps running,
-  it just is not staking.
+  it is just not staking.
 - **"Could not connect to the Gridcoin daemon … node.sock: connection refused."**
   The daemon is not running yet, was not started with `-multiprocess`, is using a
   different `-datadir`, or (Windows) is running as a different user. Start the daemon
