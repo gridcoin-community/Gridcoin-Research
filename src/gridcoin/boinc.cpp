@@ -9,18 +9,34 @@
 #include <optional>
 #include <vector>
 
+namespace {
+//! \brief fs::exists() that reports an unprobeable path as absent.
+//!
+//! The throwing overload raises filesystem_error when the path cannot be
+//! stat()ed at all -- most commonly EACCES on a directory owned by another
+//! user. Probing for BOINC is a best-effort guess among candidates, and every
+//! caller here wants "no" for a candidate it is not allowed to look at, not an
+//! exception unwinding out of startup.
+bool PathExists(const fs::path& path)
+{
+    boost::system::error_code ec;
+
+    return fs::exists(path, ec) && !ec;
+}
+} // anonymous namespace
+
 fs::path GRC::ResolveBoincDataDir(const std::vector<fs::path>& candidates)
 {
     // Pass 1: Prefer a directory with client_state.xml (active BOINC installation).
     for (const auto& candidate : candidates) {
-        if (fs::exists(candidate / "client_state.xml")) {
+        if (PathExists(candidate / "client_state.xml")) {
             return candidate;
         }
     }
 
     // Pass 2: Fall back to any directory that exists (installed but not yet run).
     for (const auto& candidate : candidates) {
-        if (fs::exists(candidate)) {
+        if (PathExists(candidate)) {
             return candidate;
         }
     }
@@ -76,7 +92,7 @@ static fs::path FindBoincDataDir()
 
             fs::path path = std::wstring(szPath);
 
-            if (fs::exists(path)){
+            if (PathExists(path)){
                 return path;
             } else {
                 LogPrintf("Cannot find BOINC data dir %s.", path.string());
@@ -86,9 +102,9 @@ static fs::path FindBoincDataDir()
         RegCloseKey(hKey);
     }
 
-    if (fs::exists("C:\\ProgramData\\BOINC\\")){
+    if (PathExists("C:\\ProgramData\\BOINC\\")){
         return "C:\\ProgramData\\BOINC\\";
-    } else if(fs::exists("C:\\Documents and Settings\\All Users\\Application Data\\BOINC\\")) {
+    } else if(PathExists("C:\\Documents and Settings\\All Users\\Application Data\\BOINC\\")) {
         return "C:\\Documents and Settings\\All Users\\Application Data\\BOINC\\";
     }
     #endif
@@ -113,7 +129,7 @@ static fs::path FindBoincDataDir()
     #endif
 
     #ifdef __APPLE__
-    if (fs::exists("/Library/Application Support/BOINC Data/")) {
+    if (PathExists("/Library/Application Support/BOINC Data/")) {
         return "/Library/Application Support/BOINC Data/";
     }
     #endif

@@ -23,7 +23,19 @@ struct BoincDataDirTestSetup
 
     ~BoincDataDirTestSetup()
     {
-        fs::remove_all(test_root);
+        // A test that fails mid-case can leave a permission-stripped
+        // directory behind; restore access before removing, and never throw
+        // from a destructor during unwind -- a throwing remove_all here turns
+        // a clean test failure into SIGABRT plus a leaked no-perms directory
+        // under /tmp.
+        boost::system::error_code ec;
+        for (fs::recursive_directory_iterator it(test_root, ec), end; !ec && it != end; it.increment(ec)) {
+            fs::permissions(it->path(), fs::owner_all, ec);
+            ec.clear();
+        }
+        fs::permissions(test_root, fs::owner_all, ec);
+        ec.clear();
+        fs::remove_all(test_root, ec);
     }
 
     //! Create a candidate directory (installed but not active).
@@ -110,6 +122,42 @@ BOOST_AUTO_TEST_CASE(it_returns_empty_for_empty_candidate_list)
 {
     std::vector<fs::path> candidates;
     BOOST_CHECK(GRC::ResolveBoincDataDir(candidates).empty());
+}
+
+//! A candidate the process is not allowed to stat has to read as absent.
+//!
+//! boost::filesystem::exists() throws filesystem_error on EACCES rather than
+//! returning false. The distro BOINC packages install /var/lib/boinc-client owned
+//! by the boinc user with mode 0750, so a wallet running as an ordinary user
+//! cannot probe it -- and the exception unwound all the way out of AppInit and
+//! aborted the daemon at startup.
+BOOST_AUTO_TEST_CASE(it_skips_a_candidate_it_cannot_probe)
+{
+    BoincDataDirTestSetup setup;
+
+    fs::path unreadable = setup.CreateActiveDir("unreadable");
+    fs::path readable = setup.CreateActiveDir("readable");
+
+    fs::permissions(unreadable, fs::no_perms);
+
+    // Root ignores the mode bits, and not every filesystem carries them, so
+    // confirm the probe really is blocked before asserting on the consequence.
+    boost::system::error_code probe;
+    fs::exists(unreadable / "client_state.xml", probe);
+
+    if (!probe) {
+        fs::permissions(unreadable, fs::owner_all);
+        BOOST_TEST_MESSAGE("skipped: this process can still probe a no-perms directory");
+        return;
+    }
+
+    std::vector<fs::path> candidates = {unreadable, readable};
+    const fs::path resolved = GRC::ResolveBoincDataDir(candidates);
+
+    // Restore before the assertion so the fixture can always clean up.
+    fs::permissions(unreadable, fs::owner_all);
+
+    BOOST_CHECK_EQUAL(resolved, readable);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
