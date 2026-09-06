@@ -76,7 +76,9 @@ void ResearcherWizardPoolPage::populatePoolTable()
 {
     // The rows come from the pool registry rather than the .ui file. The
     // registry is seeded with the grandfathered pools in its constructor and
-    // again on Reset(), so it is never empty and needs no static fallback.
+    // again on Reset(), so there are rows from genesis and no static fallback
+    // is needed; were every pool de-listed on chain, the table would simply
+    // be empty.
     const std::vector<std::pair<QString, QString>> pools = m_researcher_model->buildPoolList();
 
     ui->poolTableWidget->clearContents();

@@ -441,8 +441,8 @@ public:
     std::vector<Pool> Entries() const;
 
     //!
-    //! \brief Get all pools currently in the ACTIVE state. Used by the wizard
-    //! and the listpools RPC.
+    //! \brief Get all pools currently in the ACTIVE state. Backs
+    //! ActivePoolsByOperator(); the listpools RPC reads Entries().
     //!
     std::vector<Pool> ActivePools() const;
 
@@ -460,8 +460,14 @@ public:
     //! SeedBuiltinPools -- so keying on the operator key would collapse every
     //! builtin into one row.
     //!
-    //! Result is sorted by name, so the order does not depend on the CPID map's
-    //! iteration order.
+    //! Result is sorted by name (URL breaks a tie), so the order does not
+    //! depend on the CPID map's iteration order. ACTIVE entries whose URL is
+    //! empty are dropped: there is nothing to join.
+    //!
+    //! The collapse keys on the exact URL string, and only ACTIVE entries take
+    //! part. So an operator claiming several builtin CPIDs should register the
+    //! same URL byte-for-byte for each, or the site shows as more than one row;
+    //! and a CPID mid-claim (PENDING) drops out of its row until approved.
     //!
     std::vector<Pool> ActivePoolsByOperator() const;
 

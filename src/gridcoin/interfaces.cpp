@@ -1186,7 +1186,8 @@ public:
         // ActivePoolsByOperator collapses the CPIDs an operator holds into the
         // one site a researcher joins, so the four grandfathered grcpool.com
         // seeds present as a single row. The registry is seeded at construction
-        // and re-seeded by Reset(), so this is never empty.
+        // and re-seeded by Reset(), so there are rows from genesis; this is
+        // empty only if every ACTIVE pool has been de-listed on chain.
         std::vector<PoolRow> result;
 
         for (const auto& pool : GRC::GetPoolRegistry().ActivePoolsByOperator()) {

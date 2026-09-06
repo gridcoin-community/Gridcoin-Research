@@ -578,6 +578,70 @@ BOOST_AUTO_TEST_CASE(active_pools_by_operator_keeps_the_lowest_name_of_each_grou
                                }));
 }
 
+BOOST_AUTO_TEST_CASE(active_pools_by_operator_applies_its_rules_beyond_the_seed_family)
+{
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    // A non-builtin ACTIVE pool sharing the grcpool site under a name that
+    // sorts ahead of every seed: the label rule is "lowest ACTIVE name wins",
+    // for any entry, not just the grcpool.com-N family.
+    GRC::Pool claimant;
+    claimant.m_cpid = GRC::Cpid::Parse("00000000000000000000000000000001");
+    claimant.m_name = "aaa-grcpool";
+    claimant.m_url = "https://grcpool.com/";
+    claimant.m_status = GRC::PoolStatus::ACTIVE;
+    registry.SeedForTests(claimant);
+
+    // A PENDING entry with an even lower name and the same URL is not ACTIVE,
+    // so it must not take the label: the reduction starts from ActivePools(),
+    // not Entries().
+    GRC::Pool pending;
+    pending.m_cpid = GRC::Cpid::Parse("00000000000000000000000000000002");
+    pending.m_name = "000-grcpool";
+    pending.m_url = "https://grcpool.com/";
+    pending.m_status = GRC::PoolStatus::PENDING;
+    registry.SeedForTests(pending);
+
+    // An ACTIVE entry whose URL is empty (reachable post-V15: the operator's
+    // POOL_REGISTER REMOVE may carry no URL, and a later Foundation
+    // POOL_APPROVE ADD flips that entry back to ACTIVE as it stands) has
+    // nothing a researcher can join, and must not become a blank row.
+    GRC::Pool blank;
+    blank.m_cpid = GRC::Cpid::Parse("00000000000000000000000000000003");
+    blank.m_name = "blank";
+    blank.m_url = "";
+    blank.m_status = GRC::PoolStatus::ACTIVE;
+    registry.SeedForTests(blank);
+
+    const std::vector<GRC::Pool> rows = registry.ActivePoolsByOperator();
+
+    std::set<std::string> seed_urls;
+
+    for (const auto& seed : GRC::PoolRegistry::BuiltinPoolSeeds()) {
+        seed_urls.insert(seed.url);
+    }
+
+    // The claimant joined an existing site and the blank entry was dropped, so
+    // the row count is still the number of distinct seed sites.
+    BOOST_CHECK_EQUAL(rows.size(), seed_urls.size());
+
+    auto grcpool = std::find_if(rows.begin(), rows.end(), [](const GRC::Pool& pool) {
+        return pool.m_url == "https://grcpool.com/";
+    });
+
+    BOOST_REQUIRE(grcpool != rows.end());
+    BOOST_CHECK_EQUAL(grcpool->m_name, "aaa-grcpool");
+
+    for (const auto& row : rows) {
+        BOOST_CHECK(!row.m_url.empty());
+        BOOST_CHECK(row.m_name != "000-grcpool");
+        BOOST_CHECK(row.m_name != "blank");
+    }
+
+    // Restore the seeded boot state for the cases that follow.
+    registry.ClearForTests();
+}
+
 BOOST_AUTO_TEST_CASE(builtin_pools_match_g_mining_pools_pre_v15)
 {
     // Q3 shadow check: pre-V15, ActivePoolsAtHeight must yield the same SET of

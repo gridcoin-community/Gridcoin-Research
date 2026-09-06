@@ -15,6 +15,7 @@
 #include <cassert>
 #include <set>
 #include <string>
+#include <tuple>
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
@@ -408,15 +409,20 @@ std::vector<Pool> PoolRegistry::ActivePoolsByOperator() const
 
     // Sort by name first so the surviving entry of each URL group is the
     // lowest-named one, and so the result order does not depend on the CPID
-    // map's iteration order.
+    // map's iteration order. The URL breaks a tie between equal names.
     std::sort(out.begin(), out.end(), [](const Pool& lhs, const Pool& rhs) {
-        return lhs.m_name < rhs.m_name;
+        return std::tie(lhs.m_name, lhs.m_url) < std::tie(rhs.m_name, rhs.m_url);
     });
 
     std::set<std::string> seen_urls;
 
+    // An ACTIVE entry with no URL has nothing a researcher can join. It is
+    // reachable: an operator's POOL_REGISTER REMOVE may carry an empty URL,
+    // and a later Foundation POOL_APPROVE ADD flips that entry back to ACTIVE
+    // as it stands. Drop it rather than render a blank row (and collapse every
+    // such entry into one).
     out.erase(std::remove_if(out.begin(), out.end(), [&seen_urls](const Pool& pool) {
-                  return !seen_urls.insert(pool.m_url).second;
+                  return pool.m_url.empty() || !seen_urls.insert(pool.m_url).second;
               }),
               out.end());
 

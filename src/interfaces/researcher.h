@@ -233,8 +233,9 @@ public:
     virtual std::vector<WhitelistProject> whitelistProjects() = 0;
 
     //! The pools a researcher can join (name + url), one row per operator site.
-    //! Replaces the researcher wizard's hardcoded pool table; the registry is
-    //! never empty, since PoolRegistry seeds the grandfathered pools at boot.
+    //! Replaces the researcher wizard's hardcoded pool table. PoolRegistry seeds
+    //! the grandfathered pools at boot, so there are rows from genesis; the
+    //! result is empty only if every ACTIVE pool is de-listed on chain.
     virtual std::vector<PoolRow> activePools() = 0;
 
     //! Maximum on-chain project name / URL lengths (GRC::Project::MAX_NAME_SIZE /
@@ -281,6 +282,7 @@ INTERFACES_ASSERT_MARSHALABLE(ResearcherSnapshot);
 INTERFACES_ASSERT_MARSHALABLE(ResearcherProjectRow);
 INTERFACES_ASSERT_MARSHALABLE(BeaconAdvertiseResult);
 INTERFACES_ASSERT_MARSHALABLE(WhitelistProject);
+INTERFACES_ASSERT_MARSHALABLE(PoolRow);
 } // namespace interfaces
 
 #endif // GRIDCOIN_INTERFACES_RESEARCHER_H
