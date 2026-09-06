@@ -43,12 +43,22 @@ Encrypt the wallet passphrase, bound to this host (and its TPM, if present), the
 
 ```bash
 systemd-ask-password 'Wallet passphrase:' \
-    | sudo systemd-creds encrypt --name=wallet-passphrase - /etc/gridcoin/wallet-passphrase.cred
+    | sudo systemd-creds encrypt --name=wallet-passphrase --tpm2-pcrs="" \
+          - /etc/gridcoin/wallet-passphrase.cred
 sudo chown gridcoin:gridcoin /etc/gridcoin/wallet-passphrase.cred
 sudo chmod 0400 /etc/gridcoin/wallet-passphrase.cred
 
 sudo systemctl enable --now gridcoinresearchd-autounlock.service
 ```
+
+> **Keep `--tpm2-pcrs=""`.** On a host with a TPM, `systemd-creds` would otherwise also seal the
+> credential to PCR 7 — the register that measures the Secure Boot keys and dbx. Any BIOS
+> *restore factory keys*, dbx update (fwupd ships those routinely), firmware update, or Secure
+> Boot toggle then changes PCR 7 and the TPM refuses to unseal the credential for good: the unit
+> fails with `status=243/CREDENTIALS` and the wallet silently stops staking after the next
+> restart. Binding to the host key and the TPM without a PCR policy keeps the protection that
+> matters (only this machine can decrypt it) and survives ordinary firmware maintenance. A
+> credential already sealed with the default cannot be recovered — re-run the command above.
 
 > **Never put the passphrase in the command itself** (`printf '%s' 'MY-PASSPHRASE' | …`). Even though a shell
 > builtin keeps it out of `ps`, the whole command line is written to `~/.bash_history`, and to sudo's I/O log if

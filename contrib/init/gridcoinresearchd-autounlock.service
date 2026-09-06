@@ -19,12 +19,27 @@
 # terminal prompt for it instead, so it is never part of any command:
 #
 #   systemd-ask-password 'Wallet passphrase:' \
-#       | sudo systemd-creds encrypt --name=wallet-passphrase - /etc/gridcoin/wallet-passphrase.cred
+#       | sudo systemd-creds encrypt --name=wallet-passphrase --tpm2-pcrs="" \
+#             - /etc/gridcoin/wallet-passphrase.cred
 #
 #   (or, without systemd-ask-password:
 #       read -rs -p 'Wallet passphrase: ' pw && printf '%s' "$pw" \
-#           | sudo systemd-creds encrypt --name=wallet-passphrase - /etc/gridcoin/wallet-passphrase.cred
+#           | sudo systemd-creds encrypt --name=wallet-passphrase --tpm2-pcrs="" \
+#                 - /etc/gridcoin/wallet-passphrase.cred
 #       unset pw)
+#
+# --tpm2-pcrs="" is REQUIRED on a host with a TPM. Without it, systemd-creds
+# additionally seals the credential to PCR 7 (its default), the register that
+# measures the Secure Boot variables -- PK/KEK/db/dbx and the Secure Boot state.
+# Any BIOS "restore factory keys", dbx update (fwupd ships them routinely),
+# firmware update, or Secure Boot toggle then changes PCR 7 and the TPM refuses
+# to unseal the credential ever again; the unit fails at credential setup with
+# exit 243/CREDENTIALS and the wallet silently stops staking after the next
+# restart. Binding to the host key and the TPM without a PCR policy keeps the
+# protection that matters here -- only PID 1 on THIS machine can decrypt it --
+# while surviving ordinary firmware maintenance. A credential that has already
+# been sealed with the default cannot be recovered; re-encrypt the passphrase
+# with the command above and restart this unit.
 #
 #   sudo chown gridcoin:gridcoin /etc/gridcoin/wallet-passphrase.cred
 #   sudo chmod 0400 /etc/gridcoin/wallet-passphrase.cred
@@ -70,7 +85,8 @@ RemainAfterExit=yes
 User=gridcoin
 Group=gridcoin
 
-# Host/TPM-bound wallet passphrase, decrypted to %d/wallet-passphrase at runtime.
+# Host/TPM-bound wallet passphrase (no PCR policy -- see SETUP above), decrypted
+# to %d/wallet-passphrase at runtime.
 LoadCredentialEncrypted=wallet-passphrase:/etc/gridcoin/wallet-passphrase.cred
 
 # --once: a single unlock attempt driven by systemd's own lifecycle. The core
@@ -89,7 +105,10 @@ ExecStart=/usr/bin/python3 /usr/share/gridcoin/gridcoin_autounlock.py \
 # Exit 1 (transient: core still coming up, RPC momentarily unreachable) retries.
 Restart=on-failure
 RestartSec=30
-RestartPreventExitStatus=2
+# 243 is systemd's own EXIT_CREDENTIALS: PID 1 could not decrypt the credential
+# (typically a TPM PCR policy that no longer matches -- see SETUP). That never
+# clears on its own, so park it as failed rather than retrying every 30s forever.
+RestartPreventExitStatus=2 243
 
 # Finite, unlike the core (TimeoutStartSec=infinity). The helper's --once worst
 # case is one /proc read plus a getinfo and a walletpassphrase call, each bounded
