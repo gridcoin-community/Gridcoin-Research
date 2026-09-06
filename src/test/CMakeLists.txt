@@ -135,6 +135,8 @@ add_executable(test_gridcoin
     # test binary alongside the sources above.
     ${CMAKE_SOURCE_DIR}/src/ipc/peercred.cpp
     ipc_peercred_tests.cpp
+    # CTxDB batch-consistent reads: Exists() against a pending Delete.
+    dbwrapper_tests.cpp
     random_tests.cpp
     rpc_tests.cpp
     rpchelpman_tests.cpp
