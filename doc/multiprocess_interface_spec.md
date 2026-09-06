@@ -209,7 +209,7 @@ handshake (`ipc/handshake.h`):
 
 ```cpp
 constexpr uint32_t IPC_SCHEMA_MAJOR   = 3;
-constexpr uint32_t IPC_SCHEMA_MINOR   = 1;
+constexpr uint32_t IPC_SCHEMA_MINOR   = 2;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 ```
 
@@ -234,6 +234,11 @@ Rules a client must honor (from `ClientHandshake` and design §4.2):
   signature-request toast damp keys on; an older node would send it empty and
   the damp would silence every request after the first, which the minor turns
   into the "update the node" hard fail.
+  **Minor 2** (under major 3) adds `ResearcherContext.activePools @19`, the
+  registry-driven pool list behind the researcher wizard's pool page; a GUI
+  carrying it against an older node would otherwise call a method that node does
+  not serve, which the minor turns into the "update the node" hard fail at
+  connect.
 - **`protocol_version`** — the transport/handshake shape. Must match exactly.
 - **`git_commit`** / **`built_at`** — not compatibility gates; a `git_commit`
   mismatch is a soft mixed-build warning, `built_at` is informational.
@@ -376,7 +381,9 @@ voting types cross.
 Beacon / magnitude / accrual. `snapshot() -> ResearcherSnapshot` (blocking) and
 `trySnapshot()` (non-blocking); `outOfSync`; the fused `projects(extended) ->
 vector<ResearcherProjectRow>` (whitelist + local projects + scraper magnitude in
-one node-side pass); `whitelistProjects`, `v3CapableProjects`, `hasV3CapableProjects`,
+one node-side pass); `whitelistProjects`, `activePools` (the pool registry's
+ACTIVE entries reduced to one row per operator site, for the wizard's pool
+page), `v3CapableProjects`, `hasV3CapableProjects`,
 `maxProjectNameLength` / `maxProjectUrlLength`; commands `switchMode`,
 `advertiseBeacon`, `generateBeaconKeyForV3`, `advertiseBeaconV3`, `reload`; and
 the `handleResearcherChanged` / `handleBeaconChanged` / `handleAccrualChanged` /

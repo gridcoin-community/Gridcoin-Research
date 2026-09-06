@@ -13,7 +13,12 @@
 #include <QClipboard>
 #include <QDesktopServices> // for opening URLs
 #include <QInputDialog>
+#include <QStringList>
+#include <QTableWidgetItem>
 #include <QUrl>
+
+#include <utility>
+#include <vector>
 
 // -----------------------------------------------------------------------------
 // Class: ResearcherWizardPoolPage
@@ -55,13 +60,7 @@ void ResearcherWizardPoolPage::initializePage()
 
     m_researcher_model->switchToPool();
 
-    // TODO (issue #1783 follow-up): populate poolTableWidget from
-    // GetPoolRegistry().ActivePools() instead of the static rows defined in
-    // researcherwizardpoolpage.ui. With the V15 rework grandfathering the
-    // 5 legacy pools into PoolRegistry's constructor, the registry is never
-    // empty, so the dynamic path can switch over at any time — the
-    // pre-activation fallback this comment used to mention is no longer
-    // needed.
+    populatePoolTable();
 
     connect(ui->poolTableWidget, &QTableWidget::cellClicked,
             this, &ResearcherWizardPoolPage::openLink);
@@ -73,11 +72,53 @@ void ResearcherWizardPoolPage::initializePage()
     connect(ui->newAddressButton, &QPushButton::clicked, this, &ResearcherWizardPoolPage::getNewAddress);
 }
 
+void ResearcherWizardPoolPage::populatePoolTable()
+{
+    // The rows come from the pool registry rather than the .ui file. The
+    // registry is seeded with the grandfathered pools in its constructor and
+    // again on Reset(), so there are rows from genesis and no static fallback
+    // is needed; were every pool de-listed on chain, the table would simply
+    // be empty.
+    const std::vector<std::pair<QString, QString>> pools = m_researcher_model->buildPoolList();
+
+    ui->poolTableWidget->clearContents();
+    ui->poolTableWidget->setRowCount(static_cast<int>(pools.size()));
+
+    QStringList names;
+
+    for (int row = 0; row < static_cast<int>(pools.size()); ++row) {
+        names << pools[row].first;
+
+        // Not translated: a pool's website address is data, like the addresses
+        // the .ui rows carried with notr="true".
+        auto* url_item = new QTableWidgetItem(pools[row].second);
+        url_item->setFlags(url_item->flags() & ~Qt::ItemIsEditable);
+        ui->poolTableWidget->setItem(row, 0, url_item);
+    }
+
+    // The pool name is the row's vertical header, as it was in the .ui.
+    ui->poolTableWidget->setVerticalHeaderLabels(names);
+}
+
 void ResearcherWizardPoolPage::openLink(int row, int column) const
 {
     const QTableWidgetItem* item = ui->poolTableWidget->item(row, column);
 
-    QDesktopServices::openUrl(QUrl(item->text()));
+    if (!item) {
+        return;
+    }
+
+    // The cell text is on-chain registry data now, not a string from the .ui:
+    // an operator registers the URL and the Foundation approves it. Hand the
+    // desktop only a well-formed web address; anything else (a bare host, a
+    // file: or custom scheme) is not something this page should launch.
+    const QUrl url(item->text());
+
+    if (!url.isValid() || (url.scheme() != QStringLiteral("http") && url.scheme() != QStringLiteral("https"))) {
+        return;
+    }
+
+    QDesktopServices::openUrl(url);
 }
 
 void ResearcherWizardPoolPage::getNewAddress()

@@ -11,7 +11,11 @@
 #include "sync.h"
 #include "chain.h"
 
+#include <algorithm>
 #include <cassert>
+#include <set>
+#include <string>
+#include <tuple>
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
@@ -397,6 +401,39 @@ std::vector<Pool> PoolRegistry::ActivePools() const
     }
 
     return out;
+}
+
+std::vector<Pool> PoolRegistry::ActivePoolsByOperator() const
+{
+    std::vector<Pool> out = ActivePools();
+
+    // Sort by name first so the surviving entry of each URL group is the
+    // lowest-named one, and so the result order does not depend on the CPID
+    // map's iteration order. The URL breaks a tie between equal names.
+    std::sort(out.begin(), out.end(), [](const Pool& lhs, const Pool& rhs) {
+        return std::tie(lhs.m_name, lhs.m_url) < std::tie(rhs.m_name, rhs.m_url);
+    });
+
+    // One explicit pass over the sorted list: keep the first entry seen for
+    // each URL, which the sort above made the lowest-named one.
+    //
+    // An ACTIVE entry with no URL has nothing a researcher can join. It is
+    // reachable: an operator's POOL_REGISTER REMOVE may carry an empty URL,
+    // and a later Foundation POOL_APPROVE ADD flips that entry back to ACTIVE
+    // as it stands. Drop it rather than render a blank row (and collapse every
+    // such entry into one).
+    std::vector<Pool> result;
+    std::set<std::string> seen_urls;
+
+    for (Pool& pool : out) {
+        if (pool.m_url.empty() || !seen_urls.insert(pool.m_url).second) {
+            continue;
+        }
+
+        result.push_back(std::move(pool));
+    }
+
+    return result;
 }
 
 std::vector<Pool> PoolRegistry::ActivePoolsAtHeight(int height) const

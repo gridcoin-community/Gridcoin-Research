@@ -545,6 +545,18 @@ std::vector<std::pair<QString, QString>> ResearcherModel::buildV3ProjectList() c
     return result;
 }
 
+std::vector<std::pair<QString, QString>> ResearcherModel::buildPoolList() const
+{
+    std::vector<std::pair<QString, QString>> result;
+
+    for (const auto& pool : m_researcher_context.activePools()) {
+        result.emplace_back(QString::fromStdString(pool.name),
+                            QString::fromStdString(pool.url));
+    }
+
+    return result;
+}
+
 QString ResearcherModel::generateBeaconKeyForV3()
 {
     const std::string public_key_hex = m_researcher_context.generateBeaconKeyForV3();

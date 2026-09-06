@@ -14,6 +14,7 @@
 #include "util/system.h"
 
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <map>
 #include <set>
 #include <vector>
@@ -528,6 +529,117 @@ BOOST_AUTO_TEST_CASE(pool_registry_active_pools_contains_grandfathered_builtins)
 // -----------------------------------------------------------------------------
 // Grandfathered builtin pools (issue #1783 / plan §3, §3.5, §6, Q3, Q4)
 // -----------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(active_pools_by_operator_collapses_the_shared_grcpool_site)
+{
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    // Four of the five seeds are grcpool.com under one URL; the fifth is
+    // arikado. A researcher joins a site, not a CPID, so the wizard wants two
+    // rows where ActivePools() answers five.
+    const std::vector<GRC::Pool> by_operator = registry.ActivePoolsByOperator();
+
+    std::set<std::string> urls;
+
+    for (const auto& seed : GRC::PoolRegistry::BuiltinPoolSeeds()) {
+        urls.insert(seed.url);
+    }
+
+    BOOST_CHECK_EQUAL(registry.ActivePools().size(), GRC::PoolRegistry::BuiltinPoolSeeds().size());
+    BOOST_CHECK_EQUAL(by_operator.size(), urls.size());
+
+    // Every surviving row carries a distinct URL.
+    std::set<std::string> seen;
+
+    for (const auto& pool : by_operator) {
+        BOOST_CHECK(seen.insert(pool.m_url).second);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(active_pools_by_operator_keeps_the_lowest_name_of_each_group)
+{
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    const std::vector<GRC::Pool> by_operator = registry.ActivePoolsByOperator();
+
+    // grcpool.com sorts ahead of grcpool.com-2/-3/-5, so it is the label the
+    // group keeps -- not whichever CPID the map happened to yield first.
+    auto grcpool = std::find_if(by_operator.begin(), by_operator.end(), [](const GRC::Pool& pool) {
+        return pool.m_url == "https://grcpool.com/";
+    });
+
+    BOOST_REQUIRE(grcpool != by_operator.end());
+    BOOST_CHECK_EQUAL(grcpool->m_name, "grcpool.com");
+
+    // And the result is sorted by name, so it does not depend on CPID order.
+    BOOST_CHECK(std::is_sorted(by_operator.begin(), by_operator.end(),
+                               [](const GRC::Pool& lhs, const GRC::Pool& rhs) {
+                                   return lhs.m_name < rhs.m_name;
+                               }));
+}
+
+// PoolLifecycleFixture leaves the shared registry booted-clean before and after:
+// this case mutates it, so it must not depend on, or leak into, its neighbours.
+BOOST_FIXTURE_TEST_CASE(active_pools_by_operator_applies_its_rules_beyond_the_seed_family, PoolLifecycleFixture)
+{
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    // A non-builtin ACTIVE pool sharing the grcpool site under a name that
+    // sorts ahead of every seed: the label rule is "lowest ACTIVE name wins",
+    // for any entry, not just the grcpool.com-N family.
+    GRC::Pool claimant;
+    claimant.m_cpid = GRC::Cpid::Parse("00000000000000000000000000000001");
+    claimant.m_name = "aaa-grcpool";
+    claimant.m_url = "https://grcpool.com/";
+    claimant.m_status = GRC::PoolStatus::ACTIVE;
+    registry.SeedForTests(claimant);
+
+    // A PENDING entry with an even lower name and the same URL is not ACTIVE,
+    // so it must not take the label: the reduction starts from ActivePools(),
+    // not Entries().
+    GRC::Pool pending;
+    pending.m_cpid = GRC::Cpid::Parse("00000000000000000000000000000002");
+    pending.m_name = "000-grcpool";
+    pending.m_url = "https://grcpool.com/";
+    pending.m_status = GRC::PoolStatus::PENDING;
+    registry.SeedForTests(pending);
+
+    // An ACTIVE entry whose URL is empty (reachable post-V15: the operator's
+    // POOL_REGISTER REMOVE may carry no URL, and a later Foundation
+    // POOL_APPROVE ADD flips that entry back to ACTIVE as it stands) has
+    // nothing a researcher can join, and must not become a blank row.
+    GRC::Pool blank;
+    blank.m_cpid = GRC::Cpid::Parse("00000000000000000000000000000003");
+    blank.m_name = "blank";
+    blank.m_url = "";
+    blank.m_status = GRC::PoolStatus::ACTIVE;
+    registry.SeedForTests(blank);
+
+    const std::vector<GRC::Pool> rows = registry.ActivePoolsByOperator();
+
+    std::set<std::string> seed_urls;
+
+    for (const auto& seed : GRC::PoolRegistry::BuiltinPoolSeeds()) {
+        seed_urls.insert(seed.url);
+    }
+
+    // The claimant joined an existing site and the blank entry was dropped, so
+    // the row count is still the number of distinct seed sites.
+    BOOST_CHECK_EQUAL(rows.size(), seed_urls.size());
+
+    auto grcpool = std::find_if(rows.begin(), rows.end(), [](const GRC::Pool& pool) {
+        return pool.m_url == "https://grcpool.com/";
+    });
+
+    BOOST_REQUIRE(grcpool != rows.end());
+    BOOST_CHECK_EQUAL(grcpool->m_name, "aaa-grcpool");
+
+    for (const auto& row : rows) {
+        BOOST_CHECK(!row.m_url.empty());
+        BOOST_CHECK(row.m_name != "000-grcpool");
+        BOOST_CHECK(row.m_name != "blank");
+    }
+}
 
 BOOST_AUTO_TEST_CASE(builtin_pools_match_g_mining_pools_pre_v15)
 {
