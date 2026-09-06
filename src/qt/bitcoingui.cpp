@@ -1780,10 +1780,12 @@ void BitcoinGUI::handlePSGTPoolChanged(QString revision_hash, quint8 change_type
     const std::string revision_hex = revision_hash.toStdString();
 
     // A removal is the only point at which the pool shrinks. Forget the spends
-    // that left with it, so a transaction submitted again later is a new
-    // request and is announced again.
+    // that left with it. Every GUI wallet sees every network PSGT leave the
+    // pool, so skip the pool fetch when there is nothing remembered.
     if (change_type == CT_DELETED) {
-        m_psgt_toast_damp.Prune(currentPSGTPoolEntries());
+        if (m_psgt_toast_damp.AnnouncedCount() > 0) {
+            m_psgt_toast_damp.Prune(currentPSGTPoolEntries());
+        }
         return;
     }
 
@@ -1794,11 +1796,17 @@ void BitcoinGUI::handlePSGTPoolChanged(QString revision_hash, quint8 change_type
 
     // Every co-signer's revision fires this handler, and walletMustSignRevision
     // answers true for all of them until this wallet signs, so the predicate
-    // alone would announce the same request once per co-signer. The damp keys
-    // on the unsigned transaction, so an initiator superseding the pending
-    // spend with a different transaction (delivered as an update under the
-    // same image) is announced as the new request it is.
-    if (!m_psgt_toast_damp.ShouldToastRevision(currentPSGTPoolEntries(), revision_hex)) {
+    // alone would announce the same request once per co-signer ahead of this
+    // wallet (at most m-1 times for an m-of-n; never twice for a 2-of-3). The
+    // damp keys on the unsigned transaction, so an initiator superseding the
+    // pending spend with a different transaction (delivered as an update under
+    // the same image) is announced as the new request it is. CT_NEW means the
+    // pool's image slot was empty when this revision arrived, i.e. a new
+    // request by the pool's own definition: it is announced regardless of what
+    // the damp remembers, so the decision does not depend on the order in
+    // which a removal and a resubmission reach this thread.
+    if (!m_psgt_toast_damp.ShouldToastRevision(currentPSGTPoolEntries(), revision_hex,
+                                               /*first_revision=*/change_type == CT_NEW)) {
         return;
     }
 

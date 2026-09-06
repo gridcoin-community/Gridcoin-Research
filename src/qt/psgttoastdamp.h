@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2026 The Gridcoin developers
+// Copyright (c) 2026 The Gridcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -16,11 +16,14 @@
 //! \brief Decides whether a PSGT pool change should raise a "needs your
 //! signature" toast.
 //!
-//! One pending spend collects a revision per co-signer, and each of them fires
-//! the pool-changed notification. walletMustSignRevision only stops the toast
-//! once this wallet has signed, so up to that point the same request is
-//! announced once per co-signer who signs ahead of it. Keying on the spend
-//! instead of the revision announces it once.
+//! One pending spend collects a revision per co-signer who signs ahead of this
+//! wallet, and each of them fires the pool-changed notification.
+//! walletMustSignRevision only stops the toast once this wallet has signed, so
+//! up to that point the same request is announced once per such revision. The
+//! pool never holds a complete revision, so an m-of-n pools at most m-1
+//! revisions of one transaction: a 2-of-3 never repeats, a 3-of-5 announces
+//! the same request twice. Keying on the spend instead of the revision
+//! announces it once.
 //!
 //! The spend is identified by the hash of its UNSIGNED transaction
 //! (PSGTPoolRow::tx_hash_hex), not by the pool image. The image is the
@@ -30,6 +33,13 @@
 //! UPDATED change as signature progress. That is a new request and must be
 //! announced, so the image would be the wrong key. Every signature revision of
 //! one spend shares its unsigned-transaction hash; a supersede changes it.
+//!
+//! The pool reports the first revision to land in an empty image slot as a
+//! new entry (CT_NEW) and later revisions as updates (CT_UPDATED). A first
+//! revision is announced unconditionally: it is a new request by the pool's
+//! own definition, and deciding it from what this class remembers would make
+//! the outcome depend on whether the removal that emptied the slot was
+//! processed on this thread before the resubmission. Only updates are damped.
 //!
 //! Session-scoped and deliberately not persisted. The behaviour being damped is
 //! repetition within one sitting; a restart re-announcing a request the wallet
@@ -55,15 +65,18 @@ public:
     //!
     //! \param pool The pool as it stands, used to resolve the spend.
     //! \param revision_hex The revision the notification named.
+    //! \param first_revision The pool reported this revision as the first for
+    //! its image slot (CT_NEW). Announced and recorded unconditionally.
     //!
     //! \return \c true for the first revision of a spend. A revision that does
     //! not resolve to a spend is announced rather than swallowed on the
     //! strength of a lookup that failed. The caller gates on
     //! walletMustSignRevision first, and that already answers false for a
     //! revision the pool has dropped, so what reaches this is the narrow race
-    //! between those two calls.
+    //! between those two calls; its cost is a repeated toast, never a lost one.
     //!
-    bool ShouldToastRevision(const std::vector<Entry>& pool, const std::string& revision_hex)
+    bool ShouldToastRevision(const std::vector<Entry>& pool, const std::string& revision_hex,
+                             bool first_revision)
     {
         Prune(pool);
 
@@ -72,6 +85,11 @@ public:
         });
 
         if (entry == pool.end()) {
+            return true;
+        }
+
+        if (first_revision) {
+            m_announced.insert(entry->tx_hash_hex);
             return true;
         }
 

@@ -1,9 +1,9 @@
-// Copyright (c) 2014-2026 The Gridcoin developers
+// Copyright (c) 2026 The Gridcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef GRIDCOIN_QT_TEST_PSGTTOASTDAMPTESTS_H
-#define GRIDCOIN_QT_TEST_PSGTTOASTDAMPTESTS_H
+#ifndef BITCOIN_QT_TEST_PSGTTOASTDAMPTESTS_H
+#define BITCOIN_QT_TEST_PSGTTOASTDAMPTESTS_H
 
 #include <QObject>
 #include <QTest>
@@ -19,6 +19,7 @@ private slots:
     void removalForgetsOnlyTheEntriesThatLeft();
     void aResubmittedSpendAnnouncesAgain();
     void aSupersedeUnderTheSameImageAnnouncesAgain();
+    void aFirstRevisionAnnouncesRegardlessOfDeliveryOrder();
 };
 
-#endif // GRIDCOIN_QT_TEST_PSGTTOASTDAMPTESTS_H
+#endif // BITCOIN_QT_TEST_PSGTTOASTDAMPTESTS_H
