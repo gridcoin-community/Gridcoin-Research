@@ -65,8 +65,8 @@ sudo systemctl enable --now gridcoinresearchd-autounlock.service
 > builtin keeps it out of `ps`, the whole command line is written to `~/.bash_history`, and to sudo's I/O log if
 > `log_input` is enabled. `systemd-ask-password` prompts for it, so it is never part of any command — though
 > note sudo's `log_input` also captures the command's stdin, so on a host with sudo I/O logging run the
-> encryption from a root login shell rather than through sudo. Without `systemd-ask-password`, use a shell
-> prompt instead:
+> same pipeline without `sudo` from a root login shell (e.g. after `su -`). Without `systemd-ask-password`,
+> use a shell prompt instead:
 > `read -rs -p 'Wallet passphrase: ' pw && printf '%s' "$pw" | sudo systemd-creds encrypt …; unset pw`.
 
 The autounlock unit runs whenever the core starts (boot, restart, upgrade), unlocks **stake-only**, and exits.

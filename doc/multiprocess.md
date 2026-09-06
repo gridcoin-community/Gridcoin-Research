@@ -441,9 +441,10 @@ Set it up once, then enable:
 ```bash
 # Encrypt the wallet passphrase, bound to this host (and its TPM, if present).
 # Let the terminal prompt for it -- never put it in the command line, where it
-# would land in ~/.bash_history and in `ps`. (sudo I/O logging with log_input
-# captures the command's stdin too; on such a host run this from a root login
-# shell rather than through sudo.)
+# would land in ~/.bash_history (and, unless printf is a shell builtin, in
+# process listings). sudo I/O logging with log_input captures the command's
+# stdin too; on such a host run the same pipeline without sudo from a root
+# login shell (e.g. after `su -`).
 systemd-ask-password 'Wallet passphrase:' | sudo systemd-creds encrypt \
     --name=wallet-passphrase --tpm2-pcrs="" - /etc/gridcoin/wallet-passphrase.cred
 sudo chown gridcoin:gridcoin /etc/gridcoin/wallet-passphrase.cred
@@ -511,7 +512,7 @@ must run as the account that ran setup. Remove with `.\Set-GridcoinAutounlock.ps
   PCR 7) and the machine's Secure Boot keys, dbx, or firmware have since changed,
   so the TPM refuses to unseal it. The credential cannot be recovered; re-encrypt
   the passphrase with `--tpm2-pcrs=""` as shown in the setup above, then
-  `systemctl restart gridcoinresearchd-autounlock.service`. Unlock the wallet by
+  `sudo systemctl restart gridcoinresearchd-autounlock.service`. Unlock the wallet by
   hand in the meantime (`walletpassphrase` stake-only) — the core keeps running,
   it just is not staking.
 - **"Could not connect to the Gridcoin daemon … node.sock: connection refused."**
