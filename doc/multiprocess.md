@@ -439,14 +439,35 @@ The helper is Python 3 (standard library only). The daemon package *Recommends*
 Set it up once, then enable:
 
 ```bash
-# Encrypt the wallet passphrase, bound to this host (and its TPM, if present):
-printf '%s' 'YOUR-WALLET-PASSPHRASE' | sudo systemd-creds encrypt \
-    --name=wallet-passphrase - /etc/gridcoin/wallet-passphrase.cred
+# Encrypt the wallet passphrase, bound to this host (and its TPM, if present).
+# Let the terminal prompt for it -- never put it in the command line, where it
+# would land in ~/.bash_history (and, unless printf is a shell builtin, in
+# process listings). sudo I/O logging with log_input captures the command's
+# stdin too; on such a host run this from a root login shell (e.g. after
+# `su -`) and drop the `sudo`:
+#   systemd-ask-password 'Wallet passphrase:' | systemd-creds encrypt \
+#       --name=wallet-passphrase --tpm2-pcrs="" - /etc/gridcoin/wallet-passphrase.cred
+systemd-ask-password 'Wallet passphrase:' | sudo systemd-creds encrypt \
+    --name=wallet-passphrase --tpm2-pcrs="" - /etc/gridcoin/wallet-passphrase.cred
 sudo chown gridcoin:gridcoin /etc/gridcoin/wallet-passphrase.cred
 sudo chmod 0400 /etc/gridcoin/wallet-passphrase.cred
 
 sudo systemctl enable --now gridcoinresearchd-autounlock.service
 ```
+
+`--tpm2-pcrs=""` matters on any host with a TPM: without it, `systemd-creds` also
+seals the credential to PCR 7, which measures the Secure Boot keys and dbx, and any
+BIOS key reset, dbx or firmware update, or Secure Boot toggle then makes the
+credential permanently undecryptable (the unit fails with `status=243/CREDENTIALS`).
+Binding to the host key (and the TPM, when one is present — the default key
+selection picks that automatically, so the same command serves both kinds of host)
+without a PCR policy keeps the credential tied to this machine's key material
+(decrypting it needs the host key plus this machine's TPM, so root on this host can
+and nothing elsewhere can) and survives ordinary firmware maintenance. The
+trade-off: without the PCR policy the TPM no longer refuses to unseal after a
+Secure Boot state change, so that defense-in-depth is given up. To keep it, drop
+`--tpm2-pcrs=""` and re-encrypt the passphrase after every BIOS key, dbx, or
+firmware change instead.
 
 `systemctl enable` links the unit into `gridcoinresearchd.service.wants/`, so it runs
 whenever the core starts (boot, restart, deploy) without modifying the core unit;
@@ -492,6 +513,15 @@ must run as the account that ran setup. Remove with `.\Set-GridcoinAutounlock.ps
 
 ## Troubleshooting
 
+- **Autounlock unit fails with `status=243/CREDENTIALS` and the journal shows
+  `Failed to unseal secret using TPM2: Operation not permitted`.** The encrypted
+  passphrase was sealed to a TPM PCR policy (the `systemd-creds` default binds
+  PCR 7) and the machine's Secure Boot keys, dbx, or firmware have since changed,
+  so the TPM refuses to unseal it. The credential cannot be recovered; re-encrypt
+  the passphrase with `--tpm2-pcrs=""` as shown in the setup above, then
+  `sudo systemctl restart gridcoinresearchd-autounlock.service`. Unlock the wallet by
+  hand in the meantime (`walletpassphrase` stake-only) — the core keeps running,
+  it is just not staking.
 - **"Could not connect to the Gridcoin daemon … node.sock: connection refused."**
   The daemon is not running yet, was not started with `-multiprocess`, is using a
   different `-datadir`, or (Windows) is running as a different user. Start the daemon

@@ -43,17 +43,35 @@ Encrypt the wallet passphrase, bound to this host (and its TPM, if present), the
 
 ```bash
 systemd-ask-password 'Wallet passphrase:' \
-    | sudo systemd-creds encrypt --name=wallet-passphrase - /etc/gridcoin/wallet-passphrase.cred
+    | sudo systemd-creds encrypt --name=wallet-passphrase --tpm2-pcrs="" \
+          - /etc/gridcoin/wallet-passphrase.cred
 sudo chown gridcoin:gridcoin /etc/gridcoin/wallet-passphrase.cred
 sudo chmod 0400 /etc/gridcoin/wallet-passphrase.cred
 
 sudo systemctl enable --now gridcoinresearchd-autounlock.service
 ```
 
+> **Keep `--tpm2-pcrs=""`.** On a host with a TPM, `systemd-creds` would otherwise also seal the
+> credential to PCR 7 — the register that measures the Secure Boot keys and dbx. Any BIOS
+> *restore factory keys*, dbx update (fwupd ships those routinely), firmware update, or Secure
+> Boot toggle then changes PCR 7 and the TPM refuses to unseal the credential for good: the unit
+> fails with `status=243/CREDENTIALS` and the wallet silently stops staking after the next
+> restart. Binding to the host key (and the TPM when one is present — the default key selection
+> handles both kinds of host) without a PCR policy keeps the credential tied to this machine's key
+> material (decrypting it needs the host key plus this machine's TPM, so root on this host can and
+> nothing elsewhere can) and survives ordinary firmware maintenance. The trade-off: without the PCR
+> policy the TPM no longer refuses to unseal after a Secure Boot state change, so that
+> defense-in-depth is given up. To keep it, drop `--tpm2-pcrs=""` and re-encrypt the passphrase
+> after every BIOS key, dbx, or firmware change instead. A credential already sealed with the
+> default cannot be recovered — re-run the command above.
+
 > **Never put the passphrase in the command itself** (`printf '%s' 'MY-PASSPHRASE' | …`). Even though a shell
 > builtin keeps it out of `ps`, the whole command line is written to `~/.bash_history`, and to sudo's I/O log if
-> `log_input` is enabled. `systemd-ask-password` prompts for it, so it is never part of any command. Without
-> `systemd-ask-password`, use a shell prompt instead:
+> `log_input` is enabled. `systemd-ask-password` prompts for it, so it is never part of any command — though
+> note sudo's `log_input` also captures the command's stdin, so on a host with sudo I/O logging run the
+> same pipeline without `sudo` from a root login shell (e.g. after `su -`):
+> `systemd-ask-password 'Wallet passphrase:' | systemd-creds encrypt --name=wallet-passphrase --tpm2-pcrs="" - /etc/gridcoin/wallet-passphrase.cred`.
+> Without `systemd-ask-password`, use a shell prompt instead:
 > `read -rs -p 'Wallet passphrase: ' pw && printf '%s' "$pw" | sudo systemd-creds encrypt …; unset pw`.
 
 The autounlock unit runs whenever the core starts (boot, restart, upgrade), unlocks **stake-only**, and exits.
