@@ -107,7 +107,7 @@ bool WriteBlockToDisk(const CBlock& block, unsigned int& nFileRet, unsigned int&
         // no LevelDB entry ever references them), and the peer will
         // re-relay the block. Both calls log their own failure reason.
         if (!FileCommit(fileout.Get())) {
-            return error("%s: FileCommit failed for blk%05u.dat", __func__, nFileRet);
+            return error("%s: FileCommit failed for blk%04u.dat", __func__, nFileRet);
         }
         if (!CTxDB().Sync()) {
             return error("%s: CTxDB::Sync failed (block-index WAL barrier)", __func__);
@@ -292,7 +292,7 @@ FILE* AppendBlockFile(unsigned int& nFileRet)
         // it once per ~2GB boundary is free and makes the handoff strictly more
         // durable than before, not less.
         if (fflush(file) != 0 || !FileCommit(file)) {
-            LogPrintf("WARN: %s: could not commit blk%05u.dat before rolling over to "
+            LogPrintf("WARN: %s: could not commit blk%04u.dat before rolling over to "
                       "the next block file; its tail may not be durable yet",
                       __func__, nCurrentBlockFile);
         }
