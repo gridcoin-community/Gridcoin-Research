@@ -264,7 +264,7 @@ void Shutdown(void* parg)
                 // The handle is cached and owned by blockstorage, not by us.
                 CloseBlockFile();
                 if (!block_file_synced) {
-                    LogPrintf("WARN: %s: FileCommit failed for blk%05u.dat during shutdown; "
+                    LogPrintf("WARN: %s: FileCommit failed for blk%04u.dat during shutdown; "
                               "skipping LevelDB sync barrier so the block-index DB does not "
                               "become durable referencing unflushed flat-file data.",
                               __func__, nFile);
@@ -707,6 +707,10 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-reindex", "Rebuild chain state and block index from the blk*.dat files on disk",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-checkblocks=<n>", "How many blocks to verify at startup, counting back from the tip (default: 1000, 0 = none)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-checklevel=<n>", "How thorough the startup block verification is (0-7, default: 1)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-settings=<file>", strprintf("Specify path to dynamic settings data file. Can be disabled with"
                                                  " -nosettings. File is written at runtime and not meant to be edited by"
                                                  " users (use %s instead for custom settings). Relative paths will be"
@@ -802,10 +806,6 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-zapwallettxes", "Delete all wallet transactions and only recover those parts of the blockchain through"
                                      " -rescan on startup",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
-    argsman.AddArg("-checkblocks=<n>", "How many blocks to check at startup (default: 2500, 0 = all)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
-    argsman.AddArg("-checklevel=<n>", "How thorough the block verification is (0-6, default: 1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-coherencewalkmax=<n>",
                    strprintf("Cap on how far backward the Phase 2 startup chain-coherence walk will go "

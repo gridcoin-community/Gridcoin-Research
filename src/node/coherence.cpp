@@ -80,7 +80,7 @@ CoherenceResult VerifyChainCoherence(int max_walkback)
             break;  // proceed to Phase 2 forward walk
         }
 
-        LogPrintf("WARN: %s: block at height %d (hash %s, blk%05u.dat:%u) failed coherence check "
+        LogPrintf("WARN: %s: block at height %d (hash %s, blk%04u.dat:%u) failed coherence check "
                   "(read_ok=%s); walking back.",
                   __func__, pindex->nHeight, pindex->GetBlockHash().GetHex(),
                   pindex->nFile, pindex->nBlockPos, read_ok ? "true" : "false");
