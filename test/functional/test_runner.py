@@ -201,6 +201,11 @@ BASE_SCRIPTS = [
     'feature_research_reward.py',
     'feature_mrc.py',
     'feature_contract_replay.py',
+    # feature_blockindex_verification.py: LoadBlockIndex's startup
+    # verification pass over a block whose payload was corrupted without
+    # disturbing its header, the one corruption class that arms its
+    # CheckBlock branch and that Phase 2 coherence recovery does not cover.
+    'feature_blockindex_verification.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled
