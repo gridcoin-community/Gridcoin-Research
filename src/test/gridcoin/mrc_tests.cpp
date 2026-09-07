@@ -63,9 +63,16 @@ struct Setup {
 
         key.MakeNewKey(false);
 
-        LOCK(wallet->cs_wallet);
-
-        wallet->AddKey(key);
+        // Scoped to the key insertion alone. Everything below reaches cs_main
+        // -- the beacon registry calls, and Researcher::Reload by way of
+        // StoreResearcher -- so holding cs_wallet across them registers
+        // wallet->cs_wallet -> cs_main, inverting the canonical
+        // cs_main -> cs_wallet order that the test bodies below take with
+        // LOCK2. Nothing after this needs the wallet lock.
+        {
+            LOCK(wallet->cs_wallet);
+            wallet->AddKey(key);
+        }
 
         GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
                 GRC::ContractAction::ADD,
