@@ -132,7 +132,18 @@ jobs:
             echo "$unexpected"
             echo
             echo "Full reports, each with the historical and current lock stacks:"
-            grep -A30 "POTENTIAL DEADLOCK DETECTED" ctest_asan.log
+            # Print whole blocks rather than a fixed window. A report runs from
+            # the banner to the "potential deadlock detected: a -> b -> a" line
+            # and grows with the depth of the two lock stacks; real ones already
+            # run 29 lines, so a fixed -A window is one frame from truncating
+            # the part worth reading. The cap is a backstop, not the mechanism:
+            # a report thrown rather than logged (sync_tests sets throw mode)
+            # never prints that closing line, so without it the block would run
+            # to the end of the log.
+            awk '/POTENTIAL DEADLOCK DETECTED/            {p = 1; n = 0}
+                 p                                       {print; n++}
+                 /potential deadlock detected:/           {p = 0}
+                 p && n >= 80 {print "  ... truncated at 80 lines ..."; p = 0}' ctest_asan.log
             exit 1
           fi
 

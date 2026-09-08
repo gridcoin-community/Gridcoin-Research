@@ -71,7 +71,7 @@ struct Setup {
         // LOCK2. Nothing after this needs the wallet lock.
         {
             LOCK(wallet->cs_wallet);
-            wallet->AddKey(key);
+            BOOST_REQUIRE(wallet->AddKey(key));
         }
 
         GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
