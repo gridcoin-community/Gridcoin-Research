@@ -62,9 +62,25 @@ jobs:
         run: |
           # -fsanitize=address includes LSan (LeakSanitizer)
           # -fsanitize=undefined catches UB (integer overflow, null deref, etc)
+          #
+          # ENABLE_DEBUG_LOCKORDER turns on two runtime lock checks that every
+          # other job compiles away, so this is the only place they run:
+          #
+          #   * AssertLockHeld / AssertLockNotHeld. Without the flag
+          #     AssertLockHeldInternal is an empty inline (src/sync.h), so a
+          #     function annotated EXCLUSIVE_LOCKS_REQUIRED can be called with
+          #     no lock held and nothing notices. These abort, so they fail the
+          #     ctest step on their own.
+          #   * Lock-order tracking, which reports a pair of locks taken in two
+          #     different orders. This one reports and continues by design, so
+          #     it is gated by the step after the tests rather than by ctest.
+          #
+          # Both are runtime checks, which is why they live here and not on the
+          # Thread Safety job: that one is compile-only and would gain nothing.
           cmake -B build_asan \
             -DENABLE_GUI=OFF \
             -DENABLE_TESTS=ON \
+            -DENABLE_DEBUG_LOCKORDER=ON \
             -DUSE_QT6=ON \
             -DUSE_ASM=OFF \
             -DCMAKE_BUILD_TYPE=Debug \
@@ -86,7 +102,41 @@ jobs:
           ASAN_OPTIONS: malloc_context_size=0:check_initialization_order=1
         run: |
           # We exclude the Qt tests here if they trigger false positives in GUI libs
-          ctest --test-dir build_asan --output-on-failure
+          # -V so the suite's own output is captured even for tests that pass:
+          # the lock-order checker reports through the log, and
+          # --output-on-failure alone shows nothing for a passing test.
+          set -o pipefail
+          ctest --test-dir build_asan -V 2>&1 | tee ctest_asan.log
+
+      - name: Check for lock-order inversions
+        run: |
+          # The checker reports and continues rather than aborting, on purpose:
+          # a single run surfaces every inversion instead of stopping at the
+          # first, so one pass shows the whole picture instead of forcing a
+          # fix-and-rerun cycle per inversion. That also means the suite can
+          # pass while having reported one, so the gate belongs here.
+          #
+          # sync_tests drives the checker deliberately with its own
+          # mutex1/mutex2 fixture and asserts on the message it throws. That
+          # report is expected; any other is not.
+          if ! grep -q "POTENTIAL DEADLOCK DETECTED" ctest_asan.log; then
+            echo "No lock-order reports."
+            exit 0
+          fi
+
+          unexpected=$(grep -A3 "POTENTIAL DEADLOCK DETECTED" ctest_asan.log \
+            | grep "Conflict:" | grep -v "'mutex1'" | grep -v "'mutex2'" || true)
+
+          if [ -n "$unexpected" ]; then
+            echo "::error::The unit suite reported a lock-order inversion."
+            echo "$unexpected"
+            echo
+            echo "Full reports, each with the historical and current lock stacks:"
+            grep -A30 "POTENTIAL DEADLOCK DETECTED" ctest_asan.log
+            exit 1
+          fi
+
+          echo "Only sync_tests' deliberate mutex1/mutex2 report present."
 
   # ----------------------------------------------------------------------
   # JOB 2: Linter
