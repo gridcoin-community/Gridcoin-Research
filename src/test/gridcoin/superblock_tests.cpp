@@ -709,8 +709,10 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics_v3
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence)
 {
     const ScraperStatsMeta meta;
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(
-        GetTestConvergence(meta), 2, /*update_pending_cache=*/true, pindexBest);
+    // FromConvergence documents that the call site holds cs_main: below the
+    // gate the V1 path reads pindexBest internally.
+    GRC::Superblock superblock = WITH_LOCK(cs_main, return GRC::Superblock::FromConvergence(
+        GetTestConvergence(meta), 2, /*update_pending_cache=*/true, pindexBest));
 
     BOOST_CHECK(superblock.m_version == 2);
 
@@ -847,8 +849,10 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence_v3)
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergence)
 {
     const ScraperStatsMeta meta;
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(
-        GetTestConvergence(meta, true), 2, /*update_pending_cache=*/true, pindexBest); // Set fallback by project flag
+    // FromConvergence documents that the call site holds cs_main: below the
+    // gate the V1 path reads pindexBest internally.
+    GRC::Superblock superblock = WITH_LOCK(cs_main, return GRC::Superblock::FromConvergence(
+        GetTestConvergence(meta, true), 2, /*update_pending_cache=*/true, pindexBest)); // Set fallback by project flag
 
     BOOST_CHECK(superblock.m_version == 2);
     BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
@@ -1297,8 +1301,10 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
         << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(
-        GetTestConvergence(meta), 2, /*update_pending_cache=*/true, pindexBest);
+    // FromConvergence documents that the call site holds cs_main: below the
+    // gate the V1 path reads pindexBest internally.
+    GRC::Superblock superblock = WITH_LOCK(cs_main, return GRC::Superblock::FromConvergence(
+        GetTestConvergence(meta), 2, /*update_pending_cache=*/true, pindexBest));
 
     BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
 
@@ -1437,8 +1443,10 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
         << calc_2_convergence_hint                      // Convergence hint for project 2
         << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(
-        GetTestConvergence(meta, true), 2, /*update_pending_cache=*/true, pindexBest); // Set fallback by project flag
+    // FromConvergence documents that the call site holds cs_main: below the
+    // gate the V1 path reads pindexBest internally.
+    GRC::Superblock superblock = WITH_LOCK(cs_main, return GRC::Superblock::FromConvergence(
+        GetTestConvergence(meta, true), 2, /*update_pending_cache=*/true, pindexBest)); // Set fallback by project flag
 
     BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
 

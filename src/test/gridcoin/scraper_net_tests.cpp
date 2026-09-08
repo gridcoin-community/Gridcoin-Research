@@ -120,7 +120,12 @@ BOOST_AUTO_TEST_CASE(addpartdata_refuses_an_oversized_part_and_registers_nothing
 {
     auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
 
-    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+    // mapParts is guarded by cs_mapParts, which the reads below need. The
+    // order is the one production uses: cs_mapManifest, then cs_mapParts, then
+    // cs_manifest (scraper.cpp and CSplitBlob::addPart, which re-takes the last
+    // two under this).
+    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+    LOCK(manifest->cs_manifest);
 
     const size_t before = CSplitBlob::mapParts.size();
 
