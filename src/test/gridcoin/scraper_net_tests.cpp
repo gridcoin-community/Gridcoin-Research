@@ -146,7 +146,12 @@ BOOST_AUTO_TEST_CASE(addpartdata_accepts_a_part_at_the_cap)
 {
     auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
 
-    LOCK2(CScraperManifest::cs_mapManifest, manifest->cs_manifest);
+    // Same order as the case above and as production: cs_mapManifest, then
+    // cs_mapParts, then cs_manifest. addPartData takes the last two itself, so
+    // holding cs_manifest first would have this test model the reverse of what
+    // it is exercising.
+    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+    LOCK(manifest->cs_manifest);
 
     CDataStream at_cap(SER_NETWORK, PROTOCOL_VERSION);
     at_cap.resize(kPartWireCap);
