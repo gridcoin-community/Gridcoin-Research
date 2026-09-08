@@ -423,6 +423,11 @@ bool CheckBlockSizeOnly(CBlock& block)
 {
     CValidationState state;
 
+    // CheckBlock is annotated EXCLUSIVE_LOCKS_REQUIRED(cs_main). Taking it here
+    // rather than at each call site keeps the eight BOOST_CHECKs below reading
+    // as the assertions they are.
+    LOCK(cs_main);
+
     // Height below nGrandfather, so the difficulty check does not fire; the
     // rules under test key on the block's version, not on this.
     return CheckBlock(block, state, 1000, false, false, false);
