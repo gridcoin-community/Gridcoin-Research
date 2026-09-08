@@ -229,6 +229,14 @@ jobs:
   # were never checked. That needs capnproto + libcapnp-dev below. (The
   # cmake_multiprocess workflow builds the same surface, but with gcc, which
   # ignores the annotations entirely.)
+  #
+  # ENABLE_TESTS=ON, and the test targets on the build line, because the
+  # analysis is per-translation-unit: a TU that is never compiled is never
+  # analysed. While the tests were excluded their annotation failures were
+  # invisible and accumulated (issue #3344 -- seven of them, across three
+  # files). Tests call the same annotated production API as everything else,
+  # and calling a function that requires cs_main without holding it is the
+  # same defect wherever it is written.
   # ----------------------------------------------------------------------
   thread-safety:
     name: Thread Safety (Clang)
@@ -267,7 +275,7 @@ jobs:
         run: |
           cmake -B build_tsa \
             -DENABLE_GUI=ON \
-            -DENABLE_TESTS=OFF \
+            -DENABLE_TESTS=ON \
             -DUSE_QT6=ON \
             -DENABLE_MULTIPROCESS=ON \
             -DWERROR_THREAD_SAFETY=ON \
@@ -276,4 +284,8 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build (compile-only — analysis runs at compile time)
-        run: cmake --build build_tsa --target gridcoinresearch gridcoinresearchd
+        # -k so one run reports every annotation failure. Without it the build
+        # stops at the first, and finding the rest takes a fix-and-rerun cycle:
+        # the run that motivated adding the test targets stopped after 63 of 92
+        # test TUs and never reached one of the three files at fault.
+        run: cmake --build build_tsa --target gridcoinresearch gridcoinresearchd test_gridcoin test_gridcoin-qt -- -k
