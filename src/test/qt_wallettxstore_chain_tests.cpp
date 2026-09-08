@@ -149,7 +149,7 @@ struct OwnedKey
     OwnedKey()
     {
         key.MakeNewKey(false);
-        BOOST_REQUIRE(pwalletMain->AddKey(key));
+        BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(key)));
         dest = CTxDestination(key.GetPubKey().GetID());
     }
 };

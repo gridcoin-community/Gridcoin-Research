@@ -185,7 +185,7 @@ BOOST_AUTO_TEST_CASE(label_rpcs_roundtrip)
 {
     CKey key;
     key.MakeNewKey(false);
-    BOOST_REQUIRE(pwalletMain->AddKey(key));   // owned -> purpose "receive"
+    BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(key)));   // owned -> purpose "receive"
     const std::string addr = EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
 
     setlabel(ArgArray({addr, "tabby"}));
@@ -241,7 +241,7 @@ BOOST_AUTO_TEST_CASE(account_bridge_rpcs_still_work)
 {
     CKey key;
     key.MakeNewKey(false);
-    BOOST_REQUIRE(pwalletMain->AddKey(key));   // owned -> purpose "receive"
+    BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(key)));   // owned -> purpose "receive"
     const CTxDestination dest = CTxDestination(key.GetPubKey().GetID());
     const std::string addr = EncodeDestination(dest);
 
@@ -279,7 +279,7 @@ BOOST_AUTO_TEST_CASE(received_by_label_rpcs_work_flag_free)
 {
     CKey key;
     key.MakeNewKey(false);
-    BOOST_REQUIRE(pwalletMain->AddKey(key));   // owned -> purpose "receive"
+    BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(key)));   // owned -> purpose "receive"
     const std::string addr = EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
     setlabel(ArgArray({addr, "recvlabel"}));
 
@@ -503,7 +503,7 @@ struct OwnedKey
     OwnedKey()
     {
         key.MakeNewKey(false);
-        BOOST_REQUIRE(pwalletMain->AddKey(key));
+        BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(key)));
         dest = CTxDestination(key.GetPubKey().GetID());
         addr = EncodeDestination(dest);
     }
@@ -526,7 +526,7 @@ BOOST_AUTO_TEST_CASE(received_by_label_tallies_owned_outputs_only)
     // Owned, labeled address -> its output is tallied.
     CKey key;
     key.MakeNewKey(false);
-    BOOST_REQUIRE(pwalletMain->AddKey(key));
+    BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(key)));
     const CTxDestination dest = CTxDestination(key.GetPubKey().GetID());
     setlabel(ArgArray({EncodeDestination(dest), "fundedlabel"}));
 
@@ -597,7 +597,7 @@ BOOST_AUTO_TEST_CASE(listreceived_shows_unbooked_address_with_external_receipt)
     // Owned key, deliberately NOT added to the address book.
     CKey key;
     key.MakeNewKey(false);
-    BOOST_REQUIRE(pwalletMain->AddKey(key));
+    BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(key)));
     const CTxDestination dest = CTxDestination(key.GetPubKey().GetID());
     const std::string addr = EncodeDestination(dest);
     {
@@ -656,7 +656,7 @@ BOOST_AUTO_TEST_CASE(getreceivedby_default_label_matches_grouped_row)
     // Owned key, deliberately NOT added to the address book, paid from outside the wallet.
     CKey key;
     key.MakeNewKey(false);
-    BOOST_REQUIRE(pwalletMain->AddKey(key));
+    BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(key)));
     const CTxDestination dest = CTxDestination(key.GetPubKey().GetID());
     {
         LOCK(pwalletMain->cs_wallet);
@@ -687,13 +687,13 @@ BOOST_AUTO_TEST_CASE(migratelabels_books_unbooked_external_receipts)
     // E: unbooked, paid from outside the wallet.
     CKey keyE;
     keyE.MakeNewKey(false);
-    BOOST_REQUIRE(pwalletMain->AddKey(keyE));
+    BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(keyE)));
     const CTxDestination destE = CTxDestination(keyE.GetPubKey().GetID());
 
     // F: unbooked, receives only change from the wallet's own spend.
     CKey keyF;
     keyF.MakeNewKey(false);
-    BOOST_REQUIRE(pwalletMain->AddKey(keyF));
+    BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(keyF)));
     const CTxDestination destF = CTxDestination(keyF.GetPubKey().GetID());
 
     {
@@ -756,7 +756,7 @@ BOOST_AUTO_TEST_CASE(listreceived_hides_pure_change_until_external_receipt)
     // exactly the shape that would double-emit if the new loop's booked-skip were missing.
     CKey keyA;
     keyA.MakeNewKey(false);
-    BOOST_REQUIRE(pwalletMain->AddKey(keyA));
+    BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(keyA)));
     const CTxDestination destA = CTxDestination(keyA.GetPubKey().GetID());
     const std::string addrA = EncodeDestination(destA);
     setlabel(ArgArray({addrA, "changetest-ext"}));
@@ -764,7 +764,7 @@ BOOST_AUTO_TEST_CASE(listreceived_hides_pure_change_until_external_receipt)
     // C: owned, unbooked.
     CKey keyC;
     keyC.MakeNewKey(false);
-    BOOST_REQUIRE(pwalletMain->AddKey(keyC));
+    BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(keyC)));
     const CTxDestination destC = CTxDestination(keyC.GetPubKey().GetID());
     const std::string addrC = EncodeDestination(destC);
 
@@ -821,13 +821,13 @@ BOOST_AUTO_TEST_CASE(listreceived_includeempty_ignores_unbooked_keys_without_rec
     // Owned, unbooked, no receipts.
     CKey keyD;
     keyD.MakeNewKey(false);
-    BOOST_REQUIRE(pwalletMain->AddKey(keyD));
+    BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(keyD)));
     const std::string addrD = EncodeDestination(CTxDestination(keyD.GetPubKey().GetID()));
 
     // Owned, booked, no receipts.
     CKey keyE;
     keyE.MakeNewKey(false);
-    BOOST_REQUIRE(pwalletMain->AddKey(keyE));
+    BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(keyE)));
     const std::string addrE = EncodeDestination(CTxDestination(keyE.GetPubKey().GetID()));
     setlabel(ArgArray({addrE, "emptylabel"}));
 
@@ -1078,7 +1078,7 @@ BOOST_AUTO_TEST_CASE(migratelabels_backfills_purpose)
 {
     CKey key;
     key.MakeNewKey(false);
-    BOOST_REQUIRE(pwalletMain->AddKey(key));   // owned -> should become "receive"
+    BOOST_REQUIRE(WITH_LOCK(pwalletMain->cs_wallet, return pwalletMain->AddKey(key)));   // owned -> should become "receive"
     const CTxDestination dest = CTxDestination(key.GetPubKey().GetID());
 
     // Simulate a pre-label entry: a name with the default "unknown" purpose.
