@@ -108,6 +108,7 @@ this table mirrors it.
 | `mempool_accept.py` | `sendrawtransaction` accept + double-spend rejection |
 | `rpc_net.py` | two-node `getpeerinfo`/`addnode` + block propagation |
 | `feature_sidestake.py` | local sidestaking config + coinstake reward split |
+| `feature_no_mainnet_seeds_on_regtest.py` | regtest takes neither the DNS seed hostnames nor `pnSeed` |
 
 ### Extended suite (opt-in via `--extended`, not in default CI)
 

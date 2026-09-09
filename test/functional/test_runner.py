@@ -206,6 +206,14 @@ BASE_SCRIPTS = [
     # disturbing its header, the one corruption class that arms its
     # CheckBlock branch and that Phase 2 coherence recovery does not cover.
     'feature_blockindex_verification.py',
+    # feature_no_mainnet_seeds_on_regtest.py: neither compiled-in mainnet seed
+    # list -- the DNS seed hostnames resolved at startup, nor the pnSeed
+    # addresses injected after 60 seconds with an empty addrman -- may reach a
+    # regtest node. The pnSeed arm spends ten seconds watching a connection loop
+    # that must stay quiet, which puts it alongside feature_mrc.py and
+    # wallet_splitunspent.py rather than in EXTENDED_SCRIPTS: it is deterministic
+    # and drives no staking, so duration is its only cost.
+    'feature_no_mainnet_seeds_on_regtest.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled
