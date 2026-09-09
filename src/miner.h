@@ -53,12 +53,6 @@ int32_t ComputeBlockVersion(int height);
 // (Particl-analog) and consumed in StakeMiner. Unused on testnet / mainnet.
 extern std::atomic<int> g_stakelimit_height;
 
-//! Whether the development-build staking cripple is active. When true,
-//! ThreadStakeMiner refuses to stake and CommitTransaction refuses
-//! reward-bearing sends: a development build disables all staking unless the
-//! hidden `devbuild=override` setting is passed. State lives in miner.cpp;
-//! extracted from the former util.h fDevbuildCripple global so util.h is
-//! stateless. Set from init.
 namespace GRC { class Superblock; }
 
 //! \brief Stage an explicit superblock for the next block the miner assembles.
@@ -72,6 +66,13 @@ namespace GRC { class Superblock; }
 //! before consumption replaces the pending value (last writer wins).
 void StageRegtestSuperblock(GRC::Superblock superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+//! Whether the non-release-build cripple is active. When true, ThreadStakeMiner
+//! refuses to stake and CommitTransaction refuses reward-bearing sends, unless
+//! the hidden `devbuild=override` setting is passed. Set from init, and only on
+//! mainnet: a build carrying a nonzero version tweak is unvetted code, and the
+//! live money chain is the one place that matters. Testnet and regtest are
+//! where such builds are meant to run. State lives in miner.cpp, extracted from
+//! the former util.h fDevbuildCripple global so util.h is stateless.
 bool GetDevbuildCripple();
 void SetDevbuildCripple(bool crippled);
 

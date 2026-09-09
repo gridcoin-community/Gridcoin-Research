@@ -1860,20 +1860,27 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     std::ostringstream strErrors;
 
+    // The cripple exists to keep a non-release binary from staking or spending on
+    // the live money chain. It was written when there were two networks, where
+    // !OnTestnet() did mean mainnet; regtest arrived later and inherited the
+    // mainnet branch by accident. Regtest is further from the live chain than
+    // testnet is -- private, local, and unreachable from the real networks -- so
+    // if testnet is exempt then regtest must be. Ask the question the mechanism
+    // actually means: is this the live money chain.
     SetDevbuildCripple(false);
-    if ((CLIENT_VERSION_BUILD != 0) && !OnTestnet())
+    if ((CLIENT_VERSION_BUILD != 0) && OnMainnet())
     {
         SetDevbuildCripple(true);
         if ((gArgs.GetArg("-devbuild", "") == "override"))
         {
             LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
             SetDevbuildCripple(false);
-            LogPrintf("WARNING: Running development version outside of testnet in override mode!\n"
+            LogPrintf("WARNING: Running a non-release build on mainnet in override mode!\n"
                       "VERBOSE logging is enabled.");
         }
         else
         {
-            LogPrintf("WARNING: Running development version outside of testnet!\n"
+            LogPrintf("WARNING: Running a non-release build on mainnet!\n"
                       "Staking and sending transactions will be disabled.");
         }
     }

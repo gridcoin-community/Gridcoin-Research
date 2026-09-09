@@ -47,8 +47,8 @@ using namespace std;
 unsigned int nMinerSleep;
 CAmount nMinerMinTxFee = -1;  // -1: -mintxfee unset, use GetBaseFee
 
-// Development-build staking cripple; see miner.h. Extracted from the former
-// util.h global. Set from init (AppInit2 devbuild/testnet gating).
+// Non-release-build staking cripple; see miner.h. Extracted from the former
+// util.h global. Set from init (AppInit2, mainnet gating).
 static bool fDevbuildCripple = false;
 bool GetDevbuildCripple() { return fDevbuildCripple; }
 void SetDevbuildCripple(bool crippled) { fDevbuildCripple = crippled; }
