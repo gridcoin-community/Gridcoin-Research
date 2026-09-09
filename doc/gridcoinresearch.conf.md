@@ -108,8 +108,12 @@ behavior.
 ## Addnodes
 
 The list of addnodes you provide are the nodes that your client will
-attempt to establish outbound connections with. The basic configuration
-file does not include addnodes. A full current list of addnodes can be
+attempt to establish outbound connections with. The configuration file
+generated on a first run already contains a small bootstrap set on mainnet and
+testnet -- on testnet those entries are the only automatic peer discovery there
+is, since the DNS seeds and the compiled-in fallback addresses are mainnet-only.
+A regtest config is generated without them, because a regtest node is not meant
+to reach the public network at all. A full current list of addnodes can be
 found at https://github.com/gridcoin-community/Gridcoin-Wiki/wiki/List-of-Addnodes
 
 If your system fails to sync, check your list of addnodes against the current list.

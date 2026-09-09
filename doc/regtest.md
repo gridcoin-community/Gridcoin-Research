@@ -5,9 +5,11 @@ testing. Unlike mainnet and testnet it has no peers, no real BOINC/research
 component, and a trivial difficulty target, so you can create blocks on demand
 and exercise wallet, mempool, P2P, and consensus code in a deterministic
 sandbox. Having no peers is enforced rather than incidental: a regtest node
-performs no DNS seeding and takes none of the peer addresses compiled into the
-binary, so it reaches the network only where you point it. It is the chain mode
-the Python functional tests run against (see
+performs no DNS seeding, takes none of the peer addresses compiled into the
+binary, and is not given the bootstrap `addnode=` entries that a first run
+writes into a mainnet or testnet config -- so its peers are the ones you name,
+and there is no automatic discovery behind them. It is the chain mode the Python
+functional tests run against (see
 [`test/functional/README.md`](../test/functional/README.md)).
 
 > Regtest is enabled only on builds where the regtest chain params are compiled
