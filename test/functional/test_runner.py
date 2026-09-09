@@ -214,6 +214,11 @@ BASE_SCRIPTS = [
     # wallet_splitunspent.py rather than in EXTENDED_SCRIPTS: it is deterministic
     # and drives no staking, so duration is its only cost.
     'feature_no_mainnet_seeds_on_regtest.py',
+    # feature_no_update_check_on_regtest.py: the GitHub release check must not be
+    # armed on regtest. Pins the decision rather than the request, because
+    # CScheduler runs on the real clock and setmocktime cannot reach the
+    # 60-second delay.
+    'feature_no_update_check_on_regtest.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled

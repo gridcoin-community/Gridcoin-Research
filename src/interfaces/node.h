@@ -222,6 +222,11 @@ public:
     //! Whether the node runs on testnet.
     virtual bool isTestNet() = 0;
 
+    //! Whether the node runs on mainnet. Not the negation of isTestNet(): there
+    //! is a third network, and GUI code that needs "is this the live network"
+    //! has to ask for it directly rather than infer it.
+    virtual bool isMainNet() = 0;
+
     //! Request that the node begin shutting down (the GUI->core direction, e.g.
     //! a Windows WM_QUERYENDSESSION). Wraps the core StartShutdown(); in the
     //! monolith this brings the whole app down, matching the prior direct call.

@@ -36,9 +36,12 @@ void Upgrade::ScheduledUpdateCheck()
 bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, std::string& change_log, Upgrade::UpgradeType& upgrade_type,
                                    bool ui_dialog)
 {
-    // If testnet skip this || If the user changes this to disable while wallet running just drop out of here now.
-    // (Need a way to remove items from scheduler.)
-    if (OnTestnet() || gArgs.GetBoolArg("-disableupdatecheck", false))
+    // Mainnet only. This is the leaf that the scheduler, the About dialog's
+    // version-info button and walletdiagnose's client-version check all reach,
+    // so it carries the guard for the callers the scheduler gate does not cover.
+    // The -disableupdatecheck arm is re-read on every call so that flipping the
+    // setting on a running wallet takes effect -- there is no way to unschedule.
+    if (!OnMainnet() || gArgs.GetBoolArg("-disableupdatecheck", false))
         return false;
 
     Http VersionPull;

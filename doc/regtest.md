@@ -43,6 +43,19 @@ CLI (`gridcoinresearchd -regtest <command>`); there is no separate `gridcoin-cli
   fresh node has spendable coins immediately. `listunspent` shows the premine
   UTXOs (note: `getbalance` reports 0 for the raw premine — it is immature for
   balance accounting even though it is spendable).
+- **No automatic peer discovery, and no update check.** A regtest node performs
+  no DNS seeding, injects none of the compiled-in `pnSeed` addresses, gets no
+  bootstrap `addnode=` lines in its generated config, and does not check GitHub
+  for a newer release, so the peers it dials are the ones you name with
+  `-connect` / `-addnode` / `-seednode`. Read that as the scope it is: it covers
+  what the node starts on its own, not everything it can be made to do. An RPC
+  you call can still reach the network -- `walletdiagnose` issues an NTP query
+  and a port-reachability connect on every chain, which is
+  [issue #3359](https://github.com/gridcoin-community/Gridcoin-Research/issues/3359).
+- **Not treated as a development build.** The cripple that stops a binary with a
+  nonzero version tweak from staking or sending applies only on mainnet, so a
+  regtest node built from a development tree stakes and spends without
+  `-devbuild=override`.
 - **Default ports.** P2P `32747`, RPC `35715` (mainnet uses `32749`/`15715`,
   testnet `32748`/`25715`). The functional framework allocates per-node ports
   dynamically when running multiple instances.

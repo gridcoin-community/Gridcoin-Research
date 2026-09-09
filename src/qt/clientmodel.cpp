@@ -217,6 +217,11 @@ bool ClientModel::isTestNet() const
     return m_node.isTestNet();
 }
 
+bool ClientModel::isMainNet() const
+{
+    return m_node.isMainNet();
+}
+
 bool ClientModel::inInitialBlockDownload() const
 {
     return m_node.isInitialBlockDownload();

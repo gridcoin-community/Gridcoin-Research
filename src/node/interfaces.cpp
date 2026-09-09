@@ -156,6 +156,8 @@ public:
 
     bool isTestNet() override { return OnTestnet(); }
 
+    bool isMainNet() override { return OnMainnet(); }
+
     void startShutdown() override { StartShutdown(); }
 
     LatestVersionInfo checkForLatestUpdate() override

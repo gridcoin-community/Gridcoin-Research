@@ -47,12 +47,16 @@ void AboutDialog::setModel(ClientModel *model)
     {
         ui->versionLabel->setText(model->formatFullVersion());
 
-        // Wire the version-info / update-check button. Testnet status is read
-        // through the client model's node interface (ClientModel::isTestNet ->
-        // interfaces::Node), never by calling chainparams (OnTestnet()) from GUI
+        // Wire the version-info / update-check button. Network identity is read
+        // through the client model's node interface (ClientModel::isMainNet ->
+        // interfaces::Node), never by calling chainparams (OnMainnet()) from GUI
         // code; done here rather than in the constructor because the model is
         // only available once set. -disableupdatecheck is a config read.
-        if (!model->isTestNet() && !gArgs.GetBoolArg("-disableupdatecheck", false)) {
+        //
+        // isMainNet() rather than !isTestNet(): the check is served only on
+        // mainnet, and !isTestNet() is true on regtest, which would leave the
+        // button live and reporting a network error caused by policy.
+        if (model->isMainNet() && !gArgs.GetBoolArg("-disableupdatecheck", false)) {
             connect(ui->versionInfoButton, &QAbstractButton::pressed, this, [this]() { handlePressVersionInfoButton(); });
         } else if (gArgs.GetBoolArg("-disableupdatecheck", false)) {
             ui->versionInfoButton->setDisabled(true);
@@ -60,7 +64,7 @@ void AboutDialog::setModel(ClientModel *model)
                                                  "by config or startup parameter."));
         } else {
             ui->versionInfoButton->setDisabled(true);
-            ui->versionInfoButton->setToolTip(tr("Version information is not available on testnet."));
+            ui->versionInfoButton->setToolTip(tr("Version information is only available on mainnet."));
         }
     }
 }

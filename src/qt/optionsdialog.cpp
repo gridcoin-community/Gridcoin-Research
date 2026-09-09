@@ -160,11 +160,15 @@ void OptionsDialog::setModel(OptionsModel *model)
     {
         connect(model, &OptionsModel::displayUnitChanged, this, &OptionsDialog::updateDisplayUnit);
 
-        // Hide the update-check option on testnet. Read testnet status through
-        // the model's node interface (never the raw fTestNet global), and do it
-        // here rather than in the constructor because the model -- and thus the
-        // node -- is only available once it is set.
-        if (model->isTestNet()) {
+        // Hide the update-check option wherever the check does not run, which
+        // is everywhere but mainnet. Read network identity through the model's
+        // node interface (never the raw fTestNet global), and do it here rather
+        // than in the constructor because the model -- and thus the node -- is
+        // only available once it is set.
+        //
+        // isMainNet() rather than isTestNet(): the latter is false on regtest,
+        // which would leave the option on offer for a check that never runs.
+        if (!model->isMainNet()) {
             ui->disableUpdateCheck->setHidden(true);
         }
 

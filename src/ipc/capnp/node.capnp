@@ -62,6 +62,7 @@ interface Node $Proxy.wrap("interfaces::Node") {
     handleMinerStatusChanged @39 (context :Proxy.Context, callback :MinerStatusChangedCallback) -> (result :Handler.Handler);
     handlePSGTPoolChanged @40 (context :Proxy.Context, callback :PSGTPoolChangedCallback) -> (result :Handler.Handler);
     handleNotifyScraperEvent @41 (context :Proxy.Context, callback :NotifyScraperEventCallback) -> (result :Handler.Handler);
+    isMainNet @42 (context :Proxy.Context) -> (result :Bool);
 }
 
 # --- Notification callbacks (interfaces::Node::*Fn std::function types) ---

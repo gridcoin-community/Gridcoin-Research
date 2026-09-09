@@ -481,6 +481,11 @@ bool OptionsModel::isTestNet()
     return m_node.isTestNet();
 }
 
+bool OptionsModel::isMainNet()
+{
+    return m_node.isMainNet();
+}
+
 bool OptionsModel::getCoinControlFeatures()
 {
     return fCoinControlFeatures;

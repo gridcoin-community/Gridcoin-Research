@@ -109,6 +109,7 @@ this table mirrors it.
 | `rpc_net.py` | two-node `getpeerinfo`/`addnode` + block propagation |
 | `feature_sidestake.py` | local sidestaking config + coinstake reward split |
 | `feature_no_mainnet_seeds_on_regtest.py` | regtest takes neither the DNS seed hostnames nor `pnSeed` |
+| `feature_no_update_check_on_regtest.py` | regtest does not arm the GitHub release check |
 
 ### Extended suite (opt-in via `--extended`, not in default CI)
 
