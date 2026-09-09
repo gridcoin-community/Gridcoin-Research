@@ -132,6 +132,22 @@ inline bool OnTestnet()
 }
 
 /**
+ * Whether the currently selected chain is the main network. Derived the same
+ * way as OnTestnet(), and the correct test for anything that is meaningful
+ * only on mainnet -- hardcoded mainnet peer addresses, for instance.
+ *
+ * !OnTestnet() is not that test. There are three networks, so it is true on
+ * regtest as well, and code written when there were only two reads as if it
+ * meant mainnet when it does not. See the seed handling in net.cpp for what
+ * that cost, and validation.cpp's mainnet address decode for the same trap
+ * caught earlier.
+ */
+inline bool OnMainnet()
+{
+    return Params().NetworkIDString() == CBaseChainParams::MAIN;
+}
+
+/**
  * Sets the params returned by Params() to those for the given chain name.
  * @throws std::runtime_error when the chain is not supported.
  */

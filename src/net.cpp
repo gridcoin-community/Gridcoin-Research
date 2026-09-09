@@ -1312,7 +1312,12 @@ void ThreadDNSAddressSeed2(void* parg)
     LogPrint(BCLog::LogFlags::NET, "ThreadDNSAddressSeed started");
     int found = 0;
 
-    if (!OnTestnet())
+    // strDNSSeed resolves to mainnet peers, so only a mainnet node has any use
+    // for them. This was !OnTestnet(), which is also true on regtest, so a
+    // regtest node resolved and dialled real mainnet peers -- and did it at
+    // startup, ahead of the pnSeed fallback below, which is why fixing that one
+    // alone would have left the common case untouched.
+    if (OnMainnet())
     {
         LogPrint(BCLog::LogFlags::NET, "Loading addresses from DNS seeds (could take a while)");
 
@@ -1501,7 +1506,12 @@ void CConnman::ThreadOpenConnections2()
             return;
 
         // Add seed nodes
-        if (g_connman->GetAddrMan().size() == 0 && (GetAdjustedTime() - nStart > 60) && !OnTestnet())
+        //
+        // pnSeed holds mainnet addresses, so this has the same restriction as
+        // the DNS seeds above, and had the same !OnTestnet() defect: a regtest
+        // node whose addrman was still empty after a minute injected real
+        // mainnet peers and started dialling them.
+        if (g_connman->GetAddrMan().size() == 0 && (GetAdjustedTime() - nStart > 60) && OnMainnet())
         {
             std::vector<CAddress> vAdd;
             for (const auto& seed : pnSeed)
@@ -1520,6 +1530,11 @@ void CConnman::ThreadOpenConnections2()
             CNetAddr local;
             LookupHost("127.0.0.1", local, false);
             g_connman->GetAddrMan().Add(vAdd, local);
+
+            // addrman logs the Add itself, but that line is identical whether
+            // the addresses came from a peer's addr message, a DNS seed or this
+            // compiled-in list. Name the path.
+            LogPrint(BCLog::LogFlags::NET, "Added %u fixed seed nodes to addrman", vAdd.size());
         }
 
         //

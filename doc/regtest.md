@@ -4,7 +4,10 @@ Regtest is a private, instant-staking chain mode for development and automated
 testing. Unlike mainnet and testnet it has no peers, no real BOINC/research
 component, and a trivial difficulty target, so you can create blocks on demand
 and exercise wallet, mempool, P2P, and consensus code in a deterministic
-sandbox. It is the chain mode the Python functional tests run against (see
+sandbox. Having no peers is enforced rather than incidental: a regtest node
+performs no DNS seeding and takes none of the peer addresses compiled into the
+binary, so it reaches the network only where you point it. It is the chain mode
+the Python functional tests run against (see
 [`test/functional/README.md`](../test/functional/README.md)).
 
 > Regtest is enabled only on builds where the regtest chain params are compiled
