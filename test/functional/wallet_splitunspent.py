@@ -6,21 +6,15 @@
 floor, the piece cap, the -minstakesplitvalue floor, the error paths and the
 consolidateunspent round trip.
 
-Three regtest facts shape the design:
+Two regtest facts shape the design:
 
-1. -devbuild=override is mandatory. Without it CWallet::CommitTransaction
-   short-circuits (src/wallet/wallet.cpp) and every splitunspent fails with RPC
-   -4 "...coins in your wallet were already spent..." even though the wallet is
-   fine. Raw-transaction funding is NOT gated, so a missing flag funds cleanly
-   and only fails at the split.
-
-2. generatetoaddress' address argument is advisory: the coinstake pays back to
+1. generatetoaddress' address argument is advisory: the coinstake pays back to
    the kernel's own script, so on regtest every reward lands on the single
    premine address and a fresh address never receives anything from mining.
    Split targets are funded by explicit raw transactions instead, and the test
    mines no blocks at all.
 
-3. splitunspent calls AvailableCoins with fOnlyConfirmed=false, and depth-0
+2. splitunspent calls AvailableCoins with fOnlyConfirmed=false, and depth-0
    mempool outputs clear the remaining filters, so the funding outputs never
    need to confirm.
 
@@ -54,8 +48,7 @@ class WalletSplitUnspentTest(GridcoinTestFramework):
         # to be today's default). The exact-fee assertions below (per-piece
         # floor, conservation sums) are written against this value, so a
         # change to the daemon default cannot shift them.
-        self.extra_args = [["-staking=0", "-connect=0", "-listen=0", "-devbuild=override",
-                            "-paytxfee=0.001"]]
+        self.extra_args = [["-staking=0", "-connect=0", "-listen=0", "-paytxfee=0.001"]]
 
     def setup_network(self):
         # Single isolated regtest node; bypass the base regtest createwallet path

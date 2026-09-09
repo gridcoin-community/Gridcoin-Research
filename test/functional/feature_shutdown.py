@@ -40,7 +40,12 @@ class FeatureShutdownTest(GridcoinTestFramework):
         # Skip the default deterministic-coinbase wallet import: it calls
         # createwallet with named args, which Gridcoin's RPC parser rejects
         # ("Params must be an array"). This test needs no wallet or chain state.
-        self.add_nodes(self.num_nodes)
+        #
+        # -staking=0 is explicit rather than inherited. Staking defaults to on,
+        # and until the non-release-build cripple stopped applying to regtest it
+        # was what kept the staker inert here. This test is about a clean bounded
+        # shutdown, so the staker has no business running during it.
+        self.add_nodes(self.num_nodes, [["-staking=0"]])
         self.start_nodes()
 
     def run_test(self):

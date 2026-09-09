@@ -76,9 +76,9 @@ BULK_INPUTS = 20
 
 # Hoisted out of set_test_params because case 4 restarts a node itself, and
 # TestNode.start REPLACES extra_args rather than appending to it -- a restart
-# that passes only "-mintxfee=..." would drop -devbuild=override and fail for
-# an unrelated reason.
-COMMON_ARGS = ["-staking=0", "-connect=0", "-listen=0", "-devbuild=override"]
+# that passes only "-mintxfee=..." would drop the isolation and staking flags
+# and fail for an unrelated reason.
+COMMON_ARGS = ["-staking=0", "-connect=0", "-listen=0"]
 
 
 class MiningFeePolicyTest(GridcoinTestFramework):

@@ -50,7 +50,6 @@ class ContractReplayTest(GridcoinTestFramework):
         self.setup_clean_chain = True
         self.extra_args = [[
             "-staking=0",
-            "-devbuild=override",
             "-connect=0",
             "-listen=0",
             f"-forcecpid={CPID}",
