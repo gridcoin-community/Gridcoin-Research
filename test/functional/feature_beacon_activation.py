@@ -44,11 +44,9 @@ class BeaconActivationTest(GridcoinTestFramework):
         self.setup_clean_chain = True
         # -staking=0 keeps the background staker out of it, so the chain only
         # moves on an explicit generate call. -forcecpid supplies the CPID that
-        # BOINC would otherwise have to provide. -devbuild=override lets a
-        # development build send a transaction at all.
+        # BOINC would otherwise have to provide.
         self.extra_args = [[
             "-staking=0",
-            "-devbuild=override",
             "-connect=0",
             "-listen=0",
             f"-forcecpid={CPID}",

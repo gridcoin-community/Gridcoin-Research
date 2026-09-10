@@ -89,6 +89,11 @@ public:
     //! (interfaces::Node::isTestNet). Lets dialogs that hold an OptionsModel gate
     //! testnet-only UI without calling chainparams (OnTestnet()) from GUI code.
     bool isTestNet();
+    //! Whether the node is on mainnet, read through the node interface
+    //! (interfaces::Node::isMainNet). Distinct from !isTestNet(), which is also
+    //! true on regtest -- use this to gate UI for anything that only happens on
+    //! the live network.
+    bool isMainNet();
     bool getStartAtStartup();
     bool getStartMin();
     bool getMinimizeToTray();

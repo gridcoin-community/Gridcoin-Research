@@ -51,6 +51,9 @@ public:
 
     //! Return true if client connected to testnet
     bool isTestNet() const;
+    //! Return true if client connected to mainnet. Distinct from !isTestNet(),
+    //! which is also true on regtest.
+    bool isMainNet() const;
     //! Return true if core is doing initial block download
     bool inInitialBlockDownload() const;
     //! Return conservative estimate of total number of blocks, or 0 if unknown

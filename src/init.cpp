@@ -544,14 +544,34 @@ static void CreateNewConfigFile()
         << "# daemon will not start without them. Change them if you like, but do\n"
         << "# not leave rpcpassword empty or equal to rpcuser.\n"
         << "rpcuser=gridcoinrpc\n"
-        << "rpcpassword=" << GenerateRpcPassword() << "\n"
-        << "\n"
-        << "addnode=addnode-us-central.cycy.me\n"
-        << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
-        << "addnode=gridcoin.network\n"
-        << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
-        << "addnode=seed.gridcoin.pl\n"
-        << "addnode=www.grcpool.com\n";
+        << "rpcpassword=" << GenerateRpcPassword() << "\n";
+
+    // Bootstrap peers for the public networks, and only for those.
+    //
+    // On testnet these are load-bearing rather than a convenience: ThreadDNSAddressSeed2
+    // and the pnSeed fallback in ThreadOpenConnections2 are both mainnet-only, chainparams
+    // carries no per-network seed list, and peers.dat is empty on a fresh node -- so
+    // without these lines a fresh testnet node has no automatic peer discovery at all.
+    // They are resolved against Params().GetDefaultPort(), so testnet dials them on its
+    // own port rather than mainnet's. That is why the guard here is IsMockableChain()
+    // and not OnMainnet(): excluding testnet would strand it.
+    //
+    // Regtest is a private, local chain, so writing real-network hostnames into its
+    // config is wrong twice over -- an isolated test chain resolves and repeatedly dials
+    // third-party production hosts, and the lines persist for the life of the datadir.
+    //
+    // The credentials above are still written on every network: the daemon soft-sets
+    // -server and StartRPCThreads refuses to start without them.
+    if (!Params().IsMockableChain()) {
+        myConfig
+            << "\n"
+            << "addnode=addnode-us-central.cycy.me\n"
+            << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
+            << "addnode=gridcoin.network\n"
+            << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
+            << "addnode=seed.gridcoin.pl\n"
+            << "addnode=www.grcpool.com\n";
+    }
 }
 
 void AddLoggingArgs(ArgsManager& argsman)
@@ -1840,20 +1860,27 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     std::ostringstream strErrors;
 
+    // The cripple exists to keep a non-release binary from staking or spending on
+    // the live money chain. It was written when there were two networks, where
+    // !OnTestnet() did mean mainnet; regtest arrived later and inherited the
+    // mainnet branch by accident. Regtest is further from the live chain than
+    // testnet is -- private, local, and unreachable from the real networks -- so
+    // if testnet is exempt then regtest must be. Ask the question the mechanism
+    // actually means: is this the live money chain.
     SetDevbuildCripple(false);
-    if ((CLIENT_VERSION_BUILD != 0) && !OnTestnet())
+    if ((CLIENT_VERSION_BUILD != 0) && OnMainnet())
     {
         SetDevbuildCripple(true);
         if ((gArgs.GetArg("-devbuild", "") == "override"))
         {
             LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
             SetDevbuildCripple(false);
-            LogPrintf("WARNING: Running development version outside of testnet in override mode!\n"
+            LogPrintf("WARNING: Running a non-release build on mainnet in override mode!\n"
                       "VERBOSE logging is enabled.");
         }
         else
         {
-            LogPrintf("WARNING: Running development version outside of testnet!\n"
+            LogPrintf("WARNING: Running a non-release build on mainnet!\n"
                       "Staking and sending transactions will be disabled.");
         }
     }

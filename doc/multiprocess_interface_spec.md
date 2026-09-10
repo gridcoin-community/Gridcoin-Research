@@ -209,7 +209,7 @@ handshake (`ipc/handshake.h`):
 
 ```cpp
 constexpr uint32_t IPC_SCHEMA_MAJOR   = 3;
-constexpr uint32_t IPC_SCHEMA_MINOR   = 2;
+constexpr uint32_t IPC_SCHEMA_MINOR   = 3;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 ```
 
@@ -239,6 +239,12 @@ Rules a client must honor (from `ClientHandshake` and design §4.2):
   carrying it against an older node would otherwise call a method that node does
   not serve, which the minor turns into the "update the node" hard fail at
   connect.
+  **Minor 3** (under major 3) adds `Node.isMainNet @42`. The About dialog has to
+  know whether it is on the live network before it offers the version-info
+  button, and `isTestNet` cannot answer that -- there are three networks, so
+  `!isTestNet()` is also true on regtest. Same failure shape as the two above: a
+  GUI carrying it against an older node would call a method that node does not
+  serve, which the minor turns into the "update the node" hard fail at connect.
 - **`protocol_version`** — the transport/handshake shape. Must match exactly.
 - **`git_commit`** / **`built_at`** — not compatibility gates; a `git_commit`
   mismatch is a soft mixed-build warning, `built_at` is informational.
@@ -286,7 +292,8 @@ exchange), not a Gridcoin method (§9).
 Chain/network state plus node-side notification registration. Query methods
 include `getNodeCount`, `getNumBlocks`, `getBestBlockHash` (returns `uint256`),
 `getLastBlockTime`, `getDifficulty`, `isInitialBlockDownload`,
-`isOutOfSyncByAge`, `getWarnings`, `getClientVersion`, `isTestNet`, and the
+`isOutOfSyncByAge`, `getWarnings`, `getClientVersion`, `isTestNet`,
+`isMainNet` (not the negation of `isTestNet` -- regtest is neither), and the
 byte counters. Note the `try*` variants (`tryGetNumBlocksOfPeers`) that return
 `std::nullopt` instead of blocking on `cs_main` — provided for callers that must
 never wait on a core lock.

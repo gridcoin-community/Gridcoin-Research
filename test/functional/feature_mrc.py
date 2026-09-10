@@ -44,7 +44,7 @@ class MrcTest(GridcoinTestFramework):
         self.num_nodes = 2
         self.chain = "regtest"
         self.setup_clean_chain = True
-        common = ["-staking=0", "-devbuild=override"]
+        common = ["-staking=0"]
         self.extra_args = [common[:], common + [f"-forcecpid={CPID}"]]
 
     def setup_network(self):

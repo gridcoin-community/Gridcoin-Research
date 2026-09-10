@@ -605,8 +605,14 @@ void ScheduleBackups(CScheduler& scheduler)
 //!
 void ScheduleUpdateChecks(CScheduler& scheduler)
 {
-    if (OnTestnet()) {
-        LogPrintf("Gridcoin: update checks disabled for testnet");
+    // Checking GitHub for a newer release is a mainnet activity: it is an
+    // unsolicited outbound HTTPS request about a release that only mainnet runs.
+    // The guard was !OnTestnet() by way of OnTestnet(), which is false on regtest
+    // too, so a regtest node armed this job and dialled api.github.com a minute
+    // after every start.
+    if (!OnMainnet()) {
+        LogPrintf("Gridcoin: update checks are mainnet-only; disabled on chain \"%s\"",
+                  Params().NetworkIDString());
         return;
     }
 

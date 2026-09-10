@@ -54,8 +54,16 @@ namespace ipc {
 //! reply is rethrown client-side as std::runtime_error out of initializePage(),
 //! which the GUI can only treat as a runaway exception. The minor turns that
 //! into the "Update the node" hard fail at connect.
+//!
+//! Minor 3 (under major 3): Node gained `isMainNet @42` (node.capnp). The About
+//! dialog needs to know whether it is on the live network before it offers the
+//! version-info button, and isTestNet() cannot answer that -- there are three
+//! networks, so !isTestNet() is true on regtest. Additive, so an old node still
+//! talks to a new GUI until the About dialog opens and calls a method the node
+//! does not serve; the minor turns that into the "Update the node" hard fail at
+//! connect instead.
 constexpr uint32_t IPC_SCHEMA_MAJOR = 3;
-constexpr uint32_t IPC_SCHEMA_MINOR = 2;
+constexpr uint32_t IPC_SCHEMA_MINOR = 3;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 
 //! Domain-separation tag hashed into the node identity token. Bump the suffix if

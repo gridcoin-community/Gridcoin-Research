@@ -918,8 +918,9 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         The outputs are ordinary (non-coinstake), spendable at 1 confirmation, so
         a single confirming block suffices (mining more would over-mine the
         shared premine pool -> "CreateCoinStake: no stake found"). The split is a
-        *raw* transaction because dev builds cripple wallet-level
-        CommitTransaction (fDevbuildCripple), so sendmany/sendtoaddress fail.
+        *raw* transaction so that it depends on no wallet-level send policy at
+        all; three of this helper's five callers never passed -devbuild=override
+        even when the cripple still applied on regtest.
 
         Args:
           funder: node whose premine UTXO is fanned out; the outputs go to

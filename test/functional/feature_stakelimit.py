@@ -41,11 +41,9 @@ class RegtestStakeLimitTest(GridcoinTestFramework):
         self.chain = "regtest"
         self.setup_clean_chain = True
         # -staking=1 runs the background ThreadStakeMiner (the path stakelimit
-        # gates). -devbuild=override clears fDevbuildCripple, which otherwise
-        # disables staking on a dev build outside testnet (regtest is not
-        # testnet). Isolated (-connect=0/-listen=0); solo staking is allowed on
+        # gates). Isolated (-connect=0/-listen=0); solo staking is allowed on
         # regtest via the IsMockableChain bypass in IsMiningAllowed.
-        self.extra_args = [["-staking=1", "-devbuild=override", "-connect=0", "-listen=0"]]
+        self.extra_args = [["-staking=1", "-connect=0", "-listen=0"]]
 
     def setup_network(self):
         # Single isolated node; bypass the base regtest createwallet path (Gridcoin
