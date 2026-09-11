@@ -149,6 +149,22 @@ bool TryConfirmFromTxIndex(CWalletTx& wtx, const CTxIndex& txindex) EXCLUSIVE_LO
     return true;
 }
 
+//! True when one of wtx's inputs is recorded in the tx index as already spent.
+//! The caller has established that wtx itself is not in the index, so the
+//! spender is a different, chain-confirmed transaction: wtx is genuinely
+//! conflicted, not merely absent from the mempool.
+bool HasChainSpentInput(const CWalletTx& wtx, CTxDB& txdb)
+{
+    for (const CTxIn& txin : wtx.vin) {
+        CTxIndex prev;
+        if (!txdb.ReadTxIndex(txin.prevout.hash, prev)) continue;
+        if (txin.prevout.n < prev.vSpent.size() && !prev.vSpent[txin.prevout.n].IsNull()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 //! Resolve an unrecognized tx to a proper state. Priority: hashBlock → CTxDB → mempool → inactive.
 //! Returns {updated, repeat}.
 std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txindex,
@@ -224,16 +240,65 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
         fResolved = true;
     }
 
-    // FOURTH: mark inactive as last resort
+    // FOURTH: not in a block and not in the pool.
+    //
+    // Every restarted own unconfirmed transaction lands here. The in-mempool tag
+    // does not survive the wallet.dat round trip -- it serializes as the null
+    // block-hash sentinel and reloads as unrecognized -- and nothing has put the
+    // transaction back in the pool this early. So "not found anywhere" is the
+    // ordinary state of a healthy unconfirmed send at startup, not a conflict,
+    // and resolving it to inactive ends its rebroadcast for good:
+    // RelayWalletTransaction() refuses inactive transactions.
     if (!fResolved) {
-        LogPrint(BCLog::LogFlags::VERBOSE,
-                "ReacceptWalletTransactions: migrating unrecognized tx %s to inactive (not found anywhere)\n",
-                wtx.GetHash().ToString());
-        wtx.SetTxState(TxStateInactive{false});
-        fUpdated = true;
-        if (!(wtx.IsCoinBase() || wtx.IsCoinStake())) {
+        // A coinbase or coinstake is only valid inside a block. AcceptToMemoryPool
+        // rejects one outright and RelayWalletTransaction skips it, so there is
+        // nothing to re-pool and nothing to rebroadcast: inactive is the honest
+        // answer for a generated transaction that resolved to nothing.
+        if (wtx.IsCoinBase() || wtx.IsCoinStake()) {
+            LogPrint(BCLog::LogFlags::VERBOSE,
+                    "ReacceptWalletTransactions: migrating unrecognized generated tx %s to inactive "
+                    "(not found anywhere)\n",
+                    wtx.GetHash().ToString());
+            wtx.SetTxState(TxStateInactive{false});
+        } else {
+            // Re-pool first, then read the answer off the pool rather than assume
+            // it. AcceptWalletTransaction discards the CValidationState it
+            // validates through, so its bool is all it reports; mempool.exists()
+            // is the same answer without depending on that.
             wtx.AcceptWalletTransaction(txdb);
+
+            const bool pooled = mempool.exists(wtx.GetHash());
+
+            // fTxIndexFound here means the index says the transaction IS in a
+            // block, but the branches above could not place it on the active
+            // chain: the block would not read, is absent from mapBlockIndex, is
+            // off the main chain, or does not list the transaction. That is also
+            // the one case where HasChainSpentInput cannot be asked, since an
+            // indexed transaction is its own inputs' recorded spender.
+            if (!pooled && (fTxIndexFound || HasChainSpentInput(wtx, txdb))) {
+                LogPrint(BCLog::LogFlags::VERBOSE,
+                        "ReacceptWalletTransactions: migrating unrecognized tx %s to inactive (%s)\n",
+                        wtx.GetHash().ToString(),
+                        fTxIndexFound ? "indexed in a block this node could not place on the active chain"
+                                      : "an input is spent by a confirmed transaction");
+                wtx.SetTxState(TxStateInactive{false});
+            } else {
+                // Either the pool took it back, or it is simply in neither the pool
+                // nor the chain -- depth -1, which is what ResendWalletTransactions()
+                // exists to rebroadcast. In this wallet the in-mempool tag means
+                // "unconfirmed and relayable" rather than "presently pooled":
+                // TransactionRemovedFromMempool deliberately keeps it through an
+                // EXPIRY or SIZELIMIT eviction, and depth is derived live from
+                // mempool.exists() either way. Same rule the import/rescan half
+                // applies in ValidateMempoolTx().
+                LogPrint(BCLog::LogFlags::VERBOSE,
+                        "ReacceptWalletTransactions: migrating unrecognized tx %s to mempool (%s)\n",
+                        wtx.GetHash().ToString(),
+                        pooled ? "re-accepted" : "left unconfirmed for rebroadcast");
+                wtx.SetTxState(TxStateInMempool{});
+            }
         }
+        fUpdated = true;
     }
 
     return {fUpdated, fRepeat};
@@ -263,22 +328,6 @@ std::pair<bool, bool> ValidateConfirmedTx(CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIR
     return {false, false};
 }
 
-//! True when one of wtx's inputs is recorded in the tx index as already spent.
-//! The caller has established that wtx itself is not in the index, so the
-//! spender is a different, chain-confirmed transaction: wtx is genuinely
-//! conflicted, not merely absent from the mempool.
-bool HasChainSpentInput(const CWalletTx& wtx, CTxDB& txdb)
-{
-    for (const CTxIn& txin : wtx.vin) {
-        CTxIndex prev;
-        if (!txdb.ReadTxIndex(txin.prevout.hash, prev)) continue;
-        if (txin.prevout.n < prev.vSpent.size() && !prev.vSpent[txin.prevout.n].IsNull()) {
-            return true;
-        }
-    }
-    return false;
-}
-
 //! Validate a mempool tx: verify still in mempool, try to confirm from index if not.
 //! Returns {updated, repeat}.
 std::pair<bool, bool> ValidateMempoolTx(CWalletTx& wtx, const CTxIndex& txindex, bool fTxIndexFound, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -298,10 +347,13 @@ std::pair<bool, bool> ValidateMempoolTx(CWalletTx& wtx, const CTxIndex& txindex,
         // Reached for a transaction still tagged in-mempool that the pool no
         // longer holds: an EXPIRY or SIZELIMIT eviction keeps the tag, and the
         // import/rescan RPCs (importprivkey, importwallet, restoreseedphrase)
-        // run this pass afterwards. A restarted wallet's own transactions do
-        // not come here: the in-mempool tag does not survive the wallet.dat
-        // round trip, so they reload as unrecognized and take
-        // ResolveUnrecognizedTx instead. Not in the mempool and not in the
+        // run this pass afterwards. A restarted wallet's own transactions reach
+        // it too, on the same pass: the in-mempool tag does not survive the
+        // wallet.dat round trip, so they reload as unrecognized, and the tag
+        // ResolveUnrecognizedTx writes is what the dispatch below it reads. That
+        // second look repeats this function's index reads and logging for those
+        // transactions, and arrives at the same answer, so it is wasteful rather
+        // than harmful. Not in the mempool and not in the
         // chain is depth -1, the state ResendWalletTransactions() exists to
         // rebroadcast. Only an input that another confirmed transaction has
         // already spent makes it conflicted; RelayWalletTransaction() refuses
@@ -4403,9 +4455,14 @@ void CWallet::ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountRele
     // side chain, or one that no longer exists after a reset -- has not happened as
     // far as the chain is concerned, so the flags it left behind are wrong.
     //
-    // Deliberately confirmed-state transactions only. A wallet transaction sitting
-    // in the mempool has genuinely committed its inputs and must keep its flags, or
-    // the wallet would happily respend them.
+    // Deliberately confirmed-state transactions only. A transaction tagged
+    // in-mempool has genuinely committed its inputs and must keep its flags, or
+    // the wallet would happily respend them. Read that tag as "unconfirmed and
+    // relayable" rather than "presently pooled": an EXPIRY or SIZELIMIT eviction
+    // keeps it, and ResolveUnrecognizedTx resolves a restarted own unconfirmed
+    // transaction to it. That is the point -- the wallet is still rebroadcasting
+    // those, so their inputs are exactly the ones it must not hand back to coin
+    // selection. AbandonTransaction is the deliberate way to release them.
     // NOTE the state handling here, which is not optional bookkeeping. This runs
     // AFTER ReacceptWalletTransactions, and ValidateConfirmedTx demotes any confirmed
     // transaction whose block is missing or off the main chain:
@@ -4421,8 +4478,9 @@ void CWallet::ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountRele
     // calling IsInMainChain() inside one needs the requirement stated. It is
     // satisfied at every call site below, which run under the LOCK2 above.
     const auto spend_is_active = [](const CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
-        // In the mempool: the inputs are genuinely committed and the flags must
-        // stand, or the wallet would happily respend them.
+        // Unconfirmed and relayable: the inputs are genuinely committed and the
+        // flags must stand, or the wallet would happily respend a transaction it
+        // is still rebroadcasting.
         if (wtx.isInMempool()) return true;
 
         // Unrecognized is a not-yet-migrated legacy state, not a statement about the
@@ -5078,8 +5136,17 @@ bool CWallet::AbandonTransaction(const uint256& txid, unsigned int* inputs_relea
 
     CWalletTx& wtx = it->second;
 
-    // Can only abandon unconfirmed transactions not in mempool
-    if (wtx.isConfirmed() || wtx.isInMempool()) {
+    // Can only abandon unconfirmed transactions the pool does not hold.
+    //
+    // Membership is asked of the pool, not of the tag. isInMempool() means
+    // "unconfirmed and relayable" here, not "presently pooled":
+    // TransactionRemovedFromMempool deliberately keeps the tag through an EXPIRY
+    // or SIZELIMIT eviction, and ResolveUnrecognizedTx now resolves a restarted
+    // own unconfirmed transaction to it as well. Gating on the tag would refuse
+    // exactly the evicted transactions this RPC exists to release -- and before
+    // that resolver change, the only thing that made them abandonable was the
+    // bug of remarking them inactive on every restart.
+    if (wtx.isConfirmed() || mempool.exists(txid)) {
         LogPrintf("AbandonTransaction: Cannot abandon confirmed or mempool tx %s\n",
                   txid.ToString());
         return false;
@@ -5112,8 +5179,10 @@ bool CWallet::AbandonTransaction(const uint256& txid, unsigned int* inputs_relea
         if (it2 == mapWallet.end()) continue;
         CWalletTx& cur_wtx = it2->second;
 
-        // Skip confirmed or in-mempool transactions
-        if (cur_wtx.isConfirmed() || cur_wtx.isInMempool()) {
+        // Same predicate as the entry gate: pool membership, not the tag. The
+        // first iteration is the target transaction itself, so a divergence here
+        // would let the entry gate admit it and this skip drop it.
+        if (cur_wtx.isConfirmed() || mempool.exists(now)) {
             continue;
         }
 

@@ -3076,10 +3076,11 @@ UniValue cancelunbroadcasttransaction(const UniValue& params)
     // node would hand out the "cancelled" transaction to each of them in turn.
     RemoveFromRelayMemory(hash);
 
-    // Tell subscribers the transaction left the pool. This is what makes the
-    // AbandonTransaction below possible: CWallet::isInMempool() reads cached wallet
-    // state rather than querying the pool, and AbandonTransaction refuses while that
-    // state says in-mempool. CWallet::TransactionRemovedFromMempool maps UNKNOWN to
+    // Tell subscribers the transaction left the pool. What makes the
+    // AbandonTransaction below possible is the mempool.remove() above, not this
+    // signal: AbandonTransaction asks the pool directly, so the removal has to stay
+    // ahead of it -- reorder the two and the abandon is refused, leaving the inputs
+    // committed. CWallet::TransactionRemovedFromMempool maps UNKNOWN to
     // TxStateInactive{false} -- inactive but NOT abandoned, deliberately leaving the
     // abandoned flag for the user-initiated call below. The signal is delivered
     // synchronously (CMainSignals::TransactionRemovedFromMempool invokes the slot
