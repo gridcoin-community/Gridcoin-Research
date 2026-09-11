@@ -2092,6 +2092,211 @@ BOOST_AUTO_TEST_CASE(reaccept_keeps_own_unconfirmed_tx_rebroadcastable)
     }
 }
 
+namespace {
+//! Plant a confirmed parent in the tx index whose single output is either
+//! unspent (a null vSpent slot) or already spent by some other confirmed
+//! transaction. The chain-spent guard reads exactly that slot, so the two
+//! shapes are what separate "unconfirmed" from "conflicted". Caller erases the
+//! entry with txdb.EraseTxIndex(parent).
+CTransaction PlantIndexedParent(const CKey& key, CAmount value, bool output_already_spent)
+{
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(1);
+    parent_mtx.vout[0].nValue = value;
+    parent_mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction parent(parent_mtx);
+
+    CTxIndex parent_index(CDiskTxPos(1, 1, 1), 1);
+    if (output_already_spent) parent_index.vSpent[0] = CDiskTxPos(2, 2, 2);
+
+    CTxDB txdb("r+");
+    BOOST_REQUIRE(txdb.TxnBegin());
+    BOOST_REQUIRE(txdb.UpdateTxIndex(parent.GetHash(), parent_index));
+    BOOST_REQUIRE(txdb.TxnCommit());
+    return parent;
+}
+
+//! Drop the entry from mapWallet and the wallet DB together, and the parent
+//! from the tx index: re-accept writes state changes through CWalletDB, so
+//! erasing the map alone would leave the record for whatever loads it next.
+void EraseWalletTxAndParent(const uint256& hash, const CTransaction& parent)
+{
+    BOOST_REQUIRE(pwalletMain->EraseFromWallet(hash));
+    CTxDB txdb("r+");
+    BOOST_REQUIRE(txdb.TxnBegin());
+    BOOST_REQUIRE(txdb.EraseTxIndex(parent));
+    BOOST_REQUIRE(txdb.TxnCommit());
+}
+} // namespace
+
+// ---------------------------------------------------------------------------
+// The startup half: a reloaded own unconfirmed transaction
+// ---------------------------------------------------------------------------
+
+// An own unconfirmed transaction does not come back from wallet.dat tagged
+// in-mempool -- that tag serializes as the null block-hash sentinel and reloads
+// as unrecognized -- so on restart it takes ResolveUnrecognizedTx's last-resort
+// branch rather than ValidateMempoolTx. Absence from the pool is the ordinary
+// state of a healthy unconfirmed send at that point, not a conflict. Resolving
+// it to inactive ends its rebroadcast for good, because RelayWalletTransaction
+// refuses inactive transactions, and hands its inputs back to coin selection,
+// because ReleaseSpendsNotInActiveChain releases the spends of anything not
+// tagged in-mempool.
+//
+// The validation signals are deliberately left unregistered, which is what
+// startup actually looks like: AppInit2 runs this pass before it wires the
+// signal layer, so nothing observes the re-pool and repairs the state behind
+// the resolver. Registering them would let this pass on the unfixed tree.
+BOOST_AUTO_TEST_CASE(reaccept_reloaded_own_unconfirmed_tx_stays_rebroadcastable)
+{
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key));
+    }
+
+    const CTransaction parent = PlantIndexedParent(key, 2 * COIN, /*output_already_spent=*/false);
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(parent.GetHash(), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx);
+        wtx.SetTxState(TxStateUnrecognized{});  // what a wallet.dat load produces
+        wtx.fFromMe = true;
+        pwalletMain->mapWallet[hash] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+
+    pwalletMain->ReacceptWalletTransactions();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        const CWalletTx& wtx = pwalletMain->mapWallet[hash];
+        BOOST_CHECK_MESSAGE(!wtx.isInactive(),
+            "startup re-accept marked a reloaded own unconfirmed tx conflicted "
+            "against an empty mempool");
+        BOOST_CHECK(wtx.isInMempool());
+        BOOST_CHECK(!pwalletMain->IsAbandoned(hash));
+    }
+    // Pin which arm this covers. The fabricated parent exists only as an index
+    // entry, so AcceptToMemoryPool cannot fetch the inputs and the re-pool does
+    // not succeed: this is the "neither pooled nor chain-spent" arm, the one
+    // that has to resolve to in-mempool anyway so the transaction stays
+    // relayable. Asserting it keeps the case from silently becoming the other
+    // arm if the fixture ever gains real inputs.
+    {
+        LOCK(cs_main);
+        BOOST_CHECK(!mempool.exists(hash));
+    }
+
+    EraseWalletTxAndParent(hash, parent);
+    {
+        LOCK(cs_main);
+        mempool.clear();
+    }
+}
+
+// The control: the same reload, but an input this transaction spends has since
+// been spent by a confirmed transaction. That is a real conflict, and the
+// chain-spent guard has to keep saying so.
+// A generated transaction is only valid inside a block: AcceptToMemoryPool
+// rejects one outright and RelayWalletTransaction skips it, so there is nothing
+// to re-pool and nothing to rebroadcast. Inactive stays the honest answer, and
+// this is the arm that keeps ReleaseSpendsNotInActiveChain free to release its
+// inputs.
+BOOST_AUTO_TEST_CASE(reaccept_reloaded_generated_tx_stays_inactive)
+{
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key));
+    }
+
+    // A coinbase: a single null prevout input.
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout.SetNull();
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 3 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+    BOOST_REQUIRE(tx.IsCoinBase());
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx);
+        wtx.SetTxState(TxStateUnrecognized{});
+        pwalletMain->mapWallet[hash] = wtx;
+    }
+
+    pwalletMain->ReacceptWalletTransactions();
+
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        BOOST_CHECK_MESSAGE(pwalletMain->mapWallet[hash].isInactive(),
+            "a generated transaction that resolved to nothing was left relayable");
+        BOOST_CHECK(!mempool.exists(hash));
+    }
+
+    BOOST_REQUIRE(pwalletMain->EraseFromWallet(hash));
+}
+
+BOOST_AUTO_TEST_CASE(reaccept_reloaded_own_unconfirmed_tx_conflicted_when_input_spent_in_chain)
+{
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key));
+    }
+
+    const CTransaction parent = PlantIndexedParent(key, 2 * COIN, /*output_already_spent=*/true);
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(parent.GetHash(), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx);
+        wtx.SetTxState(TxStateUnrecognized{});
+        wtx.fFromMe = true;
+        pwalletMain->mapWallet[hash] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+
+    pwalletMain->ReacceptWalletTransactions();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        const CWalletTx& wtx = pwalletMain->mapWallet[hash];
+        BOOST_CHECK_MESSAGE(wtx.isInactive(),
+            "startup re-accept left a genuinely conflicted tx rebroadcastable");
+    }
+
+    EraseWalletTxAndParent(hash, parent);
+    {
+        LOCK(cs_main);
+        mempool.clear();
+    }
+}
+
 BOOST_AUTO_TEST_CASE(reaccept_marks_own_unconfirmed_tx_conflicted_when_input_spent_in_chain)
 {
     // Control for the case above: absence from the mempool is not a conflict,
@@ -2625,11 +2830,18 @@ BOOST_AUTO_TEST_CASE(txstate_default_constructor_invariants)
 }
 
 // ---------------------------------------------------------------------------
-// AbandonTransaction: mempool tx cannot be abandoned
+// AbandonTransaction: pool membership, not the state tag
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// AbandonTransaction: pool membership, not the state tag
 // ---------------------------------------------------------------------------
 
 BOOST_AUTO_TEST_CASE(abandon_transaction_mempool_tx_fails)
 {
+    // The transaction is put in the real mempool, not merely tagged. The tag on
+    // its own is not the question the gate asks any more, and a test that only
+    // set it would pass whatever the gate did.
     CWallet test_wallet;
 
     CMutableTransaction mtx;
@@ -2644,18 +2856,68 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_mempool_tx_fails)
         wtx.SetTxState(TxStateInMempool{});
         test_wallet.mapWallet[hash] = wtx;
     }
+    {
+        LOCK(cs_main);
+        mempool.addUnchecked(hash, CTxMemPoolEntry(
+            tx, /*fee=*/0, /*time=*/0, /*height=*/0,
+            ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION)));
+    }
+    BOOST_REQUIRE(mempool.exists(hash));
 
-    // Should NOT be able to abandon a mempool transaction
+    // Should NOT be able to abandon a transaction the pool actually holds
     {
         LOCK(cs_main);
         BOOST_CHECK(!test_wallet.AbandonTransaction(hash));
     }
 
-    // Should still be in mempool, not abandoned
     {
         LOCK(test_wallet.cs_wallet);
         BOOST_CHECK(!test_wallet.IsAbandoned(hash));
         BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+    }
+
+    {
+        LOCK2(cs_main, test_wallet.cs_wallet);
+        mempool.remove(tx);
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+}
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_evicted_tx_succeeds)
+{
+    // The eviction case, which the gate used to refuse. An EXPIRY or SIZELIMIT
+    // eviction keeps the in-mempool tag (TransactionRemovedFromMempool says so
+    // in as many words), and a restarted own unconfirmed transaction now
+    // resolves to the same tag. Gating on the tag would make both permanently
+    // un-abandonable: the pool does not hold them, so nothing would ever clear
+    // the tag, and the inputs would stay committed with no way to release them.
+    CWallet test_wallet;
+
+    // A distinct value from the case above: these two would otherwise build the
+    // same transaction, share a txid, and contend over the global mempool.
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 21 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[hash] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+
+    {
+        LOCK(cs_main);
+        BOOST_CHECK_MESSAGE(test_wallet.AbandonTransaction(hash),
+            "abandon refused a transaction tagged in-mempool that the pool does not hold");
+    }
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(test_wallet.IsAbandoned(hash));
     }
 }
 
