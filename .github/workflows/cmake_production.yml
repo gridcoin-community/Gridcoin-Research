@@ -574,7 +574,20 @@ jobs:
         run: |
           # Install a separate x86_64 Homebrew at /usr/local (Intel prefix).
           # The ARM64 runner has Rosetta 2, so x86_64 binaries run transparently.
-          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
+          #
+          # PINNED, and deliberately not to HEAD. Homebrew removed Intel macOS
+          # support from the installer on 2026-09-11 (Homebrew/install#1140,
+          # merge fde1410a6). HEAD now aborts with "Homebrew on macOS is only
+          # supported on Apple Silicon processors!" whenever uname -m is not
+          # arm64 -- which is exactly what arch -x86_64 makes it -- and past
+          # that check it hardcodes HOMEBREW_PREFIX=/opt/homebrew, so there is
+          # no env-var escape hatch and no /usr/local branch left to reach.
+          # df3c25561 is the last commit that still installs the Intel prefix.
+          #
+          # This is a stopgap on a road upstream has closed: the bottle
+          # demotion the source-fallback script below exists for was the first
+          # step, and this is the second. Tracking issue: #3362.
+          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/df3c25561/install.sh)" </dev/null
           arch -x86_64 /usr/local/bin/brew update
           # shellcheck disable=SC2086
           BREW_ARCH="arch -x86_64" contrib/devtools/brew-install-with-source-fallback.sh \
