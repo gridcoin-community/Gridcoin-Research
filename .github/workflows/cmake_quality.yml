@@ -289,3 +289,98 @@ jobs:
         # the run that motivated adding the test targets stopped after 63 of 92
         # test TUs and never reached one of the three files at fault.
         run: cmake --build build_tsa --target gridcoinresearch gridcoinresearchd test_gridcoin test_gridcoin-qt -- -k
+
+  # ----------------------------------------------------------------------
+  # JOB 4: Unit suites in isolation, and one shuffled run
+  # test_gridcoin runs every suite in one process on one global fixture, so
+  # a suite that leaves process state behind can break -- or prop up -- the
+  # suite that links after it, and which one that is differs by platform
+  # (src/test/README.md, "Process state, and what a suite must put back").
+  # The in-binary detector fails a suite that leaks; this job catches the
+  # other half, a
+  # suite that only passes because of what an earlier one left behind, by
+  # running each suite in its own process. The shuffled run is the same
+  # check from the other direction and is informational: it is reported as
+  # a warning annotation with the seed to reproduce it, not as a failure,
+  # because one seed per run is a sample, not a gate.
+  # ----------------------------------------------------------------------
+  suite-isolation:
+    name: Unit Suite Isolation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install System Deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake build-essential libboost-all-dev \
+            libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
+            libcurl4-openssl-dev libzip-dev zipcmp zipmerge ziptool ccache
+
+      - name: Restore Ccache
+        uses: actions/cache@v5
+        with:
+          path: /home/runner/.ccache
+          key: ccache-isolation-${{ github.sha }}
+          restore-keys: ccache-isolation-
+
+      - name: Setup Concurrency
+        run: |
+          if [ -z "$CMAKE_BUILD_PARALLEL_LEVEL" ]; then
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "Concurrency: Auto-detected $(nproc) cores."
+          else
+            echo "Concurrency: Limit set externally to $CMAKE_BUILD_PARALLEL_LEVEL."
+          fi
+
+      - name: Configure
+        run: |
+          cmake -B build_isolation \
+            -DENABLE_GUI=OFF \
+            -DENABLE_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build test_gridcoin
+        run: cmake --build build_isolation --target test_gridcoin
+
+      - name: Run every suite alone
+        run: contrib/devtools/run-unit-suites-isolated.sh build_isolation/src/test/test_gridcoin
+
+      - name: Run the whole binary in shuffled order (informational)
+        id: shuffled
+        # The seed is the run number, so every run samples a new order and a
+        # failure names the seed that reproduces it. Non-gating: see the job
+        # comment. The step after this one turns a failure into a warning
+        # annotation on the run and the PR, so it is seen rather than
+        # swallowed.
+        continue-on-error: true
+        run: |
+          seed=$(( ${{ github.run_number }} % 100000 + 1 ))
+          echo "seed=$seed" >> "$GITHUB_OUTPUT"
+          set -o pipefail
+          contrib/devtools/run-unit-suites-isolated.sh --random "$seed" \
+            build_isolation/src/test/test_gridcoin 2>&1 | tee shuffled.log
+
+      - name: Report a shuffled-order failure
+        if: steps.shuffled.outcome == 'failure'
+        run: |
+          seed="${{ steps.shuffled.outputs.seed }}"
+          echo "::warning title=Unit suite failed in shuffled order::test_gridcoin --random=$seed failed on this commit; the log is in the shuffled-order artifact. This does not fail the job."
+          {
+            echo "### Unit suite failed in shuffled order"
+            echo
+            echo "Reproduce with \`test_gridcoin --random=$seed\` (or \`contrib/devtools/run-unit-suites-isolated.sh --random $seed <binary>\`)."
+            echo
+            echo '```'
+            grep -E "error|fail|leak" shuffled.log | tail -n 40
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the shuffled-order log
+        if: steps.shuffled.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: shuffled-order-unit-log
+          path: shuffled.log

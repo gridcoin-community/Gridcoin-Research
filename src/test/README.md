@@ -103,3 +103,19 @@ Two habits keep a new suite out of the detector's report:
 
 A `--run_test=<suite>/<case>` filter still runs the suite's fixtures, so a
 single case can show a diff set that the whole suite would not.
+
+### Running the suites alone, and in shuffled order
+
+The detector reports a suite that leaks. The other half of the same defect, a
+suite that only passes because of what an earlier one left behind, shows up
+by running each suite in its own process, or by running the binary in a
+shuffled order:
+
+    contrib/devtools/run-unit-suites-isolated.sh build/src/test/test_gridcoin
+    contrib/devtools/run-unit-suites-isolated.sh --random 7 build/src/test/test_gridcoin
+
+The `Unit Suite Isolation` job in `.github/workflows/cmake_quality.yml` runs
+the first on every push and pull request, and fails on any suite that does not
+pass alone. It also runs one shuffled order per run, seeded from the run
+number; a failure there is reported as a warning annotation naming the seed,
+not as a job failure.
