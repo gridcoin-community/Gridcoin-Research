@@ -6,6 +6,7 @@
 #include "coinselectionmodeltests.h"
 #include "coinselectionviewtests.h"
 #include "psgttoastdamptests.h"
+#include "researcherwizardpagetests.h"
 #include "sidestakemodeltests.h"
 #include "uritests.h"
 
@@ -61,6 +62,10 @@ int main(int argc, char *argv[])
 
     PSGTToastDampTests test6;
     if (QTest::qExec(&test6) != 0)
+        fInvalid = true;
+
+    ResearcherWizardPageTests test7;
+    if (QTest::qExec(&test7) != 0)
         fInvalid = true;
 
     return fInvalid;

@@ -50,6 +50,18 @@ void ResearcherWizardPoolPage::setModel(
 {
     this->m_researcher_model = researcher_model;
     this->m_wallet_model = wallet_model;
+
+    // Connected here, once, rather than in initializePage(): QWizard runs
+    // initializePage() on every forward entry into the page, and the wizard's
+    // start-over button restarts from the first page, so a connection made
+    // there is made again on each visit and the slot then runs once per visit
+    // for a single click (#3349).
+    connect(ui->poolTableWidget, &QTableWidget::cellClicked,
+            this, &ResearcherWizardPoolPage::openLink);
+
+    if (m_wallet_model) {
+        connect(ui->newAddressButton, &QPushButton::clicked, this, &ResearcherWizardPoolPage::getNewAddress);
+    }
 }
 
 void ResearcherWizardPoolPage::initializePage()
@@ -61,15 +73,6 @@ void ResearcherWizardPoolPage::initializePage()
     m_researcher_model->switchToPool();
 
     populatePoolTable();
-
-    connect(ui->poolTableWidget, &QTableWidget::cellClicked,
-            this, &ResearcherWizardPoolPage::openLink);
-
-    if (!m_wallet_model) {
-        return;
-    }
-
-    connect(ui->newAddressButton, &QPushButton::clicked, this, &ResearcherWizardPoolPage::getNewAddress);
 }
 
 void ResearcherWizardPoolPage::populatePoolTable()

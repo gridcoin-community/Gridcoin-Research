@@ -6,10 +6,13 @@
 #define BITCOIN_QT_TEST_INTERFACEFAKES_H
 
 #include "interfaces/handler.h"
+#include "interfaces/researcher.h"
 #include "interfaces/sidestake.h"
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <vector>
 
 //! Hand-rolled test doubles for the interfaces:: boundary (Phase 1f). A model
 //! test constructs a GUI model against one of these fakes -- with no wallet,
@@ -91,6 +94,64 @@ public:
 
     std::unique_ptr<interfaces::Handler> handleMandatorySideStakeChanged(
         interfaces::MandatorySideStakeChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+};
+
+//! Fake interfaces::ResearcherContext: serves a canned snapshot and pool list,
+//! answers every command with a default result, and counts mode switches so a
+//! test can tell how many times a wizard page was entered.
+class FakeResearcherContext : public interfaces::ResearcherContext
+{
+public:
+    // Canned responses (set by the test before use).
+    interfaces::ResearcherSnapshot m_snapshot;
+    std::vector<interfaces::PoolRow> m_pools;
+
+    // Recorded calls.
+    int m_switch_mode_calls = 0;
+
+    interfaces::ResearcherSnapshot snapshot() override { return m_snapshot; }
+    std::optional<interfaces::ResearcherSnapshot> trySnapshot() override { return m_snapshot; }
+    bool outOfSync() override { return m_snapshot.out_of_sync; }
+    bool hasV3CapableProjects() override { return false; }
+    std::vector<interfaces::ResearcherProjectRow> projects(bool /*extended*/) override { return {}; }
+    std::vector<interfaces::WhitelistProject> whitelistProjects() override { return {}; }
+    std::vector<interfaces::PoolRow> activePools() override { return m_pools; }
+    int maxProjectNameLength() override { return 0; }
+    int maxProjectUrlLength() override { return 0; }
+    std::vector<interfaces::WhitelistProject> v3CapableProjects() override { return {}; }
+
+    bool switchMode(interfaces::ResearcherMode /*mode*/, const std::string& /*email*/) override
+    {
+        ++m_switch_mode_calls;
+        return true;
+    }
+
+    interfaces::BeaconAdvertiseResult advertiseBeacon() override { return {}; }
+    std::string generateBeaconKeyForV3() override { return {}; }
+    interfaces::BeaconAdvertiseResult advertiseBeaconV3(const std::string& /*ownership_proof_xml*/) override { return {}; }
+    void reload() override {}
+
+    // Notification delivery is not exercised here; see the note on
+    // FakeSideStakeManager's handlers.
+    std::unique_ptr<interfaces::Handler> handleResearcherChanged(interfaces::ResearcherChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+
+    std::unique_ptr<interfaces::Handler> handleBeaconChanged(interfaces::BeaconChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+
+    std::unique_ptr<interfaces::Handler> handleAccrualChanged(interfaces::AccrualChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+
+    std::unique_ptr<interfaces::Handler> handleBlocksChanged(interfaces::BlocksChangedFn /*fn*/) override
     {
         return interfaces::MakeCleanupHandler([] {});
     }
