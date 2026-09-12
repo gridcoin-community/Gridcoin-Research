@@ -16,6 +16,8 @@
 #include <array>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
 #include <iostream>
 #include <vector>
 
@@ -769,6 +771,10 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence)
 #endif
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence_v3)
 {
+    // Restores the tip globals on exit: the deletes at the end of this case
+    // free the indexes but left the pointers behind for later suites.
+    grc_test::StateGuard guard;
+
     // This needs to be initialized, because the below FromConvergence call uses the AutoGreylist class, which in turn
     // cannot have a pindex with random data.
     pindexBest = new CBlockIndex;
@@ -926,6 +932,10 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergen
 #endif
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergence_v3)
 {
+    // Restores the tip globals on exit: the deletes at the end of this case
+    // free the indexes but left the pointers behind for later suites.
+    grc_test::StateGuard guard;
+
     // This needs to be initialized, because the below FromConvergence call uses the AutoGreylist class, which in turn
     // cannot have a pindex with random data.
     pindexBest = new CBlockIndex;

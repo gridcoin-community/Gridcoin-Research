@@ -9,6 +9,8 @@
 #include "gridcoin/staking/reward.h"
 
 #include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
 #include <boost/algorithm/hex.hpp>
 #include <map>
 #include <string>
@@ -18,17 +20,6 @@ extern leveldb::DB *txdb;
 namespace {
 // Arbitrary random characters generated with Python UUID.
 const std::string TEST_CPID("17c65330c0924259b2f93c31d25b03ac");
-
-struct GridcoinTestsConfig
-{
-    GridcoinTestsConfig()
-    {
-    }
-
-    ~GridcoinTestsConfig()
-    {
-    }
-};
 
 void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, const std::string& value,
                       const CBlockIndex index, const bool& reset_registry = false) NO_THREAD_SAFETY_ANALYSIS
@@ -67,8 +58,6 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
 
 } // anonymous namespace
 
-BOOST_GLOBAL_FIXTURE(GridcoinTestsConfig);
-
 BOOST_AUTO_TEST_SUITE(gridcoin_tests)
 
 BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock1010000InProduction)
@@ -81,13 +70,16 @@ BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock1010000InProduction)
 
 BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock312000InTestnet)
 {
+    // Puts the network back even if a check below throws; the trailing
+    // SelectParams(MAIN) this replaces only ran on the happy path.
+    grc_test::StateGuard guard;
+
     SelectParams(CBaseChainParams::TESTNET);
     // With testnet block 312000 was created as the first V8 block,
     // hence the difference in testing setup compared to the production
     // tests.
     BOOST_CHECK(IsV8Enabled(311999) == false);
     BOOST_CHECK(IsV8Enabled(312000) == true);
-    SelectParams(CBaseChainParams::MAIN);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -105,7 +97,10 @@ BOOST_AUTO_TEST_SUITE_END()
 #pragma clang diagnostic ignored "-Wthread-safety-analysis"
 #endif
 
-BOOST_AUTO_TEST_SUITE(gridcoin_cbr_tests)
+// Symmetric reset: the cases reset the protocol registry on entry only, and
+// the ACTIVE blockreward1 entry the last case leaves behind changes the
+// reward every later suite that mines a block is paid.
+BOOST_AUTO_TEST_SUITE(gridcoin_cbr_tests, *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::PROTOCOL>>())
 
 BOOST_AUTO_TEST_CASE(gridcoin_DefaultCBRShouldBe10PreV13)
 {

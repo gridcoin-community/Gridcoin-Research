@@ -6,6 +6,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <test/test_gridcoin.h>
+#include <test/state_leak_detector.h>
 
 #include <leveldb/env.h>
 #include <leveldb/helpers/memenv/memenv.h>
@@ -164,6 +165,12 @@ struct TestingSetup {
             return g_peerman ? g_peerman->ClearMisbehaviorForSubnet(sub_net) : 0u;
         });
         g_mock_deterministic_tests = true;
+
+        // Last, so every global above is in its steady state when the
+        // detector takes its first per-suite snapshot. Throws on failure:
+        // this constructor runs as a framework observer, where an assertion
+        // would be discarded (see state_leak_detector.h).
+        grc_test::InstallStateLeakDetector();
     }
     ~TestingSetup()
     {
