@@ -315,8 +315,6 @@ UniValue dumpprivkey(const UniValue& params)
     CTxDestination address = DecodeDestination(params[0].get_str());
     if (!IsValidDestination(address))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-    if (fWalletUnlockStakingOnly)
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is unlocked for staking only.");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
