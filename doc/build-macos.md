@@ -32,7 +32,24 @@ Options:
   --help, -h          Show this help message.
 ```
 
-**macOS 14 (Sonoma) or newer is required.**
+**macOS 14 (Sonoma) or newer is required**, for both Apple Silicon and Intel.
+
+That is the floor the dependency stack imposes rather than a preference.
+Homebrew sets no deployment target when it builds a bottle, so a bottle's
+minimum is simply whatever macOS it was compiled on, and the bundle's real floor
+is the highest minimum among every library it ships -- not whatever
+`LSMinimumSystemVersion` claims. Everything CI links is therefore macOS
+14-built: the ARM job runs on a macOS 14 runner and pours `arm64_sonoma`
+bottles, and the Intel job gets `sonoma` bottles whatever runner it is on
+because Homebrew no longer builds x86_64 bottles past that tag, with the kegs
+mirrored for the formulae that have no Intel bottle at all compiled on macOS 14
+to match. Qt 6 does not support anything below macOS 13 in any case.
+
+The released binaries declare the floor explicitly: CI passes
+`-DCMAKE_OSX_DEPLOYMENT_TARGET` (see `MACOS_DEPLOYMENT_TARGET` in
+`.github/workflows/cmake_production.yml`), `CMakeLists.txt` carries the same
+value as the project default for builds that do not, and the app bundle
+substitutes it into `LSMinimumSystemVersion`.
 
 If you use the build helper script above:
 
@@ -85,9 +102,15 @@ brew install qtbase qttools qtsvg qttranslations boost openssl libevent miniupnp
 ```
 
 and pass the brew prefix (e.g. `-DCMAKE_PREFIX_PATH=$(brew --prefix)`) so
-CMake sees the aggregate linked Qt view. CI uses
-contrib/devtools/brew-install-with-source-fallback.sh to source-build and
-cache the bottle-less formulae; it works locally too.
+CMake sees the aggregate linked Qt view.
+
+On Intel macOS the Qt formulae and `openssl@3` have no bottle at any tag, so
+those will source-build and take hours. CI does not pay that cost: it restores
+prebuilt kegs at pinned versions from the project's S3 mirror, via
+`contrib/devtools/macos-restore-pinned-kegs.sh` and
+`contrib/devtools/macos-pinned-kegs.txt`. You can use the same script locally on
+an Intel Mac, provided your Homebrew prefix is `/usr/local` -- the kegs carry
+absolute paths.
 
 ### 2. Get the Source Code
 

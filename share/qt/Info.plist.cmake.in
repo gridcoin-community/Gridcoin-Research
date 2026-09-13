@@ -2,8 +2,11 @@
 <!DOCTYPE plist SYSTEM "file://localhost/System/Library/DTDs/PropertyList.dtd">
 <plist version="0.9">
 <dict>
+  <!-- Substituted from the build's actual deployment target, so the declared
+       minimum cannot drift from what the binary was compiled for. This said
+       10.8.0 for years while nothing set a target at all. -->
   <key>LSMinimumSystemVersion</key>
-  <string>10.8.0</string>
+  <string>@CMAKE_OSX_DEPLOYMENT_TARGET@</string>
 
   <key>LSArchitecturePriority</key>
   <array>
