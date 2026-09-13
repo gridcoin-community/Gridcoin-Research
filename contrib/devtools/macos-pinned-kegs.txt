@@ -20,6 +20,21 @@
 # also keeps the set mutually consistent: the Qt kegs here were built against
 # these exact pcre2 and zstd versions.
 #
+# THIS LIST IS NOT THE WHOLE CLOSURE, AND IS NOT MEANT TO BE. Other formulae the
+# Intel job installs are also raised above 14.0 by one of the two routes above --
+# ca-certificates, gumbo-parser, jpeg-turbo, json-c, litehtml and lz4 are
+# source-built, and cmake pours a newer-tag bottle. None of them is pinned
+# because none of them ends up INSIDE the app bundle, which is the only place a
+# library's minimum can hurt a user. The entries here are exactly the ones
+# measured in a shipped DMG.
+#
+# So do not treat this file as derivable from `brew deps`. It is derived from
+# what the bundle actually contains, and the check that keeps it honest is in
+# the macOS jobs: they read the LC_BUILD_VERSION minimum of every Mach-O in the
+# finished DMG and fail if any exceeds the declared floor. If a formula starts
+# being bundled, or starts publishing a newer-tag Intel bottle, that check fails
+# and names the library -- add its formula here, built on the same machine.
+#
 # Each entry is <name> <version> <sha256>. The hash is not optional: these are
 # release inputs fetched over the network from a mutable object store, and a
 # version alone does not authenticate them -- the same URL can be replaced or

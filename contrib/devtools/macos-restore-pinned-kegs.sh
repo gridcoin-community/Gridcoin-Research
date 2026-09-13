@@ -19,14 +19,23 @@
 # macOS 14. This was found by measuring a shipped DMG -- pcre2 and xz had been
 # source-building quietly, and zstd was pouring its sequoia bottle.
 #
-# So the pinned set is not only the slow formulae: it is every formula Homebrew
-# would raise above 14.0 by either route. See macos-pinned-kegs.txt, which
-# records which reason applies to each. Everything else still resolves to a
-# `sonoma` Intel bottle at minos 14.0, and Homebrew pours those on a newer macOS
-# quite happily (measured: libevent in 9s on Sequoia).
+# So the pinned set is not only the slow formulae: it is every formula that
+# would otherwise put a library needing macOS 15 INSIDE the app bundle. Other
+# members of the closure are raised above 14.0 too and are deliberately not
+# pinned, because they are never bundled and a library's minimum can only hurt
+# a user from inside the bundle. macos-pinned-kegs.txt records which of the two
+# reasons applies to each entry, and why the list is not `brew deps` output.
 #
 # None of this is taken on trust: both macOS CI jobs measure the finished
-# bundle's real floor and fail if it exceeds what the bundle declares.
+# bundle's real floor and fail if it exceeds what the bundle declares. That
+# check, not this script, is what makes the declared floor true.
+#
+# KNOWN LIMITATION. The install list below is computed from the CURRENT formula
+# definitions while the restored kegs are frozen at the manifest's versions, so
+# the two can drift: a dependency rename or soname bump upstream would install
+# libraries the kegs do not reference. That surfaces as a link failure or as the
+# bundle check above, both loud, and the fix is to refresh the kegs -- which is
+# the same maintainer action an upgrade needs anyway.
 #
 # The kegs are built once by a maintainer on a native Intel macOS 14 machine and
 # uploaded to the same S3 bucket the depends system already uses as a source

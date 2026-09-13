@@ -645,7 +645,16 @@ jobs:
             echo "$SUBMIT_OUTPUT"
             exit 0
           }
-          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          # Guarded: this step runs under the default `bash -e {0}`, so an
+          # unguarded failure here would fail the JOB, which skips Upload
+          # Artifacts and makes the deploy job skip with it -- losing the whole
+          # release over a notarization hiccup, the opposite of best-effort.
+          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || SUBMISSION_ID=""
+          if [ -z "$SUBMISSION_ID" ]; then
+            echo "::warning::Could not read a submission id from notarytool — publishing the signed (un-notarized) DMG. Staple later via contrib/macdeploy/notarize-dmg.sh."
+            echo "$SUBMIT_OUTPUT"
+            exit 0
+          fi
           echo "  Submission ID: $SUBMISSION_ID"
 
           # Best-effort 45m wait: ample for Apple's automated path. A submission
@@ -660,9 +669,15 @@ jobs:
             --team-id "$APPLE_TEAM_ID" \
             --timeout 45m; then
             echo "=== Stapling $DMG in place ==="
-            xcrun stapler staple "$DMG"
-            xcrun stapler validate "$DMG"
-            echo "=== Notarized + stapled: $DMG ==="
+            # Also guarded, for the same reason. Stapling can fail transiently
+            # after a successful notarization (the ticket takes a moment to
+            # propagate), and a signed, notarized-but-unstapled DMG is still a
+            # shippable artifact -- Gatekeeper falls back to an online check.
+            if xcrun stapler staple "$DMG" && xcrun stapler validate "$DMG"; then
+              echo "=== Notarized + stapled: $DMG ==="
+            else
+              echo "::warning::Notarization succeeded but stapling did not — publishing the signed, notarized DMG unstapled. The ticket exists; staple later via contrib/macdeploy/notarize-dmg.sh."
+            fi
           else
             echo "::warning::Notarization did not complete within 45m — publishing the signed (un-notarized) DMG. Diagnose with 'xcrun notarytool log $SUBMISSION_ID --apple-id ... --team-id ...'; staple later via contrib/macdeploy/notarize-dmg.sh."
             xcrun notarytool log "$SUBMISSION_ID" \
@@ -1017,7 +1032,16 @@ jobs:
             echo "$SUBMIT_OUTPUT"
             exit 0
           }
-          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          # Guarded: this step runs under the default `bash -e {0}`, so an
+          # unguarded failure here would fail the JOB, which skips Upload
+          # Artifacts and makes the deploy job skip with it -- losing the whole
+          # release over a notarization hiccup, the opposite of best-effort.
+          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || SUBMISSION_ID=""
+          if [ -z "$SUBMISSION_ID" ]; then
+            echo "::warning::Could not read a submission id from notarytool — publishing the signed (un-notarized) DMG. Staple later via contrib/macdeploy/notarize-dmg.sh."
+            echo "$SUBMIT_OUTPUT"
+            exit 0
+          fi
           echo "  Submission ID: $SUBMISSION_ID"
 
           # Best-effort 45m wait: ample for Apple's automated path. A submission
@@ -1032,9 +1056,15 @@ jobs:
             --team-id "$APPLE_TEAM_ID" \
             --timeout 45m; then
             echo "=== Stapling $DMG in place ==="
-            xcrun stapler staple "$DMG"
-            xcrun stapler validate "$DMG"
-            echo "=== Notarized + stapled: $DMG ==="
+            # Also guarded, for the same reason. Stapling can fail transiently
+            # after a successful notarization (the ticket takes a moment to
+            # propagate), and a signed, notarized-but-unstapled DMG is still a
+            # shippable artifact -- Gatekeeper falls back to an online check.
+            if xcrun stapler staple "$DMG" && xcrun stapler validate "$DMG"; then
+              echo "=== Notarized + stapled: $DMG ==="
+            else
+              echo "::warning::Notarization succeeded but stapling did not — publishing the signed, notarized DMG unstapled. The ticket exists; staple later via contrib/macdeploy/notarize-dmg.sh."
+            fi
           else
             echo "::warning::Notarization did not complete within 45m — publishing the signed (un-notarized) DMG. Diagnose with 'xcrun notarytool log $SUBMISSION_ID --apple-id ... --team-id ...'; staple later via contrib/macdeploy/notarize-dmg.sh."
             xcrun notarytool log "$SUBMISSION_ID" \
