@@ -20,13 +20,18 @@
 # also keeps the set mutually consistent: the Qt kegs here were built against
 # these exact pcre2 and zstd versions.
 #
-# THIS LIST IS NOT THE WHOLE CLOSURE, AND IS NOT MEANT TO BE. Other formulae the
-# Intel job installs are also raised above 14.0 by one of the two routes above --
-# ca-certificates, gumbo-parser, jpeg-turbo, json-c, litehtml and lz4 are
-# source-built, and cmake pours a newer-tag bottle. None of them is pinned
-# because none of them ends up INSIDE the app bundle, which is the only place a
-# library's minimum can hurt a user. The entries here are exactly the ones
-# measured in a shipped DMG.
+# A THIRD REASON, AND THE ONE THAT GOVERNS MOST OF THIS LIST: a formula that
+# still has an x86_64 bottle today is one upstream revision away from not having
+# one. Every formula below that is not covered by the two reasons above is here
+# pre-emptively, captured while capturing was still a download rather than a
+# source build on someone's machine. They are the formulae that actually ship
+# inside the app bundle, measured from a built DMG rather than derived from
+# `brew deps` -- outside the bundle a library's minimum cannot reach a user.
+#
+# Still deliberately NOT pinned: ca-certificates (pinning a CA bundle freezes
+# trust roots, which is a security decision and not ours to make silently),
+# gumbo-parser, jpeg-turbo, json-c, litehtml and lz4 (source-built, never
+# bundled), and cmake and ccache (build tools, not linked into anything).
 #
 # So do not treat this file as derivable from `brew deps`. It is derived from
 # what the bundle actually contains, and the check that keeps it honest is in
@@ -64,3 +69,23 @@ openssl@3       3.6.3   45142a82c589caac92ffe544c02b27d8c28e8b42ef99d70083ab8495
 pcre2           10.47_1 45b59b0a38d25de207b6ef52e46b9115ffdcb60a2bf47995bb89be7d7f219b40
 xz              5.8.3   731694e5da2585a8bc8100ce2e08dc5bb0b0737b2ed389c8e51153a253c251b4
 zstd            1.5.7_1 a2477c998a68d4cadf0c776344222e863613a23288d103beed1850f610dea89c
+
+# Bundled libraries captured while their x86_64 bottle still existed.
+boost           1.90.0_1 8f051e9c38a7137d2e4904e6bdfc2723525002b246424a20a61651784782ff08
+brotli          1.2.0    a8afd8d548c85c30d4c8a552e4e5246a46e75e492c8320c2b39f51da9b4c9184
+capnp           1.5.0    ea8518e95cd545596014ad4eb38c7670dfa490b781d0697871bfb6d053f251bb
+dbus            1.16.2_1 ec8384d31315de156cac25112c530beb4084fe65b76801e74331c428881b0fbc
+double-conversion 3.4.0    6d25a03093afe4000925b19d2885a42f9b357d1ff3a666b68efa43a46ed946f5
+freetype        2.14.3   2e5504927120d0db892d1f79efc1482edb8bf19e876f6ec2a90c3f528ad73172
+gettext         1.0      d8e0df0728a7ca1a3ba1c23c4ca5d912ee6276f1e94bef235af11077fafafc4e
+glib            2.88.1   a28bd13421713450c5573054bd6ff548f72cda8547bfd1fa03f9d014ddd83def
+graphite2       1.3.14   0aab51c9ef36436bb269ea3e1cbf8219297e68c296779259b2714b2e94e8217d
+harfbuzz        14.2.0   eb04cf92e0448c05d7c8fe1276795e761fcb098d7ea3821b5a4120e14f6892f5
+icu4c@78        78.3     8e05774b9e6fa348cfd764a3b236b23c0a0bb99611450149541c3f2ca0b4c808
+libb2           0.98.1   ffd2f67cc74e7c7101671cbc9d56bf978265b55deb09f3d053694f3b64175ae1
+libevent        2.1.13   669aa17e5ddcf9d16283eedfd2ae49d4cc809c27aed461b12a4be1f26cbc337c
+libpng          1.6.58   6bd8378ed6e94486b9fc8837a7de5aab8b16020763b5dee0318702bdf83e48e3
+libzip          1.11.4_1 7d3ccefc6db528981df478849988c4e19862a078e163ebb561dd3168ff684f92
+md4c            0.5.3    903e7f852aa5725efeda720fe3522e644a9adfa74e3f4533c7af03d73db43da6
+miniupnpc       2.3.3    a26989050b10d15321d420fab01149dfa07d4f05505247d4173f1d8e5bf186a2
+qrencode        4.1.1    21fc53ddea51ce44ec19485ea6127c210d839b3cd16ed7b75f6d44b4b024b274
