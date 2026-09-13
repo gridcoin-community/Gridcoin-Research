@@ -32,7 +32,15 @@ Options:
   --help, -h          Show this help message.
 ```
 
-**macOS 14 (Sonoma) or newer is required.**
+**macOS 14 (Sonoma) or newer is required**, for both Apple Silicon and Intel.
+
+That is the floor the dependency stack imposes rather than a preference: the
+Homebrew bottles CI builds against are compiled on macOS 14 and carry a 14.0
+minimum, and Qt 6 does not support anything below macOS 13 in any case. The
+released binaries declare it explicitly -- CI passes
+`-DCMAKE_OSX_DEPLOYMENT_TARGET` (see `MACOS_DEPLOYMENT_TARGET` in
+`.github/workflows/cmake_production.yml`) and the app bundle substitutes that
+same value into `LSMinimumSystemVersion`.
 
 If you use the build helper script above:
 
@@ -85,9 +93,15 @@ brew install qtbase qttools qtsvg qttranslations boost openssl libevent miniupnp
 ```
 
 and pass the brew prefix (e.g. `-DCMAKE_PREFIX_PATH=$(brew --prefix)`) so
-CMake sees the aggregate linked Qt view. CI uses
-contrib/devtools/brew-install-with-source-fallback.sh to source-build and
-cache the bottle-less formulae; it works locally too.
+CMake sees the aggregate linked Qt view.
+
+On Intel macOS the Qt formulae and `openssl@3` have no bottle at any tag, so
+those will source-build and take hours. CI does not pay that cost: it restores
+prebuilt kegs at pinned versions from the project's S3 mirror, via
+`contrib/devtools/macos-restore-pinned-kegs.sh` and
+`contrib/devtools/macos-pinned-kegs.txt`. You can use the same script locally on
+an Intel Mac, provided your Homebrew prefix is `/usr/local` -- the kegs carry
+absolute paths.
 
 ### 2. Get the Source Code
 

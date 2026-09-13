@@ -1,0 +1,24 @@
+# Pinned Homebrew kegs for the Intel macOS CI job.
+#
+# These six formulae have no Intel bottle at any macOS tag, so Homebrew would
+# source-build them -- hours per run. They are built once on the project's
+# macOS 14 Intel VM and mirrored to S3; see macos-restore-pinned-kegs.sh.
+#
+# TO UPGRADE: upgrade the formula on the VM, tar the keg as
+# <name>--<version>.tar.gz from the Cellar, upload it under
+# homebrew-kegs/<built_on>/, then bump the version here. Note that a signed PUT
+# must percent-encode '@' (openssl%403--...) or S3 rejects the signature; GET
+# works with either spelling.
+#
+# built_on is the macOS the kegs were compiled on. It sets the S3 prefix and the
+# binaries' minos, and must be <= the runner's macOS: older-on-newer works,
+# newer-on-older does not.
+
+built_on        sonoma-x86_64
+
+qtbase          6.11.1
+qttools         6.11.1
+qtsvg           6.11.1
+qttranslations  6.11.1
+qtdeclarative   6.11.1
+openssl@3       3.6.3

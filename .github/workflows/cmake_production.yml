@@ -25,6 +25,19 @@ env:
   # installs the qtbase/qttools/qtsvg/qttranslations subset (see the Intel
   # job's keg-cache comment). doc/build-macos.md and the install helper carry
   # the user-facing copies of this list.
+  # The macOS floor both jobs build against, and the number the app bundle
+  # declares -- share/qt/Info.plist.cmake.in substitutes CMAKE_OSX_DEPLOYMENT_TARGET
+  # rather than hardcoding one, so the declaration cannot drift from the build.
+  #
+  # Without an explicit target CMake forces the RUNNER's OS version, so until now
+  # the shipped minimum silently tracked whichever label GitHub handed us while
+  # the plist advertised 10.8.0.
+  #
+  # 14.0 is the lowest the stack actually supports: Homebrew's Intel bottles are
+  # built on macOS 14 (the `sonoma` tag) and carry minos 14.0, the Intel kegs
+  # mirrored to S3 are built on the macOS 14 VM, and Qt 6 will not go below
+  # macOS 13 at all.
+  MACOS_DEPLOYMENT_TARGET: "14.0"
   MACOS_BREW_DEPS: boost libevent miniupnpc qrencode libzip ccache cmake capnp
 
 jobs:
@@ -296,7 +309,9 @@ jobs:
   # ----------------------------------------------------------------------
   macos-native-arm64:
     name: macOS ARM64 (Homebrew Qt6)
-    runs-on: macos-14
+    # macos-14 is deprecated: brownouts from 2026-10-05, unsupported 2026-11-02
+    # (actions/runner-images#13518).
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
 
@@ -392,6 +407,7 @@ jobs:
             -DENABLE_DOCS=OFF \
             -DUSE_QT6=ON \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ env.MACOS_DEPLOYMENT_TARGET }} \
             -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT" \
             -DPython3_EXECUTABLE="${RUNNER_TEMP}/venv/bin/python3" \
             $CC_LAUNCHER \
@@ -539,64 +555,38 @@ jobs:
 
   macos-native-intel:
     name: macOS Intel (Homebrew Qt6)
-    runs-on: macos-14
+    # A NATIVE Intel runner, not Rosetta on arm64. Homebrew removed Intel
+    # support from its installer on 2026-09-11 (Homebrew/install#1140), so a
+    # second x86_64 Homebrew can no longer be bootstrapped at /usr/local on an
+    # arm64 runner at all -- which is what this job used to do. A native Intel
+    # runner already ships Homebrew at the Intel prefix, so there is nothing to
+    # bootstrap and no `arch -x86_64` wrapper on every command.
+    #
+    # macos-15-intel is available until August 2027, after which Actions drops
+    # x86_64 entirely (actions/runner-images#13045).
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v5
 
-      # Homebrew is winding down x86_64 macOS bottles (Tier 3 platform
-      # demotion): formulae keep working but lose their Intel bottles one by
-      # one. Instead of chasing each casualty with a bespoke step (openssl@3
-      # and pcre2 got that treatment before the demotion went wholesale),
-      # contrib/devtools/brew-install-with-source-fallback.sh converges
-      # generically -- it source-builds whatever formula brew names in a
-      # missing-bottle error and stashes the keg here, keyed by the manifest
-      # of built name-versions, so each casualty is built once per version
-      # and restored thereafter. The qt meta-formula is deliberately NOT
-      # installed: it drags in every Qt satellite (qtwebengine is a Chromium
-      # build no runner can source-build); qtbase/qttools/qtsvg cover the
-      # QT_COMPONENTS list in CMakeLists.txt, plus qttranslations for the
-      # bundled translations. Note qttools still pulls qtdeclarative (and its
-      # build-only satellites) as bottle-less source builds -- part of the
-      # cold-run budget. Kegs are stashed and the manifest rewritten after
-      # every build, and the save below runs on failure too, so repeated runs
-      # converge monotonically even if one run cannot finish the whole set
-      # inside the job limit. If a saved keg is ever broken (the cache key
-      # only tracks versions, not build health), bump the v1 in the key to
-      # start a fresh cache generation.
-      - name: Restore the Intel source-built keg cache
-        uses: actions/cache/restore@v5
-        with:
-          path: ~/intel-kegs
-          key: intel-kegs-v1-${{ github.run_id }}
-          restore-keys: intel-kegs-v1-
-
-      - name: Install x86_64 Homebrew and Dependencies
+      # Homebrew wound x86_64 macOS down to Tier 3 and the Qt stack plus
+      # openssl@3 now have no Intel bottle at any tag, so `brew install` would
+      # source-build them -- hours per run, and the reason this job once hit the
+      # six-hour ceiling without starting a compile. Those six come prebuilt from
+      # the project's S3 mirror at pinned versions; everything else still has a
+      # `sonoma` Intel bottle, which Homebrew pours happily on a newer macOS.
+      #
+      # The mirrored kegs are built on macOS 14, so they and the bottles both
+      # carry minos 14.0 -- the floor MACOS_DEPLOYMENT_TARGET declares.
+      - name: Restore the pinned Intel kegs
         run: |
-          # Install a separate x86_64 Homebrew at /usr/local (Intel prefix).
-          # The ARM64 runner has Rosetta 2, so x86_64 binaries run transparently.
-          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
-          arch -x86_64 /usr/local/bin/brew update
-          # shellcheck disable=SC2086
-          BREW_ARCH="arch -x86_64" contrib/devtools/brew-install-with-source-fallback.sh \
-            "$HOME/intel-kegs" \
-            qtbase qttools qtsvg qttranslations openssl@3 $MACOS_BREW_DEPS
+          contrib/devtools/macos-restore-pinned-kegs.sh \
+            contrib/devtools/macos-pinned-kegs.txt
 
-      - name: Compute the keg cache key
-        id: kegkey
-        if: ${{ always() }}
+      - name: Install the remaining bottled dependencies
         run: |
-          if [ -s "$HOME/intel-kegs/manifest.txt" ]; then
-            echo "key=intel-kegs-v1-$(shasum -a 256 "$HOME/intel-kegs/manifest.txt" | cut -c1-16)" >> "$GITHUB_OUTPUT"
-          else
-            echo "key=" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Save the Intel source-built keg cache
-        if: ${{ always() && steps.kegkey.outputs.key != '' }}
-        uses: actions/cache/save@v5
-        with:
-          path: ~/intel-kegs
-          key: ${{ steps.kegkey.outputs.key }}
+          # These all have Intel bottles; none is in the pinned set, so naming
+          # them cannot drag a pinned formula forward.
+          brew install $MACOS_BREW_DEPS
 
       - name: Configure Ccache
         uses: actions/cache@v5
@@ -618,7 +608,7 @@ jobs:
 
       - name: Set up Python venv for DMG packaging
         run: |
-          arch -x86_64 /usr/local/bin/python3 -m venv "${RUNNER_TEMP}/venv"
+          python3 -m venv "${RUNNER_TEMP}/venv"
           "${RUNNER_TEMP}/venv/bin/pip" install ds_store mac_alias
 
       - name: Import Code Signing Certificate
@@ -671,10 +661,10 @@ jobs:
           # With the split Qt kegs, qtbase's Qt6Config cannot resolve the Svg
           # and LinguistTools components living in the qtsvg/qttools kegs;
           # the brew prefix exposes the aggregate linked lib/cmake view.
-          QT6_PATH=$(arch -x86_64 /usr/local/bin/brew --prefix)
-          OPENSSL_ROOT=$(arch -x86_64 /usr/local/bin/brew --prefix openssl)
+          QT6_PATH=$(brew --prefix)
+          OPENSSL_ROOT=$(brew --prefix openssl@3)
 
-          arch -x86_64 /usr/local/bin/cmake -B build \
+          cmake -B build \
             -DCMAKE_PREFIX_PATH="$QT6_PATH" \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DENABLE_GUI=ON \
@@ -686,19 +676,20 @@ jobs:
             -DENABLE_DOCS=OFF \
             -DUSE_QT6=ON \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ env.MACOS_DEPLOYMENT_TARGET }} \
             -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT" \
             -DPython3_EXECUTABLE="${RUNNER_TEMP}/venv/bin/python3" \
             $CC_LAUNCHER \
             $CXX_LAUNCHER
 
       - name: Build
-        run: arch -x86_64 /usr/local/bin/cmake --build build
+        run: cmake --build build
 
       - name: Test
         # See the arm64 job: bounded twice so a hang is reported rather than
         # running to the six-hour job default.
         timeout-minutes: 45
-        run: arch -x86_64 /usr/local/bin/ctest --test-dir build --output-on-failure --timeout 1800
+        run: ctest --test-dir build --output-on-failure --timeout 1800
 
       - name: Dump crash reports on test failure
         # macOS writes a symbolicated report to DiagnosticReports when a process
@@ -721,7 +712,7 @@ jobs:
       - name: Verify Binary Hardening
         run: ./contrib/devtools/check-binary-hardening.sh build
       - name: Package (DMG)
-        run: arch -x86_64 /usr/local/bin/cmake --build build --target deploy
+        run: cmake --build build --target deploy
 
       - name: Verify DMG Package
         run: |
