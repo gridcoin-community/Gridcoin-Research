@@ -90,6 +90,8 @@ EXPECTED_BOOST_INCLUDES=(
     boost/signals2/connection.hpp
     boost/signals2/optional_last_value.hpp
     boost/signals2/signal.hpp
+    boost/test/tree/traverse.hpp
+    boost/test/tree/visitor.hpp
     boost/test/unit_test.hpp
     boost/thread.hpp
     boost/thread/condition_variable.hpp

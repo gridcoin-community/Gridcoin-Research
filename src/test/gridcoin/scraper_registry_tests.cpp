@@ -7,6 +7,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "test/state_guard.h"
+
 // Tests are single-threaded and drive the ScraperRegistry contract
 // handler directly. The handler is EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 // suppress the analyzer for this file rather than take a lock the
@@ -94,7 +96,8 @@ void AddRemoveScraperEntryV2(const std::string& address, const GRC::ScraperEntry
 
 }// anonymous namespace
 
-BOOST_AUTO_TEST_SUITE(scraper_registry_tests)
+// Symmetric reset: the cases reset the registry on entry only.
+BOOST_AUTO_TEST_SUITE(scraper_registry_tests, *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::SCRAPER>>())
 
 BOOST_AUTO_TEST_CASE(scraper_entries_added_to_scraper_work_correctly_legacy)
 {

@@ -4,12 +4,16 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "test/state_guard.h"
+
 #include <util.h>
 #include <gridcoin/sidestake.h>
 #include <interfaces/sidestake.h>
 #include <key_io.h>
 
-BOOST_AUTO_TEST_SUITE(sidestake_tests)
+// Suite-level guard: the sidestake editors write read-write settings
+// (sidestakeaddresses / allocations / descriptions) that nothing removes.
+BOOST_AUTO_TEST_SUITE(sidestake_tests, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 BOOST_AUTO_TEST_CASE(sidestake_Allocation_Initialization_trivial)
 {

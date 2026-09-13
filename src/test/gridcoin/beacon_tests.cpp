@@ -12,6 +12,8 @@
 #include <util/string.h>
 
 #include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
 #include <vector>
 
 extern leveldb::DB *txdb;
@@ -1000,7 +1002,12 @@ BOOST_AUTO_TEST_SUITE_END()
 // BeaconPayload
 // -----------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_SUITE(BeaconPayload)
+// Suite-level guards: BeaconRegistryTest inserts every block of the fixture
+// file into mapBlockIndex and advances hashBestChain without ever erasing
+// or restoring them, and resets the beacon registry on entry only.
+BOOST_AUTO_TEST_SUITE(BeaconPayload,
+                      *boost::unit_test::fixture<grc_test::StateGuard>()
+                      * boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::BEACON>>())
 
 // BeaconRegistry methods (Reset, Add, ActivatePending, Delete, Try,
 // FindPending, FindHistorical, Deactivate) are EXCLUSIVE_LOCKS_REQUIRED(cs_main).

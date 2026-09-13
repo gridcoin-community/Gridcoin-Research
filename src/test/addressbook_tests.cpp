@@ -17,6 +17,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "test/state_guard.h"
+
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -51,7 +53,9 @@ bool ReloadEntry(const CTxDestination& dest, CAddressBookData& out)
 }
 } // namespace
 
-BOOST_AUTO_TEST_SUITE(addressbook_tests)
+// Suite-level guard: loading a wallet through CWalletDB can force -rescan,
+// which otherwise stays set for the rest of the process.
+BOOST_AUTO_TEST_SUITE(addressbook_tests, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 // A default-constructed entry has an empty label and the "unknown" purpose. This is the
 // default that old wallets (which carry only "name" records) inherit on load.

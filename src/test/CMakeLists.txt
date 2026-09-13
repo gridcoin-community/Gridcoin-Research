@@ -14,6 +14,8 @@ add_executable(test_gridcoin
     dos_tests.cpp
     accounting_tests.cpp
     chain_setup.cpp
+    state_guard.cpp
+    state_leak_detector.cpp
     miner_block_assembly_tests.cpp
     addressbook_tests.cpp
     addrman_tests.cpp

@@ -8,6 +8,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "test/state_guard.h"
+
 #include <algorithm>
 #include <random>
 
@@ -22,6 +24,11 @@ BOOST_AUTO_TEST_CASE(osrandom_tests)
 
 BOOST_AUTO_TEST_CASE(fastrandom_tests)
 {
+    // The global fixture runs the whole binary with deterministic GetRand();
+    // the second half of this case turns that off to prove nondeterminism and
+    // used to leave it off for every suite that ran afterwards.
+    grc_test::StateGuard guard;
+
     // Check that deterministic FastRandomContexts are deterministic
     g_mock_deterministic_tests = true;
     FastRandomContext ctx1(true);

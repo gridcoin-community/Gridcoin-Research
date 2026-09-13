@@ -21,6 +21,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "test/state_guard.h"
+
 
 BOOST_AUTO_TEST_SUITE(connectinputs_tests)
 
@@ -186,11 +188,10 @@ BOOST_AUTO_TEST_CASE(script_flags_follow_the_height_a_transaction_lands_at)
 //!
 BOOST_AUTO_TEST_CASE(v15_script_flags_are_inert_until_v15_is_scheduled)
 {
-    const int v15 = GetBlockV15Height();
-
     // Unscheduled today. If this ever fails, v15 has been given a height and
     // the assertions below need revisiting rather than deleting.
-    BOOST_REQUIRE_EQUAL(v15, std::numeric_limits<int>::max());
+    grc_test::RequireV15Unscheduled();
+    const int v15 = GetBlockV15Height();
 
     for (const int h : {0, 1, 1000000, 3989999, 3990000, 4000000, 100000000}) {
         const unsigned int flags = GetBlockScriptFlags(h);
@@ -242,20 +243,10 @@ BOOST_AUTO_TEST_CASE(a_consensus_script_failure_scores_the_relayer)
 
     // Restored before leaving: three suites in this binary assert that v15 is
     // unscheduled, and pool_tests forces this same argument in the other
-    // direction. Leaving it set would make this file's own earlier cases order
-    // dependent.
-    struct V15HeightGuard {
-        const bool was_set{gArgs.IsArgSet("-blockv15height")};
-        const std::string previous{gArgs.GetArg("-blockv15height", "")};
-        ~V15HeightGuard()
-        {
-            if (was_set) {
-                gArgs.ForceSetArg("-blockv15height", previous);
-            } else {
-                gArgs.ForceSetArg("-blockv15height", strprintf("%d", std::numeric_limits<int>::max()));
-            }
-        }
-    } guard;
+    // direction. The guard puts the argument back exactly as it found it,
+    // presence included; writing the INT_MAX sentinel would leave the key
+    // present where it was absent.
+    grc_test::V15HeightGuard guard(std::numeric_limits<int>::max());
 
     CBlockIndex index;
     index.nHeight = nGrandfather + 1;
@@ -453,7 +444,7 @@ BOOST_AUTO_TEST_CASE(the_superblock_leaves_the_block_bound_only_under_v15_rules)
     LOCK(cs_main);
 
     // Inert until v15 is scheduled.
-    BOOST_REQUIRE_EQUAL(GetBlockV15Height(), std::numeric_limits<int>::max());
+    grc_test::RequireV15Unscheduled();
 
     // Over the block bound on its own, but inside its own bound.
     const GRC::Superblock superblock = SuperblockOfAtLeast(MAX_BLOCK_SIZE + 1);

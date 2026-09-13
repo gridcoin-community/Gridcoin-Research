@@ -6,6 +6,8 @@
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 #include <boost/test/unit_test.hpp>
 
+#include "test/state_guard.h"
+
 #include "wallet/wallet.h"
 #include "net.h"
 #include "util.h"
@@ -64,6 +66,8 @@ BOOST_AUTO_TEST_CASE(DoS_banning)
 
 BOOST_AUTO_TEST_CASE(DoS_banscore)
 {
+    grc_test::StateGuard guard; // -banscore back to absent, not to "100"
+
     CNodeStats nodestats;
     g_banman->ClearBanned();
     gArgs.ForceSetArg("-banscore", "111"); // because 11 is my favorite number
@@ -79,9 +83,6 @@ BOOST_AUTO_TEST_CASE(DoS_banscore)
     BOOST_CHECK(nodestats.nMisbehavior == 110); // nMisbehavior should be 110.
     dummyNode1.Misbehaving(1);
     BOOST_CHECK(g_banman->IsBanned(addr1));
-
-    // TODO: Why no ClearArg?
-    gArgs.ForceSetArg("-banscore", "100");
 }
 
 BOOST_AUTO_TEST_CASE(DoS_ban_then_clear_lock_order)
@@ -145,6 +146,8 @@ BOOST_AUTO_TEST_CASE(DoS_ban_then_clear_lock_order)
 
 BOOST_AUTO_TEST_CASE(DoS_bantime)
 {
+    grc_test::StateGuard guard; // mock time back to 0 on exit
+
     CNodeStats nodestats;
     g_banman->ClearBanned();
     int64_t nStartTime = GetTime();
@@ -167,6 +170,8 @@ BOOST_AUTO_TEST_CASE(DoS_bantime)
 
 BOOST_AUTO_TEST_CASE(DoS_misbehavior_decay)
 {
+    grc_test::StateGuard guard; // mock time back to 0 on exit
+
     CNodeStats nodestats;
     g_banman->ClearBanned();
     int64_t nStartTime = GetTime();

@@ -7,6 +7,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "test/state_guard.h"
+
 // Tests are single-threaded and drive the ProtocolRegistry contract
 // handler directly. The handler is EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 // suppress the analyzer for this file rather than take a lock the
@@ -96,7 +98,8 @@ void DeleteProtocolEntry(const uint32_t& payload_version, const std::string& key
 
 } // anonymous namespace
 
-BOOST_AUTO_TEST_SUITE(protocol_tests)
+// Symmetric reset: the cases reset the registry on entry only.
+BOOST_AUTO_TEST_SUITE(protocol_tests, *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::PROTOCOL>>())
 
 // Note for these tests we are going to mix payload version 1 and 2 entries to make
 // sure they act equivalently.

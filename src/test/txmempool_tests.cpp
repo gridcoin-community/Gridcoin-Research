@@ -9,6 +9,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "test/state_guard.h"
+
 #include <key.h>
 #include <primitives/transaction.h>
 #include <txmempool.h>
@@ -60,7 +62,9 @@ CTxMemPoolEntry MakeEntry(const CTransaction& tx)
 }
 } // anonymous namespace
 
-BOOST_AUTO_TEST_SUITE(txmempool_tests)
+// Suite-level guard: the pool is cleared on entry and on exit, so the
+// per-case clears below defend this suite and nothing leaks out of it.
+BOOST_AUTO_TEST_SUITE(txmempool_tests, *boost::unit_test::fixture<grc_test::MempoolStateGuard>())
 
 BOOST_AUTO_TEST_CASE(entry_caches_fee_size_time_height)
 {

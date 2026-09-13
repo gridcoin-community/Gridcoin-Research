@@ -13,6 +13,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "test/state_guard.h"
+
 // Tests are single-threaded and drive the Whitelist contract handler
 // directly (not via ApplyContracts). The handler is
 // EXCLUSIVE_LOCKS_REQUIRED(cs_main) under the thread-safety annotation
@@ -563,7 +565,9 @@ BOOST_AUTO_TEST_SUITE_END()
 // Whitelist
 // -----------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_SUITE(Whitelist)
+// Suite-level guard: DeepCopyHeightGuard below writes
+// -autogreylistdeepcopyheight on exit where it was absent on entry.
+BOOST_AUTO_TEST_SUITE(Whitelist, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 BOOST_AUTO_TEST_CASE(it_adds_whitelisted_projects_from_contract_data)
 {

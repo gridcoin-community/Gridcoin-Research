@@ -4,6 +4,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "test/state_guard.h"
+
 #include <key.h>
 #include <keystore.h>
 #include <node/psgt_pool.h>
@@ -20,7 +22,10 @@
 
 using namespace psgt_test;
 
-BOOST_AUTO_TEST_SUITE(psgt_pool_tests)
+// Suite-level guard: the pool is cleared on entry and on exit. The cases
+// clear it on entry themselves; orphan_held_then_promoted_when_funding_arrives
+// ends with its funding transaction still in the pool.
+BOOST_AUTO_TEST_SUITE(psgt_pool_tests, *boost::unit_test::fixture<grc_test::MempoolStateGuard>())
 
 //! Register a transaction with the global mempool so the pool's funding-output
 //! check (chain-or-mempool existence, mapNextTx spentness) can see it. The

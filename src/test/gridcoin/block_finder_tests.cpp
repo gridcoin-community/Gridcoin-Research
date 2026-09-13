@@ -7,6 +7,8 @@
 #include "primitives/block.h"
 
 #include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
 #include <array>
 #include <cstdint>
 
@@ -26,6 +28,12 @@ namespace
     class BlockChain
     {
     public:
+        // First member, so it captures the tip globals before the constructor
+        // points them at `blocks` and restores them after `blocks` is gone.
+        // Without it every case left pindexBest / pindexGenesisBlock /
+        // nBestHeight aimed at a dead stack frame.
+        grc_test::StateGuard guard;
+
         BlockChain()
         {
             // Initialize block link.

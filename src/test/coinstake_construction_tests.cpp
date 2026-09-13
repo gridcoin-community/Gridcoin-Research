@@ -22,6 +22,7 @@
 #include <gridcoin/tally.h>
 #include <gridcoin/contract/contract.h>
 #include <rpc/blockchain.h>
+#include <test/state_guard.h>
 #include <test/test_gridcoin.h>
 #include <wallet/wallet.h>
 
@@ -30,6 +31,12 @@ namespace {
 // Reuses the fixture pattern from mrc_tests.cpp with additions for
 // coinstake construction testing (pindexBest, sidestake config, etc.)
 struct CoinstakeSetup {
+    // First member: restores the tip globals, mock time and every argument
+    // this fixture forces, after the members below are gone. The destructor
+    // used to write empty strings back and leave pindexGenesisBlock pointing
+    // at the index it had just freed.
+    grc_test::StateGuard guard;
+
     CBlockIndex* pindex{nullptr};
     GRC::Cpid cpid = GRC::Cpid(InsecureRandBytes(16));
     GRC::ResearchAccount& account = GRC::Tally::CreateAccount(cpid);
@@ -102,8 +109,6 @@ struct CoinstakeSetup {
 
     ~CoinstakeSetup()
     {
-        pindexBest = nullptr;
-
         GRC::GetBeaconRegistry().Reset();
         GRC::GetSideStakeRegistry().ResetInMemoryOnly();
 
@@ -111,14 +116,10 @@ struct CoinstakeSetup {
         gArgs.ForceSetArg("email", "noncruncher");
         GRC::Researcher::Reload();
         gArgs.ForceSetArg("email", "");
-        gArgs.ForceSetArg("-enablestakesplit", "");
-        gArgs.ForceSetArg("-enablesidestaking", "");
-        gArgs.ForceSetArg("-minstakesplitvalue", "");
-        gArgs.ForceSetArg("-stakingefficiency", "");
         GRC::Tally::RemoveAccount(cpid);
 
-        SetMockTime(0);
-
+        // The staking arguments, mock time and the tip pointers are restored
+        // by `guard` once this destructor has freed the mock chain.
         for (CBlockIndex* tip = pindex; tip->pprev; tip = tip->pprev) {
             mapBlockIndex.erase(tip->GetBlockHash());
             delete tip->phashBlock;
@@ -343,6 +344,12 @@ BOOST_AUTO_TEST_CASE(sidestake_outputs_placed)
         GRC::LocalSideStake::LocalSideStakeStatus::ACTIVE
     );
     GRC::GetSideStakeRegistry().NonContractAdd(sidestake, false);
+
+    // The registry only hands out local sidestakes while -enablesidestaking
+    // is on; the flag passed to SplitCoinStakeOutput below is not enough on
+    // its own. This used to pass anyway because the previous case's teardown
+    // forced -enablesidestaking to an empty string, which parses as true.
+    gArgs.ForceSetArg("-enablesidestaking", "1");
 
     CMutableTransaction coinstake = MakeCoinstake(10000 * COIN);
     CBlock block = MakeBlock();
