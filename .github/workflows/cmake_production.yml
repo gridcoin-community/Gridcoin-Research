@@ -37,11 +37,15 @@ env:
   MACOS_DEPLOYMENT_TARGET: "14.0"
 
   # The non-Qt Homebrew dependencies shared by both macOS jobs. The Qt head
-  # differs on purpose: ARM64 installs the qt meta-formula (bottled); Intel
-  # restores the qtbase/qttools/qtsvg/qttranslations/qtdeclarative kegs from the
-  # mirror, because those have no Intel bottle at any tag (see
-  # contrib/devtools/macos-pinned-kegs.txt). doc/build-macos.md carries the
-  # user-facing copy of this list.
+  # differs on purpose, but not in WHICH Qt: both jobs use the qtbase/qttools/
+  # qtsvg/qttranslations/qtdeclarative subset rather than the `qt` meta-formula,
+  # which drags in qtwebengine. They differ in WHERE it comes from -- ARM64
+  # installs the subset from Homebrew, Intel restores it from the mirror, because
+  # those formulae have no Intel bottle at any tag (see
+  # contrib/devtools/macos-pinned-kegs.txt). Most of the names below are mirrored
+  # for Intel too and the restore script drops them from what it asks Homebrew
+  # for; the ARM job installs the list as written. doc/build-macos.md carries the
+  # user-facing copy.
   MACOS_BREW_DEPS: boost libevent miniupnpc qrencode libzip ccache cmake capnp
 
 jobs:
@@ -726,17 +730,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Homebrew wound x86_64 macOS down to Tier 3 and the Qt stack plus
-      # openssl@3 now have no Intel bottle at any tag, so `brew install` would
-      # source-build them -- hours per run, and the reason this job once hit the
-      # six-hour ceiling without starting a compile. Those six come prebuilt from
-      # the project's S3 mirror at pinned versions; everything else still has a
-      # `sonoma` Intel bottle, which Homebrew pours happily on a newer macOS.
+      # Homebrew wound x86_64 macOS down to Tier 3, and the mirror answers three
+      # different consequences of that. The Qt stack, openssl@3, pcre2 and xz have
+      # no Intel bottle at any tag, so `brew install` would source-build them --
+      # hours per run for Qt, and the reason this job once hit the six-hour ceiling
+      # without starting a compile. zstd has one, but for a NEWER macOS tag, and
+      # Homebrew prefers the newest, which quietly yields a 15.0 binary. The rest
+      # are mirrored pre-emptively: they still have an Intel bottle today and will
+      # not forever, and capturing one costs a download now against a source build
+      # later. contrib/devtools/macos-pinned-kegs.txt records which reason applies
+      # to each entry.
       #
-      # The mirrored kegs are built on native Intel macOS 14, so they and the
-      # bottles both carry minos 14.0 -- the floor MACOS_DEPLOYMENT_TARGET
-      # declares.
-      - name: Restore the pinned Intel kegs and install the bottled ones
+      # Every mirrored keg is built on native Intel macOS 14 and carries minos
+      # 14.0, the floor MACOS_DEPLOYMENT_TARGET declares -- and which the DMG check
+      # further down measures rather than trusts.
+      - name: Restore the pinned Intel kegs and install the rest
         run: |
           # MACOS_BREW_DEPS is passed IN rather than installed afterwards. Several
           # of them reach a pinned formula through their own dependencies --

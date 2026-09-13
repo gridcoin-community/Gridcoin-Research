@@ -129,10 +129,15 @@ echo "pinned (${BUILT_ON}): ${NAMES[*]}"
 pinned_list="$(printf '%s\n' "${NAMES[@]}")"
 external="$("${BREW}" deps --union "${NAMES[@]}" | grep -vxF -e "${pinned_list}" || true)"
 
+# EXTRA is filtered through the pinned set too, not just the closure. The workflow
+# passes MACOS_BREW_DEPS verbatim and most of those names are now pinned, so
+# without this `brew install` would fetch its own copy of a pinned formula
+# moments before the restore replaces it: wasted work today, and on the day that
+# formula's bottle disappears, the very source build the mirror exists to avoid.
 install_list="${external}"
 if [ "${#EXTRA[@]}" -gt 0 ]; then
     install_list="${install_list}
-$(printf '%s\n' "${EXTRA[@]}")"
+$(printf '%s\n' "${EXTRA[@]}" | grep -vxF -e "${pinned_list}" || true)"
 fi
 
 if [ -n "${install_list//[[:space:]]/}" ]; then
@@ -178,6 +183,12 @@ for i in "${!NAMES[@]}"; do
         exit 1
     fi
 
+    # Remove any existing keg of this exact version first. tar overlays files but
+    # does not delete ones the archive lacks, so extracting over a copy Homebrew
+    # installed transitively would leave its files behind and the result would no
+    # longer be the tree whose hash we just verified. The check at the end reads
+    # the directory name, not its contents, so it would not notice.
+    rm -rf "${CELLAR:?}/${name}/${version}"
     tar -xzf "${tmp}" -C "${CELLAR}"
     rm -f "${tmp}"
 
