@@ -116,14 +116,22 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND NOT CMAKE_HOST_APPLE)
   # In turn, the find_library() inspects the well-known locations
   # on the file system; therefore, a hint is required.
   set(CMAKE_FRAMEWORK_PATH "@OSX_SDK@/System/Library/Frameworks")
+endif()
 
-  # depends already bakes its floor into the compile and link flags
-  # (-mmacos-version-min / -platform_version, from OSX_MIN_VERSION in
-  # hosts/darwin.mk). State it as the CMake variable as well, because that is
-  # what share/qt/Info.plist.cmake.in substitutes into LSMinimumSystemVersion:
-  # without it a cross-built bundle declares nothing at all, while the binaries
-  # inside it target this version. The flags remain the authority for what is
-  # compiled; this only makes the bundle say the same thing.
+# depends already bakes its macOS floor into the compile and link flags
+# (-mmacos-version-min / -platform_version, from OSX_MIN_VERSION in
+# hosts/darwin.mk). State it as the CMake variable too, because that is what
+# share/qt/Info.plist.cmake.in substitutes into LSMinimumSystemVersion: without
+# it the bundle declares nothing at all while the binaries inside it target this
+# version. The flags remain the authority for what is compiled; this only makes
+# the bundle say the same thing.
+#
+# Guarded on the value rather than on CMAKE_SYSTEM_NAME or CMAKE_HOST_APPLE.
+# OSX_MIN_VERSION is defined only by hosts/darwin.mk, so it is non-empty exactly
+# when depends targets macOS -- whether cross-compiled from Linux or built on a
+# Mac. The Darwin block above is host-conditional and would have missed the
+# second case.
+if(NOT "@OSX_MIN_VERSION@" STREQUAL "")
   set(CMAKE_OSX_DEPLOYMENT_TARGET "@OSX_MIN_VERSION@" CACHE STRING "Minimum macOS version, from depends OSX_MIN_VERSION")
 endif()
 

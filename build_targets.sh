@@ -775,9 +775,15 @@ if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darw
 
                 echo "Checking for Homebrew Qt ($QT_PROBE_FORMULA)..."
 
-                if ! QT_KEG_PATH=$(brew --prefix "$QT_PROBE_FORMULA" 2>/dev/null); then
-                     echo "Error: brew --prefix $QT_PROBE_FORMULA failed. Installation broken or missing."
-                     echo "Check your Homebrew install or use WITH_GUI=false if you only want the daemon."
+                # `brew --prefix <formula>` prints the would-be opt path and exits 0
+                # even when the formula is not installed, so its exit status alone
+                # proves nothing. Check the path actually exists, which is what the
+                # error below is claiming.
+                if ! QT_KEG_PATH=$(brew --prefix "$QT_PROBE_FORMULA" 2>/dev/null) \
+                   || [ ! -d "$QT_KEG_PATH" ]; then
+                     echo "Error: $QT_PROBE_FORMULA is not installed."
+                     echo "Install the Qt 6 subset with ./install_dependencies.sh, or see"
+                     echo "doc/build-macos.md; use WITH_GUI=false if you only want the daemon."
                      exit 1
                 fi
 
