@@ -6,7 +6,14 @@ export LC_ALL=C
 #
 # notarize-dmg.sh — Submit signed DMGs to Apple for notarization and staple.
 #
-# This script replaces the CI notarization job which times out at 2 hours.
+# CI notarizes and staples release DMGs itself (the "Notarize and Staple
+# (best-effort)" step in .github/workflows/cmake_production.yml, on tag builds).
+# That step is deliberately non-fatal: if credentials are absent, if Apple's
+# notary does not finish inside the 45m wait, or if stapling fails after a
+# successful notarization, it warns and publishes the signed DMG rather than
+# failing the release. This script is how that DMG gets finished afterwards --
+# it is the fallback those warnings point at, not a replacement for the job.
+#
 # Run it on a macOS machine with valid Apple Developer credentials.
 #
 # Usage:
