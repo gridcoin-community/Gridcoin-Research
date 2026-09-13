@@ -4,16 +4,29 @@
 #
 # WHY THIS EXISTS
 #
-# Homebrew has wound x86_64 macOS down to Tier 3. Five of the formulae this
-# build needs -- qtbase, qttools, qtsvg, qttranslations, qtdeclarative -- plus
-# openssl@3 now ship NO Intel bottle at any macOS tag, so `brew install` builds
-# them from source. That is hours per run, and it is why the Intel job reached
-# the six-hour job ceiling without ever starting a compile.
+# Homebrew has wound x86_64 macOS down to Tier 3, and that costs us twice.
 #
-# Everything else we need still has a `sonoma` Intel bottle, and Homebrew pours
-# those on a newer macOS quite happily (measured: libevent in 9s on Sequoia), so
-# only the six bottle-less formulae are mirrored. Those bottles are built on
-# macOS 14 and carry minos 14.0, which is the same floor as the mirrored kegs.
+# COST ONE, TIME. qtbase, qttools, qtsvg, qttranslations, qtdeclarative and
+# openssl@3 ship no Intel bottle at any macOS tag, so `brew install` builds them
+# from source. That is hours per run, and it is why the Intel job reached the
+# six-hour job ceiling without ever starting a compile.
+#
+# COST TWO, THE FLOOR. Homebrew sets no deployment target, so a binary's minimum
+# is whatever machine produced it. A source build on the runner takes the
+# RUNNER's macOS (15), and a formula that publishes a bottle for a newer tag
+# hands over a newer binary because Homebrew prefers the newest. Both put a 15.0
+# library inside a bundle that claims 14.0, and dyld then refuses to load it on
+# macOS 14. This was found by measuring a shipped DMG -- pcre2 and xz had been
+# source-building quietly, and zstd was pouring its sequoia bottle.
+#
+# So the pinned set is not only the slow formulae: it is every formula Homebrew
+# would raise above 14.0 by either route. See macos-pinned-kegs.txt, which
+# records which reason applies to each. Everything else still resolves to a
+# `sonoma` Intel bottle at minos 14.0, and Homebrew pours those on a newer macOS
+# quite happily (measured: libevent in 9s on Sequoia).
+#
+# None of this is taken on trust: both macOS CI jobs measure the finished
+# bundle's real floor and fail if it exceeds what the bundle declares.
 #
 # The kegs are built once by a maintainer on a native Intel macOS 14 machine and
 # uploaded to the same S3 bucket the depends system already uses as a source

@@ -38,12 +38,20 @@ That is the floor the dependency stack imposes rather than a preference.
 Homebrew sets no deployment target when it builds a bottle, so a bottle's
 minimum is simply whatever macOS it was compiled on, and the bundle's real floor
 is the highest minimum among every library it ships -- not whatever
-`LSMinimumSystemVersion` claims. Everything CI links is therefore macOS
-14-built: the ARM job runs on a macOS 14 runner and pours `arm64_sonoma`
-bottles, and the Intel job gets `sonoma` bottles whatever runner it is on
-because Homebrew no longer builds x86_64 bottles past that tag, with the kegs
-mirrored for the formulae that have no Intel bottle at all compiled on macOS 14
-to match. Qt 6 does not support anything below macOS 13 in any case.
+`LSMinimumSystemVersion` claims. Two things raise that floor without saying so:
+a formula that publishes a bottle for a newer macOS (Homebrew prefers the
+newest), and a formula with no bottle for your architecture at all, which is
+built from source against the machine you are on. Qt 6 does not support anything
+below macOS 13 in any case.
+
+CI therefore links only macOS 14-built libraries. The ARM job runs on a macOS 14
+runner, so its bottles carry a 14.0 minimum. The Intel job runs on macOS 15, so
+every formula that Homebrew would raise above 14.0 by either route is pinned to a
+keg built on a native Intel macOS 14 machine and mirrored to S3 -- see
+`contrib/devtools/macos-pinned-kegs.txt`, which records why each one is there.
+Both jobs then verify the finished DMG: the packaging step measures the
+`LC_BUILD_VERSION` minimum of every Mach-O in the bundle and fails if any of them
+needs a newer macOS than the version the bundle declares.
 
 The released binaries declare the floor explicitly: CI passes
 `-DCMAKE_OSX_DEPLOYMENT_TARGET` (see `MACOS_DEPLOYMENT_TARGET` in

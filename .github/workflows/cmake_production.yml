@@ -533,6 +533,53 @@ jobs:
           fi
           echo "PASS: gridcoinresearchd present in the bundle"
 
+          # The bundle's real macOS floor is the HIGHEST LC_BUILD_VERSION minos
+          # among every Mach-O it ships, because dyld refuses to load a library
+          # built for a newer OS than the one running -- whatever
+          # LSMinimumSystemVersion claims. Homebrew sets no deployment target, so
+          # a bottle carries the minimum of whatever machine built it, and a
+          # formula with no bottle for this architecture is source-built here and
+          # picks up the RUNNER's version. Both routes raise the floor silently,
+          # and a DMG that claims more than it can honour fails only on a user's
+          # machine. So assert it against the artifact, never against the
+          # configure flag -- that flag is set by us and proves nothing about
+          # what got linked in.
+          declared="${MACOS_DEPLOYMENT_TARGET}"
+          find "$APP" -type f > /tmp/bundle-machos.txt
+          worst="0.0"; worstfile=""; measured=0
+          while IFS= read -r macho; do
+            m=$(otool -l "$macho" 2>/dev/null | awk '/LC_BUILD_VERSION/{f=1} f&&/^[[:space:]]*minos/{print $2; exit}')
+            [ -n "$m" ] || continue
+            measured=$((measured + 1))
+            if [ "$m" != "$worst" ] && [ "$(printf '%s\n%s\n' "$worst" "$m" | sort -V | tail -1)" = "$m" ]; then
+              worst="$m"; worstfile="$macho"
+            fi
+          done < /tmp/bundle-machos.txt
+          # A check that measures nothing passes everything. The bundle ships tens
+          # of Mach-O files and we have already asserted two of them exist, so
+          # zero readings means the check broke, not that the bundle is clean.
+          if [ "$measured" -lt 10 ]; then
+            echo "FAIL: only $measured Mach-O files could be read under $APP;"
+            echo "      this check cannot vouch for the floor, so it does not pretend to."
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "Declared floor: $declared   Measured floor: $worst   ($measured Mach-O files)"
+          if [ "$(printf '%s\n%s\n' "$declared" "$worst" | sort -V | tail -1)" != "$declared" ]; then
+            echo "FAIL: the bundle requires macOS $worst but declares $declared."
+            echo "      Every library at the measured floor:"
+            while IFS= read -r macho; do
+              m=$(otool -l "$macho" 2>/dev/null | awk '/LC_BUILD_VERSION/{f=1} f&&/^[[:space:]]*minos/{print $2; exit}')
+              [ "$m" = "$worst" ] && echo "        $m  ${macho#$APP/}"
+            done < /tmp/bundle-machos.txt
+            echo "      Pin the offending formula in contrib/devtools/macos-pinned-kegs.txt"
+            echo "      (built on macOS ${declared%%.*}), or raise MACOS_DEPLOYMENT_TARGET to"
+            echo "      match reality. Do not just change the plist."
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: every shipped library honours the declared $declared floor (worst: ${worstfile#$APP/})"
+
           # Neither binary may reference a build-machine library path. Homebrew is
           # present on the runner and on most developer machines, so a missed
           # relocation runs fine here and fails only on a clean install -- which is
@@ -857,6 +904,53 @@ jobs:
             exit 1
           fi
           echo "PASS: gridcoinresearchd present in the bundle"
+
+          # The bundle's real macOS floor is the HIGHEST LC_BUILD_VERSION minos
+          # among every Mach-O it ships, because dyld refuses to load a library
+          # built for a newer OS than the one running -- whatever
+          # LSMinimumSystemVersion claims. Homebrew sets no deployment target, so
+          # a bottle carries the minimum of whatever machine built it, and a
+          # formula with no bottle for this architecture is source-built here and
+          # picks up the RUNNER's version. Both routes raise the floor silently,
+          # and a DMG that claims more than it can honour fails only on a user's
+          # machine. So assert it against the artifact, never against the
+          # configure flag -- that flag is set by us and proves nothing about
+          # what got linked in.
+          declared="${MACOS_DEPLOYMENT_TARGET}"
+          find "$APP" -type f > /tmp/bundle-machos.txt
+          worst="0.0"; worstfile=""; measured=0
+          while IFS= read -r macho; do
+            m=$(otool -l "$macho" 2>/dev/null | awk '/LC_BUILD_VERSION/{f=1} f&&/^[[:space:]]*minos/{print $2; exit}')
+            [ -n "$m" ] || continue
+            measured=$((measured + 1))
+            if [ "$m" != "$worst" ] && [ "$(printf '%s\n%s\n' "$worst" "$m" | sort -V | tail -1)" = "$m" ]; then
+              worst="$m"; worstfile="$macho"
+            fi
+          done < /tmp/bundle-machos.txt
+          # A check that measures nothing passes everything. The bundle ships tens
+          # of Mach-O files and we have already asserted two of them exist, so
+          # zero readings means the check broke, not that the bundle is clean.
+          if [ "$measured" -lt 10 ]; then
+            echo "FAIL: only $measured Mach-O files could be read under $APP;"
+            echo "      this check cannot vouch for the floor, so it does not pretend to."
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "Declared floor: $declared   Measured floor: $worst   ($measured Mach-O files)"
+          if [ "$(printf '%s\n%s\n' "$declared" "$worst" | sort -V | tail -1)" != "$declared" ]; then
+            echo "FAIL: the bundle requires macOS $worst but declares $declared."
+            echo "      Every library at the measured floor:"
+            while IFS= read -r macho; do
+              m=$(otool -l "$macho" 2>/dev/null | awk '/LC_BUILD_VERSION/{f=1} f&&/^[[:space:]]*minos/{print $2; exit}')
+              [ "$m" = "$worst" ] && echo "        $m  ${macho#$APP/}"
+            done < /tmp/bundle-machos.txt
+            echo "      Pin the offending formula in contrib/devtools/macos-pinned-kegs.txt"
+            echo "      (built on macOS ${declared%%.*}), or raise MACOS_DEPLOYMENT_TARGET to"
+            echo "      match reality. Do not just change the plist."
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: every shipped library honours the declared $declared floor (worst: ${worstfile#$APP/})"
 
           # Neither binary may reference a build-machine library path. Homebrew is
           # present on the runner and on most developer machines, so a missed

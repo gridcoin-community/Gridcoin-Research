@@ -1,9 +1,24 @@
 # Pinned Homebrew kegs for the Intel macOS CI job.
 #
-# These six formulae have no Intel bottle at any macOS tag, so Homebrew would
-# source-build them -- hours per run. A maintainer builds them once on a native
-# Intel macOS 14 machine and mirrors them to S3; see
-# macos-restore-pinned-kegs.sh.
+# Every formula here is pinned because leaving it to Homebrew produces a binary
+# that will not run on macOS 14. There are two distinct reasons, and both were
+# found by measuring a shipped DMG rather than by reading formulae:
+#
+#   NO INTEL BOTTLE AT ANY TAG -- qtbase, qttools, qtsvg, qttranslations,
+#   qtdeclarative, openssl@3, pcre2, xz. Homebrew source-builds these on the
+#   runner, and a source build takes the RUNNER's OS as its deployment target,
+#   so they come out at minos 15.0. For the Qt formulae that also costs hours
+#   per run; for pcre2 and xz it is fast enough to go unnoticed, which is how
+#   liblzma and libpcre2 shipped at 15.0 undetected.
+#
+#   AN INTEL BOTTLE FOR A NEWER TAG -- zstd, which publishes x86_64 bottles for
+#   sequoia and tahoe. Homebrew prefers the newest, so it pours a 15.0 binary
+#   even though a `sonoma` bottle exists.
+#
+# A maintainer builds all of them once on a native Intel macOS 14 machine and
+# mirrors them to S3; see macos-restore-pinned-kegs.sh. Pinning from one machine
+# also keeps the set mutually consistent: the Qt kegs here were built against
+# these exact pcre2 and zstd versions.
 #
 # Each entry is <name> <version> <sha256>. The hash is not optional: these are
 # release inputs fetched over the network from a mutable object store, and a
@@ -29,3 +44,8 @@ qtsvg           6.11.1  c6fc06e47664fb5b544963e33a285bd56a82f23f9fef706d9bf95b0c
 qttranslations  6.11.1  8cca825ccdcfc99fba6ed7a2db9d38ea760dc602f4887634392ba68627ecb397
 qtdeclarative   6.11.1  9cc6a8d55976020f34909422b7d02e42c2d995923a7795cd6b7b4ea5ba7f6d0f
 openssl@3       3.6.3   45142a82c589caac92ffe544c02b27d8c28e8b42ef99d70083ab84955a0228d3
+
+# Qt's transitive dependencies that Homebrew would otherwise raise above 14.0.
+pcre2           10.47_1 45b59b0a38d25de207b6ef52e46b9115ffdcb60a2bf47995bb89be7d7f219b40
+xz              5.8.3   731694e5da2585a8bc8100ce2e08dc5bb0b0737b2ed389c8e51153a253c251b4
+zstd            1.5.7_1 a2477c998a68d4cadf0c776344222e863613a23288d103beed1850f610dea89c
