@@ -71,7 +71,8 @@ Options:
   --help, -h          Show this help message.
 ```
 
-This script works for all five major targets. The "native" target (Linux Native) should work across all seven major distributions that we check in continuous integration testing on Github, including the automatic installation of all the necessary dependencies. The "depends" target (Linux Static) and the "win64" target (Windows Cross-Compile) works with Ubuntu latest, Fedora, and OpenSUSE, and probably the others as well. The macOS target should work with macOS 12 "Monterey" or newer.
+This script works for all five major targets. The "native" target (Linux Native) should work across all seven major distributions that we check in continuous integration testing on Github, including the automatic installation of all the necessary dependencies. The "depends" target (Linux Static) and the "win64" target (Windows Cross-Compile) works with Ubuntu latest, Fedora, and OpenSUSE, and probably the others as well. The macOS target requires macOS 14 "Sonoma" or newer, on both Apple Silicon
+and Intel; see [doc/build-macos.md](build-macos.md) for why that is the floor.
 
 A typical example of the use of this script by someone desiring a local build dynamically linked to the system libraries would be:
 
