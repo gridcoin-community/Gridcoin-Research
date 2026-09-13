@@ -5,11 +5,17 @@
 # Intel macOS 14 machine and mirrors them to S3; see
 # macos-restore-pinned-kegs.sh.
 #
+# Each entry is <name> <version> <sha256>. The hash is not optional: these are
+# release inputs fetched over the network from a mutable object store, and a
+# version alone does not authenticate them -- the same URL can be replaced or
+# overwritten and CI would link the result into a signed DMG without noticing.
+# depends pins its sources by hash for exactly this reason; so do we.
+#
 # TO UPGRADE: upgrade the formula on that machine, tar the keg as
 # <name>--<version>.tar.gz from the Cellar, upload it under
-# homebrew-kegs/<built_on>/, then bump the version here. Note that a signed PUT
-# must percent-encode '@' (openssl%403--...) or S3 rejects the signature; GET
-# works with either spelling.
+# homebrew-kegs/<built_on>/, then update BOTH the version and the hash here.
+# Note that a signed PUT must percent-encode '@' (openssl%403--...) or S3
+# rejects the signature; GET works with either spelling.
 #
 # built_on is the macOS the kegs were compiled on. It sets the S3 prefix and the
 # binaries' minos, and must be <= the runner's macOS: older-on-newer works,
@@ -17,9 +23,9 @@
 
 built_on        sonoma-x86_64
 
-qtbase          6.11.1
-qttools         6.11.1
-qtsvg           6.11.1
-qttranslations  6.11.1
-qtdeclarative   6.11.1
-openssl@3       3.6.3
+qtbase          6.11.1  ea73c14ac7ba61a002228253a694bed2beded7ffa541b8e56d94851dfabe30f3
+qttools         6.11.1  307d1db295958ca34a4ae60fd637aa722d3aa98294aff944804168057979560d
+qtsvg           6.11.1  c6fc06e47664fb5b544963e33a285bd56a82f23f9fef706d9bf95b0c282f3d06
+qttranslations  6.11.1  8cca825ccdcfc99fba6ed7a2db9d38ea760dc602f4887634392ba68627ecb397
+qtdeclarative   6.11.1  9cc6a8d55976020f34909422b7d02e42c2d995923a7795cd6b7b4ea5ba7f6d0f
+openssl@3       3.6.3   45142a82c589caac92ffe544c02b27d8c28e8b42ef99d70083ab84955a0228d3

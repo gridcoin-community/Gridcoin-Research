@@ -39,18 +39,25 @@
 #      leaves `brew link` nothing to choose between.
 #   3. Link, then `brew pin`, so a later `brew upgrade` cannot undo any of it.
 #
-# usage: macos-restore-pinned-kegs.sh <manifest>
+# usage: macos-restore-pinned-kegs.sh <manifest> [extra-formula...]
+#        extra-formula are additional bottled formulae the build needs. They are
+#        installed in step 1 WITH the external closure, never afterwards: a later
+#        `brew install` can pull a pinned formula forward through its own
+#        dependencies (libevent depends on openssl@3), and doing that after the
+#        prune and the verification below would defeat both.
 # env:   BREW  brew executable (default: the one on PATH)
 
 export LC_ALL=C
 set -euo pipefail
 
-if [ "$#" -ne 1 ]; then
-    echo "usage: $0 <manifest>" >&2
+if [ "$#" -lt 1 ]; then
+    echo "usage: $0 <manifest> [extra-formula...]" >&2
     exit 2
 fi
 
 MANIFEST="$1"
+shift
+EXTRA=("$@")
 BREW="${BREW:-$(command -v brew || true)}"
 S3_BASE="${S3_BASE:-https://gridcoin-depends-backup-sources.s3.us-east-1.amazonaws.com/homebrew-kegs}"
 
@@ -75,11 +82,16 @@ if [ -z "${BUILT_ON}" ]; then
     exit 1
 fi
 
-NAMES=() VERSIONS=()
-while read -r name version; do
+NAMES=() VERSIONS=() HASHES=()
+while read -r name version hash; do
     case "${name}" in ''|'#'*|built_on) continue ;; esac
+    if [ -z "${hash}" ]; then
+        echo "ERROR: ${name} has no sha256 in ${MANIFEST}" >&2
+        exit 1
+    fi
     NAMES+=("${name}")
     VERSIONS+=("${version}")
+    HASHES+=("${hash}")
 done < <(sed -E 's/#.*//' "${MANIFEST}")
 
 if [ "${#NAMES[@]}" -eq 0 ]; then
@@ -95,14 +107,20 @@ echo "pinned (${BUILT_ON}): ${NAMES[*]}"
 pinned_list="$(printf '%s\n' "${NAMES[@]}")"
 external="$("${BREW}" deps --union "${NAMES[@]}" | grep -vxF -e "${pinned_list}" || true)"
 
-if [ -n "${external}" ]; then
-    echo "installing external dependencies:"
+install_list="${external}"
+if [ "${#EXTRA[@]}" -gt 0 ]; then
+    install_list="${install_list}
+$(printf '%s\n' "${EXTRA[@]}")"
+fi
+
+if [ -n "${install_list//[[:space:]]/}" ]; then
+    echo "installing bottled formulae before any restore:"
     # shellcheck disable=SC2086  # deliberate word splitting, one formula per line
-    printf '  %s\n' ${external}
+    printf '  %s\n' ${install_list}
     # shellcheck disable=SC2086  # deliberate word splitting of the formula list
-    "${BREW}" install ${external}
+    "${BREW}" install ${install_list}
 else
-    echo "no external dependencies to install"
+    echo "nothing to install"
 fi
 
 # ---------------------------------------------------------------------------
@@ -111,6 +129,7 @@ fi
 for i in "${!NAMES[@]}"; do
     name="${NAMES[$i]}"
     version="${VERSIONS[$i]}"
+    want="${HASHES[$i]}"
     url="${S3_BASE}/${BUILT_ON}/${name}--${version}.tar.gz"
 
     echo "--- ${name} ${version}"
@@ -119,11 +138,24 @@ for i in "${!NAMES[@]}"; do
         rm -f "${tmp}"
         echo "ERROR: no mirrored keg at ${url}" >&2
         echo "       Build it on a native Intel macOS ${BUILT_ON%%-*} machine and upload" >&2
-        echo "       it, or" >&2
-        echo "       correct the version in ${MANIFEST}. Falling back to a source" >&2
-        echo "       build here would take hours and is deliberately not done." >&2
+        echo "       it, or correct the version in ${MANIFEST}. Falling back to a" >&2
+        echo "       source build here would take hours and is deliberately not done." >&2
         exit 1
     fi
+
+    # Verify before extracting, not after: the point is to never unpack an
+    # object we cannot vouch for into the tree that becomes a signed release.
+    got="$(shasum -a 256 "${tmp}" | awk '{print $1}')"
+    if [ "${got}" != "${want}" ]; then
+        rm -f "${tmp}"
+        echo "ERROR: sha256 mismatch for ${name} ${version}" >&2
+        echo "       expected ${want}" >&2
+        echo "       got      ${got}" >&2
+        echo "       The mirrored object has changed. Do NOT update the manifest to" >&2
+        echo "       match without establishing why." >&2
+        exit 1
+    fi
+
     tar -xzf "${tmp}" -C "${CELLAR}"
     rm -f "${tmp}"
 

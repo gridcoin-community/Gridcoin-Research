@@ -22,6 +22,25 @@ HunterGate(
 # Project configuration
 # =====================
 
+# The macOS floor. Set before project(), which is when CMake reads it.
+#
+# This is the project's declaration, not CI's: share/qt/Info.plist.cmake.in
+# substitutes it into LSMinimumSystemVersion, so without a default here every
+# build that does not pass -DCMAKE_OSX_DEPLOYMENT_TARGET -- build_targets.sh
+# TARGET=macos, and any plain cmake invocation -- would stamp the bundle with an
+# empty minimum. CI passes the same value explicitly (MACOS_DEPLOYMENT_TARGET in
+# .github/workflows/cmake_production.yml); this makes local bundles agree with
+# the released ones instead of depending on the caller. The test is `NOT`
+# rather than `NOT DEFINED` so an explicitly empty -D cannot reopen the same
+# hole.
+#
+# 14.0 is what the dependency stack supports: Homebrew's Intel bottles and the
+# mirrored Intel kegs are built on macOS 14 and carry minos 14.0, and Qt 6 does
+# not support anything below macOS 13.
+if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "Minimum macOS version (ignored off Apple platforms)")
+endif()
+
 project("Gridcoin"
     VERSION 5.5.1.8
     DESCRIPTION "POS-based cryptocurrency that rewards BOINC computation"

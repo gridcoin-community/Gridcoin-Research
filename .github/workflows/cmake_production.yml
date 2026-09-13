@@ -20,14 +20,11 @@ env:
   BUILD_TYPE: Release
   OS_REF: ubuntu-24.04
   USE_CCACHE: true
-  # The non-Qt Homebrew dependencies shared by both macOS jobs. The Qt head
-  # differs on purpose: ARM64 installs the qt meta-formula (bottled); Intel
-  # installs the qtbase/qttools/qtsvg/qttranslations subset (see the Intel
-  # job's keg-cache comment). doc/build-macos.md and the install helper carry
-  # the user-facing copies of this list.
   # The macOS floor both jobs build against, and the number the app bundle
   # declares -- share/qt/Info.plist.cmake.in substitutes CMAKE_OSX_DEPLOYMENT_TARGET
   # rather than hardcoding one, so the declaration cannot drift from the build.
+  # CMakeLists.txt carries the same value as the project default, for builds
+  # that do not come through here.
   #
   # Without an explicit target CMake forces the RUNNER's OS version, so until now
   # the shipped minimum silently tracked whichever label GitHub handed us while
@@ -38,6 +35,13 @@ env:
   # mirrored to S3 are built on native Intel macOS 14, and Qt 6 will not go below
   # macOS 13 at all.
   MACOS_DEPLOYMENT_TARGET: "14.0"
+
+  # The non-Qt Homebrew dependencies shared by both macOS jobs. The Qt head
+  # differs on purpose: ARM64 installs the qt meta-formula (bottled); Intel
+  # restores the qtbase/qttools/qtsvg/qttranslations/qtdeclarative kegs from the
+  # mirror, because those have no Intel bottle at any tag (see
+  # contrib/devtools/macos-pinned-kegs.txt). doc/build-macos.md carries the
+  # user-facing copy of this list.
   MACOS_BREW_DEPS: boost libevent miniupnpc qrencode libzip ccache cmake capnp
 
 jobs:
@@ -657,16 +661,16 @@ jobs:
       # The mirrored kegs are built on native Intel macOS 14, so they and the
       # bottles both carry minos 14.0 -- the floor MACOS_DEPLOYMENT_TARGET
       # declares.
-      - name: Restore the pinned Intel kegs
+      - name: Restore the pinned Intel kegs and install the bottled ones
         run: |
+          # MACOS_BREW_DEPS is passed IN rather than installed afterwards. Several
+          # of them reach a pinned formula through their own dependencies --
+          # libevent depends on openssl@3 -- so installing them after the restore
+          # would pull a pinned keg forward again, past the prune and past the
+          # verification that is supposed to catch exactly that.
+          # shellcheck disable=SC2086
           contrib/devtools/macos-restore-pinned-kegs.sh \
-            contrib/devtools/macos-pinned-kegs.txt
-
-      - name: Install the remaining bottled dependencies
-        run: |
-          # These all have Intel bottles; none is in the pinned set, so naming
-          # them cannot drag a pinned formula forward.
-          brew install $MACOS_BREW_DEPS
+            contrib/devtools/macos-pinned-kegs.txt $MACOS_BREW_DEPS
 
       - name: Configure Ccache
         uses: actions/cache@v5
