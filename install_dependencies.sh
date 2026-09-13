@@ -88,7 +88,14 @@ install_deps() {
             # Qt Logic for macOS Homebrew (Only if GUI is requested)
             if [[ "$WITH_GUI" == "true" ]]; then
                 if [[ "$USE_QT6" == "true" ]]; then
-                    append_qt qt
+                    # The SUBSET, not the `qt` meta-formula. `qt` depends on
+                    # qtwebengine, which Gridcoin does not use and which has no
+                    # bottle on the configurations Homebrew has wound down to
+                    # Tier 3 -- every x86_64 Mac, and Apple Silicon on macOS 14.
+                    # Requesting `qt` there starts an hours-long source build
+                    # that then fails outright. Keep this in step with
+                    # doc/build-macos.md and the macOS CI jobs.
+                    append_qt qtbase qttools qtsvg qttranslations qtdeclarative
                 else
                     # Install Qt5 specific formula for legacy support
                     append_qt qt@5
