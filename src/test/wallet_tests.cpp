@@ -10,6 +10,9 @@
 #include "rpc/protocol.h"
 #include "rpc/server.h"
 #include "txdb.h"
+#include "script/sign.h"
+#include "test/state_guard.h"
+#include "rpc/blockchain.h"
 #include "txmempool.h"
 
 #include <algorithm>
@@ -2135,13 +2138,17 @@ void EraseWalletTxAndParent(const uint256& hash, const CTransaction& parent)
 
 // An own unconfirmed transaction does not come back from wallet.dat tagged
 // in-mempool -- that tag serializes as the null block-hash sentinel and reloads
-// as unrecognized -- so on restart it takes ResolveUnrecognizedTx's last-resort
-// branch rather than ValidateMempoolTx. Absence from the pool is the ordinary
-// state of a healthy unconfirmed send at that point, not a conflict. Resolving
-// it to inactive ends its rebroadcast for good, because RelayWalletTransaction
-// refuses inactive transactions, and hands its inputs back to coin selection,
-// because ReleaseSpendsNotInActiveChain releases the spends of anything not
-// tagged in-mempool.
+// as unrecognized -- so on restart ResolveUnrecognizedTx's last-resort branch is
+// what decides its state. ValidateMempoolTx then sees it too, on the same pass:
+// the dispatch in ReacceptWalletTransactions does not skip the state chain after
+// the resolver has run, so the tag the resolver just wrote is read immediately
+// below it. The second look repeats the same index reads and reaches the same
+// answer. Absence from the pool is the ordinary state of a healthy unconfirmed
+// send at that point, not a conflict. Resolving it to inactive ends its
+// rebroadcast for good, because RelayWalletTransaction refuses inactive
+// transactions, and hands its inputs back to coin selection, because
+// ReleaseSpendsNotInActiveChain releases the spends of anything not tagged
+// in-mempool.
 //
 // The validation signals are deliberately left unregistered, which is what
 // startup actually looks like: AppInit2 runs this pass before it wires the
@@ -2199,15 +2206,8 @@ BOOST_AUTO_TEST_CASE(reaccept_reloaded_own_unconfirmed_tx_stays_rebroadcastable)
     }
 
     EraseWalletTxAndParent(hash, parent);
-    {
-        LOCK(cs_main);
-        mempool.clear();
-    }
 }
 
-// The control: the same reload, but an input this transaction spends has since
-// been spent by a confirmed transaction. That is a real conflict, and the
-// chain-spent guard has to keep saying so.
 // A generated transaction is only valid inside a block: AcceptToMemoryPool
 // rejects one outright and RelayWalletTransaction skips it, so there is nothing
 // to re-pool and nothing to rebroadcast. Inactive stays the honest answer, and
@@ -2252,6 +2252,107 @@ BOOST_AUTO_TEST_CASE(reaccept_reloaded_generated_tx_stays_inactive)
     BOOST_REQUIRE(pwalletMain->EraseFromWallet(hash));
 }
 
+// The arm where the re-pool SUCCEEDS. Every case above fabricates a parent that
+// AcceptToMemoryPool cannot fetch, so `pooled` is false in each and the branch
+// that reads a genuine re-pool off the pool is never exercised.
+//
+// Two things have to be true for acceptance to be reachable here. FetchInputs
+// resolves the parent through mempool.lookup(), because PlantIndexedParent
+// writes the index entry with the CDiskTxPos(1,1,1) sentinel and FetchInputs
+// treats that exactly like a missing entry -- so putting the parent in the pool
+// is enough for the child's inputs to resolve. And AcceptToMemoryPool goes on to
+// use pindexBest unconditionally in ConnectInputs, which TestingSetup leaves
+// null, so the case has to stand a tip up first. The tip is kept at height 1 so
+// the V14 sequence-lock branch stays inert; this case is about the re-pool, not
+// about BIP68.
+//
+// StateGuard restores the tip globals and erases the index entry on the way out,
+// and the two transactions this case puts in the pool are removed by hash --
+// clearing the pool wholesale would discard entries belonging to other suites.
+BOOST_AUTO_TEST_CASE(reaccept_reloaded_own_unconfirmed_tx_repooled_when_accepted)
+{
+    grc_test::StateGuard guard;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key));
+    }
+
+    // A tip for ConnectInputs. Pool-allocated; StateGuard erases the entry.
+    {
+        LOCK(cs_main);
+        uint256* phash = new uint256(GetRandHash());
+        CBlockIndex* tip = GRC::MockBlockIndex::InsertBlockIndex(*phash);
+        tip->phashBlock = phash;
+        tip->nHeight = 1;
+        tip->nTime = GetAdjustedTime();
+        tip->nVersion = 12;
+        pindexBest = tip;
+        nBestHeight = tip->nHeight;
+    }
+
+    const CTransaction parent = PlantIndexedParent(key, 2 * COIN, /*output_already_spent=*/false);
+    {
+        LOCK(cs_main);
+        mempool.addUnchecked(parent.GetHash(), CTxMemPoolEntry(
+            parent, /*fee=*/0, /*time=*/0, /*height=*/0,
+            ::GetSerializeSize(parent, SER_NETWORK, PROTOCOL_VERSION)));
+    }
+    BOOST_REQUIRE(mempool.exists(parent.GetHash()));
+
+    CMutableTransaction mtx;
+    mtx.nTime = parent.nTime;  // a child may not predate its parent
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(parent.GetHash(), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    BOOST_REQUIRE(SignSignature(*pwalletMain, parent, mtx, 0));
+
+    const CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx);
+        wtx.SetTxState(TxStateUnrecognized{});  // what a wallet.dat load produces
+        wtx.fFromMe = true;
+        pwalletMain->mapWallet[hash] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+
+    pwalletMain->ReacceptWalletTransactions();
+
+    {
+        LOCK(cs_main);
+        BOOST_CHECK_MESSAGE(mempool.exists(hash),
+            "startup re-accept did not put a valid own unconfirmed tx back in the pool");
+    }
+    {
+        LOCK(pwalletMain->cs_wallet);
+        const CWalletTx& wtx = pwalletMain->mapWallet[hash];
+        BOOST_CHECK(wtx.isInMempool());
+        BOOST_CHECK(!wtx.isInactive());
+        BOOST_CHECK(!pwalletMain->IsAbandoned(hash));
+    }
+
+    {
+        LOCK(cs_main);
+        mempool.remove(tx, /*fRecursive=*/true);
+        mempool.remove(parent, /*fRecursive=*/true);
+        BOOST_CHECK(!mempool.exists(hash));
+        BOOST_CHECK(!mempool.exists(parent.GetHash()));
+    }
+    EraseWalletTxAndParent(hash, parent);
+}
+
+// The control for the case above: the same reload, but an input this
+// transaction spends has since been spent by a confirmed transaction. That is a
+// real conflict, and the chain-spent guard has to keep saying so -- this is the
+// case that actually exercises HasChainSpentInput, which a generated
+// transaction cannot, its prevout being null.
 BOOST_AUTO_TEST_CASE(reaccept_reloaded_own_unconfirmed_tx_conflicted_when_input_spent_in_chain)
 {
     CKey key;
@@ -2291,10 +2392,6 @@ BOOST_AUTO_TEST_CASE(reaccept_reloaded_own_unconfirmed_tx_conflicted_when_input_
     }
 
     EraseWalletTxAndParent(hash, parent);
-    {
-        LOCK(cs_main);
-        mempool.clear();
-    }
 }
 
 BOOST_AUTO_TEST_CASE(reaccept_marks_own_unconfirmed_tx_conflicted_when_input_spent_in_chain)

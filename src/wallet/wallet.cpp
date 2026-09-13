@@ -165,7 +165,17 @@ bool HasChainSpentInput(const CWalletTx& wtx, CTxDB& txdb)
     return false;
 }
 
-//! Resolve an unrecognized tx to a proper state. Priority: hashBlock → CTxDB → mempool → inactive.
+//! Resolve an unrecognized tx to a proper state.
+//!
+//! Priority: hashBlock, then CTxDB, then the mempool, then the last-resort
+//! branch for a transaction found in none of them. That last branch does NOT
+//! always end at inactive: it re-pools the transaction and resolves it to
+//! in-mempool unless the transaction is generated, is indexed in a block this
+//! node could not place on the active chain, or has an input already spent by a
+//! confirmed transaction. "Not found anywhere" is the ordinary state of a
+//! healthy restarted unconfirmed send, and in-mempool is what keeps it
+//! relayable.
+//!
 //! Returns {updated, repeat}.
 std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txindex,
                                              bool fTxIndexFound, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -257,7 +267,7 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
         if (wtx.IsCoinBase() || wtx.IsCoinStake()) {
             LogPrint(BCLog::LogFlags::VERBOSE,
                     "ReacceptWalletTransactions: migrating unrecognized generated tx %s to inactive "
-                    "(not found anywhere)\n",
+                    "(not found anywhere)",
                     wtx.GetHash().ToString());
             wtx.SetTxState(TxStateInactive{false});
         } else {
@@ -277,7 +287,7 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
             // indexed transaction is its own inputs' recorded spender.
             if (!pooled && (fTxIndexFound || HasChainSpentInput(wtx, txdb))) {
                 LogPrint(BCLog::LogFlags::VERBOSE,
-                        "ReacceptWalletTransactions: migrating unrecognized tx %s to inactive (%s)\n",
+                        "ReacceptWalletTransactions: migrating unrecognized tx %s to inactive (%s)",
                         wtx.GetHash().ToString(),
                         fTxIndexFound ? "indexed in a block this node could not place on the active chain"
                                       : "an input is spent by a confirmed transaction");
@@ -292,7 +302,7 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
                 // mempool.exists() either way. Same rule the import/rescan half
                 // applies in ValidateMempoolTx().
                 LogPrint(BCLog::LogFlags::VERBOSE,
-                        "ReacceptWalletTransactions: migrating unrecognized tx %s to mempool (%s)\n",
+                        "ReacceptWalletTransactions: migrating unrecognized tx %s to mempool (%s)",
                         wtx.GetHash().ToString(),
                         pooled ? "re-accepted" : "left unconfirmed for rebroadcast");
                 wtx.SetTxState(TxStateInMempool{});
