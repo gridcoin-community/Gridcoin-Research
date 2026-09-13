@@ -32,7 +32,32 @@ Options:
   --help, -h          Show this help message.
 ```
 
-**macOS 14 (Sonoma) or newer is required.**
+**macOS 14 (Sonoma) or newer is required**, for both Apple Silicon and Intel.
+
+That is the floor the dependency stack imposes rather than a preference.
+Homebrew sets no deployment target when it builds a bottle, so a bottle's
+minimum is simply whatever macOS it was compiled on, and the bundle's real floor
+is the highest minimum among every library it ships -- not whatever
+`LSMinimumSystemVersion` claims. Two things raise that floor without saying so:
+a formula that publishes a bottle for a newer macOS (Homebrew prefers the
+newest), and a formula with no bottle for your architecture at all, which is
+built from source against the machine you are on. Qt 6 does not support anything
+below macOS 13 in any case.
+
+CI therefore links only macOS 14-built libraries. The ARM job runs on a macOS 14
+runner, so its bottles carry a 14.0 minimum. The Intel job runs on macOS 15, so
+every formula that Homebrew would raise above 14.0 by either route is pinned to a
+keg built on a native Intel macOS 14 machine and mirrored to S3 -- see
+`contrib/devtools/macos-pinned-kegs.txt`, which records why each one is there.
+Both jobs then verify the finished DMG: the packaging step measures the
+`LC_BUILD_VERSION` minimum of every Mach-O in the bundle and fails if any of them
+needs a newer macOS than the version the bundle declares.
+
+The released binaries declare the floor explicitly: CI passes
+`-DCMAKE_OSX_DEPLOYMENT_TARGET` (see `MACOS_DEPLOYMENT_TARGET` in
+`.github/workflows/cmake_production.yml`), `CMakeLists.txt` carries the same
+value as the project default for builds that do not, and the app bundle
+substitutes it into `LSMinimumSystemVersion`.
 
 If you use the build helper script above:
 
@@ -70,24 +95,31 @@ Open your terminal and run:
 
 ```
 brew update
-brew install qt boost openssl libevent miniupnpc qrencode libzip ccache cmake
+brew install qtbase qttools qtsvg qttranslations qtdeclarative boost openssl libevent miniupnpc qrencode libzip ccache cmake
 ```
 
-Note: Homebrew installs Qt6 by default when you request qt.
+Then pass the brew prefix when you configure (e.g.
+`-DCMAKE_PREFIX_PATH=$(brew --prefix)`) so CMake sees the aggregate linked Qt
+view. With the Qt formulae split like this, qtbase's own `Qt6Config` cannot
+resolve the Svg and LinguistTools components, which live in the qtsvg and
+qttools kegs.
 
-Note for Intel Macs: Homebrew no longer ships x86_64 bottles for many
-formulae (Tier 3 wind-down), and modern brew builds those from source
-automatically, which for the qt meta-formula means an infeasible
-qtwebengine build. Install the Qt subset instead of qt:
+Note the Qt SUBSET above rather than the `qt` meta-formula, which is what most
+Qt build instructions tell you to install. `qt` depends on qtwebengine, which
+Gridcoin does not use and which has no bottle on the configurations Homebrew has
+wound down to Tier 3 -- every x86_64 Mac, and Apple Silicon on macOS 14. There,
+`brew install qt` silently starts building qtwebengine from source: hours of
+compilation that, on macOS 14, then fails outright. Requesting the subset avoids
+pulling it in at all. On Apple Silicon running macOS 15 or newer, `brew install
+qt` does still work if you prefer it.
 
-```
-brew install qtbase qttools qtsvg qttranslations boost openssl libevent miniupnpc qrencode libzip ccache cmake
-```
-
-and pass the brew prefix (e.g. `-DCMAKE_PREFIX_PATH=$(brew --prefix)`) so
-CMake sees the aggregate linked Qt view. CI uses
-contrib/devtools/brew-install-with-source-fallback.sh to source-build and
-cache the bottle-less formulae; it works locally too.
+On Intel macOS the Qt formulae and `openssl@3` have no bottle at any tag, so
+those will source-build and take hours. CI does not pay that cost: it restores
+prebuilt kegs at pinned versions from the project's S3 mirror, via
+`contrib/devtools/macos-restore-pinned-kegs.sh` and
+`contrib/devtools/macos-pinned-kegs.txt`. You can use the same script locally on
+an Intel Mac, provided your Homebrew prefix is `/usr/local` -- the kegs carry
+absolute paths.
 
 ### 2. Get the Source Code
 
@@ -105,9 +137,11 @@ We need to tell CMake where Homebrew installed Qt and OpenSSL. We do this dynami
 Create a build directory and configure the project by running the following in the terminal:
 
 ```
-# Set paths for Homebrew libraries
-QT6_PATH=$(brew --prefix qt)
-OPENSSL_ROOT=$(brew --prefix openssl)
+# Set paths for Homebrew libraries. QT6_PATH is the brew prefix itself, not
+# `brew --prefix qt`: the Qt subset installed above leaves no `qt` keg to point
+# at, and the prefix is what exposes the aggregate linked lib/cmake view.
+QT6_PATH=$(brew --prefix)
+OPENSSL_ROOT=$(brew --prefix openssl@3)
 
 # Configure CMake
 cmake -B build \

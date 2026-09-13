@@ -20,11 +20,32 @@ env:
   BUILD_TYPE: Release
   OS_REF: ubuntu-24.04
   USE_CCACHE: true
+  # The macOS floor both jobs build against, and the number the app bundle
+  # declares -- share/qt/Info.plist.cmake.in substitutes CMAKE_OSX_DEPLOYMENT_TARGET
+  # rather than hardcoding one, so the declaration cannot drift from the build.
+  # CMakeLists.txt carries the same value as the project default, for builds
+  # that do not come through here.
+  #
+  # Without an explicit target CMake forces the RUNNER's OS version, so until now
+  # the shipped minimum silently tracked whichever label GitHub handed us while
+  # the plist advertised 10.8.0.
+  #
+  # 14.0 is the lowest the stack actually supports: Homebrew's Intel bottles are
+  # built on macOS 14 (the `sonoma` tag) and carry minos 14.0, the Intel kegs
+  # mirrored to S3 are built on native Intel macOS 14, and Qt 6 will not go below
+  # macOS 13 at all.
+  MACOS_DEPLOYMENT_TARGET: "14.0"
+
   # The non-Qt Homebrew dependencies shared by both macOS jobs. The Qt head
-  # differs on purpose: ARM64 installs the qt meta-formula (bottled); Intel
-  # installs the qtbase/qttools/qtsvg/qttranslations subset (see the Intel
-  # job's keg-cache comment). doc/build-macos.md and the install helper carry
-  # the user-facing copies of this list.
+  # differs on purpose, but not in WHICH Qt: both jobs use the qtbase/qttools/
+  # qtsvg/qttranslations/qtdeclarative subset rather than the `qt` meta-formula,
+  # which drags in qtwebengine. They differ in WHERE it comes from -- ARM64
+  # installs the subset from Homebrew, Intel restores it from the mirror, because
+  # those formulae have no Intel bottle at any tag (see
+  # contrib/devtools/macos-pinned-kegs.txt). Most of the names below are mirrored
+  # for Intel too and the restore script drops them from what it asks Homebrew
+  # for; the ARM job installs the list as written. doc/build-macos.md carries the
+  # user-facing copy.
   MACOS_BREW_DEPS: boost libevent miniupnpc qrencode libzip ccache cmake capnp
 
 jobs:
@@ -296,14 +317,47 @@ jobs:
   # ----------------------------------------------------------------------
   macos-native-arm64:
     name: macOS ARM64 (Homebrew Qt6)
+    # Stays on macos-14 because that is what makes the declared 14.0 floor true.
+    #
+    # Homebrew sets no deployment target of its own, so a bottle's minimum is
+    # whatever it was built on. Measured on a macos-15 runner, every non-Qt
+    # dependency comes back at minos 15.0 -- openssl@3, boost, libevent,
+    # miniupnpc, qrencode, libzip and capnp all build for the host; only Qt sets
+    # its own target and stays at 14.0. macdeployqtplus copies those dylibs INTO
+    # the bundle (it skips only /System/Library and /usr/lib), so on macos-15 the
+    # DMG would advertise LSMinimumSystemVersion 14.0 while dyld refused to load
+    # it on macOS 14. Pinning individual bottles does not help: the whole
+    # dependency closure is built the same way.
+    #
+    # On macos-14 the same formulae pour arm64_sonoma bottles at minos 14.0 and
+    # the floor is real. Intel has no such problem -- Homebrew no longer builds
+    # x86_64 bottles past the `sonoma` tag, so that runner can only get 14.0
+    # binaries, and the mirrored kegs are built on macOS 14 to match.
+    #
+    # This runner is deprecated: brownouts from 2026-10-05, unsupported
+    # 2026-11-02 (actions/runner-images#13518). Moving to macos-15 means either
+    # dropping macOS 14 ARM users or pinning the entire arm64_sonoma closure;
+    # arm64_sonoma bottles do still exist for these formulae, so the second is
+    # possible. That decision is tracked in #3366 and must land before the
+    # brownouts.
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v5
 
       - name: Install Dependencies
         run: |
+          # The Qt SUBSET, not the `qt` meta-formula, for the same reason the
+          # Intel job uses it: `qt` depends on qtwebengine, and qtwebengine is
+          # now the one formula in this set with no arm64_sonoma bottle (it
+          # publishes golden_gate, sequoia and tahoe only). On macOS 14 brew
+          # therefore source-builds it, which takes hours and then fails in
+          # ninja -- observed on this runner. Nothing here needs QtWebEngine.
+          #
+          # Homebrew calls macOS 14 a Tier 3 configuration now, so expect more
+          # of this: the same wind-down that removed the Intel bottles is
+          # reaching macos-14 arm64. #3366 tracks moving off it.
           brew update
-          brew install qt openssl $MACOS_BREW_DEPS
+          brew install qtbase qttools qtsvg qttranslations qtdeclarative openssl@3 $MACOS_BREW_DEPS
 
       - name: Configure Ccache
         uses: actions/cache@v5
@@ -378,8 +432,11 @@ jobs:
         run: |
           export CC_LAUNCHER='-DCMAKE_C_COMPILER_LAUNCHER=ccache'
           export CXX_LAUNCHER='-DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
-          QT6_PATH=$(brew --prefix qt)
-          OPENSSL_ROOT=$(brew --prefix openssl)
+          # With the split Qt kegs, qtbase's Qt6Config cannot resolve the Svg
+          # and LinguistTools components living in the qtsvg/qttools kegs;
+          # the brew prefix exposes the aggregate linked lib/cmake view.
+          QT6_PATH=$(brew --prefix)
+          OPENSSL_ROOT=$(brew --prefix openssl@3)
 
           cmake -B build \
             -DCMAKE_PREFIX_PATH="$QT6_PATH" \
@@ -392,6 +449,7 @@ jobs:
             -DENABLE_DOCS=OFF \
             -DUSE_QT6=ON \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ env.MACOS_DEPLOYMENT_TARGET }} \
             -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT" \
             -DPython3_EXECUTABLE="${RUNNER_TEMP}/venv/bin/python3" \
             $CC_LAUNCHER \
@@ -492,6 +550,53 @@ jobs:
           fi
           echo "PASS: gridcoinresearchd present in the bundle"
 
+          # The bundle's real macOS floor is the HIGHEST LC_BUILD_VERSION minos
+          # among every Mach-O it ships, because dyld refuses to load a library
+          # built for a newer OS than the one running -- whatever
+          # LSMinimumSystemVersion claims. Homebrew sets no deployment target, so
+          # a bottle carries the minimum of whatever machine built it, and a
+          # formula with no bottle for this architecture is source-built here and
+          # picks up the RUNNER's version. Both routes raise the floor silently,
+          # and a DMG that claims more than it can honour fails only on a user's
+          # machine. So assert it against the artifact, never against the
+          # configure flag -- that flag is set by us and proves nothing about
+          # what got linked in.
+          declared="${MACOS_DEPLOYMENT_TARGET}"
+          find "$APP" -type f > /tmp/bundle-machos.txt
+          worst="0.0"; worstfile=""; measured=0
+          while IFS= read -r macho; do
+            m=$(otool -l "$macho" 2>/dev/null | awk '/LC_BUILD_VERSION/{f=1} f&&/^[[:space:]]*minos/{print $2; exit}')
+            [ -n "$m" ] || continue
+            measured=$((measured + 1))
+            if [ "$m" != "$worst" ] && [ "$(printf '%s\n%s\n' "$worst" "$m" | sort -V | tail -1)" = "$m" ]; then
+              worst="$m"; worstfile="$macho"
+            fi
+          done < /tmp/bundle-machos.txt
+          # A check that measures nothing passes everything. The bundle ships tens
+          # of Mach-O files and we have already asserted two of them exist, so
+          # zero readings means the check broke, not that the bundle is clean.
+          if [ "$measured" -lt 10 ]; then
+            echo "FAIL: only $measured Mach-O files could be read under $APP;"
+            echo "      this check cannot vouch for the floor, so it does not pretend to."
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "Declared floor: $declared   Measured floor: $worst   ($measured Mach-O files)"
+          if [ "$(printf '%s\n%s\n' "$declared" "$worst" | sort -V | tail -1)" != "$declared" ]; then
+            echo "FAIL: the bundle requires macOS $worst but declares $declared."
+            echo "      Every library at the measured floor:"
+            while IFS= read -r macho; do
+              m=$(otool -l "$macho" 2>/dev/null | awk '/LC_BUILD_VERSION/{f=1} f&&/^[[:space:]]*minos/{print $2; exit}')
+              [ "$m" = "$worst" ] && echo "        $m  ${macho#$APP/}"
+            done < /tmp/bundle-machos.txt
+            echo "      Pin the offending formula in contrib/devtools/macos-pinned-kegs.txt"
+            echo "      (built on macOS ${declared%%.*}), or raise MACOS_DEPLOYMENT_TARGET to"
+            echo "      match reality. Do not just change the plist."
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: every shipped library honours the declared $declared floor (worst: ${worstfile#$APP/})"
+
           # Neither binary may reference a build-machine library path. Homebrew is
           # present on the runner and on most developer machines, so a missed
           # relocation runs fine here and fails only on a clean install -- which is
@@ -525,6 +630,79 @@ jobs:
           hdiutil detach "$MOUNT_POINT"
           echo "DMG verification: ALL CHECKS PASSED"
 
+      - name: Notarize and Staple (best-effort)
+        # Release-only: this workflow runs on every push/PR, but notarization is
+        # meaningful only for the published DMG. Gate to tag builds (same gate as
+        # the deploy job) so we don't submit every macOS CI build to Apple's notary.
+        if: ${{ !env.ACT && startsWith(github.ref, 'refs/tags/') }}
+        env:
+          APPLE_NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
+          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -u
+          DMG=$(find build -maxdepth 1 -name "gridcoin-*.dmg" | head -1)
+          if [ -z "$DMG" ]; then
+            echo "ERROR: No DMG found to notarize."
+            exit 1
+          fi
+
+          if [ -z "${APPLE_NOTARY_APPLE_ID:-}" ] || [ -z "${APPLE_NOTARY_PASSWORD:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
+            echo "::warning::Notary credentials not configured — publishing the signed (un-notarized) DMG. Staple later via contrib/macdeploy/notarize-dmg.sh."
+            exit 0
+          fi
+
+          echo "=== Submitting $DMG to Apple notary ==="
+          SUBMIT_OUTPUT=$(xcrun notarytool submit "$DMG" \
+            --apple-id "$APPLE_NOTARY_APPLE_ID" \
+            --password "$APPLE_NOTARY_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --output-format json 2>&1) || {
+            echo "::warning::notarytool submit failed — publishing the signed (un-notarized) DMG."
+            echo "$SUBMIT_OUTPUT"
+            exit 0
+          }
+          # Guarded: this step runs under the default `bash -e {0}`, so an
+          # unguarded failure here would fail the JOB, which skips Upload
+          # Artifacts and makes the deploy job skip with it -- losing the whole
+          # release over a notarization hiccup, the opposite of best-effort.
+          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || SUBMISSION_ID=""
+          if [ -z "$SUBMISSION_ID" ]; then
+            echo "::warning::Could not read a submission id from notarytool — publishing the signed (un-notarized) DMG. Staple later via contrib/macdeploy/notarize-dmg.sh."
+            echo "$SUBMIT_OUTPUT"
+            exit 0
+          fi
+          echo "  Submission ID: $SUBMISSION_ID"
+
+          # Best-effort 45m wait: ample for Apple's automated path. A submission
+          # flagged for manual review (rare — typically only the first-ever for a
+          # Developer ID) will exceed this; we then ship the signed DMG and staple
+          # it later with contrib/macdeploy/notarize-dmg.sh. The step never fails
+          # the build, so the release always ships at least a signed DMG.
+          echo "=== Waiting for notarization (up to 45m) ==="
+          if xcrun notarytool wait "$SUBMISSION_ID" \
+            --apple-id "$APPLE_NOTARY_APPLE_ID" \
+            --password "$APPLE_NOTARY_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --timeout 45m; then
+            echo "=== Stapling $DMG in place ==="
+            # Also guarded, for the same reason. Stapling can fail transiently
+            # after a successful notarization (the ticket takes a moment to
+            # propagate), and a signed, notarized-but-unstapled DMG is still a
+            # shippable artifact -- Gatekeeper falls back to an online check.
+            if xcrun stapler staple "$DMG" && xcrun stapler validate "$DMG"; then
+              echo "=== Notarized + stapled: $DMG ==="
+            else
+              echo "::warning::Notarization succeeded but stapling did not — publishing the signed, notarized DMG unstapled. The ticket exists; staple later via contrib/macdeploy/notarize-dmg.sh."
+            fi
+          else
+            echo "::warning::Notarization did not complete within 45m — publishing the signed (un-notarized) DMG. Diagnose with 'xcrun notarytool log $SUBMISSION_ID --apple-id ... --team-id ...'; staple later via contrib/macdeploy/notarize-dmg.sh."
+            xcrun notarytool log "$SUBMISSION_ID" \
+              --apple-id "$APPLE_NOTARY_APPLE_ID" \
+              --password "$APPLE_NOTARY_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" 2>&1 || true
+          fi
+
       - name: Upload Artifacts
         if: ${{ !env.ACT }}
         uses: actions/upload-artifact@v5
@@ -539,64 +717,43 @@ jobs:
 
   macos-native-intel:
     name: macOS Intel (Homebrew Qt6)
-    runs-on: macos-14
+    # A NATIVE Intel runner, not Rosetta on arm64. Homebrew removed Intel
+    # support from its installer on 2026-09-11 (Homebrew/install#1140), so a
+    # second x86_64 Homebrew can no longer be bootstrapped at /usr/local on an
+    # arm64 runner at all -- which is what this job used to do. A native Intel
+    # runner already ships Homebrew at the Intel prefix, so there is nothing to
+    # bootstrap and no `arch -x86_64` wrapper on every command.
+    #
+    # macos-15-intel is available until August 2027, after which Actions drops
+    # x86_64 entirely (actions/runner-images#13045).
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v5
 
-      # Homebrew is winding down x86_64 macOS bottles (Tier 3 platform
-      # demotion): formulae keep working but lose their Intel bottles one by
-      # one. Instead of chasing each casualty with a bespoke step (openssl@3
-      # and pcre2 got that treatment before the demotion went wholesale),
-      # contrib/devtools/brew-install-with-source-fallback.sh converges
-      # generically -- it source-builds whatever formula brew names in a
-      # missing-bottle error and stashes the keg here, keyed by the manifest
-      # of built name-versions, so each casualty is built once per version
-      # and restored thereafter. The qt meta-formula is deliberately NOT
-      # installed: it drags in every Qt satellite (qtwebengine is a Chromium
-      # build no runner can source-build); qtbase/qttools/qtsvg cover the
-      # QT_COMPONENTS list in CMakeLists.txt, plus qttranslations for the
-      # bundled translations. Note qttools still pulls qtdeclarative (and its
-      # build-only satellites) as bottle-less source builds -- part of the
-      # cold-run budget. Kegs are stashed and the manifest rewritten after
-      # every build, and the save below runs on failure too, so repeated runs
-      # converge monotonically even if one run cannot finish the whole set
-      # inside the job limit. If a saved keg is ever broken (the cache key
-      # only tracks versions, not build health), bump the v1 in the key to
-      # start a fresh cache generation.
-      - name: Restore the Intel source-built keg cache
-        uses: actions/cache/restore@v5
-        with:
-          path: ~/intel-kegs
-          key: intel-kegs-v1-${{ github.run_id }}
-          restore-keys: intel-kegs-v1-
-
-      - name: Install x86_64 Homebrew and Dependencies
+      # Homebrew wound x86_64 macOS down to Tier 3, and the mirror answers three
+      # different consequences of that. The Qt stack, openssl@3, pcre2 and xz have
+      # no Intel bottle at any tag, so `brew install` would source-build them --
+      # hours per run for Qt, and the reason this job once hit the six-hour ceiling
+      # without starting a compile. zstd has one, but for a NEWER macOS tag, and
+      # Homebrew prefers the newest, which quietly yields a 15.0 binary. The rest
+      # are mirrored pre-emptively: they still have an Intel bottle today and will
+      # not forever, and capturing one costs a download now against a source build
+      # later. contrib/devtools/macos-pinned-kegs.txt records which reason applies
+      # to each entry.
+      #
+      # Every mirrored keg is built on native Intel macOS 14 and carries minos
+      # 14.0, the floor MACOS_DEPLOYMENT_TARGET declares -- and which the DMG check
+      # further down measures rather than trusts.
+      - name: Restore the pinned Intel kegs and install the rest
         run: |
-          # Install a separate x86_64 Homebrew at /usr/local (Intel prefix).
-          # The ARM64 runner has Rosetta 2, so x86_64 binaries run transparently.
-          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
-          arch -x86_64 /usr/local/bin/brew update
+          # MACOS_BREW_DEPS is passed IN rather than installed afterwards. Several
+          # of them reach a pinned formula through their own dependencies --
+          # libevent depends on openssl@3 -- so installing them after the restore
+          # would pull a pinned keg forward again, past the prune and past the
+          # verification that is supposed to catch exactly that.
           # shellcheck disable=SC2086
-          BREW_ARCH="arch -x86_64" contrib/devtools/brew-install-with-source-fallback.sh \
-            "$HOME/intel-kegs" \
-            qtbase qttools qtsvg qttranslations openssl@3 $MACOS_BREW_DEPS
-
-      - name: Compute the keg cache key
-        id: kegkey
-        if: ${{ always() }}
-        run: |
-          if [ -s "$HOME/intel-kegs/manifest.txt" ]; then
-            echo "key=intel-kegs-v1-$(shasum -a 256 "$HOME/intel-kegs/manifest.txt" | cut -c1-16)" >> "$GITHUB_OUTPUT"
-          else
-            echo "key=" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Save the Intel source-built keg cache
-        if: ${{ always() && steps.kegkey.outputs.key != '' }}
-        uses: actions/cache/save@v5
-        with:
-          path: ~/intel-kegs
-          key: ${{ steps.kegkey.outputs.key }}
+          contrib/devtools/macos-restore-pinned-kegs.sh \
+            contrib/devtools/macos-pinned-kegs.txt $MACOS_BREW_DEPS
 
       - name: Configure Ccache
         uses: actions/cache@v5
@@ -618,7 +775,7 @@ jobs:
 
       - name: Set up Python venv for DMG packaging
         run: |
-          arch -x86_64 /usr/local/bin/python3 -m venv "${RUNNER_TEMP}/venv"
+          python3 -m venv "${RUNNER_TEMP}/venv"
           "${RUNNER_TEMP}/venv/bin/pip" install ds_store mac_alias
 
       - name: Import Code Signing Certificate
@@ -671,10 +828,10 @@ jobs:
           # With the split Qt kegs, qtbase's Qt6Config cannot resolve the Svg
           # and LinguistTools components living in the qtsvg/qttools kegs;
           # the brew prefix exposes the aggregate linked lib/cmake view.
-          QT6_PATH=$(arch -x86_64 /usr/local/bin/brew --prefix)
-          OPENSSL_ROOT=$(arch -x86_64 /usr/local/bin/brew --prefix openssl)
+          QT6_PATH=$(brew --prefix)
+          OPENSSL_ROOT=$(brew --prefix openssl@3)
 
-          arch -x86_64 /usr/local/bin/cmake -B build \
+          cmake -B build \
             -DCMAKE_PREFIX_PATH="$QT6_PATH" \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DENABLE_GUI=ON \
@@ -686,19 +843,20 @@ jobs:
             -DENABLE_DOCS=OFF \
             -DUSE_QT6=ON \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ env.MACOS_DEPLOYMENT_TARGET }} \
             -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT" \
             -DPython3_EXECUTABLE="${RUNNER_TEMP}/venv/bin/python3" \
             $CC_LAUNCHER \
             $CXX_LAUNCHER
 
       - name: Build
-        run: arch -x86_64 /usr/local/bin/cmake --build build
+        run: cmake --build build
 
       - name: Test
         # See the arm64 job: bounded twice so a hang is reported rather than
         # running to the six-hour job default.
         timeout-minutes: 45
-        run: arch -x86_64 /usr/local/bin/ctest --test-dir build --output-on-failure --timeout 1800
+        run: ctest --test-dir build --output-on-failure --timeout 1800
 
       - name: Dump crash reports on test failure
         # macOS writes a symbolicated report to DiagnosticReports when a process
@@ -721,7 +879,7 @@ jobs:
       - name: Verify Binary Hardening
         run: ./contrib/devtools/check-binary-hardening.sh build
       - name: Package (DMG)
-        run: arch -x86_64 /usr/local/bin/cmake --build build --target deploy
+        run: cmake --build build --target deploy
 
       - name: Verify DMG Package
         run: |
@@ -783,6 +941,53 @@ jobs:
           fi
           echo "PASS: gridcoinresearchd present in the bundle"
 
+          # The bundle's real macOS floor is the HIGHEST LC_BUILD_VERSION minos
+          # among every Mach-O it ships, because dyld refuses to load a library
+          # built for a newer OS than the one running -- whatever
+          # LSMinimumSystemVersion claims. Homebrew sets no deployment target, so
+          # a bottle carries the minimum of whatever machine built it, and a
+          # formula with no bottle for this architecture is source-built here and
+          # picks up the RUNNER's version. Both routes raise the floor silently,
+          # and a DMG that claims more than it can honour fails only on a user's
+          # machine. So assert it against the artifact, never against the
+          # configure flag -- that flag is set by us and proves nothing about
+          # what got linked in.
+          declared="${MACOS_DEPLOYMENT_TARGET}"
+          find "$APP" -type f > /tmp/bundle-machos.txt
+          worst="0.0"; worstfile=""; measured=0
+          while IFS= read -r macho; do
+            m=$(otool -l "$macho" 2>/dev/null | awk '/LC_BUILD_VERSION/{f=1} f&&/^[[:space:]]*minos/{print $2; exit}')
+            [ -n "$m" ] || continue
+            measured=$((measured + 1))
+            if [ "$m" != "$worst" ] && [ "$(printf '%s\n%s\n' "$worst" "$m" | sort -V | tail -1)" = "$m" ]; then
+              worst="$m"; worstfile="$macho"
+            fi
+          done < /tmp/bundle-machos.txt
+          # A check that measures nothing passes everything. The bundle ships tens
+          # of Mach-O files and we have already asserted two of them exist, so
+          # zero readings means the check broke, not that the bundle is clean.
+          if [ "$measured" -lt 10 ]; then
+            echo "FAIL: only $measured Mach-O files could be read under $APP;"
+            echo "      this check cannot vouch for the floor, so it does not pretend to."
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "Declared floor: $declared   Measured floor: $worst   ($measured Mach-O files)"
+          if [ "$(printf '%s\n%s\n' "$declared" "$worst" | sort -V | tail -1)" != "$declared" ]; then
+            echo "FAIL: the bundle requires macOS $worst but declares $declared."
+            echo "      Every library at the measured floor:"
+            while IFS= read -r macho; do
+              m=$(otool -l "$macho" 2>/dev/null | awk '/LC_BUILD_VERSION/{f=1} f&&/^[[:space:]]*minos/{print $2; exit}')
+              [ "$m" = "$worst" ] && echo "        $m  ${macho#$APP/}"
+            done < /tmp/bundle-machos.txt
+            echo "      Pin the offending formula in contrib/devtools/macos-pinned-kegs.txt"
+            echo "      (built on macOS ${declared%%.*}), or raise MACOS_DEPLOYMENT_TARGET to"
+            echo "      match reality. Do not just change the plist."
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: every shipped library honours the declared $declared floor (worst: ${worstfile#$APP/})"
+
           # Neither binary may reference a build-machine library path. Homebrew is
           # present on the runner and on most developer machines, so a missed
           # relocation runs fine here and fails only on a clean install -- which is
@@ -815,6 +1020,79 @@ jobs:
           # Cleanup
           hdiutil detach "$MOUNT_POINT"
           echo "DMG verification: ALL CHECKS PASSED"
+
+      - name: Notarize and Staple (best-effort)
+        # Release-only: this workflow runs on every push/PR, but notarization is
+        # meaningful only for the published DMG. Gate to tag builds (same gate as
+        # the deploy job) so we don't submit every macOS CI build to Apple's notary.
+        if: ${{ !env.ACT && startsWith(github.ref, 'refs/tags/') }}
+        env:
+          APPLE_NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
+          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -u
+          DMG=$(find build -maxdepth 1 -name "gridcoin-*.dmg" | head -1)
+          if [ -z "$DMG" ]; then
+            echo "ERROR: No DMG found to notarize."
+            exit 1
+          fi
+
+          if [ -z "${APPLE_NOTARY_APPLE_ID:-}" ] || [ -z "${APPLE_NOTARY_PASSWORD:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
+            echo "::warning::Notary credentials not configured — publishing the signed (un-notarized) DMG. Staple later via contrib/macdeploy/notarize-dmg.sh."
+            exit 0
+          fi
+
+          echo "=== Submitting $DMG to Apple notary ==="
+          SUBMIT_OUTPUT=$(xcrun notarytool submit "$DMG" \
+            --apple-id "$APPLE_NOTARY_APPLE_ID" \
+            --password "$APPLE_NOTARY_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --output-format json 2>&1) || {
+            echo "::warning::notarytool submit failed — publishing the signed (un-notarized) DMG."
+            echo "$SUBMIT_OUTPUT"
+            exit 0
+          }
+          # Guarded: this step runs under the default `bash -e {0}`, so an
+          # unguarded failure here would fail the JOB, which skips Upload
+          # Artifacts and makes the deploy job skip with it -- losing the whole
+          # release over a notarization hiccup, the opposite of best-effort.
+          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || SUBMISSION_ID=""
+          if [ -z "$SUBMISSION_ID" ]; then
+            echo "::warning::Could not read a submission id from notarytool — publishing the signed (un-notarized) DMG. Staple later via contrib/macdeploy/notarize-dmg.sh."
+            echo "$SUBMIT_OUTPUT"
+            exit 0
+          fi
+          echo "  Submission ID: $SUBMISSION_ID"
+
+          # Best-effort 45m wait: ample for Apple's automated path. A submission
+          # flagged for manual review (rare — typically only the first-ever for a
+          # Developer ID) will exceed this; we then ship the signed DMG and staple
+          # it later with contrib/macdeploy/notarize-dmg.sh. The step never fails
+          # the build, so the release always ships at least a signed DMG.
+          echo "=== Waiting for notarization (up to 45m) ==="
+          if xcrun notarytool wait "$SUBMISSION_ID" \
+            --apple-id "$APPLE_NOTARY_APPLE_ID" \
+            --password "$APPLE_NOTARY_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --timeout 45m; then
+            echo "=== Stapling $DMG in place ==="
+            # Also guarded, for the same reason. Stapling can fail transiently
+            # after a successful notarization (the ticket takes a moment to
+            # propagate), and a signed, notarized-but-unstapled DMG is still a
+            # shippable artifact -- Gatekeeper falls back to an online check.
+            if xcrun stapler staple "$DMG" && xcrun stapler validate "$DMG"; then
+              echo "=== Notarized + stapled: $DMG ==="
+            else
+              echo "::warning::Notarization succeeded but stapling did not — publishing the signed, notarized DMG unstapled. The ticket exists; staple later via contrib/macdeploy/notarize-dmg.sh."
+            fi
+          else
+            echo "::warning::Notarization did not complete within 45m — publishing the signed (un-notarized) DMG. Diagnose with 'xcrun notarytool log $SUBMISSION_ID --apple-id ... --team-id ...'; staple later via contrib/macdeploy/notarize-dmg.sh."
+            xcrun notarytool log "$SUBMISSION_ID" \
+              --apple-id "$APPLE_NOTARY_APPLE_ID" \
+              --password "$APPLE_NOTARY_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" 2>&1 || true
+          fi
 
       - name: Upload Artifacts
         if: ${{ !env.ACT }}
@@ -1172,14 +1450,16 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/gridcoinresearch:latest
 
   # ----------------------------------------------------------------------
-  # JOB 4: Notarize macOS DMGs (tag pushes only)
-  # Disabled — Apple notarization service consistently times out at the
-  # 2-hour mark in CI. Notarization and stapling are performed locally
-  # using contrib/macdeploy/notarize-dmg.sh and the stapled DMGs are
-  # uploaded to the release manually.
+  # There is no separate notarization job. Each macOS build notarizes and
+  # staples its own DMG in place, gated to tag builds, between DMG verification
+  # and artifact upload -- a standalone job would have to re-download the DMG,
+  # re-sign nothing, and upload it again.
+  #
+  # The step is best-effort by design: on a timeout, a submit failure, or absent
+  # credentials it warns and ships the signed but un-notarized DMG rather than
+  # failing the release, and contrib/macdeploy/notarize-dmg.sh staples it
+  # afterwards.
   # ----------------------------------------------------------------------
-  # notarize-macos:
-  #   ...
 
   # ----------------------------------------------------------------------
   # JOB 5: Deploy (GitHub Release)

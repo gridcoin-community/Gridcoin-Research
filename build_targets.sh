@@ -758,17 +758,38 @@ if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darw
             else
                 # Default Homebrew Logic
                 if [ "$USE_QT6" = "true" ]; then
-                     QT_FORMULA="qt"
+                     # Qt6 is installed as the qtbase/qttools/qtsvg/... subset
+                     # rather than the `qt` meta-formula, because `qt` drags in
+                     # qtwebengine, which has no bottle on Homebrew's Tier 3
+                     # configurations and source-builds for hours before failing.
+                     # There is therefore no `qt` keg to point at: the prefix
+                     # itself is what exposes the aggregate linked lib/cmake view,
+                     # and qtbase's Qt6Config needs it to resolve the Svg and
+                     # LinguistTools components living in the sibling kegs.
+                     QT_PROBE_FORMULA="qtbase"
+                     QT_PREFIX_PATH="$(brew --prefix 2>/dev/null)"
                 else
-                     QT_FORMULA="qt@5"
+                     QT_PROBE_FORMULA="qt@5"
+                     QT_PREFIX_PATH=""
                 fi
 
-                echo "Checking for Homebrew Qt ($QT_FORMULA)..."
+                echo "Checking for Homebrew Qt ($QT_PROBE_FORMULA)..."
 
-                if ! QT_PREFIX_PATH=$(brew --prefix "$QT_FORMULA" 2>/dev/null); then
-                     echo "Error: brew --prefix $QT_FORMULA failed. Installation broken or missing."
-                     echo "Check your Homebrew install or use WITH_GUI=false if you only want the daemon."
+                # `brew --prefix <formula>` prints the would-be opt path and exits 0
+                # even when the formula is not installed, so its exit status alone
+                # proves nothing. Check the path actually exists, which is what the
+                # error below is claiming.
+                if ! QT_KEG_PATH=$(brew --prefix "$QT_PROBE_FORMULA" 2>/dev/null) \
+                   || [ ! -d "$QT_KEG_PATH" ]; then
+                     echo "Error: $QT_PROBE_FORMULA is not installed."
+                     echo "Install the Qt 6 subset with ./install_dependencies.sh, or see"
+                     echo "doc/build-macos.md; use WITH_GUI=false if you only want the daemon."
                      exit 1
+                fi
+
+                # Qt5 keeps pointing at its own keg; Qt6 uses the brew prefix.
+                if [ "$USE_QT6" != "true" ]; then
+                     QT_PREFIX_PATH="$QT_KEG_PATH"
                 fi
             fi
             echo "Final Qt Path: $QT_PREFIX_PATH"

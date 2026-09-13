@@ -194,6 +194,7 @@ $(host_prefix)/toolchain.cmake : toolchain.cmake.in $(host_prefix)/.stamp_$(fina
             -e 's|@CC@|$(host_CC)|' \
             -e 's|@CXX@|$(host_CXX)|' \
             -e 's|@OSX_SDK@|$(OSX_SDK)|' \
+            -e 's|@OSX_MIN_VERSION@|$(OSX_MIN_VERSION)|' \
             -e 's|@AR@|$(host_AR)|' \
             -e 's|@RANLIB@|$(host_RANLIB)|' \
             -e 's|@STRIP@|$(host_STRIP)|' \

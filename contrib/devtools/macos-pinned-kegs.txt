@@ -1,0 +1,91 @@
+# Pinned Homebrew kegs for the Intel macOS CI job.
+#
+# Every formula here is pinned because leaving it to Homebrew produces a binary
+# that will not run on macOS 14. There are two distinct reasons, and both were
+# found by measuring a shipped DMG rather than by reading formulae:
+#
+#   NO INTEL BOTTLE AT ANY TAG -- qtbase, qttools, qtsvg, qttranslations,
+#   qtdeclarative, openssl@3, pcre2, xz. Homebrew source-builds these on the
+#   runner, and a source build takes the RUNNER's OS as its deployment target,
+#   so they come out at minos 15.0. For the Qt formulae that also costs hours
+#   per run; for pcre2 and xz it is fast enough to go unnoticed, which is how
+#   liblzma and libpcre2 shipped at 15.0 undetected.
+#
+#   AN INTEL BOTTLE FOR A NEWER TAG -- zstd, which publishes x86_64 bottles for
+#   sequoia and tahoe. Homebrew prefers the newest, so it pours a 15.0 binary
+#   even though a `sonoma` bottle exists.
+#
+# A maintainer builds all of them once on a native Intel macOS 14 machine and
+# mirrors them to S3; see macos-restore-pinned-kegs.sh. Pinning from one machine
+# also keeps the set mutually consistent: the Qt kegs here were built against
+# these exact pcre2 and zstd versions.
+#
+# A THIRD REASON, AND THE ONE THAT GOVERNS MOST OF THIS LIST: a formula that
+# still has an x86_64 bottle today is one upstream revision away from not having
+# one. Every formula below that is not covered by the two reasons above is here
+# pre-emptively, captured while capturing was still a download rather than a
+# source build on someone's machine. They are the formulae that actually ship
+# inside the app bundle, measured from a built DMG rather than derived from
+# `brew deps` -- outside the bundle a library's minimum cannot reach a user.
+#
+# Still deliberately NOT pinned: ca-certificates (pinning a CA bundle freezes
+# trust roots, which is a security decision and not ours to make silently),
+# gumbo-parser, jpeg-turbo, json-c, litehtml and lz4 (source-built, never
+# bundled), and cmake and ccache (build tools, not linked into anything).
+#
+# So do not treat this file as derivable from `brew deps`. It is derived from
+# what the bundle actually contains, and the check that keeps it honest is in
+# the macOS jobs: they read the LC_BUILD_VERSION minimum of every Mach-O in the
+# finished DMG and fail if any exceeds the declared floor. If a formula starts
+# being bundled, or starts publishing a newer-tag Intel bottle, that check fails
+# and names the library -- add its formula here, built on the same machine.
+#
+# Each entry is <name> <version> <sha256>. The hash is not optional: these are
+# release inputs fetched over the network from a mutable object store, and a
+# version alone does not authenticate them -- the same URL can be replaced or
+# overwritten and CI would link the result into a signed DMG without noticing.
+# depends pins its sources by hash for exactly this reason; so do we.
+#
+# TO UPGRADE: upgrade the formula on that machine, tar the keg as
+# <name>--<version>.tar.gz from the Cellar, upload it under
+# homebrew-kegs/<built_on>/, then update BOTH the version and the hash here.
+# Note that a signed PUT must percent-encode '@' (openssl%403--...) or S3
+# rejects the signature; GET works with either spelling.
+#
+# built_on is the macOS the kegs were compiled on. It sets the S3 prefix and the
+# binaries' minos, and must be <= the runner's macOS: older-on-newer works,
+# newer-on-older does not.
+
+built_on        sonoma-x86_64
+
+qtbase          6.11.1  ea73c14ac7ba61a002228253a694bed2beded7ffa541b8e56d94851dfabe30f3
+qttools         6.11.1  307d1db295958ca34a4ae60fd637aa722d3aa98294aff944804168057979560d
+qtsvg           6.11.1  c6fc06e47664fb5b544963e33a285bd56a82f23f9fef706d9bf95b0c282f3d06
+qttranslations  6.11.1  8cca825ccdcfc99fba6ed7a2db9d38ea760dc602f4887634392ba68627ecb397
+qtdeclarative   6.11.1  9cc6a8d55976020f34909422b7d02e42c2d995923a7795cd6b7b4ea5ba7f6d0f
+openssl@3       3.6.3   45142a82c589caac92ffe544c02b27d8c28e8b42ef99d70083ab84955a0228d3
+
+# Qt's transitive dependencies that Homebrew would otherwise raise above 14.0.
+pcre2           10.47_1 45b59b0a38d25de207b6ef52e46b9115ffdcb60a2bf47995bb89be7d7f219b40
+xz              5.8.3   731694e5da2585a8bc8100ce2e08dc5bb0b0737b2ed389c8e51153a253c251b4
+zstd            1.5.7_1 a2477c998a68d4cadf0c776344222e863613a23288d103beed1850f610dea89c
+
+# Bundled libraries captured while their x86_64 bottle still existed.
+boost           1.90.0_1 8f051e9c38a7137d2e4904e6bdfc2723525002b246424a20a61651784782ff08
+brotli          1.2.0    a8afd8d548c85c30d4c8a552e4e5246a46e75e492c8320c2b39f51da9b4c9184
+capnp           1.5.0    ea8518e95cd545596014ad4eb38c7670dfa490b781d0697871bfb6d053f251bb
+dbus            1.16.2_1 ec8384d31315de156cac25112c530beb4084fe65b76801e74331c428881b0fbc
+double-conversion 3.4.0    6d25a03093afe4000925b19d2885a42f9b357d1ff3a666b68efa43a46ed946f5
+freetype        2.14.3   2e5504927120d0db892d1f79efc1482edb8bf19e876f6ec2a90c3f528ad73172
+gettext         1.0      d8e0df0728a7ca1a3ba1c23c4ca5d912ee6276f1e94bef235af11077fafafc4e
+glib            2.88.1   a28bd13421713450c5573054bd6ff548f72cda8547bfd1fa03f9d014ddd83def
+graphite2       1.3.14   0aab51c9ef36436bb269ea3e1cbf8219297e68c296779259b2714b2e94e8217d
+harfbuzz        14.2.0   eb04cf92e0448c05d7c8fe1276795e761fcb098d7ea3821b5a4120e14f6892f5
+icu4c@78        78.3     8e05774b9e6fa348cfd764a3b236b23c0a0bb99611450149541c3f2ca0b4c808
+libb2           0.98.1   ffd2f67cc74e7c7101671cbc9d56bf978265b55deb09f3d053694f3b64175ae1
+libevent        2.1.13   669aa17e5ddcf9d16283eedfd2ae49d4cc809c27aed461b12a4be1f26cbc337c
+libpng          1.6.58   6bd8378ed6e94486b9fc8837a7de5aab8b16020763b5dee0318702bdf83e48e3
+libzip          1.11.4_1 7d3ccefc6db528981df478849988c4e19862a078e163ebb561dd3168ff684f92
+md4c            0.5.3    903e7f852aa5725efeda720fe3522e644a9adfa74e3f4533c7af03d73db43da6
+miniupnpc       2.3.3    a26989050b10d15321d420fab01149dfa07d4f05505247d4173f1d8e5bf186a2
+qrencode        4.1.1    21fc53ddea51ce44ec19485ea6127c210d839b3cd16ed7b75f6d44b4b024b274
