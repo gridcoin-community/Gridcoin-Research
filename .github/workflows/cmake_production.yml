@@ -342,8 +342,18 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          # The Qt SUBSET, not the `qt` meta-formula, for the same reason the
+          # Intel job uses it: `qt` depends on qtwebengine, and qtwebengine is
+          # now the one formula in this set with no arm64_sonoma bottle (it
+          # publishes golden_gate, sequoia and tahoe only). On macOS 14 brew
+          # therefore source-builds it, which takes hours and then fails in
+          # ninja -- observed on this runner. Nothing here needs QtWebEngine.
+          #
+          # Homebrew calls macOS 14 a Tier 3 configuration now, so expect more
+          # of this: the same wind-down that removed the Intel bottles is
+          # reaching macos-14 arm64. #3366 tracks moving off it.
           brew update
-          brew install qt openssl $MACOS_BREW_DEPS
+          brew install qtbase qttools qtsvg qttranslations qtdeclarative openssl@3 $MACOS_BREW_DEPS
 
       - name: Configure Ccache
         uses: actions/cache@v5
@@ -418,8 +428,11 @@ jobs:
         run: |
           export CC_LAUNCHER='-DCMAKE_C_COMPILER_LAUNCHER=ccache'
           export CXX_LAUNCHER='-DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
-          QT6_PATH=$(brew --prefix qt)
-          OPENSSL_ROOT=$(brew --prefix openssl)
+          # With the split Qt kegs, qtbase's Qt6Config cannot resolve the Svg
+          # and LinguistTools components living in the qtsvg/qttools kegs;
+          # the brew prefix exposes the aggregate linked lib/cmake view.
+          QT6_PATH=$(brew --prefix)
+          OPENSSL_ROOT=$(brew --prefix openssl@3)
 
           cmake -B build \
             -DCMAKE_PREFIX_PATH="$QT6_PATH" \

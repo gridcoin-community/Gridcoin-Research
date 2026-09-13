@@ -95,22 +95,23 @@ Open your terminal and run:
 
 ```
 brew update
-brew install qt boost openssl libevent miniupnpc qrencode libzip ccache cmake
+brew install qtbase qttools qtsvg qttranslations qtdeclarative boost openssl libevent miniupnpc qrencode libzip ccache cmake
 ```
 
-Note: Homebrew installs Qt6 by default when you request qt.
+Then pass the brew prefix when you configure (e.g.
+`-DCMAKE_PREFIX_PATH=$(brew --prefix)`) so CMake sees the aggregate linked Qt
+view. With the Qt formulae split like this, qtbase's own `Qt6Config` cannot
+resolve the Svg and LinguistTools components, which live in the qtsvg and
+qttools kegs.
 
-Note for Intel Macs: Homebrew no longer ships x86_64 bottles for many
-formulae (Tier 3 wind-down), and modern brew builds those from source
-automatically, which for the qt meta-formula means an infeasible
-qtwebengine build. Install the Qt subset instead of qt:
-
-```
-brew install qtbase qttools qtsvg qttranslations boost openssl libevent miniupnpc qrencode libzip ccache cmake
-```
-
-and pass the brew prefix (e.g. `-DCMAKE_PREFIX_PATH=$(brew --prefix)`) so
-CMake sees the aggregate linked Qt view.
+Note the Qt SUBSET above rather than the `qt` meta-formula, which is what most
+Qt build instructions tell you to install. `qt` depends on qtwebengine, which
+Gridcoin does not use and which has no bottle on the configurations Homebrew has
+wound down to Tier 3 -- every x86_64 Mac, and Apple Silicon on macOS 14. There,
+`brew install qt` silently starts building qtwebengine from source: hours of
+compilation that, on macOS 14, then fails outright. Requesting the subset avoids
+pulling it in at all. On Apple Silicon running macOS 15 or newer, `brew install
+qt` does still work if you prefer it.
 
 On Intel macOS the Qt formulae and `openssl@3` have no bottle at any tag, so
 those will source-build and take hours. CI does not pay that cost: it restores
@@ -136,9 +137,11 @@ We need to tell CMake where Homebrew installed Qt and OpenSSL. We do this dynami
 Create a build directory and configure the project by running the following in the terminal:
 
 ```
-# Set paths for Homebrew libraries
-QT6_PATH=$(brew --prefix qt)
-OPENSSL_ROOT=$(brew --prefix openssl)
+# Set paths for Homebrew libraries. QT6_PATH is the brew prefix itself, not
+# `brew --prefix qt`: the Qt subset installed above leaves no `qt` keg to point
+# at, and the prefix is what exposes the aggregate linked lib/cmake view.
+QT6_PATH=$(brew --prefix)
+OPENSSL_ROOT=$(brew --prefix openssl@3)
 
 # Configure CMake
 cmake -B build \
