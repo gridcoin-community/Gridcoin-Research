@@ -1301,14 +1301,16 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/gridcoinresearch:latest
 
   # ----------------------------------------------------------------------
-  # JOB 4: Notarize macOS DMGs (tag pushes only)
-  # Disabled — Apple notarization service consistently times out at the
-  # 2-hour mark in CI. Notarization and stapling are performed locally
-  # using contrib/macdeploy/notarize-dmg.sh and the stapled DMGs are
-  # uploaded to the release manually.
+  # There is no separate notarization job. Each macOS build notarizes and
+  # staples its own DMG in place, gated to tag builds, between DMG verification
+  # and artifact upload -- a standalone job would have to re-download the DMG,
+  # re-sign nothing, and upload it again.
+  #
+  # The step is best-effort by design: on a timeout, a submit failure, or absent
+  # credentials it warns and ships the signed but un-notarized DMG rather than
+  # failing the release, and contrib/macdeploy/notarize-dmg.sh staples it
+  # afterwards.
   # ----------------------------------------------------------------------
-  # notarize-macos:
-  #   ...
 
   # ----------------------------------------------------------------------
   # JOB 5: Deploy (GitHub Release)
