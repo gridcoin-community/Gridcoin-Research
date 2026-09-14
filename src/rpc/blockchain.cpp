@@ -1464,9 +1464,25 @@ UniValue rainbymagnitude(const UniValue& params)
     CWalletTx wtx;
     wtx.mapValue["comment"] = "Rain By Magnitude";
 
-    // Custom messages are no longer supported. The static "rain by magnitude" message will be replaced by an actual
-    // rain contract at the next mandatory.
-    {
+    // The fixed "Rain By Magnitude" MESSAGE contract is attached only while the
+    // block this transaction is bound for still accepts one.
+    //
+    // The string is not user-controlled, so it is no part of the abuse this
+    // branch closes -- but CheckContracts rejects MESSAGE by TYPE, not by
+    // payload, so carrying it past the disable height would stop rain working
+    // altogether. Dropping it unconditionally instead would change what rain puts
+    // on chain the moment this merges, and the whole branch is built the other
+    // way round: every behaviour change waits on the height.
+    //
+    // Nothing is lost when it does go. The identifying string still reaches
+    // wtx.mapValue["comment"] above -- wallet metadata, and the copy the sender
+    // could actually read back; the on-chain one was write-only in practice. A
+    // purpose-specific rain contract remains the eventual home for this and is
+    // not this change.
+    //
+    // nBestHeight is read under the cs_main held from the beacon-lookup loop
+    // above, so it cannot move between here and CreateTransaction below.
+    if (IsMessageContractEnabled(nBestHeight + 1)) {
         CMutableTransaction mtx;
         mtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
             GRC::ContractAction::ADD,
