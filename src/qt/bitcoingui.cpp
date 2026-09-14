@@ -911,6 +911,7 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
         votingPage->setOptionsModel(clientModel->getOptionsModel());
 
         psgtPoolPage->setClientModel(clientModel);
+        sendCoinsPage->setClientModel(clientModel);
         // PSGT pool notifications (#2910): drive the page's table model and the
         // signature-requested toast off the core PSGTPoolChanged signal.
         connect(clientModel, &ClientModel::psgtPoolChanged,

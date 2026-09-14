@@ -9,6 +9,7 @@
 namespace Ui {
     class SendCoinsDialog;
 }
+class ClientModel;
 class SendCoinsEntry;
 
 QT_BEGIN_NAMESPACE
@@ -25,6 +26,7 @@ public:
     ~SendCoinsDialog();
 
     void setModel(WalletModel *model);
+    void setClientModel(ClientModel *client_model);
 
     /** Set up the tab chain manually, as Qt messes up the tab chain by default in some cases (issue https://bugreports.qt-project.org/browse/QTBUG-10907).
      */
@@ -46,9 +48,21 @@ private:
     interfaces::WalletCoinControl *coinControl;
     QList<qint64> *payAmounts;
     WalletModel *model;
+    ClientModel *m_client_model{nullptr};
     bool fNewRecipientAllowed;
 
     bool hasSubtractFeeRecipient() const;
+
+    //! Whether a MESSAGE contract would still be accepted for a transaction sent
+    //! now. Evaluated in the GUI process: chainparams.h is deliberately outside
+    //! lint-qt-includes.sh's forbidden set (stateless since #3204), and the tip
+    //! comes from ClientModel, so this needs nothing new across the IPC boundary.
+    bool messageContractsAllowed() const;
+
+    //! Apply messageContractsAllowed() to the entries. Also re-applies the
+    //! one-message-per-transaction rule, which is why it owns both conditions
+    //! rather than sitting beside the existing loop.
+    void updateMessageFieldVisibility();
 
 private slots:
     void on_sendButton_clicked();

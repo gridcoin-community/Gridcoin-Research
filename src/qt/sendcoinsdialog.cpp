@@ -1,4 +1,6 @@
 #include "sendcoinsdialog.h"
+#include "chainparams.h"
+#include "clientmodel.h"
 #include "ui_sendcoinsdialog.h"
 
 #include "addresstablemodel.h"
@@ -78,6 +80,50 @@ SendCoinsDialog::SendCoinsDialog(QWidget* parent)
     ui->coinControlChangeLabel->addAction(clipboardChangeAction);
 
     fNewRecipientAllowed = true;
+}
+
+bool SendCoinsDialog::messageContractsAllowed() const
+{
+    // No client model yet (early construction): say yes and let the node decide.
+    // Hiding the field on a guess would be the wrong failure -- the field is a
+    // convenience, and wallet/interfaces.cpp drops the message anyway if the
+    // network has disabled MESSAGE contracts.
+    if (!m_client_model) return true;
+
+    // nBestHeight + 1: the first block a transaction started now could be mined
+    // in, which is the height CheckContracts will judge its contracts by.
+    return IsMessageContractEnabled(m_client_model->getNumBlocks() + 1);
+}
+
+void SendCoinsDialog::updateMessageFieldVisibility()
+{
+    // Two conditions, deliberately in one place. A transaction can carry only one
+    // message, so only the first entry ever offers the field; and once the network
+    // disables MESSAGE contracts no entry does.
+    //
+    // TODO: separate the message field from the context of each output. Leaving
+    // this field in the first output group gives the impression that only the
+    // first recipient can see the message.
+    const bool allowed = messageContractsAllowed();
+
+    for (int i = 0; i < ui->entries->count(); ++i) {
+        auto* entry = qobject_cast<SendCoinsEntry*>(ui->entries->itemAt(i)->widget());
+        if (entry) entry->setMessageEnabled(allowed && i == 0);
+    }
+}
+
+void SendCoinsDialog::setClientModel(ClientModel *client_model)
+{
+    m_client_model = client_model;
+    if (!client_model) return;
+
+    // The disable height is a block height, so the field's visibility can change
+    // underneath an open send page. Re-evaluate as blocks arrive rather than only
+    // when entries are added or removed.
+    connect(client_model, &ClientModel::numBlocksChanged, this,
+            [this]() { updateMessageFieldVisibility(); });
+
+    updateMessageFieldVisibility();
 }
 
 void SendCoinsDialog::setModel(WalletModel *model)
@@ -360,17 +406,10 @@ void SendCoinsDialog::updateRemoveEnabled()
         if(entry)
         {
             entry->setRemoveEnabled(enabled);
-
-            // Transactions can only contain one message. Hide the message field
-            // for all but the first output entry.
-            //
-            // TODO: separate the message field from the context of each output.
-            // Leaving this field in the first output group gives the impression
-            // that only the first recipient can see the message.
-            //
-            entry->setMessageEnabled(i == 0);
         }
     }
+
+    updateMessageFieldVisibility();
     setupTabChain(nullptr);
     coinControlUpdateLabels();
 }
