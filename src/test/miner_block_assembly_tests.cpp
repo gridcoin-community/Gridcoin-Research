@@ -42,7 +42,9 @@
 #include "primitives/transaction.h"
 #include "scheduler.h"
 #include "script/script.h"
+#include "gridcoin/tx_message.h"
 #include "test/chain_setup.h"
+#include "test/state_guard.h"
 #include "txmempool.h"
 #include "validation.h"
 #include "validationinterface.h"
@@ -374,6 +376,62 @@ BOOST_AUTO_TEST_CASE(a_sigop_heavy_transaction_is_skipped_and_selection_continue
 //!
 //! A candidate stamped after the block it would go into is skipped.
 //!
+//!
+//! A transaction carrying a MESSAGE contract is not selected once the disable
+//! height is reached, and selection continues past it.
+//!
+//! This is not redundant with the CheckContracts gate. AcceptToMemoryPool
+//! validates contracts against the CURRENT TIP while a block is validated at its
+//! own height, so a message transaction accepted on the last block before the
+//! gate is still in the pool when a template is built one height later. Without
+//! the miner guard it is selected, and the staker loses the block to a
+//! transaction its own ConnectBlock rejects.
+//!
+//! The candidate is funded ABOVE the on-time control so that fee-rate ordering
+//! cannot be what excludes it: if the guard is deleted this transaction really
+//! does land in the block, which is what makes the case discriminate rather than
+//! merely pass.
+//!
+BOOST_AUTO_TEST_CASE(a_message_contract_transaction_is_skipped_at_the_disable_height)
+{
+    mempool.clear();
+    grc_test::StateGuard guard;
+
+    // The template is built at pindexBest->nHeight + 1 (miner.cpp), so pin the
+    // gate exactly there rather than guessing a constant that fixture changes
+    // could drift away from.
+    int template_height = 0;
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(pindexBest != nullptr);
+        template_height = pindexBest->nHeight + 1;
+    }
+    gArgs.ForceSetArg("-messagecontractdisableheight", ToString(template_height));
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    const CTransaction with_message = grc_test::CreateSpendWithContract(
+        PremineCoinbase(), coins[0].n, 200000,
+        GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "stuffed"));
+    const CTransaction ordinary = CreateSpend(PremineCoinbase(), coins[1].n, 150000, 1);
+
+    BOOST_REQUIRE_GT(FeePerKb(with_message, 200000), FeePerKb(ordinary, 150000));
+
+    AddToMempool(with_message, 200000);
+    AddToMempool(ordinary, 150000);
+
+    CAmount fees = 0;
+    const std::vector<CTransaction> selected = AssembleBlock(fees);
+
+    BOOST_CHECK_MESSAGE(!Contains(selected, with_message),
+        "the miner put a MESSAGE-contract transaction in a template at the disable height");
+    BOOST_CHECK_MESSAGE(Contains(selected, ordinary),
+        "selection did not continue past the skipped transaction");
+
+    mempool.clear();
+}
+
 BOOST_AUTO_TEST_CASE(a_transaction_newer_than_the_block_is_skipped)
 {
     mempool.clear();
