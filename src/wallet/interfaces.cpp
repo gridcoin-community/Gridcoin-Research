@@ -605,11 +605,33 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
 
     if (!recipients[0].message.empty())
     {
-        CMutableTransaction mtx;
-        mtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
-            GRC::ContractAction::ADD,
-            recipients[0].message));
-        static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
+        // The enforcement half of the GUI's message handling. The send page also
+        // hides the message field once MESSAGE contracts are disabled, but that is
+        // presentation and this is the guarantee: the field could be stale, the
+        // GUI could be an older build, or the request could arrive from something
+        // that is not the GUI at all. The message is dropped here and the payment
+        // still goes out, matching sendtoaddress and sendfrom.
+        //
+        // Worth knowing why the two halves can disagree without that being a bug:
+        // GetMessageContractDisableHeight() consults gArgs, and in a multiprocess
+        // run the GUI process has its own. A dev passing
+        // -messagecontractdisableheight to the node alone leaves the GUI still
+        // showing the field, and this is what catches it. On mainnet the height
+        // comes from compiled-in chainparams and the two cannot diverge.
+        //
+        // nBestHeight + 1 is the first height this transaction could be mined at,
+        // which is what CheckContracts will judge it by.
+        if (!IsMessageContractEnabled(nBestHeight + 1)) {
+            LogPrintf("WARNING: %s: MESSAGE contracts are disabled from height %d; the message "
+                      "was discarded and the payment sent without it.",
+                      __func__, GetMessageContractDisableHeight());
+        } else {
+            CMutableTransaction mtx;
+            mtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
+                GRC::ContractAction::ADD,
+                recipients[0].message));
+            static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
+        }
     }
 
     {
