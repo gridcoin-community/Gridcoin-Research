@@ -1747,6 +1747,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("Block version 14 hard fork configured for block %d", Params().GetConsensus().BlockV14Height);
     LogPrintf("Block version 15 hard fork configured for block %d", GetBlockV15Height());
 
+    // Same rationale as the heights above and the retention below: this value is
+    // consensus-affecting and carries a hidden isolated-testnet override, so a
+    // node running a different effective value from its peers would otherwise
+    // have nothing in the log to show it during incident diagnosis.
+    LogPrintf("MESSAGE contracts disabled from block %d", GetMessageContractDisableHeight());
+
     // Surface the effective POOL PENDING/OPEN retention so an isolated-testnet
     // -pendingpoolretention override is visible in the log and an accidental
     // mismatch across nodes is diagnosable (the value is consensus-affecting).

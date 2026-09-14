@@ -826,8 +826,12 @@ UniValue sendtoaddress(const UniValue& params)
         // will judge it by in a block, and it stops the wallet from building a
         // transaction that is already doomed on the last block before the gate.
         if (!IsMessageContractEnabled(nBestHeight + 1)) {
+            // Worded as intent, not outcome: this runs before
+            // SendMoneyToDestination(), so claiming the payment was sent would
+            // record a payment that a later failure never made. What is certain
+            // at this point is only that no message contract will be attached.
             LogPrintf("WARNING: %s: MESSAGE contracts are disabled from height %d; the message "
-                      "argument was discarded and the payment sent without it.",
+                      "argument is being discarded and the payment attempted without it.",
                       __func__, GetMessageContractDisableHeight());
         } else {
             CMutableTransaction mtx;
@@ -1778,8 +1782,12 @@ UniValue sendfrom(const UniValue& params)
         // goes out. See the comment there for why the warning is logged rather
         // than returned.
         if (!IsMessageContractEnabled(nBestHeight + 1)) {
+            // Worded as intent, not outcome: this runs before
+            // SendMoneyToDestination(), so claiming the payment was sent would
+            // record a payment that a later failure never made. What is certain
+            // at this point is only that no message contract will be attached.
             LogPrintf("WARNING: %s: MESSAGE contracts are disabled from height %d; the message "
-                      "argument was discarded and the payment sent without it.",
+                      "argument is being discarded and the payment attempted without it.",
                       __func__, GetMessageContractDisableHeight());
         } else {
             CMutableTransaction mtx;

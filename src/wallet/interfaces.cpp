@@ -603,50 +603,52 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
         wtx.mapValue["subtractFeeFromAmount"] = "1";
     }
 
-    if (!recipients[0].message.empty())
-    {
-        // The enforcement half of the GUI's message handling. The send page also
-        // hides the message field once MESSAGE contracts are disabled, but that is
-        // presentation and this is the guarantee: the field could be stale, the
-        // GUI could be an older build, or the request could arrive from something
-        // that is not the GUI at all. The message is dropped here and the payment
-        // still goes out, matching sendtoaddress and sendfrom.
-        //
-        // Worth knowing why the two halves can disagree without that being a bug:
-        // GetMessageContractDisableHeight() consults gArgs, and in a multiprocess
-        // run the GUI process has its own. A dev passing
-        // -messagecontractdisableheight to the node alone leaves the GUI still
-        // showing the field, and this is what catches it. On mainnet the height
-        // comes from compiled-in chainparams and the two cannot diverge.
-        //
-        // nBestHeight + 1 is the first height this transaction could be mined at,
-        // which is what CheckContracts will judge it by. It is GUARDED_BY(cs_main)
-        // and nothing is held here -- the balance scope above closed at its own
-        // brace and the send scope below has not opened yet -- so read it under a
-        // short lock of its own rather than racing the tip. The two send RPCs do
-        // the same check while already holding LOCK2(cs_main, cs_wallet), which is
-        // why only this call site needed it.
-        int next_height = 0;
-        {
-            LOCK(cs_main);
-            next_height = nBestHeight + 1;
-        }
-
-        if (!IsMessageContractEnabled(next_height)) {
-            LogPrintf("WARNING: %s: MESSAGE contracts are disabled from height %d; the message "
-                      "was discarded and the payment sent without it.",
-                      __func__, GetMessageContractDisableHeight());
-        } else {
-            CMutableTransaction mtx;
-            mtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
-                GRC::ContractAction::ADD,
-                recipients[0].message));
-            static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
-        }
-    }
+    // Set inside the send scope, reported only once the payment has actually
+    // committed: a warning logged before the send would claim a payment that a
+    // later failure never made.
+    bool message_discarded = false;
 
     {
         LOCK2(cs_main, m_wallet->cs_wallet);
+
+        if (!recipients[0].message.empty()) {
+            // Inside this scope deliberately, not before it. nBestHeight is
+            // GUARDED_BY(cs_main), and reading it under a lock of its own would
+            // still leave the decision free to go stale before CreateTransaction
+            // below acts on it: the tip could cross the disable height in the gap,
+            // and the contract attached on the strength of the old answer would
+            // then be rejected by CheckContracts -- failing the whole payment
+            // rather than merely dropping the message. Deciding and building under
+            // one lock means both see the same tip.
+            //
+            // The two send RPCs make the same check already holding
+            // LOCK2(cs_main, cs_wallet) taken at the top of each, so this is the
+            // same shape rather than a different rule.
+            //
+            // nBestHeight + 1 is the first height this transaction could be mined
+            // at, which is what CheckContracts will judge it by.
+            if (!IsMessageContractEnabled(nBestHeight + 1)) {
+                // The enforcement half of the GUI's message handling. The send
+                // page also hides the field, but that is presentation: the field
+                // can be stale, the GUI can be an older build, and the request
+                // need not come from the GUI at all.
+                //
+                // The two halves can legitimately disagree, which is why both
+                // exist. GetMessageContractDisableHeight() consults gArgs, and in
+                // a multiprocess run the GUI process has its own -- a developer
+                // passing -messagecontractdisableheight to the node alone leaves
+                // the GUI still offering the field, and this catches it. On
+                // mainnet the height comes from compiled-in chainparams and the
+                // two cannot diverge.
+                message_discarded = true;
+            } else {
+                CMutableTransaction mtx;
+                mtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
+                    GRC::ContractAction::ADD,
+                    recipients[0].message));
+                static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
+            }
+        }
 
         // Sendmany
         std::vector<std::pair<CScript, int64_t>> vecSend;
@@ -904,6 +906,12 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
         {
             return {SendCoinsStatus::TransactionCommitFailed};
         }
+    }
+
+    if (message_discarded) {
+        LogPrintf("WARNING: %s: MESSAGE contracts are disabled from height %d; the message was "
+                  "discarded and the payment sent without it.",
+                  __func__, GetMessageContractDisableHeight());
     }
 
     // Add addresses / update labels that we've sent to the address book.
