@@ -25,7 +25,7 @@ try:
 except ImportError:
     HAS_DS_STORE = False
 from pathlib import Path
-from subprocess import PIPE, run
+from subprocess import CalledProcessError, PIPE, run
 from typing import List, Optional
 
 # This is ported from the original macdeployqt with modifications
@@ -878,7 +878,27 @@ if config.dmg is not None:
 
     print("+ Finalizing .dmg disk image +")
 
-    run(["hdiutil", "detach", f"/Volumes/{appname}"], universal_newlines=True)
+    # The DETACH is the operation that races the indexer, not the convert, and
+    # it was the one call here that neither retried nor checked its result.
+    # Spotlight and fseventsd index the volume we have just written and hold it
+    # open, so the eject fails with "Resource busy". Nothing looked at that, and
+    # the convert below then ran against a still-mounted image and failed with
+    # "Resource temporarily unavailable" -- four times, because retrying a
+    # convert cannot un-mount anything. Observed on a macos-15-intel runner:
+    # one failed eject followed by four identical convert failures, and a
+    # traceback that named convert as the culprit.
+    #
+    # Retry the eject instead, and fail loudly if it never takes.
+    try:
+        run_hdiutil_with_retry(["detach", f"/Volumes/{appname}"])
+    except CalledProcessError:
+        # Last resort. -force ejects a volume something else still holds open.
+        # Everything that writes to the image is done by this point -- the
+        # fancy settings above are the last thing to touch it -- so there is
+        # nothing left to lose by forcing, and it beats failing a release
+        # because an indexer was still reading.
+        print("hdiutil detach still busy after retries; forcing the eject")
+        run_hdiutil_with_retry(["detach", "-force", f"/Volumes/{appname}"])
 
     run_hdiutil_with_retry(["convert", tempname, "-format", "UDZO", "-o", dmg_basename, "-imagekey", "zlib-level=9"])
 
