@@ -191,6 +191,8 @@ public:
         // TBD: set coincident with BlockV15Height when v15 is scheduled. Must never be set
         // below AutoGreylistDeepCopyHeight (see Consensus::Params).
         consensus.AutoGreylistRedesignHeight = std::numeric_limits<int>::max();
+        // TBD: set coincident with BlockV15Height when v15 is scheduled.
+        consensus.MessageContractDisableHeight = std::numeric_limits<int>::max();
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
         consensus.ConstantBlockRewardCeiling = 500 * COIN;
@@ -327,6 +329,8 @@ public:
         // TBD: set coincident with BlockV15Height when v15 is scheduled. Must never be set
         // below AutoGreylistDeepCopyHeight (see Consensus::Params).
         consensus.AutoGreylistRedesignHeight = std::numeric_limits<int>::max();
+        // TBD: set coincident with BlockV15Height when v15 is scheduled.
+        consensus.MessageContractDisableHeight = std::numeric_limits<int>::max();
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
         consensus.ConstantBlockRewardCeiling = 500 * COIN;
@@ -432,6 +436,8 @@ public:
         consensus.AutoGreylistDeepCopyHeight = 0;
         consensus.AutoGreylistTotalCreditFixHeight = 0;
         consensus.AutoGreylistRedesignHeight = 0;
+        // Inert on regtest to match V15 setting above.
+        consensus.MessageContractDisableHeight = std::numeric_limits<int>::max();
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
         consensus.ConstantBlockRewardCeiling = 500 * COIN;
@@ -504,6 +510,14 @@ int GetBlockV15Height()
     // POOL contracts at a low height for end-to-end exercise. Defaults to the
     // chainparams value (std::numeric_limits<int>::max() until pinned).
     return gArgs.GetArg("-blockv15height", Params().GetConsensus().BlockV15Height);
+}
+
+int GetMessageContractDisableHeight()
+{
+    // Hidden `-messagecontractdisableheight` arg lets isolated testnet / regtest disable
+    // MESSAGE contracts at a lower height for end-to-end exercise.
+    return gArgs.GetArg("-messagecontractdisableheight",
+                        Params().GetConsensus().MessageContractDisableHeight);
 }
 
 int GetPendingPoolRetention()
