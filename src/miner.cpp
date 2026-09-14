@@ -467,6 +467,38 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                 }
             }
 
+            // The same argument, for the same reason, about MESSAGE contracts.
+            // They are rejected from the disable height, contract dispatch does
+            // not screen them either -- MESSAGE has no registry handler and falls
+            // to the permissive one, exactly as CLAIM does -- and the mempool
+            // cannot be relied on to have kept them out.
+            //
+            // It cannot, specifically: AcceptToMemoryPool validates contracts
+            // against pindexBest->nHeight, the CURRENT tip, while a block is
+            // validated at its own height. A message transaction accepted on the
+            // last block before the gate is therefore still in the pool when this
+            // template is built one height later, where it is invalid. Taking it
+            // would cost the staker the block for someone else's transaction.
+            if (!IsMessageContractEnabled(nHeight)) {
+                bool has_message_contract = false;
+
+                for (const auto& contract : tx.GetContracts()) {
+                    if (contract.m_type == GRC::ContractType::MESSAGE) {
+                        has_message_contract = true;
+                        break;
+                    }
+                }
+
+                if (has_message_contract) {
+                    LogPrint(BCLog::LogFlags::MINER,
+                        "%s: message contract disabled at this height. Skipped tx %s",
+                        __func__,
+                        tx.GetHash().ToString());
+
+                    continue;
+                }
+            }
+
             COrphan* porphan = nullptr;
             int64_t nTotalIn = 0;
             bool fMissingInputs = false;
