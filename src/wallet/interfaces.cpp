@@ -620,8 +620,19 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
         // comes from compiled-in chainparams and the two cannot diverge.
         //
         // nBestHeight + 1 is the first height this transaction could be mined at,
-        // which is what CheckContracts will judge it by.
-        if (!IsMessageContractEnabled(nBestHeight + 1)) {
+        // which is what CheckContracts will judge it by. It is GUARDED_BY(cs_main)
+        // and nothing is held here -- the balance scope above closed at its own
+        // brace and the send scope below has not opened yet -- so read it under a
+        // short lock of its own rather than racing the tip. The two send RPCs do
+        // the same check while already holding LOCK2(cs_main, cs_wallet), which is
+        // why only this call site needed it.
+        int next_height = 0;
+        {
+            LOCK(cs_main);
+            next_height = nBestHeight + 1;
+        }
+
+        if (!IsMessageContractEnabled(next_height)) {
             LogPrintf("WARNING: %s: MESSAGE contracts are disabled from height %d; the message "
                       "was discarded and the payment sent without it.",
                       __func__, GetMessageContractDisableHeight());
