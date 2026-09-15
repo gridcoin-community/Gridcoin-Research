@@ -60,6 +60,7 @@
 #include <vector>
 
 using grc_test::AddToMempool;
+using grc_test::CreateAndProcessBlock;
 using grc_test::CreateSpend;
 using grc_test::MakeBlockAndCoinstake;
 using grc_test::PremineCoinbase;
@@ -752,6 +753,158 @@ BOOST_AUTO_TEST_CASE(a_coinstake_in_the_mempool_is_never_selected)
     BOOST_CHECK(!Contains(selected, coinstake));
     BOOST_CHECK(Contains(selected, ordinary));
     BOOST_CHECK_EQUAL(fees, 150000);
+
+    mempool.clear();
+}
+
+//! Helper: is \p txid in the wallet and marked abandoned?
+//!
+//! Abandonment is the sweep's signature effect. Nothing else in a mined block
+//! produces it, which is what makes it the discriminator between the two cases
+//! below.
+bool IsAbandonedInWallet(const uint256& txid)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    const auto it = pwalletMain->mapWallet.find(txid);
+    if (it == pwalletMain->mapWallet.end()) return false;
+
+    const auto* inactive = it->second.state<TxStateInactive>();
+    return inactive != nullptr && inactive->m_abandoned;
+}
+
+//! Put \p tx in the wallet so the abandon half of the sweep has something to act
+//! on. AddToWalletIfInvolvingMe would filter it out -- the premine key is not in
+//! pwalletMain -- so add it directly, which is what accounting_tests does.
+void PutInWallet(const CTransaction& tx)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CWalletDB walletdb(pwalletMain->strWalletFile);
+    CWalletTx wtx(pwalletMain, tx);
+    pwalletMain->AddToWallet(wtx, &walletdb);
+}
+
+//!
+//! The activation sweep, end to end through real block connection.
+//!
+//! The txmempool cases cover the pieces in isolation -- the entry tag, the
+//! counter, recursive remove() -- and would all still pass if the height
+//! predicate in ReorganizeChain, the lookup loop, or the AbandonTransaction
+//! integration stopped working. This is the case that executes that branch:
+//! a MESSAGE transaction and a child of it are pooled, a real block is mined
+//! that carries the chain across the configured height, and the sweep has to
+//! take both out of the pool and release the wallet's inputs.
+//!
+BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_swept_when_the_chain_crosses_the_height)
+{
+    mempool.clear();
+    grc_test::StateGuard guard;
+
+    // Pin the gate at the block about to be mined rather than a constant: the
+    // sweep asks about pindex->nHeight + 1, so the block AFTER this one is the
+    // first that refuses MESSAGE, and this block is the one that triggers it.
+    int crossing_height = 0;
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(pindexBest != nullptr);
+        crossing_height = pindexBest->nHeight + 1;
+    }
+    gArgs.ForceSetArg("-messagecontractdisableheight", ToString(crossing_height));
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 1u);
+
+    // The burn matters: without it CheckContracts rejects the transaction on the
+    // fee rule and a block carrying it is refused, so the case would pass for the
+    // wrong reason -- "not mined" would mean malformed, not gated.
+    const GRC::Contract contract =
+        GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "stuffed");
+
+    const CTransaction message = grc_test::CreateSpendWithContract(
+        PremineCoinbase(), coins[0].n, 200000, contract, /*tx_time=*/0,
+        contract.RequiredBurnAmount());
+
+    // A child of it, to pin the recursive half: it is just as unmineable once
+    // the parent can never confirm, so leaving it pooled would keep its own
+    // inputs locked for exactly the same reason.
+    const CTransaction child = CreateSpend(message, 0, 50000, 1);
+
+    AddToMempool(message, 200000);
+    AddToMempool(child, 50000);
+    PutInWallet(message);
+
+    BOOST_REQUIRE(mempool.exists(message.GetHash()));
+    BOOST_REQUIRE(mempool.exists(child.GetHash()));
+    BOOST_REQUIRE(!IsAbandonedInWallet(message.GetHash()));
+
+    CBlock block;
+    std::string err;
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+
+    // The miner refuses it at this height, so it cannot leave the pool by being
+    // mined -- which is what makes the pool assertions below mean the sweep.
+    BOOST_REQUIRE_MESSAGE(!Contains(block.vtx, message),
+        "the miner mined a MESSAGE transaction at the disable height, so this case "
+        "cannot distinguish the sweep from ordinary confirmation");
+
+    BOOST_CHECK_MESSAGE(!mempool.exists(message.GetHash()),
+        "the MESSAGE transaction was left in the mempool after the chain crossed the height");
+    BOOST_CHECK_MESSAGE(!mempool.exists(child.GetHash()),
+        "the child of the MESSAGE transaction was left in the mempool");
+    BOOST_CHECK_MESSAGE(IsAbandonedInWallet(message.GetHash()),
+        "the wallet transaction was not abandoned, so its inputs stay locked");
+
+    mempool.clear();
+}
+
+//!
+//! The control. Same transaction, same mining, gate out of reach: nothing is
+//! swept and nothing is abandoned.
+//!
+//! Without this the case above would pass just as well for a sweep that fired
+//! unconditionally -- which would retire MESSAGE transactions on every block
+//! from the day this merges.
+//!
+BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_untouched_below_the_height)
+{
+    mempool.clear();
+    grc_test::StateGuard guard;
+
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(pindexBest != nullptr);
+        gArgs.ForceSetArg("-messagecontractdisableheight", ToString(pindexBest->nHeight + 1000));
+    }
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    // A DIFFERENT premine output, so this transaction does not share a txid with
+    // the one the case above abandoned -- mapWallet outlives the case and would
+    // otherwise hand this one the previous verdict.
+    const GRC::Contract contract =
+        GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "stuffed");
+
+    const CTransaction message = grc_test::CreateSpendWithContract(
+        PremineCoinbase(), coins[1].n, 200000, contract, /*tx_time=*/0,
+        contract.RequiredBurnAmount());
+
+    AddToMempool(message, 200000);
+    PutInWallet(message);
+
+    CBlock block;
+    std::string err;
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+
+    // Below the height a MESSAGE transaction is ordinary: the miner takes it and
+    // the block carrying it is accepted. That is the half the sweep must not
+    // disturb, and it also proves the fixture transaction is genuinely valid --
+    // without which "not mined" above would prove nothing.
+    BOOST_CHECK_MESSAGE(Contains(block.vtx, message),
+        "a valid MESSAGE transaction was not mined below the disable height");
+    BOOST_CHECK_MESSAGE(!IsAbandonedInWallet(message.GetHash()),
+        "a MESSAGE transaction was abandoned below the disable height");
 
     mempool.clear();
 }

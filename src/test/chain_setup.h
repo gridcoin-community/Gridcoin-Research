@@ -121,8 +121,14 @@ CTransaction CreateSpend(const CTransaction& txFrom, uint32_t n, CAmount fee, in
 //! that way is dropped by ConnectInputs rather than by whatever contract rule a
 //! test meant to exercise, and the test passes for the wrong reason.
 //!
+//! \p burn, when non-zero, adds a second OP_RETURN output carrying that amount.
+//! CheckContracts sums OP_RETURN outputs and rejects a transaction supplying less
+//! than the contract's RequiredBurnAmount(), so a contract-bearing fixture without
+//! one is unminable -- a block containing it is rejected at ConnectBlock. Tests
+//! that only inspect a TEMPLATE can leave it 0; any test that mines needs it.
 CTransaction CreateSpendWithContract(const CTransaction& txFrom, uint32_t n, CAmount fee,
-                                     const GRC::Contract& contract, int64_t tx_time = 0);
+                                     const GRC::Contract& contract, int64_t tx_time = 0,
+                                     CAmount burn = 0);
 
 //! \brief As CreateSpend, but every output carries \p script_pub_key.
 CTransaction CreateSpendToScript(const CTransaction& txFrom, uint32_t n, CAmount fee,

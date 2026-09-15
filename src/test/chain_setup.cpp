@@ -425,13 +425,14 @@ CTransaction CreateSpendToScript(const CTransaction& txFrom, uint32_t n, CAmount
 }
 
 CTransaction CreateSpendWithContract(const CTransaction& txFrom, uint32_t n, CAmount fee,
-                                     const GRC::Contract& contract, int64_t tx_time)
+                                     const GRC::Contract& contract, int64_t tx_time,
+                                     CAmount burn)
 {
     BOOST_REQUIRE(n < txFrom.vout.size());
 
     const CAmount value_in = txFrom.vout[n].nValue;
-    const CAmount value_out = value_in - fee;
-    BOOST_REQUIRE_MESSAGE(value_out > 0, "fee exceeds the value of the input");
+    const CAmount value_out = value_in - fee - burn;
+    BOOST_REQUIRE_MESSAGE(value_out > 0, "fee and burn exceed the value of the input");
 
     CMutableTransaction mtx;
     mtx.nVersion = 2;  // vContracts is only serialized from version 2
@@ -441,6 +442,15 @@ CTransaction CreateSpendWithContract(const CTransaction& txFrom, uint32_t n, CAm
     mtx.vout.resize(1);
     mtx.vout[0].nValue = value_out;
     mtx.vout[0].scriptPubKey = PremineScript();
+
+    // CheckContracts counts OP_RETURN outputs toward the contract's required
+    // burn. Added before signing with everything else.
+    if (burn > 0) {
+        CTxOut burn_out;
+        burn_out.nValue = burn;
+        burn_out.scriptPubKey = CScript() << OP_RETURN;
+        mtx.vout.push_back(burn_out);
+    }
 
     // Before signing, deliberately: SignatureHash serializes the transaction and
     // vContracts is part of that serialization at this version, so a contract
