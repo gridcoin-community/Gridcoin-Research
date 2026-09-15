@@ -84,9 +84,11 @@ SendCoinsDialog::SendCoinsDialog(QWidget* parent)
 
 bool SendCoinsDialog::messageContractsAllowed() const
 {
-    // No client model yet (early construction): say yes and let the node decide.
-    // Hiding the field on a guess would be the wrong failure -- the field is a
-    // convenience, and wallet/interfaces.cpp drops the message anyway if the
+    // No client model: say yes and let the node decide. This covers both ends of
+    // the model's life -- before BitcoinGUI hands it over, and after the shutdown
+    // teardown clears it, which is when the pointer would otherwise be dangling.
+    // Hiding the field on a guess would be the wrong failure anyway: it is a
+    // convenience, and wallet/interfaces.cpp drops the message regardless if the
     // network has disabled MESSAGE contracts.
     if (!m_client_model) return true;
 

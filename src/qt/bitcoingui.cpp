@@ -924,6 +924,17 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
         // is destroyed. The diagnostics dialog likewise drops its node pointer.
         rpcConsole->setClientModel(nullptr);
         diagnosticsDialog->setClientModel(nullptr);
+
+        // Every child handed the model above must be cleared here too, or it
+        // keeps a raw pointer to a ClientModel that is about to be destroyed.
+        // The send page dereferences its copy whenever the message field's
+        // visibility is refreshed, which user interaction can still trigger
+        // while the window is coming down. The pool page was already missing
+        // from this branch before the send page joined it; both take the model
+        // by raw pointer and both clear it correctly when handed nullptr, so
+        // the fix is simply to hand it to them.
+        psgtPoolPage->setClientModel(nullptr);
+        sendCoinsPage->setClientModel(nullptr);
     }
 }
 
