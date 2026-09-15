@@ -466,6 +466,64 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                 }
             }
 
+            // Retire MESSAGE contract transactions the chain has left behind.
+            //
+            // One accepted below the disable height never leaves the pool on its own
+            // once the chain crosses it. The pool has no time-based expiry (the EXPIRY
+            // removal reason has no producer); size eviction runs only from
+            // AcceptToMemoryPool over -maxmempool and ranks contract transactions last;
+            // and replacement is disabled in AcceptToMemoryPool, so its mapNextTx rows
+            // keep the inputs locked against every other spend. The wallet cannot
+            // retire it either: ResendWalletTransactions only revalidates transactions
+            // the pool does NOT hold. So without this the sender's coins stay
+            // unspendable, and the transaction stays unconfirmed, until the node is
+            // restarted -- with nothing saying why.
+            //
+            // Removal is recursive because a child spending one is equally unmineable.
+            // Each removed transaction is then abandoned rather than erased: that
+            // releases the parents' vfSpent bits, which -- not mapTxSpends -- are what
+            // gate coin selection, and it cascades to wallet descendants.
+            // AbandonTransaction refuses a transaction the pool still holds, so the
+            // removal has to come first. One that is not ours simply leaves the pool.
+            //
+            // The height is the block being built on top of this one, matching where
+            // AcceptToMemoryPool's own v14 sequence-lock check looks. Note that
+            // CheckContracts is handed pindexBest->nHeight there, one lower, so a
+            // MESSAGE transaction can still be accepted while the tip sits at
+            // disable_height - 1 and be born unmineable; this sweep is what bounds
+            // that window to the one block it takes to connect the next one.
+            //
+            // Inert until the height is scheduled: MessageContractDisableHeight is
+            // INT_MAX on every network (chainparams.cpp), so IsMessageContractEnabled()
+            // is always true and none of this runs. Only the hidden
+            // -messagecontractdisableheight arg lowers it, for isolated testnet and
+            // regtest exercise.
+            if (!IsMessageContractEnabled(pindex->nHeight + 1)) {
+                for (const uint256& message_hash : mempool.GetMessageContractTxs()) {
+                    CTransaction message_tx;
+
+                    // Already gone as a descendant of one removed earlier in this loop.
+                    if (!mempool.lookup(message_hash, message_tx)) continue;
+
+                    std::vector<CTransaction> removed;
+                    mempool.remove(message_tx, /*fRecursive=*/true,
+                                   MemPoolRemovalReason::UNKNOWN, &removed);
+
+                    for (const auto& tx : removed) {
+                        LogPrintf("%s: MESSAGE contracts are disabled from height %d. Removed "
+                                  "transaction %s from the mempool.",
+                                  __func__, GetMessageContractDisableHeight(), tx.GetHash().ToString());
+
+                        unsigned int inputs_released = 0;
+
+                        if (pwalletMain->AbandonTransaction(tx.GetHash(), &inputs_released)) {
+                            LogPrintf("%s: Abandoned wallet transaction %s, releasing %u input(s).",
+                                      __func__, tx.GetHash().ToString(), inputs_released);
+                        }
+                    }
+                }
+            }
+
             if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
                 txdb.TxnAbort();
                 return error("%s: WriteHashBestChain failed", __func__);
