@@ -2774,7 +2774,10 @@ bool CWalletTx::RevalidateTransaction(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_m
     // Validate any contracts published in the transaction:
 
     if (!tx.GetContracts().empty()) {
-        if (!CheckContracts(tx, wallet_state, mapInputs, pindexBest->nHeight)) {
+        // As in AcceptToMemoryPool: this asks whether the transaction is still
+        // relayable, so the height that matters is the block it would enter, not
+        // the one already connected.
+        if (!CheckContracts(tx, wallet_state, mapInputs, pindexBest->nHeight + 1)) {
             return error("%s: CheckContracts found invalid contract in tx %s", __func__, tx.GetHash().ToString());
         }
 

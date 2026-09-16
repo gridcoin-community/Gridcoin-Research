@@ -909,4 +909,90 @@ BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_untouched_below_the_height)
     mempool.clear();
 }
 
+//!
+//! AcceptToMemoryPool evaluates the contract gates at the height of the block
+//! the transaction would ENTER, not the tip.
+//!
+//! This is the one height where the two conventions disagree, so it is the only
+//! place the difference can be observed: the gate is pinned at the tip's NEXT
+//! height, which leaves the tip one below it. Reading the tip, the pool would
+//! admit a transaction that the very next block rejects -- and the pool has no
+//! way to retire it afterwards, so its inputs stay locked until a restart.
+//!
+//! Paired with the control below, which moves the gate one block further out and
+//! requires the SAME transaction to be accepted. Without that, this case would
+//! pass just as well for a transaction rejected on the fee rule, a missing burn,
+//! or anything else AcceptToMemoryPool checks.
+//!
+BOOST_AUTO_TEST_CASE(message_contract_acceptance_is_evaluated_at_the_next_block)
+{
+    mempool.clear();
+    grc_test::StateGuard guard;
+
+    int next_height = 0;
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(pindexBest != nullptr);
+        next_height = pindexBest->nHeight + 1;
+    }
+
+    gArgs.ForceSetArg("-messagecontractdisableheight", ToString(next_height));
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 1u);
+
+    const GRC::Contract contract =
+        GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "stuffed");
+    CTransaction message = grc_test::CreateSpendWithContract(
+        PremineCoinbase(), coins[0].n, 200000, contract, /*tx_time=*/0,
+        contract.RequiredBurnAmount());
+
+    CValidationState state;
+    LOCK(cs_main);
+
+    BOOST_CHECK_MESSAGE(!AcceptToMemoryPool(mempool, message, state, nullptr),
+        "the pool admitted a MESSAGE transaction that the next block rejects");
+    BOOST_CHECK(!mempool.exists(message.GetHash()));
+
+    mempool.clear();
+}
+
+//! The control: the same transaction, with the gate one block further out so the
+//! next block still accepts MESSAGE. It must be admitted -- which is what makes
+//! the rejection above attributable to the height gate and nothing else.
+BOOST_AUTO_TEST_CASE(message_contract_is_accepted_while_the_next_block_still_allows_it)
+{
+    mempool.clear();
+    grc_test::StateGuard guard;
+
+    int next_height = 0;
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(pindexBest != nullptr);
+        next_height = pindexBest->nHeight + 1;
+    }
+
+    gArgs.ForceSetArg("-messagecontractdisableheight", ToString(next_height + 1));
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    // A different premine output, so this does not collide with the txid the
+    // case above built and left rejected.
+    const GRC::Contract contract =
+        GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "stuffed");
+    CTransaction message = grc_test::CreateSpendWithContract(
+        PremineCoinbase(), coins[1].n, 200000, contract, /*tx_time=*/0,
+        contract.RequiredBurnAmount());
+
+    CValidationState state;
+    LOCK(cs_main);
+
+    BOOST_CHECK_MESSAGE(AcceptToMemoryPool(mempool, message, state, nullptr),
+        "the pool refused a MESSAGE transaction the next block still accepts");
+    BOOST_CHECK(mempool.exists(message.GetHash()));
+
+    mempool.clear();
+}
+
 BOOST_AUTO_TEST_SUITE_END()

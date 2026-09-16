@@ -2302,7 +2302,13 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
                                  "insufficient-fee");
 
         // Validate any contracts published in the transaction:
-        if (!tx.GetContracts().empty() && !CheckContracts(tx, state, mapInputs, pindexBest->nHeight)) {
+        // The next block is the earliest one this transaction can be in, and the
+        // contract rules reached from here withdraw permission at their height
+        // (see CheckContracts in validation.h). Asking about the tip would admit
+        // a transaction the next block rejects, which then sits in the pool with
+        // its inputs locked, unmineable and unrelayable, until a restart.
+        if (!tx.GetContracts().empty()
+                && !CheckContracts(tx, state, mapInputs, pindexBest->nHeight + 1)) {
             return false;
         }
 
