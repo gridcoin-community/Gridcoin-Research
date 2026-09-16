@@ -486,12 +486,20 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             // AbandonTransaction refuses a transaction the pool still holds, so the
             // removal has to come first. One that is not ours simply leaves the pool.
             //
-            // The height is the block being built on top of this one, matching where
-            // AcceptToMemoryPool's own v14 sequence-lock check looks. Note that
-            // CheckContracts is handed pindexBest->nHeight there, one lower, so a
-            // MESSAGE transaction can still be accepted while the tip sits at
-            // disable_height - 1 and be born unmineable; this sweep is what bounds
-            // that window to the one block it takes to connect the next one.
+            // The height is the block being built on top of this one, which is the
+            // same question AcceptToMemoryPool now asks when it admits a
+            // transaction (validation.h) -- so acceptance and retirement agree on
+            // which block a pooled transaction is measured against.
+            //
+            // That agreement is what this sweep exists to complete rather than
+            // duplicate. Acceptance can only refuse what is in front of it at the
+            // time: a MESSAGE transaction admitted while the tip was at
+            // disable_height - 2 was legitimately admitted, being valid for the
+            // very next block. If it is not mined into that block, nothing else
+            // ever revisits it -- the pool has no expiry, and
+            // ResendWalletTransactions only revalidates transactions the pool does
+            // NOT hold. Connecting that block is the moment it becomes permanently
+            // unmineable, and this is the only thing that notices.
             //
             // Inert until the height is scheduled: MessageContractDisableHeight is
             // INT_MAX on every network (chainparams.cpp), so IsMessageContractEnabled()

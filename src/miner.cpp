@@ -473,12 +473,17 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
             // to the permissive one, exactly as CLAIM does -- and the mempool
             // cannot be relied on to have kept them out.
             //
-            // It cannot, specifically: AcceptToMemoryPool validates contracts
-            // against pindexBest->nHeight, the CURRENT tip, while a block is
-            // validated at its own height. A message transaction accepted on the
-            // last block before the gate is therefore still in the pool when this
-            // template is built one height later, where it is invalid. Taking it
-            // would cost the staker the block for someone else's transaction.
+            // This is belt and braces rather than the primary containment, and
+            // deliberately so. AcceptToMemoryPool now evaluates contracts at the
+            // height of the block a transaction would ENTER (validation.h), so one
+            // carrying a MESSAGE contract is admitted only while the tip is at
+            // disable_height - 2 or lower -- and such a transaction is still valid
+            // for the next block, so it can be mined normally. If it is not,
+            // connecting that block runs the sweep in ReorganizeChain, which
+            // retires it before any template at or above the disable height is
+            // built. Both of those have to hold for this guard to be unreachable,
+            // and the cost of being wrong is that the staker loses the block for
+            // someone else's transaction, so the check stays.
             if (!IsMessageContractEnabled(nHeight)) {
                 bool has_message_contract = false;
 
