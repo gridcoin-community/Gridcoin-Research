@@ -1087,6 +1087,76 @@ BOOST_FIXTURE_TEST_CASE(takeover_register_rejected_operator_register_accepted, P
     }
 }
 
+//!
+//! PoolRegistry::Validate is the MEMPOOL path, and it must evaluate the height
+//! rules at the block a transaction would ENTER rather than at the tip.
+//!
+//! Every other case in this suite drives BlockValidateContracts, which is handed
+//! a block index the test controls -- precisely because nBestHeight is unset
+//! under the harness. That left Validate's own height read untested. This case
+//! sets nBestHeight explicitly (StateGuard puts it back) and goes through
+//! GRC::ValidateContracts, the entry point AcceptToMemoryPool and
+//! CWalletTx::RevalidateTransaction actually call.
+//!
+//! The V15 gate is used as the observable because it is the first check in
+//! ValidateAtHeight and it is cheap to place exactly. It is an ADDITIVE rule, so
+//! on its own the tip was merely conservative here; the reason the height has to
+//! be right is the subtractive rules further in (IsPendingExpired,
+//! IsAuthorizationExpired), where the tip admits an entry the next block treats
+//! as expired -- unmineable, and nothing retires it from the pool. Those need a
+//! registry entry aged across a retention window to observe, so the gate stands
+//! in for the single line both of them share.
+//!
+BOOST_FIXTURE_TEST_CASE(mempool_validate_uses_the_next_block_height, PoolLifecycleFixture)
+{
+    grc_test::StateGuard guard; // restores nBestHeight
+
+    LOCK(cs_main);
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    // A live operator-claimed entry, and a routine operator-signed update of it
+    // -- the shape takeover_register_rejected_operator_register_accepted already
+    // proves the consensus path accepts, so anything refused below is the height.
+    const GRC::Cpid cpid = PoolTestKey::Cpid();
+    CKey operator_key = PoolTestKey::Private();
+
+    GRC::Pool entry(cpid, "legitpool", "https://legit.example/", operator_key.GetPubKey());
+    entry.m_status = GRC::PoolStatus::ACTIVE;
+    entry.m_height = 50;
+    entry.m_hash = GRC::PoolRegistry::BuiltinSeedHash(cpid);
+    registry.SeedForTests(entry);
+
+    GRC::PoolRegisterPayload payload(cpid, "legitpool", "https://legit.example/",
+                                     operator_key.GetPubKey());
+    BOOST_REQUIRE(payload.Sign(operator_key, GRC::ContractAction::ADD, entry.m_hash));
+    GRC::Contract contract = GRC::MakeContract<GRC::PoolRegisterPayload>(
+        GRC::ContractAction::ADD, std::move(payload));
+    const CTransaction tx = MakePoolTx(std::move(contract), 23);
+
+    nBestHeight = 1000;
+
+    {
+        // V15 activates at the NEXT block, which is the block this transaction
+        // would enter, so it must be accepted. Reading the tip would see 1000,
+        // refuse, and keep a transaction out of the pool that the very next
+        // block accepts.
+        grc_test::V15HeightGuard v15(1001);
+        int dos = 0;
+        BOOST_CHECK_MESSAGE(GRC::ValidateContracts(tx, dos),
+            "the mempool path refused a POOL contract valid in the block it would enter");
+    }
+
+    {
+        // Control: V15 one block further out, so the next block is still pre-V15
+        // and the same transaction must be refused. Without this the case above
+        // would pass just as well for a Validate that ignored the gate entirely.
+        grc_test::V15HeightGuard v15(1002);
+        int dos = 0;
+        BOOST_CHECK_MESSAGE(!GRC::ValidateContracts(tx, dos),
+            "the mempool path accepted a POOL contract the next block rejects");
+    }
+}
+
 BOOST_FIXTURE_TEST_CASE(reset_reseeds_builtins, PoolLifecycleFixture)
 {
     LOCK(cs_main);

@@ -788,7 +788,41 @@ bool PoolRegistry::Validate(const Contract& contract, const CTransaction& tx, in
     // chain-tip height read is already under the canonical lock; cs_lock
     // acquisition inside ValidateAtHeight then honours the cs_main ->
     // cs_lock lock order.
-    return ValidateAtHeight(contract, nBestHeight, DoS);
+    //
+    // nBestHeight + 1, not nBestHeight: both callers of ValidateContracts
+    // (AcceptToMemoryPool and CWalletTx::RevalidateTransaction) are asking
+    // about a transaction that is not in a block yet, so the height that
+    // decides it is the one it would ENTER. See CheckContracts in
+    // validation.h for why the distinction matters -- the rules behind this
+    // helper point in both directions, and which way each one points is what
+    // decides whether the tip is merely conservative or actively wrong:
+    //
+    //   IsV15Enabled           ADDITIVE. Permission arrives at the height, so
+    //                          the tip only refused a POOL contract for one
+    //                          block longer than it had to.
+    //
+    //   IsPendingExpired       ADDITIVE in its one use (below): expiry CLEARS
+    //                          existing_for_takeover, which skips the signature
+    //                          check against the old key and lets a takeover
+    //                          through. Expiry grants permission here.
+    //
+    //   IsAuthorizationExpired SUBTRACTIVE: expiry REJECTS the contract, so at
+    //                          the boundary the tip admits one the next block
+    //                          refuses. That transaction can then never be
+    //                          mined, and nothing retires it from the pool.
+    //
+    // Only the last one can strand, and only on the builtin-CPID path where a
+    // Foundation POOL_APPROVE OPEN authorization is what is expiring.
+    // KNOWN GAP, not closed here. This corrects ADMISSION only. A POOL contract
+    // admitted while the tip was two or more blocks below an expiry boundary was
+    // legitimately admitted -- it is valid for the next block -- but if it is not
+    // mined there it stays pooled, becomes invalid at the boundary, and nothing
+    // retires it. MESSAGE has a sweep in ReorganizeChain for exactly this; POOL
+    // has no equivalent, and giving it one needs a contract-type index in the
+    // pool plus an expiry-aware predicate. Dormant until v15 (BlockV15Height is
+    // INT_MAX on every network, so no POOL contract validates at all), and it
+    // belongs with the v15 pool work rather than with a height correction.
+    return ValidateAtHeight(contract, nBestHeight + 1, DoS);
 }
 
 bool PoolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
@@ -798,8 +832,10 @@ bool PoolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
     // in the shared ValidateAtHeight helper. BlockValidate is the
     // authoritative caller — it passes the actual block height
     // (ctx.m_pindex->nHeight), which is deterministic for consensus. The
-    // mempool path (Validate) calls the same helper with a chain-tip
-    // height snapshot as a best-effort approximation.
+    // mempool path (Validate) calls the same helper with the height of the
+    // block a transaction would enter, which is the tip plus one -- so
+    // acceptance asks exactly the question this does, one block ahead of it,
+    // rather than approximating it with the tip.
     //
     // Authentication shape (issue #1783, plan §3 / §3.5):
     //   * POOL_REGISTER on an unclaimed builtin → requires fresh
