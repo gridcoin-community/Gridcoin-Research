@@ -308,6 +308,28 @@ void RegistryReset::Apply() const
     }
 }
 
+ForcedArgGuard::ForcedArgGuard(std::string key, const std::string& value)
+    : m_key(std::move(key))
+{
+    gArgs.LockSettings([&](util::Settings& settings) {
+        auto it = settings.forced_settings.find(m_key);
+        if (it != settings.forced_settings.end()) m_saved = it->second;
+    });
+
+    gArgs.ForceSetArg("-" + m_key, value);
+}
+
+ForcedArgGuard::~ForcedArgGuard()
+{
+    gArgs.LockSettings([&](util::Settings& settings) {
+        if (m_saved) {
+            settings.forced_settings[m_key] = *m_saved;
+        } else {
+            settings.forced_settings.erase(m_key);
+        }
+    });
+}
+
 V15HeightGuard::V15HeightGuard(int height)
 {
     gArgs.LockSettings([&](util::Settings& settings) {

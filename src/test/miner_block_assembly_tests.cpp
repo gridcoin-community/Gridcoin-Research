@@ -382,10 +382,11 @@ BOOST_AUTO_TEST_CASE(a_sigop_heavy_transaction_is_skipped_and_selection_continue
 //! height is reached, and selection continues past it.
 //!
 //! This is not redundant with the CheckContracts gate. AcceptToMemoryPool
-//! validates contracts against the CURRENT TIP while a block is validated at its
-//! own height, so a message transaction accepted on the last block before the
-//! gate is still in the pool when a template is built one height later. Without
-//! the miner guard it is selected, and the staker loses the block to a
+//! evaluates contracts at the height of the block a transaction would ENTER, so
+//! one carrying a MESSAGE contract is admitted only while the tip is two blocks
+//! or more below the gate -- but such a transaction can miss its last valid
+//! block and still be pooled when the disable-height template is assembled.
+//! Without the miner guard it is selected, and the staker loses the block to a
 //! transaction its own ConnectBlock rejects.
 //!
 //! The candidate is funded ABOVE the on-time control so that fee-rate ordering
@@ -799,18 +800,25 @@ void PutInWallet(const CTransaction& tx)
 BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_swept_when_the_chain_crosses_the_height)
 {
     mempool.clear();
-    grc_test::StateGuard guard;
 
-    // Pin the gate at the block about to be mined rather than a constant: the
-    // sweep asks about pindex->nHeight + 1, so the block AFTER this one is the
-    // first that refuses MESSAGE, and this block is the one that triggers it.
-    int crossing_height = 0;
+    int mined_height = 0;
     {
         LOCK(cs_main);
         BOOST_REQUIRE(pindexBest != nullptr);
-        crossing_height = pindexBest->nHeight + 1;
+        mined_height = pindexBest->nHeight + 1;
     }
-    gArgs.ForceSetArg("-messagecontractdisableheight", ToString(crossing_height));
+
+    // ONE ABOVE the block about to be mined, which is what makes this case pin
+    // the sweep's "+ 1". The sweep asks !IsMessageContractEnabled(pindex->
+    // nHeight + 1), so connecting this block must fire it because the NEXT block
+    // is the first that refuses MESSAGE; a predicate reading pindex->nHeight
+    // would not fire here at all. An earlier version put the gate AT the mined
+    // block, where BOTH predicates fire and the "+ 1" was therefore unpinned.
+    //
+    // ForcedArgGuard, not StateGuard: this case mines, and StateGuard would
+    // restore nBestHeight and erase the block index before the suite fixture's
+    // teardown can rewind the committed chain (see state_guard.h).
+    grc_test::ForcedArgGuard gate("messagecontractdisableheight", ToString(mined_height + 1));
 
     const std::vector<COutPoint> coins = SpendablePremineOutputs();
     BOOST_REQUIRE_GE(coins.size(), 1u);
@@ -821,14 +829,23 @@ BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_swept_when_the_chain_crosse
     const GRC::Contract contract =
         GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "stuffed");
 
+    // Stamped past the block being mined so the miner's own timestamp guard
+    // (miner.cpp) leaves it out of the template. It is still perfectly VALID for
+    // that block -- the gate is a block further out -- so it must survive mining
+    // and then be removed by the sweep, not by confirmation. That is also the
+    // real shape of the problem: a transaction admitted below the gate that
+    // misses its last valid block. A real block is stamped from
+    // GetAdjustedTime(), not the fixture constant, so "later" is clock-relative.
+    const int64_t after_the_block = GetAdjustedTime() + 3600;
+
     const CTransaction message = grc_test::CreateSpendWithContract(
-        PremineCoinbase(), coins[0].n, 200000, contract, /*tx_time=*/0,
+        PremineCoinbase(), coins[0].n, 200000, contract, after_the_block,
         contract.RequiredBurnAmount());
 
     // A child of it, to pin the recursive half: it is just as unmineable once
     // the parent can never confirm, so leaving it pooled would keep its own
     // inputs locked for exactly the same reason.
-    const CTransaction child = CreateSpend(message, 0, 50000, 1);
+    const CTransaction child = CreateSpend(message, 0, 50000, 1, after_the_block);
 
     AddToMempool(message, 200000);
     AddToMempool(child, 50000);
@@ -842,14 +859,15 @@ BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_swept_when_the_chain_crosse
     std::string err;
     BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
 
-    // The miner refuses it at this height, so it cannot leave the pool by being
-    // mined -- which is what makes the pool assertions below mean the sweep.
+    // Kept out by the timestamp guard, not by the gate -- so anything below is
+    // the sweep and cannot be ordinary confirmation.
     BOOST_REQUIRE_MESSAGE(!Contains(block.vtx, message),
-        "the miner mined a MESSAGE transaction at the disable height, so this case "
-        "cannot distinguish the sweep from ordinary confirmation");
+        "the MESSAGE transaction was mined, so this case cannot distinguish the "
+        "sweep from ordinary confirmation");
 
     BOOST_CHECK_MESSAGE(!mempool.exists(message.GetHash()),
-        "the MESSAGE transaction was left in the mempool after the chain crossed the height");
+        "the MESSAGE transaction was left in the mempool after the chain reached "
+        "the block before the disable height");
     BOOST_CHECK_MESSAGE(!mempool.exists(child.GetHash()),
         "the child of the MESSAGE transaction was left in the mempool");
     BOOST_CHECK_MESSAGE(IsAbandonedInWallet(message.GetHash()),
@@ -869,16 +887,24 @@ BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_swept_when_the_chain_crosse
 BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_untouched_below_the_height)
 {
     mempool.clear();
-    grc_test::StateGuard guard;
 
+    int mined_height = 0;
     {
         LOCK(cs_main);
         BOOST_REQUIRE(pindexBest != nullptr);
-        gArgs.ForceSetArg("-messagecontractdisableheight", ToString(pindexBest->nHeight + 1000));
+        mined_height = pindexBest->nHeight + 1;
     }
+
+    // Identical to the case above except the gate sits one block FURTHER out, so
+    // the block being connected is NOT the one before the disable height and the
+    // sweep must not fire. That is what forbids a sweep running a block early;
+    // with the pair, the predicate is pinned from both sides.
+    grc_test::ForcedArgGuard gate("messagecontractdisableheight", ToString(mined_height + 2));
 
     const std::vector<COutPoint> coins = SpendablePremineOutputs();
     BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    const int64_t after_the_block = GetAdjustedTime() + 3600;
 
     // A DIFFERENT premine output, so this transaction does not share a txid with
     // the one the case above abandoned -- mapWallet outlives the case and would
@@ -887,7 +913,7 @@ BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_untouched_below_the_height)
         GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "stuffed");
 
     const CTransaction message = grc_test::CreateSpendWithContract(
-        PremineCoinbase(), coins[1].n, 200000, contract, /*tx_time=*/0,
+        PremineCoinbase(), coins[1].n, 200000, contract, after_the_block,
         contract.RequiredBurnAmount());
 
     AddToMempool(message, 200000);
@@ -897,14 +923,15 @@ BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_untouched_below_the_height)
     std::string err;
     BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
 
-    // Below the height a MESSAGE transaction is ordinary: the miner takes it and
-    // the block carrying it is accepted. That is the half the sweep must not
-    // disturb, and it also proves the fixture transaction is genuinely valid --
-    // without which "not mined" above would prove nothing.
-    BOOST_CHECK_MESSAGE(Contains(block.vtx, message),
-        "a valid MESSAGE transaction was not mined below the disable height");
+    BOOST_REQUIRE_MESSAGE(!Contains(block.vtx, message),
+        "the MESSAGE transaction was mined, so this control proves nothing about "
+        "the sweep");
+
+    BOOST_CHECK_MESSAGE(mempool.exists(message.GetHash()),
+        "the sweep fired a block early and removed a MESSAGE transaction that is "
+        "still valid for the next block");
     BOOST_CHECK_MESSAGE(!IsAbandonedInWallet(message.GetHash()),
-        "a MESSAGE transaction was abandoned below the disable height");
+        "a MESSAGE transaction was abandoned a block before the disable height");
 
     mempool.clear();
 }

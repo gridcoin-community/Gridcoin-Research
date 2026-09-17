@@ -506,6 +506,17 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             // is always true and none of this runs. Only the hidden
             // -messagecontractdisableheight arg lowers it, for isolated testnet and
             // regtest exercise.
+            // Retirement is deliberately IRREVERSIBLE, and that is a choice
+            // rather than an oversight. If this block is later disconnected the
+            // swept transactions are valid again, but they were never mined so
+            // the disconnect cannot resurrect them, and being abandoned they are
+            // not rebroadcast either. Accepted because the coins are the thing
+            // that matters and they are freed, not stranded: AbandonTransaction
+            // releases the inputs, so the sender can simply send again. Making
+            // it reversible would mean tracking every swept transaction across
+            // reorganisations to re-admit it into a window that is about to
+            // close again permanently -- real machinery for a boundary the chain
+            // crosses once.
             if (!IsMessageContractEnabled(pindex->nHeight + 1)) {
                 for (const uint256& message_hash : mempool.GetMessageContractTxs()) {
                     CTransaction message_tx;
