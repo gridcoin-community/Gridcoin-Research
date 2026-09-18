@@ -214,10 +214,10 @@ public:
                 MemPoolRemovalReason reason = MemPoolRemovalReason::UNKNOWN,
                 std::vector<CTransaction>* removed_out = nullptr);
     //! Remove the pooled transactions that spend an input of \p tx.
-    //! \p removed_out, when given, collects the hashes removed at the top
-    //! level. Descendants go with them through remove()'s recursion and are
-    //! not reported: a caller that re-offers a parent gets the children back
-    //! through the ordinary rebroadcast path once the parent is pooled again.
+    //! \p removed_out, when given, collects the hash of every transaction
+    //! removed, the descendants that go with each conflict included, with a
+    //! parent before its descendants so a caller re-offering the set can
+    //! pool them in dependency order.
     bool removeConflicts(const CTransaction &tx, std::vector<uint256>* removed_out = nullptr);
     void clear();
     void queryHashes(std::vector<uint256>& vtxid);

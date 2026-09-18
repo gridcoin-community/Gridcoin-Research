@@ -84,8 +84,8 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
     set<string> vRereadCPIDs;
 
     // The wallet's own transactions the disconnected blocks had conflicted.
-    // Local to the batch: re-offered below like vResurrect, but with no
-    // unbroadcast bookkeeping to reconcile afterwards.
+    // Local to the batch: re-offered below like vResurrect, and re-armed for
+    // announcement when that succeeds, since their provenance is known.
     list<CTransaction> vReconflicted;
 
     GRC::RegistryBookmarks registries;
@@ -241,18 +241,47 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
         // succeeds when whatever displaced it went with the block: a coinstake,
         // which is never resurrected, or a transaction whose own inputs the
         // block created.
-        for (CTransaction& tx : vReconflicted) {
-            CValidationState reconflicted_state;
-            bool missing_inputs = false;
-            if (AcceptToMemoryPool(mempool, tx, reconflicted_state, &missing_inputs)) {
-                LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s is pending again",
-                         __func__, tx.GetHash().ToString());
-            } else {
-                LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s stays conflicted%s%s",
-                         __func__, tx.GetHash().ToString(),
-                         missing_inputs ? ": missing inputs" : "",
-                         reconflicted_state.GetRejectReason().empty() ? "" : ": " + reconflicted_state.GetRejectReason());
+        //
+        // The set can hold a parent and its descendants (removeConflicts
+        // reports what went out with each conflict), and TakeConflictedBy hands
+        // them back in no particular order, so a refusal for missing inputs is
+        // retried while the pass before it pooled something: a child then
+        // follows its parent in.
+        bool pooled_any = true;
+        while (pooled_any && !vReconflicted.empty()) {
+            pooled_any = false;
+
+            for (auto it = vReconflicted.begin(); it != vReconflicted.end();) {
+                CValidationState reconflicted_state;
+                bool missing_inputs = false;
+
+                if (AcceptToMemoryPool(mempool, *it, reconflicted_state, &missing_inputs)) {
+                    LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s is pending again",
+                             __func__, it->GetHash().ToString());
+
+                    // Every peer dropped it too when the block connected, and the
+                    // wallet's own resend covers only what the pool does NOT hold,
+                    // so its unbroadcast entry (erased on eviction) is the one path
+                    // that announces it again. Unlike vResurrect, provenance is
+                    // known here: these are the wallet's own.
+                    mempool.AddUnbroadcast(it->GetHash());
+
+                    it = vReconflicted.erase(it);
+                    pooled_any = true;
+                } else if (missing_inputs) {
+                    ++it;
+                } else {
+                    LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s stays conflicted%s",
+                             __func__, it->GetHash().ToString(),
+                             reconflicted_state.GetRejectReason().empty() ? "" : ": " + reconflicted_state.GetRejectReason());
+                    it = vReconflicted.erase(it);
+                }
             }
+        }
+
+        for (const CTransaction& tx : vReconflicted) {
+            LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s stays conflicted: missing inputs",
+                     __func__, tx.GetHash().ToString());
         }
 
         // Record new best height (the common block) in the registries that have a backing DB. This is important
