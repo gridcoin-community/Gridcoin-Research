@@ -52,6 +52,10 @@ CTxMemPoolEntry::CTxMemPoolEntry(const CTransaction& tx_in, CAmount fee, int64_t
             m_has_message = true;
             break;
         }
+        case GRC::ContractType::POOL_REGISTER: {
+            m_has_pool_register = true;
+            break;
+        }
         default:
             break;
         }
@@ -103,6 +107,8 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry)
             ++m_mandatory_sidestake_count;
         if (e.HasMessageContract())
             ++m_message_contract_count;
+        if (e.HasPoolRegister())
+            ++m_pool_register_count;
 
         // Size accounting + eviction ordering.
         m_total_tx_size += e.GetTxSize();
@@ -129,6 +135,8 @@ void CTxMemPool::eraseIndexes(const CTxMemPoolEntry& entry)
         --m_mandatory_sidestake_count;
     if (entry.HasMessageContract() && m_message_contract_count > 0)
         --m_message_contract_count;
+    if (entry.HasPoolRegister() && m_pool_register_count > 0)
+        --m_pool_register_count;
 
     // Size accounting + eviction ordering. add/erase are balanced in practice
     // (every addUnchecked is matched by exactly one erase), so this cannot
@@ -208,6 +216,7 @@ void CTxMemPool::clear()
     m_beacon_by_cpid.clear();
     m_mandatory_sidestake_count = 0;
     m_message_contract_count = 0;
+    m_pool_register_count = 0;
     m_mrc_by_fee.clear();
     m_total_tx_size = 0;
     m_eviction_index.clear();

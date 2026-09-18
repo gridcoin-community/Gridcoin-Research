@@ -805,6 +805,140 @@ BOOST_AUTO_TEST_CASE(is_authorization_expired_height_boundary)
     BOOST_CHECK(GRC::PoolRegistry::IsAuthorizationExpired(entry, 100 + retention + 1));
 }
 
+//
+// IsStrandedAtHeight -- the mempool expiry sweep predicate
+//
+
+//! A POOL_REGISTER riding a Foundation OPEN authorization becomes permanently
+//! unmineable once that authorization expires. Nothing else retires it: the pool
+//! has no time-based expiry, replacement is disabled in AcceptToMemoryPool so its
+//! inputs stay locked, and ResendWalletTransactions only revalidates transactions
+//! the pool does NOT hold. This is the case the sweep exists for.
+BOOST_FIXTURE_TEST_CASE(is_stranded_fires_when_the_authorization_expires, PoolLifecycleFixture)
+{
+    grc_test::V15HeightGuard v15(0);
+    LOCK(cs_main);
+
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+    const GRC::Cpid cpid =
+        GRC::Cpid::Parse(GRC::PoolRegistry::BuiltinPoolSeeds().front().cpid_hex);
+
+    CKey operator_key = PoolTestKey::Private();
+    const int authorized_at = 5'000'000;
+    const int retention = GetPendingPoolRetention();
+
+    // Foundation OPEN authorizing this operator for an unclaimed builtin slot.
+    CBlockIndex pindex;
+    pindex.nHeight = authorized_at;
+    GRC::Contract open = GRC::MakeContract<GRC::PoolApprovePayload>(
+        GRC::ContractAction::OPEN, cpid, operator_key.GetPubKey());
+    DispatchApply(MakePoolTx(std::move(open), 41), &pindex);
+    BOOST_REQUIRE(registry.Try(cpid)->m_authorized_operator_key == operator_key.GetPubKey());
+
+    GRC::PoolRegisterPayload payload(cpid, "grcpool.com", "https://grcpool.com/",
+                                     operator_key.GetPubKey());
+    BOOST_REQUIRE(payload.Sign(operator_key, GRC::ContractAction::ADD,
+                               registry.Try(cpid)->m_hash));
+    const GRC::Contract contract = GRC::MakeContract<GRC::PoolRegisterPayload>(
+        GRC::ContractAction::ADD, std::move(payload));
+
+    // On the last height the authorization still covers, it is mineable, so the
+    // sweep must leave it alone. Without this half the case below would pass for
+    // a predicate that returned true unconditionally.
+    BOOST_CHECK_MESSAGE(!registry.IsStrandedAtHeight(contract, authorized_at + retention),
+        "a POOL_REGISTER was retired while its authorization still covered it");
+
+    // One height later it can never be mined again.
+    BOOST_CHECK_MESSAGE(registry.IsStrandedAtHeight(contract, authorized_at + retention + 1),
+        "a POOL_REGISTER whose authorization expired was not recognised as stranded");
+}
+
+//! The trap the predicate is a CONJUNCTION to avoid.
+//!
+//! IsPendingExpired GRANTS permission when it fires -- expiry clears
+//! existing_for_takeover, which skips the signature check against the incumbent's
+//! key and lets a takeover through. So a takeover contract is refused today and
+//! acceptable later, and a sweep driven by "fails validation now" alone would
+//! retire a transaction that is merely early. It has no authorization of its own,
+//! so IsAuthorizationExpired is false and the conjunction refuses to fire.
+BOOST_FIXTURE_TEST_CASE(is_stranded_ignores_a_takeover_that_is_merely_early, PoolLifecycleFixture)
+{
+    grc_test::V15HeightGuard v15(0);
+    LOCK(cs_main);
+
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+    const GRC::Cpid cpid = PoolTestKey::Cpid(); // non-builtin
+    BOOST_REQUIRE(!registry.IsBuiltin(cpid));
+
+    const int claimed_at = 5'000'000;
+    const int retention = GetPendingPoolRetention();
+
+    // An incumbent PENDING claim held by someone else.
+    CKey incumbent;
+    incumbent.MakeNewKey(false);
+    GRC::Pool entry(cpid, "incumbent", "https://incumbent.example/", incumbent.GetPubKey());
+    entry.m_status = GRC::PoolStatus::PENDING;
+    entry.m_height = claimed_at;
+    entry.m_hash = GRC::PoolRegistry::BuiltinSeedHash(cpid);
+    registry.SeedForTests(entry);
+
+    // A different claimant, signing with their own key. Refused now because the
+    // incumbent's claim still stands; acceptable once that claim ages out.
+    CKey challenger = PoolTestKey::Private();
+    GRC::PoolRegisterPayload payload(cpid, "challenger", "https://challenger.example/",
+                                     challenger.GetPubKey());
+    BOOST_REQUIRE(payload.Sign(challenger, GRC::ContractAction::ADD, entry.m_hash));
+    const GRC::Contract contract = GRC::MakeContract<GRC::PoolRegisterPayload>(
+        GRC::ContractAction::ADD, std::move(payload));
+
+    BOOST_CHECK_MESSAGE(!registry.IsStrandedAtHeight(contract, claimed_at + 1),
+        "an early takeover was treated as stranded");
+    BOOST_CHECK_MESSAGE(!registry.IsStrandedAtHeight(contract, claimed_at + retention + 1),
+        "a takeover was treated as stranded at the height that makes it valid");
+}
+
+//! The other half of the conjunction. An expired authorization on the CPID is
+//! necessary but not sufficient: a builtin that has since been claimed and is
+//! operational validates through the Path 1 signature check, which never consults
+//! the authorization. Testing expiry alone would retire a perfectly mineable
+//! transaction that merely shares a CPID with a stale authorization.
+BOOST_FIXTURE_TEST_CASE(is_stranded_ignores_a_contract_that_does_not_use_the_authorization,
+                        PoolLifecycleFixture)
+{
+    grc_test::V15HeightGuard v15(0);
+    LOCK(cs_main);
+
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+    const GRC::Cpid cpid =
+        GRC::Cpid::Parse(GRC::PoolRegistry::BuiltinPoolSeeds().front().cpid_hex);
+
+    CKey operator_key = PoolTestKey::Private();
+    const int authorized_at = 5'000'000;
+    const int retention = GetPendingPoolRetention();
+
+    // Claimed and operational, AND carrying a long-expired authorization.
+    GRC::Pool entry(cpid, "grcpool.com", "https://grcpool.com/", operator_key.GetPubKey());
+    entry.m_status = GRC::PoolStatus::ACTIVE;
+    entry.m_height = authorized_at;
+    entry.m_hash = GRC::PoolRegistry::BuiltinSeedHash(cpid);
+    entry.m_authorized_operator_key = operator_key.GetPubKey();
+    entry.m_authorization_height = authorized_at;
+    registry.SeedForTests(entry);
+
+    GRC::PoolRegisterPayload payload(cpid, "grcpool.com", "https://grcpool.com/",
+                                     operator_key.GetPubKey());
+    BOOST_REQUIRE(payload.Sign(operator_key, GRC::ContractAction::ADD, entry.m_hash));
+    const GRC::Contract contract = GRC::MakeContract<GRC::PoolRegisterPayload>(
+        GRC::ContractAction::ADD, std::move(payload));
+
+    const int past_expiry = authorized_at + retention + 1;
+    BOOST_REQUIRE(GRC::PoolRegistry::IsAuthorizationExpired(entry, past_expiry));
+
+    BOOST_CHECK_MESSAGE(!registry.IsStrandedAtHeight(contract, past_expiry),
+        "an operator-signed POOL_REGISTER was retired over an authorization it "
+        "does not depend on");
+}
+
 BOOST_AUTO_TEST_CASE(is_authorization_expired_handles_sentinel_height)
 {
     // Sentinel m_authorization_height == -1 means "no authorization ever
@@ -855,7 +989,7 @@ BOOST_FIXTURE_TEST_CASE(open_apply_revert_round_trips_a_builtin, PoolLifecycleFi
         BOOST_CHECK(!seed->m_authorized_operator_key.IsValid());
     }
 
-    const CKey operator_key = PoolTestKey::Private();
+    CKey operator_key = PoolTestKey::Private();
     const CPubKey authorized = operator_key.GetPubKey();
 
     CBlockIndex pindex;

@@ -543,6 +543,69 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                 }
             }
 
+            // Retire POOL contracts the chain has left behind. Same problem and
+            // the same shape as the MESSAGE sweep above, with the boundary coming
+            // from registry state rather than a single network-wide height: a
+            // POOL_REGISTER admitted while the tip was below an expiry boundary
+            // was legitimately admitted -- it was valid for the next block -- but
+            // if it is not mined before the boundary nothing else retires it.
+            //
+            // PoolRegistry::IsStrandedAtHeight owns the question rather than this
+            // loop, because answering it needs the branch structure of
+            // VerifyRegisterAuth and the private validation helper. In particular
+            // "fails validation now" is NOT the test: IsPendingExpired GRANTS
+            // permission when it fires, so a contract can be refused today and
+            // acceptable later, and a sweep driven by failure alone would retire
+            // takeovers that are merely early.
+            //
+            // Inert until v15: BlockV15Height is INT_MAX on every network, so no
+            // POOL contract validates at all and none can be pooled.
+            {
+                const int next_height = pindex->nHeight + 1;
+
+                // Snapshot once. GetPoolRegisterTxs() takes the pool lock and
+                // builds a vector, and the empty case needs no guard of its own:
+                // the loop below simply does not run.
+                const std::vector<uint256> pool_register_txs = mempool.GetPoolRegisterTxs();
+
+                for (const uint256& pool_hash : pool_register_txs) {
+                    CTransaction pool_tx;
+
+                    if (!mempool.lookup(pool_hash, pool_tx)) continue;
+
+                    bool stranded = false;
+                    for (const auto& contract : pool_tx.GetContracts()) {
+                        if (GRC::GetPoolRegistry().IsStrandedAtHeight(contract, next_height)) {
+                            stranded = true;
+                            break;
+                        }
+                    }
+                    if (!stranded) continue;
+
+                    std::vector<CTransaction> removed;
+                    mempool.remove(pool_tx, /*fRecursive=*/true,
+                                   MemPoolRemovalReason::UNKNOWN, &removed);
+
+                    // removed carries the named transaction AND its in-pool
+                    // descendants. A descendant is stranded too -- it spends an
+                    // output that can never confirm -- but the expired
+                    // authorization is the parent's, so the line states the rule
+                    // that fired rather than attributing it to each transaction.
+                    for (const auto& tx : removed) {
+                        LogPrintf("%s: A POOL authorization expired at height %d. Removed "
+                                  "transaction %s from the mempool.",
+                                  __func__, next_height, tx.GetHash().ToString());
+
+                        unsigned int inputs_released = 0;
+
+                        if (pwalletMain->AbandonTransaction(tx.GetHash(), &inputs_released)) {
+                            LogPrintf("%s: Abandoned wallet transaction %s, releasing %u input(s).",
+                                      __func__, tx.GetHash().ToString(), inputs_released);
+                        }
+                    }
+                }
+            }
+
             if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
                 txdb.TxnAbort();
                 return error("%s: WriteHashBestChain failed", __func__);

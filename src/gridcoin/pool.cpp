@@ -576,6 +576,28 @@ bool PoolRegistry::IsAuthorizationExpired(const Pool& entry, int at_height)
     return at_height > entry.m_authorization_height + GetPendingPoolRetention();
 }
 
+bool PoolRegistry::IsStrandedAtHeight(const Contract& contract, int at_height) const
+{
+    // POOL_REGISTER is the only POOL contract whose validity consults
+    // IsAuthorizationExpired, so it is the only one that can reach this state.
+    if (contract.m_type != ContractType::POOL_REGISTER) {
+        return false;
+    }
+
+    const auto payload = contract.SharePayloadAs<PoolRegisterPayload>();
+    const Pool_ptr existing = Try(payload->m_cpid);
+
+    if (!existing || !IsAuthorizationExpired(*existing, at_height)) {
+        return false;
+    }
+
+    // Expired authorization for this CPID is necessary but not sufficient: the
+    // contract has to actually be refused at that height, or it is one that does
+    // not depend on the authorization at all.
+    int DoS = 0;
+    return !ValidateAtHeight(contract, at_height, DoS);
+}
+
 bool PoolRegistry::VerifyRegisterAuth(const PoolRegisterPayload& payload,
                                       const ContractAction action,
                                       int at_height,

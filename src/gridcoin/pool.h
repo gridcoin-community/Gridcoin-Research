@@ -522,6 +522,43 @@ public:
     //!
     static bool IsAuthorizationExpired(const Pool& entry, int at_height);
 
+    //!
+    //! \brief Whether \p contract can never be mined from \p at_height onward.
+    //!
+    //! For the mempool sweep in ReorganizeChain. A POOL contract admitted while
+    //! the tip was below an expiry boundary was legitimately admitted -- it was
+    //! valid for the next block -- but if it is not mined before the boundary it
+    //! becomes permanently unmineable, and nothing else retires it: the pool has
+    //! no time-based expiry, replacement is disabled in AcceptToMemoryPool so its
+    //! inputs stay locked, and ResendWalletTransactions only revalidates
+    //! transactions the pool does NOT hold.
+    //!
+    //! Only IsAuthorizationExpired can produce that state. IsV15Enabled grants
+    //! permission at its height, and IsPendingExpired grants it too in its one
+    //! use -- expiry there CLEARS existing_for_takeover, letting a takeover
+    //! through. A contract failing for either of those may become valid later, so
+    //! a sweep driven by "fails validation now" alone would retire transactions
+    //! that are merely early.
+    //!
+    //! The test is deliberately a conjunction: the authorization for the CPID
+    //! must be expired AND the contract must actually fail at that height. The
+    //! first alone would retire a contract that merely shares a CPID with an
+    //! expired authorization it does not depend on; the second alone is the
+    //! early-takeover trap above. m_authorized_operator_key is only ever set by a
+    //! Foundation POOL_APPROVE OPEN, so the conjunction also scopes this to the
+    //! builtin-authorization path without duplicating VerifyRegisterAuth's branch
+    //! structure.
+    //!
+    //! NOT strictly monotone, and that is accepted rather than hidden: a fresh
+    //! Foundation POOL_APPROVE OPEN moves m_authorization_height forward and
+    //! could make a retired contract valid again. Retirement is irreversible, as
+    //! it is across a reorganisation -- but AbandonTransaction releases the
+    //! inputs, so nothing is stranded and re-sending is the natural response to a
+    //! new authorization anyway. Holding a dead transaction indefinitely against
+    //! a hypothetical future authorization is the worse outcome.
+    //!
+    bool IsStrandedAtHeight(const Contract& contract, int at_height) const;
+
     void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override

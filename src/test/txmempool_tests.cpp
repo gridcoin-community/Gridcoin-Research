@@ -20,6 +20,7 @@
 #include <gridcoin/beacon.h>
 #include <gridcoin/cpid.h>
 #include <gridcoin/mrc.h>
+#include <gridcoin/pool.h>
 #include <gridcoin/sidestake.h>
 #include <gridcoin/tx_message.h>
 #include <gridcoin/contract/contract.h>
@@ -818,6 +819,44 @@ BOOST_AUTO_TEST_CASE(message_contract_removal_takes_descendants)
     // The child's input is released with it: a still-locked outpoint is the
     // whole defect the sweep exists to clear.
     BOOST_CHECK(pool.mapNextTx.empty());
+}
+
+//! The POOL_REGISTER tag and counter the expiry sweep selects on, same shape as
+//! the MESSAGE pair above. If the constructor's switch stops covering
+//! POOL_REGISTER the sweep silently finds nothing and the mechanism is a no-op.
+BOOST_AUTO_TEST_CASE(pool_register_count_tracks_add_and_remove)
+{
+    GRC::PoolRegisterPayload payload;
+    const CTransaction pool_tx = MakeTx(
+        {GRC::MakeContract<GRC::PoolRegisterPayload>(GRC::ContractAction::ADD, payload)});
+    const CTransaction plain_tx = MakePlainTx(1000);
+
+    BOOST_CHECK(MakeEntry(pool_tx).HasPoolRegister());
+    BOOST_CHECK(!MakeEntry(plain_tx).HasPoolRegister());
+
+    CTxMemPool pool;
+    pool.addUnchecked(plain_tx.GetHash(), MakeEntry(plain_tx));
+
+    // Entries present but none of them POOL_REGISTER: the guard, not an empty pool.
+    BOOST_CHECK_EQUAL(pool.m_pool_register_count, 0U);
+    BOOST_CHECK(pool.GetPoolRegisterTxs().empty());
+
+    pool.addUnchecked(pool_tx.GetHash(), MakeEntry(pool_tx));
+    BOOST_CHECK_EQUAL(pool.m_pool_register_count, 1U);
+
+    const std::vector<uint256> found = pool.GetPoolRegisterTxs();
+    BOOST_REQUIRE_EQUAL(found.size(), 1U);
+    BOOST_CHECK(found[0] == pool_tx.GetHash());
+
+    pool.remove(pool_tx);
+    BOOST_CHECK_EQUAL(pool.m_pool_register_count, 0U);
+    BOOST_CHECK(pool.GetPoolRegisterTxs().empty());
+    BOOST_CHECK_EQUAL(pool.size(), 1UL);
+
+    pool.addUnchecked(pool_tx.GetHash(), MakeEntry(pool_tx));
+    pool.clear();
+    BOOST_CHECK_EQUAL(pool.m_pool_register_count, 0U);
+    BOOST_CHECK(pool.GetPoolRegisterTxs().empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
