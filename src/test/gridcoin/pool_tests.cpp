@@ -1234,12 +1234,14 @@ BOOST_FIXTURE_TEST_CASE(takeover_register_rejected_operator_register_accepted, P
 //!
 //! The V15 gate is used as the observable because it is the first check in
 //! ValidateAtHeight and it is cheap to place exactly. It is an ADDITIVE rule, so
-//! on its own the tip was merely conservative here; the reason the height has to
-//! be right is the subtractive rules further in (IsPendingExpired,
-//! IsAuthorizationExpired), where the tip admits an entry the next block treats
-//! as expired -- unmineable, and nothing retires it from the pool. Those need a
-//! registry entry aged across a retention window to observe, so the gate stands
-//! in for the single line both of them share.
+//! on its own the tip was merely conservative here. The rule that makes the
+//! height load-bearing is IsAuthorizationExpired, which is the one SUBTRACTIVE
+//! rule behind this helper -- IsPendingExpired is additive in its one use, where
+//! expiry clears existing_for_takeover and lets a takeover through. Reading the
+//! tip there admits a contract the next block refuses; retiring it afterwards is
+//! the ReorganizeChain sweep's job, and is covered separately. Observing the
+//! expiry rule directly needs a registry entry aged across a retention window,
+//! so the gate stands in for the single line every one of them shares.
 //!
 BOOST_FIXTURE_TEST_CASE(mempool_validate_uses_the_next_block_height, PoolLifecycleFixture)
 {

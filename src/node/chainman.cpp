@@ -466,6 +466,30 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                 }
             }
 
+
+
+            if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
+                txdb.TxnAbort();
+                return error("%s: WriteHashBestChain failed", __func__);
+            }
+
+            // Make sure it's successfully written to disk before changing memory structure
+            if (!txdb.TxnCommit()) {
+                return error("%s: TxnCommit failed", __func__);
+            }
+
+            // Mempool retirement runs AFTER the commit, deliberately.
+            //
+            // Both sweeps below remove transactions from the pool and abandon them
+            // in the wallet, and AbandonTransaction writes that state to disk. Run
+            // before the commit, a failed WriteHashBestChain or TxnCommit would
+            // leave a transaction persistently abandoned for a boundary the chain
+            // never actually crossed -- irreversible bookkeeping justified by a
+            // block that was then thrown away. Nothing here feeds the commit, so
+            // the ordering costs nothing.
+            //
+            // The stale-MRC removal further up predates this and still runs before
+            // the commit; it is left where it is rather than moved as a drive-by.
             // Retire MESSAGE contract transactions the chain has left behind.
             //
             // One accepted below the disable height never leaves the pool on its own
@@ -604,16 +628,6 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                         }
                     }
                 }
-            }
-
-            if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
-                txdb.TxnAbort();
-                return error("%s: WriteHashBestChain failed", __func__);
-            }
-
-            // Make sure it's successfully written to disk before changing memory structure
-            if (!txdb.TxnCommit()) {
-                return error("%s: TxnCommit failed", __func__);
             }
 
             // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This

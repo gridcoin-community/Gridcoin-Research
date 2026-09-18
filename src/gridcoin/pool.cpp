@@ -835,15 +835,12 @@ bool PoolRegistry::Validate(const Contract& contract, const CTransaction& tx, in
     //
     // Only the last one can strand, and only on the builtin-CPID path where a
     // Foundation POOL_APPROVE OPEN authorization is what is expiring.
-    // KNOWN GAP, not closed here. This corrects ADMISSION only. A POOL contract
-    // admitted while the tip was two or more blocks below an expiry boundary was
-    // legitimately admitted -- it is valid for the next block -- but if it is not
-    // mined there it stays pooled, becomes invalid at the boundary, and nothing
-    // retires it. MESSAGE has a sweep in ReorganizeChain for exactly this; POOL
-    // has no equivalent, and giving it one needs a contract-type index in the
-    // pool plus an expiry-aware predicate. Dormant until v15 (BlockV15Height is
-    // INT_MAX on every network, so no POOL contract validates at all), and it
-    // belongs with the v15 pool work rather than with a height correction.
+    // This corrects ADMISSION. Retirement is the other half and lives in
+    // ReorganizeChain, which sweeps contracts that were admitted legitimately --
+    // valid for the next block -- and then missed their last mineable block; see
+    // IsStrandedAtHeight for why that predicate is a conjunction rather than
+    // "fails validation now". Admission alone would leave those pooled forever
+    // with their inputs locked.
     return ValidateAtHeight(contract, nBestHeight + 1, DoS);
 }
 

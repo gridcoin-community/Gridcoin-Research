@@ -34,6 +34,7 @@
 #include "consensus/consensus.h"
 #include "consensus/tx_verify.h"
 #include "gridcoin/cpid.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/mrc.h"
 #include "init.h"
 #include "miner.h"
@@ -1018,6 +1019,157 @@ BOOST_AUTO_TEST_CASE(message_contract_is_accepted_while_the_next_block_still_all
     BOOST_CHECK_MESSAGE(AcceptToMemoryPool(mempool, message, state, nullptr),
         "the pool refused a MESSAGE transaction the next block still accepts");
     BOOST_CHECK(mempool.exists(message.GetHash()));
+
+    mempool.clear();
+}
+
+//!
+//! The POOL expiry sweep, end to end through real block connection.
+//!
+//! IsStrandedAtHeight and the POOL_REGISTER tag/counter are covered in their own
+//! suites, but nothing there connects a block: a regression in this branch's
+//! height, its lookup loop, the recursive removal or the wallet abandonment would
+//! still pass. Same gap the MESSAGE sweep had, and the same fix.
+//!
+//! Retention is forced to 1 block so the boundary is reachable on a regtest chain
+//! that is a couple of blocks old, and V15 is forced on because ValidateAtHeight
+//! refuses every POOL contract below it. The transaction is stamped past the block
+//! being mined so the miner's timestamp guard leaves it out of the template -- it
+//! has to survive mining and be removed by the sweep, not by confirmation.
+//!
+BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_swept_when_its_authorization_expires)
+{
+    mempool.clear();
+    grc_test::V15HeightGuard v15(0);
+    grc_test::ForcedArgGuard retention("pendingpoolretention", "1");
+
+    int authorized_at = 0;
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(pindexBest != nullptr);
+        authorized_at = pindexBest->nHeight;
+    }
+
+    // An unclaimed builtin slot carrying a Foundation OPEN authorization. With
+    // retention 1 the authorization covers heights up to authorized_at + 1, so
+    // the block about to be mined puts the NEXT block past it.
+    const GRC::Cpid cpid =
+        GRC::Cpid::Parse(GRC::PoolRegistry::BuiltinPoolSeeds().front().cpid_hex);
+    CKey operator_key;
+    operator_key.MakeNewKey(false);
+
+    uint256 prev_hash;
+    {
+        LOCK(cs_main);
+        GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+        GRC::Pool_ptr seed = registry.Try(cpid);
+        BOOST_REQUIRE(seed);
+
+        GRC::Pool entry = *seed;
+        entry.m_authorized_operator_key = operator_key.GetPubKey();
+        entry.m_authorization_height = authorized_at;
+        registry.SeedForTests(entry);
+        prev_hash = entry.m_hash;
+    }
+
+    GRC::PoolRegisterPayload payload(cpid, "grcpool.com", "https://grcpool.com/",
+                                     operator_key.GetPubKey());
+    BOOST_REQUIRE(payload.Sign(operator_key, GRC::ContractAction::ADD, prev_hash));
+    const GRC::Contract contract = GRC::MakeContract<GRC::PoolRegisterPayload>(
+        GRC::ContractAction::ADD, std::move(payload));
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 1u);
+
+    const int64_t after_the_block = GetAdjustedTime() + 3600;
+    const CTransaction pool_tx = grc_test::CreateSpendWithContract(
+        PremineCoinbase(), coins[0].n, 200000, contract, after_the_block,
+        contract.RequiredBurnAmount());
+
+    AddToMempool(pool_tx, 200000);
+    PutInWallet(pool_tx);
+    BOOST_REQUIRE(mempool.exists(pool_tx.GetHash()));
+    BOOST_REQUIRE(!IsAbandonedInWallet(pool_tx.GetHash()));
+
+    CBlock block;
+    std::string err;
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+
+    BOOST_REQUIRE_MESSAGE(!Contains(block.vtx, pool_tx),
+        "the POOL transaction was mined, so this case cannot distinguish the sweep "
+        "from ordinary confirmation");
+
+    BOOST_CHECK_MESSAGE(!mempool.exists(pool_tx.GetHash()),
+        "a POOL_REGISTER whose authorization expired was left in the mempool");
+    BOOST_CHECK_MESSAGE(IsAbandonedInWallet(pool_tx.GetHash()),
+        "the wallet transaction was not abandoned, so its inputs stay locked");
+
+    mempool.clear();
+}
+
+//! The control: identical, with retention long enough that the authorization
+//! still covers the next block. Nothing is swept and nothing is abandoned, which
+//! is what forbids a sweep that retires POOL contracts unconditionally.
+BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_untouched_while_its_authorization_holds)
+{
+    mempool.clear();
+    grc_test::V15HeightGuard v15(0);
+    grc_test::ForcedArgGuard retention("pendingpoolretention", "100000");
+
+    int authorized_at = 0;
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(pindexBest != nullptr);
+        authorized_at = pindexBest->nHeight;
+    }
+
+    const GRC::Cpid cpid =
+        GRC::Cpid::Parse(GRC::PoolRegistry::BuiltinPoolSeeds().front().cpid_hex);
+    CKey operator_key;
+    operator_key.MakeNewKey(false);
+
+    uint256 prev_hash;
+    {
+        LOCK(cs_main);
+        GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+        GRC::Pool_ptr seed = registry.Try(cpid);
+        BOOST_REQUIRE(seed);
+
+        GRC::Pool entry = *seed;
+        entry.m_authorized_operator_key = operator_key.GetPubKey();
+        entry.m_authorization_height = authorized_at;
+        registry.SeedForTests(entry);
+        prev_hash = entry.m_hash;
+    }
+
+    GRC::PoolRegisterPayload payload(cpid, "grcpool.com", "https://grcpool.com/",
+                                     operator_key.GetPubKey());
+    BOOST_REQUIRE(payload.Sign(operator_key, GRC::ContractAction::ADD, prev_hash));
+    const GRC::Contract contract = GRC::MakeContract<GRC::PoolRegisterPayload>(
+        GRC::ContractAction::ADD, std::move(payload));
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    // A different premine output, so this does not share a txid with the one the
+    // case above abandoned -- mapWallet outlives a case.
+    const int64_t after_the_block = GetAdjustedTime() + 3600;
+    const CTransaction pool_tx = grc_test::CreateSpendWithContract(
+        PremineCoinbase(), coins[1].n, 200000, contract, after_the_block,
+        contract.RequiredBurnAmount());
+
+    AddToMempool(pool_tx, 200000);
+    PutInWallet(pool_tx);
+
+    CBlock block;
+    std::string err;
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+    BOOST_REQUIRE(!Contains(block.vtx, pool_tx));
+
+    BOOST_CHECK_MESSAGE(mempool.exists(pool_tx.GetHash()),
+        "the sweep removed a POOL_REGISTER whose authorization still covers it");
+    BOOST_CHECK_MESSAGE(!IsAbandonedInWallet(pool_tx.GetHash()),
+        "a POOL_REGISTER was abandoned while its authorization still held");
 
     mempool.clear();
 }
