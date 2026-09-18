@@ -179,8 +179,16 @@ bool Contains(const std::vector<CTransaction>& txs, const CTransaction& tx)
 
 } // anonymous namespace
 
+// RegistryResetFor is here because the POOL cases below seed the process-global
+// PoolRegistry. StateGuard deliberately does NOT restore registries (state_guard.h
+// -- Reset() is destructive and some suites want it on entry only), and the
+// suite-level leak detector compares registry SIZES, which those cases do not
+// change: they modify an existing builtin seed rather than adding an entry. So the
+// mutation is both unrestored and invisible, and the reset has to be asked for.
 BOOST_AUTO_TEST_SUITE(miner_block_assembly_tests,
-                      *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
+                      *boost::unit_test::fixture<grc_test::RegtestChainSetup>()
+                      *boost::unit_test::fixture<
+                          grc_test::RegistryResetFor<GRC::ContractType::POOL_REGISTER>>())
 
 //!
 //! The fixture's own precondition: a real chain, and premine coins that the

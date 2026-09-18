@@ -2723,20 +2723,48 @@ unsigned int CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQU
         LogPrint(BCLog::LogFlags::VERBOSE, "WARNING: %s: to_be_erased.size() = %u", __func__, to_be_erased.size());
     }
 
-    for (const auto& wtx : to_be_erased) {
+    // cs_main is held by the caller (see the annotation on this function), so
+    // taking cs_wallet here is the canonical order; ReleaseTransactionInputs
+    // asserts it, and EraseFromWallet's own LOCK is recursive.
+    {
+        LOCK(cs_wallet);
 
-        const CTransaction& tx = wtx.second;
+        std::unique_ptr<CWalletDB> pwalletdb;
+        if (fFileBacked) pwalletdb = std::make_unique<CWalletDB>(strWalletFile);
 
-        if (EraseFromWallet(wtx.first)) {
-            LogPrintf("WARNING %s: Erased invalid transaction %s from the wallet.", __func__, wtx.first.ToString());
+        for (const auto& wtx : to_be_erased) {
 
-            ++txns_erased_from_wallet;
-        } else {
-            LogPrintf("WARNING %s: Unable to erase invalid transaction %s from the wallet.",
-                      __func__, wtx.first.ToString());
+            const CTransaction& tx = wtx.second;
+
+            // Release the inputs BEFORE erasing. EraseFromWallet drops the
+            // mapTxSpends rows but leaves the parents' vfSpent bits set, and it is
+            // vfSpent -- not mapTxSpends -- that gates coin selection in
+            // AvailableCoins. Erasing alone therefore takes the transaction away
+            // while keeping the coins it spent locked, until FixSpentCoins runs at
+            // startup or via repairwallet.
+            //
+            // That was survivable while this path only saw transactions that were
+            // malformed to begin with. The contract height gates now also send it
+            // ones that were perfectly valid when signed and became permanently
+            // unmineable afterwards: the ReorganizeChain sweeps abandon those while
+            // they are still pooled, but one that has left the pool -- size
+            // eviction, or a restart, which reloads through AcceptToMemoryPool and
+            // is refused -- arrives here instead. Its owner did nothing to earn
+            // locked coins.
+            const unsigned int released = ReleaseTransactionInputs(tx, pwalletdb.get());
+
+            if (EraseFromWallet(wtx.first)) {
+                LogPrintf("WARNING %s: Erased invalid transaction %s from the wallet, releasing %u input(s).",
+                          __func__, wtx.first.ToString(), released);
+
+                ++txns_erased_from_wallet;
+            } else {
+                LogPrintf("WARNING %s: Unable to erase invalid transaction %s from the wallet.",
+                          __func__, wtx.first.ToString());
+            }
+
+            NotifyTransactionChanged(this, tx.GetHash(), CT_DELETED);
         }
-
-        NotifyTransactionChanged(this, tx.GetHash(), CT_DELETED);
     }
 
     LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: %u transactions relayed, %u transactions failed validation, "
