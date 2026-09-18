@@ -197,6 +197,11 @@ BASE_SCRIPTS = [
     # can collide, reconnect, and assert the shorter node reorganizes. It was
     # in EXTENDED_SCRIPTS while it raced two stakers on the shared premine.
     'feature_reorg.py',
+    # feature_reorg_conflicted.py: a wallet transaction conflicted by a block
+    # stops being conflicted when that block is disconnected, provided whatever
+    # took its outpoint went with the block; also the refused, descendant and
+    # abandoned cases, and that the re-pooled transaction is re-announced.
+    'feature_reorg_conflicted.py',
     'feature_beacon_activation.py',
     'feature_research_reward.py',
     'feature_mrc.py',
@@ -219,10 +224,6 @@ BASE_SCRIPTS = [
     # CScheduler runs on the real clock and setmocktime cannot reach the
     # 60-second delay.
     'feature_no_update_check_on_regtest.py',
-    # feature_reorg_conflicted.py: a wallet transaction conflicted by a block
-    # stops being conflicted when that block is disconnected, provided whatever
-    # took its outpoint went with the block.
-    'feature_reorg_conflicted.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled
