@@ -3446,3 +3446,138 @@ BOOST_AUTO_TEST_CASE(txstate_variant_index_stability_extended)
 
 
 BOOST_AUTO_TEST_SUITE_END()
+
+// ---------------------------------------------------------------------------
+// The block-conflict record: RecordConflictedBy / TakeConflictedBy
+//
+// The functional test (feature_reorg_conflicted.py) reaches the record only
+// through a real connect and disconnect, where three of TakeConflictedBy's
+// four filters are unreachable: a recorded transaction cannot be pooled or
+// confirmed while its displacing block is connected. These cases drive the
+// two methods directly on an in-memory wallet. TakeConflictedBy consults the
+// process-global mempool, so the suite runs under MempoolStateGuard.
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_SUITE(wallet_conflict_record_tests, *boost::unit_test::fixture<grc_test::MempoolStateGuard>())
+
+namespace {
+//! A distinct transaction paying \p value to nobody in particular.
+CTransaction DistinctTx(CAmount value)
+{
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = value;
+    mtx.vout[0].scriptPubKey = CScript() << OP_TRUE;
+    return CTransaction(mtx);
+}
+
+//! Add \p tx to \p wallet in \p state and return its hash.
+uint256 Hold(CWallet& wallet, const CTransaction& tx, const TxState& state)
+{
+    LOCK(wallet.cs_wallet);
+    CWalletTx wtx(&wallet, tx);
+    wtx.SetTxState(state);
+    wallet.mapWallet[tx.GetHash()] = wtx;
+    return tx.GetHash();
+}
+
+size_t RecordCount(CWallet& wallet)
+{
+    LOCK(wallet.cs_wallet);
+    return wallet.m_conflicting_block.size();
+}
+
+std::set<uint256> Hashes(const std::vector<CTransaction>& txs)
+{
+    std::set<uint256> out;
+    for (const auto& tx : txs) out.insert(tx.GetHash());
+    return out;
+}
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(record_keeps_only_wallet_hashes_and_overwrites_a_repeat)
+{
+    CWallet wallet;
+    const uint256 own = Hold(wallet, DistinctTx(1 * COIN), TxStateInMempool{});
+    const uint256 foreign = DistinctTx(2 * COIN).GetHash();
+    const uint256 block_b = GetRandHash();
+    const uint256 block_c = GetRandHash();
+
+    wallet.RecordConflictedBy({own, foreign}, block_b);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_CHECK_EQUAL(wallet.m_conflicting_block.size(), 1u);
+        BOOST_CHECK(wallet.m_conflicting_block.at(own) == block_b);
+        BOOST_CHECK_EQUAL(wallet.m_conflicting_block.count(foreign), 0u);
+    }
+
+    // Displaced again after a re-pool: the later block replaces the earlier.
+    wallet.RecordConflictedBy({own}, block_c);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_CHECK_EQUAL(wallet.m_conflicting_block.size(), 1u);
+        BOOST_CHECK(wallet.m_conflicting_block.at(own) == block_c);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(take_returns_and_erases_only_the_named_blocks_records)
+{
+    CWallet wallet;
+    const uint256 by_b = Hold(wallet, DistinctTx(1 * COIN), TxStateInMempool{});
+    const uint256 by_c = Hold(wallet, DistinctTx(2 * COIN), TxStateInMempool{});
+    const uint256 block_b = GetRandHash();
+    const uint256 block_c = GetRandHash();
+    wallet.RecordConflictedBy({by_b}, block_b);
+    wallet.RecordConflictedBy({by_c}, block_c);
+    BOOST_REQUIRE_EQUAL(RecordCount(wallet), 2u);
+
+    const std::vector<CTransaction> taken_b = wallet.TakeConflictedBy(block_b);
+    BOOST_CHECK(Hashes(taken_b) == std::set<uint256>{by_b});
+    BOOST_CHECK_EQUAL(RecordCount(wallet), 1u);
+
+    // The record is gone with the take: a second disconnect of B finds nothing.
+    BOOST_CHECK(wallet.TakeConflictedBy(block_b).empty());
+    BOOST_CHECK_EQUAL(RecordCount(wallet), 1u);
+
+    const std::vector<CTransaction> taken_c = wallet.TakeConflictedBy(block_c);
+    BOOST_CHECK(Hashes(taken_c) == std::set<uint256>{by_c});
+    BOOST_CHECK_EQUAL(RecordCount(wallet), 0u);
+}
+
+BOOST_AUTO_TEST_CASE(take_returns_only_what_is_still_unconfirmed_unpooled_and_not_abandoned)
+{
+    CWallet wallet;
+    const uint256 block_b = GetRandHash();
+
+    // Returned: still tagged in-mempool but not pooled, and conflicted (not
+    // abandoned) the way a restart-time resolution leaves it.
+    const uint256 pending = Hold(wallet, DistinctTx(1 * COIN), TxStateInMempool{});
+    const uint256 inactive = Hold(wallet, DistinctTx(2 * COIN), TxStateInactive{false});
+
+    // Not returned: resolved by another path.
+    const CTransaction pooled_tx = DistinctTx(3 * COIN);
+    const uint256 pooled = Hold(wallet, pooled_tx, TxStateInMempool{});
+    BOOST_REQUIRE(mempool.addUnchecked(pooled, CTxMemPoolEntry(
+        pooled_tx, /*fee=*/0, /*time=*/0, /*height=*/0,
+        ::GetSerializeSize(pooled_tx, SER_NETWORK, PROTOCOL_VERSION))));
+    const uint256 confirmed = Hold(wallet, DistinctTx(4 * COIN), TxStateConfirmed(GetRandHash(), 1));
+    const uint256 abandoned = Hold(wallet, DistinctTx(5 * COIN), TxStateInactive{true});
+    const uint256 erased = Hold(wallet, DistinctTx(6 * COIN), TxStateInMempool{});
+
+    wallet.RecordConflictedBy({pending, inactive, pooled, confirmed, abandoned, erased}, block_b);
+    BOOST_REQUIRE_EQUAL(RecordCount(wallet), 6u);
+    {
+        LOCK(wallet.cs_wallet);
+        wallet.mapWallet.erase(erased);
+    }
+
+    const std::vector<CTransaction> taken = wallet.TakeConflictedBy(block_b);
+    BOOST_CHECK(Hashes(taken) == (std::set<uint256>{pending, inactive}));
+
+    // Every record for the block leaves, returned or not.
+    BOOST_CHECK_EQUAL(RecordCount(wallet), 0u);
+
+    mempool.clear();
+}
+
+BOOST_AUTO_TEST_SUITE_END()
