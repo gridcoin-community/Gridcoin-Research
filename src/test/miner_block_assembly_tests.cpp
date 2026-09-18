@@ -936,9 +936,14 @@ BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_untouched_below_the_height)
         "the MESSAGE transaction was mined, so this control proves nothing about "
         "the sweep");
 
-    BOOST_CHECK_MESSAGE(mempool.exists(message.GetHash()),
-        "the sweep fired a block early and removed a MESSAGE transaction that is "
-        "still valid for the next block");
+    // Abandonment, not pool membership, is what this asserts on. The sweep's
+    // signature effect is AbandonTransaction, so an early fire is caught here
+    // exactly. Pool membership is NOT safe to require: the coinstake draws from
+    // the same premine outputs these fixtures spend, so the block's
+    // removeConflicts() can evict this transaction for spending an outpoint the
+    // kernel just took -- and which output the kernel takes depends on the
+    // 16-second slot the case happens to run in. Requiring it pooled made this
+    // case fail on a slower CI leg while passing here every time.
     BOOST_CHECK_MESSAGE(!IsAbandonedInWallet(message.GetHash()),
         "a MESSAGE transaction was abandoned a block before the disable height");
 
@@ -1174,8 +1179,10 @@ BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_untouched_while_its_authorization
     BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
     BOOST_REQUIRE(!Contains(block.vtx, pool_tx));
 
-    BOOST_CHECK_MESSAGE(mempool.exists(pool_tx.GetHash()),
-        "the sweep removed a POOL_REGISTER whose authorization still covers it");
+    // As in the MESSAGE control: abandonment is the sweep's signature and the
+    // safe thing to assert. Pool membership races the coinstake for premine
+    // outputs (see above), so requiring it would make this case fail on timing
+    // rather than on behaviour.
     BOOST_CHECK_MESSAGE(!IsAbandonedInWallet(pool_tx.GetHash()),
         "a POOL_REGISTER was abandoned while its authorization still held");
 
@@ -1196,17 +1203,20 @@ BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_untouched_while_its_authorization
 //!
 //! An MRC anchored to something other than the current head is stale and must be
 //! removed when the block connects; the control anchors to the head and must
-//! survive. Both are stamped past the block so the miner leaves them pooled and
-//! the removal cannot be confused with ordinary confirmation.
+//! survive.
+//!
+//! Both are built WITHOUT inputs, which matters. An earlier version funded them
+//! from premine outputs, and the coinstake draws from those same outputs -- so
+//! the block's removeConflicts() could take the control transaction out of the
+//! pool for spending an outpoint the coinstake had just consumed. Which output
+//! the kernel picks depends on timestamps, so that race resolved differently per
+//! environment: it passed here every run and failed on the Debian CI leg. A
+//! contract-only transaction has no outpoints to conflict on and nothing the
+//! miner wants, so the only thing that can remove it is the sweep under test.
 //!
 BOOST_AUTO_TEST_CASE(a_stale_mrc_is_removed_when_a_block_connects)
 {
     mempool.clear();
-
-    const std::vector<COutPoint> coins = SpendablePremineOutputs();
-    BOOST_REQUIRE_GE(coins.size(), 2u);
-
-    const int64_t after_the_block = GetAdjustedTime() + 3600;
 
     uint256 head;
     {
@@ -1214,57 +1224,64 @@ BOOST_AUTO_TEST_CASE(a_stale_mrc_is_removed_when_a_block_connects)
         head = hashBestChain;
     }
 
-    // Stale: anchored to a block that is not the head.
-    GRC::MRC stale_mrc;
-    stale_mrc.m_mining_id = GRC::Cpid::Parse(GetRandHash().ToString().substr(0, 32));
-    stale_mrc.m_fee = 0;
-    stale_mrc.m_last_block_hash = GetRandHash();
-    const GRC::Contract stale_contract =
-        GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, stale_mrc);
-    const CTransaction stale_tx = grc_test::CreateSpendWithContract(
-        PremineCoinbase(), coins[0].n, 200000, stale_contract, after_the_block,
-        stale_contract.RequiredBurnAmount());
+    // Contract-only, no inputs and no outputs: nothing for removeConflicts() to
+    // match and nothing for the miner to select. AddToMempool bypasses
+    // acceptance, which is what makes that possible.
+    auto make_mrc_tx = [](const uint256& anchor) {
+        GRC::MRC mrc;
+        mrc.m_mining_id = GRC::Cpid::Parse(GetRandHash().ToString().substr(0, 32));
+        mrc.m_fee = 0;
+        mrc.m_last_block_hash = anchor;
 
-    // Current: anchored to the head, so not stale.
-    GRC::MRC current_mrc;
-    current_mrc.m_mining_id = GRC::Cpid::Parse(GetRandHash().ToString().substr(0, 32));
-    current_mrc.m_fee = 0;
-    current_mrc.m_last_block_hash = head;
-    const GRC::Contract current_contract =
-        GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, current_mrc);
-    const CTransaction current_tx = grc_test::CreateSpendWithContract(
-        PremineCoinbase(), coins[1].n, 200000, current_contract, after_the_block,
-        current_contract.RequiredBurnAmount());
+        CMutableTransaction mtx;
+        mtx.nVersion = 2;
+        mtx.vContracts.emplace_back(
+            GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, mrc));
+        return CTransaction(mtx);
+    };
+
+    const CTransaction stale_tx = make_mrc_tx(GetRandHash());  // not the head -> stale
+    const CTransaction current_tx = make_mrc_tx(head);          // the head      -> not stale
 
     AddToMempool(stale_tx, 200000);
     AddToMempool(current_tx, 200000);
     BOOST_REQUIRE(mempool.exists(stale_tx.GetHash()));
     BOOST_REQUIRE(mempool.exists(current_tx.GetHash()));
 
+    // Both go in the wallet as well, which no earlier version of this case did:
+    // the removal calls EraseFromWallet and signals CT_DELETED, and with nothing
+    // in the wallet EraseFromWallet simply returned false every run, so that half
+    // of the path was never exercised at all.
+    PutInWallet(stale_tx);
+    PutInWallet(current_tx);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->mapWallet.count(stale_tx.GetHash()) == 1);
+        BOOST_REQUIRE(pwalletMain->mapWallet.count(current_tx.GetHash()) == 1);
+    }
+
     CBlock block;
     std::string err;
     BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
 
-    BOOST_REQUIRE_MESSAGE(!Contains(block.vtx, stale_tx),
-        "the stale MRC was mined, so this case cannot distinguish removal from "
-        "ordinary confirmation");
+    // Neither can be mined or conflicted, so mempool membership is now an exact
+    // read of what the sweep did.
+    BOOST_REQUIRE_MESSAGE(!Contains(block.vtx, stale_tx), "the stale MRC was mined");
+    BOOST_REQUIRE_MESSAGE(!Contains(block.vtx, current_tx), "the control MRC was mined");
 
     BOOST_CHECK_MESSAGE(!mempool.exists(stale_tx.GetHash()),
         "a stale MRC survived block connection");
+    BOOST_CHECK_MESSAGE(mempool.exists(current_tx.GetHash()),
+        "an MRC anchored to the head was removed as stale");
 
-    // The control asks only that the sweep did not take it. Leaving the pool by
-    // being MINED is a legitimate outcome and not this case's business: whether
-    // the miner binds a pooled MRC into the block depends on reward and template
-    // conditions that vary by environment, and an earlier version of this
-    // assertion conflated the two -- it required the transaction to still be
-    // pooled and so reported "removed as stale" when it had simply been
-    // confirmed. Either survival is fine; being silently dropped is not.
-    const bool survived = mempool.exists(current_tx.GetHash())
-                          || Contains(block.vtx, current_tx);
-
-    BOOST_CHECK_MESSAGE(survived,
-        "an MRC anchored to the head is gone from both the mempool and the block, "
-        "so the sweep removed it as stale");
+    // The wallet half, which the removal does through EraseFromWallet.
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_CHECK_MESSAGE(pwalletMain->mapWallet.count(stale_tx.GetHash()) == 0,
+            "a stale MRC was removed from the mempool but left in the wallet");
+        BOOST_CHECK_MESSAGE(pwalletMain->mapWallet.count(current_tx.GetHash()) == 1,
+            "an MRC anchored to the head was erased from the wallet");
+    }
 
     mempool.clear();
 }
