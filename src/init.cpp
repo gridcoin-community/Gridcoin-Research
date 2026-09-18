@@ -1054,6 +1054,12 @@ void SetupServerArgs()
     // in chainparams.cpp.
     hidden_args.emplace_back("-blockv15height");
 
+    // Isolated-testnet / regtest override for the message contract disable height.
+    // The default chainparams value is std::numeric_limits<int>::max() until
+    // pinned by a follow-up release; the arg lets dev runs disable message contracts
+    // early so the validation can be tested.
+    hidden_args.emplace_back("-messagecontractdisableheight");
+
     // Isolated-testnet / regtest override for the PENDING / OPEN expiration
     // window on POOL contracts (issue #1783). Default chainparams value is
     // 28800 blocks (~30 days at mainnet ~90s spacing); this arg shortens
@@ -1740,6 +1746,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("Block version 13 hard fork configured for block %d", Params().GetConsensus().BlockV13Height);
     LogPrintf("Block version 14 hard fork configured for block %d", Params().GetConsensus().BlockV14Height);
     LogPrintf("Block version 15 hard fork configured for block %d", GetBlockV15Height());
+
+    // Same rationale as the heights above and the retention below: this value is
+    // consensus-affecting and carries a hidden isolated-testnet override, so a
+    // node running a different effective value from its peers would otherwise
+    // have nothing in the log to show it during incident diagnosis.
+    LogPrintf("MESSAGE contracts disabled from block %d", GetMessageContractDisableHeight());
 
     // Surface the effective POOL PENDING/OPEN retention so an isolated-testnet
     // -pendingpoolretention override is visible in the log and an accidental

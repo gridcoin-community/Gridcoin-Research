@@ -108,6 +108,9 @@ struct Params {
       * during testing. Overridable via -autogreylistredesignheight for testnet rollout. */
     int AutoGreylistRedesignHeight;
     /**
+     *  @brief The height that message contracts are no longer allowed on the chain. */
+    int MessageContractDisableHeight;
+    /**
       * @brief The default GRC paid for a constant block reward.
       *
       * Note that the GRC paid for CBR can be specified by an administrative protocol entry with the key name "blockreward1" for

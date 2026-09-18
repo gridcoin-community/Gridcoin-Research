@@ -272,6 +272,20 @@ inline bool IsV15Enabled(int nHeight)
 }
 
 //!
+//! \brief GetMessageContractDisableHeight. The block height at which transaction MESSAGE
+//! contracts are no longer allowed. Returns the value passed via the hidden
+//! `-messagecontractdisableheight` arg if present. Out-of-line so gArgs/ util/system.h
+//! doesn't have to be pulled into this header.
+//! \return
+//!
+int GetMessageContractDisableHeight();
+
+inline bool IsMessageContractEnabled(int nHeight)
+{
+    return nHeight < GetMessageContractDisableHeight();
+}
+
+//!
 //! \brief Effective PENDING / OPEN expiration window in blocks for POOL
 //! contracts (issue #1783). Returns the value passed via the hidden
 //! `-pendingpoolretention` arg if present (isolated-testnet / regtest only),

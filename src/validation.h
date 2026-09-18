@@ -80,6 +80,22 @@ bool CheckTransaction(const CTransaction& tx, CValidationState& state, bool v15_
 //! tx to search for the master key address for validating administrative
 //! contracts.
 //!
+//! \param block_height Height of the block CONTAINING tx -- not the current
+//! tip. Block validation passes the block's own height; a caller asking about a
+//! transaction that is not in a block yet (mempool acceptance, wallet relay)
+//! must pass the height of the block it would enter, which is the tip's next
+//! height.
+//!
+//! The distinction is load-bearing because every height-dependent rule reached
+//! from here is SUBTRACTIVE -- it withdraws permission at its height rather than
+//! granting it. MasterKey() rotates, so the outgoing key stops validating; and
+//! MESSAGE contracts stop being accepted. Answering for the tip therefore
+//! accepts a transaction the very next block rejects, and it leaves the mempool
+//! holding one that can never be mined (its inputs locked with it) until a
+//! restart. That is the opposite of the additive v13/v14 gates elsewhere in the
+//! tree, where trailing the tip by one block is merely conservative: the old
+//! form stays valid, so nothing is stranded.
+//!
 //! \return \c true if all of the contracts in the transaction validate.
 //!
 bool CheckContracts(const CTransaction& tx, CValidationState& state, const MapPrevTx& inputs, int block_height);

@@ -95,6 +95,8 @@ private:
     bool m_has_beacon{false};
     GRC::Cpid m_beacon_cpid;
     bool m_has_mandatory_sidestake{false};
+    bool m_has_message{false};
+    bool m_has_pool_register{false};
 
 public:
     CTxMemPoolEntry(const CTransaction& tx, CAmount fee, int64_t time,
@@ -122,6 +124,8 @@ public:
     bool HasBeacon() const { return m_has_beacon; }
     const GRC::Cpid& GetBeaconCpid() const { return m_beacon_cpid; }
     bool HasMandatorySidestake() const { return m_has_mandatory_sidestake; }
+    bool HasMessageContract() const { return m_has_message; }
+    bool HasPoolRegister() const { return m_has_pool_register; }
 };
 
 //! Aggregate mempool statistics, collected under a single lock for getmempoolinfo.
@@ -166,6 +170,14 @@ public:
     //! to a multimap.
     std::map<GRC::Cpid, uint256> m_beacon_by_cpid;
     size_t m_mandatory_sidestake_count{0};         //!< Mandatory-sidestake txs in the pool.
+    //! MESSAGE-contract txs in the pool. Existence counter only, so the
+    //! disable-height sweep in ConnectBlock costs one integer compare per block
+    //! instead of a full-pool contract scan (#3029 Phase 2 retired those).
+    size_t m_message_contract_count{0};
+    //! POOL_REGISTER txs in the pool. Existence counter only, for the same
+    //! reason as the MESSAGE one: the expiry sweep in ConnectBlock costs one
+    //! integer compare per block instead of a full-pool contract scan.
+    size_t m_pool_register_count{0};
     //! MRCs in fee-descending order, for the GUI/RPC queue ranking.
     std::multimap<CAmount, GRC::Cpid, std::greater<CAmount>> m_mrc_by_fee;
 
@@ -321,6 +333,41 @@ public:
                 stale.push_back(hash);
         }
         return stale;
+    }
+
+    //! \brief Hashes of pooled transactions carrying a POOL_REGISTER contract.
+    //!
+    //! Guarded by m_pool_register_count so the caller is O(1) whenever the pool
+    //! holds none, which is almost always: a POOL_REGISTER is an occasional
+    //! administrative act, and there are five builtin pools.
+    std::vector<uint256> GetPoolRegisterTxs() const
+    {
+        LOCK(cs);
+        std::vector<uint256> found;
+        if (m_pool_register_count == 0) return found;
+
+        for (const auto& [hash, entry] : mapTx) {
+            if (entry.HasPoolRegister()) found.push_back(hash);
+        }
+        return found;
+    }
+
+    //! \brief Hashes of pooled transactions carrying a MESSAGE contract.
+    //!
+    //! No MESSAGE-keyed index exists because the only consumer is the one-shot
+    //! disable-height sweep in ConnectBlock. The m_message_contract_count guard
+    //! keeps that caller O(1) in the overwhelmingly common case of a pool holding
+    //! none, so the scan below runs only across the activation transition itself.
+    std::vector<uint256> GetMessageContractTxs() const
+    {
+        LOCK(cs);
+        std::vector<uint256> found;
+        if (m_message_contract_count == 0) return found;
+
+        for (const auto& [hash, entry] : mapTx) {
+            if (entry.HasMessageContract()) found.push_back(hash);
+        }
+        return found;
     }
 
     unsigned long size() const

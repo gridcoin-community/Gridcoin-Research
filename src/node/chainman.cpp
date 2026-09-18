@@ -436,6 +436,39 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                 mempool.removeConflicts(tx);
             }
 
+
+
+            if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
+                txdb.TxnAbort();
+                return error("%s: WriteHashBestChain failed", __func__);
+            }
+
+            // Make sure it's successfully written to disk before changing memory structure
+            if (!txdb.TxnCommit()) {
+                return error("%s: TxnCommit failed", __func__);
+            }
+
+            // Mempool retirement runs AFTER the commit, deliberately.
+            //
+            // Everything below removes transactions from the pool and writes the
+            // consequence to the wallet -- EraseFromWallet for a stale MRC,
+            // AbandonTransaction for a swept contract -- and both persist. Run
+            // before the commit, a failed WriteHashBestChain or TxnCommit would
+            // abort the block while leaving those transactions gone and the wallet
+            // change on disk: irreversible bookkeeping justified by a block that
+            // was then thrown away. Nothing here feeds the commit, so the ordering
+            // costs nothing.
+            //
+            // hashBestChain is what makes moving the MRC pass safe rather than a
+            // behaviour change: it is not assigned until after this whole scope
+            // closes, so GetStaleMRCs sees exactly the value it saw before the
+            // commit -- the pre-connect tip. to_be_erased still has to be declared
+            // ahead of the FixSpentCoins call below, which is gated on it.
+            //
+            // NOT moved: the "delete redundant memory transactions" loop above,
+            // which drops this block's own transactions from the pool. It touches
+            // no persisted state, so a failed commit costs at most a re-relay.
+
             // Remove stale MRCs in the mempool that are not in this new block. Remember the MRCs were initially validated in
             // AcceptToMemoryPool. Here we just need to do a staleness check.
             std::vector<CTransaction> to_be_erased;
@@ -465,15 +498,144 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                     pwalletMain->NotifyTransactionChanged(pwalletMain, tx.GetHash(), CT_DELETED);
                 }
             }
+            // Retire MESSAGE contract transactions the chain has left behind.
+            //
+            // One accepted below the disable height never leaves the pool on its own
+            // once the chain crosses it. The pool has no time-based expiry (the EXPIRY
+            // removal reason has no producer); size eviction runs only from
+            // AcceptToMemoryPool over -maxmempool and ranks contract transactions last;
+            // and replacement is disabled in AcceptToMemoryPool, so its mapNextTx rows
+            // keep the inputs locked against every other spend. The wallet cannot
+            // retire it either: ResendWalletTransactions only revalidates transactions
+            // the pool does NOT hold. So without this the sender's coins stay
+            // unspendable, and the transaction stays unconfirmed, until the node is
+            // restarted -- with nothing saying why.
+            //
+            // Removal is recursive because a child spending one is equally unmineable.
+            // Each removed transaction is then abandoned rather than erased: that
+            // releases the parents' vfSpent bits, which -- not mapTxSpends -- are what
+            // gate coin selection, and it cascades to wallet descendants.
+            // AbandonTransaction refuses a transaction the pool still holds, so the
+            // removal has to come first. One that is not ours simply leaves the pool.
+            //
+            // The height is the block being built on top of this one, which is the
+            // same question AcceptToMemoryPool now asks when it admits a
+            // transaction (validation.h) -- so acceptance and retirement agree on
+            // which block a pooled transaction is measured against.
+            //
+            // That agreement is what this sweep exists to complete rather than
+            // duplicate. Acceptance can only refuse what is in front of it at the
+            // time: a MESSAGE transaction admitted while the tip was at
+            // disable_height - 2 was legitimately admitted, being valid for the
+            // very next block. If it is not mined into that block, nothing else
+            // ever revisits it -- the pool has no expiry, and
+            // ResendWalletTransactions only revalidates transactions the pool does
+            // NOT hold. Connecting that block is the moment it becomes permanently
+            // unmineable, and this is the only thing that notices.
+            //
+            // Inert until the height is scheduled: MessageContractDisableHeight is
+            // INT_MAX on every network (chainparams.cpp), so IsMessageContractEnabled()
+            // is always true and none of this runs. Only the hidden
+            // -messagecontractdisableheight arg lowers it, for isolated testnet and
+            // regtest exercise.
+            // Retirement is deliberately IRREVERSIBLE, and that is a choice
+            // rather than an oversight. If this block is later disconnected the
+            // swept transactions are valid again, but they were never mined so
+            // the disconnect cannot resurrect them, and being abandoned they are
+            // not rebroadcast either. Accepted because the coins are the thing
+            // that matters and they are freed, not stranded: AbandonTransaction
+            // releases the inputs, so the sender can simply send again. Making
+            // it reversible would mean tracking every swept transaction across
+            // reorganisations to re-admit it into a window that is about to
+            // close again permanently -- real machinery for a boundary the chain
+            // crosses once.
+            if (!IsMessageContractEnabled(pindex->nHeight + 1)) {
+                for (const uint256& message_hash : mempool.GetMessageContractTxs()) {
+                    CTransaction message_tx;
 
-            if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
-                txdb.TxnAbort();
-                return error("%s: WriteHashBestChain failed", __func__);
+                    // Already gone as a descendant of one removed earlier in this loop.
+                    if (!mempool.lookup(message_hash, message_tx)) continue;
+
+                    std::vector<CTransaction> removed;
+                    mempool.remove(message_tx, /*fRecursive=*/true,
+                                   MemPoolRemovalReason::UNKNOWN, &removed);
+
+                    for (const auto& tx : removed) {
+                        LogPrintf("%s: MESSAGE contracts are disabled from height %d. Removed "
+                                  "transaction %s from the mempool.",
+                                  __func__, GetMessageContractDisableHeight(), tx.GetHash().ToString());
+
+                        unsigned int inputs_released = 0;
+
+                        if (pwalletMain->AbandonTransaction(tx.GetHash(), &inputs_released)) {
+                            LogPrintf("%s: Abandoned wallet transaction %s, releasing %u input(s).",
+                                      __func__, tx.GetHash().ToString(), inputs_released);
+                        }
+                    }
+                }
             }
 
-            // Make sure it's successfully written to disk before changing memory structure
-            if (!txdb.TxnCommit()) {
-                return error("%s: TxnCommit failed", __func__);
+            // Retire POOL contracts the chain has left behind. Same problem and
+            // the same shape as the MESSAGE sweep above, with the boundary coming
+            // from registry state rather than a single network-wide height: a
+            // POOL_REGISTER admitted while the tip was below an expiry boundary
+            // was legitimately admitted -- it was valid for the next block -- but
+            // if it is not mined before the boundary nothing else retires it.
+            //
+            // PoolRegistry::IsStrandedAtHeight owns the question rather than this
+            // loop, because answering it needs the branch structure of
+            // VerifyRegisterAuth and the private validation helper. In particular
+            // "fails validation now" is NOT the test: IsPendingExpired GRANTS
+            // permission when it fires, so a contract can be refused today and
+            // acceptable later, and a sweep driven by failure alone would retire
+            // takeovers that are merely early.
+            //
+            // Inert until v15: BlockV15Height is INT_MAX on every network, so no
+            // POOL contract validates at all and none can be pooled.
+            {
+                const int next_height = pindex->nHeight + 1;
+
+                // Snapshot once. GetPoolRegisterTxs() takes the pool lock and
+                // builds a vector, and the empty case needs no guard of its own:
+                // the loop below simply does not run.
+                const std::vector<uint256> pool_register_txs = mempool.GetPoolRegisterTxs();
+
+                for (const uint256& pool_hash : pool_register_txs) {
+                    CTransaction pool_tx;
+
+                    if (!mempool.lookup(pool_hash, pool_tx)) continue;
+
+                    bool stranded = false;
+                    for (const auto& contract : pool_tx.GetContracts()) {
+                        if (GRC::GetPoolRegistry().IsStrandedAtHeight(contract, next_height)) {
+                            stranded = true;
+                            break;
+                        }
+                    }
+                    if (!stranded) continue;
+
+                    std::vector<CTransaction> removed;
+                    mempool.remove(pool_tx, /*fRecursive=*/true,
+                                   MemPoolRemovalReason::UNKNOWN, &removed);
+
+                    // removed carries the named transaction AND its in-pool
+                    // descendants. A descendant is stranded too -- it spends an
+                    // output that can never confirm -- but the expired
+                    // authorization is the parent's, so the line states the rule
+                    // that fired rather than attributing it to each transaction.
+                    for (const auto& tx : removed) {
+                        LogPrintf("%s: A POOL authorization expired at height %d. Removed "
+                                  "transaction %s from the mempool.",
+                                  __func__, next_height, tx.GetHash().ToString());
+
+                        unsigned int inputs_released = 0;
+
+                        if (pwalletMain->AbandonTransaction(tx.GetHash(), &inputs_released)) {
+                            LogPrintf("%s: Abandoned wallet transaction %s, releasing %u input(s).",
+                                      __func__, tx.GetHash().ToString(), inputs_released);
+                        }
+                    }
+                }
             }
 
             // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This

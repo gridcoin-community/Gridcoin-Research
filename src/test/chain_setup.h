@@ -8,6 +8,7 @@
 #include "amount.h"
 #include "key.h"
 #include "keystore.h"
+#include "gridcoin/contract/contract.h"
 #include "primitives/transaction.h"
 
 #include <string>
@@ -109,6 +110,25 @@ int64_t FixtureTxTime();
 //!
 CTransaction CreateSpend(const CTransaction& txFrom, uint32_t n, CAmount fee, int n_outputs = 1,
                          int64_t tx_time = 0);
+
+//!
+//! \brief As CreateSpend, but the transaction carries \p contract.
+//!
+//! The contract is attached BEFORE signing, which is the whole point of having a
+//! separate helper: vContracts is serialized for nVersion >= 2
+//! (primitives/transaction.h) and SignatureHash serializes the transaction, so a
+//! contract bolted on after signing invalidates the signature. A candidate built
+//! that way is dropped by ConnectInputs rather than by whatever contract rule a
+//! test meant to exercise, and the test passes for the wrong reason.
+//!
+//! \p burn, when non-zero, adds a second OP_RETURN output carrying that amount.
+//! CheckContracts sums OP_RETURN outputs and rejects a transaction supplying less
+//! than the contract's RequiredBurnAmount(), so a contract-bearing fixture without
+//! one is unminable -- a block containing it is rejected at ConnectBlock. Tests
+//! that only inspect a TEMPLATE can leave it 0; any test that mines needs it.
+CTransaction CreateSpendWithContract(const CTransaction& txFrom, uint32_t n, CAmount fee,
+                                     const GRC::Contract& contract, int64_t tx_time = 0,
+                                     CAmount burn = 0);
 
 //! \brief As CreateSpend, but every output carries \p script_pub_key.
 CTransaction CreateSpendToScript(const CTransaction& txFrom, uint32_t n, CAmount fee,

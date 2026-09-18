@@ -576,6 +576,28 @@ bool PoolRegistry::IsAuthorizationExpired(const Pool& entry, int at_height)
     return at_height > entry.m_authorization_height + GetPendingPoolRetention();
 }
 
+bool PoolRegistry::IsStrandedAtHeight(const Contract& contract, int at_height) const
+{
+    // POOL_REGISTER is the only POOL contract whose validity consults
+    // IsAuthorizationExpired, so it is the only one that can reach this state.
+    if (contract.m_type != ContractType::POOL_REGISTER) {
+        return false;
+    }
+
+    const auto payload = contract.SharePayloadAs<PoolRegisterPayload>();
+    const Pool_ptr existing = Try(payload->m_cpid);
+
+    if (!existing || !IsAuthorizationExpired(*existing, at_height)) {
+        return false;
+    }
+
+    // Expired authorization for this CPID is necessary but not sufficient: the
+    // contract has to actually be refused at that height, or it is one that does
+    // not depend on the authorization at all.
+    int DoS = 0;
+    return !ValidateAtHeight(contract, at_height, DoS);
+}
+
 bool PoolRegistry::VerifyRegisterAuth(const PoolRegisterPayload& payload,
                                       const ContractAction action,
                                       int at_height,
@@ -788,7 +810,38 @@ bool PoolRegistry::Validate(const Contract& contract, const CTransaction& tx, in
     // chain-tip height read is already under the canonical lock; cs_lock
     // acquisition inside ValidateAtHeight then honours the cs_main ->
     // cs_lock lock order.
-    return ValidateAtHeight(contract, nBestHeight, DoS);
+    //
+    // nBestHeight + 1, not nBestHeight: both callers of ValidateContracts
+    // (AcceptToMemoryPool and CWalletTx::RevalidateTransaction) are asking
+    // about a transaction that is not in a block yet, so the height that
+    // decides it is the one it would ENTER. See CheckContracts in
+    // validation.h for why the distinction matters -- the rules behind this
+    // helper point in both directions, and which way each one points is what
+    // decides whether the tip is merely conservative or actively wrong:
+    //
+    //   IsV15Enabled           ADDITIVE. Permission arrives at the height, so
+    //                          the tip only refused a POOL contract for one
+    //                          block longer than it had to.
+    //
+    //   IsPendingExpired       ADDITIVE in its one use (below): expiry CLEARS
+    //                          existing_for_takeover, which skips the signature
+    //                          check against the old key and lets a takeover
+    //                          through. Expiry grants permission here.
+    //
+    //   IsAuthorizationExpired SUBTRACTIVE: expiry REJECTS the contract, so at
+    //                          the boundary the tip admits one the next block
+    //                          refuses. That transaction can then never be
+    //                          mined, and nothing retires it from the pool.
+    //
+    // Only the last one can strand, and only on the builtin-CPID path where a
+    // Foundation POOL_APPROVE OPEN authorization is what is expiring.
+    // This corrects ADMISSION. Retirement is the other half and lives in
+    // ReorganizeChain, which sweeps contracts that were admitted legitimately --
+    // valid for the next block -- and then missed their last mineable block; see
+    // IsStrandedAtHeight for why that predicate is a conjunction rather than
+    // "fails validation now". Admission alone would leave those pooled forever
+    // with their inputs locked.
+    return ValidateAtHeight(contract, nBestHeight + 1, DoS);
 }
 
 bool PoolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
@@ -798,8 +851,10 @@ bool PoolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
     // in the shared ValidateAtHeight helper. BlockValidate is the
     // authoritative caller — it passes the actual block height
     // (ctx.m_pindex->nHeight), which is deterministic for consensus. The
-    // mempool path (Validate) calls the same helper with a chain-tip
-    // height snapshot as a best-effort approximation.
+    // mempool path (Validate) calls the same helper with the height of the
+    // block a transaction would enter, which is the tip plus one -- so
+    // acceptance asks exactly the question this does, one block ahead of it,
+    // rather than approximating it with the tip.
     //
     // Authentication shape (issue #1783, plan §3 / §3.5):
     //   * POOL_REGISTER on an unclaimed builtin → requires fresh

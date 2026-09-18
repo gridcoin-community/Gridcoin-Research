@@ -467,6 +467,43 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                 }
             }
 
+            // The same argument, for the same reason, about MESSAGE contracts.
+            // They are rejected from the disable height, contract dispatch does
+            // not screen them either -- MESSAGE has no registry handler and falls
+            // to the permissive one, exactly as CLAIM does -- and the mempool
+            // cannot be relied on to have kept them out.
+            //
+            // This is belt and braces rather than the primary containment, and
+            // deliberately so. AcceptToMemoryPool now evaluates contracts at the
+            // height of the block a transaction would ENTER (validation.h), so one
+            // carrying a MESSAGE contract is admitted only while the tip is at
+            // disable_height - 2 or lower -- and such a transaction is still valid
+            // for the next block, so it can be mined normally. If it is not,
+            // connecting that block runs the sweep in ReorganizeChain, which
+            // retires it before any template at or above the disable height is
+            // built. Both of those have to hold for this guard to be unreachable,
+            // and the cost of being wrong is that the staker loses the block for
+            // someone else's transaction, so the check stays.
+            if (!IsMessageContractEnabled(nHeight)) {
+                bool has_message_contract = false;
+
+                for (const auto& contract : tx.GetContracts()) {
+                    if (contract.m_type == GRC::ContractType::MESSAGE) {
+                        has_message_contract = true;
+                        break;
+                    }
+                }
+
+                if (has_message_contract) {
+                    LogPrint(BCLog::LogFlags::MINER,
+                        "%s: message contract disabled at this height. Skipped tx %s",
+                        __func__,
+                        tx.GetHash().ToString());
+
+                    continue;
+                }
+            }
+
             COrphan* porphan = nullptr;
             int64_t nTotalIn = 0;
             bool fMissingInputs = false;

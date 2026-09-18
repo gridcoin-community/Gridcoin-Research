@@ -28,7 +28,12 @@ namespace {
 //!
 bool SelectMasterInputOutput(CCoinControl& coin_control) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    const CTxDestination master_address = CWallet::MasterAddress(pindexBest->nHeight);
+    // The master key rotates by height, and the transaction being built here is
+    // validated against the block it lands in -- the next one at the earliest.
+    // Selecting for the tip would, in the block before a rotation, spend the
+    // OUTGOING key's UTXOs and send change to its address, and HasMasterKeyInput
+    // would then reject the transaction against the incoming key.
+    const CTxDestination master_address = CWallet::MasterAddress(pindexBest->nHeight + 1);
 
     // Send change back to the master address:
     coin_control.destChange = master_address;

@@ -20,7 +20,9 @@
 #include <gridcoin/beacon.h>
 #include <gridcoin/cpid.h>
 #include <gridcoin/mrc.h>
+#include <gridcoin/pool.h>
 #include <gridcoin/sidestake.h>
+#include <gridcoin/tx_message.h>
 #include <gridcoin/contract/contract.h>
 #include <rpc/server.h>
 #include <test/test_gridcoin.h>
@@ -54,6 +56,14 @@ CTransaction MakeMrcTx(const GRC::Cpid& cpid, CAmount fee, const uint256& last_b
     mrc.m_fee = fee;
     mrc.m_last_block_hash = last_block;
     return MakeTx({GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, mrc)});
+}
+
+//! Build a v2 transaction carrying a single MESSAGE contract.
+CTransaction MakeMessageTx(const std::string& message,
+                           const std::vector<CTxIn>& vin = {},
+                           const std::vector<CTxOut>& vout = {})
+{
+    return MakeTx({GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, message)}, vin, vout);
 }
 
 CTxMemPoolEntry MakeEntry(const CTransaction& tx)
@@ -708,6 +718,145 @@ BOOST_AUTO_TEST_CASE(testmempoolaccept_reports_already_in_mempool)
     BOOST_CHECK_EQUAL(res[0]["reject-reason"].get_str(), "txn-already-in-mempool");
 
     mempool.clear();
+}
+
+//! The MESSAGE tag the disable-height sweep selects on. Mirrors the other
+//! entry_tags_* cases: the tag is computed once in the entry constructor, so if
+//! the constructor's switch ever stops covering MESSAGE the sweep silently stops
+//! finding anything and the whole mechanism becomes a no-op.
+BOOST_AUTO_TEST_CASE(entry_tags_message_contract)
+{
+    const CTransaction tx = MakeMessageTx("hello");
+    const CTxMemPoolEntry entry = MakeEntry(tx);
+
+    BOOST_CHECK(entry.HasMessageContract());
+    BOOST_CHECK_EQUAL(entry.GetContractTypes().count(GRC::ContractType::MESSAGE), 1U);
+
+    // A transaction with no contracts must not be tagged, or the sweep would
+    // remove the entire pool at the disable height.
+    BOOST_CHECK(!MakeEntry(MakeTx()).HasMessageContract());
+}
+
+//! The counter is what keeps GetMessageContractTxs() O(1) for a pool holding no
+//! MESSAGE contract -- which, after the transition, is every pool forever. Pin
+//! both halves: the counter tracks add/remove, and the lookup returns nothing
+//! without scanning when it is zero.
+BOOST_AUTO_TEST_CASE(message_contract_count_tracks_add_and_remove)
+{
+    const CTransaction message_tx = MakeMessageTx("hello");
+    const CTransaction plain_tx = MakePlainTx(1000);
+
+    CTxMemPool pool;
+    pool.addUnchecked(plain_tx.GetHash(), MakeEntry(plain_tx));
+
+    // A pool with entries but no MESSAGE contract: the guard, not an empty pool.
+    BOOST_CHECK_EQUAL(pool.m_message_contract_count, 0U);
+    BOOST_CHECK(pool.GetMessageContractTxs().empty());
+
+    pool.addUnchecked(message_tx.GetHash(), MakeEntry(message_tx));
+    BOOST_CHECK_EQUAL(pool.m_message_contract_count, 1U);
+
+    const std::vector<uint256> found = pool.GetMessageContractTxs();
+    BOOST_REQUIRE_EQUAL(found.size(), 1U);
+    BOOST_CHECK(found[0] == message_tx.GetHash());
+
+    pool.remove(message_tx);
+    BOOST_CHECK_EQUAL(pool.m_message_contract_count, 0U);
+    BOOST_CHECK(pool.GetMessageContractTxs().empty());
+
+    // The unrelated transaction is untouched by the sweep.
+    BOOST_CHECK_EQUAL(pool.size(), 1UL);
+}
+
+//! clear() has to zero the counter with the rest of the indexes, or a cleared
+//! pool reports MESSAGE contracts it no longer holds and the sweep scans forever.
+BOOST_AUTO_TEST_CASE(message_contract_count_reset_by_clear)
+{
+    const CTransaction message_tx = MakeMessageTx("hello");
+
+    CTxMemPool pool;
+    pool.addUnchecked(message_tx.GetHash(), MakeEntry(message_tx));
+    BOOST_CHECK_EQUAL(pool.m_message_contract_count, 1U);
+
+    pool.clear();
+    BOOST_CHECK_EQUAL(pool.m_message_contract_count, 0U);
+    BOOST_CHECK(pool.GetMessageContractTxs().empty());
+}
+
+//! The sweep removes recursively, and this is why. A child spending a MESSAGE
+//! transaction is just as unmineable once the parent can never confirm, so
+//! leaving it pooled would keep its own inputs locked for exactly the same
+//! reason. removed_out must report BOTH so the caller can abandon the pair.
+BOOST_AUTO_TEST_CASE(message_contract_removal_takes_descendants)
+{
+    CTxOut parent_out;
+    parent_out.nValue = 1000;
+    const CTransaction parent = MakeMessageTx("hello", {}, {parent_out});
+
+    CTxIn spend;
+    spend.prevout = COutPoint(parent.GetHash(), 0);
+    CTxOut child_out;
+    child_out.nValue = 900;
+    const CTransaction child = MakeTx({}, {spend}, {child_out});
+
+    CTxMemPool pool;
+    pool.addUnchecked(parent.GetHash(), MakeEntry(parent));
+    pool.addUnchecked(child.GetHash(), MakeEntry(child));
+    BOOST_CHECK_EQUAL(pool.size(), 2UL);
+
+    std::vector<CTransaction> removed;
+    pool.remove(parent, /*fRecursive=*/true, MemPoolRemovalReason::UNKNOWN, &removed);
+
+    BOOST_CHECK_EQUAL(pool.size(), 0UL);
+    BOOST_CHECK_EQUAL(pool.m_message_contract_count, 0U);
+    BOOST_REQUIRE_EQUAL(removed.size(), 2U);
+
+    std::set<uint256> removed_hashes;
+    for (const auto& tx : removed) removed_hashes.insert(tx.GetHash());
+    BOOST_CHECK_EQUAL(removed_hashes.count(parent.GetHash()), 1U);
+    BOOST_CHECK_EQUAL(removed_hashes.count(child.GetHash()), 1U);
+
+    // The child's input is released with it: a still-locked outpoint is the
+    // whole defect the sweep exists to clear.
+    BOOST_CHECK(pool.mapNextTx.empty());
+}
+
+//! The POOL_REGISTER tag and counter the expiry sweep selects on, same shape as
+//! the MESSAGE pair above. If the constructor's switch stops covering
+//! POOL_REGISTER the sweep silently finds nothing and the mechanism is a no-op.
+BOOST_AUTO_TEST_CASE(pool_register_count_tracks_add_and_remove)
+{
+    GRC::PoolRegisterPayload payload;
+    const CTransaction pool_tx = MakeTx(
+        {GRC::MakeContract<GRC::PoolRegisterPayload>(GRC::ContractAction::ADD, payload)});
+    const CTransaction plain_tx = MakePlainTx(1000);
+
+    BOOST_CHECK(MakeEntry(pool_tx).HasPoolRegister());
+    BOOST_CHECK(!MakeEntry(plain_tx).HasPoolRegister());
+
+    CTxMemPool pool;
+    pool.addUnchecked(plain_tx.GetHash(), MakeEntry(plain_tx));
+
+    // Entries present but none of them POOL_REGISTER: the guard, not an empty pool.
+    BOOST_CHECK_EQUAL(pool.m_pool_register_count, 0U);
+    BOOST_CHECK(pool.GetPoolRegisterTxs().empty());
+
+    pool.addUnchecked(pool_tx.GetHash(), MakeEntry(pool_tx));
+    BOOST_CHECK_EQUAL(pool.m_pool_register_count, 1U);
+
+    const std::vector<uint256> found = pool.GetPoolRegisterTxs();
+    BOOST_REQUIRE_EQUAL(found.size(), 1U);
+    BOOST_CHECK(found[0] == pool_tx.GetHash());
+
+    pool.remove(pool_tx);
+    BOOST_CHECK_EQUAL(pool.m_pool_register_count, 0U);
+    BOOST_CHECK(pool.GetPoolRegisterTxs().empty());
+    BOOST_CHECK_EQUAL(pool.size(), 1UL);
+
+    pool.addUnchecked(pool_tx.GetHash(), MakeEntry(pool_tx));
+    pool.clear();
+    BOOST_CHECK_EQUAL(pool.m_pool_register_count, 0U);
+    BOOST_CHECK(pool.GetPoolRegisterTxs().empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

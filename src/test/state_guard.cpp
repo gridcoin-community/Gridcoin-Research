@@ -236,9 +236,31 @@ StateGuard::~StateGuard()
             for (auto it = mapBlockIndex.begin(); it != mapBlockIndex.end();) {
                 if (m_preexisting_keys.count(it->first)) {
                     ++it;
-                } else {
-                    it = mapBlockIndex.erase(it);
+                    continue;
                 }
+
+                // Unlink the index from the chain BEFORE its key is freed.
+                //
+                // phashBlock aliases the map key (validation.cpp), and the index
+                // objects are pool-allocated and deliberately never deleted, so
+                // erasing the node leaves any surviving pointer to that index
+                // holding a dangling hash. Restoring pindexBest and
+                // pindexGenesisBlock below is not enough: nothing clears the
+                // previous tip's pnext, so a FORWARD walk still reaches an index
+                // a suite mined. CWallet::ScanForWalletTransactions does exactly
+                // that walk, which is how this surfaced -- one case mined a block
+                // and the next one to scan read the freed key.
+                //
+                // Harmless for the InsertBlockIndex fixtures this guard was
+                // written for, whose entries have no pprev in the active chain;
+                // load-bearing for anything that mines.
+                if (CBlockIndex* pindex = it->second) {
+                    if (pindex->pprev != nullptr && pindex->pprev->pnext == pindex) {
+                        pindex->pprev->pnext = nullptr;
+                    }
+                }
+
+                it = mapBlockIndex.erase(it);
             }
         }
 
@@ -284,6 +306,28 @@ void RegistryReset::Apply() const
     for (const auto type : m_types) {
         GRC::RegistryBookmarks::GetRegistryWithDB(type).Reset();
     }
+}
+
+ForcedArgGuard::ForcedArgGuard(std::string key, const std::string& value)
+    : m_key(std::move(key))
+{
+    gArgs.LockSettings([&](util::Settings& settings) {
+        auto it = settings.forced_settings.find(m_key);
+        if (it != settings.forced_settings.end()) m_saved = it->second;
+    });
+
+    gArgs.ForceSetArg("-" + m_key, value);
+}
+
+ForcedArgGuard::~ForcedArgGuard()
+{
+    gArgs.LockSettings([&](util::Settings& settings) {
+        if (m_saved) {
+            settings.forced_settings[m_key] = *m_saved;
+        } else {
+            settings.forced_settings.erase(m_key);
+        }
+    });
 }
 
 V15HeightGuard::V15HeightGuard(int height)

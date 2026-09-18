@@ -424,6 +424,45 @@ CTransaction CreateSpendToScript(const CTransaction& txFrom, uint32_t n, CAmount
     return CTransaction(mtx);
 }
 
+CTransaction CreateSpendWithContract(const CTransaction& txFrom, uint32_t n, CAmount fee,
+                                     const GRC::Contract& contract, int64_t tx_time,
+                                     CAmount burn)
+{
+    BOOST_REQUIRE(n < txFrom.vout.size());
+
+    const CAmount value_in = txFrom.vout[n].nValue;
+    const CAmount value_out = value_in - fee - burn;
+    BOOST_REQUIRE_MESSAGE(value_out > 0, "fee and burn exceed the value of the input");
+
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;  // vContracts is only serialized from version 2
+    mtx.nTime = static_cast<unsigned int>(tx_time != 0 ? tx_time : FIXTURE_TX_TIME);
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(txFrom.GetHash(), n);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = value_out;
+    mtx.vout[0].scriptPubKey = PremineScript();
+
+    // CheckContracts counts OP_RETURN outputs toward the contract's required
+    // burn. Added before signing with everything else.
+    if (burn > 0) {
+        CTxOut burn_out;
+        burn_out.nValue = burn;
+        burn_out.scriptPubKey = CScript() << OP_RETURN;
+        mtx.vout.push_back(burn_out);
+    }
+
+    // Before signing, deliberately: SignatureHash serializes the transaction and
+    // vContracts is part of that serialization at this version, so a contract
+    // attached afterwards would invalidate the signature.
+    mtx.vContracts.push_back(contract);
+
+    BOOST_REQUIRE_MESSAGE(SignSignature(PremineKeystore(), txFrom, mtx, 0),
+                          "failed to sign the fixture spend carrying a contract");
+
+    return CTransaction(mtx);
+}
+
 CTransaction CreateSpend(const CTransaction& txFrom, uint32_t n, CAmount fee, int n_outputs,
                          int64_t tx_time)
 {

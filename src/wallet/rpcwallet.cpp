@@ -779,7 +779,10 @@ static const RPCHelpMan sendtoaddress_help{
         {"comment_to", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
             "Comment to store the name of the person or organization to which you're sending the transaction. Not part of the transaction."},
         {"message", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-            "Optional message to add to the receiver (TxMessage contract)."},
+            "Optional message to add to the receiver (TxMessage contract). Accepted but "
+            "DISCARDED once MESSAGE contracts are disabled by the network; the payment is "
+            "still sent and a warning is written to the log. The argument is retained so "
+            "existing callers keep working."},
     },
     RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
     RPCExamples{
@@ -807,10 +810,35 @@ UniValue sendtoaddress(const UniValue& params)
     if (params.size() > 3 && !params[3].isNull() && !params[3].get_str().empty())
         wtx.mapValue["to"]      = params[3].get_str();
     if (params.size() > 4 && !params[4].isNull() && !params[4].get_str().empty()) {
-        CMutableTransaction mtx;
-        mtx.vContracts.emplace_back(
-            GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, params[4].get_str()));
-        static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
+        // The `message` argument is retained deliberately after MESSAGE contracts
+        // are disabled, rather than removed: dropping it would turn every existing
+        // caller's invocation into a "too many parameters" error at the mandatory.
+        // Instead the payment still goes through and the message is discarded, so a
+        // caller that ignores the warning loses the note, not the send.
+        //
+        // The result stays a bare txid string, so there is nowhere in the return to
+        // put the warning; it goes to the log. Changing the result to an object to
+        // carry it would break every client parsing the string and would alter the
+        // RPC's heritage fingerprint, which is a worse trade than a log line.
+        //
+        // Tested against nBestHeight + 1, the height this transaction could first
+        // be mined at, rather than the current tip: that is what CheckContracts
+        // will judge it by in a block, and it stops the wallet from building a
+        // transaction that is already doomed on the last block before the gate.
+        if (!IsMessageContractEnabled(nBestHeight + 1)) {
+            // Worded as intent, not outcome: this runs before
+            // SendMoneyToDestination(), so claiming the payment was sent would
+            // record a payment that a later failure never made. What is certain
+            // at this point is only that no message contract will be attached.
+            LogPrintf("WARNING: %s: MESSAGE contracts are disabled from height %d; the message "
+                      "argument is being discarded and the payment attempted without it.",
+                      __func__, GetMessageContractDisableHeight());
+        } else {
+            CMutableTransaction mtx;
+            mtx.vContracts.emplace_back(
+                GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, params[4].get_str()));
+            static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
+        }
     }
 
     if (pwalletMain->IsLocked())
@@ -1711,7 +1739,10 @@ static const RPCHelpMan sendfrom_help{
         {"comment_to", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
             "Wallet-local comment naming the recipient."},
         {"message", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-            "Optional message to add to the receiver (TxMessage contract)."},
+            "Optional message to add to the receiver (TxMessage contract). Accepted but "
+            "DISCARDED once MESSAGE contracts are disabled by the network; the payment is "
+            "still sent and a warning is written to the log. The argument is retained so "
+            "existing callers keep working."},
     },
     RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
     RPCExamples{
@@ -1746,10 +1777,24 @@ UniValue sendfrom(const UniValue& params)
     if (params.size() > 5 && !params[5].isNull() && !params[5].get_str().empty())
         wtx.mapValue["to"]      = params[5].get_str();
     if (params.size() > 6 && !params[6].isNull() && !params[6].get_str().empty()) {
-        CMutableTransaction mtx;
-        mtx.vContracts.emplace_back(
-            GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, params[6].get_str()));
-        static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
+        // Same treatment as sendtoaddress: the argument stays, the message is
+        // discarded once MESSAGE contracts are disabled, and the payment still
+        // goes out. See the comment there for why the warning is logged rather
+        // than returned.
+        if (!IsMessageContractEnabled(nBestHeight + 1)) {
+            // Worded as intent, not outcome: this runs before
+            // SendMoneyToDestination(), so claiming the payment was sent would
+            // record a payment that a later failure never made. What is certain
+            // at this point is only that no message contract will be attached.
+            LogPrintf("WARNING: %s: MESSAGE contracts are disabled from height %d; the message "
+                      "argument is being discarded and the payment attempted without it.",
+                      __func__, GetMessageContractDisableHeight());
+        } else {
+            CMutableTransaction mtx;
+            mtx.vContracts.emplace_back(
+                GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, params[6].get_str()));
+            static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
+        }
     }
 
     EnsureWalletIsUnlocked();

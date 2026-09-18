@@ -226,6 +226,39 @@ struct RegistryResetFor : RegistryReset
 };
 
 //!
+//!
+//! \brief Pin one forced argument for a scope and put it back EXACTLY.
+//!
+//! "Back" means presence as well as value: if the forced setting was absent the
+//! key is erased again rather than written as some sentinel. The leak detector's
+//! settings snapshot is presence-sensitive, and an empty string is not a usable
+//! "unset" either -- for a height argument it would activate the gate from
+//! genesis.
+//!
+//! Use this, NOT StateGuard, in a case that mines. StateGuard restores
+//! nBestHeight and erases the block index entries the case added, which for a
+//! case driving real block connection is actively wrong: RegtestChainSetup is a
+//! SUITE fixture whose teardown rewinds the committed chain through
+//! ForceReorganizeToHash, and that rewind is guarded on nBestHeight > 0. A
+//! per-case StateGuard puts nBestHeight back to 0 first, the rewind is skipped,
+//! and the blocks the case committed to CTxDB leak out of the suite.
+//!
+class ForcedArgGuard
+{
+public:
+    //! \p key is the argument name WITHOUT its leading dash, which is how
+    //! ArgsManager stores it.
+    ForcedArgGuard(std::string key, const std::string& value);
+    ~ForcedArgGuard();
+
+    ForcedArgGuard(const ForcedArgGuard&) = delete;
+    ForcedArgGuard& operator=(const ForcedArgGuard&) = delete;
+
+private:
+    std::string m_key;
+    std::optional<util::SettingsValue> m_saved;
+};
+
 //! \brief Pin -blockv15height for a scope and put it back EXACTLY.
 //!
 //! "Back" means presence as well as value: if the forced setting was absent

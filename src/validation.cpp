@@ -229,6 +229,22 @@ bool CheckContracts(const CTransaction& tx, CValidationState& state, const MapPr
             return state.DoS(100, error("%s: malformed contract", __func__));
         }
 
+        // MESSAGE contracts carry a free-form, uncapped string and are not
+        // accepted once the disable height is reached.
+        //
+        // Gated on the contract TYPE, not on the ADD action. TxMessage::WellFormed()
+        // ignores the action it is handed and returns true for any non-empty
+        // message, and MESSAGE has no registry handler to constrain the action
+        // either -- it falls through in both switches in contract/registry.h. An
+        // ADD-only gate would therefore be sidestepped by sending the same payload
+        // under any other action. There is no legitimate MESSAGE contract of any
+        // action past the gate, so the type is the honest thing to reject.
+        if (contract.m_type == GRC::ContractType::MESSAGE
+                && !IsMessageContractEnabled(block_height)) {
+            return state.DoS(100, error("%s: message contract disabled at height %d",
+                                        __func__, block_height));
+        }
+
         // Reject any transactions with administrative contracts sent from a
         // wallet that does not hold the master key:
         if (contract.RequiresMasterKey() && !HasMasterKeyInput(tx, inputs, block_height)) {
@@ -2286,7 +2302,13 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
                                  "insufficient-fee");
 
         // Validate any contracts published in the transaction:
-        if (!tx.GetContracts().empty() && !CheckContracts(tx, state, mapInputs, pindexBest->nHeight)) {
+        // The next block is the earliest one this transaction can be in, and the
+        // contract rules reached from here withdraw permission at their height
+        // (see CheckContracts in validation.h). Asking about the tip would admit
+        // a transaction the next block rejects, which then sits in the pool with
+        // its inputs locked, unmineable and unrelayable, until a restart.
+        if (!tx.GetContracts().empty()
+                && !CheckContracts(tx, state, mapInputs, pindexBest->nHeight + 1)) {
             return false;
         }
 
