@@ -436,6 +436,39 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                 mempool.removeConflicts(tx);
             }
 
+
+
+            if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
+                txdb.TxnAbort();
+                return error("%s: WriteHashBestChain failed", __func__);
+            }
+
+            // Make sure it's successfully written to disk before changing memory structure
+            if (!txdb.TxnCommit()) {
+                return error("%s: TxnCommit failed", __func__);
+            }
+
+            // Mempool retirement runs AFTER the commit, deliberately.
+            //
+            // Everything below removes transactions from the pool and writes the
+            // consequence to the wallet -- EraseFromWallet for a stale MRC,
+            // AbandonTransaction for a swept contract -- and both persist. Run
+            // before the commit, a failed WriteHashBestChain or TxnCommit would
+            // abort the block while leaving those transactions gone and the wallet
+            // change on disk: irreversible bookkeeping justified by a block that
+            // was then thrown away. Nothing here feeds the commit, so the ordering
+            // costs nothing.
+            //
+            // hashBestChain is what makes moving the MRC pass safe rather than a
+            // behaviour change: it is not assigned until after this whole scope
+            // closes, so GetStaleMRCs sees exactly the value it saw before the
+            // commit -- the pre-connect tip. to_be_erased still has to be declared
+            // ahead of the FixSpentCoins call below, which is gated on it.
+            //
+            // NOT moved: the "delete redundant memory transactions" loop above,
+            // which drops this block's own transactions from the pool. It touches
+            // no persisted state, so a failed commit costs at most a re-relay.
+
             // Remove stale MRCs in the mempool that are not in this new block. Remember the MRCs were initially validated in
             // AcceptToMemoryPool. Here we just need to do a staleness check.
             std::vector<CTransaction> to_be_erased;
@@ -465,31 +498,6 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                     pwalletMain->NotifyTransactionChanged(pwalletMain, tx.GetHash(), CT_DELETED);
                 }
             }
-
-
-
-            if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
-                txdb.TxnAbort();
-                return error("%s: WriteHashBestChain failed", __func__);
-            }
-
-            // Make sure it's successfully written to disk before changing memory structure
-            if (!txdb.TxnCommit()) {
-                return error("%s: TxnCommit failed", __func__);
-            }
-
-            // Mempool retirement runs AFTER the commit, deliberately.
-            //
-            // Both sweeps below remove transactions from the pool and abandon them
-            // in the wallet, and AbandonTransaction writes that state to disk. Run
-            // before the commit, a failed WriteHashBestChain or TxnCommit would
-            // leave a transaction persistently abandoned for a boundary the chain
-            // never actually crossed -- irreversible bookkeeping justified by a
-            // block that was then thrown away. Nothing here feeds the commit, so
-            // the ordering costs nothing.
-            //
-            // The stale-MRC removal further up predates this and still runs before
-            // the commit; it is left where it is rather than moved as a drive-by.
             // Retire MESSAGE contract transactions the chain has left behind.
             //
             // One accepted below the disable height never leaves the pool on its own

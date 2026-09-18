@@ -1174,4 +1174,91 @@ BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_untouched_while_its_authorization
     mempool.clear();
 }
 
+//!
+//! The stale-MRC removal, through real block connection.
+//!
+//! This path predates the branch and had no end-to-end coverage --
+//! getstalemrcs_selects_by_anchor_block pins the pool helper, not the
+//! ReorganizeChain integration that consumes it. It is added here because this
+//! branch MOVED that removal to after the chain commit, and the argument for the
+//! move being behaviour-preserving rests on hashBestChain not being assigned
+//! until after the enclosing scope closes, so GetStaleMRCs sees the same
+//! pre-connect tip at either position. That is worth a test rather than only an
+//! argument.
+//!
+//! An MRC anchored to something other than the current head is stale and must be
+//! removed when the block connects; the control anchors to the head and must
+//! survive. Both are stamped past the block so the miner leaves them pooled and
+//! the removal cannot be confused with ordinary confirmation.
+//!
+BOOST_AUTO_TEST_CASE(a_stale_mrc_is_removed_when_a_block_connects)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    const int64_t after_the_block = GetAdjustedTime() + 3600;
+
+    uint256 head;
+    {
+        LOCK(cs_main);
+        head = hashBestChain;
+    }
+
+    // Stale: anchored to a block that is not the head.
+    GRC::MRC stale_mrc;
+    stale_mrc.m_mining_id = GRC::Cpid::Parse(GetRandHash().ToString().substr(0, 32));
+    stale_mrc.m_fee = 0;
+    stale_mrc.m_last_block_hash = GetRandHash();
+    const GRC::Contract stale_contract =
+        GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, stale_mrc);
+    const CTransaction stale_tx = grc_test::CreateSpendWithContract(
+        PremineCoinbase(), coins[0].n, 200000, stale_contract, after_the_block,
+        stale_contract.RequiredBurnAmount());
+
+    // Current: anchored to the head, so not stale.
+    GRC::MRC current_mrc;
+    current_mrc.m_mining_id = GRC::Cpid::Parse(GetRandHash().ToString().substr(0, 32));
+    current_mrc.m_fee = 0;
+    current_mrc.m_last_block_hash = head;
+    const GRC::Contract current_contract =
+        GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, current_mrc);
+    const CTransaction current_tx = grc_test::CreateSpendWithContract(
+        PremineCoinbase(), coins[1].n, 200000, current_contract, after_the_block,
+        current_contract.RequiredBurnAmount());
+
+    AddToMempool(stale_tx, 200000);
+    AddToMempool(current_tx, 200000);
+    BOOST_REQUIRE(mempool.exists(stale_tx.GetHash()));
+    BOOST_REQUIRE(mempool.exists(current_tx.GetHash()));
+
+    CBlock block;
+    std::string err;
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+
+    BOOST_REQUIRE_MESSAGE(!Contains(block.vtx, stale_tx),
+        "the stale MRC was mined, so this case cannot distinguish removal from "
+        "ordinary confirmation");
+
+    BOOST_CHECK_MESSAGE(!mempool.exists(stale_tx.GetHash()),
+        "a stale MRC survived block connection");
+
+    // The control asks only that the sweep did not take it. Leaving the pool by
+    // being MINED is a legitimate outcome and not this case's business: whether
+    // the miner binds a pooled MRC into the block depends on reward and template
+    // conditions that vary by environment, and an earlier version of this
+    // assertion conflated the two -- it required the transaction to still be
+    // pooled and so reported "removed as stale" when it had simply been
+    // confirmed. Either survival is fine; being silently dropped is not.
+    const bool survived = mempool.exists(current_tx.GetHash())
+                          || Contains(block.vtx, current_tx);
+
+    BOOST_CHECK_MESSAGE(survived,
+        "an MRC anchored to the head is gone from both the mempool and the block, "
+        "so the sweep removed it as stale");
+
+    mempool.clear();
+}
+
 BOOST_AUTO_TEST_SUITE_END()
