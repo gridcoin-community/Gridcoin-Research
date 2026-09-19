@@ -606,7 +606,27 @@ as each waits for the other to release its lock) are a problem. Compile with
   lock acquisitions. This means **argument order matters**: callers must list
   locks in the canonical order to prevent deadlocks. For example, always write
   `LOCK2(cs_main, cs_wallet)`, never `LOCK2(cs_wallet, cs_main)`.
-- **`TRY_LOCK(cs, name)`** — Non-blocking lock attempt.
+- **`TRY_LOCK(cs, name)`** — Non-blocking lock attempt. It stays in the lock
+  hierarchy on purpose: `DEBUG_LOCKORDER` records and checks its order like a
+  blocking lock's, even though a try-lock cannot wait. With the canonical order
+  applied throughout, a try-lock should never be *needed* to avoid a deadlock
+  (upstream's position, bitcoin/bitcoin#9674, and the goal here), so a
+  `TRY_LOCK` in the reverse order is usually a lock-order inversion compensated
+  by a try, and whether its author knew that is exactly what the report exists
+  to ask.
+- **`TRY_LOCK_ORDER_EXEMPT(cs, name)`** — A non-blocking attempt that
+  `DEBUG_LOCKORDER` leaves out of the hierarchy: no order is recorded into it
+  and none is checked, while a blocking lock taken while it is held is still
+  ordered against it. Use it only for a try-lock that gives up on the spot when
+  it fails, never for one that retries until it succeeds (that waits after all),
+  and say why at the site. The point of the split is that the exemption is
+  explicit and reviewed: a `TRY_LOCK` reached for by someone unsure of the
+  canonical order is still caught. The only sites that carry it are the net
+  layer's per-node probes, and they carry it because the refactor that removes
+  the need for them (per-node message queues in place of the scanning loops)
+  has not happened yet, not because a try-lock is an acceptable way to live
+  with an inversion. See "Known DEBUG_LOCKORDER reports that are not deadlocks"
+  below for those sites and the argument behind each.
 
 ### Canonical lock ordering
 
@@ -672,9 +692,10 @@ names, `cs_vNodes`, `pto->cs_vSend (TRY)` and `cs_main (TRY)`; it aborted the
 client under `--enable-debug` for two years and is why the checker here was
 changed in 2021 (594658bb0) to report and continue rather than assert.
 
-The net layer produces three such reports on a `DEBUG_LOCKORDER` daemon as soon
-as it exchanges messages with a peer, so they show up in any functional test
-that connects two nodes. They never reach CI: the Sanitizers job runs the
+The net layer produced three such reports on a `DEBUG_LOCKORDER` daemon as soon
+as it exchanged messages with a peer, so they showed up in any functional test
+that connected two nodes, until the socket handler's probes were marked
+`TRY_LOCK_ORDER_EXEMPT` (see the end of this section). They never reach CI: the Sanitizers job runs the
 functional suite too (`ctest` registers it for every native build with Python
 3) under the same checker, but a daemon writes its reports to its own
 `debug.log`, in a directory the harness removes when the test passes, and the
@@ -728,13 +749,22 @@ code; a change that turns one of the socket handler's `TRY_LOCK`s into a
 `LOCK`, or takes `m_nodes_mutex` from inside `SendMessages()`, creates the
 deadlock the reports describe.
 
-These reports will persist until the net refactor (the CConnman and
-PeerManager backport line that #2558 started) replaces the scanning loops with
-per-node message queues. Do not silence them by exempting try-locks in the
-checker: the same code path may one day be reached with a blocking lock, and
-the report is what would show it. Recognise them by the `(TRY)` markers on the
-socket-handler side and the two thread names; a report between these locks
-whose "Current" stack shows a blocking acquisition is a real finding.
+The five socket-handler probes, the three in the delete-disconnected pass, the
+one in event registration and the drain in `CloseSocketDisconnect()`, carry
+`TRY_LOCK_ORDER_EXEMPT`, so the checker records no order into them and these
+reports no longer appear. That is the whole of the exemption: plain `TRY_LOCK`
+stays in the hierarchy, so a try-lock added in the reverse order anywhere else
+is still reported (that is the case worth catching: an inversion compensated
+by an uncontrolled try, by someone who has not read this far), and so is a
+blocking lock taken while one of the marked probes is held. The message handler's own try-locks need no mark, since nothing
+is held before them and no reverse edge exists. The two invariants above are
+still what keeps the blocking nestings one-directional, and the probes are the
+only sites that meet the keyword's contract: each gives up on the spot. The
+scanning loops themselves last until the net refactor (the CConnman and
+PeerManager backport line that #2558 started) replaces them with per-node
+message queues. A report between these locks whose "Current" stack shows a
+blocking or a plain `(TRY)` acquisition, rather than `(TRY, order-exempt)`, is a
+real finding.
 
 Re-architecting the core code so there are better-defined interfaces
 between the various components is a goal, with any necessary locking

@@ -438,7 +438,7 @@ void CNode::CloseSocketDisconnect()
     if (was_open)
     {
         // in case this fails, we'll empty the recv buffer when the CNode is deleted
-        TRY_LOCK(cs_vRecvMsg, lockRecv);
+        TRY_LOCK_ORDER_EXEMPT(cs_vRecvMsg, lockRecv);
         if (lockRecv)
             vRecvMsg.clear();
     }
@@ -777,21 +777,22 @@ void CConnman::ThreadSocketHandler2()
                 const std::shared_ptr<CNode>& pnode = *it;
                 if (pnode.use_count() == 1)
                 {
-                    // These try-locks nest the per-node locks under
-                    // m_nodes_mutex, the reverse of the message handler's
-                    // order, and DEBUG_LOCKORDER reports that as a potential
-                    // deadlock. It is not one: a try-lock never waits. See
-                    // "Known DEBUG_LOCKORDER reports that are not deadlocks" in
-                    // doc/developer-notes.md before changing either side.
+                    // Per-node probes under m_nodes_mutex, the reverse of the
+                    // message handler's order. They are TRY_LOCK_ORDER_EXEMPT: each
+                    // gives up on the spot, so it cannot be the waiting edge of
+                    // a cycle, and DEBUG_LOCKORDER leaves it out of the lock
+                    // hierarchy. See "Known DEBUG_LOCKORDER reports that are not
+                    // deadlocks" in doc/developer-notes.md before changing
+                    // either side.
                     bool fDelete = false;
                     {
-                        TRY_LOCK(pnode->cs_vSend, lockSend);
+                        TRY_LOCK_ORDER_EXEMPT(pnode->cs_vSend, lockSend);
                         if (lockSend)
                         {
-                            TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
+                            TRY_LOCK_ORDER_EXEMPT(pnode->cs_vRecvMsg, lockRecv);
                             if (lockRecv)
                             {
-                                TRY_LOCK(pnode->cs_inventory, lockInv);
+                                TRY_LOCK_ORDER_EXEMPT(pnode->cs_inventory, lockInv);
                                 if (lockInv)
                                     fDelete = true;
                             }
@@ -839,7 +840,7 @@ void CConnman::ThreadSocketHandler2()
                 const std::shared_ptr<Sock> sock = pnode->GetSock();
                 if (!sock || sock->Get() == INVALID_SOCKET)
                     continue;
-                TRY_LOCK(pnode->cs_vSend, lockSend);
+                TRY_LOCK_ORDER_EXEMPT(pnode->cs_vSend, lockSend);
                 if (lockSend) {
                     // do not read, if draining write queue
                     const Sock::Event requested =
