@@ -54,13 +54,17 @@ fi
 # name ending in '*' (enabled); its cases are indented beneath it.
 # Captured first: a listing that fails part-way stops the script here (set -e
 # applies to the assignment) instead of running whatever subset was printed.
-listing="$("$bin" --list_content 2>&1)"
+listing="$("$bin" --use_alt_stack=no --list_content 2>&1)"
 mapfile -t suites < <(printf '%s\n' "$listing" | sed -n 's/^\([A-Za-z0-9_]*\)\*$/\1/p')
 [ "${#suites[@]}" -gt 0 ] || { echo "no suites listed by $bin" >&2; exit 2; }
 
 failed=()
 for suite in "${suites[@]}"; do
-    if "$bin" --use_alt_stack=no --run_test="$suite" > "$suite.log" 2>&1; then
+    # Each suite gets its own working directory, so what one leaves on disk
+    # (banlist.dat and the like) is not there for the next; the log stays in
+    # the parent so the failure report below can find it.
+    mkdir "$suite"
+    if (cd "$suite" && "$bin" --use_alt_stack=no --run_test="$suite") > "$suite.log" 2>&1; then
         echo "ok   $suite"
     else
         echo "FAIL $suite"
