@@ -50,7 +50,7 @@ LEAVE_CRITICAL_SECTION(mutex); // no RAII
 ///////////////////////////////
 
 #ifdef DEBUG_LOCKORDER
-void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry = false);
+void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry = false, bool fOrderExempt = false);
 void LeaveCritical();
 void CheckLastCritical(void* cs, std::string& lockname, const char* guardname, const char* file, int line);
 std::string LocksHeld();
@@ -83,7 +83,7 @@ void SetLockOrderDebugThrowException(bool enable);
 //! for subsequently-run code re-registers pairs as they occur.
 void ResetLockOrderTracking();
 #else
-inline void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry = false) {}
+inline void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry = false, bool fOrderExempt = false) {}
 inline void LeaveCritical() {}
 inline void CheckLastCritical(void* cs, std::string& lockname, const char* guardname, const char* file, int line) {}
 template <typename MutexType>
@@ -171,9 +171,9 @@ private:
 #endif
     }
 
-    bool TryEnter(const char* pszName, const char* pszFile, int nLine)
+    bool TryEnter(const char* pszName, const char* pszFile, int nLine, bool fOrderExempt)
     {
-        EnterCritical(pszName, pszFile, nLine, (void*)(Base::mutex()), true);
+        EnterCritical(pszName, pszFile, nLine, (void*)(Base::mutex()), true, fOrderExempt);
         if (Base::try_lock()) {
             return true;
         }
@@ -182,21 +182,21 @@ private:
     }
 
 public:
-    UniqueLock(Mutex& mutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false) EXCLUSIVE_LOCK_FUNCTION(mutexIn) : Base(mutexIn, std::defer_lock)
+    UniqueLock(Mutex& mutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false, bool fOrderExempt = false) EXCLUSIVE_LOCK_FUNCTION(mutexIn) : Base(mutexIn, std::defer_lock)
     {
         if (fTry)
-            TryEnter(pszName, pszFile, nLine);
+            TryEnter(pszName, pszFile, nLine, fOrderExempt);
         else
             Enter(pszName, pszFile, nLine);
     }
 
-    UniqueLock(Mutex* pmutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false) EXCLUSIVE_LOCK_FUNCTION(pmutexIn)
+    UniqueLock(Mutex* pmutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false, bool fOrderExempt = false) EXCLUSIVE_LOCK_FUNCTION(pmutexIn)
     {
         if (!pmutexIn) return;
 
         *static_cast<Base*>(this) = Base(*pmutexIn, std::defer_lock);
         if (fTry)
-            TryEnter(pszName, pszFile, nLine);
+            TryEnter(pszName, pszFile, nLine, fOrderExempt);
         else
             Enter(pszName, pszFile, nLine);
     }
@@ -268,6 +268,21 @@ using DebugLock = UniqueLock<typename std::remove_reference<typename std::remove
     DebugLock<decltype(cs1)> criticalblock1(cs1, #cs1, __FILE__, __LINE__); \
     DebugLock<decltype(cs2)> criticalblock2(cs2, #cs2, __FILE__, __LINE__);
 #define TRY_LOCK(cs, name) DebugLock<decltype(cs)> name(cs, #cs, __FILE__, __LINE__, true)
+//! A try-lock that DEBUG_LOCKORDER leaves out of the lock hierarchy: no order
+//! is recorded into it and none is checked, while a blocking lock taken
+//! while it is held is still ordered against it.
+//!
+//! TRY_LOCK is deliberately kept in the hierarchy. With the canonical order
+//! applied throughout, a try-lock should never be needed to avoid a deadlock
+//! (upstream's position, and the goal here), so a TRY_LOCK in the reverse
+//! order is usually a lock-order inversion compensated by a try, and whether
+//! its author knew that is exactly what the report exists to ask. This macro
+//! is the reviewed exception: only for a try-lock that gives up on the spot
+//! when it fails, never for one that retries until it succeeds, which waits
+//! after all. Today that is the net layer's per-node probes under
+//! m_nodes_mutex, which stay only until the net refactor replaces the
+//! scanning loops. Say why at the site.
+#define TRY_LOCK_ORDER_EXEMPT(cs, name) DebugLock<decltype(cs)> name(cs, #cs, __FILE__, __LINE__, true, true)
 #define WAIT_LOCK(cs, name) DebugLock<decltype(cs)> name(cs, #cs, __FILE__, __LINE__)
 
 #define ENTER_CRITICAL_SECTION(cs)                            \
