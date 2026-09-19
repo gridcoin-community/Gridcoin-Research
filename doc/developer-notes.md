@@ -674,8 +674,12 @@ changed in 2021 (594658bb0) to report and continue rather than assert.
 
 The net layer produces three such reports on a `DEBUG_LOCKORDER` daemon as soon
 as it exchanges messages with a peer, so they show up in any functional test
-that connects two nodes (they do not appear in the unit suite, which is what the
-Sanitizers CI job runs under the checker):
+that connects two nodes. They never reach CI: the Sanitizers job runs the
+functional suite too (`ctest` registers it for every native build with Python
+3) under the same checker, but a daemon writes its reports to its own
+`debug.log`, in a directory the harness removes when the test passes, and the
+job's gate reads the `ctest` log, where only the unit binary's reports appear.
+The reports are:
 
 ```
 Conflict: 'm_nodes_mutex' and 'pnode->cs_vRecvMsg' acquired in inconsistent orders.
