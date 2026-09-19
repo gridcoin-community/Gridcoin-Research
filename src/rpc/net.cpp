@@ -712,9 +712,13 @@ UniValue listalerts(const UniValue& params)
 
 
 // ppcoin: send alert.
-// There is a known deadlock situation with ThreadMessageHandler
-// ThreadMessageHandler: holds cs_vSend and acquiring cs_main in SendMessages()
-// ThreadRPCServer: holds cs_main and acquiring cs_vSend in alert.RelayTo()/PushMessage()/BeginMessage()
+// The relay below takes each node's cs_vSend (through CAlert::RelayTo and
+// PushMessage) while ForEachNode holds m_nodes_mutex. That once deadlocked
+// against the message handler, which held cs_vSend while waiting for cs_main
+// in SendMessages(); the handler now try-locks cs_main before it try-locks
+// cs_vSend (CConnman::ThreadMessageHandler) and never waits while holding
+// cs_vSend, so this nesting is one-directional. See "Known DEBUG_LOCKORDER
+// reports that are not deadlocks" in doc/developer-notes.md.
 // Variadic: legacy behavior accepted any params.size() >= 6, with the
 // 7th positional (cancelupto) optionally consumed. MarkVariadic() keeps
 // the dispatcher off the upper-bound check so trailing-ignored args keep

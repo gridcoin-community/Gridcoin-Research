@@ -777,6 +777,12 @@ void CConnman::ThreadSocketHandler2()
                 const std::shared_ptr<CNode>& pnode = *it;
                 if (pnode.use_count() == 1)
                 {
+                    // These try-locks nest the per-node locks under
+                    // m_nodes_mutex, the reverse of the message handler's
+                    // order, and DEBUG_LOCKORDER reports that as a potential
+                    // deadlock. It is not one: a try-lock never waits. See
+                    // "Known DEBUG_LOCKORDER reports that are not deadlocks" in
+                    // doc/developer-notes.md before changing either side.
                     bool fDelete = false;
                     {
                         TRY_LOCK(pnode->cs_vSend, lockSend);
