@@ -6,6 +6,7 @@ add_executable(test_gridcoin-qt
     coinselectionmodeltests.cpp
     coinselectionviewtests.cpp
     psgttoastdamptests.cpp
+    researcherwizardpagetests.cpp
 )
 
 set_target_properties(test_gridcoin-qt PROPERTIES

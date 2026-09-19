@@ -30,6 +30,15 @@ ResearcherWizardModePage::~ResearcherWizardModePage()
 void ResearcherWizardModePage::setModel(ResearcherModel *model)
 {
     this->m_researcher_model = model;
+
+    // Connected once here, not in initializePage(), which runs on every entry
+    // into the page (#3349).
+    connect(ui->soloIconLabel, &ClickLabel::clicked, this, static_cast<void (ResearcherWizardModePage::*)()>(&ResearcherWizardModePage::selectSolo));
+    connect(ui->soloRadioButton, &QRadioButton::toggled, this, static_cast<void (ResearcherWizardModePage::*)(bool)>(&ResearcherWizardModePage::selectSolo));
+    connect(ui->poolIconLabel, &ClickLabel::clicked, this, static_cast<void (ResearcherWizardModePage::*)()>(&ResearcherWizardModePage::selectPool));
+    connect(ui->poolRadioButton, &QRadioButton::toggled, this, static_cast<void (ResearcherWizardModePage::*)(bool)>(&ResearcherWizardModePage::selectPool));
+    connect(ui->noncruncherIconLabel, &ClickLabel::clicked, this, static_cast<void (ResearcherWizardModePage::*)()>(&ResearcherWizardModePage::selectNoncruncher));
+    connect(ui->noncruncherRadioButton, &QRadioButton::toggled, this, static_cast<void (ResearcherWizardModePage::*)(bool)>(&ResearcherWizardModePage::selectNoncruncher));
 }
 
 void ResearcherWizardModePage::initializePage()
@@ -41,13 +50,6 @@ void ResearcherWizardModePage::initializePage()
     ui->modeButtonGroup->setId(ui->soloRadioButton, ResearcherWizard::ModeSolo);
     ui->modeButtonGroup->setId(ui->poolRadioButton, ResearcherWizard::ModePool);
     ui->modeButtonGroup->setId(ui->noncruncherRadioButton, ResearcherWizard::ModeNoncruncher);
-
-    connect(ui->soloIconLabel, &ClickLabel::clicked, this, static_cast<void (ResearcherWizardModePage::*)()>(&ResearcherWizardModePage::selectSolo));
-    connect(ui->soloRadioButton, &QRadioButton::toggled, this, static_cast<void (ResearcherWizardModePage::*)(bool)>(&ResearcherWizardModePage::selectSolo));
-    connect(ui->poolIconLabel, &ClickLabel::clicked, this, static_cast<void (ResearcherWizardModePage::*)()>(&ResearcherWizardModePage::selectPool));
-    connect(ui->poolRadioButton, &QRadioButton::toggled, this, static_cast<void (ResearcherWizardModePage::*)(bool)>(&ResearcherWizardModePage::selectPool));
-    connect(ui->noncruncherIconLabel, &ClickLabel::clicked, this, static_cast<void (ResearcherWizardModePage::*)()>(&ResearcherWizardModePage::selectNoncruncher));
-    connect(ui->noncruncherRadioButton, &QRadioButton::toggled, this, static_cast<void (ResearcherWizardModePage::*)(bool)>(&ResearcherWizardModePage::selectNoncruncher));
 
     if (m_researcher_model->configuredForNoncruncherMode()) {
         selectNoncruncher();
