@@ -1916,109 +1916,169 @@ BOOST_AUTO_TEST_CASE(maptxspends_cleanup_on_erase)
 }
 
 // ---------------------------------------------------------------------------
-// transactionRemovedFromMempool state-transition tests (#9)
+// TransactionRemovedFromMempool, one case per MemPoolRemovalReason
 //
-// These verify the state-transition *logic* for each MemPoolRemovalReason
-// without requiring full mempool mocking. We pre-populate mapWallet and
-// apply the same transitions that transactionRemovedFromMempool() makes.
+// Each case hands the handler an own in-mempool transaction and checks what
+// it did: the state it left, and whether it told the GUI. The wallet holds
+// the key the transaction pays to, because the arms that change state go
+// through SyncTransaction, and AddToWalletIfInvolvingMe drops a transaction
+// the wallet does not recognise before it looks at the state.
 // ---------------------------------------------------------------------------
+
+namespace {
+//! An in-memory wallet with one key and one own transaction tagged
+//! in-mempool, plus a count of the change notifications the handler emits
+//! for it.
+struct RemovalCase
+{
+    CWallet wallet;
+    CTransactionRef tx;
+    uint256 hash;
+    int notified = 0;
+    int updated = 0;
+
+    RemovalCase()
+    {
+        CKey key;
+        key.MakeNewKey(true);
+        {
+            LOCK(wallet.cs_wallet);
+            BOOST_REQUIRE(wallet.AddKey(key));
+        }
+
+        CMutableTransaction mtx;
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = 50 * COIN;
+        mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+        tx = MakeTransactionRef(CTransaction(mtx));
+        hash = tx->GetHash();
+
+        {
+            LOCK(wallet.cs_wallet);
+            CWalletTx wtx(&wallet, *tx);
+            wtx.SetTxState(TxStateInMempool{});
+            wallet.mapWallet[hash] = wtx;
+        }
+
+        wallet.NotifyTransactionChanged.connect([this](CWallet*, const uint256& changed, ChangeType status) {
+            if (changed != hash) {
+                return;
+            }
+            ++notified;
+            if (status == CT_UPDATED) {
+                ++updated;
+            }
+        });
+    }
+
+    void Remove(MemPoolRemovalReason reason)
+    {
+        LOCK(cs_main);
+        wallet.TransactionRemovedFromMempool(tx, reason);
+    }
+
+    bool InMempool()
+    {
+        LOCK(wallet.cs_wallet);
+        return wallet.mapWallet.at(hash).isInMempool();
+    }
+
+    bool ConflictedNotAbandoned()
+    {
+        LOCK(wallet.cs_wallet);
+        const CWalletTx& wtx = wallet.mapWallet.at(hash);
+        const auto* inactive = wtx.state<TxStateInactive>();
+        return wtx.isInactive() && inactive != nullptr && !inactive->m_abandoned && !wallet.IsAbandoned(hash);
+    }
+};
+} // anonymous namespace
 
 BOOST_AUTO_TEST_CASE(mempool_removal_block_reason_no_state_change)
 {
-    // When reason == BLOCK, transactionRemovedFromMempool returns early.
-    // blockConnected handles the state transition instead.
-    CWallet test_wallet;
-    CMutableTransaction mtx;
-    mtx.vout.resize(1);
-    mtx.vout[0].nValue = 50 * COIN;
-    CTransaction tx(mtx);
-    uint256 hash = tx.GetHash();
-
-    {
-        LOCK(test_wallet.cs_wallet);
-        CWalletTx wtx(&test_wallet, tx);
-        wtx.SetTxState(TxStateInMempool{});
-        test_wallet.mapWallet[hash] = wtx;
-    }
-
-    // Simulate: reason == BLOCK → no action (early return)
-    // State should remain InMempool (blockConnected changes it later)
-    {
-        LOCK(test_wallet.cs_wallet);
-        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
-    }
+    // BLOCK: the handler returns before touching the wallet; BlockConnected
+    // owns that transition and emits its own notification.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::BLOCK);
+    BOOST_CHECK(c.InMempool());
+    BOOST_CHECK_EQUAL(c.notified, 0);
 }
 
 BOOST_AUTO_TEST_CASE(mempool_removal_conflict_marks_inactive)
 {
-    // CONFLICT reason should mark transaction as inactive (not abandoned)
-    CWallet test_wallet;
-    CMutableTransaction mtx;
-    mtx.vout.resize(1);
-    mtx.vout[0].nValue = 50 * COIN;
-    CTransaction tx(mtx);
-    uint256 hash = tx.GetHash();
-
-    {
-        LOCK(test_wallet.cs_wallet);
-        CWalletTx wtx(&test_wallet, tx);
-        wtx.SetTxState(TxStateInMempool{});
-        test_wallet.mapWallet[hash] = wtx;
-
-        // Apply same logic as transactionRemovedFromMempool for CONFLICT
-        test_wallet.mapWallet[hash].SetTxState(TxStateInactive{false});
-
-        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
-        auto* inactive = test_wallet.mapWallet[hash].state<TxStateInactive>();
-        BOOST_CHECK(inactive != nullptr);
-        BOOST_CHECK_EQUAL(inactive->m_abandoned, false);  // Not abandoned, just conflicted
-    }
+    // CONFLICT: inactive, not abandoned (only AbandonTransaction sets that),
+    // and the GUI hears about it through SyncTransaction.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::CONFLICT);
+    BOOST_CHECK(c.ConflictedNotAbandoned());
+    BOOST_CHECK_EQUAL(c.updated, 1);
 }
 
 BOOST_AUTO_TEST_CASE(mempool_removal_replaced_marks_inactive)
 {
-    // REPLACED reason should mark transaction as inactive (same as CONFLICT)
-    CWallet test_wallet;
-    CMutableTransaction mtx;
-    mtx.vout.resize(1);
-    mtx.vout[0].nValue = 50 * COIN;
-    CTransaction tx(mtx);
-    uint256 hash = tx.GetHash();
-
-    {
-        LOCK(test_wallet.cs_wallet);
-        CWalletTx wtx(&test_wallet, tx);
-        wtx.SetTxState(TxStateInMempool{});
-        test_wallet.mapWallet[hash] = wtx;
-
-        // Apply same logic as transactionRemovedFromMempool for REPLACED
-        test_wallet.mapWallet[hash].SetTxState(TxStateInactive{false});
-
-        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
-        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
-    }
+    // REPLACED: same arm as CONFLICT.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::REPLACED);
+    BOOST_CHECK(c.ConflictedNotAbandoned());
+    BOOST_CHECK_EQUAL(c.updated, 1);
 }
 
 BOOST_AUTO_TEST_CASE(mempool_removal_expiry_preserves_mempool_state)
 {
-    // EXPIRY reason should NOT change state — tx is eligible for re-acceptance
-    CWallet test_wallet;
-    CMutableTransaction mtx;
-    mtx.vout.resize(1);
-    mtx.vout[0].nValue = 50 * COIN;
-    CTransaction tx(mtx);
-    uint256 hash = tx.GetHash();
+    // EXPIRY: still valid, just evicted. The tag stays in-mempool so the
+    // scheduled resend picks it up (depth reads -1 live), and the GUI is
+    // told once so an aged row is re-derived rather than left Offline.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::EXPIRY);
+    BOOST_CHECK(c.InMempool());
+    BOOST_CHECK_EQUAL(c.updated, 1);
+    BOOST_CHECK_EQUAL(c.notified, 1);
+}
 
+BOOST_AUTO_TEST_CASE(mempool_removal_sizelimit_preserves_mempool_state)
+{
+    // SIZELIMIT: the arm the mempool actually reaches (TrimToSize); same
+    // contract as EXPIRY.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::SIZELIMIT);
+    BOOST_CHECK(c.InMempool());
+    BOOST_CHECK_EQUAL(c.updated, 1);
+    BOOST_CHECK_EQUAL(c.notified, 1);
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_reorg_defers_to_block_disconnected)
+{
+    // REORG: BlockDisconnected owns the transition; the handler only logs.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::REORG);
+    BOOST_CHECK(c.InMempool());
+    BOOST_CHECK_EQUAL(c.notified, 0);
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_unknown_marks_inactive)
+{
+    // UNKNOWN: conservatively inactive, like CONFLICT.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::UNKNOWN);
+    BOOST_CHECK(c.ConflictedNotAbandoned());
+    BOOST_CHECK_EQUAL(c.updated, 1);
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_not_in_wallet_no_crash)
+{
+    // A transaction the wallet has never seen: the handler returns at the
+    // mapWallet lookup, adds nothing and notifies nobody, for the arm that
+    // would otherwise sync.
+    RemovalCase c;
     {
-        LOCK(test_wallet.cs_wallet);
-        CWalletTx wtx(&test_wallet, tx);
-        wtx.SetTxState(TxStateInMempool{});
-        test_wallet.mapWallet[hash] = wtx;
-
-        // EXPIRY: no state change (just logs)
-        // State should remain InMempool — ReacceptWalletTransactions will handle it
-        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+        LOCK(c.wallet.cs_wallet);
+        c.wallet.mapWallet.erase(c.hash);
     }
+    c.Remove(MemPoolRemovalReason::CONFLICT);
+    {
+        LOCK(c.wallet.cs_wallet);
+        BOOST_CHECK_EQUAL(c.wallet.mapWallet.count(c.hash), 0u);
+    }
+    BOOST_CHECK_EQUAL(c.notified, 0);
 }
 
 BOOST_AUTO_TEST_CASE(reaccept_keeps_own_unconfirmed_tx_rebroadcastable)
@@ -2457,91 +2517,6 @@ BOOST_AUTO_TEST_CASE(reaccept_marks_own_unconfirmed_tx_conflicted_when_input_spe
         BOOST_REQUIRE(txdb.TxnBegin());
         BOOST_REQUIRE(txdb.EraseTxIndex(parent));
         BOOST_REQUIRE(txdb.TxnCommit());
-    }
-}
-
-BOOST_AUTO_TEST_CASE(mempool_removal_sizelimit_preserves_mempool_state)
-{
-    // SIZELIMIT reason should NOT change state — tx is eligible for re-acceptance
-    CWallet test_wallet;
-    CMutableTransaction mtx;
-    mtx.vout.resize(1);
-    mtx.vout[0].nValue = 50 * COIN;
-    CTransaction tx(mtx);
-    uint256 hash = tx.GetHash();
-
-    {
-        LOCK(test_wallet.cs_wallet);
-        CWalletTx wtx(&test_wallet, tx);
-        wtx.SetTxState(TxStateInMempool{});
-        test_wallet.mapWallet[hash] = wtx;
-
-        // SIZELIMIT: no state change (just logs)
-        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
-    }
-}
-
-BOOST_AUTO_TEST_CASE(mempool_removal_reorg_defers_to_block_disconnected)
-{
-    // REORG reason should NOT change state — blockDisconnected handles it
-    CWallet test_wallet;
-    CMutableTransaction mtx;
-    mtx.vout.resize(1);
-    mtx.vout[0].nValue = 50 * COIN;
-    CTransaction tx(mtx);
-    uint256 hash = tx.GetHash();
-
-    {
-        LOCK(test_wallet.cs_wallet);
-        CWalletTx wtx(&test_wallet, tx);
-        wtx.SetTxState(TxStateInMempool{});
-        test_wallet.mapWallet[hash] = wtx;
-
-        // REORG: no state change (deferred to blockDisconnected)
-        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
-    }
-}
-
-BOOST_AUTO_TEST_CASE(mempool_removal_unknown_marks_inactive)
-{
-    // UNKNOWN reason should conservatively mark as inactive
-    CWallet test_wallet;
-    CMutableTransaction mtx;
-    mtx.vout.resize(1);
-    mtx.vout[0].nValue = 50 * COIN;
-    CTransaction tx(mtx);
-    uint256 hash = tx.GetHash();
-
-    {
-        LOCK(test_wallet.cs_wallet);
-        CWalletTx wtx(&test_wallet, tx);
-        wtx.SetTxState(TxStateInMempool{});
-        test_wallet.mapWallet[hash] = wtx;
-
-        // Apply same logic as transactionRemovedFromMempool for UNKNOWN
-        test_wallet.mapWallet[hash].SetTxState(TxStateInactive{false});
-
-        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
-        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
-    }
-}
-
-BOOST_AUTO_TEST_CASE(mempool_removal_not_in_wallet_no_crash)
-{
-    // Removal of tx NOT in wallet should be a no-op (no crash)
-    CWallet test_wallet;
-    CMutableTransaction mtx;
-    mtx.vout.resize(1);
-    mtx.vout[0].nValue = 50 * COIN;
-    CTransaction tx(mtx);
-    uint256 hash = tx.GetHash();
-
-    // Don't add to wallet — verify no crash when looking up
-    {
-        LOCK(test_wallet.cs_wallet);
-        auto it = test_wallet.mapWallet.find(hash);
-        BOOST_CHECK(it == test_wallet.mapWallet.end());
-        // In transactionRemovedFromMempool, this causes an early return
     }
 }
 
