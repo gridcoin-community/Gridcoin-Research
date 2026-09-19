@@ -36,9 +36,11 @@ struct CLockLocation {
         const char* pszFile,
         int nLine,
         bool fTryIn,
+        bool fOrderExemptIn,
         const std::string& thread_name
         )
         : fTry(fTryIn),
+          fOrderExempt(fOrderExemptIn),
           mutexName(pszName),
           sourceFile(pszFile),
           m_thread_name(thread_name),
@@ -48,7 +50,7 @@ struct CLockLocation {
     {
         return strprintf(
             "'%s' in %s:%s%s (in thread '%s')",
-            mutexName, sourceFile, sourceLine, (fTry ? " (TRY)" : "") , m_thread_name);
+            mutexName, sourceFile, sourceLine, (fTry ? (fOrderExempt ? " (TRY, order-exempt)" : " (TRY)") : ""), m_thread_name);
     }
 
     std::string Name() const
@@ -56,8 +58,16 @@ struct CLockLocation {
         return mutexName;
     }
 
+    //! A TRY_LOCK_ORDER_EXEMPT acquisition: outside the lock hierarchy. Only a
+    //! try-lock can be, whatever the second flag says: a blocking lock waits.
+    bool IsOrderExempt() const
+    {
+        return fTry && fOrderExempt;
+    }
+
 private:
     bool fTry;
+    bool fOrderExempt;
     std::string mutexName;
     std::string sourceFile;
     const std::string& m_thread_name;
@@ -168,6 +178,14 @@ static void push_lock(void* c, const CLockLocation& locklocation)
 
     LockStack& lock_stack = lockdata.m_lock_stacks[std::this_thread::get_id()];
     lock_stack.emplace_back(c, locklocation);
+
+    // A TRY_LOCK_ORDER_EXEMPT acquisition is outside the hierarchy: record no
+    // order into it and check none. It stays on the stack, because the lock
+    // it took is held like any other, and a blocking lock taken while it is
+    // held is a real order, recorded and checked below when that lock is
+    // pushed. A plain TRY_LOCK is deliberately still ordered (sync.h).
+    if (locklocation.IsOrderExempt()) return;
+
     for (const LockStackItem& i : lock_stack) {
         if (i.first == c)
             break;
@@ -203,9 +221,9 @@ static void pop_lock()
     }
 }
 
-void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry)
+void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry, bool fOrderExempt)
 {
-    push_lock(cs, CLockLocation(pszName, pszFile, nLine, fTry, util::ThreadGetInternalName()));
+    push_lock(cs, CLockLocation(pszName, pszFile, nLine, fTry, fOrderExempt, util::ThreadGetInternalName()));
 }
 
 void CheckLastCritical(void* cs, std::string& lockname, const char* guardname, const char* file, int line)
