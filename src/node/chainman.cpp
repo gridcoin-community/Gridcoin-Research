@@ -545,6 +545,9 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             // NOT moved: the "delete redundant memory transactions" loop above,
             // which drops this block's own transactions from the pool. It touches
             // no persisted state, so a failed commit costs at most a re-relay.
+            // Nor the wallet's block-conflict record beside it (RecordConflictedBy):
+            // in memory only, keyed by this block, and taken back only when this
+            // block is disconnected, which a block that never connected never is.
 
             // Remove stale MRCs in the mempool that are not in this new block. Remember the MRCs were initially validated in
             // AcceptToMemoryPool. Here we just need to do a staleness check.
