@@ -1622,6 +1622,51 @@ void CWallet::TransactionRemovedFromMempool(const CTransactionRef& tx,
     }
 }
 
+void CWallet::RecordConflictedBy(const std::vector<uint256>& hashes, const uint256& block_hash)
+{
+    LOCK(cs_wallet);
+
+    for (const uint256& hash : hashes) {
+        if (mapWallet.count(hash)) {
+            m_conflicting_block[hash] = block_hash;
+        }
+    }
+}
+
+std::vector<CTransaction> CWallet::TakeConflictedBy(const uint256& block_hash)
+{
+    LOCK(cs_wallet);
+
+    std::vector<CTransaction> displaced;
+
+    for (auto it = m_conflicting_block.begin(); it != m_conflicting_block.end();) {
+        if (it->second != block_hash) {
+            ++it;
+            continue;
+        }
+
+        auto wtx = mapWallet.find(it->first);
+
+        // A transaction that has since confirmed, been abandoned, or found its
+        // way back into the pool was resolved by another path; only one the
+        // wallet still holds unconfirmed and out of the mempool is the
+        // disconnect's business. The state is read rather than the depth
+        // because the depth needs cs_main, which the caller holds but this
+        // does not require.
+        if (wtx != mapWallet.end() && !wtx->second.isConfirmed() && !mempool.exists(it->first)) {
+            const TxStateInactive* inactive = wtx->second.state<TxStateInactive>();
+
+            if (inactive == nullptr || !inactive->m_abandoned) {
+                displaced.push_back(static_cast<CTransaction>(wtx->second));
+            }
+        }
+
+        it = m_conflicting_block.erase(it);
+    }
+
+    return displaced;
+}
+
 void CWallet::BlockDisconnected(const CBlock& block, int height)
 {
     LOCK(cs_wallet);

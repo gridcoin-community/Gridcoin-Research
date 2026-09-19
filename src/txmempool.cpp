@@ -191,7 +191,7 @@ bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive, MemPoolRemovalR
     return true;
 }
 
-bool CTxMemPool::removeConflicts(const CTransaction &tx)
+bool CTxMemPool::removeConflicts(const CTransaction &tx, std::vector<uint256>* removed_out)
 {
     // Remove transactions which depend on inputs of tx, recursively
     LOCK(cs);
@@ -200,8 +200,21 @@ bool CTxMemPool::removeConflicts(const CTransaction &tx)
         std::map<COutPoint, CInPoint>::iterator it = mapNextTx.find(txin.prevout);
         if (it != mapNextTx.end()) {
             const CTransaction &txConflict = *it->second.ptx;
-            if (txConflict != tx)
-                remove(txConflict, true, MemPoolRemovalReason::CONFLICT);
+            if (txConflict != tx) {
+                // remove() copies what it takes out into the collector before
+                // erasing the entry, so the reference above only starts it.
+                std::vector<CTransaction> removed;
+                remove(txConflict, true, MemPoolRemovalReason::CONFLICT,
+                       removed_out != nullptr ? &removed : nullptr);
+
+                if (removed_out != nullptr) {
+                    // remove() reports each descendant before its parent;
+                    // reverse so a caller re-offering the set meets parents first.
+                    for (auto rit = removed.rbegin(); rit != removed.rend(); ++rit) {
+                        removed_out->push_back(rit->GetHash());
+                    }
+                }
+            }
         }
     }
     return true;

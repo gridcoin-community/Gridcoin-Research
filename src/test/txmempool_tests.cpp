@@ -859,4 +859,52 @@ BOOST_AUTO_TEST_CASE(pool_register_count_tracks_add_and_remove)
     BOOST_CHECK(pool.GetPoolRegisterTxs().empty());
 }
 
+BOOST_AUTO_TEST_CASE(removeconflicts_reports_the_whole_removed_set_parents_first)
+{
+    // A block transaction S spends two outpoints. O1 is held by pooled P,
+    // whose output pooled C spends; O2 is held by pooled Q. removeConflicts
+    // must take all three out and report every one of them, with P ahead of
+    // C so a caller that re-offers the set meets the parent first.
+    mempool.clear();
+
+    const CScript script = CScript() << OP_TRUE;
+    const COutPoint o1(GetRandHash(), 0);
+    const COutPoint o2(GetRandHash(), 1);
+
+    const CTransaction p = MakeTx({}, {CTxIn(o1)}, {CTxOut(3 * COIN, script)});
+    const CTransaction c = MakeTx({}, {CTxIn(COutPoint(p.GetHash(), 0))}, {CTxOut(2 * COIN, script)});
+    const CTransaction q = MakeTx({}, {CTxIn(o2)}, {CTxOut(5 * COIN, script)});
+    const CTransaction s = MakeTx({}, {CTxIn(o1), CTxIn(o2)}, {CTxOut(7 * COIN, script)});
+
+    BOOST_REQUIRE(mempool.addUnchecked(p.GetHash(), MakeEntry(p)));
+    BOOST_REQUIRE(mempool.addUnchecked(c.GetHash(), MakeEntry(c)));
+    BOOST_REQUIRE(mempool.addUnchecked(q.GetHash(), MakeEntry(q)));
+    BOOST_REQUIRE_EQUAL(mempool.size(), 3u);
+
+    std::vector<uint256> removed;
+    BOOST_CHECK(mempool.removeConflicts(s, &removed));
+
+    const std::vector<uint256> expected{p.GetHash(), c.GetHash(), q.GetHash()};
+    BOOST_CHECK(removed == expected);
+    BOOST_CHECK(!mempool.exists(p.GetHash()));
+    BOOST_CHECK(!mempool.exists(c.GetHash()));
+    BOOST_CHECK(!mempool.exists(q.GetHash()));
+    BOOST_CHECK_EQUAL(mempool.size(), 0u);
+
+    // Without a collector the removal is the same and nothing is written.
+    BOOST_REQUIRE(mempool.addUnchecked(p.GetHash(), MakeEntry(p)));
+    BOOST_CHECK(mempool.removeConflicts(s, nullptr));
+    BOOST_CHECK(!mempool.exists(p.GetHash()));
+
+    // A transaction only conflicts with others: when S itself holds the
+    // outpoints, nothing is removed and nothing is reported.
+    BOOST_REQUIRE(mempool.addUnchecked(s.GetHash(), MakeEntry(s)));
+    removed.clear();
+    BOOST_CHECK(mempool.removeConflicts(s, &removed));
+    BOOST_CHECK(removed.empty());
+    BOOST_CHECK(mempool.exists(s.GetHash()));
+
+    mempool.clear();
+}
+
 BOOST_AUTO_TEST_SUITE_END()

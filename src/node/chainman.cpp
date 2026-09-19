@@ -83,6 +83,11 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
 {
     set<string> vRereadCPIDs;
 
+    // The wallet's own transactions the disconnected blocks had conflicted.
+    // Local to the batch: re-offered below like vResurrect, and re-armed for
+    // announcement when that succeeds, since their provenance is known.
+    list<CTransaction> vReconflicted;
+
     GRC::RegistryBookmarks registries;
 
     // Count superblocks crossed during this disconnect. BeaconRegistry::Deactivate
@@ -119,6 +124,17 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
         for (auto const& tx : boost::adaptors::reverse(block.vtx))
             if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Params().Checkpoints().GetHeight())
                 vResurrect.push_front(tx);
+
+        // Queue the wallet's own transactions this block's connect had
+        // conflicted. They are not in the block -- they lost the outpoint to
+        // something that is -- so the loop above never sees them, and
+        // nothing records which block displaced them, so nothing else can
+        // tell that the reason they are conflicted has just been disconnected.
+        if (pwalletMain) {
+            for (CTransaction& tx : pwalletMain->TakeConflictedBy(pindexBest->GetBlockHash())) {
+                vReconflicted.push_back(tx);
+            }
+        }
 
         // TODO: Implement flag in CBlockIndex for mrcs?
         if (pindexBest->IsUserCPID() || !pindexBest->m_mrc_researchers.empty()) {
@@ -216,6 +232,56 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
                          missing_inputs ? ": missing inputs" : "",
                          resurrect_state.GetRejectReason().empty() ? "" : ": " + resurrect_state.GetRejectReason());
             }
+        }
+
+        // Re-evaluate the conflicts the disconnected blocks caused, after the
+        // resurrect loop so the transaction that won the outpoint gets it back
+        // first. A refusal here is the ordinary answer -- the conflict was real
+        // and still is -- and the wallet transaction stays conflicted. It
+        // succeeds when whatever displaced it went with the block: a coinstake,
+        // which is never resurrected, or a transaction whose own inputs the
+        // block created.
+        //
+        // The set can hold a parent and its descendants (removeConflicts
+        // reports what went out with each conflict), and TakeConflictedBy hands
+        // them back in no particular order, so a refusal for missing inputs is
+        // retried while the pass before it pooled something: a child then
+        // follows its parent in.
+        bool pooled_any = true;
+        while (pooled_any && !vReconflicted.empty()) {
+            pooled_any = false;
+
+            for (auto it = vReconflicted.begin(); it != vReconflicted.end();) {
+                CValidationState reconflicted_state;
+                bool missing_inputs = false;
+
+                if (AcceptToMemoryPool(mempool, *it, reconflicted_state, &missing_inputs)) {
+                    LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s is pending again",
+                             __func__, it->GetHash().ToString());
+
+                    // Every peer dropped it too when the block connected, and the
+                    // wallet's own resend covers only what the pool does NOT hold,
+                    // so its unbroadcast entry (erased on eviction) is the one path
+                    // that announces it again. Unlike vResurrect, provenance is
+                    // known here: these are the wallet's own.
+                    mempool.AddUnbroadcast(it->GetHash());
+
+                    it = vReconflicted.erase(it);
+                    pooled_any = true;
+                } else if (missing_inputs) {
+                    ++it;
+                } else {
+                    LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s stays conflicted%s",
+                             __func__, it->GetHash().ToString(),
+                             reconflicted_state.GetRejectReason().empty() ? "" : ": " + reconflicted_state.GetRejectReason());
+                    it = vReconflicted.erase(it);
+                }
+            }
+        }
+
+        for (const CTransaction& tx : vReconflicted) {
+            LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s stays conflicted: missing inputs",
+                     __func__, tx.GetHash().ToString());
         }
 
         // Record new best height (the common block) in the registries that have a backing DB. This is important
@@ -431,9 +497,20 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             }
 
             // Delete redundant memory transactions
+            std::vector<uint256> displaced;
+
             for (auto const& tx : block.vtx) {
                 mempool.remove(tx);
-                mempool.removeConflicts(tx);
+                mempool.removeConflicts(tx, &displaced);
+            }
+
+            // Tell the wallet which of its transactions this block displaced.
+            // remove() emits no validation signal, so this is the only point at
+            // which the pairing of transaction and responsible block exists;
+            // without it a disconnect cannot tell that the reason one of its
+            // own transactions is being reported conflicted has just gone away.
+            if (pwalletMain && !displaced.empty()) {
+                pwalletMain->RecordConflictedBy(displaced, pindex->GetBlockHash());
             }
 
 
@@ -468,6 +545,9 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             // NOT moved: the "delete redundant memory transactions" loop above,
             // which drops this block's own transactions from the pool. It touches
             // no persisted state, so a failed commit costs at most a re-relay.
+            // Nor the wallet's block-conflict record beside it (RecordConflictedBy):
+            // in memory only, keyed by this block, and taken back only when this
+            // block is disconnected, which a block that never connected never is.
 
             // Remove stale MRCs in the mempool that are not in this new block. Remember the MRCs were initially validated in
             // AcceptToMemoryPool. Here we just need to do a staleness check.
