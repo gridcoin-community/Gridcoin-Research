@@ -1,13 +1,15 @@
 name: CMake Functional Tests (extended)
 
-# The EXTENDED_SCRIPTS set in test/functional/test_runner.py never runs in CI:
-# the default suite skips it, and nothing else invokes it. Issue #3057.
+# The EXTENDED_SCRIPTS set in test/functional/test_runner.py does not run on
+# push: the default suite skips it, and the `functional_tests` CTest case is
+# registered without it. Issue #3057. This job runs the whole set weekly.
 #
 # Deliberately NOT on push/pull_request. These tests are opt-in because they are
 # slow and wall-clock bound -- feature_stakelimit drives the background
-# ThreadStakeMiner at ~16s block spacing via STAKE_TIMESTAMP_MASK, and is opt-in
-# by design rather than pending a fix. A schedule plus manual dispatch gives them
-# coverage without putting that on every push.
+# ThreadStakeMiner at ~16s block spacing via STAKE_TIMESTAMP_MASK, and the two
+# mining_fee tests build and relay dozens of transactions before staking a
+# block -- opt-in by design rather than pending a fix. A schedule plus manual
+# dispatch gives them coverage without putting that on every push.
 on:
   schedule:
     # 04:17 UTC on Sundays: off-peak, and weekly matches how slowly this set
@@ -24,9 +26,13 @@ env:
 
 jobs:
   # ----------------------------------------------------------------------
-  # Same daemon-only build as cmake_functional.yml, but runs the two
+  # Same daemon-only build as cmake_functional.yml, but runs the
   # EXTENDED_SCRIPTS by name instead of the `functional_tests` CTest case,
-  # which is registered without them.
+  # which is registered without them. The names come from test_runner.py's
+  # own list at run time, so a script added to that list is covered here
+  # without touching this file; the first version of this job hand-listed
+  # two scripts and ran one that had since moved to the default suite while
+  # skipping two that had since been added.
   # ----------------------------------------------------------------------
   functional-tests-extended:
     name: Functional Tests, extended (Linux)
@@ -93,75 +99,48 @@ jobs:
       # adds no signal and doubles the flake surface (a local --extended run
       # tripped two unrelated base tests that pass in isolation).
       #
-      # The GRIDCOIND / GRIDCOINCLI overrides are the ones the `functional_tests`
-      # CTest case supplies. The daemon doubles as the CLI.
-      # test_runner.py drops an unknown script name with a WARNING and
-      # exits 0 even when NO requested script survives -- so a rename or
-      # removal of either EXTENDED script would leave this weekly job green
-      # while silently running nothing. Fail red instead, before running.
-      - name: Verify the extended scripts are still registered
+      # The list is read from test_runner.py itself (importing it has no side
+      # effects; main() is behind the __main__ guard). test_runner.py drops an
+      # unknown script name with a WARNING and exits 0 even when NO requested
+      # script survives, so an empty list, or a listed script whose file is
+      # gone, fails here, red, before anything runs.
+      - name: Resolve the extended script list from test_runner.py
+        id: extended
         run: |
-          for s in feature_stakelimit.py feature_reorg.py; do
-            # Anchored to line start (whitespace only) so a commented-out
-            # list entry does not satisfy the check; the dot is escaped.
-            grep -qE "^[[:space:]]*'${s//./\\.}'" test/functional/test_runner.py || {
-              echo "::error::$s is no longer in test_runner.py's script lists; this job would silently run nothing for it."
+          scripts=$(cd test/functional && python3 -c 'import test_runner; print(" ".join(test_runner.EXTENDED_SCRIPTS))')
+          if [ -z "$scripts" ]; then
+            echo "::error::test_runner.py's EXTENDED_SCRIPTS is empty; this job would run nothing."
+            exit 1
+          fi
+          for s in $scripts; do
+            [ -f "test/functional/$s" ] || {
+              echo "::error::$s is in EXTENDED_SCRIPTS but test/functional/$s does not exist; test_runner.py would drop it with a warning."
               exit 1
             }
           done
+          echo "Extended scripts: $scripts"
+          echo "scripts=$scripts" >> "$GITHUB_OUTPUT"
 
-      - name: Run feature_stakelimit
+      # Gating. --attempts only retries the known transient daemon RPC-startup
+      # signature. The GRIDCOIND / GRIDCOINCLI overrides are the ones the
+      # `functional_tests` CTest case supplies; the daemon doubles as the CLI.
+      - name: Run the extended scripts
         env:
           GRIDCOIND: ${{ github.workspace }}/build/bin/gridcoinresearchd
           GRIDCOINCLI: ${{ github.workspace }}/build/bin/gridcoinresearchd
         run: >-
           python3 test/functional/test_runner.py
           "--configfile=${{ github.workspace }}/build/test/config.ini"
-          feature_stakelimit.py
+          ${{ steps.extended.outputs.scripts }}
           --ci --quiet --combinedlogslen=4000 --attempts=3
-
-      # Non-gating. --attempts only retries the known transient daemon
-      # RPC-startup signature; sync failures are never retried, and feature_reorg
-      # fails by sync_blocks timeout in roughly 13% of runs (see its note in
-      # EXTENDED_SCRIPTS: both nodes share the deterministic premine and can draw
-      # the same coinstake kernel). Gating a scheduled job on that would leave the
-      # workflow red about one week in eight with nobody watching, so it reports
-      # instead. Once invalidateblock or disconnectnode lands and the test returns
-      # to BASE_SCRIPTS, this step goes away.
-      - name: Run feature_reorg (non-gating, known flaky)
-        id: reorg
-        continue-on-error: true
-        env:
-          GRIDCOIND: ${{ github.workspace }}/build/bin/gridcoinresearchd
-          GRIDCOINCLI: ${{ github.workspace }}/build/bin/gridcoinresearchd
-        run: >-
-          python3 test/functional/test_runner.py
-          "--configfile=${{ github.workspace }}/build/test/config.ini"
-          feature_reorg.py
-          --ci --quiet --combinedlogslen=4000 --attempts=3
-
-      # continue-on-error makes a reorg failure invisible by default: the job
-      # stays green, GitHub sends no notification, and failure() below would
-      # stay false. Surface it as a warning annotation and a step-summary line
-      # so the run page says what happened without opening the step list.
-      - name: Report a feature_reorg failure
-        if: steps.reorg.outcome == 'failure'
-        run: |
-          echo "::warning title=feature_reorg failed (non-gating)::known ~13% sync_blocks flake; debug.log artifact uploaded"
-          echo "feature_reorg FAILED (non-gating; known ~13% sync_blocks flake). Debug logs are in the run artifacts." >> "$GITHUB_STEP_SUMMARY"
 
       # On failure, keep the per-node datadirs (each holds <chain>/debug.log) so an
       # intermittent flake -- which often vanishes on the next run -- leaves a
       # debuggable artifact instead of only the truncated console log. This matters
       # more here than on the default suite: a scheduled run has no author watching
       # it.
-      #
-      # failure() reads step CONCLUSIONS, and continue-on-error forces the
-      # reorg step's conclusion to success -- so the reorg outcome must be
-      # checked explicitly or the artifact vanishes in exactly the scenario
-      # this step exists for.
       - name: Upload functional test logs on failure
-        if: failure() || steps.reorg.outcome == 'failure'
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: functional-extended-test-logs-${{ github.run_id }}
