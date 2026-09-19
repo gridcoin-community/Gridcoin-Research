@@ -650,6 +650,75 @@ Key elements:
   (recursive mutex) when a function that takes `LOCK(cs_main)` is called from code
   that already holds `cs_main`.
 
+### Known DEBUG_LOCKORDER reports that are not deadlocks
+
+The checker records a `TRY_LOCK` acquisition in the lock-order graph exactly as
+it records a blocking one: `push_lock()` in `src/sync.cpp` never consults the
+try flag, which only decorates the printed stack with `(TRY)`. An ordering
+whose second step is always a try-lock is therefore reported as a potential
+deadlock even though the thread holding the first lock never waits for the
+second, and a deadlock needs every thread in the cycle to wait.
+
+The net layer produces three such reports on a `DEBUG_LOCKORDER` daemon as soon
+as it exchanges messages with a peer, so they show up in any functional test
+that connects two nodes (they do not appear in the unit suite, which is what the
+Sanitizers CI job runs under the checker):
+
+```
+Conflict: 'm_nodes_mutex' and 'pnode->cs_vRecvMsg' acquired in inconsistent orders.
+Conflict: 'pnode->cs_vSend' and 'pnode->cs_vRecvMsg' acquired in inconsistent orders.
+Conflict: 'm_nodes_mutex' and 'cs_vRecvMsg' acquired in inconsistent orders.
+```
+
+The two sides are the socket handler (`grc-net`) and the message handler
+(`grc-msghand`) in `src/net.cpp`:
+
+- The socket handler holds `m_nodes_mutex` while it decides whether a
+  disconnected node can be deleted, and takes that node's `cs_vSend`,
+  `cs_vRecvMsg` and `cs_inventory` with `TRY_LOCK`, skipping the node if any is
+  contended. Its receive and send passes run on a snapshot of the node list with
+  `m_nodes_mutex` released and again only `TRY_LOCK` the per-node locks;
+  `CNode::CloseSocketDisconnect()` try-locks `cs_vRecvMsg` to drain the buffer.
+  Every `(TRY)` entry in the reports' "Current" stacks is one of these.
+- The message handler try-locks `cs_vRecvMsg` and then, inside
+  `ProcessMessages()`, takes `cs_main`, `m_nodes_mutex` (through the `CConnman`
+  node-access API: `CheckIncomingNonce`, `ForEachNode`, `GetNodeCount`,
+  `RelayAddress`) and `cs_vSend` (through `PushMessage`) with blocking locks.
+  That is the "Historical" order in the reports, and it is the one that can
+  wait. It then try-locks `cs_main` and, only if that succeeded, try-locks
+  `cs_vSend` around `SendMessages()`.
+
+No cycle can close, because of two invariants the net code keeps:
+
+1. **A thread that holds `m_nodes_mutex` or `cs_main` takes `cs_vRecvMsg` only
+   with `TRY_LOCK`.** The only blocking `LOCK(cs_vRecvMsg)` in the tree is the
+   VERACK handler in `src/net_processing.cpp`, which runs inside
+   `ProcessMessages()` under the same lock, so it is a re-entrant acquisition
+   of a recursive mutex, never a wait.
+2. **A thread that holds `cs_vSend` never waits for `m_nodes_mutex` or
+   `cs_main`.** `SendMessages()` and `SocketSendData()` take neither, and
+   `PushMessage()` holds `cs_vSend` only around the message framing. The
+   message handler acquires `cs_main` by `TRY_LOCK` *before* `cs_vSend`, which
+   is what retired the old `sendalert` deadlock: the RPC thread blocks on
+   `cs_vSend` in `CAlert::RelayTo()` while holding `m_nodes_mutex`, and the
+   handler no longer holds `cs_vSend` while waiting for anything.
+
+The blocking nestings that do exist, `cs_vSend` under `m_nodes_mutex` in the
+alert relay and under `cs_main` plus `m_nodes_mutex` in the getblocks fan-out
+of `src/node/chainman.cpp`, are therefore one-directional: nothing holds
+`cs_vSend` and waits the other way. Keep both invariants when touching the net
+code; a change that turns one of the socket handler's `TRY_LOCK`s into a
+`LOCK`, or takes `m_nodes_mutex` from inside `SendMessages()`, creates the
+deadlock the reports describe.
+
+These reports will persist until the net refactor (the CConnman and
+PeerManager backport line that #2558 started) replaces the scanning loops with
+per-node message queues. Do not silence them by exempting try-locks in the
+checker: the same code path may one day be reached with a blocking lock, and
+the report is what would show it. Recognise them by the `(TRY)` markers on the
+socket-handler side and the two thread names; a report between these locks
+whose "Current" stack shows a blocking acquisition is a real finding.
+
 Re-architecting the core code so there are better-defined interfaces
 between the various components is a goal, with any necessary locking
 done by the components (e.g. see the self-contained `CKeyStore` class (in `src/keystore.h`)
