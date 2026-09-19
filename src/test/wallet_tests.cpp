@@ -889,6 +889,56 @@ BOOST_AUTO_TEST_CASE(importprivkey_requires_an_unlocked_wallet)
     expect_unlock_needed("re-import of a held key");
 }
 
+BOOST_AUTO_TEST_CASE(dumpprivkey_staking_only_unlock_is_refused_by_the_shared_check)
+{
+    // Same in-memory encrypted wallet as the case above. dumpprivkey used to
+    // carry its own fWalletUnlockStakingOnly check below the address parsing;
+    // EnsureWalletIsUnlocked(), its first statement, already throws for that
+    // state, so the second check could not be reached. This case pins that the
+    // refusal comes from the shared helper, message and all, and that the
+    // ordinary unlock exports the key.
+    CWallet locked;
+    struct SwapWallet {
+        CWallet* m_saved;
+        explicit SwapWallet(CWallet* replacement) : m_saved(pwalletMain) { pwalletMain = replacement; }
+        ~SwapWallet() { pwalletMain = m_saved; }
+    } swap(&locked);
+
+    CKey key;
+    key.MakeNewKey(true);
+    const CKeyID id = key.GetPubKey().GetID();
+    {
+        LOCK(locked.cs_wallet);
+        BOOST_REQUIRE(locked.AddKey(key));
+    }
+    const SecureString passphrase("dumpprivkey-test");
+    BOOST_REQUIRE(locked.EncryptWallet(passphrase));
+    locked.Lock();
+    BOOST_REQUIRE(locked.Unlock(passphrase));
+
+    // The staking-only flag is process-global; put it back however the case ends.
+    struct StakingOnlyFlag {
+        bool m_saved;
+        StakingOnlyFlag() : m_saved(fWalletUnlockStakingOnly) { fWalletUnlockStakingOnly = true; }
+        ~StakingOnlyFlag() { fWalletUnlockStakingOnly = m_saved; }
+    } staking_only;
+
+    UniValue params(UniValue::VARR);
+    params.push_back(EncodeDestination(id));
+
+    try {
+        dumpprivkey(params);
+        BOOST_FAIL("dumpprivkey did not throw on a staking-only unlock");
+    } catch (const UniValue& err) {
+        BOOST_CHECK_EQUAL(find_value(err, "code").get_int(), RPC_WALLET_UNLOCK_NEEDED);
+        // EnsureWalletIsUnlocked()'s wording, not the RPC's former own one.
+        BOOST_CHECK_EQUAL(find_value(err, "message").get_str(), "Error: Wallet is unlocked for staking only.");
+    }
+
+    fWalletUnlockStakingOnly = false;
+    BOOST_CHECK_EQUAL(dumpprivkey(params).get_str(), EncodeSecret(key));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(wallet_integration_tests)
