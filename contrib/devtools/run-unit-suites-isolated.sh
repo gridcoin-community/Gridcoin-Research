@@ -16,7 +16,10 @@
 #   contrib/devtools/run-unit-suites-isolated.sh --random <seed> <path/to/test_gridcoin>
 #
 # The binary is run from a temporary directory: it writes banlist.dat and
-# similar files into its working directory.
+# similar files into its working directory. Every invocation passes
+# --use_alt_stack=no, as the ctest registration does: src/test/CMakeLists.txt
+# explains why the pre-installed alternate stack and that switch are both
+# required on musl.
 
 export LC_ALL=C
 set -euo pipefail
@@ -43,18 +46,21 @@ cd "$workdir"
 
 if [ -n "$seed" ]; then
     echo "== test_gridcoin --random=$seed"
-    "$bin" --random="$seed"
+    "$bin" --use_alt_stack=no --random="$seed"
     exit $?
 fi
 
 # --list_content prints the tree to stderr: a top-level suite is an unindented
 # name ending in '*' (enabled); its cases are indented beneath it.
-mapfile -t suites < <("$bin" --list_content 2>&1 | sed -n 's/^\([A-Za-z0-9_]*\)\*$/\1/p')
+# Captured first: a listing that fails part-way stops the script here (set -e
+# applies to the assignment) instead of running whatever subset was printed.
+listing="$("$bin" --list_content 2>&1)"
+mapfile -t suites < <(printf '%s\n' "$listing" | sed -n 's/^\([A-Za-z0-9_]*\)\*$/\1/p')
 [ "${#suites[@]}" -gt 0 ] || { echo "no suites listed by $bin" >&2; exit 2; }
 
 failed=()
 for suite in "${suites[@]}"; do
-    if "$bin" --run_test="$suite" > "$suite.log" 2>&1; then
+    if "$bin" --use_alt_stack=no --run_test="$suite" > "$suite.log" 2>&1; then
         echo "ok   $suite"
     else
         echo "FAIL $suite"

@@ -374,7 +374,10 @@ jobs:
             echo "Reproduce with \`test_gridcoin --random=$seed\` (or \`contrib/devtools/run-unit-suites-isolated.sh --random $seed <binary>\`)."
             echo
             echo '```'
-            grep -E "error|fail|leak" shuffled.log | tail -n 40
+            # Best effort: a crash may leave a log that matches nothing, and
+            # an empty excerpt must not fail this step (the job runs with
+            # pipefail) or skip the artifact upload after it.
+            grep -E "error|fail|leak" shuffled.log | tail -n 40 || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
