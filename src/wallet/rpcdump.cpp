@@ -310,13 +310,17 @@ const RPCHelpMan& dumpprivkey_helpman() { return dumpprivkey_help; }
 
 UniValue dumpprivkey(const UniValue& params)
 {
+    // Under cs_wallet before the unlock-state check, as importprivkey is
+    // (#3332): walletpassphrase and walletlock change the lock state and the
+    // staking-only flag under cs_wallet, so the check and the key access below
+    // are one step rather than a window another RPC thread can change.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     EnsureWalletIsUnlocked();
 
     CTxDestination address = DecodeDestination(params[0].get_str());
     if (!IsValidDestination(address))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CKeyID* keyID = std::get_if<CKeyID>(&address);
     if (!keyID)
