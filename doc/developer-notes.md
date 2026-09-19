@@ -659,6 +659,19 @@ whose second step is always a try-lock is therefore reported as a potential
 deadlock even though the thread holding the first lock never waits for the
 second, and a deadlock needs every thread in the cycle to wait.
 
+This is the checker's oldest known limitation, not a discovery. Bitcoin Core's
+checker, which this one descends from, exempted a try-lock as the second lock
+from December 2014 (bitcoin/bitcoin#5515) and removed that exemption in
+February 2017 (bitcoin/bitcoin#9674, "Always enforce strict lock ordering (try
+or not)") as a discipline choice: upstream's code was by then close to using
+the canonical order inside try-locks as well, so a try-lock in the reverse
+order is reported as a violation of the hierarchy, not because it can wait.
+Upstream still reports them that way, and so does this tree. Gridcoin's #779
+(December 2017) is this very report on the same locks under their pre-CConnman
+names, `cs_vNodes`, `pto->cs_vSend (TRY)` and `cs_main (TRY)`; it aborted the
+client under `--enable-debug` for two years and is why the checker here was
+changed in 2021 (594658bb0) to report and continue rather than assert.
+
 The net layer produces three such reports on a `DEBUG_LOCKORDER` daemon as soon
 as it exchanges messages with a peer, so they show up in any functional test
 that connects two nodes (they do not appear in the unit suite, which is what the
