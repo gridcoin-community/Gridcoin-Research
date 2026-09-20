@@ -79,6 +79,32 @@ void static InvalidChainFound(CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(c
       DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
 }
 
+//! \brief Did this wallet author \p tx, answered so that it cannot escape.
+//!
+//! Only the wallet's own transactions are worth re-announcing after a reorg, and
+//! only they may be exposed to the unbroadcast machinery at all: a transaction
+//! merely PAID TO us is in mapWallet too, and re-announcing someone else's
+//! spend, or listing it as ours, is not this node's business.
+//!
+//! IsFromMe sums a per-input debit and throws when the running total leaves
+//! MoneyRange (CWallet::GetDebit). The callers below run after TxnCommit inside
+//! a half-applied disconnect, where ReorganizeChain handles a false return but
+//! has no handler for a throw -- one would unwind past its fatal-error guard and
+//! leave the registries desynced from the tip. So an unanswerable question is
+//! answered "no", which costs at most one missed re-announcement.
+static bool AuthoredByWallet(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    if (!pwalletMain) return false;
+
+    try {
+        return pwalletMain->IsFromMe(tx);
+    } catch (const std::exception& e) {
+        LogPrintf("WARN: %s: cannot determine authorship of %s (%s); not re-announcing it",
+                  __func__, tx.GetHash().ToString(), e.what());
+        return false;
+    }
+}
+
 static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned& cnt_dis, CBlockIndex* pcommon) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     set<string> vRereadCPIDs;
@@ -217,16 +243,30 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
         // batch still pending, the transaction's own index entry is still on
         // disk (so ContainsTx refuses it) and its inputs are still marked spent.
         // Every resurrection was silently refused that way.
-        // Note: these are re-accepted but NOT re-added to the unbroadcast set --
-        // provenance ("was this ours?") is not tracked here. A locally-originated
-        // non-wallet tx (e.g. sendrawtransaction/HTLC) that had briefly confirmed
-        // and is then resurrected by a reorg will therefore not be rebroadcast by
-        // the unbroadcast machinery; wallet-originated txs remain covered by
-        // ResendWalletTransactions. Acceptable given how rare a same-tx reorg is.
+        //
+        // A resurrected transaction left the peers' pools too when the block
+        // that carried it connected, so something has to offer it again, and
+        // the wallet's periodic resend covers neither outcome here.
+        // CWallet::BlockDisconnected has already run for every transaction in
+        // these blocks, above, and marked each one inactive, because the pool
+        // could not hold it before TxnCommit. A resurrection that SUCCEEDS is
+        // promoted back out of inactive by the mempool-added signal, and then
+        // sits at depth 0, which the resend skips because it selects only
+        // depth -1. One that FAILS stays inactive, and RelayWalletTransaction
+        // refuses inactive outright. So the unbroadcast entry is the only thing
+        // that announces a successful resurrection.
+        //
+        // Reannounce, not the default: peers have certainly seen these -- they
+        // were in a block -- so the entry must not open the cancel gate.
         for( CTransaction& tx : vResurrect) {
             CValidationState resurrect_state;
             bool missing_inputs = false;
-            if (!AcceptToMemoryPool(mempool, tx, resurrect_state, &missing_inputs)) {
+
+            if (AcceptToMemoryPool(mempool, tx, resurrect_state, &missing_inputs)) {
+                if (AuthoredByWallet(tx)) {
+                    mempool.AddUnbroadcast(tx.GetHash(), UnbroadcastReason::Reannounce);
+                }
+            } else {
                 LogPrint(BCLog::LogFlags::MEMPOOL, "%s: transaction %s not resurrected%s%s",
                          __func__, tx.GetHash().ToString(),
                          missing_inputs ? ": missing inputs" : "",
@@ -236,11 +276,23 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
 
         // Re-evaluate the conflicts the disconnected blocks caused, after the
         // resurrect loop so the transaction that won the outpoint gets it back
-        // first. A refusal here is the ordinary answer -- the conflict was real
-        // and still is -- and the wallet transaction stays conflicted. It
-        // succeeds when whatever displaced it went with the block: a coinstake,
-        // which is never resurrected, or a transaction whose own inputs the
-        // block created.
+        // first. It succeeds when whatever displaced it went with the block: a
+        // coinstake, which is never resurrected, or a transaction whose own
+        // inputs the block created.
+        //
+        // A refusal leaves the transaction out of THIS node's pool, and the log
+        // names which refusal it was rather than assuming. The expected one is
+        // txn-mempool-conflict: the displacing transaction is pooled again, so
+        // the conflict was real and still is. A full pool or a fee rule lands
+        // here too, and neither means the conflict survived.
+        //
+        // What a refusal does NOT do is strand the transaction. These never
+        // became inactive: removeConflicts reaches the pool through remove(),
+        // which emits no validation signal, so CWallet's CONFLICT arm never
+        // ran and the entry still carries its in-mempool state. It reads
+        // depth -1, RelayWalletTransaction does not skip it, and the wallet's
+        // periodic resend keeps announcing it. The cost of a refusal is that
+        // this node cannot mine it, since the miner builds from the pool.
         //
         // The set can hold a parent and its descendants (removeConflicts
         // reports what went out with each conflict), and TakeConflictedBy hands
@@ -259,12 +311,18 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
                     LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s is pending again",
                              __func__, it->GetHash().ToString());
 
-                    // Every peer dropped it too when the block connected, and the
-                    // wallet's own resend covers only what the pool does NOT hold,
-                    // so its unbroadcast entry (erased on eviction) is the one path
-                    // that announces it again. Unlike vResurrect, provenance is
-                    // known here: these are the wallet's own.
-                    mempool.AddUnbroadcast(it->GetHash());
+                    // Every peer dropped it too when the block connected, so the
+                    // unbroadcast entry (erased on any pool exit) is what puts it
+                    // back on the wire promptly. Reannounce, not the default:
+                    // peers held this one before the block displaced it, so
+                    // cancelling it locally would cancel nothing.
+                    //
+                    // Authorship, not mere membership: TakeConflictedBy draws from
+                    // mapWallet, which holds transactions merely PAID TO us as
+                    // well, and someone else's spend is not ours to re-announce.
+                    if (AuthoredByWallet(*it)) {
+                        mempool.AddUnbroadcast(it->GetHash(), UnbroadcastReason::Reannounce);
+                    }
 
                     it = vReconflicted.erase(it);
                     pooled_any = true;

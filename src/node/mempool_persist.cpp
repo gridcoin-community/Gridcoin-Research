@@ -101,7 +101,15 @@ bool DumpUnbroadcast(const CTxMemPool& pool, const fs::path& dump_path)
     {
         LOCK(pool.cs);
         entries.reserve(pool.m_unbroadcast.size());
-        for (const uint256& hash : pool.m_unbroadcast) {
+        for (const auto& [hash, reason] : pool.m_unbroadcast) {
+            // NeverSent only. A Reannounce entry says peers have already seen
+            // the transaction and a reorg took it out of their pools, which is
+            // a statement about this session's chain and does not survive a
+            // restart. Worse, LoadUnbroadcast re-adds with the default reason,
+            // so persisting one would quietly launder it into NeverSent and
+            // re-open the cancel gate this distinction exists to keep shut.
+            if (reason != UnbroadcastReason::NeverSent) continue;
+
             auto it = pool.mapTx.find(hash);
             if (it != pool.mapTx.end()) {
                 entries.emplace_back(it->second.GetTx(), it->second.GetTime());

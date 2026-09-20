@@ -3045,6 +3045,10 @@ static const RPCHelpMan cancelunbroadcasttransaction_help{
     "the network -- a peer that already has it will never ask. In particular a\n"
     "transaction submitted with sendrawtransaction is marked unbroadcast even if it is\n"
     "already circulating. Confirm with getrawmempool on another node when it matters.\n"
+    "\nOne case is known rather than merely unproven, and is refused outright: a\n"
+    "transaction put back in the pool by a chain reorganization. It still awaits\n"
+    "announcement, so getmempoolentry reports it as unbroadcast, but peers have\n"
+    "certainly seen it and cancelling it locally would only release its inputs.\n"
     "\nRefuses if any other pooled transaction spends this one. Cancel those first;\n"
     "removing a parent while its children remain would leave them unspendable in the\n"
     "pool, and a child may have propagated even when its parent did not. Wallet\n"
@@ -3091,11 +3095,23 @@ UniValue cancelunbroadcasttransaction(const UniValue& params)
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not in mempool");
         }
 
-        if (!mempool.IsUnbroadcastTx(hash)) {
+        // One lookup, so the refusal and the reason given for it cannot disagree.
+        const std::optional<UnbroadcastReason> unbroadcast_reason = mempool.GetUnbroadcastReason(hash);
+
+        if (unbroadcast_reason != std::optional{UnbroadcastReason::NeverSent}) {
+            // Two different refusals, so say which. A transaction re-pooled by a
+            // reorg is still "unbroadcast" in the sense that it wants announcing,
+            // but peers demonstrably HAD it -- it was in a block, or in their
+            // pools -- so cancelling it here cancels nothing and would hand the
+            // inputs back while the network can still mine the original.
             throw JSONRPCError(RPC_INVALID_PARAMETER,
-                "Transaction is propagating: at least one peer has already requested it, so "
-                "removing it here would not cancel it -- peers hold it and would re-announce "
-                "it. Only a still-unbroadcast transaction can be cancelled.");
+                unbroadcast_reason
+                    ? "Transaction was re-pooled by a chain reorganization, so peers have "
+                      "already seen it. Removing it here would not cancel it, and would "
+                      "release its inputs while the network can still confirm the original."
+                    : "Transaction is propagating: at least one peer has already requested it, so "
+                      "removing it here would not cancel it -- peers hold it and would re-announce "
+                      "it. Only a still-unbroadcast transaction can be cancelled.");
         }
 
         // Refuse rather than cascade. A recursive removal could drop a child that HAS

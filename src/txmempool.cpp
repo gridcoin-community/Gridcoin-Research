@@ -148,7 +148,8 @@ void CTxMemPool::eraseIndexes(const CTxMemPoolEntry& entry)
     m_eviction_index.erase(EvictionKeyFor(entry));
 
     // A tx leaving the pool (confirmed, evicted, or conflicted) is no longer ours
-    // to rebroadcast.
+    // to rebroadcast. This is the only thing that retires a Reannounce entry,
+    // which no getdata will ever clear.
     m_unbroadcast.erase(entry.GetTx().GetHash());
 }
 
