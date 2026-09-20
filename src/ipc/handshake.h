@@ -62,8 +62,26 @@ namespace ipc {
 //! talks to a new GUI until the About dialog opens and calls a method the node
 //! does not serve; the minor turns that into the "Update the node" hard fail at
 //! connect instead.
-constexpr uint32_t IPC_SCHEMA_MAJOR = 3;
-constexpr uint32_t IPC_SCHEMA_MINOR = 3;
+//!
+//! Major 4: SendCoinsStatus gained `WalletUnlockedForStakingOnly`, so a
+//! staking-only wallet's refusal to build a spend can be reported as itself
+//! rather than as a generic creation failure.
+//!
+//! Appended, so it renumbers nothing -- and that is still not enough to make it
+//! additive, which is why this is a major and not a minor. The enum crosses as
+//! a raw integer with an unchecked cast on receipt, and the GUI's switch over
+//! it deliberately carries no `default:` so that -Wswitch flags a new
+//! enumerator at compile time. An already-shipped GUI therefore has no arm for
+//! the new value and falls through to `assert(false)`, which is live in release
+//! because the build strips NDEBUG globally. A minor would have let that
+//! pairing connect (an older GUI against a newer node is only a soft warning),
+//! and the first staking-only send would abort the GUI. The major turns it into
+//! the "use matching builds" refusal at connect, which is the honest answer:
+//! the node can produce a value this GUI cannot name.
+//!
+//! The minor restarts at 0, as it did at major 3.
+constexpr uint32_t IPC_SCHEMA_MAJOR = 4;
+constexpr uint32_t IPC_SCHEMA_MINOR = 0;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 
 //! Domain-separation tag hashed into the node identity token. Bump the suffix if

@@ -1054,7 +1054,11 @@ void SelectFinalInputs(CWallet& wallet, CWalletTx& tx,
 
     const CAmount burn_fee = mock_tx.vContracts.back().RequiredBurnAmount();
     CReserveKey reserve_key(&wallet); // unused
-    CAmount out_applied_fee;
+    // Initialised, not left to CreateTransaction. The failure branch below
+    // reads it, and CreateTransaction can now refuse before it seeds the fee
+    // (a staking-only wallet returns at the scope check), which would make that
+    // read indeterminate.
+    CAmount out_applied_fee = 0;
 
     // Pre-select fee-paying inputs largest-first (or honor the user's
     // explicit outpoint). This avoids CreateTransaction's default

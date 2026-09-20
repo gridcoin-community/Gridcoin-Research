@@ -890,6 +890,74 @@ BOOST_AUTO_TEST_CASE(importprivkey_requires_an_unlocked_wallet)
 }
 
 //!
+//! The staking-only restriction is enforced in the transaction builder every
+//! spend funnels through, not only at the entry points that remember to ask.
+//!
+//! Discriminates on nFeeRet, which CreateTransaction overwrites once it starts
+//! building. A staking-only wallet must return before that, so the caller's
+//! sentinel survives; a fully unlocked one must get past the check and clobber
+//! it, even though this coinless wallet then fails to fund. Asserting only the
+//! bool would prove nothing, since both cases return false.
+//!
+//! This is the regression test for a graphical send while unlocked for staking
+//! only: that path reaches the wallet through interfaces::Wallet, which had no
+//! check of its own, so the transaction was built, signed and committed.
+//!
+BOOST_AUTO_TEST_CASE(the_transaction_builder_refuses_a_staking_only_wallet)
+{
+    CWallet staking;
+    struct SwapWallet {
+        CWallet* m_saved;
+        explicit SwapWallet(CWallet* replacement) : m_saved(pwalletMain) { pwalletMain = replacement; }
+        ~SwapWallet() { pwalletMain = m_saved; }
+    } swap(&staking);
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(staking.cs_wallet);
+        BOOST_REQUIRE(staking.AddKey(key));
+    }
+
+    const SecureString passphrase("builder-scope-test");
+    BOOST_REQUIRE(staking.EncryptWallet(passphrase));
+    staking.Lock();
+
+    CScript destination;
+    destination.SetDestination(key.GetPubKey().GetID());
+    const std::vector<std::pair<CScript, int64_t>> recipients{{destination, CENT}};
+
+    constexpr int64_t sentinel = -987654321;
+
+    {
+        BOOST_REQUIRE(staking.Unlock(passphrase, UnlockScope::StakingOnly));
+        BOOST_REQUIRE(staking.IsUnlockedForStakingOnly());
+
+        CWalletTx wtx;
+        CReserveKey reservekey(&staking);
+        int64_t fee = sentinel;
+        BOOST_CHECK(!staking.CreateTransaction(recipients, wtx, reservekey, fee));
+        BOOST_CHECK_EQUAL(fee, sentinel); // returned before building
+    }
+
+    {
+        staking.Lock();
+        BOOST_REQUIRE(staking.Unlock(passphrase, UnlockScope::Full));
+        BOOST_REQUIRE(!staking.IsUnlockedForStakingOnly());
+
+        CWalletTx wtx;
+        CReserveKey reservekey(&staking);
+        int64_t fee = sentinel;
+        // Still false, because the wallet has no coins -- but it got far enough
+        // to set the fee, which the staking-only case never reaches.
+        BOOST_CHECK(!staking.CreateTransaction(recipients, wtx, reservekey, fee));
+        BOOST_CHECK(fee != sentinel);
+    }
+
+    staking.Lock();
+}
+
+//!
 //! Lock and restriction are one value, so no reader can see an unlocked wallet
 //! carrying the previous unlock's restriction. Pins each transition, including
 //! that a lock clears the restriction and a failed unlock moves nothing.

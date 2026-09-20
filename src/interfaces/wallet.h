@@ -194,6 +194,15 @@ enum class SendCoinsStatus
     //! ThreadSafeAskFee modal, which used to block inside
     //! LOCK2(cs_main, cs_wallet) (doc/multiprocess_design.md section 4.5).
     FeeConfirmationRequired,
+    //! The wallet is unlocked, but for staking only, so it will not build a
+    //! spend. Distinct from TransactionCreationFailed because the user can act
+    //! on it: unlock fully and retry. Nothing was committed.
+    //!
+    //! APPENDED, not inserted. This enum crosses IPC as its integer value
+    //! (src/ipc/capnp/wallet.capnp), so adding a member anywhere but the end
+    //! renumbers the ones after it and a mixed-version pair would read the
+    //! wrong status. New members go here.
+    WalletUnlockedForStakingOnly,
 };
 
 //! Result of Wallet::sendCoins.
@@ -276,6 +285,16 @@ public:
     //! Lock the wallet. This also clears the staking-only restriction, which
     //! belongs to the unlock rather than outliving it.
     virtual bool lockWallet() = 0;
+
+    //! Narrow the current unlock to staking only, without a passphrase.
+    //!
+    //! Narrowing only: it removes permission and never adds it, so it is safe
+    //! to expose. Used to hand back an elevation taken for one operation on a
+    //! wallet the user had left unlocked for staking; locking instead would
+    //! silently stop staking. False when there was nothing to narrow, which
+    //! covers both a locked wallet and an unencrypted one -- do not read false
+    //! as "it was locked".
+    virtual bool restrictToStakingOnly() = 0;
 
     //! Unlock the wallet; on success the staking-only preference is set to
     //! staking_only (a full unlock clears a stale staking-only restriction).

@@ -3619,7 +3619,7 @@ bool CWallet::FundTransaction(CTransaction& tx, int64_t& nFeeRet, int& nChangePo
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins_in,
                                 CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
                                 const CCoinControl* coinControl, bool change_back_to_input_address,
-                                int64_t nEnforcedMinFee)
+                                int64_t nEnforcedMinFee, bool permitted_while_staking_only)
 {
     int64_t nValueOut = 0;
     int64_t message_fee = 0;
@@ -3649,6 +3649,27 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
     {
         LOCK2(cs_main, cs_wallet);
+
+        // The staking-only restriction, enforced where every spend must pass
+        // rather than at each entry point that remembers to ask.
+        //
+        // All five CreateTransaction overloads funnel here, so this covers the
+        // RPC surface, the GUI's interfaces::Wallet path, voting, contracts and
+        // PSGT alike. It was previously checked only by EnsureWalletIsUnlocked,
+        // SendMoney and two sites in rawtransaction.cpp, which left the
+        // interface send path unguarded: a GUI send while unlocked for staking
+        // only was built, signed and committed. CreateCoinStake does NOT build
+        // through here, so staking itself is unaffected.
+        //
+        // Inside the lock, not at function entry. GetUnlockScope() takes and
+        // releases cs_KeyStore, so a check made before this LOCK2 could pass on
+        // a fully unlocked wallet that another thread then locks and re-unlocks
+        // staking-only -- Unlock() takes cs_wallet, so holding it here is what
+        // makes the check and the signing atomic with respect to that. It still
+        // precedes nFeeRet below, which the caller's failure branch may read.
+        if (IsUnlockedForStakingOnly() && !permitted_while_staking_only) {
+            return error("%s: wallet is unlocked for staking only", __func__);
+        }
 
         // txdb must be opened before the mapWallet lock
         CTxDB txdb("r");
@@ -3924,19 +3945,23 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
-    int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl, bool change_back_to_input_address)
+    int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl, bool change_back_to_input_address,
+    bool permitted_while_staking_only)
 {
     // Initialize setCoins empty to let CreateTransaction choose via SelectCoins...
     set<pair<const CWalletTx*,unsigned int>> setCoins;
 
-    return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl, change_back_to_input_address);
+    return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl,
+                             change_back_to_input_address, /*nEnforcedMinFee=*/0, permitted_while_staking_only);
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
-    int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address)
+    int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address,
+    bool permitted_while_staking_only)
 {
     int nChangePosRet = -1;
-    return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl, change_back_to_input_address);
+    return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl,
+                             change_back_to_input_address, permitted_while_staking_only);
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins,
@@ -4028,7 +4053,10 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew)
 {
     CReserveKey reservekey(this);
-    int64_t nFeeRequired;
+    // Initialised: the failure branch below reads it, and CreateTransaction can
+    // now return before seeding it. The checks above do not rule that out,
+    // since the scope can change before the builder takes cs_wallet.
+    int64_t nFeeRequired = 0;
 
     if (IsLocked())
     {

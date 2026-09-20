@@ -137,6 +137,7 @@ public:
     }
 
     bool lockWallet() override { return m_wallet->Lock(); }
+    bool restrictToStakingOnly() override { return m_wallet->RestrictToStakingOnly(); }
 
     bool unlockWallet(const SecureString& passphrase, bool staking_only) override
     {
@@ -514,6 +515,19 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
                                       const std::optional<WalletCoinControl>& coin_control,
                                       int64_t accepted_fee)
 {
+    // Refuse a staking-only wallet here, not twelve CreateTransaction calls
+    // later. The builder refuses too, which is what makes the restriction
+    // structural, but it returns before seeding the caller's fee: the
+    // subtract-fee retry below would then run its whole loop against a zero
+    // fee and the failure branch could blame the user's balance for something
+    // that is not about their balance.
+    //
+    // Nothing else on this path guards the unlock: this layer is what the GUI
+    // uses, and EnsureWalletIsUnlocked is RPC-only.
+    if (m_wallet->IsUnlockedForStakingOnly()) {
+        return {SendCoinsStatus::WalletUnlockedForStakingOnly};
+    }
+
     // Reconstruct the wallet-side CCoinControl from the boundary value type
     // (the raw class does not cross the interface).
     CCoinControl ctrl;

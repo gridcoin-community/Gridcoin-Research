@@ -499,15 +499,33 @@ public:
                          std::string& strFailReason, const CCoinControl* coinControl);
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
                            int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl = nullptr,
-                           bool change_back_to_input_address = false);
+                           bool change_back_to_input_address = false, bool permitted_while_staking_only = false);
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
-                           int64_t& nFeeRet, const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false);
+                           int64_t& nFeeRet, const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,
+                           bool permitted_while_staking_only = false);
     //! nEnforcedMinFee, when nonzero, sets a fee floor above the normal size-based fee
     //! (e.g. splitunspent's per-piece fee). The fee can still rise above it if required.
+    //!
+    //! Note the asymmetry below is deliberate, not an oversight: only the
+    //! overloads the exempt caller actually uses carry
+    //! permitted_while_staking_only. The setCoins overload without
+    //! nChangePosRet is reached only from consolidateunspent and splitunspent,
+    //! which are user-initiated spends that must stay refused, so giving it the
+    //! parameter would only widen the ways to reach the exemption.
+    //! \p permitted_while_staking_only exempts a caller from the staking-only
+    //! refusal. Exactly one caller passes it: the hourly automated beacon
+    //! renewal job, which runs unattended on exactly the wallets a researcher
+    //! unlocks for staking, and whose refusal would let their beacon expire
+    //! silently at six months.
+    //!
+    //! It is NOT "contract transactions are harmless". The GUI contract surface
+    //! has no unlock guard of its own and addkey gates only on IsLocked(), so
+    //! widening this to all contracts would re-open the very paths this check
+    //! exists to close.
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
                            const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,
-                           int64_t nEnforcedMinFee = 0);
+                           int64_t nEnforcedMinFee = 0, bool permitted_while_staking_only = false);
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl = nullptr,
                            bool change_back_to_input_address = false, int64_t nEnforcedMinFee = 0);

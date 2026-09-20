@@ -262,6 +262,25 @@ public:
         // The GUI only reaches submit() from the ELIGIBLE state (never locked),
         // but enforce the interface contract here so a future or out-of-process
         // caller cannot broadcast an unsigned claim.
+        // Trust-boundary guard, before any signing work. The GUI asks for an
+        // elevation before submitting (MRCRequestPage::submitMRC), which is the
+        // friendly answer for a researcher who unlocked for staking: the claim
+        // proceeds and the staking-only scope is handed back afterwards. The
+        // node must not rely on the client having done that.
+        //
+        // Placed with the other lock check rather than at the send, so a
+        // refusal costs nothing: CreateMRC signs the claim, twice on the fee
+        // path, and there is no reason to do that work only to refuse.
+        //
+        // Note MRCModel cannot detect this state on its own -- WalletModel's
+        // status enum has no staking-only value, so such a wallet reads as
+        // plain Unlocked and the submit button stays enabled.
+        if (m_wallet->IsUnlockedForStakingOnly()) {
+            res.error = "The wallet is unlocked for staking only. Unlock it fully to submit a "
+                        "manual research claim.";
+            return res;
+        }
+
         if (wallet_locked) {
             res.error = "Wallet is locked; unlock it before submitting an MRC.";
             return res;

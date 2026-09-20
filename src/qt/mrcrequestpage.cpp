@@ -313,6 +313,40 @@ void MRCRequestPage::submitMRC()
 
     if (!m_mrc_model) return;
 
+    // Ask for an unlock, the same way the send dialog and every other contract
+    // surface does. This page was the one that did not, which mattered once the
+    // builder began refusing a staking-only wallet: the claim simply failed and
+    // the only sign was a tooltip.
+    //
+    // A researcher who unlocked for staking is exactly who files these, so
+    // refusing outright would be hostile. The context elevates for this
+    // operation and hands the staking-only scope back when it expires, so the
+    // node keeps staking afterwards.
+    //
+    // MRCModel dereferences its wallet model in its own constructor, so a
+    // constructed model always has one.
+    WalletModel::UnlockContext ctx(m_wallet_model->requestUnlock());
+
+    if (!ctx.isValid()) {
+        // Cancelled or wrong passphrase. requestUnlock has already locked the
+        // wallet to force a full prompt, so a wallet that was staking is now
+        // locked; say that rather than leaving the user to discover staking
+        // stopped. The fee boost is left alone so a retry keeps it.
+        ui->mrcSubmitButton->setToolTip(tr("The wallet must be unlocked to submit a manual "
+                                           "research claim. It is locked now, so staking is "
+                                           "stopped until it is unlocked again."));
+        return;
+    }
+
+    // Re-sync before submitting. requestUnlock locks the wallet to force the
+    // prompt, and that status change arrives as a queued event which the
+    // dialog's own nested event loop drains -- so MRCModel has already recorded
+    // WALLET_LOCKED. The unlock's own notification is posted but not drained
+    // before exec() returns, so without this the model is stale and submitMRC
+    // refuses on its own eligibility check, reporting an empty error. That was
+    // deterministic for exactly the staking-only wallet this elevation serves.
+    m_mrc_model->refresh();
+
     if (!m_mrc_model->submitMRC(s, e)) {
         message = e + " MRC request cannot be submitted.";
 

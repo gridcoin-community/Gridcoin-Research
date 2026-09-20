@@ -335,6 +335,12 @@ void SendCoinsDialog::on_sendButton_clicked()
             tr("Error: Transaction creation failed."),
             QMessageBox::Ok, QMessageBox::Ok);
         break;
+    case WalletModel::WalletUnlockedForStakingOnly:
+        QMessageBox::warning(this, tr("Send Coins"),
+            tr("Error: The wallet is unlocked for staking only, so it will not send. "
+               "Lock the wallet and unlock it again without the staking-only option to send."),
+            QMessageBox::Ok, QMessageBox::Ok);
+        break;
     case WalletModel::TransactionCommitFailed:
         QMessageBox::warning(this, tr("Send Coins"),
             tr("Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here."),

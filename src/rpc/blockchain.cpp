@@ -2977,10 +2977,11 @@ UniValue addkey(const UniValue& params)
                       (unsigned)params.size()));
     }
 
-    if (pwalletMain->IsLocked()) {
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED,
-                           "Error: Please enter the wallet passphrase with walletpassphrase first.");
-    }
+    // The shared helper, not a bare IsLocked(): addkey builds an administrative
+    // contract, and every sibling admin RPC refuses a staking-only wallet with
+    // a message that says so. Without this it reached the builder and failed
+    // with a generic "transaction creation failed".
+    EnsureWalletIsUnlocked();
 
     if (!(type == GRC::ContractType::PROJECT
           || type == GRC::ContractType::SCRAPER

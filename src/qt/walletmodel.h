@@ -72,6 +72,8 @@ public:
         //! in SendCoinsDialog.
         TransactionCreationFailed,
         TransactionCommitFailed,
+        //! The wallet is unlocked for staking only and will not build a spend.
+        WalletUnlockedForStakingOnly,
         Aborted,
         //! The required fee exceeds both the configured transaction fee and
         //! the fee the caller has accepted so far; nothing was committed.
@@ -151,7 +153,7 @@ public:
     class UnlockContext
     {
     public:
-        UnlockContext(WalletModel *wallet, bool valid, bool relock);
+        UnlockContext(WalletModel *wallet, bool valid, bool relock, bool restore_staking_only = false);
         ~UnlockContext();
 
         bool isValid() const { return valid; }
@@ -166,6 +168,9 @@ public:
         WalletModel *wallet;
         bool valid;
         mutable bool relock; // mutable, as it can be set to false by copying
+        //! The wallet was unlocked for staking when this context elevated it,
+        //! so give that scope back on expiry instead of locking.
+        mutable bool restore_staking_only;
 
         void CopyFrom(const UnlockContext& rhs);
     };

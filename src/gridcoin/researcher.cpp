@@ -731,10 +731,16 @@ BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid) EXCL
 //! \return A variant that contains the new public key if successful or a
 //! description of the error that occurred.
 //!
+//! Both trailing arguments are deliberately NOT defaulted. An earlier revision
+//! defaulted automated_renewal and two callers then silently took the default,
+//! so the exemption never reached the builder and the renewal it exists for
+//! stayed broken -- and it compiled. Requiring every caller to state its intent
+//! turns that class of mistake into a build error.
 AdvertiseBeaconResult SendBeaconContract(
     const Cpid& cpid,
     Beacon beacon,
-    ContractAction action = ContractAction::ADD) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    ContractAction action,
+    bool automated_renewal) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
 
@@ -751,7 +757,8 @@ AdvertiseBeaconResult SendBeaconContract(
     uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
 
     const auto result_pair = SendContract(
-        MakeContract<BeaconPayload>(contract_version, action, std::move(payload)));
+        MakeContract<BeaconPayload>(contract_version, action, std::move(payload)),
+        automated_renewal);
 
     if (!result_pair.second.empty()) {
         return BeaconError::TX_FAILED;
@@ -826,7 +833,7 @@ namespace {
 //! \return A variant that contains the new public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid, bool automated_renewal) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // First, determine whether we can successfully send a beacon contract. The
     // wallet must be unlocked and hold a balance great enough to send a beacon
@@ -842,7 +849,7 @@ AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(c
     AdvertiseBeaconResult result = GenerateBeaconKey(cpid);
 
     if (auto key_option = result.TryPublicKey()) {
-        result = SendBeaconContract(cpid, std::move(*key_option));
+        result = SendBeaconContract(cpid, std::move(*key_option), ContractAction::ADD, automated_renewal);
     }
 
     return result;
@@ -857,7 +864,7 @@ AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(c
 //! \return A variant that contains the public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon, bool automated_renewal) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!beacon.Renewable(GetAdjustedTime())) {
         LogPrintf("%s: Beacon renewal not needed", __func__);
@@ -882,7 +889,7 @@ AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon) EXCLUS
         return BeaconError::MISSING_KEY;
     }
 
-    return SendBeaconContract(cpid, beacon);
+    return SendBeaconContract(cpid, beacon, ContractAction::ADD, automated_renewal);
 }
 } // anonymous namespace
 
@@ -1205,7 +1212,10 @@ void Researcher::RunRenewBeaconJob()
             return;
         }
 
-        researcher->AdvertiseBeacon();
+        // The one caller permitted to build while the wallet is unlocked for
+        // staking only. It runs unattended on exactly those wallets, and a
+        // refusal would let the beacon expire silently at six months.
+        researcher->AdvertiseBeacon(/*force=*/false, /*automated_renewal=*/true);
     } else {
         LogPrint(BCLog::LogFlags::BEACON,
                  "INFO: %s: Skipping beacon renewal while within scraper beacon consensus window.",
@@ -1566,7 +1576,7 @@ bool Researcher::ChangeMode(const ResearcherMode mode, std::string email)
     return true;
 }
 
-AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force)
+AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force, const bool automated_renewal)
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 
@@ -1582,14 +1592,14 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force)
     AdvertiseBeaconResult result(GRC::BeaconError::NONE);
 
     if (force) {
-        result = SendNewBeacon(*cpid);
+        result = SendNewBeacon(*cpid, automated_renewal);
     } else if (g_recent_beacons.Try(*cpid)) {
         LogPrintf("%s: Beacon awaiting confirmation already", __func__);
         return GRC::BeaconError::PENDING;
     } else if (!current_beacon) {
-        result = SendNewBeacon(*cpid);
+        result = SendNewBeacon(*cpid, automated_renewal);
     } else {
-        result = RenewBeacon(*cpid, *current_beacon);
+        result = RenewBeacon(*cpid, *current_beacon, automated_renewal);
     }
 
     if (result.Error() == GRC::BeaconError::NONE) {
@@ -1616,5 +1626,5 @@ AdvertiseBeaconResult Researcher::RevokeBeacon(const Cpid cpid)
         return GRC::BeaconError::NO_CPID;
     }
 
-    return SendBeaconContract(cpid, *beacon, ContractAction::REMOVE);
+    return SendBeaconContract(cpid, *beacon, ContractAction::REMOVE, /*automated_renewal=*/false);
 }

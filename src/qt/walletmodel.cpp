@@ -444,6 +444,8 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         return TransactionCreationFailed;
     case interfaces::SendCoinsStatus::TransactionCommitFailed:
         return TransactionCommitFailed;
+    case interfaces::SendCoinsStatus::WalletUnlockedForStakingOnly:
+        return WalletUnlockedForStakingOnly;
     case interfaces::SendCoinsStatus::FeeConfirmationRequired:
         return SendCoinsReturn(FeeConfirmationRequired, result.fee);
     }
@@ -588,10 +590,25 @@ WalletModel::UnlockContext WalletModel::requestUnlock()
 {
     bool was_locked = getEncryptionStatus() == Locked;
 
-    // A staking-only unlock is not enough here: relock and force a full
-    // unlock prompt. (isUnlockedForStakingOnly is the unlocked-AND-restricted
-    // composite, so it can only be true on the !was_locked path.)
-    if ((!was_locked) && m_wallet.isUnlockedForStakingOnly())
+    // A staking-only unlock is not enough here: relock and force a full unlock
+    // prompt. Remember that it WAS staking-only, because the wallet has to go
+    // back to that when this context expires.
+    //
+    // While the unlock preference was sticky, the hidden checkbox came up
+    // pre-ticked, the re-unlock was itself staking-only and the relock flag
+    // below came out false, so the wallet stayed staking. With no sticky
+    // preference the re-unlock is full, which would leave relock true and LOCK
+    // a wallet the user had deliberately left staking: their node would stop
+    // staking after a send, a vote, or even creating an address, with nothing
+    // said. Restoring the prior scope is what prevents that.
+    //
+    // On the SUCCESS path only. A cancelled or failed prompt leaves the wallet
+    // locked, because the relock above has already happened and the master key
+    // is gone -- narrowing cannot bring it back. Callers that care should say
+    // so; MRCRequestPage::submitMRC does.
+    const bool was_staking_only = (!was_locked) && m_wallet.isUnlockedForStakingOnly();
+
+    if (was_staking_only)
     {
        setWalletLocked(true);
        was_locked = getEncryptionStatus() == Locked;
@@ -605,19 +622,41 @@ WalletModel::UnlockContext WalletModel::requestUnlock()
     // If wallet is still locked, unlock was failed or cancelled, mark context as invalid
     bool valid = getEncryptionStatus() != Locked;
 
-    return UnlockContext(this, valid, was_locked && !m_wallet.isUnlockedForStakingOnly());
+    return UnlockContext(this, valid, was_locked && !m_wallet.isUnlockedForStakingOnly(),
+                         was_staking_only);
 }
 
-WalletModel::UnlockContext::UnlockContext(WalletModel *wallet, bool valid, bool relock):
+WalletModel::UnlockContext::UnlockContext(WalletModel *wallet, bool valid, bool relock,
+                                         bool restore_staking_only):
         wallet(wallet),
         valid(valid),
-        relock(relock)
+        relock(relock),
+        restore_staking_only(restore_staking_only)
 {
 }
 
 WalletModel::UnlockContext::~UnlockContext()
 {
-    if(valid && relock)
+    if (!valid) return;
+
+    if (restore_staking_only)
+    {
+        // Hand the elevation back rather than locking. Narrowing needs no
+        // passphrase: the master key stays installed and only the permission
+        // is removed.
+        //
+        // Not discarded: in the split build this crosses IPC and can fail, and
+        // a failure leaves the wallet FULLY unlocked, which is the unsafe
+        // direction. Nothing here can put that right without the passphrase, so
+        // the least we owe is a record of it.
+        if (!wallet->wallet().restrictToStakingOnly()) {
+            LogPrintf("WARN: %s: could not restore the staking-only scope; the wallet is left "
+                      "fully unlocked", __func__);
+        }
+        return;
+    }
+
+    if (relock)
     {
         wallet->setWalletLocked(true);
     }
@@ -625,9 +664,18 @@ WalletModel::UnlockContext::~UnlockContext()
 
 void WalletModel::UnlockContext::CopyFrom(const UnlockContext& rhs)
 {
-    // Transfer context; old object no longer relocks wallet
+    // Transfer the context: the old object must do NOTHING on destruction.
+    //
+    // Both flags are cleared, not just relock. If restore_staking_only survived
+    // on the source, its destructor would narrow the scope back to staking-only
+    // while the new owner is still relying on the elevation, and the very
+    // operation that asked for it would then be refused. Every call site
+    // currently constructs directly from the prvalue that requestUnlock returns,
+    // which C++17 elides, so no copy happens today -- but a half-transferred
+    // ownership flag is a trap for the first caller that does copy one.
     *this = rhs;
     rhs.relock = false;
+    rhs.restore_staking_only = false;
 }
 
 bool WalletModel::getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const

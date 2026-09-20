@@ -208,10 +208,22 @@ Three constants are embedded in **both** binaries and compared during the
 handshake (`ipc/handshake.h`):
 
 ```cpp
-constexpr uint32_t IPC_SCHEMA_MAJOR   = 3;
-constexpr uint32_t IPC_SCHEMA_MINOR   = 3;
+constexpr uint32_t IPC_SCHEMA_MAJOR   = 4;
+constexpr uint32_t IPC_SCHEMA_MINOR   = 0;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 ```
+
+**Major 4.** `SendCoinsStatus` gained `WalletUnlockedForStakingOnly`, so a
+staking-only wallet's refusal to build a spend is reported as itself rather than
+as a generic creation failure. Appended, so it renumbers nothing — and still not
+additive, which is why it is a major: the enum crosses as a raw integer with an
+unchecked cast on receipt, and the GUI's switch over it carries no `default:` so
+that `-Wswitch` catches a new enumerator at compile time. An already-shipped GUI
+therefore has no arm for the new value and reaches `assert(false)`, which is live
+in release because the build strips `NDEBUG` globally. A minor would have let
+that pairing connect and aborted the GUI on the first staking-only send. The same
+major adds `restrictToStakingOnly @35`.
+
 
 Rules a client must honor (from `ClientHandshake` and design §4.2):
 
@@ -335,7 +347,9 @@ The node's single wallet. Balances (`getBalance`, `getStake`,
 state (`getLockState -> WalletLockState`, `isUnlockedForStakingOnly`,
 `getUnlockStakingOnlyFlag`); mutation of lock state (`encryptWallet`,
 `lockWallet`, `unlockWallet`, `changeWalletPassphrase` — all taking a
-`SecureString` passphrase, §7).
+`SecureString` passphrase, §7; and `restrictToStakingOnly`, which does NOT,
+because it only narrows an existing unlock to staking-only and so removes
+permission rather than granting it).
 
 Coin control / send: `getOutputs`, `computeCoinControlSummary(...)
 -> CoinControlSummary` (all fee math runs node-side), `getMaxConsolidationInputs`,
