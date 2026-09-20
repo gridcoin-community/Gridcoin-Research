@@ -165,9 +165,12 @@ void MakeBlockAndCoinstake(CBlock& block, CMutableTransaction& coinbase,
 //!
 //! Mirrors the retry loop in generatetoaddress (rpc/mining.cpp): the kernel is
 //! evaluated at a single 16-second-masked timestamp, so each attempt steps to a
-//! fresh slot. Rescans the wallet afterwards -- RegisterValidationInterface is a
-//! silent no-op in this binary, so the wallet has no other way to learn about the
-//! block. Returns false and sets \p err on failure.
+//! fresh slot. The block then goes to CWallet::BlockConnected directly --
+//! RegisterValidationInterface is a silent no-op in this binary, so the signal
+//! layer will not -- which records the block's own transactions and marks the
+//! outputs they spent, the staked kernel included. Returns false and sets \p err
+//! on failure. One failure comes after acceptance: if the accepted block is not
+//! the chain tip the wallet is not told, and the chain has still advanced.
 //!
 //! Only tests that genuinely need a mined output (a confirmed P2SH funding
 //! output, say) should call this; the premine alone needs no mining.
