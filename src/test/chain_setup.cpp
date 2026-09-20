@@ -284,11 +284,13 @@ ChainState::ChainState()
     // Give the wallet the premine key and let it see the genesis outputs, so
     // CreateAndProcessBlock() has something to stake.
     //
-    // The plant helper rescans only when it adds the key. A second fixture in
-    // the same process finds the key already there, because keys are never
-    // erased, while WalletTxRestorer removed the coinbase entry the first
-    // fixture's rescan added. So rescan here unconditionally; the helper's own
-    // rescan, when it runs, is repeated harmlessly.
+    // PlantRegtestPremineKey() rescans only when it adds the key. A second
+    // fixture in the same process finds the key already there, because keys are
+    // never erased, while WalletTxRestorer removed the coinbase entry the first
+    // fixture's rescan added. So rescan here unconditionally; the rescan inside
+    // PlantRegtestPremineKey(), when it runs, is repeated harmlessly. This is
+    // the fixture's own construction and is unrelated to how
+    // CreateAndProcessBlock() delivers a mined block to the wallet.
     if (pwalletMain) {
         PlantRegtestPremineKey(pwalletMain);
 
@@ -562,14 +564,30 @@ bool CreateAndProcessBlock(CBlock& block_out, std::string& err)
     // RegisterValidationInterface() is a silent no-op in this binary --
     // registration is gated on a MainSignalsInstance that only
     // RegisterBackgroundSignalScheduler creates, and TestingSetup builds no
-    // scheduler -- so CWallet::BlockConnected never fires. Rescan instead,
-    // which reaches AddToWalletIfInvolvingMe without the signal layer.
+    // scheduler -- so nothing delivers the block to the wallet. Deliver it
+    // directly through the hook the signal layer would have called. It
+    // records the block's own transactions and marks the inputs they consumed
+    // spent, and that second part is what keeps a staked output out of the
+    // next mine's kernel search.
+    //
+    // A genesis rescan stood here before. It does not mark spends --
+    // AddToWalletIfInvolvingMe never calls WalletUpdateSpent, and a node does
+    // not need it to, because the signal path marks the inputs as each block
+    // arrives and startup follows its rescan with FixSpentCoins -- so every
+    // output a mined block staked stayed selectable, the next mine could draw
+    // it as the kernel, and that block was rejected as a double spend, or as
+    // a duplicate proof-of-stake when it landed in the same stake slot. Five
+    // attempts drawing badly in a row was the Arch failure of
+    // a_stale_mrc_is_removed_when_a_block_connects.
     {
         LOCK(cs_main);
 
-        if (pindexGenesisBlock) {
-            pwalletMain->ScanForWalletTransactions(pindexGenesisBlock, /*fUpdate=*/true);
+        if (!pindexBest || pindexBest->GetBlockHash() != block_out.GetHash()) {
+            err = "block accepted but it is not the chain tip, so the wallet was not told about it";
+            return false;
         }
+
+        pwalletMain->BlockConnected(block_out, pindexBest->nHeight);
     }
 
     return true;
