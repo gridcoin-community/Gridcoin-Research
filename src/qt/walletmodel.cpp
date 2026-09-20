@@ -500,7 +500,8 @@ bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase, b
 {
     if(locked)
     {
-        // Lock. Does not clear the staking-only unlock preference.
+        // Lock. This also clears the staking-only restriction, which now
+        // belongs to the unlock rather than outliving it.
         return m_wallet.lockWallet();
     }
     else

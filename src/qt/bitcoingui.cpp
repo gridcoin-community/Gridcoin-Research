@@ -1884,12 +1884,15 @@ void BitcoinGUI::setEncryptionStatus(int status)
         break;
     case WalletModel::Unlocked:
     {
-        // The raw preference flag, exactly what the old code read from the
-        // fWalletUnlockStakingOnly global at render time. (Not the composite
-        // isUnlockedForStakingOnly: this slot runs queued, and a relock
-        // racing the queued delivery would flip the composite to false and
-        // paint "fully unlocked" where the old code kept the staking-only
-        // rendering until the lock's own status event arrived.)
+        // There is no longer a sticky flag to prefer over the composite: both
+        // getters now report the same scope, and a lock clears it.
+        //
+        // KNOWN, and fixed by widening WalletModel::EncryptionStatus to carry
+        // the scope: this slot runs queued, so a relock racing delivery paints
+        // this arm with the scope already cleared, showing the unrestricted
+        // icon for one frame until the lock's own status event arrives. The
+        // old code painted a stale staking-only frame in the same race. Either
+        // way it is one wrong frame on an icon, corrected immediately.
         const bool staking_only = walletModel && walletModel->wallet().getUnlockStakingOnlyFlag();
 
         if (staking_only) {

@@ -1054,7 +1054,7 @@ UniValue consolidateunspent(const UniValue& params)
         return strError;
     }
 
-    if (fWalletUnlockStakingOnly)
+    if (pwalletMain->IsUnlockedForStakingOnly())
     {
         string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
         LogPrintf("consolidateunspent: %s", strError);
@@ -1298,7 +1298,7 @@ UniValue splitunspent(const UniValue& params)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet locked, unable to create transaction.");
     }
 
-    if (fWalletUnlockStakingOnly)
+    if (pwalletMain->IsUnlockedForStakingOnly())
     {
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED,
                            "Error: Wallet unlocked for staking only, unable to create transaction.");

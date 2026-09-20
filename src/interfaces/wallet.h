@@ -47,7 +47,7 @@ struct WalletLockState
     bool crypted{false};                   //!< IsCrypted(): the wallet has a passphrase.
     bool locked{false};                    //!< IsLocked(): the keys are not in memory.
     bool unlocked_for_staking_only{false}; //!< Unlocked but restricted to staking.
-    bool staking_only_flag{false};         //!< Persisted staking-only unlock preference.
+    bool staking_only_flag{false};         //!< Deprecated alias of unlocked_for_staking_only; see getUnlockStakingOnlyFlag.
 };
 
 //! Value snapshot of one unspent wallet output for the coin-control views.
@@ -261,15 +261,20 @@ public:
     //! where a snapshot taken earlier would be stale.
     virtual bool isUnlockedForStakingOnly() = 0;
 
-    //! The persisted staking-only unlock preference, independent of the
-    //! current lock state (unlike isUnlockedForStakingOnly). Seeds the
-    //! unlock dialog's checkbox while the wallet is still locked.
+    //! DEPRECATED, and now an exact alias of isUnlockedForStakingOnly.
+    //!
+    //! It used to report a sticky preference that outlived the unlock, which is
+    //! what let the unlock dialog pre-tick its box while the wallet was locked.
+    //! There is no such preference any more: the restriction belongs to the
+    //! unlock and a lock clears it, so this is false whenever the wallet is
+    //! locked. Its two remaining callers are being reworked; do not add more.
     virtual bool getUnlockStakingOnlyFlag() = 0;
 
     //! Encrypt the wallet with the given passphrase.
     virtual bool encryptWallet(const SecureString& passphrase) = 0;
 
-    //! Lock the wallet. Does not clear the staking-only preference.
+    //! Lock the wallet. This also clears the staking-only restriction, which
+    //! belongs to the unlock rather than outliving it.
     virtual bool lockWallet() = 0;
 
     //! Unlock the wallet; on success the staking-only preference is set to

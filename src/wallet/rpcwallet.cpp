@@ -105,7 +105,7 @@ void EnsureWalletIsUnlocked()
 {
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-    if (fWalletUnlockStakingOnly)
+    if (pwalletMain->IsUnlockedForStakingOnly())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
 }
 
@@ -3448,8 +3448,8 @@ static const RPCHelpMan walletpassphrase_help{
     "staking). Requires the wallet to be encrypted.\n"
     "\n"
     "If <stakingonly> is true, the wallet is unlocked for staking only and "
-    "sending functions remain disabled until walletlock is called and the "
-    "wallet is re-unlocked with <stakingonly> false.\n"
+    "sending functions remain disabled for that unlock. The restriction belongs "
+    "to the unlock, so locking clears it and the next unlock states its own.\n"
     "\n"
     "Timeouts greater than 100000000 seconds are clamped to that value to "
     "avoid a macOS/libevent bug.",
@@ -3498,10 +3498,17 @@ UniValue walletpassphrase(const UniValue& params)
     strWalletPass.reserve(100);
     strWalletPass = std::string_view{params[0].get_str()};
 
+    // ppcoin: if the user's OS account is compromised, prevent trivial
+    // sendmoney. The scope travels with the unlock instead of being written to
+    // a global afterwards, so the wallet is never briefly unlocked without it.
+    const UnlockScope scope = (params.size() > 2 && params[2].get_bool())
+        ? UnlockScope::StakingOnly
+        : UnlockScope::Full;
+
     if (strWalletPass.length() > 0) {
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
-        if (!pwalletMain->Unlock(strWalletPass)) {
+        if (!pwalletMain->Unlock(strWalletPass, scope)) {
             // Check if the passphrase has a null character
             if (strWalletPass.find('\0') == std::string::npos) {
                 throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
@@ -3521,12 +3528,6 @@ UniValue walletpassphrase(const UniValue& params)
     NewThread(ThreadTopUpKeyPool, nullptr);
     int64_t* pnSleepTime = new int64_t(nSleepTime);
     NewThread(ThreadCleanWalletPassphrase, pnSleepTime);
-
-    // ppcoin: if user OS account compromised prevent trivial sendmoney commands
-    if (params.size() > 2)
-        fWalletUnlockStakingOnly = params[2].get_bool();
-    else
-        fWalletUnlockStakingOnly = false;
 
     return NullUniValue;
 }

@@ -32,10 +32,6 @@
 #include <wallet/walletutil.h>
 #include "wallet/ismine.h"
 
-//! Staking-only unlock preference. Atomic: written by the GUI unlock path
-//! (interfaces::Wallet::unlockWallet) and RPC walletpassphrase, read by RPC
-//! send paths and the GUI status rendering, on different threads.
-extern std::atomic<bool> fWalletUnlockStakingOnly;
 extern bool fConfChange;
 
 // Wallet settings, defined in wallet.cpp (moved from main.{h,cpp}, issue
@@ -319,7 +315,24 @@ public:
     bool AddCScript(const CScript& redeemScript) override;
     bool LoadCScript(const CScript& redeemScript);
 
-    bool Unlock(const SecureString& strWalletPassphrase);
+    //! \brief Is this wallet unlocked, but for staking only?
+    //!
+    //! Replaces the former fWalletUnlockStakingOnly global, which lived beside
+    //! the lock state rather than in it. The scope answers both questions at
+    //! once, so this can never read "unrestricted" on a wallet that was just
+    //! unlocked for staking.
+    bool IsUnlockedForStakingOnly() const
+    {
+        return GetUnlockScope() == UnlockScope::StakingOnly;
+    }
+
+    //! \brief Unlock with an explicit scope.
+    //!
+    //! Defaults to Full, which is what an unlock that does not say otherwise has
+    //! always meant (walletpassphrase without its third argument). The scope is
+    //! installed with the master key, so the wallet is never briefly unlocked
+    //! carrying the previous unlock's restriction.
+    bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope = UnlockScope::Full);
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 

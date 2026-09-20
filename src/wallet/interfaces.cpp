@@ -98,37 +98,38 @@ public:
 
     WalletLockState getLockState() override
     {
-        // A single batched read of every lock/encryption facet: the split build's
-        // one round trip instead of several, and a narrower window than the former
-        // two separate getEncryptionStatus() reads. Each facet is read once, as
-        // the individual accessors did -- IsCrypted()/IsLocked() are guarded by
-        // cs_KeyStore internally and fWalletUnlockStakingOnly is atomic -- so this
-        // deliberately does NOT take cs_wallet: getEncryptionStatus() is polled
+        // One round trip for the split build, and now two reads rather than
+        // three: the scope answers locked and the restriction together, so
+        // those two can no longer be caught disagreeing.
+        //
+        // Deliberately does NOT take cs_wallet: getEncryptionStatus() is polled
         // from the GUI thread and must not stall behind a long cs_wallet holder
-        // (the O(N) updateWallet path). Because the reads are unlocked, a
-        // concurrent lock/unlock/encrypt can be caught mid-transition; that is
-        // harmless because every (crypted, locked) pair is a valid encryption
-        // status (crypted && !locked is simply Unlocked -- the state EncryptWallet
-        // itself ends in), so the snapshot is always self-consistent and any
-        // transient value corrects on the next poll.
+        // (the O(N) updateWallet path). GetUnlockScope() takes cs_KeyStore,
+        // which IsLocked() always did, so the profile is unchanged.
+        //
+        // A concurrent transition can still land between the crypted read and
+        // the scope read. That is harmless: every pair is a valid status and
+        // the next poll corrects it.
         const bool crypted = m_wallet->IsCrypted();
-        const bool locked = m_wallet->IsLocked();
-        const bool staking_only_flag = fWalletUnlockStakingOnly;
+        const UnlockScope scope = m_wallet->GetUnlockScope();
 
         WalletLockState state;
         state.crypted = crypted;
-        state.locked = locked;
-        state.unlocked_for_staking_only = !locked && staking_only_flag;
-        state.staking_only_flag = staking_only_flag;
+        state.locked = (scope == UnlockScope::Locked);
+        state.unlocked_for_staking_only = (scope == UnlockScope::StakingOnly);
+        state.staking_only_flag = state.unlocked_for_staking_only;
         return state;
     }
 
     bool isUnlockedForStakingOnly() override
     {
-        return !m_wallet->IsLocked() && fWalletUnlockStakingOnly;
+        return m_wallet->GetUnlockScope() == UnlockScope::StakingOnly;
     }
 
-    bool getUnlockStakingOnlyFlag() override { return fWalletUnlockStakingOnly; }
+    bool getUnlockStakingOnlyFlag() override
+    {
+        return m_wallet->GetUnlockScope() == UnlockScope::StakingOnly;
+    }
 
     bool encryptWallet(const SecureString& passphrase) override
     {
@@ -139,13 +140,12 @@ public:
 
     bool unlockWallet(const SecureString& passphrase, bool staking_only) override
     {
-        if (!m_wallet->Unlock(passphrase)) {
-            return false;
-        }
-
-        fWalletUnlockStakingOnly = staking_only;
-
-        return true;
+        // One call. The scope is installed with the master key, so there is no
+        // window in which the wallet is unlocked while still carrying the
+        // previous unlock's restriction -- which, since nothing cleared that
+        // restriction on lock, could be the permissive one.
+        return m_wallet->Unlock(passphrase,
+                                staking_only ? UnlockScope::StakingOnly : UnlockScope::Full);
     }
 
     bool changeWalletPassphrase(const SecureString& old_passphrase,

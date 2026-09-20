@@ -105,6 +105,29 @@ public:
 
 typedef std::map<CKeyID, std::pair<CPubKey, std::vector<unsigned char> > > CryptedKeyMap;
 
+//! \brief What the current unlock permits.
+//!
+//! One value, not a lock flag plus a restriction flag. It is written in the same
+//! cs_KeyStore section that installs or clears the master key, so no reader can
+//! observe an unlocked store carrying the previous unlock's restriction. That
+//! pair being separately written is what let a full unlock's cleared restriction
+//! survive into a staking-only unlock.
+//!
+//! Ephemeral by construction: the master key is secure-allocated and never
+//! serialized, and no startup path unlocks, so an encrypted wallet begins every
+//! run Locked. What wallet.dat persists is the encrypted master key records,
+//! which say nothing about scope.
+enum class UnlockScope : uint8_t {
+    //! No master key. Nothing that needs one may proceed.
+    Locked,
+
+    //! Unlocked for staking only. The kernel may be signed; spends may not.
+    StakingOnly,
+
+    //! Unlocked without restriction.
+    Full,
+};
+
 /** Keystore which keeps the private keys encrypted.
  * It derives from the basic key store, which is used if no encryption is active.
  */
@@ -113,7 +136,11 @@ class CCryptoKeyStore : public CBasicKeyStore
 private:
     CryptedKeyMap mapCryptedKeys GUARDED_BY(cs_KeyStore);
 
-    CKeyingMaterial vMasterKey;
+    CKeyingMaterial vMasterKey GUARDED_BY(cs_KeyStore);
+
+    //! Written only alongside vMasterKey, under the same lock, so the two cannot
+    //! disagree. Locked exactly when vMasterKey is empty.
+    UnlockScope m_unlock_scope GUARDED_BY(cs_KeyStore){UnlockScope::Locked};
 
     // if fUseCrypto is true, mapKeys must be empty
     // if fUseCrypto is false, vMasterKey must be empty
@@ -127,7 +154,7 @@ protected:
     // will encrypt previously unencrypted keys
     bool EncryptKeys(CKeyingMaterial& vMasterKeyIn);
 
-    bool Unlock(const CKeyingMaterial& vMasterKeyIn);
+    bool Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope scope);
 
     //! Encrypt/decrypt an arbitrary non-key wallet secret (e.g. the seed
     //! phrase blob) under the store's keying material. The store must be
@@ -150,16 +177,23 @@ public:
         return fUseCrypto;
     }
 
-    bool IsLocked() const
+    //! \brief What the current unlock permits.
+    //!
+    //! An unencrypted wallet has nothing to restrict, so it reads Full: every
+    //! caller asking "may this proceed" gets yes, which is what it got before
+    //! there was a scope at all.
+    UnlockScope GetUnlockScope() const
     {
         if (!IsCrypted())
-            return false;
-        bool result;
-        {
-            LOCK(cs_KeyStore);
-            result = vMasterKey.empty();
-        }
-        return result;
+            return UnlockScope::Full;
+
+        LOCK(cs_KeyStore);
+        return m_unlock_scope;
+    }
+
+    bool IsLocked() const
+    {
+        return GetUnlockScope() == UnlockScope::Locked;
     }
 
     bool Lock();

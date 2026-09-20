@@ -84,14 +84,22 @@ bool CCryptoKeyStore::Lock()
     {
         LOCK(cs_KeyStore);
         vMasterKey.clear();
+        m_unlock_scope = UnlockScope::Locked;
     }
 
     NotifyStatusChanged(this);
     return true;
 }
 
-bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
+bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope scope)
 {
+    // Asking to unlock "to Locked" is not a thing. Fail closed rather than pick
+    // a scope for the caller: silently widening it to Full would hand a future
+    // caller that read a scope back off a locked wallet a full unlock.
+    if (scope == UnlockScope::Locked) {
+        return error("%s: refusing to unlock with a Locked scope", __func__);
+    }
+
     {
         LOCK(cs_KeyStore);
         if (!SetCrypted())
@@ -127,7 +135,10 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
         if (keyPass) std::memset(&keyPass, 1, sizeof(bool));
         if (keyFail || !keyPass)
             return false;
+        // The key and what it permits, set together under one lock. A reader
+        // between two separate writes is the defect this replaces.
         vMasterKey = vMasterKeyIn;
+        m_unlock_scope = scope;
         fDecryptionThoroughlyChecked = true;
     }
     NotifyStatusChanged(this);

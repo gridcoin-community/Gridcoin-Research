@@ -72,14 +72,15 @@ void AskPassphraseDialog::setModel(WalletModel *model)
 {
     this->model = model;
 
-    // Seed the staking-only checkbox from the persisted unlock preference —
-    // done here rather than in the constructor, which runs before a model is
-    // attached (the preference lives behind the wallet interface now, not a
-    // core global). UnlockStaking mode forces the box checked in the
-    // constructor and stays forced.
-    if (model && mode != UnlockStaking) {
-        ui->stakingCheckBox->setChecked(model->wallet().getUnlockStakingOnlyFlag());
-    }
+    // The box is no longer seeded from a remembered preference: the dialog only
+    // opens on a locked wallet, and the restriction is cleared by locking, so
+    // the getter is always false here and this would always have unchecked it.
+    //
+    // Dropping the seeding also removes a lockout. The box is invisible in the
+    // Unlock mode the operation-driven prompt uses, so a user whose last unlock
+    // was staking-only used to get the hidden box pre-ticked, unlock
+    // staking-only again, and fail the very operation that raised the prompt.
+    // Do not restore "stickiness" without solving that.
 }
 
 void AskPassphraseDialog::accept()
@@ -184,7 +185,7 @@ void AskPassphraseDialog::accept()
     case Unlock:
         // A successful unlock also persists the staking-only preference
         // node-side (the checkbox state), which the old code applied to the
-        // fWalletUnlockStakingOnly global after the fact.
+        // staking-only global after the fact.
         if(!model->setWalletLocked(false, oldpass, ui->stakingCheckBox->isChecked())) {
             // Check if the passphrase has a null character
             if (oldpass.find('\0') == std::string::npos) {

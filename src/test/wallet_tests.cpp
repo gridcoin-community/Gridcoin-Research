@@ -889,10 +889,61 @@ BOOST_AUTO_TEST_CASE(importprivkey_requires_an_unlocked_wallet)
     expect_unlock_needed("re-import of a held key");
 }
 
+//!
+//! Lock and restriction are one value, so no reader can see an unlocked wallet
+//! carrying the previous unlock's restriction. Pins each transition, including
+//! that a lock clears the restriction and a failed unlock moves nothing.
+//!
+BOOST_AUTO_TEST_CASE(the_unlock_scope_is_set_and_cleared_with_the_key)
+{
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    // Unencrypted: nothing to restrict.
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+    BOOST_CHECK(!wallet.IsLocked());
+
+    const SecureString passphrase("scope-transitions");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+
+    wallet.Lock();
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Locked);
+    BOOST_CHECK(wallet.IsLocked());
+    BOOST_CHECK(!wallet.IsUnlockedForStakingOnly());
+
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::StakingOnly));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+    BOOST_CHECK(!wallet.IsLocked());
+    BOOST_CHECK(wallet.IsUnlockedForStakingOnly());
+
+    // A lock clears the restriction along with the key: the two cannot drift.
+    wallet.Lock();
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Locked);
+    BOOST_CHECK(!wallet.IsUnlockedForStakingOnly());
+
+    // No scope stated means Full, matching walletpassphrase without its third
+    // argument.
+    BOOST_REQUIRE(wallet.Unlock(passphrase));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    // A failed unlock moves nothing. Unlocking an already-unlocked wallet fails.
+    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::StakingOnly));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    wallet.Lock();
+    BOOST_CHECK(!wallet.Unlock(SecureString("wrong"), UnlockScope::Full));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Locked);
+}
+
 BOOST_AUTO_TEST_CASE(dumpprivkey_staking_only_unlock_is_refused_by_the_shared_check)
 {
     // Same in-memory encrypted wallet as the case above. dumpprivkey used to
-    // carry its own fWalletUnlockStakingOnly check below the address parsing;
+    // carry its own staking-only check below the address parsing;
     // EnsureWalletIsUnlocked(), its first statement, already throws for that
     // state, so the second check could not be reached. This case pins that the
     // refusal comes from the shared helper, message and all, and that the
@@ -914,14 +965,11 @@ BOOST_AUTO_TEST_CASE(dumpprivkey_staking_only_unlock_is_refused_by_the_shared_ch
     const SecureString passphrase("dumpprivkey-test");
     BOOST_REQUIRE(locked.EncryptWallet(passphrase));
     locked.Lock();
-    BOOST_REQUIRE(locked.Unlock(passphrase));
 
-    // The staking-only flag is process-global; put it back however the case ends.
-    struct StakingOnlyFlag {
-        bool m_saved;
-        StakingOnlyFlag() : m_saved(fWalletUnlockStakingOnly) { fWalletUnlockStakingOnly = true; }
-        ~StakingOnlyFlag() { fWalletUnlockStakingOnly = m_saved; }
-    } staking_only;
+    // Unlock for staking only, which is now one call rather than an unlock
+    // followed by a separate global write.
+    BOOST_REQUIRE(locked.Unlock(passphrase, UnlockScope::StakingOnly));
+    BOOST_REQUIRE(locked.IsUnlockedForStakingOnly());
 
     UniValue params(UniValue::VARR);
     params.push_back(EncodeDestination(id));
@@ -935,7 +983,10 @@ BOOST_AUTO_TEST_CASE(dumpprivkey_staking_only_unlock_is_refused_by_the_shared_ch
         BOOST_CHECK_EQUAL(find_value(err, "message").get_str(), "Error: Wallet is unlocked for staking only.");
     }
 
-    fWalletUnlockStakingOnly = false;
+    // A full unlock exports the key. Re-unlocking requires a lock first, which
+    // is what clears the scope.
+    locked.Lock();
+    BOOST_REQUIRE(locked.Unlock(passphrase, UnlockScope::Full));
     BOOST_CHECK_EQUAL(dumpprivkey(params).get_str(), EncodeSecret(key));
 }
 

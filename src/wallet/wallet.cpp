@@ -548,11 +548,6 @@ bool CWallet::AddCScript(const CScript& redeemScript)
     return CWalletDB(strWalletFile).WriteCScript(Hash160(redeemScript), redeemScript);
 }
 
-// optional setting to unlock wallet for staking only
-// serves to disable the trivial sendmoney when OS account compromised
-// provides no real security
-std::atomic<bool> fWalletUnlockStakingOnly{false};
-
 bool CWallet::LoadCScript(const CScript& redeemScript)
 {
     /* A sanity check was added in pull #3843 to avoid adding redeemScripts
@@ -569,7 +564,7 @@ bool CWallet::LoadCScript(const CScript& redeemScript)
     return CCryptoKeyStore::AddCScript(redeemScript);
 }
 
-bool CWallet::Unlock(const SecureString& strWalletPassphrase)
+bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope)
 {
     if (!IsLocked())
         return false;
@@ -585,7 +580,7 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
                 return false;
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 return false;
-            if (CCryptoKeyStore::Unlock(vMasterKey))
+            if (CCryptoKeyStore::Unlock(vMasterKey, scope))
             {
                 return true;
             }
@@ -596,7 +591,15 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
 
 bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase)
 {
-    bool fWasLocked = IsLocked();
+    // ONE read. IsLocked() and GetUnlockScope() are separate acquisitions, and
+    // the relock timer calls Lock() between them without holding cs_wallet: a
+    // staking-only wallet relocked in that gap would leave fWasLocked false
+    // while prior_scope read Locked, so the working scope below became Full and
+    // the final relock was skipped, leaving the wallet fully unlocked. Deriving
+    // both from one snapshot is the discipline this change applies everywhere
+    // else, and it was missing here.
+    const UnlockScope prior_scope = GetUnlockScope();
+    const bool fWasLocked = (prior_scope == UnlockScope::Locked);
 
     {
         LOCK(cs_wallet);
@@ -610,7 +613,18 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
                 return false;
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 return false;
-            if (CCryptoKeyStore::Unlock(vMasterKey))
+            // Restore whatever the wallet already permitted rather than
+            // widening to Full. The re-lock below only covers the case where it
+            // was locked on entry; a wallet that was unlocked for staking only
+            // must still be staking-only when the passphrase change returns.
+            //
+            // A wallet that WAS locked has no scope to restore, and the unlock
+            // needs a real one to rewrite the keys, so it takes Full and the
+            // fWasLocked re-lock below puts it back.
+            const UnlockScope working_scope =
+                (prior_scope == UnlockScope::Locked) ? UnlockScope::Full : prior_scope;
+
+            if (CCryptoKeyStore::Unlock(vMasterKey, working_scope))
             {
                 int64_t nStartTime = GetTimeMillis();
                 crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod);
@@ -3607,7 +3621,6 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                                 const CCoinControl* coinControl, bool change_back_to_input_address,
                                 int64_t nEnforcedMinFee)
 {
-
     int64_t nValueOut = 0;
     int64_t message_fee = 0;
     set<pair<const CWalletTx*,unsigned int>> setCoins_out;
@@ -4023,7 +4036,7 @@ string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNe
         LogPrintf("SendMoney() : %s", strError);
         return strError;
     }
-    if (fWalletUnlockStakingOnly)
+    if (IsUnlockedForStakingOnly())
     {
         string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
         LogPrintf("SendMoney() : %s", strError);
