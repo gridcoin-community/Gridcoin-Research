@@ -2226,6 +2226,14 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     //
     // Replacement is disabled, so an outpoint already spent by a pooled
     // transaction is simply a conflict and there is nothing to weigh.
+    //
+    // Name the rejection. A bare false leaves the state valid, so every
+    // caller that reports a reason had nothing to print: the reorg re-offer
+    // loops in DisconnectBlocksBatch logged a bare line on their most common
+    // outcome, and testmempoolaccept fell back to "rejected". The score stays
+    // at zero, as it was with no state at all -- a conflict is not
+    // misbehaviour, and net_processing only punishes when the DoS level is
+    // above zero -- so peer handling is unchanged.
     {
         LOCK(pool.cs); // protect pool.mapNextTx
         for (unsigned int i = 0; i < tx.vin.size(); i++)
@@ -2233,7 +2241,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
             COutPoint outpoint = tx.vin[i].prevout;
             if (pool.mapNextTx.count(outpoint))
             {
-                return false;
+                return state.Invalid(false, "txn-mempool-conflict");
             }
         }
     }
