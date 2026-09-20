@@ -567,6 +567,62 @@ BOOST_AUTO_TEST_CASE(unbroadcast_tracks_local_origination)
     BOOST_CHECK(set.count(b.GetHash()) == 1);
 }
 
+//!
+//! A reorg-re-pooled transaction still wants announcing, but peers have seen it,
+//! so it must not open the cancel gate. Discriminates on the two accessors
+//! disagreeing: IsUnbroadcastTx true, IsCancellableUnbroadcast false. Were the
+//! reason ignored, both would read true and cancelunbroadcasttransaction would
+//! release the inputs of a transaction the network can still confirm.
+//!
+BOOST_AUTO_TEST_CASE(a_reannounce_entry_is_not_cancellable)
+{
+    CTxMemPool pool;
+    const CTransaction fresh = MakePlainTx(31);
+    const CTransaction repooled = MakePlainTx(32);
+
+    pool.addUnchecked(fresh.GetHash(), MakeEntryFee(fresh, 10));
+    pool.addUnchecked(repooled.GetHash(), MakeEntryFee(repooled, 10));
+
+    pool.AddUnbroadcast(fresh.GetHash());
+    pool.AddUnbroadcast(repooled.GetHash(), UnbroadcastReason::Reannounce);
+
+    // Both await announcement, so the resend must carry both.
+    BOOST_CHECK(pool.IsUnbroadcastTx(fresh.GetHash()));
+    BOOST_CHECK(pool.IsUnbroadcastTx(repooled.GetHash()));
+    BOOST_CHECK_EQUAL(pool.GetUnbroadcast().size(), 2U);
+
+    // Only the never-sent one may be cancelled.
+    BOOST_CHECK(pool.IsCancellableUnbroadcast(fresh.GetHash()));
+    BOOST_CHECK(!pool.IsCancellableUnbroadcast(repooled.GetHash()));
+
+    // And only the never-sent one is a propagation-fault signal.
+    BOOST_CHECK_EQUAL(pool.GetMempoolInfo().unbroadcast_count, 1U);
+}
+
+//!
+//! The restrictive reason wins whichever order the two calls arrive in, so a
+//! later caller that does not know peers have seen the transaction cannot
+//! re-open the gate.
+//!
+BOOST_AUTO_TEST_CASE(reannounce_is_never_relaxed_to_never_sent)
+{
+    CTxMemPool pool;
+    const CTransaction tx = MakePlainTx(33);
+    pool.addUnchecked(tx.GetHash(), MakeEntryFee(tx, 10));
+
+    pool.AddUnbroadcast(tx.GetHash(), UnbroadcastReason::Reannounce);
+    pool.AddUnbroadcast(tx.GetHash()); // default NeverSent must not win
+    BOOST_CHECK(!pool.IsCancellableUnbroadcast(tx.GetHash()));
+
+    // The reverse order upgrades, because "peers may hold this" is the safe answer.
+    const CTransaction other = MakePlainTx(34);
+    pool.addUnchecked(other.GetHash(), MakeEntryFee(other, 10));
+    pool.AddUnbroadcast(other.GetHash());
+    BOOST_CHECK(pool.IsCancellableUnbroadcast(other.GetHash()));
+    pool.AddUnbroadcast(other.GetHash(), UnbroadcastReason::Reannounce);
+    BOOST_CHECK(!pool.IsCancellableUnbroadcast(other.GetHash()));
+}
+
 BOOST_AUTO_TEST_CASE(unbroadcast_cleared_when_tx_leaves_pool)
 {
     CTxMemPool pool;

@@ -15,10 +15,30 @@
 
 #include <cstdint>
 #include <functional>
+#include <algorithm>
 #include <map>
+#include <optional>
 #include <set>
 #include <utility>
 #include <vector>
+
+//! \brief Why a pooled transaction is in the unbroadcast set.
+//!
+//! The set answers two different questions that coincide for a freshly created
+//! transaction and diverge after a reorg, so each entry records which one it is.
+enum class UnbroadcastReason : uint8_t {
+    //! This node originated it and no peer has ever asked for it. Cancelling is
+    //! meaningful: nobody else is holding it. A getdata clears the entry.
+    NeverSent,
+
+    //! Peers HAVE seen it -- it was in a block, or in their pools, and a reorg
+    //! took it out of them. It still wants announcing, but cancelling it here
+    //! would not cancel anything, so it must not open the cancel gate. No
+    //! getdata will arrive to clear it either, because a peer that already has
+    //! the transaction never asks; the entry lives until the transaction
+    //! confirms or leaves the pool, which eraseIndexes handles.
+    Reannounce,
+};
 
 /** Reason why transaction was removed from mempool */
 enum class MemPoolRemovalReason {
@@ -192,7 +212,7 @@ public:
     // restart and periodically rebroadcast, so the node's own in-flight txs are
     // not lost on shutdown. Entries are dropped when a peer requests the tx (it
     // is propagating) or when it leaves the pool (confirmed/evicted/conflicted).
-    std::set<uint256> m_unbroadcast;
+    std::map<uint256, UnbroadcastReason> m_unbroadcast;
 
     //! Estimated per-entry bookkeeping overhead (CTxMemPoolEntry + map/index nodes)
     //! added on top of the serialized size in DynamicMemoryUsage(). This is an
@@ -249,20 +269,42 @@ public:
     size_t GetMaxSize() const { LOCK(cs); return m_max_size_bytes; }
     void SetMaxSize(size_t bytes) { LOCK(cs); m_max_size_bytes = bytes; }
 
-    //! \brief Mark a locally-originated transaction as awaiting initial broadcast.
+    //! \brief Mark a pooled transaction as still wanting announcement.
     //! No-op if the tx is not (or no longer) in the pool.
-    void AddUnbroadcast(const uint256& hash)
+    //!
+    //! \p reason defaults to NeverSent, which is what every ordinary submission
+    //! path wants. A caller that knows peers have already seen the transaction
+    //! must say Reannounce, so the cancel gate stays shut.
+    //!
+    //! An existing entry is never relaxed from Reannounce to NeverSent: the
+    //! restrictive answer wins, because "some peer may hold this" cannot be
+    //! un-learned by a later call that simply did not know.
+    void AddUnbroadcast(const uint256& hash, UnbroadcastReason reason = UnbroadcastReason::NeverSent)
     {
         LOCK(cs);
-        if (mapTx.count(hash)) m_unbroadcast.insert(hash);
+        if (!mapTx.count(hash)) return;
+
+        auto [it, inserted] = m_unbroadcast.emplace(hash, reason);
+        if (!inserted && reason == UnbroadcastReason::Reannounce) {
+            it->second = UnbroadcastReason::Reannounce;
+        }
     }
 
     //! \brief Drop a transaction from the unbroadcast set (it propagated, or left
     //! the pool). Safe to call for a hash that is not present.
     void RemoveUnbroadcast(const uint256& hash) { LOCK(cs); m_unbroadcast.erase(hash); }
 
-    //! \brief Snapshot of the transactions still awaiting initial broadcast.
-    std::set<uint256> GetUnbroadcast() const { LOCK(cs); return m_unbroadcast; }
+    //! \brief Snapshot of the transactions still wanting announcement, either
+    //! reason: the resend announces both kinds.
+    std::set<uint256> GetUnbroadcast() const
+    {
+        LOCK(cs);
+        std::set<uint256> hashes;
+        // m_unbroadcast is ordered by the same comparator as the result, so
+        // hinting at the end appends in amortised constant time per entry.
+        for (const auto& [hash, reason] : m_unbroadcast) hashes.emplace_hint(hashes.end(), hash);
+        return hashes;
+    }
 
     //! \brief Whether \p hash is still awaiting initial broadcast -- i.e. this node
     //! announced it but no peer has ever asked for it (net_processing drops the
@@ -277,6 +319,33 @@ public:
     //! GUARDED_BY; none here do), and membership uses count() rather than C++20
     //! contains() because the project baseline is CMAKE_CXX_STANDARD 17.
     bool IsUnbroadcastTx(const uint256& hash) const { LOCK(cs); return m_unbroadcast.count(hash) > 0; }
+
+    //! \brief Whether dropping \p hash locally would actually cancel it.
+    //!
+    //! True only for a NeverSent entry. A Reannounce entry is in the set because
+    //! peers demonstrably HAVE the transaction and a reorg took it out of their
+    //! pools, so removing it here cancels nothing and would strand the wallet:
+    //! the inputs come back as spendable while the network can still mine the
+    //! original. IsUnbroadcastTx deliberately stays true for those, because they
+    //! genuinely are awaiting announcement -- it is only cancellation that must
+    //! distinguish them.
+    bool IsCancellableUnbroadcast(const uint256& hash) const
+    {
+        return GetUnbroadcastReason(hash) == std::optional{UnbroadcastReason::NeverSent};
+    }
+
+    //! \brief Why \p hash is in the unbroadcast set, or nullopt if it is not.
+    //!
+    //! One lookup under one lock. A caller that needs to both refuse and explain
+    //! must not ask twice: the entry can change between two queries, and the
+    //! explanation would then not match the refusal that was already decided.
+    std::optional<UnbroadcastReason> GetUnbroadcastReason(const uint256& hash) const
+    {
+        LOCK(cs);
+        auto it = m_unbroadcast.find(hash);
+        if (it == m_unbroadcast.end()) return std::nullopt;
+        return it->second;
+    }
 
     //! \brief Whether the pool already holds an MRC for \p cpid. When it does and
     //! \p existing is non-null, the colliding transaction hash is written there.
@@ -323,7 +392,13 @@ public:
         info.mrc_count = m_mrc_by_cpid.size();
         info.beacon_count = m_beacon_by_cpid.size();
         info.mandatory_sidestake_count = m_mandatory_sidestake_count;
-        info.unbroadcast_count = m_unbroadcast.size();
+        // Only NeverSent: the documented meaning of this counter is "our own
+        // traffic is not reaching the network", and a Reannounce entry means the
+        // opposite -- peers had it and a reorg removed it. Counting those would
+        // make every reorg look like a propagation fault.
+        info.unbroadcast_count = std::count_if(
+            m_unbroadcast.begin(), m_unbroadcast.end(),
+            [](const auto& e) { return e.second == UnbroadcastReason::NeverSent; });
         return info;
     }
 
