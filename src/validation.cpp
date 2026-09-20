@@ -431,6 +431,23 @@ bool FetchInputs(const CTransaction& tx, CValidationState& state, CTxDB& txdb, c
 
 std::atomic<uint64_t> g_connectinputs_signature_checks{0};
 
+//! The double-spend rejection carries no DoS score on purpose, and for a block
+//! nothing downstream names the reason either: ConnectBlock returns false and
+//! ReorganizeChain reports only that the connect failed. So a block is always
+//! told why. The mempool path keeps the VERBOSE gate it has carried since 2020
+//! (1dc615ca0): a relayed transaction whose input a block has since consumed
+//! lands here too, and that is not worth an ERROR line on every node that
+//! hears it.
+static bool RejectSpentInput(const CTransaction& tx, const CDiskTxPos& spent_at, bool fBlock)
+{
+    if (fBlock || LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) {
+        return error("ConnectInputs() : %s prev tx already used at %s",
+                     tx.GetHash().ToString(), spent_at.ToString());
+    }
+
+    return false;
+}
+
 bool ConnectInputs(const CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx,
     const CBlockIndex* pindexBlock, bool fBlock, bool fMiner)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -568,11 +585,7 @@ bool ConnectInputs(const CTransaction& tx, CValidationState& state, CTxDB& txdb,
             const COutPoint prevout = tx.vin[conflict_input].prevout;
             const CTxIndex& txindex = inputs[prevout.hash].first;
 
-            return LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)
-                ? error("ConnectInputs() : %s prev tx already used at %s",
-                        tx.GetHash().ToString().c_str(),
-                        txindex.vSpent[prevout.n].ToString().c_str())
-                : false;
+            return RejectSpentInput(tx, txindex.vSpent[prevout.n], fBlock);
         }
 
         for (unsigned int i = 0; i < tx.vin.size(); i++)
@@ -604,7 +617,7 @@ bool ConnectInputs(const CTransaction& tx, CValidationState& state, CTxDB& txdb,
                     }
 
                     if (fMiner) return false;
-                    return LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) ? error("ConnectInputs() : %s prev tx already used at %s", tx.GetHash().ToString().c_str(), txindex.vSpent[prevout.n].ToString().c_str()) : false;
+                    return RejectSpentInput(tx, txindex.vSpent[prevout.n], fBlock);
                 }
 
             }
@@ -1202,9 +1215,12 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CTxDB& txdb, CBlockInd
         // initial block download.
         CTxIndex txindexOld;
         if (txdb.ReadTxIndex(hashTx, txindexOld)) {
-            for (auto const& pos : txindexOld.vSpent)
-                if (pos.IsNull())
-                    return false;
+            for (auto const& pos : txindexOld.vSpent) {
+                if (pos.IsNull()) {
+                    return error("%s: tx %s in block %s is already in the transaction index with an unspent output",
+                                 __func__, hashTx.ToString(), pindex->GetBlockHash().ToString());
+                }
+            }
         }
 
         nSigOps += GetLegacySigOpCount(tx);
