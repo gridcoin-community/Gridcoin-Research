@@ -88,6 +88,11 @@ protected:
      * conflicting transaction and should be discarded (the wallet erases its
      * now-defunct copy).
      */
+    //! No emitter today. The mempool's replacement path was unreachable and was
+    //! deleted; this stays as the interface contract a future replacement
+    //! feature would emit, and CWallet still implements it. Anything re-enabling
+    //! replacement must review that handler first: it erases the wallet entry
+    //! without releasing the transaction's inputs.
     virtual void TransactionReplacedInMempool(const CTransactionRef& tx) {}
 
     /** Notifies listeners of a block being connected to the active chain. */

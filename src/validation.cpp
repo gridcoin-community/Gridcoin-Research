@@ -2222,8 +2222,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         }
     }
 
-    // Check for conflicts with in-memory transactions
-    const CTransaction* ptxOld = nullptr;
+    // Check for conflicts with in-memory transactions.
+    //
+    // Replacement is disabled, so an outpoint already spent by a pooled
+    // transaction is simply a conflict and there is nothing to weigh.
     {
         LOCK(pool.cs); // protect pool.mapNextTx
         for (unsigned int i = 0; i < tx.vin.size(); i++)
@@ -2231,24 +2233,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
             COutPoint outpoint = tx.vin[i].prevout;
             if (pool.mapNextTx.count(outpoint))
             {
-                // Disable replacement feature for now
                 return false;
-
-                // Allow replacing with a newer version of the same transaction
-                if (i != 0)
-                    return false;
-                ptxOld = pool.mapNextTx[outpoint].ptx;
-                if (IsFinalTx(*ptxOld))
-                    return false;
-                if (!tx.IsNewerThan(*ptxOld))
-                    return false;
-                for (unsigned int i = 0; i < tx.vin.size(); i++)
-                {
-                    COutPoint outpoint = tx.vin[i].prevout;
-                    if (!pool.mapNextTx.count(outpoint) || pool.mapNextTx[outpoint].ptx != ptxOld)
-                        return false;
-                }
-                break;
             }
         }
     }
@@ -2345,19 +2330,9 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     }
 
     // Store transaction in memory
-    CTransactionRef replaced_tx; // copy of the replaced tx, captured before remove() frees it
     std::vector<CTransaction> evicted; // what TrimToSize removed to make room, signalled below
     {
         LOCK(pool.cs);
-        if (ptxOld)
-        {
-            LogPrint(BCLog::LogFlags::MEMPOOL, "AcceptToMemoryPool : replacing tx %s with new version", ptxOld->GetHash().ToString());
-            // ptxOld points into the mempool entry that remove() erases below, so
-            // copy the transaction out first; the wallet-erase signal further down
-            // must use this copy, not the dangling ptxOld.
-            replaced_tx = MakeTransactionRef(*ptxOld);
-            pool.remove(*ptxOld);
-        }
         // entry_time is non-zero only when reloading from unbroadcast.dat: preserve
         // the original pool-entry time so tx age and eviction ordering survive a
         // restart. In practice this only affects the node's non-wallet reloaded txs;
@@ -2399,19 +2374,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     for (const CTransaction& victim : evicted) {
         GetMainSignals().TransactionRemovedFromMempool(MakeTransactionRef(victim),
                                                        MemPoolRemovalReason::SIZELIMIT);
-    }
-
-    ///// are we sure this is ok when loading transactions or restoring block txes
-    // If updated, erase old tx from wallet
-    if (replaced_tx)
-    {
-        // The replaced tx was removed from the mempool above; notify the
-        // validation-signal layer so the wallet drops its now-defunct copy.
-        // Emitted synchronously under cs_main (held on entry), preserving the
-        // cs_main -> signals -> cs_wallet order and replacing the legacy
-        // cs_setpwalletRegistered EraseFromWallets wrapper (issue #3030). Uses the
-        // copy captured before remove() -- ptxOld dangles once the pool entry is gone.
-        GetMainSignals().TransactionReplacedInMempool(replaced_tx);
     }
 
     LogPrint(BCLog::LogFlags::MEMPOOL, "AcceptToMemoryPool : accepted %s (poolsz %" PRIszu ")", hash.ToString(), pool.mapTx.size());

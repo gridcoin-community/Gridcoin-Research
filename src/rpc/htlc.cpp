@@ -154,9 +154,9 @@ UniValue claimhtlc(const UniValue& params)
 {
     // Canonical order: cs_main -> cs_wallet. cs_wallet is held for this RPC's
     // own wallet work; AcceptToMemoryPool's synchronous signal dispatch (the
-    // wallet's TransactionAddedToMempool / TransactionReplacedInMempool
-    // handlers) also takes cs_wallet, recursively, under cs_main. The legacy
-    // cs_setpwalletRegistered hop is gone (issue #3030 retirement).
+    // wallet's TransactionAddedToMempool handler) also takes cs_wallet,
+    // recursively, under cs_main. The legacy cs_setpwalletRegistered hop is
+    // gone (issue #3030 retirement).
     LOCK(cs_main);
     LOCK(pwalletMain->cs_wallet);
     EnsureWalletIsUnlocked();
@@ -303,9 +303,9 @@ UniValue refundhtlc(const UniValue& params)
 {
     // Canonical order: cs_main -> cs_wallet. cs_wallet is held for this RPC's
     // own wallet work; AcceptToMemoryPool's synchronous signal dispatch (the
-    // wallet's TransactionAddedToMempool / TransactionReplacedInMempool
-    // handlers) also takes cs_wallet, recursively, under cs_main. The legacy
-    // cs_setpwalletRegistered hop is gone (issue #3030 retirement).
+    // wallet's TransactionAddedToMempool handler) also takes cs_wallet,
+    // recursively, under cs_main. The legacy cs_setpwalletRegistered hop is
+    // gone (issue #3030 retirement).
     LOCK(cs_main);
     LOCK(pwalletMain->cs_wallet);
     EnsureWalletIsUnlocked();
