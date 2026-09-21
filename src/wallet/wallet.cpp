@@ -8,6 +8,7 @@
 #include <key_io.h>
 #include "txdb.h"
 #include "wallet/wallet.h"
+#include "scheduler.h"
 #include "miner.h" // For GetDevbuildCripple() (staking cripple gate).
 #include "wallet/walletdb.h"
 #include "crypter.h"
@@ -566,6 +567,22 @@ bool CWallet::LoadCScript(const CScript& redeemScript)
 
 bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope)
 {
+    return Unlock(strWalletPassphrase, scope, /*relock_after=*/std::nullopt);
+}
+
+bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
+                     std::optional<std::chrono::seconds> relock_after)
+{
+    // Refuse rather than unlock without the timer the caller asked for. See
+    // the declaration: silently granting forever is the shape this removes.
+    if (relock_after && !g_scheduler) {
+        return error("%s: a timed unlock was requested but no scheduler is running", __func__);
+    }
+
+    const std::optional<int64_t> deadline = relock_after
+        ? std::optional<int64_t>(GetTime() + relock_after->count())
+        : std::nullopt;
+
     if (!IsLocked())
         return false;
 
@@ -580,8 +597,20 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope)
                 return false;
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 return false;
-            if (CCryptoKeyStore::Unlock(vMasterKey, scope))
+            if (CCryptoKeyStore::Unlock(vMasterKey, scope, deadline))
             {
+                // Arm the relock against THIS unlock. The scheduler cannot
+                // cancel a task, so it validates its epoch on arrival and is a
+                // no-op if anything has superseded this unlock.
+                if (relock_after) {
+                    const uint64_t epoch = GetUnlockEpoch();
+                    CWallet* const wallet = this;
+
+                    g_scheduler->scheduleFromNow([wallet, epoch] {
+                        wallet->LockIfCurrent(epoch);
+                    }, *relock_after);
+                }
+
                 return true;
             }
         }

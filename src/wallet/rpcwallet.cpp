@@ -38,11 +38,8 @@
 
 using namespace std;
 
-int64_t nWalletUnlockTime;
-static CCriticalSection cs_nWalletUnlockTime;
 
 extern void ThreadTopUpKeyPool(void* parg);
-extern void ThreadCleanWalletPassphrase(void* parg);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 static void accountingDeprecationCheck()
@@ -231,7 +228,7 @@ UniValue getinfo(const UniValue& params)
     obj.pushKV("paytxfee",      ValueFromAmount(nTransactionFee));
     obj.pushKV("mininput",      ValueFromAmount(nMinimumInputValue));
     if (pwalletMain->IsCrypted())
-        obj.pushKV("unlocked_until", nWalletUnlockTime / 1000);
+        obj.pushKV("unlocked_until", pwalletMain->GetUnlockDeadline().value_or(0));
     obj.pushKV("errors",        GetWarnings("statusbar"));
     return obj;
 }
@@ -274,7 +271,7 @@ UniValue getwalletinfo(const UniValue& params)
         res.pushKV("keypoolsize",   (int)pwalletMain->GetKeyPoolSize());
 
         if (pwalletMain->IsCrypted())
-            res.pushKV("unlocked_until", nWalletUnlockTime / 1000);
+            res.pushKV("unlocked_until", pwalletMain->GetUnlockDeadline().value_or(0));
 
         CKeyID masterKeyID = pwalletMain->GetHDChain().masterKeyID;
         if (!masterKeyID.IsNull())
@@ -3397,49 +3394,6 @@ void ThreadTopUpKeyPool(void* parg)
     pwalletMain->TopUpKeyPool();
 }
 
-void ThreadCleanWalletPassphrase(void* parg)
-{
-    // Make this thread recognisable as the wallet relocking thread
-    RenameThread("grc-lock-wa");
-
-    int64_t nMyWakeTime = GetTimeMillis() + *((int64_t*)parg) * 1000;
-
-    ENTER_CRITICAL_SECTION(cs_nWalletUnlockTime);
-
-    if (nWalletUnlockTime == 0)
-    {
-        nWalletUnlockTime = nMyWakeTime;
-
-        do
-        {
-            if (nWalletUnlockTime==0)
-                break;
-            int64_t nToSleep = nWalletUnlockTime - GetTimeMillis();
-            if (nToSleep <= 0)
-                break;
-
-            LEAVE_CRITICAL_SECTION(cs_nWalletUnlockTime);
-            if (!MilliSleep(nToSleep)) return;
-            ENTER_CRITICAL_SECTION(cs_nWalletUnlockTime);
-
-        } while(1);
-
-        if (nWalletUnlockTime)
-        {
-            nWalletUnlockTime = 0;
-            pwalletMain->Lock();
-        }
-    }
-    else
-    {
-        if (nWalletUnlockTime < nMyWakeTime)
-            nWalletUnlockTime = nMyWakeTime;
-    }
-
-    LEAVE_CRITICAL_SECTION(cs_nWalletUnlockTime);
-
-    delete (int64_t*)parg;
-}
 
 static const RPCHelpMan walletpassphrase_help{
     "walletpassphrase",
@@ -3508,7 +3462,7 @@ UniValue walletpassphrase(const UniValue& params)
     if (strWalletPass.length() > 0) {
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
-        if (!pwalletMain->Unlock(strWalletPass, scope)) {
+        if (!pwalletMain->Unlock(strWalletPass, scope, std::chrono::seconds(nSleepTime))) {
             // Check if the passphrase has a null character
             if (strWalletPass.find('\0') == std::string::npos) {
                 throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
@@ -3526,8 +3480,6 @@ UniValue walletpassphrase(const UniValue& params)
     }
 
     NewThread(ThreadTopUpKeyPool, nullptr);
-    int64_t* pnSleepTime = new int64_t(nSleepTime);
-    NewThread(ThreadCleanWalletPassphrase, pnSleepTime);
 
     return NullUniValue;
 }
@@ -3879,9 +3831,7 @@ UniValue walletlock(const UniValue& params)
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     {
-        LOCK(cs_nWalletUnlockTime);
         pwalletMain->Lock();
-        nWalletUnlockTime = 0;
     }
 
     return NullUniValue;

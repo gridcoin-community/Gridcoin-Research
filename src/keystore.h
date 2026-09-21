@@ -6,6 +6,7 @@
 #define BITCOIN_KEYSTORE_H
 
 #include "crypter.h"
+#include <optional>
 #include "sync.h"
 #include <boost/signals2/signal.hpp>
 
@@ -142,6 +143,24 @@ private:
     //! disagree. Locked exactly when vMasterKey is empty.
     UnlockScope m_unlock_scope GUARDED_BY(cs_KeyStore){UnlockScope::Locked};
 
+    //! When this unlock expires, absolute, or nullopt for an unlock with no
+    //! deadline. Set and cleared with the key and the scope, so it cannot
+    //! outlive the unlock that asked for it -- the defect in the global it
+    //! replaces, which no unlock owned.
+    std::optional<int64_t> m_unlock_deadline GUARDED_BY(cs_KeyStore);
+
+    //! Identifies the current unlock, so a relock scheduled for an earlier one
+    //! can recognise itself as superseded and do nothing.
+    //!
+    //! CScheduler cannot cancel a task, so an armed relock always arrives. It
+    //! carries the counter it was armed with and is a no-op unless that still
+    //! matches. Bumped when an unlock BEGINS and when one ENDS.
+    //!
+    //! Deliberately NOT bumped by RestrictToStakingOnly: narrowing hands an
+    //! elevation back without changing when the unlock expires, so bumping
+    //! there would retire the armed relock and the wallet would never lock.
+    uint64_t m_unlock_epoch GUARDED_BY(cs_KeyStore){0};
+
     // if fUseCrypto is true, mapKeys must be empty
     // if fUseCrypto is false, vMasterKey must be empty
     bool fUseCrypto;
@@ -154,7 +173,8 @@ protected:
     // will encrypt previously unencrypted keys
     bool EncryptKeys(CKeyingMaterial& vMasterKeyIn);
 
-    bool Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope scope);
+    bool Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope scope,
+                std::optional<int64_t> deadline = std::nullopt);
 
     //! Encrypt/decrypt an arbitrary non-key wallet secret (e.g. the seed
     //! phrase blob) under the store's keying material. The store must be
@@ -194,6 +214,48 @@ public:
     bool IsLocked() const
     {
         return GetUnlockScope() == UnlockScope::Locked;
+    }
+
+    //! \brief When the current unlock expires, or nullopt if it has no deadline.
+    std::optional<int64_t> GetUnlockDeadline() const
+    {
+        LOCK(cs_KeyStore);
+        return m_unlock_deadline;
+    }
+
+    //! \brief Identifies the current unlock, for arming a relock against it.
+    uint64_t GetUnlockEpoch() const
+    {
+        LOCK(cs_KeyStore);
+        return m_unlock_epoch;
+    }
+
+    //! \brief Lock, but only if \p epoch is still the current unlock.
+    //!
+    //! What a scheduled relock calls on arrival. CScheduler cannot cancel a
+    //! task, so a relock armed for an unlock that has since been superseded --
+    //! by a manual lock, or by a later unlock with its own deadline -- still
+    //! fires. Comparing the epoch makes every one of those a no-op.
+    //!
+    //! Validates and clears under ONE acquisition. Checking the epoch, then
+    //! releasing, then calling Lock() would let a new unlock land in the gap
+    //! and be locked by a task that had already decided it was current.
+    bool LockIfCurrent(uint64_t epoch)
+    {
+        if (!SetCrypted()) return false;
+
+        {
+            LOCK(cs_KeyStore);
+            if (epoch != m_unlock_epoch) return false;
+
+            vMasterKey.clear();
+            m_unlock_scope = UnlockScope::Locked;
+            m_unlock_deadline.reset();
+            ++m_unlock_epoch;
+        }
+
+        NotifyStatusChanged(this);
+        return true;
     }
 
     //! \brief Narrow the current unlock to staking only.

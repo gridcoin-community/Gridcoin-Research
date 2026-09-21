@@ -85,13 +85,18 @@ bool CCryptoKeyStore::Lock()
         LOCK(cs_KeyStore);
         vMasterKey.clear();
         m_unlock_scope = UnlockScope::Locked;
+        m_unlock_deadline.reset();
+
+        // Ends the current unlock, so any relock armed for it is now stale.
+        ++m_unlock_epoch;
     }
 
     NotifyStatusChanged(this);
     return true;
 }
 
-bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope scope)
+bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope scope,
+                            std::optional<int64_t> deadline)
 {
     // Asking to unlock "to Locked" is not a thing. Fail closed rather than pick
     // a scope for the caller: silently widening it to Full would hand a future
@@ -135,10 +140,16 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope sc
         if (keyPass) std::memset(&keyPass, 1, sizeof(bool));
         if (keyFail || !keyPass)
             return false;
-        // The key and what it permits, set together under one lock. A reader
-        // between two separate writes is the defect this replaces.
+        // The key, what it permits, and when it expires, set together under one
+        // lock. A reader between two separate writes is the defect this
+        // replaces, and the deadline now belongs to this unlock rather than to
+        // a process-wide global no unlock owned.
         vMasterKey = vMasterKeyIn;
         m_unlock_scope = scope;
+        m_unlock_deadline = deadline;
+
+        // Begins a new unlock, so a relock armed for the previous one is stale.
+        ++m_unlock_epoch;
         fDecryptionThoroughlyChecked = true;
     }
     NotifyStatusChanged(this);

@@ -18,8 +18,15 @@ class AskPassphraseDialog : public QDialog
 public:
     enum Mode {
         Encrypt,       /**< Ask passphrase twice and encrypt */
-        UnlockStaking, /**< Ask passphrase and unlock */
-        Unlock,        /**< Ask passphrase and unlock */
+        //! The Unlock BUTTON: a directive. Shows the staking-only checkbox,
+        //! ticked by default, and leaves the wallet in the state the user
+        //! chose. That state outlives this dialog.
+        UnlockStaking,
+        //! An ELEVATION raised by an operation that needs a full unlock. No
+        //! checkbox: staking-only would not satisfy the caller, so there is
+        //! nothing to choose. WalletModel::UnlockContext restores the prior
+        //! scope when the operation finishes.
+        Unlock,
         ChangePass,    /**< Ask old passphrase + new passphrase twice */
     };
 

@@ -1,4 +1,7 @@
 #include "random.h"
+#include "scheduler.h"
+#include <thread>
+#include <memory>
 #include <boost/test/unit_test.hpp>
 
 #include "gridcoin/mnemonics.h"
@@ -955,6 +958,106 @@ BOOST_AUTO_TEST_CASE(the_transaction_builder_refuses_a_staking_only_wallet)
     }
 
     staking.Lock();
+}
+
+//!
+//! A timed unlock locks itself when its deadline arrives, and a relock armed
+//! for an unlock that has since been superseded does NOTHING.
+//!
+//! The second half is the one that matters. CScheduler cannot cancel a task, so
+//! a relock armed for an earlier unlock always arrives; without the epoch check
+//! it would lock a wallet that a later, longer unlock owns. Discriminates by
+//! bringing ONLY the stale task due and asserting the wallet stays unlocked --
+//! were the epoch ignored, it would be locked instead.
+//!
+BOOST_AUTO_TEST_CASE(a_superseded_scheduled_relock_does_nothing)
+{
+    // Stand up a scheduler for the duration of the case and put it back after.
+    struct SchedulerForThisCase {
+        std::unique_ptr<CScheduler> m_saved;
+        std::thread m_service;
+
+        SchedulerForThisCase() : m_saved(std::move(g_scheduler))
+        {
+            g_scheduler = std::make_unique<CScheduler>();
+            m_service = std::thread([] { g_scheduler->serviceQueue(); });
+        }
+
+        ~SchedulerForThisCase()
+        {
+            g_scheduler->stop();
+            if (m_service.joinable()) m_service.join();
+            g_scheduler = std::move(m_saved);
+        }
+    } scheduler;
+
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("scheduled-relock");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    // The unlock that will be superseded, and the relock armed for it.
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+    BOOST_REQUIRE(!wallet.IsLocked());
+
+    // Supersede it: a manual lock ends that unlock, and a second unlock begins
+    // a new one with a deadline far enough out that bringing the first task due
+    // does not bring the second one due as well.
+    wallet.Lock();
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(3000)));
+    BOOST_REQUIRE(!wallet.IsLocked());
+
+    // Bring the stale task due and let the service thread run it.
+    g_scheduler->MockForward(std::chrono::seconds(61));
+
+    for (int i = 0; i < 200 && !wallet.IsLocked(); ++i) {
+        UninterruptibleSleep(std::chrono::milliseconds(10));
+    }
+
+    // Still unlocked: the stale relock recognised itself as superseded.
+    BOOST_CHECK(!wallet.IsLocked());
+    BOOST_CHECK(wallet.GetUnlockDeadline().has_value());
+
+    wallet.Lock();
+}
+
+//!
+//! A timed unlock refuses outright when there is no scheduler to arm its
+//! relock, rather than quietly granting an unlock that never expires.
+//!
+BOOST_AUTO_TEST_CASE(a_timed_unlock_without_a_scheduler_is_refused)
+{
+    std::unique_ptr<CScheduler> saved = std::move(g_scheduler); // none for this case
+
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("no-scheduler");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+    BOOST_CHECK(wallet.IsLocked());
+
+    // An unlock with no deadline arms nothing and is unaffected.
+    BOOST_CHECK(wallet.Unlock(passphrase, UnlockScope::Full, std::nullopt));
+    BOOST_CHECK(!wallet.IsLocked());
+    BOOST_CHECK(!wallet.GetUnlockDeadline().has_value());
+
+    wallet.Lock();
+    g_scheduler = std::move(saved);
 }
 
 //!

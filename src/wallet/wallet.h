@@ -7,6 +7,8 @@
 #define BITCOIN_WALLET_WALLET_H
 
 #include <atomic>
+#include <chrono>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -325,6 +327,22 @@ public:
     {
         return GetUnlockScope() == UnlockScope::StakingOnly;
     }
+
+    //! \brief Unlock with an explicit scope and an optional duration.
+    //!
+    //! \p relock_after, when set, is how long this unlock lasts. The deadline
+    //! is stored with the key and the scope, and a one-shot relock is armed on
+    //! the scheduler against this unlock's epoch, so setting a duration and
+    //! arming its timer are ONE operation that cannot be half-done.
+    //!
+    //! Fails if a duration is asked for and no scheduler is running, rather
+    //! than unlocking without the timer: a caller that asked for sixty seconds
+    //! and silently got forever is the failure this design exists to remove.
+    //! Unreachable in production, where the RPC server starts after the
+    //! scheduler; reachable in tests, which is why it is a refusal and not an
+    //! assertion.
+    bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
+                std::optional<std::chrono::seconds> relock_after);
 
     //! \brief Unlock with an explicit scope.
     //!

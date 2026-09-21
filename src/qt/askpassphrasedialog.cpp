@@ -43,7 +43,11 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
             ui->stakingCheckBox->show();
             // fallthru
         case Unlock: // Ask passphrase
-            ui->warningLabel->setText(tr("This operation needs your wallet passphrase to unlock the wallet."));
+            // Say that it is temporary, because it is: the wallet returns to
+            // whatever it was as soon as the operation finishes.
+            ui->warningLabel->setText(tr("This operation needs your wallet passphrase. The wallet is "
+                                         "unlocked for the operation and returns to its previous "
+                                         "state afterwards."));
             ui->newPassphraseLabel->hide();
             ui->newPassphraseEdit->hide();
             ui->repeatNewPassphraseLabel->hide();
@@ -183,10 +187,22 @@ void AskPassphraseDialog::accept()
     } break;
     case UnlockStaking:
     case Unlock:
-        // A successful unlock also persists the staking-only preference
-        // node-side (the checkbox state), which the old code applied to the
-        // staking-only global after the fact.
-        if(!model->setWalletLocked(false, oldpass, ui->stakingCheckBox->isChecked())) {
+        // Two different questions, so do not read one answer for both.
+        //
+        // UnlockStaking is the Unlock BUTTON: a directive that leaves the
+        // wallet in a state the user chose and that outlives this dialog. The
+        // checkbox is that choice, and it opens ticked because staking-only is
+        // the conservative option.
+        //
+        // Unlock is an ELEVATION raised by an operation that cannot proceed
+        // without a full unlock. There is nothing to choose: staking-only would
+        // not satisfy the caller, so the box is not shown and full is the only
+        // answer. Reading the hidden widget here gave the right result only
+        // because it happens to be unchecked, which is an accident rather than
+        // a decision. WalletModel::UnlockContext restores the prior scope when
+        // the operation finishes, so this elevation is temporary.
+        if(!model->setWalletLocked(false, oldpass,
+                                   mode == UnlockStaking && ui->stakingCheckBox->isChecked())) {
             // Check if the passphrase has a null character
             if (oldpass.find('\0') == std::string::npos) {
                     QMessageBox::critical(this, tr("Wallet unlock failed"),
