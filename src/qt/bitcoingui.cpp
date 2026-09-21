@@ -1883,24 +1883,23 @@ void BitcoinGUI::setEncryptionStatus(int status)
         encryptWalletAction->setEnabled(true);
         break;
     case WalletModel::Unlocked:
+    case WalletModel::UnlockedForStakingOnly:
     {
-        // There is no longer a sticky flag to prefer over the composite: both
-        // getters now report the same scope, and a lock clears it.
-        //
-        // KNOWN, and fixed by widening WalletModel::EncryptionStatus to carry
-        // the scope: this slot runs queued, so a relock racing delivery paints
-        // this arm with the scope already cleared, showing the unrestricted
-        // icon for one frame until the lock's own status event arrives. The
-        // old code painted a stale staking-only frame in the same race. Either
-        // way it is one wrong frame on an icon, corrected immediately.
-        const bool staking_only = walletModel && walletModel->wallet().getUnlockStakingOnlyFlag();
+        // The status carries the scope now, so this paints from the value it
+        // was handed. It used to make a SECOND call here at paint time, which
+        // could disagree with the status that selected this arm: a relock
+        // racing the queued delivery painted the wrong frame either way. One
+        // read cannot disagree with itself.
+        const bool staking_only = (status == WalletModel::UnlockedForStakingOnly);
 
         if (staking_only) {
             labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_unlocked_" + sSheet));
         } else {
             labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_none_" + sSheet));
         }
-        labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently %1 ").arg(staking_only ? tr("<b>unlocked for staking only</b>") : tr("<b>fully unlocked</b>")));
+
+        labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently %1 ").arg(staking_only ? tr("<b>unlocked for staking only</b>") :
+                                                                                               tr("<b>unlocked</b>")));
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
         unlockWalletAction->setVisible(false);

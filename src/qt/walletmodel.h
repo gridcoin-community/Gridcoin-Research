@@ -85,9 +85,10 @@ public:
 
     enum EncryptionStatus
     {
-        Unencrypted,  // !wallet->IsCrypted()
-        Locked,       // wallet->IsCrypted() && wallet->IsLocked()
-        Unlocked      // wallet->IsCrypted() && !wallet->IsLocked()
+        Unencrypted,             // !wallet->IsCrypted()
+        Locked,                  // crypted, scope Locked
+        Unlocked,                // crypted, scope Full
+        UnlockedForStakingOnly   // crypted, scope StakingOnly
     };
 
     //! The interface boundary for wallet queries and commands. Dialogs that

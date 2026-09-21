@@ -475,8 +475,10 @@ TransactionTableModel *WalletModel::getTransactionTableModel()
 
 WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
 {
-    // One snapshot read: crypted and locked come back together (a narrower window
-    // than two separate reads) and the split build makes a single round trip.
+    // One snapshot read, and it now carries the whole answer: a staking-only
+    // wallet is no longer reported as plain Unlocked, so no caller has to make
+    // a second call to find out which kind of unlocked it is. That second read
+    // was the last place two views of the lock state could disagree.
     const interfaces::WalletLockState lock_state = m_wallet.getLockState();
 
     if (!lock_state.crypted)
@@ -486,6 +488,10 @@ WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
     else if (lock_state.locked)
     {
         return Locked;
+    }
+    else if (lock_state.unlocked_for_staking_only)
+    {
+        return UnlockedForStakingOnly;
     }
     else
     {

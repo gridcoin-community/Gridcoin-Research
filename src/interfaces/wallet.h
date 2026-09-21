@@ -47,7 +47,10 @@ struct WalletLockState
     bool crypted{false};                   //!< IsCrypted(): the wallet has a passphrase.
     bool locked{false};                    //!< IsLocked(): the keys are not in memory.
     bool unlocked_for_staking_only{false}; //!< Unlocked but restricted to staking.
-    bool staking_only_flag{false};         //!< Deprecated alias of unlocked_for_staking_only; see getUnlockStakingOnlyFlag.
+    //! DEPRECATED and UNUSED: a duplicate of unlocked_for_staking_only. Kept
+    //! only because dropping it would hole the struct's ordinals (@3); retire
+    //! it with getUnlockStakingOnlyFlag in a dedicated renumbering change.
+    bool staking_only_flag{false};
 };
 
 //! Value snapshot of one unspent wallet output for the coin-control views.
@@ -270,13 +273,20 @@ public:
     //! where a snapshot taken earlier would be stale.
     virtual bool isUnlockedForStakingOnly() = 0;
 
-    //! DEPRECATED, and now an exact alias of isUnlockedForStakingOnly.
+    //! DEPRECATED and UNUSED. An exact alias of isUnlockedForStakingOnly.
     //!
     //! It used to report a sticky preference that outlived the unlock, which is
     //! what let the unlock dialog pre-tick its box while the wallet was locked.
     //! There is no such preference any more: the restriction belongs to the
     //! unlock and a lock clears it, so this is false whenever the wallet is
-    //! locked. Its two remaining callers are being reworked; do not add more.
+    //! locked. It now has NO production callers: WalletModel::EncryptionStatus
+    //! carries the scope, so the status icon paints from the value it was
+    //! handed and the unlock dialog no longer seeds a preference.
+    //!
+    //! Left in place rather than deleted because removing it would leave an
+    //! ordinal hole at @9, and this project renumbers rather than holes. That
+    //! renumber touches every later ordinal and deserves its own change with
+    //! its own review, not a ride-along in this one. Do not add callers.
     virtual bool getUnlockStakingOnlyFlag() = 0;
 
     //! Encrypt the wallet with the given passphrase.
