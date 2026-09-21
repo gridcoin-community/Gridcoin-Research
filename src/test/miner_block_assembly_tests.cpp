@@ -31,6 +31,7 @@
 
 #include "amount.h"
 #include "chain.h"
+#include "chainparams.h"
 #include "consensus/consensus.h"
 #include "consensus/tx_verify.h"
 #include "gridcoin/cpid.h"
@@ -38,6 +39,7 @@
 #include "gridcoin/mrc.h"
 #include "init.h"
 #include "miner.h"
+#include "node/blockstorage.h"
 #include "policy/fees.h"
 #include "primitives/block.h"
 #include "primitives/transaction.h"
@@ -55,9 +57,9 @@
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
-#include <string>
-
 #include <map>
+#include <set>
+#include <string>
 #include <vector>
 
 using grc_test::AddToMempool;
@@ -185,10 +187,12 @@ bool Contains(const std::vector<CTransaction>& txs, const CTransaction& tx)
 // suite-level leak detector compares registry SIZES, which those cases do not
 // change: they modify an existing builtin seed rather than adding an entry. So the
 // mutation is both unrestored and invisible, and the reset has to be asked for.
-BOOST_AUTO_TEST_SUITE(miner_block_assembly_tests,
-                      *boost::unit_test::fixture<grc_test::RegtestChainSetup>()
-                      *boost::unit_test::fixture<
-                          grc_test::RegistryResetFor<GRC::ContractType::POOL_REGISTER>>())
+//
+// WalletTxScope is the per-case fixture: the chain is shared, but every case
+// leaves the wallet's entry set as it found it, so the cases hold in any order
+// (--random shuffles them). Without it a case that plants an own transaction
+// and returns without erasing it hands the next case a resend candidate.
+BOOST_FIXTURE_TEST_SUITE(miner_block_assembly_tests, grc_test::WalletTxScope, *boost::unit_test::fixture<grc_test::RegtestChainSetup>() *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::POOL_REGISTER>>())
 
 //!
 //! The fixture's own precondition: a real chain, and premine coins that the
@@ -196,16 +200,65 @@ BOOST_AUTO_TEST_SUITE(miner_block_assembly_tests,
 //! so it is asserted separately rather than left implicit in a failure
 //! elsewhere.
 //!
+//! Asserted as the invariant that holds for the fixture's whole lifetime, not
+//! as the state at suite entry: the cases run in any order, and five of them
+//! mine. The entry state (height 0, ten unspent outputs) is the fixture
+//! constructor's own precondition, checked before the shuffle. What this case
+//! pins is that the transaction index agrees with the chain: the premine
+//! outputs it reports spendable are exactly those no transaction in a block on
+//! the active chain has consumed. The two are independent sources -- vSpent in
+//! the index against block contents read back from disk.
+//!
 BOOST_AUTO_TEST_CASE(the_fixture_provides_spendable_coins)
 {
     LOCK(cs_main);
 
-    BOOST_CHECK(pindexGenesisBlock != nullptr);
-    BOOST_CHECK(pindexBest != nullptr);
-    BOOST_CHECK_EQUAL(nBestHeight, 0);
+    BOOST_REQUIRE(pindexGenesisBlock != nullptr);
+    BOOST_REQUIRE(pindexBest != nullptr);
+    BOOST_CHECK_EQUAL(nBestHeight, pindexBest->nHeight);
 
-    BOOST_CHECK_EQUAL(PremineCoinbase().vout.size(), 10u);
-    BOOST_CHECK_EQUAL(SpendablePremineOutputs().size(), 10u);
+    const CTransaction& coinbase = PremineCoinbase();
+    BOOST_CHECK_EQUAL(coinbase.vout.size(), 10u);
+
+    // Walk the active chain from the tip back to genesis, collecting every
+    // premine output a block on it spends (a coinstake's kernel is an ordinary
+    // input here). The walk is over pprev, never over mapBlockIndex: when this
+    // fixture is the second one constructed in the binary, LoadBlockIndex
+    // reloads the index records of blocks an earlier fixture committed and then
+    // disconnected, and those side-chain spends were rightly undone in the
+    // transaction index.
+    std::set<uint32_t> spent_on_chain;
+    const CBlockIndex* pindex = pindexBest;
+
+    for (; pindex != nullptr && pindex != pindexGenesisBlock; pindex = pindex->pprev) {
+        CBlock block;
+        BOOST_REQUIRE_MESSAGE(ReadBlockFromDisk(block, pindex, Params().GetConsensus()),
+                              "could not read block " << pindex->nHeight << " from disk");
+
+        for (const CTransaction& tx : block.vtx) {
+            for (const CTxIn& txin : tx.vin) {
+                if (txin.prevout.hash == coinbase.GetHash()) {
+                    spent_on_chain.insert(txin.prevout.n);
+                }
+            }
+        }
+    }
+
+    BOOST_REQUIRE_MESSAGE(pindex == pindexGenesisBlock, "the tip does not descend from genesis");
+
+    std::set<uint32_t> spendable;
+    for (const COutPoint& out : SpendablePremineOutputs()) {
+        BOOST_CHECK(out.hash == coinbase.GetHash());
+        spendable.insert(out.n);
+    }
+
+    std::set<uint32_t> expected;
+    for (uint32_t n = 0; n < coinbase.vout.size(); ++n) {
+        if (!spent_on_chain.count(n)) expected.insert(n);
+    }
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(spendable.begin(), spendable.end(),
+                                  expected.begin(), expected.end());
 }
 
 //!
@@ -511,6 +564,33 @@ struct MaxSizeRestorer {
     ~MaxSizeRestorer() { mempool.SetMaxSize(m_saved); }
 };
 
+//! The wallet entries a forced ResendWalletTransactions could relay right now:
+//! unconfirmed, depth -1, and not inactive. Inactive entries are selected too
+//! but RelayWalletTransaction refuses them, so they never reach the count; an
+//! earlier suite in this binary (accounting_tests) leaves three of those in the
+//! process wallet, and they are as invisible to the count as they always were.
+//! Empty when nothing a sibling left could be counted as this case's.
+std::string DescribeRelayableCandidates()
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    std::string out;
+
+    for (const auto& item : pwalletMain->mapWallet) {
+        const CWalletTx& wtx = item.second;
+
+        if (wtx.isConfirmed() || wtx.isInactive() || wtx.GetDepthInMainChain() != -1) continue;
+
+        const char* state = wtx.state<TxStateInMempool>() ? "in-mempool tag, not pooled"
+                                                         : "unrecognized";
+
+        if (!out.empty()) out += ", ";
+        out += item.first.GetHex() + " (" + state + ")";
+    }
+
+    return out;
+}
+
 } // anonymous namespace
 
 //!
@@ -582,11 +662,6 @@ BOOST_AUTO_TEST_CASE(a_size_limit_eviction_reaches_the_wallet)
     }
 
     mempool.clear();
-
-    // The spends are deterministic, so the next case builds the same two
-    // transactions; leave it a wallet that has never seen them.
-    pwalletMain->EraseFromWallet(first_hash);
-    pwalletMain->EraseFromWallet(second.GetHash());
 }
 
 //!
@@ -600,7 +675,10 @@ BOOST_AUTO_TEST_CASE(a_size_limit_eviction_reaches_the_wallet)
 //! against the tx index and relayed; marked conflicted it is refused by
 //! RelayWalletTransaction. Had the eviction handler marked it conflicted, the
 //! count after the eviction would be 0. The wallet must have nothing to
-//! re-announce before the case starts, or the counts would not be this case's.
+//! re-announce before the case starts, or the counts would not be this case's;
+//! the suite's per-case WalletTxScope guarantees that in any order, and the
+//! entry check names any candidate a sibling left behind rather than only
+//! counting it.
 //!
 BOOST_AUTO_TEST_CASE(a_size_limit_evicted_own_spend_is_rebroadcast)
 {
@@ -616,6 +694,10 @@ BOOST_AUTO_TEST_CASE(a_size_limit_evicted_own_spend_is_rebroadcast)
 
     LOCK(cs_main);
 
+    // Taken BEFORE the call: a forced resend erases every candidate that fails
+    // revalidation as a side effect, so a count alone cannot say what was there.
+    const std::string leaked = DescribeRelayableCandidates();
+    BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
     BOOST_REQUIRE_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
 
     CValidationState state_first;
@@ -650,8 +732,6 @@ BOOST_AUTO_TEST_CASE(a_size_limit_evicted_own_spend_is_rebroadcast)
     BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
 
     mempool.clear();
-    pwalletMain->EraseFromWallet(first_hash);
-    pwalletMain->EraseFromWallet(second.GetHash());
 }
 
 BOOST_AUTO_TEST_CASE(a_size_limit_eviction_signals_the_victims_descendants_too)
@@ -726,15 +806,6 @@ BOOST_AUTO_TEST_CASE(a_size_limit_eviction_signals_the_victims_descendants_too)
             "expected exactly one CT_UPDATED for " + hash.GetHex() + ", saw " + std::to_string(notices));
     }
 
-    // Leave no wallet residue: later cases in this suite assert preconditions
-    // on the wallet's resend-candidate set, and the evicted entries here are
-    // exactly that shape (in-mempool tag, absent from the pool).
-    {
-        LOCK(pwalletMain->cs_wallet);
-        pwalletMain->EraseFromWallet(parent_hash);
-        pwalletMain->EraseFromWallet(child_hash);
-        pwalletMain->EraseFromWallet(third.GetHash());
-    }
     mempool.clear();
 }
 
@@ -784,8 +855,8 @@ bool IsAbandonedInWallet(const uint256& txid)
 }
 
 //! Put \p tx in the wallet so the abandon half of the sweep has something to act
-//! on. AddToWalletIfInvolvingMe would filter it out -- the premine key is not in
-//! pwalletMain -- so add it directly, which is what accounting_tests does.
+//! on. AddToMempool bypasses validation and the signals, so nothing tells the
+//! wallet about it; add it directly, which is what accounting_tests does.
 void PutInWallet(const CTransaction& tx)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -915,9 +986,10 @@ BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_untouched_below_the_height)
 
     const int64_t after_the_block = GetAdjustedTime() + 3600;
 
-    // A DIFFERENT premine output, so this transaction does not share a txid with
-    // the one the case above abandoned -- mapWallet outlives the case and would
-    // otherwise hand this one the previous verdict.
+    // A DIFFERENT premine output from the sweep case's, so the two transactions
+    // never share a txid. WalletTxScope erases the sweep's abandoned entry at
+    // its exit, so nothing depends on this any more; it keeps the two cases'
+    // transactions distinguishable in a log.
     const GRC::Contract contract =
         GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "stuffed");
 
@@ -1164,8 +1236,9 @@ BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_untouched_while_its_authorization
     const std::vector<COutPoint> coins = SpendablePremineOutputs();
     BOOST_REQUIRE_GE(coins.size(), 2u);
 
-    // A different premine output, so this does not share a txid with the one the
-    // case above abandoned -- mapWallet outlives a case.
+    // A different premine output from the sweep case's, so the two never share a
+    // txid; WalletTxScope erases the sweep's entry at its exit, so this is only
+    // for distinguishability in a log.
     const int64_t after_the_block = GetAdjustedTime() + 3600;
     const CTransaction pool_tx = grc_test::CreateSpendWithContract(
         PremineCoinbase(), coins[1].n, 200000, contract, after_the_block,

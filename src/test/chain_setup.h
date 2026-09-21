@@ -11,6 +11,7 @@
 #include "gridcoin/contract/contract.h"
 #include "primitives/transaction.h"
 
+#include <set>
 #include <string>
 #include <vector>
 
@@ -48,6 +49,15 @@ namespace grc_test {
 //! disk-reload path instead of creating genesis. Constructing a second one while
 //! the first is alive asserts.
 //!
+//! A LIGHT per-case fixture alongside the decorator is fine, and is how a suite
+//! keeps its cases order-independent while sharing one chain:
+//!
+//!     BOOST_FIXTURE_TEST_SUITE(my_tests, grc_test::WalletTxScope,
+//!                              *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
+//!
+//! The chain is still built once per suite; only the per-case object is
+//! constructed and destroyed around each case.
+//!
 //! Because it is not a base class under that decorator, the helpers below are
 //! free functions. They are valid only while a RegtestChainSetup is alive.
 //!
@@ -72,6 +82,40 @@ struct RegtestChainSetup
 
     RegtestChainSetup(const RegtestChainSetup&) = delete;
     RegtestChainSetup& operator=(const RegtestChainSetup&) = delete;
+};
+
+//!
+//! \brief Erases the unconfirmed wallet transactions added during its lifetime.
+//!
+//! For a suite that shares one RegtestChainSetup across its cases (see the
+//! LIFETIME note above). Every case then leaves the wallet's entry set as it
+//! found it, whatever the exit path -- a BOOST_REQUIRE that throws mid-case
+//! unwinds this object too -- so no case inherits a sibling's resend
+//! candidates, and a case's preconditions on the wallet hold in any order.
+//!
+//! What it restores: the set of mapWallet keys, and with each erased entry its
+//! own mapTxSpends rows (EraseFromWallet removes exactly those). What it does
+//! NOT restore: the vfSpent bits the added entries set on PRE-EXISTING entries,
+//! notably the premine coinbase; EraseFromWallet leaves them, and releasing them
+//! here would be wrong for an output a confirmed transaction really spent.
+//!
+//! Entries in TxStateConfirmed are kept. They belong to the chain the suite-level
+//! fixture still holds (a mined block's coinstake, delivered through
+//! CWallet::BlockConnected), the wallet stakes their outputs in later cases
+//! exactly as it does today, and the fixture's own teardown removes them once
+//! the chain is rewound. Erasing them would take the coinstake outputs out of
+//! the wallet's stakeable set while the chain still holds them.
+//!
+struct WalletTxScope
+{
+    WalletTxScope();
+    ~WalletTxScope();
+
+    WalletTxScope(const WalletTxScope&) = delete;
+    WalletTxScope& operator=(const WalletTxScope&) = delete;
+
+private:
+    std::set<uint256> m_preexisting;
 };
 
 //! \brief The key the regtest genesis premine pays to.

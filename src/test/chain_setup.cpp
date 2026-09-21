@@ -357,6 +357,39 @@ RegtestChainSetup::~RegtestChainSetup()
     g_state.reset();
 }
 
+WalletTxScope::WalletTxScope()
+{
+    if (!pwalletMain) return;
+
+    LOCK(pwalletMain->cs_wallet);
+
+    for (const auto& entry : pwalletMain->mapWallet) {
+        m_preexisting.insert(entry.first);
+    }
+}
+
+WalletTxScope::~WalletTxScope()
+{
+    if (!pwalletMain) return;
+
+    std::vector<uint256> added;
+
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        for (const auto& entry : pwalletMain->mapWallet) {
+            if (m_preexisting.count(entry.first)) continue;
+            // A confirmed entry is the chain's, not the case's; see the header.
+            if (entry.second.isConfirmed()) continue;
+            added.push_back(entry.first);
+        }
+    }
+
+    for (const uint256& hash : added) {
+        pwalletMain->EraseFromWallet(hash);
+    }
+}
+
 const CKey& PremineKey() { return State().m_key; }
 
 const CBasicKeyStore& PremineKeystore() { return State().m_keystore; }
