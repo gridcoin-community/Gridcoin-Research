@@ -565,33 +565,38 @@ bool CWallet::LoadCScript(const CScript& redeemScript)
     return CCryptoKeyStore::AddCScript(redeemScript);
 }
 
-//! Whether a relock armed now would actually run.
+//! Whether a relock armed now would be accepted.
 //!
-//! A non-null g_scheduler is not enough to know that. StartRPCThreads() runs
-//! before g_scheduler is constructed, and StopRPCThreads() runs after it has
-//! been stopped and its thread joined, so at each end of the process there is a
-//! window where an RPC can ask for a timed unlock, the pointer answers, and
-//! nothing will ever service what is put on the queue -- which would leave the
-//! wallet unlocked past the deadline it reported.
+//! Advisory only, for a caller that wants to refuse early with a good message.
+//! It cannot be relied on: the scheduler can stop between this answering yes and
+//! the task being enqueued, and the key derivation in between takes a calibrated
+//! few hundred milliseconds. ArmRelock is what actually decides.
 static bool SchedulerCanRelock()
 {
-    return g_scheduler && g_scheduler->AreThreadsServicingQueue();
+    return g_scheduler_handle.load(std::memory_order_acquire) != nullptr;
 }
 
-//! Arm a one-shot relock for the unlock identified by \p epoch.
+//! Arm a one-shot relock for the unlock identified by \p epoch, reporting
+//! whether the scheduler took it.
 //!
 //! CScheduler cannot cancel a task, so an armed relock always arrives. It
 //! carries the epoch it was armed with and does nothing unless that is still
 //! the current unlock, which makes every superseded relock a no-op.
 //!
-//! Takes the scheduler by reference rather than reading the global, so "there
-//! is one" is carried by the signature. Both callers have to decide what to do
-//! without one -- refuse the unlock, or lock instead -- and neither can reach
-//! here before making that decision.
-static void ArmRelock(CScheduler& scheduler, CWallet* wallet, uint64_t epoch,
-                      std::chrono::seconds delay)
+//! The check and the enqueue happen together, inside the scheduler. Reading a
+//! readiness flag here and scheduling afterwards would leave a window in which
+//! shutdown lands between the two, and the relock -- the only thing that will
+//! end a timed unlock -- would be dropped silently.
+//!
+//! Returns false when there is no scheduler to take it, or it is stopping. A
+//! caller must not leave the wallet unlocked on a false.
+[[nodiscard]] static bool ArmRelock(CWallet* wallet, uint64_t epoch, std::chrono::seconds delay)
 {
-    scheduler.scheduleFromNow([wallet, epoch] {
+    CScheduler* const scheduler = g_scheduler_handle.load(std::memory_order_acquire);
+
+    if (!scheduler) return false;
+
+    return scheduler->scheduleFromNowIfRunning([wallet, epoch] {
         wallet->LockIfCurrent(epoch);
     }, delay);
 }
@@ -649,8 +654,25 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                 // interval here would fire that much LATER than the deadline
                 // getinfo reports -- the key would outlive its stated expiry.
                 if (relock_after) {
-                    ArmRelock(*g_scheduler, this, epoch,
-                              std::chrono::seconds(std::max<int64_t>(0, *deadline - GetTime())));
+                    const int64_t remaining = *deadline - GetTime();
+
+                    // The derivation ate the whole timeout. Lock now rather than
+                    // enqueue a zero-delay task: that would still return with the
+                    // key installed until the scheduler thread picked it up, so a
+                    // caller could act after the deadline it was given. A one
+                    // second timeout is enough to reach this.
+                    if (remaining <= 0) {
+                        Lock();
+                        return error("%s: the unlock expired while its key was being derived", __func__);
+                    }
+
+                    // Fail CLOSED. Nothing else will end this unlock, so a wallet
+                    // left open here is the exact outcome the design refuses.
+                    if (!ArmRelock(this, epoch, std::chrono::seconds(remaining))) {
+                        Lock();
+                        return error("%s: the relock could not be scheduled, so the wallet was "
+                                     "left locked rather than unlocked without one", __func__);
+                    }
                 }
 
                 return true;
@@ -765,13 +787,11 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
                     const int64_t remaining = *prior->deadline - GetTime();
 
                     // The deadline passed while the key was being re-derived,
-                    // or there is no scheduler to arm against. Either way the
-                    // unlock this restored is already over, so end it rather
-                    // than leave it open with nothing to close it.
-                    if (remaining <= 0 || !SchedulerCanRelock()) {
+                    // or the scheduler would not take the relock. Either way the
+                    // unlock this restored is already over, or has nothing that
+                    // will end it, so end it here rather than leave it open.
+                    if (remaining <= 0 || !ArmRelock(this, epoch, std::chrono::seconds(remaining))) {
                         Lock();
-                    } else {
-                        ArmRelock(*g_scheduler, this, epoch, std::chrono::seconds(remaining));
                     }
                 }
 

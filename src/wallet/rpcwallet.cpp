@@ -3449,14 +3449,17 @@ UniValue walletpassphrase(const UniValue& params)
     }
 
     // Refuse here, with a message that says what is wrong, rather than letting
-    // Unlock's backstop refusal surface as "the passphrase was incorrect".
+    // Unlock's refusal surface as "the passphrase was incorrect".
     //
-    // A non-null g_scheduler is not enough: StartRPCThreads() runs before it is
-    // constructed and StopRPCThreads() runs after it has been stopped and
-    // joined, so this RPC is answerable at both ends of the process while
-    // nothing would ever run the relock. An unlock whose timer cannot be armed
-    // is refused, because granting it would mean granting forever.
-    if (!g_scheduler || !g_scheduler->AreThreadsServicingQueue()) {
+    // The published handle, not g_scheduler: StartRPCThreads() runs before the
+    // scheduler is constructed and StopRPCThreads() long after it is stopped, so
+    // this RPC is answerable at both ends of the process, and reading the plain
+    // unique_ptr from this thread would race the assignment in AppInit2.
+    //
+    // Advisory. Unlock re-decides atomically when it arms, because the scheduler
+    // can stop during the key derivation in between; this is only here so the
+    // common case gets a message that names the cause.
+    if (!g_scheduler_handle.load(std::memory_order_acquire)) {
         throw JSONRPCError(RPC_WALLET_ERROR,
                            "Error: the automatic relock cannot be scheduled right now, because the "
                            "node is still starting up or is shutting down. The wallet has NOT been "

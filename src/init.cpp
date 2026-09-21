@@ -81,6 +81,7 @@ extern constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
 
 std::unique_ptr<BanMan> g_banman;
 std::unique_ptr<CScheduler> g_scheduler;
+std::atomic<CScheduler*> g_scheduler_handle{nullptr};
 
 //! Set once AppInit2 has reached the unbroadcast-set reload. Shutdown() only
 //! persists the set when this is true, so an early AppInit2 failure (which still
@@ -194,6 +195,12 @@ void Shutdown(void* parg)
         // Signal to the scheduler to stop. Guarded because Shutdown() can run
         // after an early AppInit2 failure, before the scheduler is constructed.
         LogPrintf("INFO: %s: Stopping the scheduler.", __func__);
+
+        // Unpublish BEFORE stopping, so a thread that is still running -- the
+        // RPC workers are not stopped until much later -- sees "no scheduler"
+        // rather than one that is about to stop servicing its queue.
+        g_scheduler_handle.store(nullptr, std::memory_order_release);
+
         if (g_scheduler) g_scheduler->stop();
 
         // clean up any remaining threads running serviceQueue:
@@ -2515,6 +2522,13 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_scheduler = std::make_unique<CScheduler>();
     CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, g_scheduler.get());
     threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "grc-scheduler", serviceLoop));
+
+    // Publish it for the other threads that are already running. The RPC server
+    // started above, so an RPC can be in flight right now; this release store is
+    // what lets it read the scheduler without racing this assignment. Safe to do
+    // before the service thread has actually entered serviceQueue, because a
+    // task enqueued first is simply run when it gets there.
+    g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
 
     // Register the PeerManager's recurring tasks now that the scheduler exists
     // (issue #2558). This call previously sat next to the PeerManager construction

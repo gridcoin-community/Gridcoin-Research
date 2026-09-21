@@ -963,18 +963,29 @@ BOOST_AUTO_TEST_CASE(the_transaction_builder_refuses_a_staking_only_wallet)
 //! Stand up a running scheduler for the duration of a case and put the previous
 //! one back however the case exits, so a failed assertion cannot strand the
 //! rest of the binary without one.
+//!
+//! The handle is published as soon as the object exists and does NOT wait for
+//! the service thread to enter serviceQueue. It does not need to: arming asks
+//! only whether the scheduler has been told to stop, so a task enqueued before
+//! the thread comes up is run when it gets there. Waiting on
+//! AreThreadsServicingQueue() here would be the racy version of this.
 struct SchedulerForThisCase {
     std::unique_ptr<CScheduler> m_saved;
+    CScheduler* m_saved_handle;
     std::thread m_service;
 
-    SchedulerForThisCase() : m_saved(std::move(g_scheduler))
+    SchedulerForThisCase()
+        : m_saved(std::move(g_scheduler))
+        , m_saved_handle(g_scheduler_handle.load(std::memory_order_acquire))
     {
         g_scheduler = std::make_unique<CScheduler>();
+        g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
         m_service = std::thread([] { g_scheduler->serviceQueue(); });
     }
 
     ~SchedulerForThisCase()
     {
+        g_scheduler_handle.store(m_saved_handle, std::memory_order_release);
         g_scheduler->stop();
         if (m_service.joinable()) m_service.join();
         g_scheduler = std::move(m_saved);
@@ -1050,9 +1061,19 @@ BOOST_AUTO_TEST_CASE(a_timed_unlock_without_a_scheduler_is_refused)
     // one, turning a single failure into a cascade.
     struct NoSchedulerForThisCase {
         std::unique_ptr<CScheduler> m_saved;
+        CScheduler* m_saved_handle;
 
-        NoSchedulerForThisCase() : m_saved(std::move(g_scheduler)) {}
-        ~NoSchedulerForThisCase() { g_scheduler = std::move(m_saved); }
+        NoSchedulerForThisCase()
+            : m_saved(std::move(g_scheduler))
+            , m_saved_handle(g_scheduler_handle.exchange(nullptr, std::memory_order_acq_rel))
+        {
+        }
+
+        ~NoSchedulerForThisCase()
+        {
+            g_scheduler = std::move(m_saved);
+            g_scheduler_handle.store(m_saved_handle, std::memory_order_release);
+        }
     } no_scheduler;
 
     CWallet wallet;
@@ -1076,6 +1097,61 @@ BOOST_AUTO_TEST_CASE(a_timed_unlock_without_a_scheduler_is_refused)
     BOOST_CHECK(!wallet.GetUnlockDeadline().has_value());
 
     wallet.Lock();
+}
+
+//!
+//! A timed unlock whose relock cannot be armed leaves the wallet LOCKED.
+//!
+//! The early check and the arming are not the same moment: the key derivation
+//! between them takes a calibrated few hundred milliseconds, and shutdown
+//! unpublishes the handle before stopping the scheduler. So a published
+//! scheduler that has been told to stop is a real state, and the only safe
+//! answer is to refuse -- nothing else would ever end that unlock.
+//!
+BOOST_AUTO_TEST_CASE(a_timed_unlock_whose_relock_cannot_be_armed_locks_the_wallet)
+{
+    // Published, so the early check passes, but stopped, so the arming refuses.
+    // That is the shutdown window: the pointer answers, the queue does not.
+    struct StoppedSchedulerForThisCase {
+        std::unique_ptr<CScheduler> m_saved;
+        CScheduler* m_saved_handle;
+
+        StoppedSchedulerForThisCase()
+            : m_saved(std::move(g_scheduler))
+            , m_saved_handle(g_scheduler_handle.load(std::memory_order_acquire))
+        {
+            g_scheduler = std::make_unique<CScheduler>();
+            g_scheduler->stop();
+            g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
+        }
+
+        ~StoppedSchedulerForThisCase()
+        {
+            g_scheduler_handle.store(m_saved_handle, std::memory_order_release);
+            g_scheduler = std::move(m_saved);
+        }
+    } stopped;
+
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("relock-cannot-be-armed");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    // Reaches the arming, because the handle is published, and the arming is
+    // what refuses.
+    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+
+    // Fail CLOSED. The passphrase was right, so the key WAS installed for a
+    // moment; what matters is that it is gone again and nothing was left behind.
+    BOOST_CHECK(wallet.IsLocked());
+    BOOST_CHECK(!wallet.GetUnlockDeadline().has_value());
 }
 
 //!

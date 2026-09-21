@@ -340,11 +340,15 @@ public:
     //! and silently got forever is the failure this design exists to remove.
     //!
     //! It is reachable in production, which an earlier version of this note
-    //! denied. The RPC server starts BEFORE g_scheduler is constructed and
-    //! stops AFTER it has been stopped and joined, so a walletpassphrase at
-    //! either end of the process lands in a window where nothing would run the
-    //! relock. walletpassphrase refuses up front with its own message, so the
-    //! refusal here is a backstop rather than the thing the user sees.
+    //! denied. The RPC server starts BEFORE the scheduler is constructed and
+    //! stops long AFTER it is stopped, so a walletpassphrase at either end of
+    //! the process lands in a window where nothing would run the relock.
+    //!
+    //! The decision is taken when the relock is ARMED, not before: the key
+    //! derivation in between takes a calibrated few hundred milliseconds, and
+    //! the scheduler can stop inside it. If the arming is refused, or the
+    //! deadline has already passed by then, the wallet is LOCKED and this
+    //! returns false -- never left unlocked without a timer.
     bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                 std::optional<std::chrono::seconds> relock_after);
 

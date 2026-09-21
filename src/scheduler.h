@@ -10,6 +10,7 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <atomic>
 #include <thread>
 
 #include <sync.h>
@@ -48,6 +49,34 @@ public:
     void scheduleFromNow(Function f, std::chrono::milliseconds delta)
     {
         schedule(std::move(f), std::chrono::system_clock::now() + delta);
+    }
+
+    /**
+     * Like scheduleFromNow, but refuses once the scheduler has been told to
+     * stop, and reports whether the task was accepted.
+     *
+     * For a caller whose correctness depends on the task actually running -- the
+     * wallet's relock, which is the only thing that will end a timed unlock.
+     * Asking "is it running?" and then scheduling is two steps, and a stop can
+     * land between them; this decides and enqueues under one acquisition.
+     *
+     * It deliberately does NOT require a thread to be servicing the queue yet.
+     * A task enqueued before serviceQueue() starts is not lost -- the thread
+     * runs it when it comes up -- so refusing then would be a false negative,
+     * and a racy one.
+     */
+    [[nodiscard]] bool scheduleFromNowIfRunning(Function f, std::chrono::milliseconds delta)
+    {
+        {
+            LOCK(newTaskMutex);
+
+            if (stopRequested) return false;
+
+            taskQueue.insert(std::make_pair(std::chrono::system_clock::now() + delta, std::move(f)));
+        }
+
+        newTaskScheduled.notify_one();
+        return true;
     }
 
     /**
@@ -110,6 +139,20 @@ private:
 //! thread is joined. Owned via unique_ptr (mirroring g_banman) so it can be
 //! injected into PeerManager::StartScheduledTasks() once that lands.
 extern std::unique_ptr<CScheduler> g_scheduler;
+
+//! The scheduler, published for threads other than the one that builds it.
+//!
+//! g_scheduler itself is a plain unique_ptr assigned part-way through AppInit2,
+//! and the RPC server is already serving by then (StartRPCThreads runs earlier),
+//! so reading it from an RPC thread is a data race on a non-atomic object. This
+//! is set once the scheduler is ready to take work and cleared before it is told
+//! to stop, and the release/acquire pair is what makes reading through it
+//! well-defined.
+//!
+//! Null means "do not schedule": either the scheduler does not exist yet, or
+//! shutdown has begun. A caller whose task must actually run should treat null
+//! as a refusal rather than carrying on without it.
+extern std::atomic<CScheduler*> g_scheduler_handle;
 
 /**
  * Class used by CScheduler clients which may schedule multiple jobs

@@ -362,8 +362,12 @@ private slots:
     void backupWallet();
     /** Change encrypted wallet passphrase */
     void changePassphrase();
-    /** Ask for passphrase to unlock wallet temporarily */
+    /** The Unlock BUTTON: a directive, offering the staking-only choice. */
     void unlockWallet();
+
+    /** An operation needs the passphrase. \p elevate comes from the model,
+     *  which read the wallet state; do not re-derive it here. */
+    void unlockWalletForOperation(bool elevate);
 
     void lockWallet();
 

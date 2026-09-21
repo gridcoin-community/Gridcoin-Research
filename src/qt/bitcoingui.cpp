@@ -978,7 +978,7 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
                 this, &BitcoinGUI::processDrainedTransactions);
 
         // Ask for passphrase if needed
-        connect(walletModel, &WalletModel::requireUnlock, this, &BitcoinGUI::unlockWallet);
+        connect(walletModel, &WalletModel::requireUnlock, this, &BitcoinGUI::unlockWalletForOperation);
     }
     else
     {
@@ -1995,38 +1995,34 @@ void BitcoinGUI::unlockWallet()
 {
     if(!walletModel)
         return;
-    // Unlock wallet when requested by wallet model
-    //
-    // Staking-only counts as needing the prompt. requestUnlock() no longer
-    // relocks before asking -- locking first threw away the unlock's deadline
-    // and left a staking node locked when the prompt was cancelled -- so an
-    // elevation now arrives here with the wallet still unlocked for staking.
-    // The Unlock action itself is invisible in that state, so only the model
-    // can bring us here with it.
-    const WalletModel::EncryptionStatus status = walletModel->getEncryptionStatus();
-
-    if(status == WalletModel::Locked || status == WalletModel::UnlockedForStakingOnly)
+    // The Unlock BUTTON. A directive, so it offers the staking-only choice and
+    // what the user picks outlives this dialog. Only shown while locked.
+    if(walletModel->getEncryptionStatus() == WalletModel::Locked)
     {
-        // Three cases, and the third is why they are separate modes. The
-        // toolbar action is a directive and offers the checkbox. The model asks
-        // for an operation: on a LOCKED wallet that is a plain full unlock, and
-        // on one already unlocked for staking it is an ELEVATION, which widens
-        // that unlock in place and must not be confused with starting a new one
-        // if it expires while the prompt is open.
-        AskPassphraseDialog::Mode mode;
-
-        if (sender() == unlockWalletAction) {
-            mode = AskPassphraseDialog::UnlockStaking;
-        } else if (status == WalletModel::UnlockedForStakingOnly) {
-            mode = AskPassphraseDialog::Elevate;
-        } else {
-            mode = AskPassphraseDialog::Unlock;
-        }
-
-        AskPassphraseDialog dlg(mode, this);
+        AskPassphraseDialog dlg(AskPassphraseDialog::UnlockStaking, this);
         dlg.setModel(walletModel);
         dlg.exec();
     }
+}
+
+void BitcoinGUI::unlockWalletForOperation(bool elevate)
+{
+    if(!walletModel)
+        return;
+
+    // Which question to ask is NOT re-derived from the wallet state here. The
+    // model decided it from the read it had already taken, and the unlock can
+    // expire between that read and this one: answering "unlock" then starts a
+    // fresh unlock with no deadline, which the model's UnlockContext would go on
+    // to narrow to staking-only permanently -- silently turning a time-boxed
+    // unlock into an open-ended one.
+    //
+    // Elevate refuses a locked wallet, so if that is what happened the dialog
+    // reports it and the wallet stays locked, which is what the timer decided.
+    AskPassphraseDialog dlg(elevate ? AskPassphraseDialog::Elevate
+                                    : AskPassphraseDialog::Unlock, this);
+    dlg.setModel(walletModel);
+    dlg.exec();
 }
 
 void BitcoinGUI::lockWallet()

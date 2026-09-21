@@ -627,8 +627,9 @@ WalletModel::UnlockContext WalletModel::requestUnlock()
 
     if (initial == Locked || was_staking_only)
     {
-        // Request UI to unlock wallet
-        emit requireUnlock();
+        // Request UI to unlock wallet, saying which question to ask. Decided
+        // from THIS read, not from a second one in the receiver.
+        emit requireUnlock(was_staking_only);
     }
 
     // Cancelled, or the wrong passphrase. The test is "fully unlocked", not

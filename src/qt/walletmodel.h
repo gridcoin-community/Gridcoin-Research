@@ -371,7 +371,15 @@ signals:
     // Signal emitted when wallet needs to be unlocked
     // It is valid behaviour for listeners to keep the wallet locked after this signal;
     // this means that the unlocking failed or was cancelled.
-    void requireUnlock();
+    //! Ask the UI for the passphrase so an operation can proceed.
+    //!
+    //! \p elevate says WHICH question, decided here where the wallet state was
+    //! read: true widens an unlock that is already open for staking, false
+    //! unlocks a locked wallet. The receiver must not re-derive it from a second
+    //! status read -- the unlock can expire in between, and answering "unlock"
+    //! then starts a fresh one with no deadline, which this context would go on
+    //! to narrow to staking-only permanently.
+    void requireUnlock(bool elevate);
 
     // Asynchronous error notification
     void error(const QString &title, const QString &message, bool modal);
