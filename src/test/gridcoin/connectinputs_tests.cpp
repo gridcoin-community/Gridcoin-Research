@@ -308,6 +308,82 @@ BOOST_AUTO_TEST_CASE(a_consensus_script_failure_scores_the_relayer)
 }
 
 
+//!
+//! The same score, reached through a P2SH output.
+//!
+//! CLEANSTACK only means something for P2SH if VerifyScript judges the stack
+//! the REDEEM script leaves. The redeem script is OP_1 (anyone-can-spend) and
+//! the spend pushes one item too many beneath it, so the redeem-script stack
+//! ends with two items while the outer evaluation looks like any ordinary
+//! P2SH spend. Accepted while v15 is inert, rejected with the consensus score
+//! once CLEANSTACK is in the set. Everything else mirrors the bare-output case
+//! above, including the fee that keeps GetMinFee() out of the verdict.
+//!
+BOOST_AUTO_TEST_CASE(a_p2sh_cleanstack_failure_scores_the_relayer)
+{
+    LOCK(cs_main);
+
+    grc_test::V15HeightGuard guard(std::numeric_limits<int>::max());
+
+    CBlockIndex index;
+    index.nHeight = nGrandfather + 1;
+
+    CScript redeem;
+    redeem << OP_1;
+
+    CMutableTransaction prev;
+    prev.vout.resize(1);
+    prev.vout[0].nValue = 1 * COIN;
+    prev.vout[0].scriptPubKey.SetDestination(redeem.GetID());   // P2SH(OP_1)
+
+    const CTransaction prev_tx(prev);
+    const uint256 prev_hash = prev_tx.GetHash();
+
+    CTxIndex txindex;
+    txindex.vSpent.resize(1);          // unspent
+    MapPrevTx inputs;
+    inputs[prev_hash] = {txindex, prev_tx};
+
+    CMutableTransaction spender;
+    spender.vin.emplace_back();
+    spender.vin.back().prevout = COutPoint(prev_hash, 0);
+    spender.vin.back().scriptSig = CScript()
+        << OP_1                                                    // one item too many
+        << std::vector<unsigned char>(redeem.begin(), redeem.end());
+    spender.vout.resize(1);
+    spender.vout[0].nValue = COIN / 2;
+
+    const CTransaction tx(spender);
+    CTxDB txdb("r");
+
+    // Control: v15 inert, the redeem script's verdict is true, accepted.
+    {
+        gArgs.ForceSetArg("-blockv15height", strprintf("%d", std::numeric_limits<int>::max()));
+        BOOST_REQUIRE_EQUAL(GetBlockV15Height(), std::numeric_limits<int>::max());
+
+        CValidationState state;
+        std::map<uint256, CTxIndex> test_pool;
+
+        BOOST_CHECK(ConnectInputs(tx, state, txdb, inputs, test_pool,
+                                  CDiskTxPos(1, 1, 1), &index, /*fBlock=*/false, /*fMiner=*/false));
+        BOOST_CHECK_EQUAL(state.GetDoS(), 0);
+    }
+
+    // Activated: the redeem script leaves two items, and the relayer is scored.
+    {
+        gArgs.ForceSetArg("-blockv15height", "0");
+        BOOST_REQUIRE_EQUAL(GetBlockV15Height(), 0);
+
+        CValidationState state;
+        std::map<uint256, CTxIndex> test_pool;
+
+        BOOST_CHECK(!ConnectInputs(tx, state, txdb, inputs, test_pool,
+                                   CDiskTxPos(1, 1, 1), &index, /*fBlock=*/false, /*fMiner=*/false));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 100);
+    }
+}
+
 namespace {
 //! A superblock whose serialized size is at least `target` bytes.
 GRC::Superblock SuperblockOfAtLeast(const size_t target)

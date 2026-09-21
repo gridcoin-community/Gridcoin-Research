@@ -1299,15 +1299,28 @@ bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, unsigne
         if (!scriptSig.IsPushOnly()) // scriptSig must be literals-only
             return false;            // or validation fails
 
-        const valtype& pubKeySerialized = stackCopy.back();
-        CScript pubKey2(pubKeySerialized.begin(), pubKeySerialized.end());
-        popstack(stackCopy);
+        // Restore the stack the scriptSig left, so that from here on `stack`
+        // is the redeem-script evaluation and the CLEANSTACK check below
+        // judges it. Returning the redeem-script verdict from inside this
+        // block would skip that check for every P2SH spend.
+        swap(stack, stackCopy);
 
-        if (!EvalScript(stackCopy, pubKey2, flags, txTo, nIn))
+        // Cannot be empty: a P2SH scriptPubKey begins with OP_HASH160, which
+        // fails on an empty stack, so the evaluation above would already have
+        // returned false. Kept as a plain return rather than an assert.
+        if (stack.empty())
             return false;
-        if (stackCopy.empty())
+
+        const valtype& pubKeySerialized = stack.back();
+        CScript pubKey2(pubKeySerialized.begin(), pubKeySerialized.end());
+        popstack(stack);
+
+        if (!EvalScript(stack, pubKey2, flags, txTo, nIn))
             return false;
-        return CastToBool(stackCopy.back());
+        if (stack.empty())
+            return false;
+        if (!CastToBool(stack.back()))
+            return false;
     }
 
     // The CLEANSTACK check is only performed after potential P2SH evaluation,

@@ -610,6 +610,8 @@
 ["1 0x47 0x304402201bb2edab700a5d020236df174fefed78087697143731f659bea59642c759c16d022061f42cdbae5bcd3e8790f20bf76687443436e94a634321c16a72aa54cbc7c2ea01 0x47 0x304402204bb4a64f2a6e5c7fb2f07fef85ee56fde5e6da234c6a984262307a20e99842d702206f8303aaba5e625d223897e2ffd3f88ef1bcffef55f38dc3768e5f2e94c923f901 0x47 0x3044022040c2809b71fffb155ec8b82fe7a27f666bd97f941207be4e14ade85a1249dd4d02204d56c85ec525dd18e29a0533d5ddf61b6b1bb32980c2f63edf951aebf7a27bfe01", "3 0x21 0x0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798 0x21 0x038282263212c609d9ea2a6e3e172de238d8c39cabd5ac1ca10646e23fd5f51508 0x21 0x03363d90d447b00c9c99ceac05b6262ee053441c7e55552ffe526bad8f83ff4640 3 CHECKMULTISIG NOT", "", "3-of-3 NOT with invalid sig and nonzero dummy but no NULLDUMMY"],
 
 
+["0x01 1", "HASH160 0x14 0xda1745e9b549bd0bfa1a569971c77eba30cd5a4b EQUAL", "CLEANSTACK,P2SH", "P2SH(OP_1) with a clean stack, no signature"],
+
 ["The following 23 test vectors from Bitcoin Core were removed because their"],
 ["pre-computed ECDSA signatures are incompatible with Gridcoin's transaction"],
 ["format. Gridcoin's CTransaction includes an nTime field absent from Bitcoin's,"],
