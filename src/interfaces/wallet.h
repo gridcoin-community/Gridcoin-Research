@@ -267,10 +267,18 @@ public:
     //! trip. It intentionally does not lock -- see the impl for why.
     virtual WalletLockState getLockState() = 0;
 
-    //! Whether an unlocked wallet is restricted to staking only. Kept as an
-    //! individual accessor (rather than only a WalletLockState field) because
-    //! requestUnlock re-reads it fresh across its own relock/unlock mutations,
-    //! where a snapshot taken earlier would be stale.
+    //! Whether an unlocked wallet is restricted to staking only.
+    //!
+    //! No production callers. requestUnlock was the last one, and it justified
+    //! this accessor by re-reading the flag across its own relock/unlock
+    //! mutations -- it makes none now, because it elevates in place and reads
+    //! the whole state from getEncryptionStatus(). getLockState() carries the
+    //! same field for anyone who needs it.
+    //!
+    //! Left in place rather than deleted because removing it would leave an
+    //! ordinal hole at @8, and this project renumbers rather than holes; see the
+    //! note on getUnlockStakingOnlyFlag below, which is in the same position.
+    //! Do not add callers.
     virtual bool isUnlockedForStakingOnly() = 0;
 
     //! DEPRECATED and UNUSED. An exact alias of isUnlockedForStakingOnly.
@@ -305,6 +313,20 @@ public:
     //! covers both a locked wallet and an unencrypted one -- do not read false
     //! as "it was locked".
     virtual bool restrictToStakingOnly() = 0;
+
+    //! Widen an unlock in progress to full for one operation, given the
+    //! passphrase. The other half of restrictToStakingOnly(): a GUI action that
+    //! needs a full unlock elevates, acts, and hands the elevation back.
+    //!
+    //! Not a lock followed by an unlock. That threw away the unlock's deadline,
+    //! so a wallet unlocked by walletpassphrase for a fixed time stayed
+    //! unlocked indefinitely afterwards, and it left a staking wallet locked
+    //! when the prompt was cancelled.
+    //!
+    //! False when the wallet is locked -- there is no unlock to widen, and the
+    //! caller wants unlockWallet() -- when it is unencrypted, or on a wrong
+    //! passphrase.
+    virtual bool elevateWallet(const SecureString& passphrase) = 0;
 
     //! Unlock the wallet; on success the staking-only preference is set to
     //! staking_only (a full unlock clears a stale staking-only restriction).

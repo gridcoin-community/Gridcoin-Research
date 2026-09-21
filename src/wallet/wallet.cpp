@@ -565,6 +565,24 @@ bool CWallet::LoadCScript(const CScript& redeemScript)
     return CCryptoKeyStore::AddCScript(redeemScript);
 }
 
+//! Arm a one-shot relock for the unlock identified by \p epoch.
+//!
+//! CScheduler cannot cancel a task, so an armed relock always arrives. It
+//! carries the epoch it was armed with and does nothing unless that is still
+//! the current unlock, which makes every superseded relock a no-op.
+//!
+//! Takes the scheduler by reference rather than reading the global, so "there
+//! is one" is carried by the signature. Both callers have to decide what to do
+//! without one -- refuse the unlock, or lock instead -- and neither can reach
+//! here before making that decision.
+static void ArmRelock(CScheduler& scheduler, CWallet* wallet, uint64_t epoch,
+                      std::chrono::seconds delay)
+{
+    scheduler.scheduleFromNow([wallet, epoch] {
+        wallet->LockIfCurrent(epoch);
+    }, delay);
+}
+
 bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope)
 {
     return Unlock(strWalletPassphrase, scope, /*relock_after=*/std::nullopt);
@@ -597,18 +615,16 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                 return false;
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 return false;
-            if (CCryptoKeyStore::Unlock(vMasterKey, scope, deadline))
-            {
-                // Arm the relock against THIS unlock. The scheduler cannot
-                // cancel a task, so it validates its epoch on arrival and is a
-                // no-op if anything has superseded this unlock.
-                if (relock_after) {
-                    const uint64_t epoch = GetUnlockEpoch();
-                    CWallet* const wallet = this;
+            uint64_t epoch = 0;
 
-                    g_scheduler->scheduleFromNow([wallet, epoch] {
-                        wallet->LockIfCurrent(epoch);
-                    }, *relock_after);
+            if (CCryptoKeyStore::Unlock(vMasterKey, scope, deadline, &epoch))
+            {
+                // Arm the relock against THIS unlock, named by the call that
+                // installed it. Reading the epoch back would be a second
+                // acquisition, and the unlock it names need not still be this
+                // one by the time the relock is armed against it.
+                if (relock_after) {
+                    ArmRelock(*g_scheduler, this, epoch, *relock_after);
                 }
 
                 return true;
@@ -618,21 +634,67 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
     return false;
 }
 
+bool CWallet::ElevateToFull(const SecureString& strWalletPassphrase)
+{
+    // There is no unlock to widen, so there is no deadline to preserve and
+    // nothing this can add. The caller wants Unlock(), which begins one.
+    if (IsLocked()) {
+        return false;
+    }
+
+    CCrypter crypter;
+    CKeyingMaterial vMasterKey;
+
+    LOCK(cs_wallet);
+
+    for (auto const& pMasterKey : mapMasterKeys)
+    {
+        if (!crypter.SetKeyFromPassphrase(strWalletPassphrase, pMasterKey.second.vchSalt,
+                                          pMasterKey.second.nDeriveIterations,
+                                          pMasterKey.second.nDerivationMethod)) {
+            return false;
+        }
+
+        if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey)) {
+            return false;
+        }
+
+        // Refuses unless this is the key already installed, so a wrong
+        // passphrase widens nothing. The scope moves; the key, the deadline and
+        // the epoch do not, so the relock armed for this unlock still fires.
+        if (CCryptoKeyStore::Elevate(vMasterKey)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase)
 {
-    // ONE read. IsLocked() and GetUnlockScope() are separate acquisitions, and
-    // the relock timer calls Lock() between them without holding cs_wallet: a
-    // staking-only wallet relocked in that gap would leave fWasLocked false
-    // while prior_scope read Locked, so the working scope below became Full and
-    // the final relock was skipped, leaving the wallet fully unlocked. Deriving
-    // both from one snapshot is the discipline this change applies everywhere
-    // else, and it was missing here.
-    const UnlockScope prior_scope = GetUnlockScope();
-    const bool fWasLocked = (prior_scope == UnlockScope::Locked);
+    // The lock itself reports what it ended. Reading the scope first and
+    // locking afterwards is two acquisitions with a gap, and the scheduled
+    // relock takes only cs_KeyStore, so it can land in that gap: the read says
+    // StakingOnly, the timer locks, and the restore below then reopens a wallet
+    // the timer had just closed. Capturing under the acquisition that clears
+    // them removes the gap -- the relock either ran first, and this reads
+    // Locked, or it arrives later and finds an epoch that has moved on.
+    //
+    // The deadline is captured for the same reason it is restored: it belongs
+    // to the unlock, and a passphrase change must not quietly turn a wallet
+    // unlocked for an hour into one unlocked indefinitely.
+    std::optional<UnlockState> prior;
 
     {
         LOCK(cs_wallet);
-        Lock();
+
+        prior = LockAndCapture();
+
+        if (!prior) {
+            return false;
+        }
+
+        const bool fWasLocked = (prior->scope == UnlockScope::Locked);
 
         CCrypter crypter;
         CKeyingMaterial vMasterKey;
@@ -651,10 +713,31 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
             // needs a real one to rewrite the keys, so it takes Full and the
             // fWasLocked re-lock below puts it back.
             const UnlockScope working_scope =
-                (prior_scope == UnlockScope::Locked) ? UnlockScope::Full : prior_scope;
+                fWasLocked ? UnlockScope::Full : prior->scope;
 
-            if (CCryptoKeyStore::Unlock(vMasterKey, working_scope))
+            uint64_t epoch = 0;
+
+            if (CCryptoKeyStore::Unlock(vMasterKey, working_scope, prior->deadline, &epoch))
             {
+                // Put the relock back with the unlock it belongs to, and do it
+                // here rather than after the key rewrite: the capture above
+                // retired the one that was armed, and every path out of the
+                // rewrite -- including the two error returns -- leaves the
+                // wallet open in the scope just restored.
+                if (prior->deadline) {
+                    const int64_t remaining = *prior->deadline - GetTime();
+
+                    // The deadline passed while the key was being re-derived,
+                    // or there is no scheduler to arm against. Either way the
+                    // unlock this restored is already over, so end it rather
+                    // than leave it open with nothing to close it.
+                    if (remaining <= 0 || !g_scheduler) {
+                        Lock();
+                    } else {
+                        ArmRelock(*g_scheduler, this, epoch, std::chrono::seconds(remaining));
+                    }
+                }
+
                 int64_t nStartTime = GetTimeMillis();
                 crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod);
                 pMasterKey.second.nDeriveIterations = pMasterKey.second.nDeriveIterations * (100 / ((double)(GetTimeMillis() - nStartTime)));

@@ -174,7 +174,26 @@ protected:
     bool EncryptKeys(CKeyingMaterial& vMasterKeyIn);
 
     bool Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope scope,
-                std::optional<int64_t> deadline = std::nullopt);
+                std::optional<int64_t> deadline = std::nullopt,
+                uint64_t* epoch_out = nullptr);
+
+    //! \brief Widen the current unlock to Full, keeping its deadline.
+    //!
+    //! The other half of RestrictToStakingOnly(): this takes an elevation, that
+    //! hands it back. Unlike Unlock() it does not begin a new unlock -- the
+    //! master key is already installed and stays installed, so the deadline and
+    //! the epoch are both left alone and a relock armed for the unlock in
+    //! progress still fires on time. Bumping the epoch here would retire that
+    //! relock, and the wallet would never lock.
+    //!
+    //! It still demands the passphrase, because it ADDS permission. The caller
+    //! passes the keying material it derived from the passphrase, and this
+    //! refuses unless that matches the key already installed -- otherwise a
+    //! wrong passphrase would silently widen the scope.
+    //!
+    //! False when the wallet is locked (there is no unlock to widen; use
+    //! Unlock()), when it is unencrypted, or when the key does not match.
+    bool Elevate(const CKeyingMaterial& vMasterKeyIn);
 
     //! Encrypt/decrypt an arbitrary non-key wallet secret (e.g. the seed
     //! phrase blob) under the store's keying material. The store must be
@@ -291,6 +310,23 @@ public:
         NotifyStatusChanged(this);
         return true;
     }
+
+    //! What an unlock permitted, and when it was due to expire.
+    struct UnlockState {
+        UnlockScope scope{UnlockScope::Locked};
+        std::optional<int64_t> deadline;
+    };
+
+    //! \brief Lock, reporting what the unlock it ended had permitted.
+    //!
+    //! Reads the scope and the deadline under the SAME acquisition that clears
+    //! them, which is what makes the answer usable. A caller that reads them
+    //! first and locks afterwards can be overtaken by the scheduled relock in
+    //! the gap and then restore an unlock the timer had already ended.
+    //!
+    //! nullopt only when the store cannot be put into the crypted state, which
+    //! is the condition Lock() reports as false.
+    std::optional<UnlockState> LockAndCapture();
 
     bool Lock();
 

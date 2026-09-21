@@ -139,6 +139,11 @@ public:
     bool lockWallet() override { return m_wallet->Lock(); }
     bool restrictToStakingOnly() override { return m_wallet->RestrictToStakingOnly(); }
 
+    bool elevateWallet(const SecureString& passphrase) override
+    {
+        return m_wallet->ElevateToFull(passphrase);
+    }
+
     bool unlockWallet(const SecureString& passphrase, bool staking_only) override
     {
         // One call. The scope is installed with the master key, so there is no

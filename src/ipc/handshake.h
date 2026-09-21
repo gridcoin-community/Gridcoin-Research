@@ -80,8 +80,17 @@ namespace ipc {
 //! the node can produce a value this GUI cannot name.
 //!
 //! The minor restarts at 0, as it did at major 3.
+//!
+//! Minor 1 (under major 4): Wallet gained `elevateWallet @36` (wallet.capnp),
+//! which widens an unlock in progress to full for one operation rather than
+//! locking and unlocking again. Additive, so an old node still talks to a new
+//! GUI -- until the first action that needs a full unlock on a staking-only
+//! wallet calls a method the node does not serve; the UNIMPLEMENTED reply comes
+//! back client-side as a std::runtime_error thrown out of the send, vote or
+//! claim path, where nothing catches it. The minor turns that into the "Update
+//! the node" hard fail at connect instead.
 constexpr uint32_t IPC_SCHEMA_MAJOR = 4;
-constexpr uint32_t IPC_SCHEMA_MINOR = 0;
+constexpr uint32_t IPC_SCHEMA_MINOR = 1;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 
 //! Domain-separation tag hashed into the node identity token. Bump the suffix if

@@ -143,8 +143,12 @@ BOOST_AUTO_TEST_CASE(wallet_wraps_cwallet)
     const interfaces::WalletLockState lock_state = wallet->getLockState();
     BOOST_CHECK_EQUAL(lock_state.crypted, pwalletMain->IsCrypted());
     BOOST_CHECK_EQUAL(lock_state.locked, pwalletMain->IsLocked());
-    BOOST_CHECK_EQUAL(lock_state.unlocked_for_staking_only, wallet->isUnlockedForStakingOnly());
-    BOOST_CHECK_EQUAL(lock_state.staking_only_flag, wallet->getUnlockStakingOnlyFlag());
+    // Against the WALLET, not against the interface's own sibling accessors:
+    // getLockState() and getUnlockStakingOnlyFlag() are the same expression
+    // over the same source, so comparing them to each other cannot fail no
+    // matter what the snapshot is built from.
+    BOOST_CHECK_EQUAL(lock_state.unlocked_for_staking_only, pwalletMain->IsUnlockedForStakingOnly());
+    BOOST_CHECK_EQUAL(lock_state.staking_only_flag, pwalletMain->IsUnlockedForStakingOnly());
 
     int calls = 0;
     uint256 seen_hash;

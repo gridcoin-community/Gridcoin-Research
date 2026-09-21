@@ -351,6 +351,26 @@ public:
     //! installed with the master key, so the wallet is never briefly unlocked
     //! carrying the previous unlock's restriction.
     bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope = UnlockScope::Full);
+
+    //! \brief Widen an unlock in progress to Full for one operation.
+    //!
+    //! The counterpart of RestrictToStakingOnly(), and what a GUI action that
+    //! needs a full unlock on a staking-only wallet asks for. It re-derives the
+    //! master key from \p strWalletPassphrase and refuses unless that matches
+    //! the key already installed, so it still demands the passphrase.
+    //!
+    //! It does NOT lock and re-unlock. That is what this replaces: locking
+    //! first threw away the unlock's deadline, and the re-unlock that followed
+    //! carried none, so a wallet unlocked by walletpassphrase for a fixed time
+    //! stayed unlocked indefinitely after any GUI action that elevated. It also
+    //! meant a cancelled or mistyped prompt left a staking wallet locked and
+    //! the node no longer staking.
+    //!
+    //! False when the wallet is locked -- there is no unlock to widen, and the
+    //! caller wants Unlock() -- when it is unencrypted, or on a wrong
+    //! passphrase.
+    bool ElevateToFull(const SecureString& strWalletPassphrase);
+
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 
@@ -527,9 +547,11 @@ public:
     //! Note the asymmetry below is deliberate, not an oversight: only the
     //! overloads the exempt caller actually uses carry
     //! permitted_while_staking_only. The setCoins overload without
-    //! nChangePosRet is reached only from consolidateunspent and splitunspent,
-    //! which are user-initiated spends that must stay refused, so giving it the
-    //! parameter would only widen the ways to reach the exemption.
+    //! nChangePosRet is reached only from consolidateunspent, splitunspent and
+    //! sweepuncoveredcoins, all user-initiated spends that must stay refused
+    //! (each calls EnsureWalletIsUnlocked first, so they are already refused
+    //! before reaching the builder), so giving it the parameter would only
+    //! widen the ways to reach the exemption.
     //! \p permitted_while_staking_only exempts a caller from the staking-only
     //! refusal. Exactly one caller passes it: the hourly automated beacon
     //! renewal job, which runs unattended on exactly the wallets a researcher

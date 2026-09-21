@@ -1996,7 +1996,16 @@ void BitcoinGUI::unlockWallet()
     if(!walletModel)
         return;
     // Unlock wallet when requested by wallet model
-    if(walletModel->getEncryptionStatus() == WalletModel::Locked)
+    //
+    // Staking-only counts as needing the prompt. requestUnlock() no longer
+    // relocks before asking -- locking first threw away the unlock's deadline
+    // and left a staking node locked when the prompt was cancelled -- so an
+    // elevation now arrives here with the wallet still unlocked for staking.
+    // The Unlock action itself is invisible in that state, so only the model
+    // can bring us here with it.
+    const WalletModel::EncryptionStatus status = walletModel->getEncryptionStatus();
+
+    if(status == WalletModel::Locked || status == WalletModel::UnlockedForStakingOnly)
     {
         AskPassphraseDialog::Mode mode = sender() == unlockWalletAction ?
               AskPassphraseDialog::UnlockStaking : AskPassphraseDialog::Unlock;

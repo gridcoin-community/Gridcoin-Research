@@ -3625,7 +3625,7 @@ UniValue SendPoolApprove(const GRC::Cpid& cpid,
     EnsurePoolRegistrationActive();
 
     // Use EnsureWalletIsUnlocked() rather than a bare IsLocked() check so a
-    // staking-only unlock (fWalletUnlockStakingOnly) is rejected up front,
+    // staking-only unlock (UnlockScope::StakingOnly) is rejected up front,
     // matching registerpool / withdrawpool. A bare IsLocked() returns false
     // when unlocked-for-staking-only, letting this master-key, coin-spending
     // RPC proceed and fail with a less precise error deeper in SendContract.

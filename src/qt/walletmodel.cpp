@@ -520,6 +520,14 @@ bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase, b
     }
 }
 
+bool WalletModel::elevateWallet(const SecureString &passPhrase)
+{
+    // Widens the unlock in progress. The key stays installed and the deadline
+    // and the relock armed for it are untouched, so an elevation cannot extend
+    // an unlock the user asked to expire.
+    return m_wallet.elevateWallet(passPhrase);
+}
+
 bool WalletModel::changePassphrase(const SecureString &oldPass, const SecureString &newPass)
 {
     // Locks the wallet first (node-side) before attempting the change.
@@ -594,42 +602,53 @@ void WalletModel::unsubscribeFromCoreSignals()
 // WalletModel::UnlockContext implementation
 WalletModel::UnlockContext WalletModel::requestUnlock()
 {
-    bool was_locked = getEncryptionStatus() == Locked;
+    // One read, and it carries the whole answer.
+    const EncryptionStatus initial = getEncryptionStatus();
 
-    // A staking-only unlock is not enough here: relock and force a full unlock
-    // prompt. Remember that it WAS staking-only, because the wallet has to go
-    // back to that when this context expires.
+    // A staking-only unlock is not enough here, so ask for the passphrase and
+    // WIDEN that unlock rather than replacing it. Remember that it WAS
+    // staking-only, because the wallet has to go back to that when this context
+    // expires: with no sticky preference the elevation is full, so without this
+    // the wallet would be left FULLY unlocked after a send, a vote, or even
+    // creating an address.
     //
-    // While the unlock preference was sticky, the hidden checkbox came up
-    // pre-ticked, the re-unlock was itself staking-only and the relock flag
-    // below came out false, so the wallet stayed staking. With no sticky
-    // preference the re-unlock is full, which would leave relock true and LOCK
-    // a wallet the user had deliberately left staking: their node would stop
-    // staking after a send, a vote, or even creating an address, with nothing
-    // said. Restoring the prior scope is what prevents that.
-    //
-    // On the SUCCESS path only. A cancelled or failed prompt leaves the wallet
-    // locked, because the relock above has already happened and the master key
-    // is gone -- narrowing cannot bring it back. Callers that care should say
-    // so; MRCRequestPage::submitMRC does.
-    const bool was_staking_only = (!was_locked) && m_wallet.isUnlockedForStakingOnly();
+    // This used to relock first, to force a full prompt out of a path that
+    // could only unlock a LOCKED wallet. Two things came of that. The unlock's
+    // deadline went with the key, and the re-unlock carried none, so a wallet
+    // unlocked by walletpassphrase for an hour came back from the prompt
+    // unlocked indefinitely with nothing armed to close it. And a cancelled or
+    // mistyped prompt left the wallet locked -- the key was already gone and
+    // narrowing cannot bring it back -- so a node that had been staking quietly
+    // stopped. Widening in place has neither problem: nothing is given up
+    // before the passphrase is known to be right.
+    const bool was_staking_only = (initial == UnlockedForStakingOnly);
 
-    if (was_staking_only)
-    {
-       setWalletLocked(true);
-       was_locked = getEncryptionStatus() == Locked;
-
-    }
-    if(was_locked)
+    if (initial == Locked || was_staking_only)
     {
         // Request UI to unlock wallet
         emit requireUnlock();
     }
-    // If wallet is still locked, unlock was failed or cancelled, mark context as invalid
-    bool valid = getEncryptionStatus() != Locked;
 
-    return UnlockContext(this, valid, was_locked && !m_wallet.isUnlockedForStakingOnly(),
-                         was_staking_only);
+    // Cancelled, or the wrong passphrase. The test is "fully unlocked", not
+    // "not locked": on the elevation path a refused prompt leaves the wallet
+    // still unlocked for staking, which is exactly the state the caller could
+    // not proceed in. An unencrypted wallet has nothing to unlock, and every
+    // caller may proceed on one.
+    const EncryptionStatus now = getEncryptionStatus();
+    const bool valid = (now == Unencrypted || now == Unlocked);
+
+    // Lock on expiry only when this context is what unlocked a LOCKED wallet.
+    // A wallet that was staking is narrowed back instead, never locked.
+    //
+    // One edge, and it is benign. If the relock armed by an earlier
+    // walletpassphrase comes due while the prompt is open, the wallet locks
+    // under us and the dialog does a full unlock rather than an elevation. This
+    // context then narrows THAT unlock to staking-only, which has no deadline --
+    // the unlock the deadline belonged to is over. That is the same state the
+    // Unlock button gives with its box ticked, and reachable that way, so it is
+    // a legitimate resting place rather than an anomaly; it is simply no longer
+    // time-boxed.
+    return UnlockContext(this, valid, valid && (initial == Locked), was_staking_only);
 }
 
 WalletModel::UnlockContext::UnlockContext(WalletModel *wallet, bool valid, bool relock,

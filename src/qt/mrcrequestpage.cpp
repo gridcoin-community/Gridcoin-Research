@@ -328,24 +328,23 @@ void MRCRequestPage::submitMRC()
     WalletModel::UnlockContext ctx(m_wallet_model->requestUnlock());
 
     if (!ctx.isValid()) {
-        // Cancelled or wrong passphrase. requestUnlock has already locked the
-        // wallet to force a full prompt, so a wallet that was staking is now
-        // locked; say that rather than leaving the user to discover staking
-        // stopped. The fee boost is left alone so a retry keeps it.
+        // Cancelled or wrong passphrase. The elevation widens the unlock in
+        // place, so nothing was given up on the way to the prompt and a wallet
+        // that was staking is still staking. The fee boost is left alone so a
+        // retry keeps it.
         ui->mrcSubmitButton->setToolTip(tr("The wallet must be unlocked to submit a manual "
-                                           "research claim. It is locked now, so staking is "
-                                           "stopped until it is unlocked again."));
+                                           "research claim."));
         return;
     }
 
-    // Re-sync before submitting. requestUnlock locks the wallet to force the
-    // prompt, and that status change arrives as a queued event which the
-    // dialog's own nested event loop drains -- so MRCModel has already recorded
-    // WALLET_LOCKED. The unlock's own notification is posted but not drained
-    // before exec() returns, so without this the model is stale and submitMRC
-    // refuses on its own eligibility check, reporting an empty error. That was
-    // deterministic for exactly the staking-only wallet this elevation serves.
-    m_mrc_model->refresh();
+    // Re-sync before submitting. The elevation's status change arrives as a
+    // queued event, and the dialog's own nested event loop may have drained it
+    // or not, so the model's cached lock state is whatever that race left.
+    //
+    // Hand it the live status rather than calling refresh(): refresh() READS
+    // the cached flag and never writes it, so on its own it would re-run the
+    // snapshot against exactly the stale value. This is the only writer.
+    m_mrc_model->walletStatusChanged(static_cast<int>(m_wallet_model->getEncryptionStatus()));
 
     if (!m_mrc_model->submitMRC(s, e)) {
         message = e + " MRC request cannot be submitted.";

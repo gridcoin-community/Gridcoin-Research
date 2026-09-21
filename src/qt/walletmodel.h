@@ -142,6 +142,10 @@ public:
     // unlock to staking (persisted node-side as the unlock preference).
     bool setWalletLocked(bool locked, const SecureString& passPhrase=SecureString(),
                          bool stakingOnly = false);
+    //! Widen an unlock in progress to full, for one operation. What an
+    //! elevation prompt calls instead of locking and unlocking again, so the
+    //! unlock's deadline and the relock armed for it survive it.
+    bool elevateWallet(const SecureString& passPhrase);
     bool changePassphrase(const SecureString& oldPass, const SecureString& newPass);
 
     // Back up the wallet .dat / config file to dest (pass-throughs to the
