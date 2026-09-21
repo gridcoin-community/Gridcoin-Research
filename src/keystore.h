@@ -195,6 +195,47 @@ protected:
     //! Unlock()), when it is unencrypted, or when the key does not match.
     bool Elevate(const CKeyingMaterial& vMasterKeyIn);
 
+    //! \brief Narrow the current unlock to staking only.
+    //!
+    //! PROTECTED deliberately, and CWallet::RestrictToStakingOnly is the entry
+    //! point. cs_KeyStore alone does not serialise this against a spend: the
+    //! chokepoint in CreateTransaction reads the scope while holding cs_wallet
+    //! for the whole build, so a narrowing that took only cs_KeyStore could
+    //! land after that read and the build would go on to sign. The wrapper
+    //! takes cs_wallet first, which is also the canonical order.
+    //!
+    //! Narrowing only: it can remove permission, never add it, so unlike
+    //! Unlock() it needs no passphrase -- the master key is already installed
+    //! and stays installed. Returns false when there is nothing to narrow,
+    //! which covers BOTH a locked wallet and an unencrypted one; a caller must
+    //! not read false as "it was locked". A no-op on one already restricted.
+    //!
+    //! This exists so an elevation taken for one operation can be handed back.
+    //! Locking instead would silently stop staking on a wallet the user had
+    //! deliberately left staking.
+    bool RestrictToStakingOnly()
+    {
+        // False on an UNENCRYPTED wallet as well as a locked one: there is
+        // nothing to restrict in either case. A caller must not read false as
+        // "the wallet was locked".
+        if (!IsCrypted()) return false;
+
+        {
+            LOCK(cs_KeyStore);
+            if (m_unlock_scope == UnlockScope::Locked) return false;
+            if (m_unlock_scope == UnlockScope::StakingOnly) return true;
+
+            m_unlock_scope = UnlockScope::StakingOnly;
+        }
+
+        // Announce it, as Lock() and Unlock() do. This changes exactly the bit
+        // WalletLockState publishes over IPC, and a subscriber that refreshes
+        // cached lock state on the status signal would otherwise miss the
+        // transition. Emitted outside the lock, matching the other two.
+        NotifyStatusChanged(this);
+        return true;
+    }
+
     //! Encrypt/decrypt an arbitrary non-key wallet secret (e.g. the seed
     //! phrase blob) under the store's keying material. The store must be
     //! crypted and unlocked. The IV must be deterministic and unique to the
@@ -273,40 +314,6 @@ public:
             ++m_unlock_epoch;
         }
 
-        NotifyStatusChanged(this);
-        return true;
-    }
-
-    //! \brief Narrow the current unlock to staking only.
-    //!
-    //! Narrowing only: it can remove permission, never add it, so unlike
-    //! Unlock() it needs no passphrase -- the master key is already installed
-    //! and stays installed. Returns false when there is nothing to narrow,
-    //! which covers BOTH a locked wallet and an unencrypted one; a caller must
-    //! not read false as "it was locked". A no-op on one already restricted.
-    //!
-    //! This exists so an elevation taken for one operation can be handed back.
-    //! Locking instead would silently stop staking on a wallet the user had
-    //! deliberately left staking.
-    bool RestrictToStakingOnly()
-    {
-        // False on an UNENCRYPTED wallet as well as a locked one: there is
-        // nothing to restrict in either case. A caller must not read false as
-        // "the wallet was locked".
-        if (!IsCrypted()) return false;
-
-        {
-            LOCK(cs_KeyStore);
-            if (m_unlock_scope == UnlockScope::Locked) return false;
-            if (m_unlock_scope == UnlockScope::StakingOnly) return true;
-
-            m_unlock_scope = UnlockScope::StakingOnly;
-        }
-
-        // Announce it, as Lock() and Unlock() do. This changes exactly the bit
-        // WalletLockState publishes over IPC, and a subscriber that refreshes
-        // cached lock state on the status signal would otherwise miss the
-        // transition. Emitted outside the lock, matching the other two.
         NotifyStatusChanged(this);
         return true;
     }

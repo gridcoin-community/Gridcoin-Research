@@ -42,14 +42,15 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
             ui->stakingCheckBox->setChecked(true);
             ui->stakingCheckBox->show();
             // fallthru
+        case Elevate:
         case Unlock: // Ask passphrase
             // Two different promises, so do not make one of them twice.
             //
             // UnlockStaking is the Unlock BUTTON: a directive that outlives this
             // dialog, and the wallet stays as chosen here until it is locked
-            // again. Unlock is an ELEVATION taken for one operation, which does
-            // give the wallet back afterwards. Saying "returns to its previous
-            // state" for both told a user pressing Unlock that their unlock was
+            // again. Unlock and Elevate are taken for ONE operation and do give
+            // the wallet back afterwards. Saying "returns to its previous state"
+            // for all three told a user pressing Unlock that their unlock was
             // temporary, which it is not.
             ui->warningLabel->setText(mode == UnlockStaking
                 ? tr("Enter your wallet passphrase to unlock the wallet. It stays unlocked until "
@@ -195,6 +196,7 @@ void AskPassphraseDialog::accept()
         }
     } break;
     case UnlockStaking:
+    case Elevate:
     case Unlock: {
         // Two different questions, so do not read one answer for both.
         //
@@ -211,22 +213,31 @@ void AskPassphraseDialog::accept()
         // a decision. WalletModel::UnlockContext restores the prior scope when
         // the operation finishes, so this elevation is temporary.
         //
-        // An elevation on a wallet that is ALREADY unlocked for staking widens
-        // that unlock in place rather than locking and unlocking again. The
-        // relock dance threw the unlock's deadline away, so a wallet unlocked
-        // by walletpassphrase for a fixed time stayed unlocked indefinitely
-        // after any GUI action that elevated, and a cancelled prompt left a
-        // staking node locked. Only the elevation mode does this; the Unlock
-        // BUTTON is a directive and its own scope answer still applies.
-        const bool elevating = mode == Unlock
-            && model->getEncryptionStatus() == WalletModel::UnlockedForStakingOnly;
-
-        const bool unlocked = elevating
+        // Elevate widens the unlock already in progress rather than locking and
+        // unlocking again. The relock dance threw that unlock's deadline away,
+        // so a wallet unlocked by walletpassphrase for a fixed time stayed
+        // unlocked indefinitely after any GUI action, and a cancelled prompt
+        // left a staking node locked.
+        //
+        // It is NOT retried as an ordinary unlock when it fails. Elevate refuses
+        // a locked wallet, so the failure that matters here is the unlock having
+        // expired while this prompt sat open; unlocking instead would start a
+        // fresh unlock with no deadline, and the caller's context would narrow
+        // that to staking-only forever. Reporting it leaves the wallet locked,
+        // which is what the timer decided, and the user can unlock and retry.
+        const bool unlocked = mode == Elevate
             ? model->elevateWallet(oldpass)
             : model->setWalletLocked(false, oldpass,
                                      mode == UnlockStaking && ui->stakingCheckBox->isChecked());
 
-        if(!unlocked) {
+        if (!unlocked && mode == Elevate
+                && model->getEncryptionStatus() == WalletModel::Locked) {
+            QMessageBox::critical(this, tr("Wallet unlock failed"),
+                                  tr("The wallet locked itself while you were entering your "
+                                     "passphrase, because the unlock you had asked for ran out. "
+                                     "Unlock the wallet and try again."));
+        }
+        else if(!unlocked) {
             // Check if the passphrase has a null character
             if (oldpass.find('\0') == std::string::npos) {
                     QMessageBox::critical(this, tr("Wallet unlock failed"),
@@ -290,6 +301,7 @@ void AskPassphraseDialog::textChanged()
         acceptable = !ui->newPassphraseEdit->text().isEmpty() && !ui->repeatNewPassphraseEdit->text().isEmpty();
         break;
     case UnlockStaking:
+    case Elevate:
     case Unlock: // Old passphrase x1
         acceptable = !ui->oldPassphraseEdit->text().isEmpty();
         break;

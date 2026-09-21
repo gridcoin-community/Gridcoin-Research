@@ -22,11 +22,22 @@ public:
         //! ticked by default, and leaves the wallet in the state the user
         //! chose. That state outlives this dialog.
         UnlockStaking,
-        //! An ELEVATION raised by an operation that needs a full unlock. No
+        //! An operation needs a full unlock and the wallet is LOCKED. No
         //! checkbox: staking-only would not satisfy the caller, so there is
-        //! nothing to choose. WalletModel::UnlockContext restores the prior
-        //! scope when the operation finishes.
+        //! nothing to choose. WalletModel::UnlockContext locks again when the
+        //! operation finishes.
         Unlock,
+        //! An operation needs a full unlock and the wallet is already unlocked
+        //! FOR STAKING. Widens that unlock in place, so its deadline and the
+        //! relock armed for it survive, and UnlockContext narrows it back.
+        //!
+        //! Distinct from Unlock because the two must not be confused when the
+        //! unlock expires while the prompt is open. Treating that as an
+        //! ordinary Unlock would start a fresh indefinite unlock, which the
+        //! context would then narrow to staking-only with no deadline at all --
+        //! silently turning the time-boxed unlock the user asked for into a
+        //! permanent one. In this mode that case is reported instead.
+        Elevate,
         ChangePass,    /**< Ask old passphrase + new passphrase twice */
     };
 

@@ -69,11 +69,16 @@ namespace ipc {
 //!
 //! Appended, so it renumbers nothing -- and that is still not enough to make it
 //! additive, which is why this is a major and not a minor. The enum crosses as
-//! a raw integer with an unchecked cast on receipt, and the GUI's switch over
-//! it deliberately carries no `default:` so that -Wswitch flags a new
-//! enumerator at compile time. An already-shipped GUI therefore has no arm for
-//! the new value and falls through to `assert(false)`, which is live in release
-//! because the build strips NDEBUG globally. A minor would have let that
+//! a raw integer with an unchecked cast on receipt, and the GUI's switch over it
+//! carries no `default:` arm, so an already-shipped GUI has nothing to do with
+//! the new value and runs into the `assert(false)` that closes the function --
+//! live in release, because the build strips NDEBUG globally.
+//!
+//! There is no compile-time backstop either. An earlier version of this note
+//! claimed the missing `default:` lets -Wswitch flag a new enumerator; it does
+//! not, because the main targets are not compiled with -Wall (only the vendored
+//! secp256k1 and crc32c subtrees set it). Verified by deleting an arm from a
+//! switch and rebuilding: no diagnostic. So the abort IS the whole mechanism. A minor would have let that
 //! pairing connect (an older GUI against a newer node is only a soft warning),
 //! and the first staking-only send would abort the GUI. The major turns it into
 //! the "use matching builds" refusal at connect, which is the honest answer:

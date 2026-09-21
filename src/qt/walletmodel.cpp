@@ -530,7 +530,9 @@ bool WalletModel::elevateWallet(const SecureString &passPhrase)
 
 bool WalletModel::changePassphrase(const SecureString &oldPass, const SecureString &newPass)
 {
-    // Locks the wallet first (node-side) before attempting the change.
+    // The node side locks, rewrites the master key records and restores the
+    // scope and deadline it captured, so a wallet unlocked for staking is still
+    // unlocked for staking, and still expires when it would have.
     return m_wallet.changeWalletPassphrase(oldPass, newPass);
 }
 
@@ -640,14 +642,14 @@ WalletModel::UnlockContext WalletModel::requestUnlock()
     // Lock on expiry only when this context is what unlocked a LOCKED wallet.
     // A wallet that was staking is narrowed back instead, never locked.
     //
-    // One edge, and it is benign. If the relock armed by an earlier
-    // walletpassphrase comes due while the prompt is open, the wallet locks
-    // under us and the dialog does a full unlock rather than an elevation. This
-    // context then narrows THAT unlock to staking-only, which has no deadline --
-    // the unlock the deadline belonged to is over. That is the same state the
-    // Unlock button gives with its box ticked, and reachable that way, so it is
-    // a legitimate resting place rather than an anomaly; it is simply no longer
-    // time-boxed.
+    // The relock armed by an earlier walletpassphrase can come due while the
+    // prompt is open. The dialog runs in Elevate mode for this path, and an
+    // elevation refuses a locked wallet, so that case fails and is reported
+    // rather than quietly becoming a fresh unlock: `valid` is then false and
+    // this context does nothing. Letting it fall back to an ordinary unlock
+    // would start one with no deadline, which the narrowing below would make
+    // permanent -- turning the time-boxed unlock the user asked for into an
+    // open-ended one.
     return UnlockContext(this, valid, valid && (initial == Locked), was_staking_only);
 }
 

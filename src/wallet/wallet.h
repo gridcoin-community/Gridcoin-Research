@@ -335,12 +335,16 @@ public:
     //! the scheduler against this unlock's epoch, so setting a duration and
     //! arming its timer are ONE operation that cannot be half-done.
     //!
-    //! Fails if a duration is asked for and no scheduler is running, rather
+    //! Fails if a duration is asked for and no scheduler is RUNNING, rather
     //! than unlocking without the timer: a caller that asked for sixty seconds
     //! and silently got forever is the failure this design exists to remove.
-    //! Unreachable in production, where the RPC server starts after the
-    //! scheduler; reachable in tests, which is why it is a refusal and not an
-    //! assertion.
+    //!
+    //! It is reachable in production, which an earlier version of this note
+    //! denied. The RPC server starts BEFORE g_scheduler is constructed and
+    //! stops AFTER it has been stopped and joined, so a walletpassphrase at
+    //! either end of the process lands in a window where nothing would run the
+    //! relock. walletpassphrase refuses up front with its own message, so the
+    //! refusal here is a backstop rather than the thing the user sees.
     bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                 std::optional<std::chrono::seconds> relock_after);
 
@@ -370,6 +374,19 @@ public:
     //! caller wants Unlock() -- when it is unencrypted, or on a wrong
     //! passphrase.
     bool ElevateToFull(const SecureString& strWalletPassphrase);
+
+    //! \brief Hand a scoped elevation back, narrowing the unlock to staking only.
+    //!
+    //! Takes cs_wallet before narrowing, which is what serialises it against a
+    //! spend. CreateTransaction reads the scope inside LOCK2(cs_main,
+    //! cs_wallet) and holds cs_wallet for the whole build, so narrowing under
+    //! cs_KeyStore alone could land just after that read and the build would
+    //! sign anyway. With this, either the spend finishes first or the builder
+    //! sees the restriction.
+    //!
+    //! False when there is nothing to narrow, which covers BOTH a locked wallet
+    //! and an unencrypted one; do not read false as "it was locked".
+    bool RestrictToStakingOnly();
 
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
     bool EncryptWallet(const SecureString& strWalletPassphrase);

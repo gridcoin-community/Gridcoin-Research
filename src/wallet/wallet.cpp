@@ -565,6 +565,19 @@ bool CWallet::LoadCScript(const CScript& redeemScript)
     return CCryptoKeyStore::AddCScript(redeemScript);
 }
 
+//! Whether a relock armed now would actually run.
+//!
+//! A non-null g_scheduler is not enough to know that. StartRPCThreads() runs
+//! before g_scheduler is constructed, and StopRPCThreads() runs after it has
+//! been stopped and its thread joined, so at each end of the process there is a
+//! window where an RPC can ask for a timed unlock, the pointer answers, and
+//! nothing will ever service what is put on the queue -- which would leave the
+//! wallet unlocked past the deadline it reported.
+static bool SchedulerCanRelock()
+{
+    return g_scheduler && g_scheduler->AreThreadsServicingQueue();
+}
+
 //! Arm a one-shot relock for the unlock identified by \p epoch.
 //!
 //! CScheduler cannot cancel a task, so an armed relock always arrives. It
@@ -593,7 +606,13 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
 {
     // Refuse rather than unlock without the timer the caller asked for. See
     // the declaration: silently granting forever is the shape this removes.
-    if (relock_after && !g_scheduler) {
+    //
+    // Non-null is NOT enough. The RPC server starts before the scheduler is
+    // constructed and stops after it has been stopped and joined, so there is a
+    // window at each end of the process where g_scheduler is answerable but
+    // nothing will ever run what is put on it. Ask whether a thread is actually
+    // servicing the queue.
+    if (relock_after && !SchedulerCanRelock()) {
         return error("%s: a timed unlock was requested but no scheduler is running", __func__);
     }
 
@@ -623,8 +642,15 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                 // installed it. Reading the epoch back would be a second
                 // acquisition, and the unlock it names need not still be this
                 // one by the time the relock is armed against it.
+                //
+                // The delay comes from the deadline, not from relock_after.
+                // The deadline was fixed before the key derivation above, which
+                // takes a calibrated ~100ms per round, so arming for the full
+                // interval here would fire that much LATER than the deadline
+                // getinfo reports -- the key would outlive its stated expiry.
                 if (relock_after) {
-                    ArmRelock(*g_scheduler, this, epoch, *relock_after);
+                    ArmRelock(*g_scheduler, this, epoch,
+                              std::chrono::seconds(std::max<int64_t>(0, *deadline - GetTime())));
                 }
 
                 return true;
@@ -668,6 +694,17 @@ bool CWallet::ElevateToFull(const SecureString& strWalletPassphrase)
     }
 
     return false;
+}
+
+bool CWallet::RestrictToStakingOnly()
+{
+    // cs_wallet, then cs_KeyStore inside: the canonical order, and the reason
+    // this wrapper exists. The spend chokepoint reads the scope while holding
+    // cs_wallet for the whole build, so narrowing has to wait for that build
+    // rather than slipping in behind its check.
+    LOCK(cs_wallet);
+
+    return CCryptoKeyStore::RestrictToStakingOnly();
 }
 
 bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase)
@@ -731,7 +768,7 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
                     // or there is no scheduler to arm against. Either way the
                     // unlock this restored is already over, so end it rather
                     // than leave it open with nothing to close it.
-                    if (remaining <= 0 || !g_scheduler) {
+                    if (remaining <= 0 || !SchedulerCanRelock()) {
                         Lock();
                     } else {
                         ArmRelock(*g_scheduler, this, epoch, std::chrono::seconds(remaining));

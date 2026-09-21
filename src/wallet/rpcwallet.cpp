@@ -22,6 +22,7 @@
 #include "gridcoin/sidestake.h"
 #include "gridcoin/staking/difficulty.h"
 #include "policy/fees.h"
+#include "scheduler.h"
 #include "policy/policy.h"
 #include "wallet/coincontrol.h"
 #include "gridcoin/staking/status.h"
@@ -3445,6 +3446,21 @@ UniValue walletpassphrase(const UniValue& params)
     if (nSleepTime > MAX_SLEEP_TIME) {
         nSleepTime = MAX_SLEEP_TIME;
         LogPrintf("WARN: walletpassphrase: timeout is too large. Set to limit of 100000000 seconds.");
+    }
+
+    // Refuse here, with a message that says what is wrong, rather than letting
+    // Unlock's backstop refusal surface as "the passphrase was incorrect".
+    //
+    // A non-null g_scheduler is not enough: StartRPCThreads() runs before it is
+    // constructed and StopRPCThreads() runs after it has been stopped and
+    // joined, so this RPC is answerable at both ends of the process while
+    // nothing would ever run the relock. An unlock whose timer cannot be armed
+    // is refused, because granting it would mean granting forever.
+    if (!g_scheduler || !g_scheduler->AreThreadsServicingQueue()) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+                           "Error: the automatic relock cannot be scheduled right now, because the "
+                           "node is still starting up or is shutting down. The wallet has NOT been "
+                           "unlocked. Try again once the node is running.");
     }
 
     // Note that the walletpassphrase is stored in params[0] which is not mlock()ed

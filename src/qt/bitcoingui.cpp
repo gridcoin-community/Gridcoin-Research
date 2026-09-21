@@ -2007,8 +2007,22 @@ void BitcoinGUI::unlockWallet()
 
     if(status == WalletModel::Locked || status == WalletModel::UnlockedForStakingOnly)
     {
-        AskPassphraseDialog::Mode mode = sender() == unlockWalletAction ?
-              AskPassphraseDialog::UnlockStaking : AskPassphraseDialog::Unlock;
+        // Three cases, and the third is why they are separate modes. The
+        // toolbar action is a directive and offers the checkbox. The model asks
+        // for an operation: on a LOCKED wallet that is a plain full unlock, and
+        // on one already unlocked for staking it is an ELEVATION, which widens
+        // that unlock in place and must not be confused with starting a new one
+        // if it expires while the prompt is open.
+        AskPassphraseDialog::Mode mode;
+
+        if (sender() == unlockWalletAction) {
+            mode = AskPassphraseDialog::UnlockStaking;
+        } else if (status == WalletModel::UnlockedForStakingOnly) {
+            mode = AskPassphraseDialog::Elevate;
+        } else {
+            mode = AskPassphraseDialog::Unlock;
+        }
+
         AskPassphraseDialog dlg(mode, this);
         dlg.setModel(walletModel);
         dlg.exec();
