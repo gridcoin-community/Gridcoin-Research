@@ -896,6 +896,17 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
 
         if (!fCreated)
         {
+            // Re-read the scope, here, where cs_wallet IS held. The early check
+            // above is not under it, and RestrictToStakingOnly takes cs_wallet,
+            // so a narrowing can land between the two: the builder then refuses
+            // correctly but this branch would report a generic creation failure
+            // and send the user to look at their balance. First, because a
+            // staking-only wallet is the reason regardless of what the fee
+            // arithmetic below would say.
+            if (m_wallet->IsUnlockedForStakingOnly()) {
+                return {SendCoinsStatus::WalletUnlockedForStakingOnly};
+            }
+
             if (!fAnySubtractFeeFromAmount && (total + nFeeRequired) > nBalance)
             {
                 return {SendCoinsStatus::AmountWithFeeExceedsBalance, nFeeRequired};

@@ -617,11 +617,12 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
     // Refuse rather than unlock without the timer the caller asked for. See
     // the declaration: silently granting forever is the shape this removes.
     //
-    // Non-null is NOT enough. The RPC server starts before the scheduler is
-    // constructed and stops after it has been stopped and joined, so there is a
-    // window at each end of the process where g_scheduler is answerable but
-    // nothing will ever run what is put on it. Ask whether a thread is actually
-    // servicing the queue.
+    // An advisory early refusal, so the common case gets a message that names
+    // the cause instead of "the passphrase was incorrect". AppInit2 builds the
+    // scheduler before the RPC server, so this no longer fires during startup;
+    // what is left is shutdown, where the handle is cleared before the scheduler
+    // stops. ArmRelock re-decides atomically, because the key derivation between
+    // here and there takes a calibrated few hundred milliseconds.
     if (relock_after && !SchedulerCanRelock()) {
         if (failure_out) *failure_out = UnlockFailure::RelockUnavailable;
 

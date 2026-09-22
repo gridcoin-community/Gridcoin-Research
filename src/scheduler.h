@@ -148,9 +148,12 @@ extern std::unique_ptr<CScheduler> g_scheduler;
 
 //! The scheduler, published for threads other than the one that builds it.
 //!
-//! g_scheduler itself is a plain unique_ptr assigned part-way through AppInit2,
-//! and the RPC server is already serving by then (StartRPCThreads runs earlier),
-//! so reading it from an RPC thread is a data race on a non-atomic object. This
+//! g_scheduler itself is a plain unique_ptr assigned during AppInit2, and other
+//! threads read it, so reading it from one of them is a data race on a
+//! non-atomic object. AppInit2 now assigns it BEFORE StartRPCThreads(), which
+//! removes the startup window in which an RPC would have found it null -- but
+//! not the race itself, since the P2P and stake-miner threads are already
+//! running by then and shutdown clears it while RPC threads still serve. This
 //! is set once the scheduler is ready to take work and cleared before it is told
 //! to stop, and the release/acquire pair is what makes reading through it
 //! well-defined.
