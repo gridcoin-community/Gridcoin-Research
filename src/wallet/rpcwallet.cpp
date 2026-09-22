@@ -3453,9 +3453,9 @@ UniValue walletpassphrase(const UniValue& params)
     //
     // The published handle, not g_scheduler: reading the plain unique_ptr from an
     // RPC thread would race the assignment in AppInit2. The scheduler is now
-    // built before the RPC server, so startup is covered; StopRPCThreads() still
-    // runs long after the scheduler stops, and this RPC stays answerable through
-    // that (issue #3388).
+    // built before the RPC server, so startup is covered. This RPC stays
+    // answerable through shutdown, where a dropped relock is harmless because
+    // the unlock does not survive the process (closed #3388).
     //
     // Advisory. Unlock re-decides atomically when it arms, because the scheduler
     // can stop during the key derivation in between; this is only here so the

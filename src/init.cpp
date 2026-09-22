@@ -2502,8 +2502,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     // acts. The scheduler needs nothing from the RPC server, so it goes first
     // and the window does not exist.
     //
-    // This does not help at the other end: shutdown stops the scheduler while
-    // the RPC threads are still running. See issue #3388.
+    // The other end needs no fix: shutdown stops the scheduler while the RPC
+    // threads still run, so a relock armed then can be dropped -- but the
+    // unlock is ephemeral (the master key is never serialized and no startup
+    // path unlocks), so the process is exiting and the key dies with it. See
+    // the reasoning on closed issue #3388.
     assert(!g_scheduler); // LINT-OK-ASSERT: single-threaded init invariant; a second scheduler would orphan the first
     g_scheduler = std::make_unique<CScheduler>();
     CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, g_scheduler.get());
