@@ -340,9 +340,11 @@ public:
     //! and silently got forever is the failure this design exists to remove.
     //!
     //! It is reachable in production, which an earlier version of this note
-    //! denied. The RPC server starts BEFORE the scheduler is constructed and
-    //! stops long AFTER it is stopped, so a walletpassphrase at either end of
-    //! the process lands in a window where nothing would run the relock.
+    //! denied. The startup half is now closed -- AppInit2 constructs the
+    //! scheduler BEFORE it starts the RPC server -- but the RPC server still
+    //! stops long after the scheduler does, so a walletpassphrase during
+    //! SHUTDOWN can still land in a window where nothing would run the relock
+    //! (issue #3388).
     //!
     //! The decision is taken when the relock is ARMED, not before: the key
     //! derivation in between takes a calibrated few hundred milliseconds, and

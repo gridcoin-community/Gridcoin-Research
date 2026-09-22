@@ -2491,6 +2491,28 @@ bool AppInit2(ThreadHandlerPtr threads)
     // net threads is safe.
     g_stake_miner_thread = std::thread(ThreadStakeMiner, pwalletMain);
 
+    // Start the lightweight task scheduler thread BEFORE the RPC server.
+    //
+    // A timed walletpassphrase refuses when the relock cannot be armed, because
+    // granting an unlock with nothing to end it is the failure that design
+    // exists to remove. Starting the RPC server first therefore opened a window
+    // in which an autounlock that fires as soon as the port answers would be
+    // refused and the wallet would stay locked. Measured at ~3s on a 515k
+    // transaction wallet -- small, but it is the exact moment such a script
+    // acts. The scheduler needs nothing from the RPC server, so it goes first
+    // and the window does not exist.
+    //
+    // This does not help at the other end: shutdown stops the scheduler while
+    // the RPC threads are still running. See issue #3388.
+    assert(!g_scheduler);
+    g_scheduler = std::make_unique<CScheduler>();
+    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, g_scheduler.get());
+    threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "grc-scheduler", serviceLoop));
+
+    // Publish it for threads other than this one. Safe before the service thread
+    // has entered serviceQueue: a task enqueued first is run when it gets there.
+    g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
+
     const bool fStartRPC = gArgs.GetBoolArg("-server", false);
     LogPrintf("init: -server=%d, %s RPC server\n", fStartRPC, fStartRPC ? "starting" : "skipping");
     if (fStartRPC) StartRPCThreads();
@@ -2517,18 +2539,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     int64_t nBalanceInQuestion;
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
 
-    // Start the lightweight task scheduler thread
-    assert(!g_scheduler);
-    g_scheduler = std::make_unique<CScheduler>();
-    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, g_scheduler.get());
-    threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "grc-scheduler", serviceLoop));
-
-    // Publish it for the other threads that are already running. The RPC server
-    // started above, so an RPC can be in flight right now; this release store is
-    // what lets it read the scheduler without racing this assignment. Safe to do
-    // before the service thread has actually entered serviceQueue, because a
-    // task enqueued first is simply run when it gets there.
-    g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
 
     // Register the PeerManager's recurring tasks now that the scheduler exists
     // (issue #2558). This call previously sat next to the PeerManager construction
