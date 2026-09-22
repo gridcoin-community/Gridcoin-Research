@@ -6,6 +6,7 @@
 #include "qt/decoration.h"
 #include "walletmodel.h"
 
+#include <QApplication>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QKeyEvent>
@@ -97,6 +98,22 @@ void AskPassphraseDialog::setModel(WalletModel *model)
     // Do not restore "stickiness" without solving that.
 }
 
+namespace {
+//! Balances setOverrideCursor/restoreOverrideCursor even if the call it wraps
+//! throws.
+//!
+//! Both users cross IPC in the split build, where a disconnect mid-call raises,
+//! and an override cursor that is set and never restored persists for the life
+//! of the application -- the whole GUI keeps a wait cursor with nothing running.
+struct BusyCursor {
+    BusyCursor() { QApplication::setOverrideCursor(Qt::WaitCursor); }
+    ~BusyCursor() { QApplication::restoreOverrideCursor(); }
+
+    BusyCursor(const BusyCursor&) = delete;
+    BusyCursor& operator=(const BusyCursor&) = delete;
+};
+} // namespace
+
 void AskPassphraseDialog::accept()
 {
     SecureString oldpass, newpass1, newpass2;
@@ -126,7 +143,29 @@ void AskPassphraseDialog::accept()
                  QMessageBox::Cancel);
         if(retval == QMessageBox::Yes) {
             if(newpass1 == newpass2) {
-                if(model->setWalletEncrypted(newpass1)) {
+                // Take this dialog down BEFORE the encryption runs, not after it.
+                //
+                // setWalletEncrypted() rewrites the wallet database and
+                // regenerates the keypool. That takes seconds and blocks this
+                // thread, and accept() cleared the passphrase fields on entry --
+                // so leaving the dialog up means the user watches an empty,
+                // frozen prompt for the duration and then gets the confirmation
+                // stacked on top of it, which reads as two prompts at once.
+                //
+                // hide(), not accept(): the message boxes below parent to this
+                // dialog, and the accept() at the end of this branch is what
+                // ends exec() with the right result.
+                hide();
+
+                // Nothing else on screen says the application is busy once the
+                // dialog is gone, and the whole GUI thread is blocked here.
+                bool encrypted = false;
+                {
+                    BusyCursor busy;
+                    encrypted = model->setWalletEncrypted(newpass1);
+                }
+
+                if(encrypted) {
                     // Earlier backups of the pre-encryption wallet are not merely useless
                     // once the new wallet is in use -- they remain a security risk, because
                     // they still contain the UNENCRYPTED private keys. This includes the
@@ -260,7 +299,20 @@ void AskPassphraseDialog::accept()
     case ChangePass:
         if(newpass1 == newpass2)
         {
-            if(model->changePassphrase(oldpass, newpass1))
+            // Down BEFORE the call, exactly as the Encrypt case above, and for
+            // the same reason: changePassphrase() re-derives the key several
+            // times to recalibrate the iteration count, blocking the GUI thread,
+            // and accept() already cleared the fields -- so leaving it up shows
+            // an empty frozen prompt here too, just for less time.
+            hide();
+
+            bool changed = false;
+            {
+                BusyCursor busy;
+                changed = model->changePassphrase(oldpass, newpass1);
+            }
+
+            if(changed)
             {
                 QMessageBox::information(this, tr("Wallet encrypted"),
                                      tr("Wallet passphrase was successfully changed."));
@@ -268,6 +320,11 @@ void AskPassphraseDialog::accept()
             }
             else
             {
+                // Back up before the error: this dialog is where the passphrase
+                // is retyped, so it has to return. The box on top of it is right
+                // here -- unlike the success case, the prompt is still wanted.
+                show();
+
                 // Check if the old passphrase had a null character
                 if (oldpass.find('\0') == std::string::npos) {
                     QMessageBox::critical(this, tr("Passphrase change failed"),
