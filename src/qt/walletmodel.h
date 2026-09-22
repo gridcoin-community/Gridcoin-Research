@@ -72,6 +72,8 @@ public:
         //! in SendCoinsDialog.
         TransactionCreationFailed,
         TransactionCommitFailed,
+        //! The wallet is unlocked for staking only and will not build a spend.
+        WalletUnlockedForStakingOnly,
         Aborted,
         //! The required fee exceeds both the configured transaction fee and
         //! the fee the caller has accepted so far; nothing was committed.
@@ -83,9 +85,10 @@ public:
 
     enum EncryptionStatus
     {
-        Unencrypted,  // !wallet->IsCrypted()
-        Locked,       // wallet->IsCrypted() && wallet->IsLocked()
-        Unlocked      // wallet->IsCrypted() && !wallet->IsLocked()
+        Unencrypted,             // !wallet->IsCrypted()
+        Locked,                  // crypted, scope Locked
+        Unlocked,                // crypted, scope Full
+        UnlockedForStakingOnly   // crypted, scope StakingOnly
     };
 
     //! The interface boundary for wallet queries and commands. Dialogs that
@@ -139,6 +142,10 @@ public:
     // unlock to staking (persisted node-side as the unlock preference).
     bool setWalletLocked(bool locked, const SecureString& passPhrase=SecureString(),
                          bool stakingOnly = false);
+    //! Widen an unlock in progress to full, for one operation. What an
+    //! elevation prompt calls instead of locking and unlocking again, so the
+    //! unlock's deadline and the relock armed for it survive it.
+    bool elevateWallet(const SecureString& passPhrase);
     bool changePassphrase(const SecureString& oldPass, const SecureString& newPass);
 
     // Back up the wallet .dat / config file to dest (pass-throughs to the
@@ -151,7 +158,7 @@ public:
     class UnlockContext
     {
     public:
-        UnlockContext(WalletModel *wallet, bool valid, bool relock);
+        UnlockContext(WalletModel *wallet, bool valid, bool relock, bool restore_staking_only = false);
         ~UnlockContext();
 
         bool isValid() const { return valid; }
@@ -166,6 +173,9 @@ public:
         WalletModel *wallet;
         bool valid;
         mutable bool relock; // mutable, as it can be set to false by copying
+        //! The wallet was unlocked for staking when this context elevated it,
+        //! so give that scope back on expiry instead of locking.
+        mutable bool restore_staking_only;
 
         void CopyFrom(const UnlockContext& rhs);
     };
@@ -361,7 +371,15 @@ signals:
     // Signal emitted when wallet needs to be unlocked
     // It is valid behaviour for listeners to keep the wallet locked after this signal;
     // this means that the unlocking failed or was cancelled.
-    void requireUnlock();
+    //! Ask the UI for the passphrase so an operation can proceed.
+    //!
+    //! \p elevate says WHICH question, decided here where the wallet state was
+    //! read: true widens an unlock that is already open for staking, false
+    //! unlocks a locked wallet. The receiver must not re-derive it from a second
+    //! status read -- the unlock can expire in between, and answering "unlock"
+    //! then starts a fresh one with no deadline, which this context would go on
+    //! to narrow to staking-only permanently.
+    void requireUnlock(bool elevate);
 
     // Asynchronous error notification
     void error(const QString &title, const QString &message, bool modal);

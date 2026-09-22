@@ -22,6 +22,7 @@
 #include "gridcoin/sidestake.h"
 #include "gridcoin/staking/difficulty.h"
 #include "policy/fees.h"
+#include "scheduler.h"
 #include "policy/policy.h"
 #include "wallet/coincontrol.h"
 #include "gridcoin/staking/status.h"
@@ -38,11 +39,8 @@
 
 using namespace std;
 
-int64_t nWalletUnlockTime;
-static CCriticalSection cs_nWalletUnlockTime;
 
 extern void ThreadTopUpKeyPool(void* parg);
-extern void ThreadCleanWalletPassphrase(void* parg);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 static void accountingDeprecationCheck()
@@ -105,7 +103,7 @@ void EnsureWalletIsUnlocked()
 {
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-    if (fWalletUnlockStakingOnly)
+    if (pwalletMain->IsUnlockedForStakingOnly())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
 }
 
@@ -231,7 +229,7 @@ UniValue getinfo(const UniValue& params)
     obj.pushKV("paytxfee",      ValueFromAmount(nTransactionFee));
     obj.pushKV("mininput",      ValueFromAmount(nMinimumInputValue));
     if (pwalletMain->IsCrypted())
-        obj.pushKV("unlocked_until", nWalletUnlockTime / 1000);
+        obj.pushKV("unlocked_until", pwalletMain->GetUnlockDeadline().value_or(0));
     obj.pushKV("errors",        GetWarnings("statusbar"));
     return obj;
 }
@@ -274,7 +272,7 @@ UniValue getwalletinfo(const UniValue& params)
         res.pushKV("keypoolsize",   (int)pwalletMain->GetKeyPoolSize());
 
         if (pwalletMain->IsCrypted())
-            res.pushKV("unlocked_until", nWalletUnlockTime / 1000);
+            res.pushKV("unlocked_until", pwalletMain->GetUnlockDeadline().value_or(0));
 
         CKeyID masterKeyID = pwalletMain->GetHDChain().masterKeyID;
         if (!masterKeyID.IsNull())
@@ -3397,49 +3395,6 @@ void ThreadTopUpKeyPool(void* parg)
     pwalletMain->TopUpKeyPool();
 }
 
-void ThreadCleanWalletPassphrase(void* parg)
-{
-    // Make this thread recognisable as the wallet relocking thread
-    RenameThread("grc-lock-wa");
-
-    int64_t nMyWakeTime = GetTimeMillis() + *((int64_t*)parg) * 1000;
-
-    ENTER_CRITICAL_SECTION(cs_nWalletUnlockTime);
-
-    if (nWalletUnlockTime == 0)
-    {
-        nWalletUnlockTime = nMyWakeTime;
-
-        do
-        {
-            if (nWalletUnlockTime==0)
-                break;
-            int64_t nToSleep = nWalletUnlockTime - GetTimeMillis();
-            if (nToSleep <= 0)
-                break;
-
-            LEAVE_CRITICAL_SECTION(cs_nWalletUnlockTime);
-            if (!MilliSleep(nToSleep)) return;
-            ENTER_CRITICAL_SECTION(cs_nWalletUnlockTime);
-
-        } while(1);
-
-        if (nWalletUnlockTime)
-        {
-            nWalletUnlockTime = 0;
-            pwalletMain->Lock();
-        }
-    }
-    else
-    {
-        if (nWalletUnlockTime < nMyWakeTime)
-            nWalletUnlockTime = nMyWakeTime;
-    }
-
-    LEAVE_CRITICAL_SECTION(cs_nWalletUnlockTime);
-
-    delete (int64_t*)parg;
-}
 
 static const RPCHelpMan walletpassphrase_help{
     "walletpassphrase",
@@ -3448,8 +3403,8 @@ static const RPCHelpMan walletpassphrase_help{
     "staking). Requires the wallet to be encrypted.\n"
     "\n"
     "If <stakingonly> is true, the wallet is unlocked for staking only and "
-    "sending functions remain disabled until walletlock is called and the "
-    "wallet is re-unlocked with <stakingonly> false.\n"
+    "sending functions remain disabled for that unlock. The restriction belongs "
+    "to the unlock, so locking clears it and the next unlock states its own.\n"
     "\n"
     "Timeouts greater than 100000000 seconds are clamped to that value to "
     "avoid a macOS/libevent bug.",
@@ -3493,15 +3448,66 @@ UniValue walletpassphrase(const UniValue& params)
         LogPrintf("WARN: walletpassphrase: timeout is too large. Set to limit of 100000000 seconds.");
     }
 
+    // Refuse here, with a message that says what is wrong, rather than letting
+    // Unlock's refusal surface as "the passphrase was incorrect".
+    //
+    // The published handle, not g_scheduler: reading the plain unique_ptr from an
+    // RPC thread would race the assignment in AppInit2. The scheduler is now
+    // built before the RPC server, so startup is covered. This RPC stays
+    // answerable through shutdown, where a dropped relock is harmless because
+    // the unlock does not survive the process (closed #3388).
+    //
+    // Advisory. Unlock re-decides atomically when it arms, because the scheduler
+    // can stop during the key derivation in between; this is only here so the
+    // common case gets a message that names the cause.
+    if (!g_scheduler_handle.load(std::memory_order_acquire)) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+                           "Error: the automatic relock cannot be scheduled right now, because the "
+                           "node is still starting up or is shutting down. The wallet has NOT been "
+                           "unlocked. Try again once the node is running.");
+    }
+
     // Note that the walletpassphrase is stored in params[0] which is not mlock()ed
     SecureString strWalletPass;
     strWalletPass.reserve(100);
     strWalletPass = std::string_view{params[0].get_str()};
 
+    // ppcoin: if the user's OS account is compromised, prevent trivial
+    // sendmoney. The scope travels with the unlock instead of being written to
+    // a global afterwards, so the wallet is never briefly unlocked without it.
+    const UnlockScope scope = (params.size() > 2 && params[2].get_bool())
+        ? UnlockScope::StakingOnly
+        : UnlockScope::Full;
+
     if (strWalletPass.length() > 0) {
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
-        if (!pwalletMain->Unlock(strWalletPass)) {
+        CWallet::UnlockFailure failure = CWallet::UnlockFailure::None;
+
+        if (!pwalletMain->Unlock(strWalletPass, scope, std::chrono::seconds(nSleepTime), &failure)) {
+            // A right passphrase can still fail here: the relock may be
+            // unschedulable, or the timeout may have run out during the key
+            // derivation, and either way the wallet is left LOCKED rather than
+            // unlocked with nothing to close it. Saying "incorrect passphrase"
+            // for that would send the user after the wrong problem.
+            // Another unlock won the race between the guard above and the
+            // wallet taking its own lock. Same answer that guard gives.
+            if (failure == CWallet::UnlockFailure::AlreadyUnlocked) {
+                throw JSONRPCError(RPC_WALLET_ALREADY_UNLOCKED,
+                                   "Error: Wallet is already unlocked, use walletlock first if "
+                                   "need to change unlock settings.");
+            }
+
+            if (failure == CWallet::UnlockFailure::RelockUnavailable) {
+                throw JSONRPCError(RPC_WALLET_ERROR,
+                                   "Error: the wallet passphrase was accepted, but the automatic "
+                                   "relock could not be scheduled, so the wallet has been locked "
+                                   "again and is NOT unlocked. This happens while the node is "
+                                   "starting up or shutting down, and for a timeout so short that "
+                                   "it expires while the key is being derived. Try again with a "
+                                   "longer timeout once the node is running.");
+            }
+
             // Check if the passphrase has a null character
             if (strWalletPass.find('\0') == std::string::npos) {
                 throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
@@ -3519,14 +3525,6 @@ UniValue walletpassphrase(const UniValue& params)
     }
 
     NewThread(ThreadTopUpKeyPool, nullptr);
-    int64_t* pnSleepTime = new int64_t(nSleepTime);
-    NewThread(ThreadCleanWalletPassphrase, pnSleepTime);
-
-    // ppcoin: if user OS account compromised prevent trivial sendmoney commands
-    if (params.size() > 2)
-        fWalletUnlockStakingOnly = params[2].get_bool();
-    else
-        fWalletUnlockStakingOnly = false;
 
     return NullUniValue;
 }
@@ -3878,9 +3876,7 @@ UniValue walletlock(const UniValue& params)
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     {
-        LOCK(cs_nWalletUnlockTime);
         pwalletMain->Lock();
-        nWalletUnlockTime = 0;
     }
 
     return NullUniValue;

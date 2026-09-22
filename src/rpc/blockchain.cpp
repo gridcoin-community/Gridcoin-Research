@@ -2977,10 +2977,11 @@ UniValue addkey(const UniValue& params)
                       (unsigned)params.size()));
     }
 
-    if (pwalletMain->IsLocked()) {
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED,
-                           "Error: Please enter the wallet passphrase with walletpassphrase first.");
-    }
+    // The shared helper, not a bare IsLocked(): addkey builds an administrative
+    // contract, and every sibling admin RPC refuses a staking-only wallet with
+    // a message that says so. Without this it reached the builder and failed
+    // with a generic "transaction creation failed".
+    EnsureWalletIsUnlocked();
 
     if (!(type == GRC::ContractType::PROJECT
           || type == GRC::ContractType::SCRAPER
@@ -3624,7 +3625,7 @@ UniValue SendPoolApprove(const GRC::Cpid& cpid,
     EnsurePoolRegistrationActive();
 
     // Use EnsureWalletIsUnlocked() rather than a bare IsLocked() check so a
-    // staking-only unlock (fWalletUnlockStakingOnly) is rejected up front,
+    // staking-only unlock (UnlockScope::StakingOnly) is rejected up front,
     // matching registerpool / withdrawpool. A bare IsLocked() returns false
     // when unlocked-for-staking-only, letting this master-key, coin-spending
     // RPC proceed and fail with a less precise error deeper in SendContract.

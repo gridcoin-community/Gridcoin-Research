@@ -62,8 +62,40 @@ namespace ipc {
 //! talks to a new GUI until the About dialog opens and calls a method the node
 //! does not serve; the minor turns that into the "Update the node" hard fail at
 //! connect instead.
-constexpr uint32_t IPC_SCHEMA_MAJOR = 3;
-constexpr uint32_t IPC_SCHEMA_MINOR = 3;
+//!
+//! Major 4: SendCoinsStatus gained `WalletUnlockedForStakingOnly`, so a
+//! staking-only wallet's refusal to build a spend can be reported as itself
+//! rather than as a generic creation failure.
+//!
+//! Appended, so it renumbers nothing -- and that is still not enough to make it
+//! additive, which is why this is a major and not a minor. The enum crosses as
+//! a raw integer with an unchecked cast on receipt, and the GUI's switch over it
+//! carries no `default:` arm, so an already-shipped GUI has nothing to do with
+//! the new value and runs into the `assert(false)` that closes the function --
+//! live in release, because the build strips NDEBUG globally.
+//!
+//! There is no compile-time backstop either. An earlier version of this note
+//! claimed the missing `default:` lets -Wswitch flag a new enumerator; it does
+//! not, because the main targets are not compiled with -Wall (only the vendored
+//! secp256k1 and crc32c subtrees set it). Verified by deleting an arm from a
+//! switch and rebuilding: no diagnostic. So the abort IS the whole mechanism. A minor would have let that
+//! pairing connect (an older GUI against a newer node is only a soft warning),
+//! and the first staking-only send would abort the GUI. The major turns it into
+//! the "use matching builds" refusal at connect, which is the honest answer:
+//! the node can produce a value this GUI cannot name.
+//!
+//! The minor restarts at 0, as it did at major 3.
+//!
+//! Minor 1 (under major 4): Wallet gained `elevateWallet @36` (wallet.capnp),
+//! which widens an unlock in progress to full for one operation rather than
+//! locking and unlocking again. Additive, so an old node still talks to a new
+//! GUI -- until the first action that needs a full unlock on a staking-only
+//! wallet calls a method the node does not serve; the UNIMPLEMENTED reply comes
+//! back client-side as a std::runtime_error thrown out of the send, vote or
+//! claim path, where nothing catches it. The minor turns that into the "Update
+//! the node" hard fail at connect instead.
+constexpr uint32_t IPC_SCHEMA_MAJOR = 4;
+constexpr uint32_t IPC_SCHEMA_MINOR = 1;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 
 //! Domain-separation tag hashed into the node identity token. Bump the suffix if

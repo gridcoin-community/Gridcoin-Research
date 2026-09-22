@@ -6,6 +6,7 @@
 #define BITCOIN_KEYSTORE_H
 
 #include "crypter.h"
+#include <optional>
 #include "sync.h"
 #include <boost/signals2/signal.hpp>
 
@@ -105,6 +106,29 @@ public:
 
 typedef std::map<CKeyID, std::pair<CPubKey, std::vector<unsigned char> > > CryptedKeyMap;
 
+//! \brief What the current unlock permits.
+//!
+//! One value, not a lock flag plus a restriction flag. It is written in the same
+//! cs_KeyStore section that installs or clears the master key, so no reader can
+//! observe an unlocked store carrying the previous unlock's restriction. That
+//! pair being separately written is what let a full unlock's cleared restriction
+//! survive into a staking-only unlock.
+//!
+//! Ephemeral by construction: the master key is secure-allocated and never
+//! serialized, and no startup path unlocks, so an encrypted wallet begins every
+//! run Locked. What wallet.dat persists is the encrypted master key records,
+//! which say nothing about scope.
+enum class UnlockScope : uint8_t {
+    //! No master key. Nothing that needs one may proceed.
+    Locked,
+
+    //! Unlocked for staking only. The kernel may be signed; spends may not.
+    StakingOnly,
+
+    //! Unlocked without restriction.
+    Full,
+};
+
 /** Keystore which keeps the private keys encrypted.
  * It derives from the basic key store, which is used if no encryption is active.
  */
@@ -113,7 +137,29 @@ class CCryptoKeyStore : public CBasicKeyStore
 private:
     CryptedKeyMap mapCryptedKeys GUARDED_BY(cs_KeyStore);
 
-    CKeyingMaterial vMasterKey;
+    CKeyingMaterial vMasterKey GUARDED_BY(cs_KeyStore);
+
+    //! Written only alongside vMasterKey, under the same lock, so the two cannot
+    //! disagree. Locked exactly when vMasterKey is empty.
+    UnlockScope m_unlock_scope GUARDED_BY(cs_KeyStore){UnlockScope::Locked};
+
+    //! When this unlock expires, absolute, or nullopt for an unlock with no
+    //! deadline. Set and cleared with the key and the scope, so it cannot
+    //! outlive the unlock that asked for it -- the defect in the global it
+    //! replaces, which no unlock owned.
+    std::optional<int64_t> m_unlock_deadline GUARDED_BY(cs_KeyStore);
+
+    //! Identifies the current unlock, so a relock scheduled for an earlier one
+    //! can recognise itself as superseded and do nothing.
+    //!
+    //! CScheduler cannot cancel a task, so an armed relock always arrives. It
+    //! carries the counter it was armed with and is a no-op unless that still
+    //! matches. Bumped when an unlock BEGINS and when one ENDS.
+    //!
+    //! Deliberately NOT bumped by RestrictToStakingOnly: narrowing hands an
+    //! elevation back without changing when the unlock expires, so bumping
+    //! there would retire the armed relock and the wallet would never lock.
+    uint64_t m_unlock_epoch GUARDED_BY(cs_KeyStore){0};
 
     // if fUseCrypto is true, mapKeys must be empty
     // if fUseCrypto is false, vMasterKey must be empty
@@ -127,7 +173,68 @@ protected:
     // will encrypt previously unencrypted keys
     bool EncryptKeys(CKeyingMaterial& vMasterKeyIn);
 
-    bool Unlock(const CKeyingMaterial& vMasterKeyIn);
+    bool Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope scope,
+                std::optional<int64_t> deadline = std::nullopt,
+                uint64_t* epoch_out = nullptr);
+
+    //! \brief Widen the current unlock to Full, keeping its deadline.
+    //!
+    //! The other half of RestrictToStakingOnly(): this takes an elevation, that
+    //! hands it back. Unlike Unlock() it does not begin a new unlock -- the
+    //! master key is already installed and stays installed, so the deadline and
+    //! the epoch are both left alone and a relock armed for the unlock in
+    //! progress still fires on time. Bumping the epoch here would retire that
+    //! relock, and the wallet would never lock.
+    //!
+    //! It still demands the passphrase, because it ADDS permission. The caller
+    //! passes the keying material it derived from the passphrase, and this
+    //! refuses unless that matches the key already installed -- otherwise a
+    //! wrong passphrase would silently widen the scope.
+    //!
+    //! False when the wallet is locked (there is no unlock to widen; use
+    //! Unlock()), when it is unencrypted, or when the key does not match.
+    bool Elevate(const CKeyingMaterial& vMasterKeyIn);
+
+    //! \brief Narrow the current unlock to staking only.
+    //!
+    //! PROTECTED deliberately, and CWallet::RestrictToStakingOnly is the entry
+    //! point. cs_KeyStore alone does not serialise this against a spend: the
+    //! chokepoint in CreateTransaction reads the scope while holding cs_wallet
+    //! for the whole build, so a narrowing that took only cs_KeyStore could
+    //! land after that read and the build would go on to sign. The wrapper
+    //! takes cs_wallet first, which is also the canonical order.
+    //!
+    //! Narrowing only: it can remove permission, never add it, so unlike
+    //! Unlock() it needs no passphrase -- the master key is already installed
+    //! and stays installed. Returns false when there is nothing to narrow,
+    //! which covers BOTH a locked wallet and an unencrypted one; a caller must
+    //! not read false as "it was locked". A no-op on one already restricted.
+    //!
+    //! This exists so an elevation taken for one operation can be handed back.
+    //! Locking instead would silently stop staking on a wallet the user had
+    //! deliberately left staking.
+    bool RestrictToStakingOnly()
+    {
+        // False on an UNENCRYPTED wallet as well as a locked one: there is
+        // nothing to restrict in either case. A caller must not read false as
+        // "the wallet was locked".
+        if (!IsCrypted()) return false;
+
+        {
+            LOCK(cs_KeyStore);
+            if (m_unlock_scope == UnlockScope::Locked) return false;
+            if (m_unlock_scope == UnlockScope::StakingOnly) return true;
+
+            m_unlock_scope = UnlockScope::StakingOnly;
+        }
+
+        // Announce it, as Lock() and Unlock() do. This changes exactly the bit
+        // WalletLockState publishes over IPC, and a subscriber that refreshes
+        // cached lock state on the status signal would otherwise miss the
+        // transition. Emitted outside the lock, matching the other two.
+        NotifyStatusChanged(this);
+        return true;
+    }
 
     //! Encrypt/decrypt an arbitrary non-key wallet secret (e.g. the seed
     //! phrase blob) under the store's keying material. The store must be
@@ -150,17 +257,83 @@ public:
         return fUseCrypto;
     }
 
-    bool IsLocked() const
+    //! \brief What the current unlock permits.
+    //!
+    //! An unencrypted wallet has nothing to restrict, so it reads Full: every
+    //! caller asking "may this proceed" gets yes, which is what it got before
+    //! there was a scope at all.
+    UnlockScope GetUnlockScope() const
     {
         if (!IsCrypted())
-            return false;
-        bool result;
+            return UnlockScope::Full;
+
+        LOCK(cs_KeyStore);
+        return m_unlock_scope;
+    }
+
+    bool IsLocked() const
+    {
+        return GetUnlockScope() == UnlockScope::Locked;
+    }
+
+    //! \brief When the current unlock expires, or nullopt if it has no deadline.
+    std::optional<int64_t> GetUnlockDeadline() const
+    {
+        LOCK(cs_KeyStore);
+        return m_unlock_deadline;
+    }
+
+    //! \brief Identifies the current unlock, for arming a relock against it.
+    uint64_t GetUnlockEpoch() const
+    {
+        LOCK(cs_KeyStore);
+        return m_unlock_epoch;
+    }
+
+    //! \brief Lock, but only if \p epoch is still the current unlock.
+    //!
+    //! What a scheduled relock calls on arrival. CScheduler cannot cancel a
+    //! task, so a relock armed for an unlock that has since been superseded --
+    //! by a manual lock, or by a later unlock with its own deadline -- still
+    //! fires. Comparing the epoch makes every one of those a no-op.
+    //!
+    //! Validates and clears under ONE acquisition. Checking the epoch, then
+    //! releasing, then calling Lock() would let a new unlock land in the gap
+    //! and be locked by a task that had already decided it was current.
+    bool LockIfCurrent(uint64_t epoch)
+    {
+        if (!SetCrypted()) return false;
+
         {
             LOCK(cs_KeyStore);
-            result = vMasterKey.empty();
+            if (epoch != m_unlock_epoch) return false;
+
+            vMasterKey.clear();
+            m_unlock_scope = UnlockScope::Locked;
+            m_unlock_deadline.reset();
+            ++m_unlock_epoch;
         }
-        return result;
+
+        NotifyStatusChanged(this);
+        return true;
     }
+
+    //! What an unlock permitted, and when it was due to expire.
+    struct UnlockState {
+        UnlockScope scope{UnlockScope::Locked};
+        std::optional<int64_t> deadline;
+    };
+
+    //! \brief Lock, reporting what the unlock it ended had permitted.
+    //!
+    //! Reads the scope and the deadline under the SAME acquisition that clears
+    //! them, which is what makes the answer usable. A caller that reads them
+    //! first and locks afterwards can be overtaken by the scheduled relock in
+    //! the gap and then restore an unlock the timer had already ended.
+    //!
+    //! nullopt only when the store cannot be put into the crypted state, which
+    //! is the condition Lock() reports as false.
+    std::optional<UnlockState> LockAndCapture();
 
     bool Lock();
 

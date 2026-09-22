@@ -47,7 +47,10 @@ struct WalletLockState
     bool crypted{false};                   //!< IsCrypted(): the wallet has a passphrase.
     bool locked{false};                    //!< IsLocked(): the keys are not in memory.
     bool unlocked_for_staking_only{false}; //!< Unlocked but restricted to staking.
-    bool staking_only_flag{false};         //!< Persisted staking-only unlock preference.
+    //! DEPRECATED and UNUSED: a duplicate of unlocked_for_staking_only. Kept
+    //! only because dropping it would hole the struct's ordinals (@3); retire
+    //! it with getUnlockStakingOnlyFlag in a dedicated renumbering change.
+    bool staking_only_flag{false};
 };
 
 //! Value snapshot of one unspent wallet output for the coin-control views.
@@ -194,6 +197,15 @@ enum class SendCoinsStatus
     //! ThreadSafeAskFee modal, which used to block inside
     //! LOCK2(cs_main, cs_wallet) (doc/multiprocess_design.md section 4.5).
     FeeConfirmationRequired,
+    //! The wallet is unlocked, but for staking only, so it will not build a
+    //! spend. Distinct from TransactionCreationFailed because the user can act
+    //! on it: unlock fully and retry. Nothing was committed.
+    //!
+    //! APPENDED, not inserted. This enum crosses IPC as its integer value
+    //! (src/ipc/capnp/wallet.capnp), so adding a member anywhere but the end
+    //! renumbers the ones after it and a mixed-version pair would read the
+    //! wrong status. New members go here.
+    WalletUnlockedForStakingOnly,
 };
 
 //! Result of Wallet::sendCoins.
@@ -255,22 +267,66 @@ public:
     //! trip. It intentionally does not lock -- see the impl for why.
     virtual WalletLockState getLockState() = 0;
 
-    //! Whether an unlocked wallet is restricted to staking only. Kept as an
-    //! individual accessor (rather than only a WalletLockState field) because
-    //! requestUnlock re-reads it fresh across its own relock/unlock mutations,
-    //! where a snapshot taken earlier would be stale.
+    //! Whether an unlocked wallet is restricted to staking only.
+    //!
+    //! No production callers. requestUnlock was the last one, and it justified
+    //! this accessor by re-reading the flag across its own relock/unlock
+    //! mutations -- it makes none now, because it elevates in place and reads
+    //! the whole state from getEncryptionStatus(). getLockState() carries the
+    //! same field for anyone who needs it.
+    //!
+    //! Left in place rather than deleted because removing it would leave an
+    //! ordinal hole at @8, and this project renumbers rather than holes; see the
+    //! note on getUnlockStakingOnlyFlag below, which is in the same position.
+    //! Do not add callers.
     virtual bool isUnlockedForStakingOnly() = 0;
 
-    //! The persisted staking-only unlock preference, independent of the
-    //! current lock state (unlike isUnlockedForStakingOnly). Seeds the
-    //! unlock dialog's checkbox while the wallet is still locked.
+    //! DEPRECATED and UNUSED. An exact alias of isUnlockedForStakingOnly.
+    //!
+    //! It used to report a sticky preference that outlived the unlock, which is
+    //! what let the unlock dialog pre-tick its box while the wallet was locked.
+    //! There is no such preference any more: the restriction belongs to the
+    //! unlock and a lock clears it, so this is false whenever the wallet is
+    //! locked. It now has NO production callers: WalletModel::EncryptionStatus
+    //! carries the scope, so the status icon paints from the value it was
+    //! handed and the unlock dialog no longer seeds a preference.
+    //!
+    //! Left in place rather than deleted because removing it would leave an
+    //! ordinal hole at @9, and this project renumbers rather than holes. That
+    //! renumber touches every later ordinal and deserves its own change with
+    //! its own review, not a ride-along in this one. Do not add callers.
     virtual bool getUnlockStakingOnlyFlag() = 0;
 
     //! Encrypt the wallet with the given passphrase.
     virtual bool encryptWallet(const SecureString& passphrase) = 0;
 
-    //! Lock the wallet. Does not clear the staking-only preference.
+    //! Lock the wallet. This also clears the staking-only restriction, which
+    //! belongs to the unlock rather than outliving it.
     virtual bool lockWallet() = 0;
+
+    //! Narrow the current unlock to staking only, without a passphrase.
+    //!
+    //! Narrowing only: it removes permission and never adds it, so it is safe
+    //! to expose. Used to hand back an elevation taken for one operation on a
+    //! wallet the user had left unlocked for staking; locking instead would
+    //! silently stop staking. False when there was nothing to narrow, which
+    //! covers both a locked wallet and an unencrypted one -- do not read false
+    //! as "it was locked".
+    virtual bool restrictToStakingOnly() = 0;
+
+    //! Widen an unlock in progress to full for one operation, given the
+    //! passphrase. The other half of restrictToStakingOnly(): a GUI action that
+    //! needs a full unlock elevates, acts, and hands the elevation back.
+    //!
+    //! Not a lock followed by an unlock. That threw away the unlock's deadline,
+    //! so a wallet unlocked by walletpassphrase for a fixed time stayed
+    //! unlocked indefinitely afterwards, and it left a staking wallet locked
+    //! when the prompt was cancelled.
+    //!
+    //! False when the wallet is locked -- there is no unlock to widen, and the
+    //! caller wants unlockWallet() -- when it is unencrypted, or on a wrong
+    //! passphrase.
+    virtual bool elevateWallet(const SecureString& passphrase) = 0;
 
     //! Unlock the wallet; on success the staking-only preference is set to
     //! staking_only (a full unlock clears a stale staking-only restriction).

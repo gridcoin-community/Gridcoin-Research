@@ -978,7 +978,7 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
                 this, &BitcoinGUI::processDrainedTransactions);
 
         // Ask for passphrase if needed
-        connect(walletModel, &WalletModel::requireUnlock, this, &BitcoinGUI::unlockWallet);
+        connect(walletModel, &WalletModel::requireUnlock, this, &BitcoinGUI::unlockWalletForOperation);
     }
     else
     {
@@ -1883,21 +1883,23 @@ void BitcoinGUI::setEncryptionStatus(int status)
         encryptWalletAction->setEnabled(true);
         break;
     case WalletModel::Unlocked:
+    case WalletModel::UnlockedForStakingOnly:
     {
-        // The raw preference flag, exactly what the old code read from the
-        // fWalletUnlockStakingOnly global at render time. (Not the composite
-        // isUnlockedForStakingOnly: this slot runs queued, and a relock
-        // racing the queued delivery would flip the composite to false and
-        // paint "fully unlocked" where the old code kept the staking-only
-        // rendering until the lock's own status event arrived.)
-        const bool staking_only = walletModel && walletModel->wallet().getUnlockStakingOnlyFlag();
+        // The status carries the scope now, so this paints from the value it
+        // was handed. It used to make a SECOND call here at paint time, which
+        // could disagree with the status that selected this arm: a relock
+        // racing the queued delivery painted the wrong frame either way. One
+        // read cannot disagree with itself.
+        const bool staking_only = (status == WalletModel::UnlockedForStakingOnly);
 
         if (staking_only) {
             labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_unlocked_" + sSheet));
         } else {
             labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_none_" + sSheet));
         }
-        labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently %1 ").arg(staking_only ? tr("<b>unlocked for staking only</b>") : tr("<b>fully unlocked</b>")));
+
+        labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently %1 ").arg(staking_only ? tr("<b>unlocked for staking only</b>") :
+                                                                                               tr("<b>unlocked</b>")));
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
         unlockWalletAction->setVisible(false);
@@ -1993,15 +1995,34 @@ void BitcoinGUI::unlockWallet()
 {
     if(!walletModel)
         return;
-    // Unlock wallet when requested by wallet model
+    // The Unlock BUTTON. A directive, so it offers the staking-only choice and
+    // what the user picks outlives this dialog. Only shown while locked.
     if(walletModel->getEncryptionStatus() == WalletModel::Locked)
     {
-        AskPassphraseDialog::Mode mode = sender() == unlockWalletAction ?
-              AskPassphraseDialog::UnlockStaking : AskPassphraseDialog::Unlock;
-        AskPassphraseDialog dlg(mode, this);
+        AskPassphraseDialog dlg(AskPassphraseDialog::UnlockStaking, this);
         dlg.setModel(walletModel);
         dlg.exec();
     }
+}
+
+void BitcoinGUI::unlockWalletForOperation(bool elevate)
+{
+    if(!walletModel)
+        return;
+
+    // Which question to ask is NOT re-derived from the wallet state here. The
+    // model decided it from the read it had already taken, and the unlock can
+    // expire between that read and this one: answering "unlock" then starts a
+    // fresh unlock with no deadline, which the model's UnlockContext would go on
+    // to narrow to staking-only permanently -- silently turning a time-boxed
+    // unlock into an open-ended one.
+    //
+    // Elevate refuses a locked wallet, so if that is what happened the dialog
+    // reports it and the wallet stays locked, which is what the timer decided.
+    AskPassphraseDialog dlg(elevate ? AskPassphraseDialog::Elevate
+                                    : AskPassphraseDialog::Unlock, this);
+    dlg.setModel(walletModel);
+    dlg.exec();
 }
 
 void BitcoinGUI::lockWallet()

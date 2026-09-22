@@ -42,8 +42,21 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
             ui->stakingCheckBox->setChecked(true);
             ui->stakingCheckBox->show();
             // fallthru
+        case Elevate:
         case Unlock: // Ask passphrase
-            ui->warningLabel->setText(tr("This operation needs your wallet passphrase to unlock the wallet."));
+            // Two different promises, so do not make one of them twice.
+            //
+            // UnlockStaking is the Unlock BUTTON: a directive that outlives this
+            // dialog, and the wallet stays as chosen here until it is locked
+            // again. Unlock and Elevate are taken for ONE operation and do give
+            // the wallet back afterwards. Saying "returns to its previous state"
+            // for all three told a user pressing Unlock that their unlock was
+            // temporary, which it is not.
+            ui->warningLabel->setText(mode == UnlockStaking
+                ? tr("Enter your wallet passphrase to unlock the wallet. It stays unlocked until "
+                     "you lock it again.")
+                : tr("This operation needs your wallet passphrase. The wallet is unlocked for the "
+                     "operation and returns to its previous state afterwards."));
             ui->newPassphraseLabel->hide();
             ui->newPassphraseEdit->hide();
             ui->repeatNewPassphraseLabel->hide();
@@ -72,14 +85,16 @@ void AskPassphraseDialog::setModel(WalletModel *model)
 {
     this->model = model;
 
-    // Seed the staking-only checkbox from the persisted unlock preference —
-    // done here rather than in the constructor, which runs before a model is
-    // attached (the preference lives behind the wallet interface now, not a
-    // core global). UnlockStaking mode forces the box checked in the
-    // constructor and stays forced.
-    if (model && mode != UnlockStaking) {
-        ui->stakingCheckBox->setChecked(model->wallet().getUnlockStakingOnlyFlag());
-    }
+    // The box is no longer seeded from a remembered preference. There is no such
+    // preference any more -- the restriction belongs to the unlock -- and the
+    // only mode that shows the box, UnlockStaking, ticks it in the constructor
+    // because staking-only is the conservative default for a directive.
+    //
+    // Dropping the seeding also removes a lockout. The box is invisible in the
+    // Unlock mode the operation-driven prompt uses, so a user whose last unlock
+    // was staking-only used to get the hidden box pre-ticked, unlock
+    // staking-only again, and fail the very operation that raised the prompt.
+    // Do not restore "stickiness" without solving that.
 }
 
 void AskPassphraseDialog::accept()
@@ -181,11 +196,48 @@ void AskPassphraseDialog::accept()
         }
     } break;
     case UnlockStaking:
-    case Unlock:
-        // A successful unlock also persists the staking-only preference
-        // node-side (the checkbox state), which the old code applied to the
-        // fWalletUnlockStakingOnly global after the fact.
-        if(!model->setWalletLocked(false, oldpass, ui->stakingCheckBox->isChecked())) {
+    case Elevate:
+    case Unlock: {
+        // Two different questions, so do not read one answer for both.
+        //
+        // UnlockStaking is the Unlock BUTTON: a directive that leaves the
+        // wallet in a state the user chose and that outlives this dialog. The
+        // checkbox is that choice, and it opens ticked because staking-only is
+        // the conservative option.
+        //
+        // Unlock is an ELEVATION raised by an operation that cannot proceed
+        // without a full unlock. There is nothing to choose: staking-only would
+        // not satisfy the caller, so the box is not shown and full is the only
+        // answer. Reading the hidden widget here gave the right result only
+        // because it happens to be unchecked, which is an accident rather than
+        // a decision. WalletModel::UnlockContext restores the prior scope when
+        // the operation finishes, so this elevation is temporary.
+        //
+        // Elevate widens the unlock already in progress rather than locking and
+        // unlocking again. The relock dance threw that unlock's deadline away,
+        // so a wallet unlocked by walletpassphrase for a fixed time stayed
+        // unlocked indefinitely after any GUI action, and a cancelled prompt
+        // left a staking node locked.
+        //
+        // It is NOT retried as an ordinary unlock when it fails. Elevate refuses
+        // a locked wallet, so the failure that matters here is the unlock having
+        // expired while this prompt sat open; unlocking instead would start a
+        // fresh unlock with no deadline, and the caller's context would narrow
+        // that to staking-only forever. Reporting it leaves the wallet locked,
+        // which is what the timer decided, and the user can unlock and retry.
+        const bool unlocked = mode == Elevate
+            ? model->elevateWallet(oldpass)
+            : model->setWalletLocked(false, oldpass,
+                                     mode == UnlockStaking && ui->stakingCheckBox->isChecked());
+
+        if (!unlocked && mode == Elevate
+                && model->getEncryptionStatus() == WalletModel::Locked) {
+            QMessageBox::critical(this, tr("Wallet unlock failed"),
+                                  tr("The wallet locked itself while you were entering your "
+                                     "passphrase, because the unlock you had asked for ran out. "
+                                     "Unlock the wallet and try again."));
+        }
+        else if(!unlocked) {
             // Check if the passphrase has a null character
             if (oldpass.find('\0') == std::string::npos) {
                     QMessageBox::critical(this, tr("Wallet unlock failed"),
@@ -204,7 +256,7 @@ void AskPassphraseDialog::accept()
         {
             QDialog::accept(); // Success
         }
-        break;
+    } break;
     case ChangePass:
         if(newpass1 == newpass2)
         {
@@ -249,6 +301,7 @@ void AskPassphraseDialog::textChanged()
         acceptable = !ui->newPassphraseEdit->text().isEmpty() && !ui->repeatNewPassphraseEdit->text().isEmpty();
         break;
     case UnlockStaking:
+    case Elevate:
     case Unlock: // Old passphrase x1
         acceptable = !ui->oldPassphraseEdit->text().isEmpty();
         break;

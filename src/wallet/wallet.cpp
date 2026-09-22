@@ -8,6 +8,7 @@
 #include <key_io.h>
 #include "txdb.h"
 #include "wallet/wallet.h"
+#include "scheduler.h"
 #include "miner.h" // For GetDevbuildCripple() (staking cripple gate).
 #include "wallet/walletdb.h"
 #include "crypter.h"
@@ -548,11 +549,6 @@ bool CWallet::AddCScript(const CScript& redeemScript)
     return CWalletDB(strWalletFile).WriteCScript(Hash160(redeemScript), redeemScript);
 }
 
-// optional setting to unlock wallet for staking only
-// serves to disable the trivial sendmoney when OS account compromised
-// provides no real security
-std::atomic<bool> fWalletUnlockStakingOnly{false};
-
 bool CWallet::LoadCScript(const CScript& redeemScript)
 {
     /* A sanity check was added in pull #3843 to avoid adding redeemScripts
@@ -569,24 +565,154 @@ bool CWallet::LoadCScript(const CScript& redeemScript)
     return CCryptoKeyStore::AddCScript(redeemScript);
 }
 
-bool CWallet::Unlock(const SecureString& strWalletPassphrase)
+//! Whether a relock armed now would be accepted.
+//!
+//! Advisory only, for a caller that wants to refuse early with a good message.
+//! It cannot be relied on: the scheduler can stop between this answering yes and
+//! the task being enqueued, and the key derivation in between takes a calibrated
+//! few hundred milliseconds. ArmRelock is what actually decides.
+static bool SchedulerCanRelock()
 {
-    if (!IsLocked())
+    return g_scheduler_handle.load(std::memory_order_acquire) != nullptr;
+}
+
+//! Arm a one-shot relock for the unlock identified by \p epoch, reporting
+//! whether the scheduler took it.
+//!
+//! CScheduler cannot cancel a task, so an armed relock always arrives. It
+//! carries the epoch it was armed with and does nothing unless that is still
+//! the current unlock, which makes every superseded relock a no-op.
+//!
+//! The check and the enqueue happen together, inside the scheduler. Reading a
+//! readiness flag here and scheduling afterwards would leave a window in which
+//! shutdown lands between the two, and the relock -- the only thing that will
+//! end a timed unlock -- would be dropped silently.
+//!
+//! Returns false when there is no scheduler to take it, or it is stopping. A
+//! caller must not leave the wallet unlocked on a false.
+[[nodiscard]] static bool ArmRelock(CWallet* wallet, uint64_t epoch, std::chrono::seconds delay)
+{
+    CScheduler* const scheduler = g_scheduler_handle.load(std::memory_order_acquire);
+
+    if (!scheduler) return false;
+
+    return scheduler->scheduleFromNowIfRunning([wallet, epoch] {
+        wallet->LockIfCurrent(epoch);
+    }, delay);
+}
+
+bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope)
+{
+    return Unlock(strWalletPassphrase, scope, /*relock_after=*/std::nullopt);
+}
+
+bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
+                     std::optional<std::chrono::seconds> relock_after,
+                     UnlockFailure* failure_out)
+{
+    // Default to the passphrase, so every early return that IS about the
+    // passphrase needs no ceremony; the two that are not say so explicitly.
+    if (failure_out) *failure_out = UnlockFailure::Passphrase;
+
+    // Refuse rather than unlock without the timer the caller asked for. See
+    // the declaration: silently granting forever is the shape this removes.
+    //
+    // An advisory early refusal, so the common case gets a message that names
+    // the cause instead of "the passphrase was incorrect". AppInit2 builds the
+    // scheduler before the RPC server, so this no longer fires during startup;
+    // what is left is shutdown, where the handle is cleared before the scheduler
+    // stops. ArmRelock re-decides atomically, because the key derivation between
+    // here and there takes a calibrated few hundred milliseconds.
+    if (relock_after && !SchedulerCanRelock()) {
+        if (failure_out) *failure_out = UnlockFailure::RelockUnavailable;
+
+        return error("%s: a timed unlock was requested but no scheduler is running", __func__);
+    }
+
+    // GetTimeSeconds, not GetTime: this deadline is published as getinfo's
+    // unlocked_until, and the scheduler that enforces it runs on the real system
+    // clock. GetTime is mockable, so under setmocktime the reported expiry and
+    // the actual relock would be on different clocks -- and a mock time that
+    // moved between the unlock and a later passphrase change would recompute the
+    // remaining delay from a number that never meant wall time.
+    const std::optional<int64_t> deadline = relock_after
+        ? std::optional<int64_t>(GetTimeSeconds() + relock_after->count())
+        : std::nullopt;
+
+    // Not a passphrase problem, and the passphrase here may well be right, so
+    // say which it was. The RPC has its own guard for this, but the GUI and IPC
+    // paths reach here directly.
+    if (!IsLocked()) {
+        if (failure_out) *failure_out = UnlockFailure::AlreadyUnlocked;
+
         return false;
+    }
 
     CCrypter crypter;
     CKeyingMaterial vMasterKey;
 
     {
         LOCK(cs_wallet);
+
+        // Again, under the lock this time. The test above is outside it, so two
+        // callers can both pass it; whichever installs second would replace the
+        // first unlock's scope, deadline and epoch, retire the relock armed for
+        // it, and leave the first caller holding a success for an unlock with a
+        // lifetime it never asked for.
+        if (!IsLocked()) {
+            if (failure_out) *failure_out = UnlockFailure::AlreadyUnlocked;
+
+            return false;
+        }
+
         for (auto const& pMasterKey : mapMasterKeys)
         {
             if(!crypter.SetKeyFromPassphrase(strWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod))
                 return false;
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 return false;
-            if (CCryptoKeyStore::Unlock(vMasterKey))
+            uint64_t epoch = 0;
+
+            if (CCryptoKeyStore::Unlock(vMasterKey, scope, deadline, &epoch))
             {
+                // Arm the relock against THIS unlock, named by the call that
+                // installed it. Reading the epoch back would be a second
+                // acquisition, and the unlock it names need not still be this
+                // one by the time the relock is armed against it.
+                //
+                // The delay comes from the deadline, not from relock_after.
+                // The deadline was fixed before the key derivation above, which
+                // takes a calibrated ~100ms per round, so arming for the full
+                // interval here would fire that much LATER than the deadline
+                // getinfo reports -- the key would outlive its stated expiry.
+                if (relock_after) {
+                    const int64_t remaining = *deadline - GetTimeSeconds();
+
+                    // The derivation ate the whole timeout. Lock now rather than
+                    // enqueue a zero-delay task: that would still return with the
+                    // key installed until the scheduler thread picked it up, so a
+                    // caller could act after the deadline it was given. A one
+                    // second timeout is enough to reach this.
+                    if (remaining <= 0) {
+                        Lock();
+                        if (failure_out) *failure_out = UnlockFailure::RelockUnavailable;
+
+                        return error("%s: the unlock expired while its key was being derived", __func__);
+                    }
+
+                    // Fail CLOSED. Nothing else will end this unlock, so a wallet
+                    // left open here is the exact outcome the design refuses.
+                    if (!ArmRelock(this, epoch, std::chrono::seconds(remaining))) {
+                        Lock();
+                        if (failure_out) *failure_out = UnlockFailure::RelockUnavailable;
+
+                        return error("%s: the relock could not be scheduled, so the wallet was "
+                                     "left locked rather than unlocked without one", __func__);
+                    }
+                }
+
+                if (failure_out) *failure_out = UnlockFailure::None;
+
                 return true;
             }
         }
@@ -594,13 +720,78 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
     return false;
 }
 
+bool CWallet::ElevateToFull(const SecureString& strWalletPassphrase)
+{
+    // There is no unlock to widen, so there is no deadline to preserve and
+    // nothing this can add. The caller wants Unlock(), which begins one.
+    if (IsLocked()) {
+        return false;
+    }
+
+    CCrypter crypter;
+    CKeyingMaterial vMasterKey;
+
+    LOCK(cs_wallet);
+
+    for (auto const& pMasterKey : mapMasterKeys)
+    {
+        if (!crypter.SetKeyFromPassphrase(strWalletPassphrase, pMasterKey.second.vchSalt,
+                                          pMasterKey.second.nDeriveIterations,
+                                          pMasterKey.second.nDerivationMethod)) {
+            return false;
+        }
+
+        if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey)) {
+            return false;
+        }
+
+        // Refuses unless this is the key already installed, so a wrong
+        // passphrase widens nothing. The scope moves; the key, the deadline and
+        // the epoch do not, so the relock armed for this unlock still fires.
+        if (CCryptoKeyStore::Elevate(vMasterKey)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool CWallet::RestrictToStakingOnly()
+{
+    // cs_wallet, then cs_KeyStore inside: the canonical order, and the reason
+    // this wrapper exists. The spend chokepoint reads the scope while holding
+    // cs_wallet for the whole build, so narrowing has to wait for that build
+    // rather than slipping in behind its check.
+    LOCK(cs_wallet);
+
+    return CCryptoKeyStore::RestrictToStakingOnly();
+}
+
 bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase)
 {
-    bool fWasLocked = IsLocked();
+    // The lock itself reports what it ended. Reading the scope first and
+    // locking afterwards is two acquisitions with a gap, and the scheduled
+    // relock takes only cs_KeyStore, so it can land in that gap: the read says
+    // StakingOnly, the timer locks, and the restore below then reopens a wallet
+    // the timer had just closed. Capturing under the acquisition that clears
+    // them removes the gap -- the relock either ran first, and this reads
+    // Locked, or it arrives later and finds an epoch that has moved on.
+    //
+    // The deadline is captured for the same reason it is restored: it belongs
+    // to the unlock, and a passphrase change must not quietly turn a wallet
+    // unlocked for an hour into one unlocked indefinitely.
+    std::optional<UnlockState> prior;
 
     {
         LOCK(cs_wallet);
-        Lock();
+
+        prior = LockAndCapture();
+
+        if (!prior) {
+            return false;
+        }
+
+        const bool fWasLocked = (prior->scope == UnlockScope::Locked);
 
         CCrypter crypter;
         CKeyingMaterial vMasterKey;
@@ -610,8 +801,38 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
                 return false;
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 return false;
-            if (CCryptoKeyStore::Unlock(vMasterKey))
+            // Restore whatever the wallet already permitted rather than
+            // widening to Full. The re-lock below only covers the case where it
+            // was locked on entry; a wallet that was unlocked for staking only
+            // must still be staking-only when the passphrase change returns.
+            //
+            // A wallet that WAS locked has no scope to restore, and the unlock
+            // needs a real one to rewrite the keys, so it takes Full and the
+            // fWasLocked re-lock below puts it back.
+            const UnlockScope working_scope =
+                fWasLocked ? UnlockScope::Full : prior->scope;
+
+            uint64_t epoch = 0;
+
+            if (CCryptoKeyStore::Unlock(vMasterKey, working_scope, prior->deadline, &epoch))
             {
+                // Put the relock back with the unlock it belongs to, and do it
+                // here rather than after the key rewrite: the capture above
+                // retired the one that was armed, and every path out of the
+                // rewrite -- including the two error returns -- leaves the
+                // wallet open in the scope just restored.
+                if (prior->deadline) {
+                    const int64_t remaining = *prior->deadline - GetTimeSeconds();
+
+                    // The deadline passed while the key was being re-derived,
+                    // or the scheduler would not take the relock. Either way the
+                    // unlock this restored is already over, or has nothing that
+                    // will end it, so end it here rather than leave it open.
+                    if (remaining <= 0 || !ArmRelock(this, epoch, std::chrono::seconds(remaining))) {
+                        Lock();
+                    }
+                }
+
                 int64_t nStartTime = GetTimeMillis();
                 crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod);
                 pMasterKey.second.nDeriveIterations = pMasterKey.second.nDeriveIterations * (100 / ((double)(GetTimeMillis() - nStartTime)));
@@ -3605,9 +3826,8 @@ bool CWallet::FundTransaction(CTransaction& tx, int64_t& nFeeRet, int& nChangePo
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins_in,
                                 CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
                                 const CCoinControl* coinControl, bool change_back_to_input_address,
-                                int64_t nEnforcedMinFee)
+                                int64_t nEnforcedMinFee, bool permitted_while_staking_only)
 {
-
     int64_t nValueOut = 0;
     int64_t message_fee = 0;
     set<pair<const CWalletTx*,unsigned int>> setCoins_out;
@@ -3636,6 +3856,40 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
     {
         LOCK2(cs_main, cs_wallet);
+
+        // The staking-only restriction, enforced where every spend must pass
+        // rather than at each entry point that remembers to ask.
+        //
+        // All five CreateTransaction overloads funnel here, so this covers the
+        // RPC surface, the GUI's interfaces::Wallet path, voting, contracts and
+        // PSGT alike. It was previously checked only by EnsureWalletIsUnlocked,
+        // SendMoney and two sites in rawtransaction.cpp, which left the
+        // interface send path unguarded: a GUI send while unlocked for staking
+        // only was built, signed and committed. CreateCoinStake does NOT build
+        // through here, so staking itself is unaffected.
+        //
+        // Inside the lock, not at function entry. GetUnlockScope() takes and
+        // releases cs_KeyStore, so a check made before this LOCK2 could pass on
+        // a fully unlocked wallet that another thread then locks and re-unlocks
+        // staking-only -- Unlock() takes cs_wallet, so holding it here is what
+        // makes the check and the signing atomic with respect to that. It still
+        // precedes nFeeRet below, which the caller's failure branch may read.
+        //
+        // It guards BUILDING, not committing, and that is deliberate. SendMoney
+        // and SendContractTx take no lock of their own, so cs_wallet is released
+        // between here and CommitTransaction, and a narrowing can land in that
+        // gap -- an already-signed spend is then still recorded and relayed.
+        //
+        // Checking again at commit would be worse. Authorisation belongs at the
+        // START of an operation: a send that was permitted when it began should
+        // finish, and a second gate would make a legitimate send fail after
+        // signing whenever the unlock expired while a fee dialog was open. It
+        // would also need the renewal exemption threaded through commit. The
+        // residual needs a SECOND operation narrowing concurrently, by someone
+        // who already holds the passphrase. Tracked rather than closed here.
+        if (IsUnlockedForStakingOnly() && !permitted_while_staking_only) {
+            return error("%s: wallet is unlocked for staking only", __func__);
+        }
 
         // txdb must be opened before the mapWallet lock
         CTxDB txdb("r");
@@ -3911,19 +4165,23 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
-    int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl, bool change_back_to_input_address)
+    int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl, bool change_back_to_input_address,
+    bool permitted_while_staking_only)
 {
     // Initialize setCoins empty to let CreateTransaction choose via SelectCoins...
     set<pair<const CWalletTx*,unsigned int>> setCoins;
 
-    return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl, change_back_to_input_address);
+    return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl,
+                             change_back_to_input_address, /*nEnforcedMinFee=*/0, permitted_while_staking_only);
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
-    int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address)
+    int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address,
+    bool permitted_while_staking_only)
 {
     int nChangePosRet = -1;
-    return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl, change_back_to_input_address);
+    return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl,
+                             change_back_to_input_address, permitted_while_staking_only);
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins,
@@ -4015,7 +4273,10 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew)
 {
     CReserveKey reservekey(this);
-    int64_t nFeeRequired;
+    // Initialised: the failure branch below reads it, and CreateTransaction can
+    // now return before seeding it. The checks above do not rule that out,
+    // since the scope can change before the builder takes cs_wallet.
+    int64_t nFeeRequired = 0;
 
     if (IsLocked())
     {
@@ -4023,7 +4284,7 @@ string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNe
         LogPrintf("SendMoney() : %s", strError);
         return strError;
     }
-    if (fWalletUnlockStakingOnly)
+    if (IsUnlockedForStakingOnly())
     {
         string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
         LogPrintf("SendMoney() : %s", strError);

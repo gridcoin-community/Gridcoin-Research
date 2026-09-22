@@ -7,6 +7,8 @@
 #define BITCOIN_WALLET_WALLET_H
 
 #include <atomic>
+#include <chrono>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -32,10 +34,6 @@
 #include <wallet/walletutil.h>
 #include "wallet/ismine.h"
 
-//! Staking-only unlock preference. Atomic: written by the GUI unlock path
-//! (interfaces::Wallet::unlockWallet) and RPC walletpassphrase, read by RPC
-//! send paths and the GUI status rendering, on different threads.
-extern std::atomic<bool> fWalletUnlockStakingOnly;
 extern bool fConfChange;
 
 // Wallet settings, defined in wallet.cpp (moved from main.{h,cpp}, issue
@@ -319,7 +317,106 @@ public:
     bool AddCScript(const CScript& redeemScript) override;
     bool LoadCScript(const CScript& redeemScript);
 
-    bool Unlock(const SecureString& strWalletPassphrase);
+    //! \brief Is this wallet unlocked, but for staking only?
+    //!
+    //! Replaces the former fWalletUnlockStakingOnly global, which lived beside
+    //! the lock state rather than in it. The scope answers both questions at
+    //! once, so this can never read "unrestricted" on a wallet that was just
+    //! unlocked for staking.
+    bool IsUnlockedForStakingOnly() const
+    {
+        return GetUnlockScope() == UnlockScope::StakingOnly;
+    }
+
+    //! \brief Unlock with an explicit scope and an optional duration.
+    //!
+    //! \p relock_after, when set, is how long this unlock lasts. The deadline
+    //! is stored with the key and the scope, and a one-shot relock is armed on
+    //! the scheduler against this unlock's epoch, so setting a duration and
+    //! arming its timer are ONE operation that cannot be half-done.
+    //!
+    //! Fails if a duration is asked for and no scheduler is RUNNING, rather
+    //! than unlocking without the timer: a caller that asked for sixty seconds
+    //! and silently got forever is the failure this design exists to remove.
+    //!
+    //! It is reachable in production, which an earlier version of this note
+    //! denied. The startup half is now closed -- AppInit2 constructs the
+    //! scheduler BEFORE it starts the RPC server. A walletpassphrase during
+    //! SHUTDOWN can still land where nothing would run the relock, and that one
+    //! does not matter: the unlock does not survive the process (closed #3388).
+    //!
+    //! The decision is taken when the relock is ARMED, not before: the key
+    //! derivation in between takes a calibrated few hundred milliseconds, and
+    //! the scheduler can stop inside it. If the arming is refused, or the
+    //! deadline has already passed by then, the wallet is LOCKED and this
+    //! returns false -- never left unlocked without a timer.
+    //! Why an unlock failed, for a caller that must not report every failure as
+    //! a bad passphrase.
+    enum class UnlockFailure {
+        None,
+
+        //! The passphrase did not decrypt the master key -- or the wallet was
+        //! not in a state that can be unlocked at all.
+        Passphrase,
+
+        //! The passphrase was RIGHT, but the relock could not be armed, or the
+        //! deadline had already passed by the time the key was installed. The
+        //! wallet is locked; granting the unlock would have meant granting it
+        //! with nothing to end it.
+        RelockUnavailable,
+
+        //! Another unlock got there first. Two callers can pass the "is it
+        //! locked?" test before either takes cs_wallet, and the second would
+        //! otherwise replace the first unlock's scope, deadline and epoch --
+        //! retiring the relock armed for it and silently giving the wallet a
+        //! different lifetime than the first caller was told.
+        AlreadyUnlocked,
+    };
+
+    bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
+                std::optional<std::chrono::seconds> relock_after,
+                UnlockFailure* failure_out = nullptr);
+
+    //! \brief Unlock with an explicit scope.
+    //!
+    //! Defaults to Full, which is what an unlock that does not say otherwise has
+    //! always meant (walletpassphrase without its third argument). The scope is
+    //! installed with the master key, so the wallet is never briefly unlocked
+    //! carrying the previous unlock's restriction.
+    bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope = UnlockScope::Full);
+
+    //! \brief Widen an unlock in progress to Full for one operation.
+    //!
+    //! The counterpart of RestrictToStakingOnly(), and what a GUI action that
+    //! needs a full unlock on a staking-only wallet asks for. It re-derives the
+    //! master key from \p strWalletPassphrase and refuses unless that matches
+    //! the key already installed, so it still demands the passphrase.
+    //!
+    //! It does NOT lock and re-unlock. That is what this replaces: locking
+    //! first threw away the unlock's deadline, and the re-unlock that followed
+    //! carried none, so a wallet unlocked by walletpassphrase for a fixed time
+    //! stayed unlocked indefinitely after any GUI action that elevated. It also
+    //! meant a cancelled or mistyped prompt left a staking wallet locked and
+    //! the node no longer staking.
+    //!
+    //! False when the wallet is locked -- there is no unlock to widen, and the
+    //! caller wants Unlock() -- when it is unencrypted, or on a wrong
+    //! passphrase.
+    bool ElevateToFull(const SecureString& strWalletPassphrase);
+
+    //! \brief Hand a scoped elevation back, narrowing the unlock to staking only.
+    //!
+    //! Takes cs_wallet before narrowing, which is what serialises it against a
+    //! spend. CreateTransaction reads the scope inside LOCK2(cs_main,
+    //! cs_wallet) and holds cs_wallet for the whole build, so narrowing under
+    //! cs_KeyStore alone could land just after that read and the build would
+    //! sign anyway. With this, either the spend finishes first or the builder
+    //! sees the restriction.
+    //!
+    //! False when there is nothing to narrow, which covers BOTH a locked wallet
+    //! and an unencrypted one; do not read false as "it was locked".
+    bool RestrictToStakingOnly();
+
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 
@@ -486,15 +583,35 @@ public:
                          std::string& strFailReason, const CCoinControl* coinControl);
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
                            int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl = nullptr,
-                           bool change_back_to_input_address = false);
+                           bool change_back_to_input_address = false, bool permitted_while_staking_only = false);
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
-                           int64_t& nFeeRet, const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false);
+                           int64_t& nFeeRet, const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,
+                           bool permitted_while_staking_only = false);
     //! nEnforcedMinFee, when nonzero, sets a fee floor above the normal size-based fee
     //! (e.g. splitunspent's per-piece fee). The fee can still rise above it if required.
+    //!
+    //! Note the asymmetry below is deliberate, not an oversight: only the
+    //! overloads the exempt caller actually uses carry
+    //! permitted_while_staking_only. The setCoins overload without
+    //! nChangePosRet is reached only from consolidateunspent, splitunspent and
+    //! sweepuncoveredcoins, all user-initiated spends that must stay refused
+    //! (each calls EnsureWalletIsUnlocked first, so they are already refused
+    //! before reaching the builder), so giving it the parameter would only
+    //! widen the ways to reach the exemption.
+    //! \p permitted_while_staking_only exempts a caller from the staking-only
+    //! refusal. Exactly one caller passes it: the hourly automated beacon
+    //! renewal job, which runs unattended on exactly the wallets a researcher
+    //! unlocks for staking, and whose refusal would let their beacon expire
+    //! silently at six months.
+    //!
+    //! It is NOT "contract transactions are harmless". The GUI contract surface
+    //! has no unlock guard of its own and addkey gates only on IsLocked(), so
+    //! widening this to all contracts would re-open the very paths this check
+    //! exists to close.
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
                            const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,
-                           int64_t nEnforcedMinFee = 0);
+                           int64_t nEnforcedMinFee = 0, bool permitted_while_staking_only = false);
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl = nullptr,
                            bool change_back_to_input_address = false, int64_t nEnforcedMinFee = 0);

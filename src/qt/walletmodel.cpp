@@ -444,14 +444,24 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         return TransactionCreationFailed;
     case interfaces::SendCoinsStatus::TransactionCommitFailed:
         return TransactionCommitFailed;
+    case interfaces::SendCoinsStatus::WalletUnlockedForStakingOnly:
+        return WalletUnlockedForStakingOnly;
     case interfaces::SendCoinsStatus::FeeConfirmationRequired:
         return SendCoinsReturn(FeeConfirmationRequired, result.fee);
     }
 
-    // Unreachable: the switch above covers every SendCoinsStatus value (and
-    // deliberately has no default, so -Wswitch flags a new enumerator). The
-    // return keeps the function well-defined in NDEBUG builds, where the
-    // assert compiles out and falling off the end would be UB.
+    // Unreachable: the switch above covers every SendCoinsStatus value, and
+    // deliberately has no default so that a new enumerator shows up as a gap
+    // rather than being swallowed.
+    //
+    // That does NOT get caught at compile time today: the main targets are not
+    // built with -Wall, so -Wswitch never fires (see issue #3387). The assert
+    // below is what actually catches it, at runtime, and it is live in release
+    // because the build strips NDEBUG globally -- which is the whole reason a
+    // new SendCoinsStatus value is a schema MAJOR and not a minor.
+    //
+    // The return keeps the function well-defined if that ever changes and the
+    // assert does compile out, where falling off the end would be UB.
     assert(false);
     return TransactionCreationFailed;
 }
@@ -473,8 +483,10 @@ TransactionTableModel *WalletModel::getTransactionTableModel()
 
 WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
 {
-    // One snapshot read: crypted and locked come back together (a narrower window
-    // than two separate reads) and the split build makes a single round trip.
+    // One snapshot read, and it now carries the whole answer: a staking-only
+    // wallet is no longer reported as plain Unlocked, so no caller has to make
+    // a second call to find out which kind of unlocked it is. That second read
+    // was the last place two views of the lock state could disagree.
     const interfaces::WalletLockState lock_state = m_wallet.getLockState();
 
     if (!lock_state.crypted)
@@ -484,6 +496,10 @@ WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
     else if (lock_state.locked)
     {
         return Locked;
+    }
+    else if (lock_state.unlocked_for_staking_only)
+    {
+        return UnlockedForStakingOnly;
     }
     else
     {
@@ -500,7 +516,8 @@ bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase, b
 {
     if(locked)
     {
-        // Lock. Does not clear the staking-only unlock preference.
+        // Lock. This also clears the staking-only restriction, which now
+        // belongs to the unlock rather than outliving it.
         return m_wallet.lockWallet();
     }
     else
@@ -511,9 +528,19 @@ bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase, b
     }
 }
 
+bool WalletModel::elevateWallet(const SecureString &passPhrase)
+{
+    // Widens the unlock in progress. The key stays installed and the deadline
+    // and the relock armed for it are untouched, so an elevation cannot extend
+    // an unlock the user asked to expire.
+    return m_wallet.elevateWallet(passPhrase);
+}
+
 bool WalletModel::changePassphrase(const SecureString &oldPass, const SecureString &newPass)
 {
-    // Locks the wallet first (node-side) before attempting the change.
+    // The node side locks, rewrites the master key records and restores the
+    // scope and deadline it captured, so a wallet unlocked for staking is still
+    // unlocked for staking, and still expires when it would have.
     return m_wallet.changeWalletPassphrase(oldPass, newPass);
 }
 
@@ -585,48 +612,132 @@ void WalletModel::unsubscribeFromCoreSignals()
 // WalletModel::UnlockContext implementation
 WalletModel::UnlockContext WalletModel::requestUnlock()
 {
-    bool was_locked = getEncryptionStatus() == Locked;
+    // One read, and it carries the whole answer.
+    const EncryptionStatus initial = getEncryptionStatus();
 
-    // A staking-only unlock is not enough here: relock and force a full
-    // unlock prompt. (isUnlockedForStakingOnly is the unlocked-AND-restricted
-    // composite, so it can only be true on the !was_locked path.)
-    if ((!was_locked) && m_wallet.isUnlockedForStakingOnly())
+    // A staking-only unlock is not enough here, so ask for the passphrase and
+    // WIDEN that unlock rather than replacing it. Remember that it WAS
+    // staking-only, because the wallet has to go back to that when this context
+    // expires: with no sticky preference the elevation is full, so without this
+    // the wallet would be left FULLY unlocked after a send, a vote, or even
+    // creating an address.
+    //
+    // This used to relock first, to force a full prompt out of a path that
+    // could only unlock a LOCKED wallet. Two things came of that. The unlock's
+    // deadline went with the key, and the re-unlock carried none, so a wallet
+    // unlocked by walletpassphrase for an hour came back from the prompt
+    // unlocked indefinitely with nothing armed to close it. And a cancelled or
+    // mistyped prompt left the wallet locked -- the key was already gone and
+    // narrowing cannot bring it back -- so a node that had been staking quietly
+    // stopped. Widening in place has neither problem: nothing is given up
+    // before the passphrase is known to be right.
+    const bool was_staking_only = (initial == UnlockedForStakingOnly);
+
+    if (initial == Locked || was_staking_only)
     {
-       setWalletLocked(true);
-       was_locked = getEncryptionStatus() == Locked;
-
+        // Request UI to unlock wallet, saying which question to ask. Decided
+        // from THIS read, not from a second one in the receiver.
+        emit requireUnlock(was_staking_only);
     }
-    if(was_locked)
-    {
-        // Request UI to unlock wallet
-        emit requireUnlock();
-    }
-    // If wallet is still locked, unlock was failed or cancelled, mark context as invalid
-    bool valid = getEncryptionStatus() != Locked;
 
-    return UnlockContext(this, valid, was_locked && !m_wallet.isUnlockedForStakingOnly());
+    // Cancelled, or the wrong passphrase. The test is "fully unlocked", not
+    // "not locked": on the elevation path a refused prompt leaves the wallet
+    // still unlocked for staking, which is exactly the state the caller could
+    // not proceed in. An unencrypted wallet has nothing to unlock, and every
+    // caller may proceed on one.
+    const EncryptionStatus now = getEncryptionStatus();
+    const bool valid = (now == Unencrypted || now == Unlocked);
+
+    // Lock on expiry only when this context is what unlocked a LOCKED wallet.
+    // A wallet that was staking is narrowed back instead, never locked.
+    //
+    // The relock armed by an earlier walletpassphrase can come due while the
+    // prompt is open. The dialog runs in Elevate mode for this path, and an
+    // elevation refuses a locked wallet, so that case fails and is reported
+    // rather than quietly becoming a fresh unlock: `valid` is then false and
+    // this context does nothing. Letting it fall back to an ordinary unlock
+    // would start one with no deadline, which the narrowing below would make
+    // permanent -- turning the time-boxed unlock the user asked for into an
+    // open-ended one.
+    return UnlockContext(this, valid, valid && (initial == Locked), was_staking_only);
 }
 
-WalletModel::UnlockContext::UnlockContext(WalletModel *wallet, bool valid, bool relock):
+WalletModel::UnlockContext::UnlockContext(WalletModel *wallet, bool valid, bool relock,
+                                         bool restore_staking_only):
         wallet(wallet),
         valid(valid),
-        relock(relock)
+        relock(relock),
+        restore_staking_only(restore_staking_only)
 {
 }
 
 WalletModel::UnlockContext::~UnlockContext()
 {
-    if(valid && relock)
+    if (!valid) return;
+
+    // Both arms cross IPC in the split build, and a destructor is implicitly
+    // noexcept: an exception escaping here -- a disconnect mid-call is the
+    // realistic one -- would terminate the GUI outright rather than leave it to
+    // the disconnect handling that already exists. Nothing here can be retried
+    // without the passphrase, so a record of what was left behind is all that
+    // can be owed.
+    try
     {
-        wallet->setWalletLocked(true);
+        if (restore_staking_only)
+        {
+            // Hand the elevation back rather than locking. Narrowing needs no
+            // passphrase: the master key stays installed and only the permission
+            // is removed.
+            //
+            // Not discarded: in the split build this crosses IPC and can fail,
+            // and a failure leaves the wallet FULLY unlocked, which is the
+            // unsafe direction.
+            //
+            // But false does NOT mean that on its own. It also means there was
+            // nothing to narrow -- a locked wallet or an unencrypted one -- and
+            // the locked case is ordinary here: the timed unlock can simply
+            // have run out while the operation was in progress. Warning on that
+            // would report a wallet left wide open when it had just closed
+            // itself, so read the state and warn only if it really is.
+            if (!wallet->wallet().restrictToStakingOnly()
+                    && wallet->getEncryptionStatus() == Unlocked) {
+                LogPrintf("WARN: %s: could not restore the staking-only scope; the wallet is left "
+                          "fully unlocked", __func__);
+            }
+            return;
+        }
+
+        if (relock)
+        {
+            wallet->setWalletLocked(true);
+        }
+    }
+    catch (const std::exception& e)
+    {
+        LogPrintf("WARN: %s: could not restore the wallet lock state (%s); it may be left more "
+                  "permissive than it was", __func__, e.what());
+    }
+    catch (...)
+    {
+        LogPrintf("WARN: %s: could not restore the wallet lock state; it may be left more "
+                  "permissive than it was", __func__);
     }
 }
 
 void WalletModel::UnlockContext::CopyFrom(const UnlockContext& rhs)
 {
-    // Transfer context; old object no longer relocks wallet
+    // Transfer the context: the old object must do NOTHING on destruction.
+    //
+    // Both flags are cleared, not just relock. If restore_staking_only survived
+    // on the source, its destructor would narrow the scope back to staking-only
+    // while the new owner is still relying on the elevation, and the very
+    // operation that asked for it would then be refused. Every call site
+    // currently constructs directly from the prvalue that requestUnlock returns,
+    // which C++17 elides, so no copy happens today -- but a half-transferred
+    // ownership flag is a trap for the first caller that does copy one.
     *this = rhs;
     rhs.relock = false;
+    rhs.restore_staking_only = false;
 }
 
 bool WalletModel::getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const

@@ -143,8 +143,12 @@ BOOST_AUTO_TEST_CASE(wallet_wraps_cwallet)
     const interfaces::WalletLockState lock_state = wallet->getLockState();
     BOOST_CHECK_EQUAL(lock_state.crypted, pwalletMain->IsCrypted());
     BOOST_CHECK_EQUAL(lock_state.locked, pwalletMain->IsLocked());
-    BOOST_CHECK_EQUAL(lock_state.unlocked_for_staking_only, wallet->isUnlockedForStakingOnly());
-    BOOST_CHECK_EQUAL(lock_state.staking_only_flag, wallet->getUnlockStakingOnlyFlag());
+    // Against the WALLET, not against the interface's own sibling accessors:
+    // getLockState() and getUnlockStakingOnlyFlag() are the same expression
+    // over the same source, so comparing them to each other cannot fail no
+    // matter what the snapshot is built from.
+    BOOST_CHECK_EQUAL(lock_state.unlocked_for_staking_only, pwalletMain->IsUnlockedForStakingOnly());
+    BOOST_CHECK_EQUAL(lock_state.staking_only_flag, pwalletMain->IsUnlockedForStakingOnly());
 
     int calls = 0;
     uint256 seen_hash;
@@ -184,21 +188,19 @@ BOOST_AUTO_TEST_CASE(wallet_query_surface_wraps_cwallet)
     BOOST_CHECK_EQUAL(balances.unconfirmed_balance, pwalletMain->GetUnconfirmedBalance());
     BOOST_CHECK_EQUAL(balances.immature_balance, pwalletMain->GetImmatureBalance());
 
-    // Staking-only preference: the raw flag getter tracks the global; the
-    // composite requires the wallet to actually be unlocked.
-    const bool saved_flag = fWalletUnlockStakingOnly;
-    fWalletUnlockStakingOnly = true;
-    BOOST_CHECK(wallet->getUnlockStakingOnlyFlag());
-    BOOST_CHECK_EQUAL(wallet->isUnlockedForStakingOnly(), !pwalletMain->IsLocked());
-    fWalletUnlockStakingOnly = false;
-    BOOST_CHECK(!wallet->getUnlockStakingOnlyFlag());
+    // Staking-only is no longer a flag that can be posed independently of the
+    // lock state; it is one value on the wallet. The test wallet is
+    // unencrypted, which has nothing to restrict, so it reads Full.
+    BOOST_CHECK(pwalletMain->GetUnlockScope() == UnlockScope::Full);
     BOOST_CHECK(!wallet->isUnlockedForStakingOnly());
-
-    // The test wallet is unencrypted: Unlock must fail, and a failed unlock
-    // must NOT overwrite the staking-only preference.
-    BOOST_CHECK(!wallet->unlockWallet(SecureString("passphrase"), true));
     BOOST_CHECK(!wallet->getUnlockStakingOnlyFlag());
-    fWalletUnlockStakingOnly = saved_flag;
+
+    // Unlocking an unencrypted wallet fails, and a failed unlock must not move
+    // the scope -- the old assertion that a failed unlock does not overwrite
+    // the preference, restated against the value that now carries it.
+    BOOST_CHECK(!wallet->unlockWallet(SecureString("passphrase"), true));
+    BOOST_CHECK(pwalletMain->GetUnlockScope() == UnlockScope::Full);
+    BOOST_CHECK(!wallet->isUnlockedForStakingOnly());
 
     // Unknown outpoints are skipped; the coin queries return empty value
     // containers rather than touching wallet internals.

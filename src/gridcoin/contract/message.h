@@ -24,7 +24,13 @@ class Contract;
 //! \return Contains the finalized transaction and error message, if any.
 //! TODO: refactor to remove string-based signaling.
 //!
-std::pair<CWalletTx, std::string> SendContract(Contract contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+//! \p permitted_while_staking_only is for the ONE caller that must still work
+//! on a wallet the user restricted to staking: the hourly automated beacon
+//! renewal. Everything else -- every RPC, every GUI action, addkey -- leaves it
+//! false and is refused, which is the point of the restriction. Do not widen it
+//! to "contracts are harmless": the GUI contract surface has no unlock guard of
+//! its own, so this flag is the only thing standing in front of it.
+std::pair<CWalletTx, std::string> SendContract(Contract contract, bool permitted_while_staking_only = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Send a transaction that contains a contract.
@@ -37,7 +43,7 @@ std::pair<CWalletTx, std::string> SendContract(Contract contract) EXCLUSIVE_LOCK
 //! \return Contains the finalized transaction and error message, if any.
 //! TODO: refactor to remove string-based signaling.
 //!
-std::pair<CWalletTx, std::string> SendContract(CWalletTx wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+std::pair<CWalletTx, std::string> SendContract(CWalletTx wtx, bool permitted_while_staking_only = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 }
 
 #endif // GRIDCOIN_CONTRACT_MESSAGE_H

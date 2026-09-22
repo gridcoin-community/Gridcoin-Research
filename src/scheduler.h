@@ -10,6 +10,7 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <atomic>
 #include <thread>
 
 #include <sync.h>
@@ -48,6 +49,40 @@ public:
     void scheduleFromNow(Function f, std::chrono::milliseconds delta)
     {
         schedule(std::move(f), std::chrono::system_clock::now() + delta);
+    }
+
+    /**
+     * Like scheduleFromNow, but refuses once the scheduler has been told to
+     * stop, and reports whether the task was ACCEPTED.
+     *
+     * For a caller that must know its task was taken -- the wallet's relock,
+     * which is the only thing that will end a timed unlock. Asking "is it
+     * running?" and then scheduling is two steps, and a stop can land between
+     * them; this decides and enqueues under one acquisition.
+     *
+     * It deliberately does NOT require a thread to be servicing the queue yet.
+     * A task enqueued before serviceQueue() starts is not lost -- the thread
+     * runs it when it comes up -- so refusing then would be a false negative,
+     * and a racy one.
+     *
+     * Accepted is NOT a promise that it runs. serviceQueue() exits on
+     * stopRequested without draining, so a task accepted immediately before
+     * stop() is dropped. Closing that would mean draining on stop, which
+     * changes the contract for every other user of this class. A caller whose
+     * task must survive shutdown has to be ordered against shutdown instead.
+     */
+    [[nodiscard]] bool scheduleFromNowIfRunning(Function f, std::chrono::milliseconds delta)
+    {
+        {
+            LOCK(newTaskMutex);
+
+            if (stopRequested) return false;
+
+            taskQueue.insert(std::make_pair(std::chrono::system_clock::now() + delta, std::move(f)));
+        }
+
+        newTaskScheduled.notify_one();
+        return true;
     }
 
     /**
@@ -110,6 +145,23 @@ private:
 //! thread is joined. Owned via unique_ptr (mirroring g_banman) so it can be
 //! injected into PeerManager::StartScheduledTasks() once that lands.
 extern std::unique_ptr<CScheduler> g_scheduler;
+
+//! The scheduler, published for threads other than the one that builds it.
+//!
+//! g_scheduler itself is a plain unique_ptr assigned during AppInit2, and other
+//! threads read it, so reading it from one of them is a data race on a
+//! non-atomic object. AppInit2 now assigns it BEFORE StartRPCThreads(), which
+//! removes the startup window in which an RPC would have found it null -- but
+//! not the race itself, since the P2P and stake-miner threads are already
+//! running by then and shutdown clears it while RPC threads still serve. This
+//! is set once the scheduler is ready to take work and cleared before it is told
+//! to stop, and the release/acquire pair is what makes reading through it
+//! well-defined.
+//!
+//! Null means "do not schedule": either the scheduler does not exist yet, or
+//! shutdown has begun. A caller whose task must actually run should treat null
+//! as a refusal rather than carrying on without it.
+extern std::atomic<CScheduler*> g_scheduler_handle;
 
 /**
  * Class used by CScheduler clients which may schedule multiple jobs

@@ -81,6 +81,7 @@ extern constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
 
 std::unique_ptr<BanMan> g_banman;
 std::unique_ptr<CScheduler> g_scheduler;
+std::atomic<CScheduler*> g_scheduler_handle{nullptr};
 
 //! Set once AppInit2 has reached the unbroadcast-set reload. Shutdown() only
 //! persists the set when this is true, so an early AppInit2 failure (which still
@@ -194,6 +195,12 @@ void Shutdown(void* parg)
         // Signal to the scheduler to stop. Guarded because Shutdown() can run
         // after an early AppInit2 failure, before the scheduler is constructed.
         LogPrintf("INFO: %s: Stopping the scheduler.", __func__);
+
+        // Unpublish BEFORE stopping, so a thread that is still running -- the
+        // RPC workers are not stopped until much later -- sees "no scheduler"
+        // rather than one that is about to stop servicing its queue.
+        g_scheduler_handle.store(nullptr, std::memory_order_release);
+
         if (g_scheduler) g_scheduler->stop();
 
         // clean up any remaining threads running serviceQueue:
@@ -2484,6 +2491,31 @@ bool AppInit2(ThreadHandlerPtr threads)
     // net threads is safe.
     g_stake_miner_thread = std::thread(ThreadStakeMiner, pwalletMain);
 
+    // Start the lightweight task scheduler thread BEFORE the RPC server.
+    //
+    // A timed walletpassphrase refuses when the relock cannot be armed, because
+    // granting an unlock with nothing to end it is the failure that design
+    // exists to remove. Starting the RPC server first therefore opened a window
+    // in which an autounlock that fires as soon as the port answers would be
+    // refused and the wallet would stay locked. Measured at ~3s on a 515k
+    // transaction wallet -- small, but it is the exact moment such a script
+    // acts. The scheduler needs nothing from the RPC server, so it goes first
+    // and the window does not exist.
+    //
+    // The other end needs no fix: shutdown stops the scheduler while the RPC
+    // threads still run, so a relock armed then can be dropped -- but the
+    // unlock is ephemeral (the master key is never serialized and no startup
+    // path unlocks), so the process is exiting and the key dies with it. See
+    // the reasoning on closed issue #3388.
+    assert(!g_scheduler); // LINT-OK-ASSERT: single-threaded init invariant; a second scheduler would orphan the first
+    g_scheduler = std::make_unique<CScheduler>();
+    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, g_scheduler.get());
+    threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "grc-scheduler", serviceLoop));
+
+    // Publish it for threads other than this one. Safe before the service thread
+    // has entered serviceQueue: a task enqueued first is run when it gets there.
+    g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
+
     const bool fStartRPC = gArgs.GetBoolArg("-server", false);
     LogPrintf("init: -server=%d, %s RPC server\n", fStartRPC, fStartRPC ? "starting" : "skipping");
     if (fStartRPC) StartRPCThreads();
@@ -2510,11 +2542,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     int64_t nBalanceInQuestion;
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
 
-    // Start the lightweight task scheduler thread
-    assert(!g_scheduler);
-    g_scheduler = std::make_unique<CScheduler>();
-    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, g_scheduler.get());
-    threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "grc-scheduler", serviceLoop));
 
     // Register the PeerManager's recurring tasks now that the scheduler exists
     // (issue #2558). This call previously sat next to the PeerManager construction

@@ -1,4 +1,7 @@
 #include "random.h"
+#include "scheduler.h"
+#include <thread>
+#include <memory>
 #include <boost/test/unit_test.hpp>
 
 #include "gridcoin/mnemonics.h"
@@ -889,10 +892,515 @@ BOOST_AUTO_TEST_CASE(importprivkey_requires_an_unlocked_wallet)
     expect_unlock_needed("re-import of a held key");
 }
 
+//!
+//! The staking-only restriction is enforced in the transaction builder every
+//! spend funnels through, not only at the entry points that remember to ask.
+//!
+//! Discriminates on nFeeRet, which CreateTransaction overwrites once it starts
+//! building. A staking-only wallet must return before that, so the caller's
+//! sentinel survives; a fully unlocked one must get past the check and clobber
+//! it, even though this coinless wallet then fails to fund. Asserting only the
+//! bool would prove nothing, since both cases return false.
+//!
+//! This is the regression test for a graphical send while unlocked for staking
+//! only: that path reaches the wallet through interfaces::Wallet, which had no
+//! check of its own, so the transaction was built, signed and committed.
+//!
+BOOST_AUTO_TEST_CASE(the_transaction_builder_refuses_a_staking_only_wallet)
+{
+    CWallet staking;
+    struct SwapWallet {
+        CWallet* m_saved;
+        explicit SwapWallet(CWallet* replacement) : m_saved(pwalletMain) { pwalletMain = replacement; }
+        ~SwapWallet() { pwalletMain = m_saved; }
+    } swap(&staking);
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(staking.cs_wallet);
+        BOOST_REQUIRE(staking.AddKey(key));
+    }
+
+    const SecureString passphrase("builder-scope-test");
+    BOOST_REQUIRE(staking.EncryptWallet(passphrase));
+    staking.Lock();
+
+    CScript destination;
+    destination.SetDestination(key.GetPubKey().GetID());
+    const std::vector<std::pair<CScript, int64_t>> recipients{{destination, CENT}};
+
+    constexpr int64_t sentinel = -987654321;
+
+    {
+        BOOST_REQUIRE(staking.Unlock(passphrase, UnlockScope::StakingOnly));
+        BOOST_REQUIRE(staking.IsUnlockedForStakingOnly());
+
+        CWalletTx wtx;
+        CReserveKey reservekey(&staking);
+        int64_t fee = sentinel;
+        BOOST_CHECK(!staking.CreateTransaction(recipients, wtx, reservekey, fee));
+        BOOST_CHECK_EQUAL(fee, sentinel); // returned before building
+    }
+
+    {
+        staking.Lock();
+        BOOST_REQUIRE(staking.Unlock(passphrase, UnlockScope::Full));
+        BOOST_REQUIRE(!staking.IsUnlockedForStakingOnly());
+
+        CWalletTx wtx;
+        CReserveKey reservekey(&staking);
+        int64_t fee = sentinel;
+        // Still false, because the wallet has no coins -- but it got far enough
+        // to set the fee, which the staking-only case never reaches.
+        BOOST_CHECK(!staking.CreateTransaction(recipients, wtx, reservekey, fee));
+        BOOST_CHECK(fee != sentinel);
+    }
+
+    staking.Lock();
+}
+
+//! Stand up a running scheduler for the duration of a case and put the previous
+//! one back however the case exits, so a failed assertion cannot strand the
+//! rest of the binary without one.
+//!
+//! The handle is published as soon as the object exists and does NOT wait for
+//! the service thread to enter serviceQueue. It does not need to: arming asks
+//! only whether the scheduler has been told to stop, so a task enqueued before
+//! the thread comes up is run when it gets there. Waiting on
+//! AreThreadsServicingQueue() here would be the racy version of this.
+struct SchedulerForThisCase {
+    std::unique_ptr<CScheduler> m_saved;
+    CScheduler* m_saved_handle;
+    std::thread m_service;
+
+    SchedulerForThisCase()
+        : m_saved(std::move(g_scheduler))
+        , m_saved_handle(g_scheduler_handle.load(std::memory_order_acquire))
+    {
+        g_scheduler = std::make_unique<CScheduler>();
+        g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
+        m_service = std::thread([] { g_scheduler->serviceQueue(); });
+    }
+
+    ~SchedulerForThisCase()
+    {
+        g_scheduler_handle.store(m_saved_handle, std::memory_order_release);
+        g_scheduler->stop();
+        if (m_service.joinable()) m_service.join();
+        g_scheduler = std::move(m_saved);
+    }
+};
+
+//! Spin until the scheduled relock has run, or give up. The service thread runs
+//! the task, so the wait is for another thread rather than for time.
+static void WaitForRelock(const CWallet& wallet)
+{
+    for (int i = 0; i < 200 && !wallet.IsLocked(); ++i) {
+        UninterruptibleSleep(std::chrono::milliseconds(10));
+    }
+}
+
+//!
+//! A timed unlock locks itself when its deadline arrives, and a relock armed
+//! for an unlock that has since been superseded does NOTHING.
+//!
+//! The second half is the one that matters. CScheduler cannot cancel a task, so
+//! a relock armed for an earlier unlock always arrives; without the epoch check
+//! it would lock a wallet that a later, longer unlock owns. Discriminates by
+//! bringing ONLY the stale task due and asserting the wallet stays unlocked --
+//! were the epoch ignored, it would be locked instead.
+//!
+BOOST_AUTO_TEST_CASE(a_superseded_scheduled_relock_does_nothing)
+{
+    SchedulerForThisCase scheduler;
+
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("scheduled-relock");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    // The unlock that will be superseded, and the relock armed for it.
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+    BOOST_REQUIRE(!wallet.IsLocked());
+
+    // Supersede it: a manual lock ends that unlock, and a second unlock begins
+    // a new one with a deadline far enough out that bringing the first task due
+    // does not bring the second one due as well.
+    wallet.Lock();
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(3000)));
+    BOOST_REQUIRE(!wallet.IsLocked());
+
+    // Bring the stale task due and let the service thread run it.
+    g_scheduler->MockForward(std::chrono::seconds(61));
+    WaitForRelock(wallet);
+
+    // Still unlocked: the stale relock recognised itself as superseded.
+    BOOST_CHECK(!wallet.IsLocked());
+    BOOST_CHECK(wallet.GetUnlockDeadline().has_value());
+
+    wallet.Lock();
+}
+
+//!
+//! A timed unlock refuses outright when there is no scheduler to arm its
+//! relock, rather than quietly granting an unlock that never expires.
+//!
+BOOST_AUTO_TEST_CASE(a_timed_unlock_without_a_scheduler_is_refused)
+{
+    // Take the scheduler away for the duration of the case and put it back
+    // however this case exits. Restoring only on the last line means a failed
+    // BOOST_REQUIRE or a throw leaves every later case in the binary without
+    // one, turning a single failure into a cascade.
+    struct NoSchedulerForThisCase {
+        std::unique_ptr<CScheduler> m_saved;
+        CScheduler* m_saved_handle;
+
+        NoSchedulerForThisCase()
+            : m_saved(std::move(g_scheduler))
+            , m_saved_handle(g_scheduler_handle.exchange(nullptr, std::memory_order_acq_rel))
+        {
+        }
+
+        ~NoSchedulerForThisCase()
+        {
+            g_scheduler = std::move(m_saved);
+            g_scheduler_handle.store(m_saved_handle, std::memory_order_release);
+        }
+    } no_scheduler;
+
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("no-scheduler");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+    BOOST_CHECK(wallet.IsLocked());
+
+    // An unlock with no deadline arms nothing and is unaffected.
+    BOOST_CHECK(wallet.Unlock(passphrase, UnlockScope::Full, std::nullopt));
+    BOOST_CHECK(!wallet.IsLocked());
+    BOOST_CHECK(!wallet.GetUnlockDeadline().has_value());
+
+    wallet.Lock();
+}
+
+//!
+//! A timed unlock whose relock cannot be armed leaves the wallet LOCKED.
+//!
+//! The early check and the arming are not the same moment: the key derivation
+//! between them takes a calibrated few hundred milliseconds, and shutdown
+//! unpublishes the handle before stopping the scheduler. So a published
+//! scheduler that has been told to stop is a real state, and the only safe
+//! answer is to refuse -- nothing else would ever end that unlock.
+//!
+BOOST_AUTO_TEST_CASE(a_timed_unlock_whose_relock_cannot_be_armed_locks_the_wallet)
+{
+    // Published, so the early check passes, but stopped, so the arming refuses.
+    // That is the shutdown window: the pointer answers, the queue does not.
+    struct StoppedSchedulerForThisCase {
+        std::unique_ptr<CScheduler> m_saved;
+        CScheduler* m_saved_handle;
+
+        StoppedSchedulerForThisCase()
+            : m_saved(std::move(g_scheduler))
+            , m_saved_handle(g_scheduler_handle.load(std::memory_order_acquire))
+        {
+            g_scheduler = std::make_unique<CScheduler>();
+            g_scheduler->stop();
+            g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
+        }
+
+        ~StoppedSchedulerForThisCase()
+        {
+            g_scheduler_handle.store(m_saved_handle, std::memory_order_release);
+            g_scheduler = std::move(m_saved);
+        }
+    } stopped;
+
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("relock-cannot-be-armed");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    // Reaches the arming, because the handle is published, and the arming is
+    // what refuses.
+    CWallet::UnlockFailure failure = CWallet::UnlockFailure::None;
+    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(60), &failure));
+
+    // Fail CLOSED. The passphrase was right, so the key WAS installed for a
+    // moment; what matters is that it is gone again and nothing was left behind.
+    BOOST_CHECK(wallet.IsLocked());
+    BOOST_CHECK(!wallet.GetUnlockDeadline().has_value());
+
+    // And the caller is told WHY. Reporting this as a bad passphrase would send
+    // the user after a problem they do not have -- theirs was accepted.
+    BOOST_CHECK(failure == CWallet::UnlockFailure::RelockUnavailable);
+
+    // A genuinely wrong passphrase still reads as one, so the distinction is
+    // not simply "any timed unlock failure".
+    failure = CWallet::UnlockFailure::None;
+    BOOST_CHECK(!wallet.Unlock(SecureString("wrong"), UnlockScope::Full,
+                               std::chrono::seconds(60), &failure));
+    BOOST_CHECK(failure == CWallet::UnlockFailure::Passphrase);
+}
+
+//!
+//! An elevation WIDENS the unlock in progress; it does not replace it. The
+//! deadline and the relock armed for it both survive, so a wallet unlocked for
+//! a fixed time still locks on time after an action elevates it.
+//!
+//! This is the discriminating case for the relock dance the GUI used to do.
+//! Locking first and unlocking again threw the deadline away and retired the
+//! armed relock, and the re-unlock carried no duration of its own -- so the
+//! wallet stayed unlocked forever. Under that behaviour the final assertion
+//! fails: nothing is left to lock the wallet.
+//!
+BOOST_AUTO_TEST_CASE(an_elevation_keeps_the_unlock_and_its_relock)
+{
+    SchedulerForThisCase scheduler;
+
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("elevation-keeps-deadline");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    // What walletpassphrase "pw" 60 true does.
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::StakingOnly, std::chrono::seconds(60)));
+
+    const std::optional<int64_t> deadline = wallet.GetUnlockDeadline();
+    const uint64_t epoch = wallet.GetUnlockEpoch();
+    BOOST_REQUIRE(deadline.has_value());
+
+    // Elevate for one operation, as a GUI send, vote or claim does.
+    BOOST_REQUIRE(wallet.ElevateToFull(passphrase));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    // The unlock did not restart. Same deadline, and the same epoch -- so the
+    // relock already armed is still the current one and is still going to fire.
+    BOOST_CHECK(wallet.GetUnlockDeadline() == deadline);
+    BOOST_CHECK_EQUAL(wallet.GetUnlockEpoch(), epoch);
+
+    // Hand the elevation back, as ~UnlockContext does.
+    BOOST_REQUIRE(wallet.RestrictToStakingOnly());
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+    BOOST_CHECK(wallet.GetUnlockDeadline() == deadline);
+
+    // And it still locks when the unlock the user asked for runs out.
+    g_scheduler->MockForward(std::chrono::seconds(61));
+    WaitForRelock(wallet);
+
+    BOOST_CHECK(wallet.IsLocked());
+}
+
+//!
+//! An elevation adds permission, so it demands the passphrase, and it needs an
+//! unlock to widen -- on a locked wallet there is nothing to widen and no
+//! deadline to preserve, which is Unlock()'s job.
+//!
+BOOST_AUTO_TEST_CASE(an_elevation_demands_the_passphrase_and_an_unlock_to_widen)
+{
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("elevation-preconditions");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    // Locked: refused even with the right passphrase.
+    BOOST_CHECK(!wallet.ElevateToFull(passphrase));
+    BOOST_CHECK(wallet.IsLocked());
+
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::StakingOnly));
+
+    // Wrong passphrase widens nothing, and moves nothing.
+    BOOST_CHECK(!wallet.ElevateToFull(SecureString("wrong")));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+
+    BOOST_REQUIRE(wallet.ElevateToFull(passphrase));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    // Already as wide as it goes: a no-op that still succeeds, so a nested
+    // elevation on an already-elevated wallet is not an error.
+    BOOST_CHECK(wallet.ElevateToFull(passphrase));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    wallet.Lock();
+}
+
+//!
+//! A lock reports the unlock it ended, read under the acquisition that clears
+//! it. This is what lets a caller that has to lock and restore -- the passphrase
+//! change -- put back exactly what was there without a gap the scheduled relock
+//! can land in.
+//!
+BOOST_AUTO_TEST_CASE(locking_reports_the_unlock_it_ended)
+{
+    SchedulerForThisCase scheduler;
+
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("lock-and-capture");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    // Already locked: there was no unlock, so there is nothing to report.
+    std::optional<CCryptoKeyStore::UnlockState> prior = wallet.LockAndCapture();
+    BOOST_REQUIRE(prior.has_value());
+    BOOST_CHECK(prior->scope == UnlockScope::Locked);
+    BOOST_CHECK(!prior->deadline.has_value());
+
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::StakingOnly, std::chrono::seconds(60)));
+    const std::optional<int64_t> deadline = wallet.GetUnlockDeadline();
+    BOOST_REQUIRE(deadline.has_value());
+
+    prior = wallet.LockAndCapture();
+    BOOST_REQUIRE(prior.has_value());
+    BOOST_CHECK(prior->scope == UnlockScope::StakingOnly);
+    BOOST_CHECK(prior->deadline == deadline);
+    BOOST_CHECK(wallet.IsLocked());
+}
+
+//!
+//! A passphrase change restores the unlock it interrupted, deadline included,
+//! and re-arms the relock for it. Changing the passphrase must not turn a wallet
+//! unlocked for a minute into one unlocked indefinitely.
+//!
+BOOST_AUTO_TEST_CASE(a_passphrase_change_keeps_the_unlock_deadline)
+{
+    SchedulerForThisCase scheduler;
+
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString old_passphrase("change-keeps-deadline-old");
+    const SecureString new_passphrase("change-keeps-deadline-new");
+    BOOST_REQUIRE(wallet.EncryptWallet(old_passphrase));
+    wallet.Lock();
+
+    BOOST_REQUIRE(wallet.Unlock(old_passphrase, UnlockScope::StakingOnly, std::chrono::seconds(60)));
+    const std::optional<int64_t> deadline = wallet.GetUnlockDeadline();
+    BOOST_REQUIRE(deadline.has_value());
+
+    BOOST_REQUIRE(wallet.ChangeWalletPassphrase(old_passphrase, new_passphrase));
+
+    // The scope came back, and so did the deadline it was unlocked with.
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+    BOOST_REQUIRE(wallet.GetUnlockDeadline().has_value());
+    BOOST_CHECK_EQUAL(*wallet.GetUnlockDeadline(), *deadline);
+
+    // And a relock was armed against the restored unlock, so it still expires.
+    g_scheduler->MockForward(std::chrono::seconds(61));
+    WaitForRelock(wallet);
+
+    BOOST_CHECK(wallet.IsLocked());
+}
+
+//!
+//! Lock and restriction are one value, so no reader can see an unlocked wallet
+//! carrying the previous unlock's restriction. Pins each transition, including
+//! that a lock clears the restriction and a failed unlock moves nothing.
+//!
+BOOST_AUTO_TEST_CASE(the_unlock_scope_is_set_and_cleared_with_the_key)
+{
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    // Unencrypted: nothing to restrict.
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+    BOOST_CHECK(!wallet.IsLocked());
+
+    const SecureString passphrase("scope-transitions");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+
+    wallet.Lock();
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Locked);
+    BOOST_CHECK(wallet.IsLocked());
+    BOOST_CHECK(!wallet.IsUnlockedForStakingOnly());
+
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::StakingOnly));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+    BOOST_CHECK(!wallet.IsLocked());
+    BOOST_CHECK(wallet.IsUnlockedForStakingOnly());
+
+    // A lock clears the restriction along with the key: the two cannot drift.
+    wallet.Lock();
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Locked);
+    BOOST_CHECK(!wallet.IsUnlockedForStakingOnly());
+
+    // No scope stated means Full, matching walletpassphrase without its third
+    // argument.
+    BOOST_REQUIRE(wallet.Unlock(passphrase));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    // A failed unlock moves nothing. Unlocking an already-unlocked wallet fails.
+    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::StakingOnly));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    // And it is reported as already unlocked, not as a bad passphrase: the
+    // passphrase used here is the right one.
+    CWallet::UnlockFailure failure = CWallet::UnlockFailure::None;
+    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::StakingOnly, std::nullopt, &failure));
+    BOOST_CHECK(failure == CWallet::UnlockFailure::AlreadyUnlocked);
+
+    wallet.Lock();
+    BOOST_CHECK(!wallet.Unlock(SecureString("wrong"), UnlockScope::Full));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Locked);
+}
+
 BOOST_AUTO_TEST_CASE(dumpprivkey_staking_only_unlock_is_refused_by_the_shared_check)
 {
     // Same in-memory encrypted wallet as the case above. dumpprivkey used to
-    // carry its own fWalletUnlockStakingOnly check below the address parsing;
+    // carry its own staking-only check below the address parsing;
     // EnsureWalletIsUnlocked(), its first statement, already throws for that
     // state, so the second check could not be reached. This case pins that the
     // refusal comes from the shared helper, message and all, and that the
@@ -914,14 +1422,11 @@ BOOST_AUTO_TEST_CASE(dumpprivkey_staking_only_unlock_is_refused_by_the_shared_ch
     const SecureString passphrase("dumpprivkey-test");
     BOOST_REQUIRE(locked.EncryptWallet(passphrase));
     locked.Lock();
-    BOOST_REQUIRE(locked.Unlock(passphrase));
 
-    // The staking-only flag is process-global; put it back however the case ends.
-    struct StakingOnlyFlag {
-        bool m_saved;
-        StakingOnlyFlag() : m_saved(fWalletUnlockStakingOnly) { fWalletUnlockStakingOnly = true; }
-        ~StakingOnlyFlag() { fWalletUnlockStakingOnly = m_saved; }
-    } staking_only;
+    // Unlock for staking only, which is now one call rather than an unlock
+    // followed by a separate global write.
+    BOOST_REQUIRE(locked.Unlock(passphrase, UnlockScope::StakingOnly));
+    BOOST_REQUIRE(locked.IsUnlockedForStakingOnly());
 
     UniValue params(UniValue::VARR);
     params.push_back(EncodeDestination(id));
@@ -935,7 +1440,10 @@ BOOST_AUTO_TEST_CASE(dumpprivkey_staking_only_unlock_is_refused_by_the_shared_ch
         BOOST_CHECK_EQUAL(find_value(err, "message").get_str(), "Error: Wallet is unlocked for staking only.");
     }
 
-    fWalletUnlockStakingOnly = false;
+    // A full unlock exports the key. Re-unlocking requires a lock first, which
+    // is what clears the scope.
+    locked.Lock();
+    BOOST_REQUIRE(locked.Unlock(passphrase, UnlockScope::Full));
     BOOST_CHECK_EQUAL(dumpprivkey(params).get_str(), EncodeSecret(key));
 }
 

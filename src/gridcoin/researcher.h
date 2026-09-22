@@ -679,7 +679,11 @@ public:
     //! \return A variant that contains the new public key if successful or a
     //! description of the error that occurred.
     //!
-    AdvertiseBeaconResult AdvertiseBeacon(const bool force = false);
+    //! \p automated_renewal marks the unattended hourly renewal job, which is
+    //! the only beacon path permitted to build a transaction while the wallet
+    //! is unlocked for staking only. Every user-initiated advertisement leaves
+    //! it false and is refused on such a wallet.
+    AdvertiseBeaconResult AdvertiseBeacon(const bool force = false, const bool automated_renewal = false);
 
     //!
     //! \brief Submit a contract to the network to revoke an existing beacon.

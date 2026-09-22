@@ -68,10 +68,11 @@ bool SelectMasterInputOutput(CCoinControl& coin_control) EXCLUSIVE_LOCKS_REQUIRE
 //!
 //! \return \c true if coin selection succeeded.
 //!
-bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn_fee) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn_fee,
+                      bool permitted_while_staking_only) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CCoinControl coin_control_out;
-    CAmount applied_fee_out; // Unused
+    CAmount applied_fee_out = 0; // Unused, but the builder can return before seeding it
     bool admin = false;
     bool contract_change_to_input_address = gArgs.GetBoolArg("-contractchangetoinputaddress", false);
     CTxDestination out_address {CNoDestination()};
@@ -120,7 +121,8 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
         wtx_out,
         reserve_key,
         applied_fee_out,
-        &coin_control_out, contract_change_to_input_address);
+        &coin_control_out, contract_change_to_input_address,
+        permitted_while_staking_only);
 }
 
 //!
@@ -131,7 +133,7 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
 //! \return An empty string when successful or a description of the error that
 //! occurred. TODO: Refactor to remove string-based signaling.
 //!
-std::string SendContractTx(CWalletTx& wtx_new) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+std::string SendContractTx(CWalletTx& wtx_new, bool permitted_while_staking_only) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CReserveKey reserve_key(pwalletMain);
 
@@ -154,7 +156,7 @@ std::string SendContractTx(CWalletTx& wtx_new) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         return strError;
     }
 
-    if (!CreateContractTx(wtx_new, reserve_key, burn_fee)) {
+    if (!CreateContractTx(wtx_new, reserve_key, burn_fee, permitted_while_staking_only)) {
         std::string strError = _("Error: Transaction creation failed.");
         error("%s: %s", __func__, strError);
         return strError;
@@ -199,7 +201,7 @@ std::string SendContractTx(CWalletTx& wtx_new) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 // Functions
 // -----------------------------------------------------------------------------
 
-std::pair<CWalletTx, std::string> GRC::SendContract(Contract contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+std::pair<CWalletTx, std::string> GRC::SendContract(Contract contract, bool permitted_while_staking_only) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CMutableTransaction mtx;
     mtx.vContracts.emplace_back(std::move(contract));
@@ -207,16 +209,16 @@ std::pair<CWalletTx, std::string> GRC::SendContract(Contract contract) EXCLUSIVE
     CWalletTx wtx;
     static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
 
-    return SendContract(std::move(wtx));
+    return SendContract(std::move(wtx), permitted_while_staking_only);
 }
 
-std::pair<CWalletTx, std::string> GRC::SendContract(CWalletTx wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+std::pair<CWalletTx, std::string> GRC::SendContract(CWalletTx wtx, bool permitted_while_staking_only) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (wtx.vContracts.empty()) {
         return std::make_pair(std::move(wtx), "Transaction contains no contract.");
     }
 
-    std::string error = SendContractTx(wtx);
+    std::string error = SendContractTx(wtx, permitted_while_staking_only);
 
     return std::make_pair(std::move(wtx), std::move(error));
 }

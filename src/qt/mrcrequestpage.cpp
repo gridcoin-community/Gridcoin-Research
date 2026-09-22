@@ -313,6 +313,39 @@ void MRCRequestPage::submitMRC()
 
     if (!m_mrc_model) return;
 
+    // Ask for an unlock, the same way the send dialog and every other contract
+    // surface does. This page was the one that did not, which mattered once the
+    // builder began refusing a staking-only wallet: the claim simply failed and
+    // the only sign was a tooltip.
+    //
+    // A researcher who unlocked for staking is exactly who files these, so
+    // refusing outright would be hostile. The context elevates for this
+    // operation and hands the staking-only scope back when it expires, so the
+    // node keeps staking afterwards.
+    //
+    // MRCModel dereferences its wallet model in its own constructor, so a
+    // constructed model always has one.
+    WalletModel::UnlockContext ctx(m_wallet_model->requestUnlock());
+
+    if (!ctx.isValid()) {
+        // Cancelled or wrong passphrase. The elevation widens the unlock in
+        // place, so nothing was given up on the way to the prompt and a wallet
+        // that was staking is still staking. The fee boost is left alone so a
+        // retry keeps it.
+        ui->mrcSubmitButton->setToolTip(tr("The wallet must be unlocked to submit a manual "
+                                           "research claim."));
+        return;
+    }
+
+    // Re-sync before submitting. The elevation's status change arrives as a
+    // queued event, and the dialog's own nested event loop may have drained it
+    // or not, so the model's cached lock state is whatever that race left.
+    //
+    // Hand it the live status rather than calling refresh(): refresh() READS
+    // the cached flag and never writes it, so on its own it would re-run the
+    // snapshot against exactly the stale value. This is the only writer.
+    m_mrc_model->walletStatusChanged(static_cast<int>(m_wallet_model->getEncryptionStatus()));
+
     if (!m_mrc_model->submitMRC(s, e)) {
         message = e + " MRC request cannot be submitted.";
 

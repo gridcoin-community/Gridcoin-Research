@@ -148,7 +148,6 @@ public:
 };
 extern const CRPCTable tableRPC;
 
-extern int64_t nWalletUnlockTime;
 extern int64_t AmountFromValue(const UniValue& value);
 extern UniValue ValueFromAmount(int64_t amount);
 
