@@ -450,10 +450,18 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         return SendCoinsReturn(FeeConfirmationRequired, result.fee);
     }
 
-    // Unreachable: the switch above covers every SendCoinsStatus value (and
-    // deliberately has no default, so -Wswitch flags a new enumerator). The
-    // return keeps the function well-defined in NDEBUG builds, where the
-    // assert compiles out and falling off the end would be UB.
+    // Unreachable: the switch above covers every SendCoinsStatus value, and
+    // deliberately has no default so that a new enumerator shows up as a gap
+    // rather than being swallowed.
+    //
+    // That does NOT get caught at compile time today: the main targets are not
+    // built with -Wall, so -Wswitch never fires (see issue #3387). The assert
+    // below is what actually catches it, at runtime, and it is live in release
+    // because the build strips NDEBUG globally -- which is the whole reason a
+    // new SendCoinsStatus value is a schema MAJOR and not a minor.
+    //
+    // The return keeps the function well-defined if that ever changes and the
+    // assert does compile out, where falling off the end would be UB.
     assert(false);
     return TransactionCreationFailed;
 }
@@ -684,7 +692,15 @@ WalletModel::UnlockContext::~UnlockContext()
             // Not discarded: in the split build this crosses IPC and can fail,
             // and a failure leaves the wallet FULLY unlocked, which is the
             // unsafe direction.
-            if (!wallet->wallet().restrictToStakingOnly()) {
+            //
+            // But false does NOT mean that on its own. It also means there was
+            // nothing to narrow -- a locked wallet or an unencrypted one -- and
+            // the locked case is ordinary here: the timed unlock can simply
+            // have run out while the operation was in progress. Warning on that
+            // would report a wallet left wide open when it had just closed
+            // itself, so read the state and warn only if it really is.
+            if (!wallet->wallet().restrictToStakingOnly()
+                    && wallet->getEncryptionStatus() == Unlocked) {
                 LogPrintf("WARN: %s: could not restore the staking-only scope; the wallet is left "
                           "fully unlocked", __func__);
             }

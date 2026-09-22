@@ -209,7 +209,7 @@ handshake (`ipc/handshake.h`):
 
 ```cpp
 constexpr uint32_t IPC_SCHEMA_MAJOR   = 4;
-constexpr uint32_t IPC_SCHEMA_MINOR   = 0;
+constexpr uint32_t IPC_SCHEMA_MINOR   = 1;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 ```
 
@@ -217,12 +217,24 @@ constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 staking-only wallet's refusal to build a spend is reported as itself rather than
 as a generic creation failure. Appended, so it renumbers nothing — and still not
 additive, which is why it is a major: the enum crosses as a raw integer with an
-unchecked cast on receipt, and the GUI's switch over it carries no `default:` so
-that `-Wswitch` catches a new enumerator at compile time. An already-shipped GUI
-therefore has no arm for the new value and reaches `assert(false)`, which is live
-in release because the build strips `NDEBUG` globally. A minor would have let
-that pairing connect and aborted the GUI on the first staking-only send. The same
-major adds `restrictToStakingOnly @35`.
+unchecked cast on receipt, and the GUI's switch over it carries no `default:`, so
+an already-shipped GUI has no arm for the new value and reaches `assert(false)`,
+which is live in release because the build strips `NDEBUG` globally.
+
+Note this is a RUNTIME failure, not a compile-time one. An earlier version of
+this section said `-Wswitch` catches the missing arm; it does not, because the
+main targets are not built with `-Wall` (issue #3387). The abort is the whole
+mechanism, which is why a minor would not do: it would have let that pairing
+connect and aborted the GUI on the first staking-only send. The same major adds
+`restrictToStakingOnly @35`.
+
+**Minor 1** (under major 4) adds `elevateWallet @36`, which widens an unlock in
+progress to full for a single operation instead of locking and unlocking again.
+Additive, so an old node still talks to a new GUI — until the first action that
+needs a full unlock on a staking-only wallet calls a method the node does not
+serve, and the `UNIMPLEMENTED` reply comes back as a `std::runtime_error` thrown
+out of a send, vote or claim path where nothing catches it. The minor turns that
+into the "Update the node" hard fail at connect.
 
 
 Rules a client must honor (from `ClientHandshake` and design §4.2):
