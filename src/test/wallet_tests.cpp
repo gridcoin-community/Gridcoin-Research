@@ -1386,6 +1386,12 @@ BOOST_AUTO_TEST_CASE(the_unlock_scope_is_set_and_cleared_with_the_key)
     BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::StakingOnly));
     BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
 
+    // And it is reported as already unlocked, not as a bad passphrase: the
+    // passphrase used here is the right one.
+    CWallet::UnlockFailure failure = CWallet::UnlockFailure::None;
+    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::StakingOnly, std::nullopt, &failure));
+    BOOST_CHECK(failure == CWallet::UnlockFailure::AlreadyUnlocked);
+
     wallet.Lock();
     BOOST_CHECK(!wallet.Unlock(SecureString("wrong"), UnlockScope::Full));
     BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Locked);

@@ -628,18 +628,42 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
         return error("%s: a timed unlock was requested but no scheduler is running", __func__);
     }
 
+    // GetTimeSeconds, not GetTime: this deadline is published as getinfo's
+    // unlocked_until, and the scheduler that enforces it runs on the real system
+    // clock. GetTime is mockable, so under setmocktime the reported expiry and
+    // the actual relock would be on different clocks -- and a mock time that
+    // moved between the unlock and a later passphrase change would recompute the
+    // remaining delay from a number that never meant wall time.
     const std::optional<int64_t> deadline = relock_after
-        ? std::optional<int64_t>(GetTime() + relock_after->count())
+        ? std::optional<int64_t>(GetTimeSeconds() + relock_after->count())
         : std::nullopt;
 
-    if (!IsLocked())
+    // Not a passphrase problem, and the passphrase here may well be right, so
+    // say which it was. The RPC has its own guard for this, but the GUI and IPC
+    // paths reach here directly.
+    if (!IsLocked()) {
+        if (failure_out) *failure_out = UnlockFailure::AlreadyUnlocked;
+
         return false;
+    }
 
     CCrypter crypter;
     CKeyingMaterial vMasterKey;
 
     {
         LOCK(cs_wallet);
+
+        // Again, under the lock this time. The test above is outside it, so two
+        // callers can both pass it; whichever installs second would replace the
+        // first unlock's scope, deadline and epoch, retire the relock armed for
+        // it, and leave the first caller holding a success for an unlock with a
+        // lifetime it never asked for.
+        if (!IsLocked()) {
+            if (failure_out) *failure_out = UnlockFailure::AlreadyUnlocked;
+
+            return false;
+        }
+
         for (auto const& pMasterKey : mapMasterKeys)
         {
             if(!crypter.SetKeyFromPassphrase(strWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod))
@@ -661,7 +685,7 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                 // interval here would fire that much LATER than the deadline
                 // getinfo reports -- the key would outlive its stated expiry.
                 if (relock_after) {
-                    const int64_t remaining = *deadline - GetTime();
+                    const int64_t remaining = *deadline - GetTimeSeconds();
 
                     // The derivation ate the whole timeout. Lock now rather than
                     // enqueue a zero-delay task: that would still return with the
@@ -797,7 +821,7 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
                 // rewrite -- including the two error returns -- leaves the
                 // wallet open in the scope just restored.
                 if (prior->deadline) {
-                    const int64_t remaining = *prior->deadline - GetTime();
+                    const int64_t remaining = *prior->deadline - GetTimeSeconds();
 
                     // The deadline passed while the key was being re-derived,
                     // or the scheduler would not take the relock. Either way the

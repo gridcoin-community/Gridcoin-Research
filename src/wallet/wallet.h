@@ -363,6 +363,13 @@ public:
         //! wallet is locked; granting the unlock would have meant granting it
         //! with nothing to end it.
         RelockUnavailable,
+
+        //! Another unlock got there first. Two callers can pass the "is it
+        //! locked?" test before either takes cs_wallet, and the second would
+        //! otherwise replace the first unlock's scope, deadline and epoch --
+        //! retiring the relock armed for it and silently giving the wallet a
+        //! different lifetime than the first caller was told.
+        AlreadyUnlocked,
     };
 
     bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,

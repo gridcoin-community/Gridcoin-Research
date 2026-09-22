@@ -3489,6 +3489,14 @@ UniValue walletpassphrase(const UniValue& params)
             // derivation, and either way the wallet is left LOCKED rather than
             // unlocked with nothing to close it. Saying "incorrect passphrase"
             // for that would send the user after the wrong problem.
+            // Another unlock won the race between the guard above and the
+            // wallet taking its own lock. Same answer that guard gives.
+            if (failure == CWallet::UnlockFailure::AlreadyUnlocked) {
+                throw JSONRPCError(RPC_WALLET_ALREADY_UNLOCKED,
+                                   "Error: Wallet is already unlocked, use walletlock first if "
+                                   "need to change unlock settings.");
+            }
+
             if (failure == CWallet::UnlockFailure::RelockUnavailable) {
                 throw JSONRPCError(RPC_WALLET_ERROR,
                                    "Error: the wallet passphrase was accepted, but the automatic "
