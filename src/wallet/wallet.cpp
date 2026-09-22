@@ -3873,6 +3873,19 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
         // staking-only -- Unlock() takes cs_wallet, so holding it here is what
         // makes the check and the signing atomic with respect to that. It still
         // precedes nFeeRet below, which the caller's failure branch may read.
+        //
+        // It guards BUILDING, not committing, and that is deliberate. SendMoney
+        // and SendContractTx take no lock of their own, so cs_wallet is released
+        // between here and CommitTransaction, and a narrowing can land in that
+        // gap -- an already-signed spend is then still recorded and relayed.
+        //
+        // Checking again at commit would be worse. Authorisation belongs at the
+        // START of an operation: a send that was permitted when it began should
+        // finish, and a second gate would make a legitimate send fail after
+        // signing whenever the unlock expired while a fee dialog was open. It
+        // would also need the renewal exemption threaded through commit. The
+        // residual needs a SECOND operation narrowing concurrently, by someone
+        // who already holds the passphrase. Tracked rather than closed here.
         if (IsUnlockedForStakingOnly() && !permitted_while_staking_only) {
             return error("%s: wallet is unlocked for staking only", __func__);
         }

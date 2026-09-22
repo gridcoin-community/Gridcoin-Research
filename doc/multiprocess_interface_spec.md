@@ -359,9 +359,13 @@ The node's single wallet. Balances (`getBalance`, `getStake`,
 state (`getLockState -> WalletLockState`, `isUnlockedForStakingOnly`,
 `getUnlockStakingOnlyFlag`); mutation of lock state (`encryptWallet`,
 `lockWallet`, `unlockWallet`, `changeWalletPassphrase` — all taking a
-`SecureString` passphrase, §7; and `restrictToStakingOnly`, which does NOT,
-because it only narrows an existing unlock to staking-only and so removes
-permission rather than granting it).
+`SecureString` passphrase, §7; `elevateWallet`, which also takes one, because it
+widens an unlock already in progress to full for a single operation and so
+GRANTS permission; and `restrictToStakingOnly`, which does NOT, because it only
+narrows an existing unlock to staking-only and so removes permission rather than
+granting it. The last two are a pair: an operation needing a full unlock on a
+staking-only wallet elevates, acts, and hands the elevation back, which leaves
+the unlock's deadline and the relock armed for it untouched).
 
 Coin control / send: `getOutputs`, `computeCoinControlSummary(...)
 -> CoinControlSummary` (all fee math runs node-side), `getMaxConsolidationInputs`,

@@ -2504,7 +2504,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     //
     // This does not help at the other end: shutdown stops the scheduler while
     // the RPC threads are still running. See issue #3388.
-    assert(!g_scheduler);
+    assert(!g_scheduler); // LINT-OK-ASSERT: single-threaded init invariant; a second scheduler would orphan the first
     g_scheduler = std::make_unique<CScheduler>();
     CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, g_scheduler.get());
     threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "grc-scheduler", serviceLoop));

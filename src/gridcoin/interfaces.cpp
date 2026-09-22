@@ -272,9 +272,12 @@ public:
         // refusal costs nothing: CreateMRC signs the claim, twice on the fee
         // path, and there is no reason to do that work only to refuse.
         //
-        // Note MRCModel cannot detect this state on its own -- WalletModel's
-        // status enum has no staking-only value, so such a wallet reads as
-        // plain Unlocked and the submit button stays enabled.
+        // MRCModel CAN see this state now: WalletModel's status enum carries
+        // UnlockedForStakingOnly, and walletStatusChanged() receives it. It
+        // deliberately does not treat that as locked, so the submit button
+        // stays enabled and the claim path asks for a temporary elevation
+        // instead of refusing. This refusal is what backstops that -- it is
+        // reached only if the elevation did not happen.
         if (m_wallet->IsUnlockedForStakingOnly()) {
             res.error = "The wallet is unlocked for staking only. Unlock it fully to submit a "
                         "manual research claim.";
