@@ -667,26 +667,44 @@ WalletModel::UnlockContext::~UnlockContext()
 {
     if (!valid) return;
 
-    if (restore_staking_only)
+    // Both arms cross IPC in the split build, and a destructor is implicitly
+    // noexcept: an exception escaping here -- a disconnect mid-call is the
+    // realistic one -- would terminate the GUI outright rather than leave it to
+    // the disconnect handling that already exists. Nothing here can be retried
+    // without the passphrase, so a record of what was left behind is all that
+    // can be owed.
+    try
     {
-        // Hand the elevation back rather than locking. Narrowing needs no
-        // passphrase: the master key stays installed and only the permission
-        // is removed.
-        //
-        // Not discarded: in the split build this crosses IPC and can fail, and
-        // a failure leaves the wallet FULLY unlocked, which is the unsafe
-        // direction. Nothing here can put that right without the passphrase, so
-        // the least we owe is a record of it.
-        if (!wallet->wallet().restrictToStakingOnly()) {
-            LogPrintf("WARN: %s: could not restore the staking-only scope; the wallet is left "
-                      "fully unlocked", __func__);
+        if (restore_staking_only)
+        {
+            // Hand the elevation back rather than locking. Narrowing needs no
+            // passphrase: the master key stays installed and only the permission
+            // is removed.
+            //
+            // Not discarded: in the split build this crosses IPC and can fail,
+            // and a failure leaves the wallet FULLY unlocked, which is the
+            // unsafe direction.
+            if (!wallet->wallet().restrictToStakingOnly()) {
+                LogPrintf("WARN: %s: could not restore the staking-only scope; the wallet is left "
+                          "fully unlocked", __func__);
+            }
+            return;
         }
-        return;
-    }
 
-    if (relock)
+        if (relock)
+        {
+            wallet->setWalletLocked(true);
+        }
+    }
+    catch (const std::exception& e)
     {
-        wallet->setWalletLocked(true);
+        LogPrintf("WARN: %s: could not restore the wallet lock state (%s); it may be left more "
+                  "permissive than it was", __func__, e.what());
+    }
+    catch (...)
+    {
+        LogPrintf("WARN: %s: could not restore the wallet lock state; it may be left more "
+                  "permissive than it was", __func__);
     }
 }
 

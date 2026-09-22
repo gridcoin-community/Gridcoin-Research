@@ -53,17 +53,23 @@ public:
 
     /**
      * Like scheduleFromNow, but refuses once the scheduler has been told to
-     * stop, and reports whether the task was accepted.
+     * stop, and reports whether the task was ACCEPTED.
      *
-     * For a caller whose correctness depends on the task actually running -- the
-     * wallet's relock, which is the only thing that will end a timed unlock.
-     * Asking "is it running?" and then scheduling is two steps, and a stop can
-     * land between them; this decides and enqueues under one acquisition.
+     * For a caller that must know its task was taken -- the wallet's relock,
+     * which is the only thing that will end a timed unlock. Asking "is it
+     * running?" and then scheduling is two steps, and a stop can land between
+     * them; this decides and enqueues under one acquisition.
      *
      * It deliberately does NOT require a thread to be servicing the queue yet.
      * A task enqueued before serviceQueue() starts is not lost -- the thread
      * runs it when it comes up -- so refusing then would be a false negative,
      * and a racy one.
+     *
+     * Accepted is NOT a promise that it runs. serviceQueue() exits on
+     * stopRequested without draining, so a task accepted immediately before
+     * stop() is dropped. Closing that would mean draining on stop, which
+     * changes the contract for every other user of this class. A caller whose
+     * task must survive shutdown has to be ordered against shutdown instead.
      */
     [[nodiscard]] bool scheduleFromNowIfRunning(Function f, std::chrono::milliseconds delta)
     {

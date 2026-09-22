@@ -3481,7 +3481,24 @@ UniValue walletpassphrase(const UniValue& params)
     if (strWalletPass.length() > 0) {
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
-        if (!pwalletMain->Unlock(strWalletPass, scope, std::chrono::seconds(nSleepTime))) {
+        CWallet::UnlockFailure failure = CWallet::UnlockFailure::None;
+
+        if (!pwalletMain->Unlock(strWalletPass, scope, std::chrono::seconds(nSleepTime), &failure)) {
+            // A right passphrase can still fail here: the relock may be
+            // unschedulable, or the timeout may have run out during the key
+            // derivation, and either way the wallet is left LOCKED rather than
+            // unlocked with nothing to close it. Saying "incorrect passphrase"
+            // for that would send the user after the wrong problem.
+            if (failure == CWallet::UnlockFailure::RelockUnavailable) {
+                throw JSONRPCError(RPC_WALLET_ERROR,
+                                   "Error: the wallet passphrase was accepted, but the automatic "
+                                   "relock could not be scheduled, so the wallet has been locked "
+                                   "again and is NOT unlocked. This happens while the node is "
+                                   "starting up or shutting down, and for a timeout so short that "
+                                   "it expires while the key is being derived. Try again with a "
+                                   "longer timeout once the node is running.");
+            }
+
             // Check if the passphrase has a null character
             if (strWalletPass.find('\0') == std::string::npos) {
                 throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");

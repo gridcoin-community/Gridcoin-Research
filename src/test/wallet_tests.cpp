@@ -1146,12 +1146,24 @@ BOOST_AUTO_TEST_CASE(a_timed_unlock_whose_relock_cannot_be_armed_locks_the_walle
 
     // Reaches the arming, because the handle is published, and the arming is
     // what refuses.
-    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+    CWallet::UnlockFailure failure = CWallet::UnlockFailure::None;
+    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(60), &failure));
 
     // Fail CLOSED. The passphrase was right, so the key WAS installed for a
     // moment; what matters is that it is gone again and nothing was left behind.
     BOOST_CHECK(wallet.IsLocked());
     BOOST_CHECK(!wallet.GetUnlockDeadline().has_value());
+
+    // And the caller is told WHY. Reporting this as a bad passphrase would send
+    // the user after a problem they do not have -- theirs was accepted.
+    BOOST_CHECK(failure == CWallet::UnlockFailure::RelockUnavailable);
+
+    // A genuinely wrong passphrase still reads as one, so the distinction is
+    // not simply "any timed unlock failure".
+    failure = CWallet::UnlockFailure::None;
+    BOOST_CHECK(!wallet.Unlock(SecureString("wrong"), UnlockScope::Full,
+                               std::chrono::seconds(60), &failure));
+    BOOST_CHECK(failure == CWallet::UnlockFailure::Passphrase);
 }
 
 //!

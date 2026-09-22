@@ -607,8 +607,13 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope)
 }
 
 bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
-                     std::optional<std::chrono::seconds> relock_after)
+                     std::optional<std::chrono::seconds> relock_after,
+                     UnlockFailure* failure_out)
 {
+    // Default to the passphrase, so every early return that IS about the
+    // passphrase needs no ceremony; the two that are not say so explicitly.
+    if (failure_out) *failure_out = UnlockFailure::Passphrase;
+
     // Refuse rather than unlock without the timer the caller asked for. See
     // the declaration: silently granting forever is the shape this removes.
     //
@@ -618,6 +623,8 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
     // nothing will ever run what is put on it. Ask whether a thread is actually
     // servicing the queue.
     if (relock_after && !SchedulerCanRelock()) {
+        if (failure_out) *failure_out = UnlockFailure::RelockUnavailable;
+
         return error("%s: a timed unlock was requested but no scheduler is running", __func__);
     }
 
@@ -663,6 +670,8 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                     // second timeout is enough to reach this.
                     if (remaining <= 0) {
                         Lock();
+                        if (failure_out) *failure_out = UnlockFailure::RelockUnavailable;
+
                         return error("%s: the unlock expired while its key was being derived", __func__);
                     }
 
@@ -670,10 +679,14 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                     // left open here is the exact outcome the design refuses.
                     if (!ArmRelock(this, epoch, std::chrono::seconds(remaining))) {
                         Lock();
+                        if (failure_out) *failure_out = UnlockFailure::RelockUnavailable;
+
                         return error("%s: the relock could not be scheduled, so the wallet was "
                                      "left locked rather than unlocked without one", __func__);
                     }
                 }
+
+                if (failure_out) *failure_out = UnlockFailure::None;
 
                 return true;
             }

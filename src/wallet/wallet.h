@@ -349,8 +349,25 @@ public:
     //! the scheduler can stop inside it. If the arming is refused, or the
     //! deadline has already passed by then, the wallet is LOCKED and this
     //! returns false -- never left unlocked without a timer.
+    //! Why an unlock failed, for a caller that must not report every failure as
+    //! a bad passphrase.
+    enum class UnlockFailure {
+        None,
+
+        //! The passphrase did not decrypt the master key -- or the wallet was
+        //! not in a state that can be unlocked at all.
+        Passphrase,
+
+        //! The passphrase was RIGHT, but the relock could not be armed, or the
+        //! deadline had already passed by the time the key was installed. The
+        //! wallet is locked; granting the unlock would have meant granting it
+        //! with nothing to end it.
+        RelockUnavailable,
+    };
+
     bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
-                std::optional<std::chrono::seconds> relock_after);
+                std::optional<std::chrono::seconds> relock_after,
+                UnlockFailure* failure_out = nullptr);
 
     //! \brief Unlock with an explicit scope.
     //!
