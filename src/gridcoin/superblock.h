@@ -1671,7 +1671,9 @@ struct hash<GRC::QuorumHash>
             case GRC::QuorumHash::Kind::SHA256:
                 out = *reinterpret_cast<const uint64_t*>(bytes + 16)
                     + *reinterpret_cast<const uint64_t*>(bytes + 24);
-                // Pass-through case.
+                // Pass-through case: a SHA256 hash folds in the MD5 case's two
+                // words as well, so the first 16 bytes are mixed in below.
+                [[fallthrough]];
             case GRC::QuorumHash::Kind::MD5:
                 out += *reinterpret_cast<const uint64_t*>(bytes)
                     + *reinterpret_cast<const uint64_t*>(bytes + 8);

@@ -41,7 +41,12 @@ public:
                     return *pLeft->m_gdpr_controls < *pRight->m_gdpr_controls;
                 } else if (!pLeft->m_gdpr_controls && pRight->m_gdpr_controls) {
                     return true;
-                } else if (!pRight->m_gdpr_controls) {
+                } else {
+                    // Reached only when the right side has no value, so this arm
+                    // is the remaining two of the four combinations. Spelling it
+                    // as a bare else is what makes the chain visibly exhaustive:
+                    // written as a third condition the compiler has to assume the
+                    // case can fall into Magnitude below, which it never does.
                     return false;
                 }
             case ProjectTableModel::Magnitude:

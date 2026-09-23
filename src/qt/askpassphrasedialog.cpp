@@ -42,6 +42,7 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
             ui->stakingCheckBox->setChecked(true);
             ui->stakingCheckBox->show();
             // fallthru
+            [[fallthrough]];
         case Elevate:
         case Unlock: // Ask passphrase
             // Two different promises, so do not make one of them twice.

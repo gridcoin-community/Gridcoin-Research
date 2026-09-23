@@ -104,28 +104,29 @@ Claim Claim::Parse(const std::string& claim, int block_version)
     // Note: Commented-out items recorded to document removed fields:
     //
     switch (std::min<size_t>(s.size() - 1, 30)) {
-        case 30: c.m_signature = DecodeBase64(s[30].c_str());
+        case 30: c.m_signature = DecodeBase64(s[30].c_str()); [[fallthrough]];
         case 29: //c.m_public_key = CPubKey::Parse(s[29]);
-        case 28: c.m_quorum_hash = QuorumHash::Parse(s[28]);
+        case 28: c.m_quorum_hash = QuorumHash::Parse(s[28]); [[fallthrough]];
         case 27: //c.m_last_por_block_hash = uint256(s[27]);
         case 26: //c.m_average_magnitude = RoundFromString(s[26], 2);
-        case 25: c.m_magnitude_unit = RoundFromString(s[25], MAG_UNIT_PLACES);
+        case 25: c.m_magnitude_unit = RoundFromString(s[25], MAG_UNIT_PLACES); [[fallthrough]];
         case 24: //c.m_research_age = RoundFromString(s[24], 6);
         case 23: //c.ResearchSubsidy2 = RoundFromString(s[23], subsidy_places);
-        case 22: c.m_superblock.Replace(Superblock::UnpackLegacy(s[22]));
+        case 22: c.m_superblock.Replace(Superblock::UnpackLegacy(s[22])); [[fallthrough]];
         case 21: if (!c.m_quorum_hash.Valid())
                     c.m_quorum_hash = QuorumHash::Parse(s[21]);
+                 [[fallthrough]];
         case 20: //c.OrganizationKey = s[20];
-        case 19: c.m_organization = std::move(s[19]);
-        case 18: c.m_block_subsidy = RoundFromString(s[18], subsidy_places) * COIN;
+        case 19: c.m_organization = std::move(s[19]); [[fallthrough]];
+        case 18: c.m_block_subsidy = RoundFromString(s[18], subsidy_places) * COIN; [[fallthrough]];
         case 17: //c.m_last_block_hash = uint256(s[17]);
-        case 16: c.m_quorum_address = s[16];
-        case 15: c.m_magnitude = RoundFromString(s[15], 0);
+        case 16: c.m_quorum_address = s[16]; [[fallthrough]];
+        case 15: c.m_magnitude = RoundFromString(s[15], 0); [[fallthrough]];
         case 14: //c.cpidv2 = s[14];
         case 13: //c.m_rsa_weight = RoundFromString(s[13], 0);
         case 12: //c.m_last_payment_time = RoundFromString(s[12], 0);
-        case 11: c.m_research_subsidy = RoundFromString(s[11], 2) * COIN;
-        case 10: c.m_client_version = std::move(s[10]);
+        case 11: c.m_research_subsidy = RoundFromString(s[11], 2) * COIN; [[fallthrough]];
+        case 10: c.m_client_version = std::move(s[10]); [[fallthrough]];
         case  9: //c.NetworkRAC = RoundFromString(s[9], 0);
         case  8:
             c.m_mining_id = MiningId::Parse(s[0]);
