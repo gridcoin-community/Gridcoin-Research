@@ -133,6 +133,7 @@ bool LoadUnbroadcast(CTxMemPool& pool, const fs::path& load_path)
               [](const auto& a, const auto& b) { return a.second < b.second; });
 
     int accepted = 0;
+    int already_pooled = 0;
     {
         LOCK(cs_main);
         for (auto& [tx, entry_time] : entries) {
@@ -143,12 +144,28 @@ bool LoadUnbroadcast(CTxMemPool& pool, const fs::path& load_path)
             if (AcceptToMemoryPool(pool, mutable_tx, state, nullptr, entry_time)) {
                 pool.AddUnbroadcast(mutable_tx.GetHash());
                 ++accepted;
+            } else if (pool.exists(mutable_tx.GetHash())) {
+                // Already pooled, which ATMP refuses without saying so. This is the
+                // ordinary case for the wallet's own transactions, not an edge case:
+                // the wallet's startup re-accept puts every restarted own unconfirmed
+                // transaction back in the pool before this load runs, so without this
+                // branch the marker persisted for exactly those transactions would be
+                // dropped, and with it the rebroadcast and the cancel gate.
+                //
+                // Restored as NeverSent, which is what was persisted: no peer asked
+                // this node for it last session. The one gap is the time between the
+                // node starting and this load, when a peer that sends "mempool" could
+                // fetch it without the fetch being recorded. No Gridcoin node sends
+                // that message, and the gate is already documented as a strong signal
+                // rather than a proof.
+                pool.AddUnbroadcast(mutable_tx.GetHash());
+                ++already_pooled;
             }
         }
     }
 
-    LogPrintf("Reloaded unbroadcast transactions: %d re-accepted of %d persisted\n",
-              accepted, (int)entries.size());
+    LogPrintf("Reloaded unbroadcast transactions: %d re-accepted, %d already in the pool, of %d persisted\n",
+              accepted, already_pooled, (int)entries.size());
     return true;
 }
 
