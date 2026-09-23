@@ -64,13 +64,14 @@ std::string LogSomething();
 //! so a live edit takes effect without a restart in both paths.
 void ApplyRwSettingSideEffect(const std::string& name);
 
-//! Validate, persist to gridcoinsettings.json, force-set into the running args,
-//! and apply one or more settings given as name/value strings. Two-phase: every
-//! setting is fully validated (name is a known arg; proxy/reservebalance values
-//! must parse) before any is applied, so a validation failure changes nothing.
-//! An EMPTY value erases the setting (unset → default), which is how "off"/default
-//! is expressed for knobs like -proxy/-reservebalance and avoids persisting a
-//! value that would fail on restart. On success, each name is categorized into
+//! Validate, persist to gridcoinsettings.json, set in the running args, and apply
+//! one or more settings given as name/value strings. Two-phase: every setting is
+//! fully validated (name is a known arg; proxy/reservebalance values must parse)
+//! before any is applied, so a validation failure changes nothing. An EMPTY value
+//! erases the setting, from gridcoinsettings.json and from the running args, so
+//! the arg falls back to the command line, then the config file, then its default.
+//! It does not mean "off" or zero: a -proxy or -reservebalance set in the config
+//! file applies again. On success, each name is categorized into
 //! no_change_out / immediate_out / requires_restart_list_out and
 //! requires_restart_out is set. On failure returns false with error_out set and
 //! invalid_input_out distinguishing a caller/validation error (true; nothing was

@@ -1273,10 +1273,11 @@ void InitLogging()
 void ApplyRwSettingSideEffect(const std::string& name)
 {
     if (name == "proxy") {
-        // Enable/redirect the SOCKS proxy live from the current -proxy value. An
-        // empty value means "off"; netbase has no primitive to clear a live
-        // proxy, so disabling is (as it always was) effective on restart, when
-        // the erased setting leaves -proxy unset.
+        // Enable/redirect the SOCKS proxy live from the current -proxy value.
+        // After an erase that is whatever the command line or config file sets,
+        // if anything. An empty value applies nothing: netbase has no primitive
+        // to clear a live proxy, so disabling is (as it always was) effective on
+        // restart.
         const std::string proxy_arg = gArgs.GetArg("-proxy", "");
         if (!proxy_arg.empty()) {
             CService addrProxy(LookupNumeric(proxy_arg.c_str(), 9050));
@@ -1410,15 +1411,26 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
         const bool sensitive = echo_flags && (*echo_flags & ArgsManager::SENSITIVE);
         const std::string param = name + "=" + (sensitive ? "****" : value);
 
-        // An empty value erases the setting (unset → default); a null
-        // SettingsValue removes the key from gridcoinsettings.json.
+        // An empty value erases the setting; a null SettingsValue removes the key
+        // from gridcoinsettings.json.
         if (!updateRwSetting(name, value.empty() ? util::SettingsValue() : util::SettingsValue(value))) {
             error_out = "Error storing setting in read-write settings file: " + name;
             return false;
         }
 
         if (value_changed) {
-            gArgs.ForceSetArg(name, value);
+            if (value.empty()) {
+                // Erasing must also drop any value forced into the running args,
+                // not force an empty one. A forced value outranks every other
+                // source, and an empty string reads as true for a boolean arg, so
+                // "enablesidestaking=" used to switch side staking ON for the rest
+                // of the session. Cleared, the arg falls back to the command line,
+                // then the config file, then its default. That includes a value
+                // init soft-set at startup for this same arg, which is forced too.
+                gArgs.ClearForcedArg(name);
+            } else {
+                gArgs.ForceSetArg(name, value);
+            }
 
             if (immediate_effect) {
                 ApplyRwSettingSideEffect(name);

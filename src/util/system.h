@@ -309,6 +309,10 @@ public:
     // been set. Also called directly in testing.
     void ForceSetArg(const std::string& strArg, const std::string& strValue);
 
+    // Removes a forced arg setting, so the arg is read from the command line, the
+    // settings file and the config file again.
+    void ClearForcedArg(const std::string& strArg);
+
     /**
      * Returns the appropriate chain name from the program arguments.
      * @return CBaseChainParams::MAIN by default; raises runtime error if an invalid combination is given.
