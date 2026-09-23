@@ -231,8 +231,8 @@ private:
         enum Kind { Insert, Remove, Update, AddressBook } kind;
         std::vector<TransactionRecord> records; //!< Insert/Update: the decomposed parts.
         uint256 hash;                           //!< Remove/Update: the tx hash.
-        std::string ab_address;                 //!< AddressBook: the changed address.
-        std::string ab_label;                   //!< AddressBook: its new label ("" if removed).
+        std::string ab_address{};               //!< AddressBook: the changed address.
+        std::string ab_label{};                 //!< AddressBook: its new label ("" if removed).
         //! Insert/Update: the producer saw this tx's confirming block in
         //! mapBlockIndex while its status still read depth -1. That is the window
         //! where the block is being connected but pindexBest has not advanced, so

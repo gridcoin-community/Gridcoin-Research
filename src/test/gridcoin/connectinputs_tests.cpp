@@ -191,7 +191,6 @@ BOOST_AUTO_TEST_CASE(v15_script_flags_are_inert_until_v15_is_scheduled)
     // Unscheduled today. If this ever fails, v15 has been given a height and
     // the assertions below need revisiting rather than deleting.
     grc_test::RequireV15Unscheduled();
-    const int v15 = GetBlockV15Height();
 
     for (const int h : {0, 1, 1000000, 3989999, 3990000, 4000000, 100000000}) {
         const unsigned int flags = GetBlockScriptFlags(h);

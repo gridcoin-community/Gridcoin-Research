@@ -100,6 +100,8 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
         , clientModel(nullptr)
         , walletModel(nullptr)
         , votingModel(nullptr)
+        , m_sync_overlay(nullptr)
+        , m_in_sync(false)
         , encryptWalletAction(nullptr)
         , changePassphraseAction(nullptr)
         , unlockWalletAction(nullptr)
@@ -107,8 +109,6 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
         , trayIcon(nullptr)
         , notificator(nullptr)
         , rpcConsole(nullptr)
-        , m_sync_overlay(nullptr)
-        , m_in_sync(false)
 {
     QSettings settings;
 

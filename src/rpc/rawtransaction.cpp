@@ -2192,7 +2192,6 @@ UniValue createrawtransaction(const UniValue& params)
     vector<string> addrList = sendTo.getKeys();
     for (auto const& name_: addrList)
     {
-        CTxDestination address = DecodeDestination(name_);
         if (name_ == "data")
         {
             std::vector<unsigned char> data = ParseHexV(sendTo[name_],"Data");

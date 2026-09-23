@@ -256,7 +256,18 @@ interfaces::BuildInfo GetLocalBuildInfo()
 {
     interfaces::BuildInfo info;
     info.git_commit = FormatFullVersion();
+    // -Wdate-time exists to catch __DATE__/__TIME__ leaking into a binary that is
+    // meant to be reproducible. Here the build timestamp IS the value: built_at is
+    // informational and is shown in the About dialog as "Node built". Suppressed at
+    // this one site so the flag keeps its meaning everywhere else.
+#if defined(__GNUC__)
+#   pragma GCC diagnostic push
+#   pragma GCC diagnostic ignored "-Wdate-time"
+#endif
     info.built_at = __DATE__ " " __TIME__;
+#if defined(__GNUC__)
+#   pragma GCC diagnostic pop
+#endif
     info.schema_major = IPC_SCHEMA_MAJOR;
     info.schema_minor = IPC_SCHEMA_MINOR;
     info.protocol_version = IPC_PROTOCOL_VERSION;

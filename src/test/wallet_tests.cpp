@@ -1588,14 +1588,6 @@ BOOST_AUTO_TEST_CASE(reorg_unmarks_parent_spent)
     CTransaction parent_tx(parent_mtx);
     uint256 parent_hash = parent_tx.GetHash();
 
-    CMutableTransaction child_mtx;
-    child_mtx.vin.resize(1);
-    child_mtx.vin[0].prevout = COutPoint(parent_hash, 0);
-    child_mtx.vout.resize(1);
-    child_mtx.vout[0].nValue = 99 * COIN;
-    CTransaction child_tx(child_mtx);
-    uint256 child_hash = child_tx.GetHash();
-
     {
         LOCK(test_wallet.cs_wallet);
 

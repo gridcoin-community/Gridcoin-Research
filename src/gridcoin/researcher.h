@@ -375,7 +375,7 @@ private:
     std::variant<CPubKey, BeaconError> m_result;
 };
 
-class OwnershipProof;
+struct OwnershipProof;
 
 //!
 //! \brief Generate a new beacon key pair.

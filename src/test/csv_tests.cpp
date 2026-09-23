@@ -12,16 +12,6 @@ using namespace std;
 
 extern uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);
 
-static CScript BuildCSVScript(int64_t nSequence)
-{
-    // Script fragment: <nSequence> OP_CHECKSEQUENCEVERIFY OP_DROP
-    CScript script;
-    script << CScriptNum(nSequence);
-    script << OP_CHECKSEQUENCEVERIFY;
-    script << OP_DROP;
-    return script;
-}
-
 BOOST_AUTO_TEST_SUITE(csv_tests)
 
 BOOST_AUTO_TEST_CASE(csv_basic_evaluation)

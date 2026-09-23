@@ -93,13 +93,6 @@ public:
         dFeePerKb = 0;
     }
 
-    void print() const
-    {
-        LogPrintf("COrphan(hash=%s, dFeePerKb=%.1f)",
-               ptx->GetHash().ToString().substr(0,10), dFeePerKb);
-        for (auto const& hash : setDependsOn)
-            LogPrintf("   setDependsOn %s", hash.ToString().substr(0,10));
-    }
 };
 
 //!

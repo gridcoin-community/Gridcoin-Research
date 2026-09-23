@@ -1442,7 +1442,6 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
 
         // Only one project in the test.
         auto greylist_candidate = auto_greylist->begin()->second;
-        auto last_history_entry = greylist_candidate.GetUpdateHistory().back();
 
         AutoGreylistEntryState entry_state_lhs(greylist_candidate.m_zcd_20_SB_count,
                                                greylist_candidate.m_TC_7_SB_sum,
