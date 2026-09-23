@@ -1123,6 +1123,11 @@ void StartRPCThreads()
     catch(boost::system::system_error &e)
     {
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s"), endpoint.port(), e.what());
+
+        // Not an error on its own: a host without IPv6 lands here on every start,
+        // and the IPv4 listener below is what serves it.
+        LogPrintf("INFO: StartRPCThreads: not listening on IPv6 [%s]:%u: %s\n",
+                  endpoint.address().to_string(), endpoint.port(), e.what());
     }
 
     try
@@ -1149,6 +1154,17 @@ void StartRPCThreads()
     catch(boost::system::system_error &e)
     {
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv4: %s"), endpoint.port(), e.what());
+
+        // With the IPv6 listener up the node starts anyway, and this was the only
+        // trace of the failure -- strerr is read only when nothing bound. Say what
+        // it costs: clients that connect over IPv4, 127.0.0.1 by default, are
+        // refused while the node looks healthy.
+        if (fListening) {
+            LogPrintf("WARNING: StartRPCThreads: not listening on IPv4 %s:%u: %s. RPC is reachable over "
+                      "IPv6 only; clients connecting to %s will be refused.\n",
+                      endpoint.address().to_string(), endpoint.port(), e.what(),
+                      endpoint.address().to_string());
+        }
     }
     } // !bind_specified
 
