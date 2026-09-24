@@ -384,6 +384,29 @@ void RelayPSGT(const uint256& revision_hash)
     g_connman->RelayInventory(CInv(MSG_PSGT, revision_hash), PSGT_PROTO_VERSION);
 }
 
+//! The 0.8-era trickle filter: three of every four transaction announcements
+//! wait for the peer's next trickle round, so an observer cannot assume the
+//! first peer to announce is the origin.
+//!
+//! Pure given the hash and the process-wide salt, which is what lets
+//! SendMessages evaluate it once outside cs_inventory to decide which hashes
+//! need a wallet answer, and again inside cs_inventory, and get the same result
+//! both times.
+//!
+//! The salt is a function-local static initialised on first use. It was
+//! previously a lazily-zero-checked static assigned in place; that is a data
+//! race if SendMessages is ever driven by more than one thread, whereas this
+//! form is guaranteed thread-safe initialisation.
+static bool TrickleWaitByHash(const uint256& hash)
+{
+    static const arith_uint256 hashSalt = UintToArith256(GetRandHash());
+
+    uint256 hashRand = ArithToUint256(UintToArith256(hash) ^ hashSalt);
+    hashRand = Hash(hashRand);
+
+    return (UintToArith256(hashRand) & 3) != 0;
+}
+
 void DeferredRelay::AddTransaction(const CTransaction& tx, const uint256& hash)
 {
     m_txs.emplace_back(tx, hash);
@@ -1731,6 +1754,30 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
     // answer: a trickle round announces everything anyway, and the three in four
     // the filter holds back are held back whichever way the wallet answers. On
     // this network that leaves a handful of hashes at most.
+    std::set<uint256> blast_ok;
+    if (!fSendTrickle)
+    {
+        std::vector<CInv> snapshot;
+        {
+            LOCK(pto->cs_inventory);
+            snapshot = pto->vInventoryToSend;
+        }
+
+        for (const CInv& inv : snapshot)
+        {
+            if (inv.type != MSG_TX) continue;
+            if (TrickleWaitByHash(inv.hash)) continue;
+
+            // setInventoryKnown is deliberately not consulted here. Reading it
+            // needs cs_inventory, and the only cost of resolving an entry the
+            // loop below then skips is one wallet lookup that goes unused.
+            CWalletTx wtx;
+            if (!(pwalletMain && pwalletMain->GetTransaction(inv.hash, wtx) && wtx.fFromMe)) {
+                blast_ok.insert(inv.hash);
+            }
+        }
+    }
+
     {
         LOCK(pto->cs_inventory);
         vInv.reserve(pto->vInventoryToSend.size());
@@ -1744,19 +1791,17 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
             if (inv.type == MSG_TX && !fSendTrickle)
             {
                 // 1/4 of tx invs blast to all immediately
-                static arith_uint256 hashSalt;
-                if (hashSalt == 0)
-                    hashSalt = UintToArith256(GetRandHash());
-                uint256 hashRand = ArithToUint256(UintToArith256(inv.hash) ^ hashSalt);
-                hashRand = Hash(hashRand);
-                bool fTrickleWait = ((UintToArith256(hashRand) & 3) != 0);
+                bool fTrickleWait = TrickleWaitByHash(inv.hash);
 
-                // always trickle our own transactions
+                // Always trickle our own transactions. Anything queued after the
+                // snapshot above has no resolved answer, and the default is to
+                // wait: that costs an unowned transaction one more SendMessages
+                // round, where it will be in the snapshot, and it never announces
+                // one of ours early. Erring the other way would leak exactly what
+                // the trickle exists to hide.
                 if (!fTrickleWait)
                 {
-                    CWalletTx wtx;
-                    if (pwalletMain && pwalletMain->GetTransaction(inv.hash, wtx) && wtx.fFromMe)
-                        fTrickleWait = true;
+                    fTrickleWait = !blast_ok.count(inv.hash);
                 }
 
                 if (fTrickleWait)
