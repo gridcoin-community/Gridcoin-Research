@@ -88,16 +88,30 @@ struct RegtestChainSetup
 //! \brief Erases the unconfirmed wallet transactions added during its lifetime.
 //!
 //! For a suite that shares one RegtestChainSetup across its cases (see the
-//! LIFETIME note above). Every case then leaves the wallet's entry set as it
-//! found it, whatever the exit path -- a BOOST_REQUIRE that throws mid-case
-//! unwinds this object too -- so no case inherits a sibling's resend
-//! candidates, and a case's preconditions on the wallet hold in any order.
+//! LIFETIME note above). Whatever the exit path -- a BOOST_REQUIRE that throws
+//! mid-case unwinds this object too -- every unconfirmed entry the case ADDED is
+//! gone again, so no case inherits a sibling's resend candidates, and a case's
+//! preconditions on the wallet hold in any order.
 //!
-//! What it restores: the set of mapWallet keys, and with each erased entry its
-//! own mapTxSpends rows (EraseFromWallet removes exactly those). What it does
-//! NOT restore: the vfSpent bits the added entries set on PRE-EXISTING entries,
-//! notably the premine coinbase; EraseFromWallet leaves them, and releasing them
-//! here would be wrong for an output a confirmed transaction really spent.
+//! What it undoes: the entries added during its lifetime, each with its own
+//! mapTxSpends rows (EraseFromWallet removes exactly those), and then the
+//! vfSpent bits those entries set on their parents. The last part goes through
+//! FixSpentCoins rather than releasing the bits directly, because the direct
+//! release is wrong here: the coinstake draws from the same premine outputs the
+//! fixtures spend, so a fixture conflicted out of the pool can share an input
+//! with a confirmed spend. FixSpentCoins decides each bit from the transaction
+//! index -- it frees what only an erased entry held, keeps what the chain spent,
+//! and its mempool guard keeps anything a still-pooled transaction spends.
+//! Without that step each such case left a premine output unselectable for every
+//! case after it, and the stakeable set only shrank.
+//!
+//! What it does NOT undo: entries the case itself REMOVES. The snapshot holds
+//! keys, not entries, so a pre-existing entry erased during the case stays
+//! erased. The known instance is the forced ResendWalletTransactions in the
+//! resend case, which erases every pre-existing entry that fails revalidation --
+//! accounting_tests' synthetic entries among them. That suite has finished with
+//! them by then, so nothing observes the loss, but the scope does not restore
+//! them and should not be read as if it did.
 //!
 //! Entries in TxStateConfirmed are kept. They belong to the chain the suite-level
 //! fixture still holds (a mined block's coinstake, delivered through
