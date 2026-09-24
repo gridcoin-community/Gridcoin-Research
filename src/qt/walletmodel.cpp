@@ -454,14 +454,16 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
     // deliberately has no default so that a new enumerator shows up as a gap
     // rather than being swallowed.
     //
-    // That does NOT get caught at compile time today: the main targets are not
-    // built with -Wall, so -Wswitch never fires (see issue #3387). The assert
-    // below is what actually catches it, at runtime, and it is live in release
-    // because the build strips NDEBUG globally -- which is the whole reason a
-    // new SendCoinsStatus value is a schema MAJOR and not a minor.
+    // -Wswitch catches that at compile time again, now that -Wall is back on the
+    // main targets (issue #3387). It only covers a tree built as a whole though:
+    // an already-shipped GUI meeting a newer node was compiled before the new
+    // enumerator existed, and for it the assert below is still what catches the
+    // unnamed value, at runtime, live in release because the build strips NDEBUG
+    // globally -- which is the whole reason a new SendCoinsStatus value is a
+    // schema MAJOR and not a minor.
     //
-    // The return keeps the function well-defined if that ever changes and the
-    // assert does compile out, where falling off the end would be UB.
+    // The return keeps the function well-defined if the assert ever compiles out,
+    // where falling off the end would be UB.
     assert(false);
     return TransactionCreationFailed;
 }

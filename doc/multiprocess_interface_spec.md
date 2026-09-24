@@ -221,11 +221,13 @@ unchecked cast on receipt, and the GUI's switch over it carries no `default:`, s
 an already-shipped GUI has no arm for the new value and reaches `assert(false)`,
 which is live in release because the build strips `NDEBUG` globally.
 
-Note this is a RUNTIME failure, not a compile-time one. An earlier version of
-this section said `-Wswitch` catches the missing arm; it does not, because the
-main targets are not built with `-Wall` (issue #3387). The abort is the whole
-mechanism, which is why a minor would not do: it would have let that pairing
-connect and aborted the GUI on the first staking-only send. The same major adds
+Note this is a RUNTIME failure. `-Wall` is back on the main targets (issue
+#3387), so `-Wswitch` does flag a missing arm when this tree is built as a
+whole -- but the pairing this major exists for is an already-shipped GUI against
+a newer node, and that binary was compiled long before the new enumerator
+existed. The abort is still the whole mechanism there, which is why a minor
+would not do: it would have let that pairing connect and aborted the GUI on the
+first staking-only send. The same major adds
 `restrictToStakingOnly @35`.
 
 **Minor 1** (under major 4) adds `elevateWallet @36`, which widens an unlock in

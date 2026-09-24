@@ -74,11 +74,13 @@ namespace ipc {
 //! the new value and runs into the `assert(false)` that closes the function --
 //! live in release, because the build strips NDEBUG globally.
 //!
-//! There is no compile-time backstop either. An earlier version of this note
-//! claimed the missing `default:` lets -Wswitch flag a new enumerator; it does
-//! not, because the main targets are not compiled with -Wall (only the vendored
-//! secp256k1 and crc32c subtrees set it). Verified by deleting an arm from a
-//! switch and rebuilding: no diagnostic. So the abort IS the whole mechanism. A minor would have let that
+//! The missing `default:` does have a compile-time backstop again: -Wall, and
+//! with it -Wswitch, was restored to the main targets (issue #3387), so a switch
+//! that gains no arm for a new enumerator is a diagnostic once more. That covers
+//! this tree when it is built as a whole. It does nothing for the case this
+//! major exists for -- an ALREADY SHIPPED GUI meeting a newer node -- because
+//! that binary was compiled before the enumerator existed. For it the abort IS
+//! still the whole mechanism. A minor would have let that
 //! pairing connect (an older GUI against a newer node is only a soft warning),
 //! and the first staking-only send would abort the GUI. The major turns it into
 //! the "use matching builds" refusal at connect, which is the honest answer:
