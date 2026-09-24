@@ -865,6 +865,12 @@ PSGTSignResult SignAndAdvancePSGT(const CScriptID& image, std::string& error,
         return PSGTSignResult::FAILED;
     }
 
+    // Declared before the lock guard so it announces after that guard unlocks,
+    // on whichever of this function's exit paths is taken: the relay path takes
+    // a peer's cs_inventory, and SendMessages takes cs_inventory and then
+    // cs_wallet (#3391).
+    DeferredRelay relay;
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     const std::optional<PSGTPoolEntry> pooled = g_psgt_pool.Get(image);
@@ -921,7 +927,7 @@ PSGTSignResult SignAndAdvancePSGT(const CScriptID& image, std::string& error,
             return PSGTSignResult::FAILED;
         }
 
-        RelayTransaction(final_tx, final_tx.GetHash());
+        relay.AddTransaction(final_tx, final_tx.GetHash());
 
         if (txid_out) *txid_out = final_tx.GetHash();
 
@@ -959,6 +965,6 @@ PSGTSignResult SignAndAdvancePSGT(const CScriptID& image, std::string& error,
 
     if (txid_out) *txid_out = pooled->tx_hash;
 
-    RelayPSGT(revision_hash);
+    relay.AddPSGT(revision_hash);
     return PSGTSignResult::SIGNED_AND_RELAYED;
 }

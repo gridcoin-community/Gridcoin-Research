@@ -16,6 +16,7 @@
 #include "gridcoin/sidestake.h"
 #include "node/blockstorage.h"
 #include "node/chainman.h"
+#include "net_processing.h"
 #include "txmempool.h"
 #include <util/string.h>
 #include <util/time.h>
@@ -1458,6 +1459,12 @@ UniValue rainbymagnitude(const UniValue& params)
         throw JSONRPCError(RPC_MISC_ERROR, "No payments above 0.01 GRC qualify. Please recheck your specified amount.");
     }
 
+    // Announced after this scope unlocks: the relay path reached from
+    // CommitTransaction takes a peer's cs_inventory, and SendMessages takes
+    // cs_inventory and then cs_wallet (#3391). Declared before the guard so it
+    // outlives it.
+    DeferredRelay relay;
+
     // cs_main is already held from the beacon-lookup loop above; just take cs_wallet here.
     LOCK(pwalletMain->cs_wallet);
 
@@ -1521,7 +1528,7 @@ UniValue rainbymagnitude(const UniValue& params)
     if (!trial_run)
     {
         // Rain the recipients
-        if (!pwalletMain->CommitTransaction(wtx, keyChange))
+        if (!pwalletMain->CommitTransaction(wtx, keyChange, &relay))
         {
             error("%s: Rain by magnitude transaction commit failed.", __func__);
 

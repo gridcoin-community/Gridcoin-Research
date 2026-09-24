@@ -858,6 +858,12 @@ UniValue consolidateunspent(const UniValue& params)
     // more UTXO's will have the same nValue.
     std::multimap<int64_t, COutput> mInputs;
 
+    // Announced after this scope unlocks: the relay path reached from
+    // CommitTransaction takes a peer's cs_inventory, and SendMessages takes
+    // cs_inventory and then cs_wallet (#3391). Declared before the guard so it
+    // outlives it.
+    DeferredRelay relay;
+
     // Have to lock both main and wallet.
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1085,7 +1091,7 @@ UniValue consolidateunspent(const UniValue& params)
         return strError;
     }
 
-    if (!pwalletMain->CommitTransaction(wtxNew, reservekey))
+    if (!pwalletMain->CommitTransaction(wtxNew, reservekey, &relay))
         return _("Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already"
                  " spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent"
                  " here.");
@@ -1199,6 +1205,12 @@ UniValue splitunspent(const UniValue& params)
     scriptDestPubKey.SetDestination(SplitAddress);
 
     std::vector<COutput> vecInputs;
+
+    // Announced after this scope unlocks: the relay path reached from
+    // CommitTransaction takes a peer's cs_inventory, and SendMessages takes
+    // cs_inventory and then cs_wallet (#3391). Declared before the guard so it
+    // outlives it.
+    DeferredRelay relay;
 
     // Have to lock both main and wallet.
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -1441,7 +1453,7 @@ UniValue splitunspent(const UniValue& params)
         throw JSONRPCError(RPC_WALLET_ERROR, "Error: Transaction creation failed.");
     }
 
-    if (!pwalletMain->CommitTransaction(wtxNew, reservekey))
+    if (!pwalletMain->CommitTransaction(wtxNew, reservekey, &relay))
     {
         throw JSONRPCError(RPC_WALLET_ERROR,
                            "Error: The transaction was rejected. This might happen if some of the coins in your "
@@ -2798,6 +2810,11 @@ UniValue sendrawtransaction(const UniValue& params)
     // cs_wallet is held for this RPC's own wallet work; AcceptToMemoryPool's
     // synchronous signal dispatch also takes cs_wallet recursively under
     // cs_main. The legacy cs_setpwalletRegistered hop is gone (issue #3030).
+    // Declared before the guard so it announces after that guard releases: the
+    // relay path takes a peer's cs_inventory, and SendMessages takes
+    // cs_inventory and then cs_wallet (#3391).
+    DeferredRelay relay;
+
     LOCK(cs_main);
     LOCK(pwalletMain->cs_wallet);
 
@@ -2833,7 +2850,7 @@ UniValue sendrawtransaction(const UniValue& params)
         if (!AcceptToMemoryPool(mempool, tx, state, nullptr))
             throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX rejected");
     }
-    RelayTransaction(tx, hashTx);
+    relay.AddTransaction(tx, hashTx);
 
     // Locally originated via RPC: register for rebroadcast / restart persistence
     // (no-op if it did not enter the pool). See CTxMemPool::m_unbroadcast.

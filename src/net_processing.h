@@ -11,6 +11,8 @@
 #include "validationinterface.h"
 
 #include <memory>
+#include <utility>
+#include <vector>
 
 class CTransaction;
 class CConnman;
@@ -78,6 +80,76 @@ unsigned int ExpireOrphanTransactions(const int64_t now);
 //! Relay a pooled PSGT revision (#2910) to peers on PSGT_PROTO_VERSION or
 //! later. The object itself is served from the PSGT pool by the getdata loop.
 void RelayPSGT(const uint256& revision_hash);
+
+//! Announcements held back until the caller's wallet lock is released (#3391).
+//!
+//! Every relay entry point below reaches CConnman::RelayInventory ->
+//! ForEachNode -> CNode::PushInventory, which takes that peer's cs_inventory.
+//! SendMessages takes cs_inventory and then asks the wallet whether a
+//! transaction is ours, taking cs_wallet. Announcing while cs_wallet is held
+//! therefore closes an ABBA cycle: the announcing thread walks every node and
+//! eventually reaches the one the message handler is servicing.
+//!
+//! Declare one BEFORE the lock guard it must outlive, queue while the lock is
+//! held, and it announces when it goes out of scope -- after the guard above it
+//! has unlocked. That ordering is the whole point, so the declaration must come
+//! first; destruction runs in reverse order of construction.
+//!
+//! \code
+//!     DeferredRelay relay;                 // flushes last
+//!     LOCK2(cs_main, pwalletMain->cs_wallet);
+//!     ...
+//!     relay.AddTransaction(tx, tx.GetHash());
+//!     return SomeResult;                   // unlocks, then announces
+//! \endcode
+//!
+//! Queuing is what makes this usable in functions with many exit paths: every
+//! return and every throw flushes the same way, with no per-exit bookkeeping.
+//!
+//! SCOPE. Callers using this do not form a closed set, and nothing here should
+//! be read as claiming they do. The set was enumerated six times by four
+//! methods while #3391 was being fixed -- direct relay sites, the
+//! TransactionAddedToMempool signal path, callers of CommitTransaction, callers
+//! of SendMoney, and a transitive walk -- and every pass found sites the
+//! previous one missed; the GRC::SendContract callers are known to be
+//! unconverted today. One of the paths reaches RelayPSGT through a
+//! CValidationInterface subscriber list populated at runtime, which no static
+//! walk can see at all.
+//!
+//! So this is a hold-time cleanup, NOT the reason the cs_wallet/cs_inventory
+//! cycle is broken. That comes from SendMessages resolving its wallet answer
+//! before taking cs_inventory, which makes cs_inventory a leaf: a leaf cannot
+//! close a cycle however many cs_wallet -> cs_inventory edges remain. Anything
+//! that wants the class closed properly should give the announcement to the
+//! scheduler, the way ResendUnbroadcastTransactions already does, rather than
+//! threading this queue through another call level.
+class DeferredRelay
+{
+public:
+    DeferredRelay() = default;
+    ~DeferredRelay();
+
+    DeferredRelay(const DeferredRelay&) = delete;
+    DeferredRelay& operator=(const DeferredRelay&) = delete;
+
+    //! Queue a transaction announcement. The transaction is copied, so the
+    //! caller's object may go out of scope before the flush.
+    void AddTransaction(const CTransaction& tx, const uint256& hash);
+
+    //! Queue a pooled PSGT revision announcement.
+    void AddPSGT(const uint256& revision_hash);
+
+    //! Announce everything queued and empty the queue. Called by the
+    //! destructor; public so a caller that wants the announcements at a
+    //! specific point can force them, having released its locks.
+    void Flush();
+
+    bool empty() const { return m_txs.empty() && m_psgts.empty(); }
+
+private:
+    std::vector<std::pair<CTransaction, uint256>> m_txs;
+    std::vector<uint256> m_psgts;
+};
 
 //! Message-processing manager (issue #2558 PR 8a). Abstract interface; the
 //! implementation (PeerManagerImpl) lives in net_processing.cpp and also

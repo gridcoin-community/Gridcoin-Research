@@ -46,6 +46,7 @@ extern unsigned int nDerivationMethodIndex;
 
 class CAccountingEntry;
 class CWalletTx;
+class DeferredRelay;
 class CReserveKey;
 class COutput;
 class CCoinControl;
@@ -617,10 +618,21 @@ public:
                            bool change_back_to_input_address = false, int64_t nEnforcedMinFee = 0);
     bool CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet,
                            const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false);
-    bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);
+    //! Commit a transaction and announce it.
+    //!
+    //! \param relay When non-null, the announcement is QUEUED here instead of
+    //! being made before returning. Callers that hold cs_wallet across this call
+    //! must pass one that outlives their own lock: this function releasing its
+    //! own guard is not enough if the caller still holds the wallet lock, which
+    //! is the case for WalletImpl::sendCoins (#3391).
+    bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey, DeferredRelay* relay = nullptr);
 
-    std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew);
-    std::string SendMoneyToDestination(const CTxDestination &address, int64_t nValue, CWalletTx& wtxNew);
+    //! \param relay Forwarded to CommitTransaction. A caller holding cs_wallet
+    //! across this call must supply one that outlives its own guard (#3391).
+    std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew,
+                          DeferredRelay* relay = nullptr);
+    std::string SendMoneyToDestination(const CTxDestination &address, int64_t nValue, CWalletTx& wtxNew,
+                                       DeferredRelay* relay = nullptr);
 
     bool NewKeyPool();
     bool TopUpKeyPool(unsigned int nSize = 0);
@@ -1469,8 +1481,20 @@ public:
     bool AcceptWalletTransaction(CTxDB& txdb);
     bool AcceptWalletTransaction();
 
+    //! Queue this transaction (and its unindexed parents) for announcement.
+    //! Touches no network state. Returns false when the transaction is inactive
+    //! and nothing was queued.
+    //!
+    //! This is the overload to use while holding cs_wallet: let the caller's
+    //! DeferredRelay outlive the lock, because announcing under cs_wallet closes
+    //! an ABBA cycle with a peer's cs_inventory (#3391).
+    bool QueueRelay(CTxDB& txdb, DeferredRelay& relay) const;
+
     //! Announce this transaction (and its unindexed parents) to peers. Returns
     //! false when the transaction is inactive and nothing was relayed.
+    //!
+    //! Announces before returning, so the caller must NOT hold cs_wallet; use
+    //! QueueRelay if it does.
     bool RelayWalletTransaction(CTxDB& txdb);
     bool RelayWalletTransaction();
 

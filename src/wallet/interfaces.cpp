@@ -14,6 +14,7 @@
 #include "streams.h"
 #include "util/strencodings.h"
 #include "wallet/coincontrol.h"
+#include "net_processing.h"
 #include "wallet/wallet.h"
 
 #include <algorithm>
@@ -631,6 +632,13 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
     // later failure never made.
     bool message_discarded = false;
 
+    // Declared before the send scope so it announces after that scope unlocks.
+    // This scope holds cs_wallet all the way through CommitTransaction, so
+    // CommitTransaction releasing its own guard does not help here -- the relay
+    // path takes a peer's cs_inventory and SendMessages takes cs_inventory then
+    // cs_wallet (#3391). This is the GUI send path that first exposed that cycle.
+    DeferredRelay relay;
+
     {
         LOCK2(cs_main, m_wallet->cs_wallet);
 
@@ -936,7 +944,7 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
             return {SendCoinsStatus::FeeConfirmationRequired, nFeeRequired};
         }
 
-        if (!m_wallet->CommitTransaction(wtx, keyChange))
+        if (!m_wallet->CommitTransaction(wtx, keyChange, &relay))
         {
             return {SendCoinsStatus::TransactionCommitFailed};
         }
