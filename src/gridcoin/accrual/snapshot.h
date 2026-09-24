@@ -129,44 +129,6 @@ public:
     }
 
     //!
-    //! \brief Get the magnitude unit factored into the reward calculation.
-    //!
-    //! CONSENSUS: This method produces a semantic floating-point value for
-    //! the magnitude unit. Do not use this value directly to implement any
-    //! consensus-critical routine. Instead, prefer integer arithmetic for a
-    //! protocol implementation that needs to avoid floating-point error or
-    //! that requires portability between platforms.
-    //!
-    //! \return Amount paid per unit of magnitude per day in units of GRC.
-    //!
-    double MagnitudeUnit() const
-    {
-        // Superblock-based accrual calculations do not rely on the rolling
-        // two-week network payment average. Instead, we calculate research
-        // rewards using the magnitude unit that represents the equilibrium
-        // quantity of the formula used to determine the magnitude unit for
-        // the legacy research age accrual calculations.
-        //
-        // Where (prior to block v13) ...
-        //
-        //   blocks_per_day = 960
-        //   grc_per_block = 50
-        //   total_magnitude = 115000
-        //
-        //   max_daily_emission = blocks_per_day * grc_per_block
-        //   daily_emission = (5.0 / 9) * max_daily_emission;
-        //
-        // ...then...
-        //
-        //   daily_emission / total_magnitude = magnitude_unit = 0.23188405...
-        //
-        // ...rounded-up to 0.25:
-        //
-        // V13+, the magnitude unit can be set by protocol entry.
-        return GetMagnitudeUnit().ToDouble();
-    }
-
-    //!
     //! \brief Get the accrual earned since the start of an account's accrual
     //! period.
     //!
