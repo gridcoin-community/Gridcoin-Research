@@ -2810,6 +2810,11 @@ UniValue sendrawtransaction(const UniValue& params)
     // cs_wallet is held for this RPC's own wallet work; AcceptToMemoryPool's
     // synchronous signal dispatch also takes cs_wallet recursively under
     // cs_main. The legacy cs_setpwalletRegistered hop is gone (issue #3030).
+    // Declared before the guard so it announces after that guard releases: the
+    // relay path takes a peer's cs_inventory, and SendMessages takes
+    // cs_inventory and then cs_wallet (#3391).
+    DeferredRelay relay;
+
     LOCK(cs_main);
     LOCK(pwalletMain->cs_wallet);
 
@@ -2845,7 +2850,7 @@ UniValue sendrawtransaction(const UniValue& params)
         if (!AcceptToMemoryPool(mempool, tx, state, nullptr))
             throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX rejected");
     }
-    RelayTransaction(tx, hashTx);
+    relay.AddTransaction(tx, hashTx);
 
     // Locally originated via RPC: register for rebroadcast / restart persistence
     // (no-op if it did not enter the pool). See CTxMemPool::m_unbroadcast.

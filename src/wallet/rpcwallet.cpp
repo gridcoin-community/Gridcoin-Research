@@ -792,6 +792,11 @@ const RPCHelpMan& sendtoaddress_helpman() { return sendtoaddress_help; }
 
 UniValue sendtoaddress(const UniValue& params)
 {
+    // Declared before the guard so it announces after that guard releases: the
+    // relay path takes a peer's cs_inventory, and SendMessages takes
+    // cs_inventory and then cs_wallet (#3391).
+    DeferredRelay relay;
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CTxDestination address = DecodeDestination(params[0].get_str());
@@ -842,7 +847,7 @@ UniValue sendtoaddress(const UniValue& params)
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
 
-    string strError = pwalletMain->SendMoneyToDestination(address, nAmount, wtx);
+    string strError = pwalletMain->SendMoneyToDestination(address, nAmount, wtx, &relay);
     if (!strError.empty())
         throw JSONRPCError(RPC_WALLET_ERROR, strError);
 
@@ -1757,6 +1762,11 @@ UniValue sendfrom(const UniValue& params)
 
     string strAccount = AccountFromValue(params[0]);
 
+    // Declared before the guard so it announces after that guard releases: the
+    // relay path takes a peer's cs_inventory, and SendMessages takes
+    // cs_inventory and then cs_wallet (#3391).
+    DeferredRelay relay;
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CTxDestination address = DecodeDestination(params[1].get_str());
@@ -1803,7 +1813,7 @@ UniValue sendfrom(const UniValue& params)
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Account has insufficient funds");
 
     // Send
-    string strError = pwalletMain->SendMoneyToDestination(address, nAmount, wtx);
+    string strError = pwalletMain->SendMoneyToDestination(address, nAmount, wtx, &relay);
     if (!strError.empty())
         throw JSONRPCError(RPC_WALLET_ERROR, strError);
 

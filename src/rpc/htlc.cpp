@@ -48,6 +48,11 @@ const RPCHelpMan& createhtlc_helpman() { return createhtlc_help; }
 
 UniValue createhtlc(const UniValue& params)
 {
+    // Declared before the guard so it announces after it releases: SendMoney
+    // reaches CommitTransaction, whose relay path takes a peer's cs_inventory
+    // while SendMessages takes cs_inventory and then cs_wallet (#3391).
+    DeferredRelay relay;
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // Parse receiver address
@@ -121,7 +126,7 @@ UniValue createhtlc(const UniValue& params)
 
         // Send the transaction
         CWalletTx wtx;
-        string strError = pwalletMain->SendMoney(scriptPubKey, nAmount, wtx);
+        string strError = pwalletMain->SendMoney(scriptPubKey, nAmount, wtx, &relay);
         if (!strError.empty())
             throw JSONRPCError(RPC_WALLET_ERROR, strError);
 

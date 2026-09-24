@@ -627,8 +627,12 @@ public:
     //! is the case for WalletImpl::sendCoins (#3391).
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey, DeferredRelay* relay = nullptr);
 
-    std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew);
-    std::string SendMoneyToDestination(const CTxDestination &address, int64_t nValue, CWalletTx& wtxNew);
+    //! \param relay Forwarded to CommitTransaction. A caller holding cs_wallet
+    //! across this call must supply one that outlives its own guard (#3391).
+    std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew,
+                          DeferredRelay* relay = nullptr);
+    std::string SendMoneyToDestination(const CTxDestination &address, int64_t nValue, CWalletTx& wtxNew,
+                                       DeferredRelay* relay = nullptr);
 
     bool NewKeyPool();
     bool TopUpKeyPool(unsigned int nSize = 0);

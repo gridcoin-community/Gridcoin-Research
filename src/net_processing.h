@@ -105,6 +105,24 @@ void RelayPSGT(const uint256& revision_hash);
 //!
 //! Queuing is what makes this usable in functions with many exit paths: every
 //! return and every throw flushes the same way, with no per-exit bookkeeping.
+//!
+//! SCOPE. Callers using this do not form a closed set, and nothing here should
+//! be read as claiming they do. The set was enumerated six times by four
+//! methods while #3391 was being fixed -- direct relay sites, the
+//! TransactionAddedToMempool signal path, callers of CommitTransaction, callers
+//! of SendMoney, and a transitive walk -- and every pass found sites the
+//! previous one missed; the GRC::SendContract callers are known to be
+//! unconverted today. One of the paths reaches RelayPSGT through a
+//! CValidationInterface subscriber list populated at runtime, which no static
+//! walk can see at all.
+//!
+//! So this is a hold-time cleanup, NOT the reason the cs_wallet/cs_inventory
+//! cycle is broken. That comes from SendMessages resolving its wallet answer
+//! before taking cs_inventory, which makes cs_inventory a leaf: a leaf cannot
+//! close a cycle however many cs_wallet -> cs_inventory edges remain. Anything
+//! that wants the class closed properly should give the announcement to the
+//! scheduler, the way ResendUnbroadcastTransactions already does, rather than
+//! threading this queue through another call level.
 class DeferredRelay
 {
 public:

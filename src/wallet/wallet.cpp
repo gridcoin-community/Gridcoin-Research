@@ -4308,7 +4308,7 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey, Defe
 
 
 
-string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew)
+string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, DeferredRelay* relay)
 {
     CReserveKey reservekey(this);
     // Initialised: the failure branch below reads it, and CreateTransaction can
@@ -4341,13 +4341,14 @@ string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNe
         return strError;
     }
 
-    if (!CommitTransaction(wtxNew, reservekey))
+    if (!CommitTransaction(wtxNew, reservekey, relay))
         return _("Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.");
 
     return "";
 }
 
-string CWallet::SendMoneyToDestination(const CTxDestination& address, int64_t nValue, CWalletTx& wtxNew)
+string CWallet::SendMoneyToDestination(const CTxDestination& address, int64_t nValue, CWalletTx& wtxNew,
+                                       DeferredRelay* relay)
 {
     // Check amount
     if (nValue <= 0)        return _("Invalid amount");
@@ -4359,7 +4360,7 @@ string CWallet::SendMoneyToDestination(const CTxDestination& address, int64_t nV
     CScript scriptPubKey;
     scriptPubKey.SetDestination(address);
 
-    return SendMoney(scriptPubKey, nValue, wtxNew);
+    return SendMoney(scriptPubKey, nValue, wtxNew, relay);
 }
 
 
