@@ -46,6 +46,7 @@ extern unsigned int nDerivationMethodIndex;
 
 class CAccountingEntry;
 class CWalletTx;
+class DeferredRelay;
 class CReserveKey;
 class COutput;
 class CCoinControl;
@@ -1469,8 +1470,20 @@ public:
     bool AcceptWalletTransaction(CTxDB& txdb);
     bool AcceptWalletTransaction();
 
+    //! Queue this transaction (and its unindexed parents) for announcement.
+    //! Touches no network state. Returns false when the transaction is inactive
+    //! and nothing was queued.
+    //!
+    //! This is the overload to use while holding cs_wallet: let the caller's
+    //! DeferredRelay outlive the lock, because announcing under cs_wallet closes
+    //! an ABBA cycle with a peer's cs_inventory (#3391).
+    bool QueueRelay(CTxDB& txdb, DeferredRelay& relay) const;
+
     //! Announce this transaction (and its unindexed parents) to peers. Returns
     //! false when the transaction is inactive and nothing was relayed.
+    //!
+    //! Announces before returning, so the caller must NOT hold cs_wallet; use
+    //! QueueRelay if it does.
     bool RelayWalletTransaction(CTxDB& txdb);
     bool RelayWalletTransaction();
 

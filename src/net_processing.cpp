@@ -384,6 +384,63 @@ void RelayPSGT(const uint256& revision_hash)
     g_connman->RelayInventory(CInv(MSG_PSGT, revision_hash), PSGT_PROTO_VERSION);
 }
 
+void DeferredRelay::AddTransaction(const CTransaction& tx, const uint256& hash)
+{
+    m_txs.emplace_back(tx, hash);
+}
+
+void DeferredRelay::AddPSGT(const uint256& revision_hash)
+{
+    m_psgts.push_back(revision_hash);
+}
+
+void DeferredRelay::Flush()
+{
+    // Emptied before announcing, not after, so this is idempotent: a caller that
+    // flushes explicitly leaves nothing for the destructor to announce a second
+    // time, and a throw partway does not leave a half-sent queue behind.
+    std::vector<std::pair<CTransaction, uint256>> txs;
+    std::vector<uint256> psgts;
+    txs.swap(m_txs);
+    psgts.swap(m_psgts);
+
+    for (const auto& entry : txs) {
+        RelayTransaction(entry.first, entry.second);
+    }
+
+    for (const uint256& revision_hash : psgts) {
+        RelayPSGT(revision_hash);
+    }
+}
+
+DeferredRelay::~DeferredRelay()
+{
+    // This destructor does network-facing work and runs on error paths too,
+    // including stack unwinding from the JSONRPCError throws in the HTLC RPCs.
+    // Letting an exception escape during unwinding terminates the process, so it
+    // is swallowed -- but what that costs is NOT uniform across the callers, and
+    // the difference is worth knowing before relying on it:
+    //
+    //   - wallet transactions are re-offered by ResendWalletTransactions;
+    //   - the HTLC RPCs register with mempool.AddUnbroadcast, so
+    //     ResendUnbroadcastTransactions re-announces them;
+    //   - a pooled PSGT revision has NEITHER. Every RelayPSGT site is
+    //     event-driven, so a dropped revision announcement is not retried, and
+    //     SignAndAdvancePSGT would still report SIGNED_AND_RELAYED. The revision
+    //     stays pooled locally and peers learn of it only on the next event that
+    //     announces it.
+    //
+    // Reaching here at all takes an allocation failure inside the relay path, so
+    // this is a last-resort guard rather than an expected route.
+    try {
+        Flush();
+    } catch (const std::exception& e) {
+        LogPrintf("ERROR: %s: deferred relay failed: %s", __func__, e.what());
+    } catch (...) {
+        LogPrintf("ERROR: %s: deferred relay failed with a non-standard exception", __func__);
+    }
+}
+
 //! Handle an incoming "psgt" message (#2910): validate against the pool
 //! admission rules and, on acceptance, pool and relay the new revision.
 //!
@@ -1662,6 +1719,18 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
     //
     vector<CInv> vInv;
     vector<CInv> vInvWait;
+
+    // The wallet answer the trickle decision needs is resolved BEFORE
+    // cs_inventory is taken, not under it. CWallet::GetTransaction takes
+    // cs_wallet, and a thread committing a wallet transaction announces it under
+    // cs_wallet and walks every node to reach this peer's cs_inventory, so
+    // querying the wallet here closes an ABBA cycle (#3391). cs_inventory has no
+    // other outgoing edge, so resolving this one outside it makes it a leaf.
+    //
+    // Only the announcements that would otherwise blast immediately need an
+    // answer: a trickle round announces everything anyway, and the three in four
+    // the filter holds back are held back whichever way the wallet answers. On
+    // this network that leaves a handful of hashes at most.
     {
         LOCK(pto->cs_inventory);
         vInv.reserve(pto->vInventoryToSend.size());

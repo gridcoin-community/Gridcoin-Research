@@ -2858,7 +2858,7 @@ void CWallet::ReacceptWalletTransactions()
 }
 
 
-bool CWalletTx::RelayWalletTransaction(CTxDB& txdb)
+bool CWalletTx::QueueRelay(CTxDB& txdb, DeferredRelay& relay) const
 {
     // Don't relay inactive (abandoned/conflicted) transactions
     if (isInactive()) {
@@ -2873,7 +2873,7 @@ bool CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         {
             uint256 hash = tx.GetHash();
             if (!txdb.ContainsTx(hash))
-                RelayTransaction((CTransaction)tx, hash);
+                relay.AddTransaction((CTransaction)tx, hash);
         }
     }
 
@@ -2883,11 +2883,19 @@ bool CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         if (!txdb.ContainsTx(hash))
         {
             LogPrint(BCLog::LogFlags::NOISY, "Relaying wtx %s", hash.ToString().substr(0,10));
-            RelayTransaction((CTransaction)*this, hash);
+            relay.AddTransaction((CTransaction)*this, hash);
         }
     }
 
     return true;
+}
+
+bool CWalletTx::RelayWalletTransaction(CTxDB& txdb)
+{
+    // Announces when this goes out of scope, which is why the caller must not
+    // hold cs_wallet -- see QueueRelay.
+    DeferredRelay relay;
+    return QueueRelay(txdb, relay);
 }
 
 bool CWalletTx::RelayWalletTransaction()
@@ -2932,6 +2940,14 @@ unsigned int CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQU
     unsigned int txns_erased_from_wallet = 0;
 
     CTxDB txdb("r");
+
+    // Declared outside the cs_wallet scope below so the announcements happen
+    // once it has unlocked: the relay path takes a peer's cs_inventory, and
+    // SendMessages takes cs_inventory and then cs_wallet (#3391). cs_main, which
+    // the caller holds throughout, is not part of that cycle -- nothing acquires
+    // it under cs_inventory.
+    DeferredRelay relay;
+
     {
         LOCK(cs_wallet);
         // Sort them in chronological order.
@@ -2964,8 +2980,8 @@ unsigned int CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQU
 
             if (wtx.RevalidateTransaction(txdb)) {
                 // Transaction is valid for relaying; an inactive one is still
-                // refused by RelayWalletTransaction and does not count.
-                if (wtx.RelayWalletTransaction(txdb)) {
+                // refused by QueueRelay and does not count.
+                if (wtx.QueueRelay(txdb, relay)) {
                     ++txns_relayed;
                 }
             } else {
@@ -2980,6 +2996,9 @@ unsigned int CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQU
             }
         }
     }
+
+    // cs_wallet is released; announce before the erase pass below takes it again.
+    relay.Flush();
 
     if (to_be_erased.size()) {
         LogPrint(BCLog::LogFlags::VERBOSE, "WARNING: %s: to_be_erased.size() = %u", __func__, to_be_erased.size());
@@ -4254,12 +4273,23 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
             return false;
         }
 
-        wtxNew.RelayWalletTransaction();
-
         // Locally originated: register for rebroadcast until we see the network
         // pick it up, and so it survives a restart (see CTxMemPool::m_unbroadcast).
+        //
+        // Registered before the announcement below rather than after it, which is
+        // also the more correct order: a peer that getdatas the transaction the
+        // instant it is announced now finds the entry and clears it, instead of
+        // racing the registration and leaving it parked until the next sweep.
         mempool.AddUnbroadcast(wtxNew.GetHash());
     }
+
+    // Announced with cs_main and cs_wallet released: the relay path takes a
+    // peer's cs_inventory, and SendMessages takes cs_inventory and then cs_wallet
+    // (#3391). This is not a cs_wallet access -- AddToWallet above inserted a
+    // COPY of wtxNew into mapWallet, so wtxNew remains the caller's own object
+    // and the inactive check inside reads the state this function just set.
+    wtxNew.RelayWalletTransaction();
+
     return true;
 }
 

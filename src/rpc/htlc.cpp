@@ -157,6 +157,13 @@ UniValue claimhtlc(const UniValue& params)
     // wallet's TransactionAddedToMempool handler) also takes cs_wallet,
     // recursively, under cs_main. The legacy cs_setpwalletRegistered hop is
     // gone (issue #3030 retirement).
+    //
+    // The relay queue is declared before those guards so the announcement below
+    // happens once they unlock, including when an exit path throws: the relay
+    // path takes a peer's cs_inventory, and SendMessages takes cs_inventory and
+    // then cs_wallet (#3391).
+    DeferredRelay relay;
+
     LOCK(cs_main);
     LOCK(pwalletMain->cs_wallet);
     EnsureWalletIsUnlocked();
@@ -270,7 +277,7 @@ UniValue claimhtlc(const UniValue& params)
     }
 
     uint256 txHash = txSpend.GetHash();
-    RelayTransaction(txSpend, txHash);
+    relay.AddTransaction(txSpend, txHash);
 
     // Locally originated: track for rebroadcast / restart persistence, like the
     // wallet and sendrawtransaction paths (this raw ATMP+relay bypasses both).
@@ -306,6 +313,13 @@ UniValue refundhtlc(const UniValue& params)
     // wallet's TransactionAddedToMempool handler) also takes cs_wallet,
     // recursively, under cs_main. The legacy cs_setpwalletRegistered hop is
     // gone (issue #3030 retirement).
+    //
+    // The relay queue is declared before those guards so the announcement below
+    // happens once they unlock, including when an exit path throws: the relay
+    // path takes a peer's cs_inventory, and SendMessages takes cs_inventory and
+    // then cs_wallet (#3391).
+    DeferredRelay relay;
+
     LOCK(cs_main);
     LOCK(pwalletMain->cs_wallet);
     EnsureWalletIsUnlocked();
@@ -428,7 +442,7 @@ UniValue refundhtlc(const UniValue& params)
     }
 
     uint256 txHash = txSpend.GetHash();
-    RelayTransaction(txSpend, txHash);
+    relay.AddTransaction(txSpend, txHash);
 
     // Locally originated: track for rebroadcast / restart persistence, like the
     // wallet and sendrawtransaction paths (this raw ATMP+relay bypasses both).
