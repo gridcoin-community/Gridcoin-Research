@@ -161,4 +161,47 @@ BOOST_AUTO_TEST_CASE(peerman_updatedblocktip_relay_gates)
     g_peerman->UpdatedBlockTip(&index, nullptr, false);
 }
 
+//! DeferredRelay exists so an announcement can be decided while cs_wallet is
+//! held and made after it unlocks (#3391). The lock ordering itself is not
+//! reachable from a unit test; the bookkeeping that makes it safe is.
+//!
+//! Flushing must empty the queue rather than merely walk it, because the
+//! destructor flushes as well: a caller that flushes explicitly -- as
+//! ResendWalletTransactions does, to announce before its erase pass retakes
+//! cs_wallet -- would otherwise announce everything a second time on scope exit.
+BOOST_AUTO_TEST_CASE(deferred_relay_empties_on_flush_and_is_idempotent)
+{
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("0x01"), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    const CTransaction tx(mtx);
+
+    DeferredRelay relay;
+    BOOST_CHECK(relay.empty());
+
+    relay.AddTransaction(tx, tx.GetHash());
+    BOOST_CHECK(!relay.empty());
+
+    relay.Flush();
+    BOOST_CHECK(relay.empty());
+
+    // Flush() announces, which caches the serialized transaction in the
+    // process-global mapRelay. This suite has no state guard, so drop it again
+    // rather than leave it available to a later getdata case.
+    RemoveFromRelayMemory(tx.GetHash());
+
+    // The second flush stands in for the destructor running after the explicit
+    // one above.
+    relay.Flush();
+    BOOST_CHECK(relay.empty());
+
+    relay.AddPSGT(uint256S("0x02"));
+    BOOST_CHECK(!relay.empty());
+
+    relay.Flush();
+    BOOST_CHECK(relay.empty());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -437,6 +437,12 @@ BOOST_AUTO_TEST_CASE(oneUnrefreshableTxDoesNotFreezeTheRestOfTheWallet)
         store.applyChainTipRefresh();   // must not propagate
     }
 
+    // The refresh hands work to the intake worker, so wait for it the same way
+    // the earlier assertions do. Without this the check below races the worker
+    // and reads an empty view on a loaded machine -- observed as "0 != 40" while
+    // the rest of the suite was running, and not reproducible in isolation.
+    settle(q);
+
     // Every good transaction must have flipped in, wherever the poison record
     // landed in the bucket order. Two parts each (stake return + sidestake).
     BOOST_CHECK_EQUAL(viewRowCount(store, GRC::VIEW_DETAILED),

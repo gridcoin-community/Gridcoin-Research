@@ -8,6 +8,7 @@
 #include "gridcoin/sidestake.h"
 #include "init.h"
 #include "wallet/wallet.h"
+#include "net_processing.h"
 #include "wallet/walletdb.h"
 #include "key_io.h"
 #include "rpc/protocol.h"
@@ -1445,6 +1446,54 @@ BOOST_AUTO_TEST_CASE(dumpprivkey_staking_only_unlock_is_refused_by_the_shared_ch
     locked.Lock();
     BOOST_REQUIRE(locked.Unlock(passphrase, UnlockScope::Full));
     BOOST_CHECK_EQUAL(dumpprivkey(params).get_str(), EncodeSecret(key));
+}
+
+//! QueueRelay is the decision half of the old RelayWalletTransaction, split out
+//! so a caller holding cs_wallet can decide under the lock and announce after
+//! releasing it (#3391). The refusal it inherits is the one that matters: an
+//! inactive transaction -- abandoned or conflicted -- must not be announced, and
+//! must not be counted as relayed by ResendWalletTransactions.
+BOOST_AUTO_TEST_CASE(queue_relay_refuses_an_inactive_transaction)
+{
+    CWalletTx wtx;
+    wtx.SetTxState(TxStateInactive{false});
+
+    CTxDB txdb("r");
+    DeferredRelay relay;
+
+    BOOST_CHECK(!wtx.QueueRelay(txdb, relay));
+    BOOST_CHECK(relay.empty());
+}
+
+//! And the converse, so the refusal above is not vacuously true: an ordinary
+//! unconfirmed transaction the index has never seen queues itself.
+BOOST_AUTO_TEST_CASE(queue_relay_queues_an_active_transaction)
+{
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("0x0a"), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+
+    CWalletTx wtx(nullptr, CTransaction(mtx));
+    wtx.SetTxState(TxStateInMempool{});
+
+    // Neither a coinbase nor a coinstake, so the self-announcement arm applies.
+    BOOST_REQUIRE(!wtx.IsCoinBase());
+    BOOST_REQUIRE(!wtx.IsCoinStake());
+
+    CTxDB txdb("r");
+    DeferredRelay relay;
+
+    BOOST_CHECK(wtx.QueueRelay(txdb, relay));
+    BOOST_CHECK(!relay.empty());
+
+    relay.Flush();
+    BOOST_CHECK(relay.empty());
+
+    // Flush() caches the serialized transaction in the process-global mapRelay;
+    // drop it so it cannot be served to a later getdata case in this binary.
+    RemoveFromRelayMemory(wtx.GetHash());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
