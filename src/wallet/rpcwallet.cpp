@@ -1856,6 +1856,12 @@ UniValue sendmany(const UniValue& params)
     if (params.size() > 2)
         nMinDepth = params[2].get_int();
 
+    // Announced after this scope unlocks: the relay path reached from
+    // CommitTransaction takes a peer's cs_inventory, and SendMessages takes
+    // cs_inventory and then cs_wallet (#3391). Declared before the guard so it
+    // outlives it.
+    DeferredRelay relay;
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CWalletTx wtx;
@@ -1938,7 +1944,7 @@ UniValue sendmany(const UniValue& params)
             throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
         throw JSONRPCError(RPC_WALLET_ERROR, "Transaction creation failed");
     }
-    if (!pwalletMain->CommitTransaction(wtx, keyChange))
+    if (!pwalletMain->CommitTransaction(wtx, keyChange, &relay))
         throw JSONRPCError(RPC_WALLET_ERROR, "Transaction commit failed");
 
     return wtx.GetHash().GetHex();
@@ -5206,6 +5212,12 @@ const RPCHelpMan& sweepuncoveredcoins_helpman() { return sweepuncoveredcoins_hel
 
 UniValue sweepuncoveredcoins(const UniValue& params)
 {
+    // Announced after this scope unlocks: the relay path reached from
+    // CommitTransaction takes a peer's cs_inventory, and SendMessages takes
+    // cs_inventory and then cs_wallet (#3391). Declared before the guard so it
+    // outlives it.
+    DeferredRelay relay;
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     if (!pwalletMain->HasSeedPhrase()) {
@@ -5479,7 +5491,7 @@ UniValue sweepuncoveredcoins(const UniValue& params)
         throw JSONRPCError(RPC_WALLET_ERROR, "Sweep transaction creation failed");
     }
 
-    if (!pwalletMain->CommitTransaction(wtxNew, reservekey)) {
+    if (!pwalletMain->CommitTransaction(wtxNew, reservekey, &relay)) {
         if (dest_from_pool) dest_reserve.ReturnKey();
         throw JSONRPCError(RPC_WALLET_ERROR,
             "The sweep transaction was rejected. This might happen if some of the coins in your "

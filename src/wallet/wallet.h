@@ -618,7 +618,14 @@ public:
                            bool change_back_to_input_address = false, int64_t nEnforcedMinFee = 0);
     bool CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet,
                            const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false);
-    bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);
+    //! Commit a transaction and announce it.
+    //!
+    //! \param relay When non-null, the announcement is QUEUED here instead of
+    //! being made before returning. Callers that hold cs_wallet across this call
+    //! must pass one that outlives their own lock: this function releasing its
+    //! own guard is not enough if the caller still holds the wallet lock, which
+    //! is the case for WalletImpl::sendCoins (#3391).
+    bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey, DeferredRelay* relay = nullptr);
 
     std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew);
     std::string SendMoneyToDestination(const CTxDestination &address, int64_t nValue, CWalletTx& wtxNew);

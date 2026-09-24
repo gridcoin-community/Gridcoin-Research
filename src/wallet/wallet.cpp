@@ -4220,7 +4220,7 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
 }
 
 // Call after CreateTransaction unless you want to abort
-bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
+bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey, DeferredRelay* relay)
 {
     if (GetDevbuildCripple())
     {
@@ -4283,12 +4283,24 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
         mempool.AddUnbroadcast(wtxNew.GetHash());
     }
 
-    // Announced with cs_main and cs_wallet released: the relay path takes a
-    // peer's cs_inventory, and SendMessages takes cs_inventory and then cs_wallet
-    // (#3391). This is not a cs_wallet access -- AddToWallet above inserted a
-    // COPY of wtxNew into mapWallet, so wtxNew remains the caller's own object
-    // and the inactive check inside reads the state this function just set.
-    wtxNew.RelayWalletTransaction();
+    // The announcement happens with THIS function's cs_main/cs_wallet guard
+    // released, because the relay path takes a peer's cs_inventory while
+    // SendMessages takes cs_inventory and then cs_wallet (#3391). Reading wtxNew
+    // here is not a cs_wallet access: AddToWallet above inserted a COPY into
+    // mapWallet, so wtxNew remains the caller's own object and the inactive check
+    // reads the state this function just set.
+    //
+    // Releasing this guard is NOT sufficient on its own, though. A caller may
+    // still hold cs_wallet across this call -- WalletImpl::sendCoins does, for
+    // the whole of its send scope -- and then announcing here would put the
+    // announcement back under the wallet lock. Such callers pass their own queue,
+    // which outlives their guard, and this function only fills it.
+    if (relay) {
+        CTxDB txdb("r");
+        wtxNew.QueueRelay(txdb, *relay);
+    } else {
+        wtxNew.RelayWalletTransaction();
+    }
 
     return true;
 }
