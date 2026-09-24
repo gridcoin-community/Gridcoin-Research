@@ -9,6 +9,7 @@
 #include <key_io.h>
 #include "miner.h"
 #include "gridcoin/accrual/snapshot.h"
+#include "gridcoin/beacon.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/kernel.h"

@@ -11,14 +11,12 @@
 #include "fs.h"
 #include "gridcoin/account.h"
 #include "gridcoin/accrual/computer.h"
-#include "gridcoin/beacon.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/sidestake.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/filehash.h"
-#include "node/blockstorage.h"
 #include "serialize.h"
 #include "streams.h"
 #include "tinyformat.h"
@@ -29,7 +27,6 @@
 class CBlockIndex;
 
 namespace GRC {
-using LogFlags = BCLog::LogFlags;
 
 //!
 //! \brief Calculates the current accrual for a CPID by adding the snapshot of
@@ -328,26 +325,7 @@ public:
     {
     }
 
-    CAmount MaxReward() const override
-    {
-        // The maximum accrual that a CPID can claim in one block is limited to
-        // the amount of accrual that a CPID can collect over two days when the
-        // CPID achieves the maximum magnitude value supported in a superblock.
-        //
-        // Where... (for block versions below V13)
-        //
-        //   max_magnitude = 32767
-        //   magnitude_unit = 0.25
-        //
-        // ...then...
-        //
-        //   max_magnitude * magnitude_unit * 2 = max_accrual = 16383.5
-        //
-        // ...rounded-up to 16384.
-        //
-        // For V13+, the magnitude unit can be set by protocol entry.
-        return (GetMagnitudeUnit() * 32768 * 2 * COIN).ToCAmount();
-    }
+    CAmount MaxReward() const override;
 
     //!
     //! \brief Get the magnitude unit factored into the reward calculation.
@@ -360,125 +338,27 @@ public:
     //!
     //! \return Amount paid per unit of magnitude per day in units of GRC.
     //!
-    double MagnitudeUnit() const override
-    {
-        return GetMagnitudeUnit().ToDouble();
-    }
+    double MagnitudeUnit() const override;
 
-    int64_t AccrualAge() const override EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-    {
-        // For the CPIDs that never staked a block, report the accrual age as
-        // the time since the CPID advertised a beacon. This is not perfectly
-        // accurate since newbie accrual begins when a new CPID first appears
-        // in a superblock, but we don't store or look-up that superblock for
-        // performance. The accrual age requested here is informational since
-        // the SnapshotCalculator performs the real accrual calculation.
-        //
-        // TODO: Update this to base age on timestamp when beacon verifies in
-        // a superblock after contract improvements for more accurate age.
-        //
-        if (m_account.IsNew()) {
-            if (const BeaconOption beacon = GetBeaconRegistry().Try(m_cpid)) {
-                const int64_t beacon_time = beacon->m_timestamp;
+    int64_t AccrualAge() const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-                if (beacon_time > 0) {
-                    return m_payment_time - beacon_time;
-                }
-            }
+    double AccrualDays() const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-            return 0;
-        }
+    int64_t AccrualBlockSpan() const override;
 
-        return SnapshotCalculator::AccrualAge(m_account);
-    }
+    CAmount PaymentPerDay() const override;
 
-    double AccrualDays() const override EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-    {
-        // Since this informational value is not consensus-critical, we use
-        // floating-point arithmetic for readability:
-        //
-        return AccrualAge() / 86400.0;
-    }
+    CAmount PaymentPerDayLimit() const override;
 
-    int64_t AccrualBlockSpan() const override
-    {
-        // TODO: we can use the height of a beacon verification in a superblock
-        // to report accurate block spans after contract improvements. For now,
-        // this is informational, so we just report zero for newbies:
-        //
-        if (m_account.IsNew()) {
-            return 0;
-        }
+    CAmount NearRewardLimit() const override;
 
-        return m_last_height - m_account.LastRewardHeight();
-    }
+    bool ExceededRecentPayments() const override;
 
-    CAmount PaymentPerDay() const override
-    {
-        if (m_account.IsNew()) {
-            return 0;
-        }
+    CAmount ExpectedDaily() const override;
 
-        const int64_t elapsed = m_payment_time - m_account.FirstRewardTime();
-        const double lifetime_days = elapsed / 86400.0;
+    CAmount RawAccrual() const override;
 
-        if (lifetime_days <= 0) {
-            return 0;
-        }
-
-        return m_account.m_total_research_subsidy / lifetime_days;
-    }
-
-    CAmount PaymentPerDayLimit() const override
-    {
-        return MaxReward();
-    }
-
-    CAmount NearRewardLimit() const override
-    {
-        // This returns MaxReward() - 2 * ExpectedDaily() or 1/2 of MaxReward(), whichever
-        // is greater
-
-        CAmount threshold = std::max(MaxReward() / 2, MaxReward() - 2 * ExpectedDaily());
-
-        return threshold;
-    }
-
-    bool ExceededRecentPayments() const override
-    {
-        return RawAccrual() > PaymentPerDayLimit();
-    }
-
-    CAmount ExpectedDaily() const override
-    {
-        // Since this informational value is not consensus-critical, we use
-        // floating-point arithmetic for readability:
-        //
-        return CurrentMagnitude(m_cpid).Floating() * MagnitudeUnit() * COIN;
-    }
-
-    CAmount RawAccrual() const override
-    {
-        if (m_account.LastRewardHeight() >= m_superblock.m_height) {
-            return AccrualDelta(m_cpid, m_account);
-        }
-
-        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: CPID = %s, m_account.m_accrual = %" PRId64 ", ",
-                 __func__, m_cpid.ToString(), m_account.m_accrual);
-
-        return m_account.m_accrual + AccrualDelta(m_cpid, m_account);
-    }
-
-    CAmount Accrual() const override
-    {
-        const CAmount accrual = RawAccrual();
-
-        if (accrual > MaxReward()) {
-            return MaxReward();
-        }
-
-        return accrual;
-    }
+    CAmount Accrual() const override;
 
 private:
     const Cpid m_cpid;                //!< CPID to calculate accrual for.
@@ -532,11 +412,7 @@ public:
     //!
     //! \brief Initialize an empty accrual snapshot.
     //!
-    AccrualSnapshot()
-        : m_version(CURRENT_VERSION)
-        , m_height(0)
-    {
-    }
+    AccrualSnapshot();
 
     //!
     //! \brief Initialize an accrual snapshot by deserializing it from the
@@ -544,33 +420,7 @@ public:
     //!
     //! \param s The input stream.
     //!
-    AccrualSnapshot(deserialize_type, CAutoHasherFile& file)
-    {
-        m_records.clear();
-
-        file >> m_version;
-        file >> m_height;
-
-        while (true) {
-            Cpid cpid;
-            int64_t accrual;
-
-            try {
-                file >> cpid;
-                file >> accrual;
-            } catch (const std::ios_base::failure& e) {
-                if (feof(file.Get())) {
-                    break;
-                }
-
-                throw;
-            }
-
-            if (!(file.GetType() & SER_GETHASH)) {
-                m_records.emplace(cpid, accrual);
-            }
-        }
-    }
+    AccrualSnapshot(deserialize_type, CAutoHasherFile& file);
 
     //!
     //! \brief Get the accrual at the time of the snapshot for the specified
@@ -581,16 +431,7 @@ public:
     //! \return Accrued research rewards at the time of the snapshot in units
     //! of 1/100000000 GRC or zero if the CPID does not exist in the snapshot.
     //!
-    CAmount GetAccrual(const Cpid cpid) const
-    {
-        auto iter = m_records.find(cpid);
-
-        if (iter == m_records.end()) {
-            return 0;
-        }
-
-        return iter->second;
-    }
+    CAmount GetAccrual(const Cpid cpid) const;
 }; // AccrualSnapshot
 
 //!
@@ -605,20 +446,14 @@ public:
     //! \param file     Handle of the snapshot file to manage.
     //! \param ser_type Type of serialization target.
     //!
-    AccrualSnapshotFile(FILE* file, const int ser_type)
-        : m_file(file, ser_type, AccrualSnapshot::CURRENT_VERSION)
-    {
-    }
+    AccrualSnapshotFile(FILE* file, const int ser_type);
 
     //!
     //! \brief Initialize an accrual snapshot file.
     //!
     //! \param file Handle of the snapshot file to manage.
     //!
-    AccrualSnapshotFile(FILE* file)
-        : AccrualSnapshotFile(file, SER_DISK)
-    {
-    }
+    AccrualSnapshotFile(FILE* file);
 
     //!
     //! \brief Extract the block height from an accrual snapshot file name.
@@ -628,44 +463,21 @@ public:
     //! \return Block height contained in the file name or zero if the file
     //! name does not contain a valid height number.
     //!
-    static uint64_t ParseHeight(const fs::path& snapshot_path)
-    {
-        uint64_t height = 0;
-
-        if (!ParseUInt64(snapshot_path.stem().string(), &height)) {
-            LogPrint(BCLog::LogFlags::SB, "WARN: %s: Filename in snapshot path does not contain a valid height number.",
-                     __func__);
-        }
-
-        return height;
-    }
+    static uint64_t ParseHeight(const fs::path& snapshot_path);
 
     //!
     //! \brief Remove the accrual snapshot file at the specified path.
     //!
     //! \param snapshot_path Path to a snapshot file.
     //!
-    static void Remove(const fs::path& snapshot_path)
-    {
-        try {
-            fs::remove(snapshot_path);
-        } catch (const std::exception& e) {
-            // Failing to remove the snapshot file is not a critical error as
-            // long as we can remove it from the registry.
-            //
-            LogPrintf("WARNING: %s: %s", __func__, e.what());
-        }
-    }
+    static void Remove(const fs::path& snapshot_path);
 
     //!
     //! \brief Remove the accrual snapshot file for the specified height.
     //!
     //! \param height Block height of the accrual snapshot to remove.
     //!
-    static void Remove(const uint64_t height)
-    {
-        Remove(SnapshotPath(height));
-    }
+    static void Remove(const uint64_t height);
 
     //!
     //! \brief Determine whether the wrapped file handle is \c nullptr .
@@ -673,20 +485,14 @@ public:
     //! \return \c true if initialized with a null file handle. This may occur
     //! when the operating system filesystem API failed to open the file.
     //!
-    bool IsNull() const
-    {
-        return m_file.IsNull();
-    }
+    bool IsNull() const;
 
     //!
     //! \brief Get the hash of the snapshot after reading or writing the file.
     //!
     //! \return SHA256 hash of the snapshot file.
     //!
-    uint256 GetHash()
-    {
-        return m_file.GetHash();
-    }
+    uint256 GetHash();
 
 protected:
     CAutoHasherFile m_file; //!< Abstracts snapshot file operations.
@@ -704,20 +510,14 @@ public:
     //! \param snapshot_path Path to the snapshot file to read.
     //! \param ser_type      Type of serialization target.
     //!
-    AccrualSnapshotReader(const fs::path& snapshot_path, const int ser_type)
-        : AccrualSnapshotFile(fsbridge::fopen(snapshot_path, "rb"), ser_type)
-    {
-    }
+    AccrualSnapshotReader(const fs::path& snapshot_path, const int ser_type);
 
     //!
     //! \brief Initialize an accrual snapshot file reader.
     //!
     //! \param snapshot_path Path to the snapshot file to read.
     //!
-    AccrualSnapshotReader(const fs::path& snapshot_path)
-        : AccrualSnapshotReader(snapshot_path, SER_DISK)
-    {
-    }
+    AccrualSnapshotReader(const fs::path& snapshot_path);
 
     //!
     //! \brief Compute the hash of the specified snapshot file.
@@ -726,33 +526,14 @@ public:
     //!
     //! \return SHA256 hash of the snapshot file.
     //!
-    static uint256 Hash(const fs::path& snapshot_path)
-    {
-        AccrualSnapshotReader reader(snapshot_path, SER_GETHASH);
-
-        if (reader.IsNull()) {
-            return uint256();
-        }
-
-        try {
-            reader.Read();
-        } catch (const std::exception& e) {
-            error("%s: %s", __func__, e.what());
-            return uint256();
-        }
-
-        return reader.GetHash();
-    }
+    static uint256 Hash(const fs::path& snapshot_path);
 
     //!
     //! \brief Deserialize the snapshot file from disk.
     //!
     //! \return The contents of the snapshot file.
     //!
-    AccrualSnapshot Read()
-    {
-        return AccrualSnapshot(deserialize, m_file);
-    }
+    AccrualSnapshot Read();
 }; // AccrualSnapshotReader
 
 //!
@@ -766,21 +547,14 @@ public:
     //!
     //! \param snapshot_path Path to the snapshot file to write.
     //!
-    AccrualSnapshotWriter(const fs::path& snapshot_path)
-        : AccrualSnapshotFile(fsbridge::fopen(snapshot_path, "wb"))
-    {
-    }
+    AccrualSnapshotWriter(const fs::path& snapshot_path);
 
     //!
     //! \brief Write the header of an accrual snapshot.
     //!
     //! \param height Block height of the snapshot. Usually a superblock.
     //!
-    void WriteHeader(const uint64_t height)
-    {
-        m_file << AccrualSnapshot::CURRENT_VERSION;
-        m_file << height;
-    }
+    void WriteHeader(const uint64_t height);
 
     //!
     //! \brief Write a CPID to accrual mapping to the snapshot file.
@@ -788,10 +562,7 @@ public:
     //! \param cpid    Identifies the owner of the accrual.
     //! \param accrual Accrued research rewards in units of 1/100000000 GRC.
     //!
-    void WriteRecord(const Cpid cpid, const int64_t accrual)
-    {
-        m_file << cpid << accrual;
-    }
+    void WriteRecord(const Cpid cpid, const int64_t accrual);
 }; // AccrualSnapshotWriter
 
 //!
@@ -928,53 +699,14 @@ public:
     //! \return \c false if the registry failed to initialize because of an IO
     //! error.
     //!
-    bool Initialize()
-    {
-        LogPrintf("Initializing accrual snapshot registry...");
-
-        if (!Close()) {
-            return false;
-        }
-
-        CAutoFile registry_file(
-            fsbridge::fopen(RegistryPath(), "rb"),
-            SER_DISK,
-            CURRENT_VERSION);
-
-        if (!registry_file.IsNull()) {
-            try {
-                Unserialize(registry_file);
-            } catch (const std::ios_base::failure& e) {
-                if (feof(registry_file.Get())) {
-                    throw SnapshotStateError("unexpected eof while loading the registry.");
-                }
-
-                throw;
-            }
-        } else {
-            m_entries.clear();
-        }
-
-        LogPrintf("Accrual snapshot registry loaded. Compacting...");
-
-        return Rewrite();
-    }
+    bool Initialize();
 
     //!
     //! \brief Close the registry file.
     //!
     //! \return \c true if the file closed successfully.
     //!
-    bool Close()
-    {
-        if (m_file && fclose(m_file) != 0) {
-            return error("%s: failed to close snapshot registry", __func__);
-        }
-
-        m_file = nullptr;
-
-        return true;
-    }
+    bool Close();
 
     //!
     //! \brief Set the height of the block for the accrual snapshot baseline.
@@ -986,47 +718,21 @@ public:
     //! \return \c false if the registry failed to store the baseline because
     //! of an IO error.
     //!
-    bool ResetBaseline(const uint64_t height)
-    {
-        if (!WriteEntry(Action::BASELINE, Entry(height, uint256()))) {
-            return error("%s: failed to record baseline snapshot", __func__);
-        }
-
-        LogPrint(LogFlags::TALLY,
-            "Tally: reset new accrual snapshot baseline: %" PRIu64, height);
-
-        m_entries.clear();
-
-        return true;
-    }
+    bool ResetBaseline(const uint64_t height);
 
     //!
     //! \brief Get the height of the baseline accrual snapshot.
     //!
     //! \return Zero if no baseline snapshot exists yet.
     //!
-    uint64_t BaselineHeight() const
-    {
-        if (!m_entries.empty()) {
-            return m_entries.front().m_height;
-        }
-
-        return 0;
-    }
+    uint64_t BaselineHeight() const;
 
     //!
     //! \brief Get the height of the most recent accrual snapshot.
     //!
     //! \return Zero if no baseline snapshot exists yet.
     //!
-    uint64_t LatestHeight() const
-    {
-        if (!m_entries.empty()) {
-            return m_entries.back().m_height;
-        }
-
-        return 0;
-    }
+    uint64_t LatestHeight() const;
 
     //!
     //! \brief Get the registry entry for the specified height if it exists.
@@ -1035,16 +741,7 @@ public:
     //!
     //! \return A null pointer if the registry contains no entry for the height.
     //!
-    const Entry* TryHeight(const uint64_t height) const
-    {
-        const auto iter = std::lower_bound(m_entries.begin(), m_entries.end(), height);
-
-        if (iter == m_entries.end() || iter->m_height != height) {
-            return nullptr;
-        }
-
-        return &*iter;
-    }
+    const Entry* TryHeight(const uint64_t height) const;
 
     //!
     //! \brief Assert that the supplied hash matches the hash in the registry
@@ -1056,12 +753,7 @@ public:
     //! \throws SnapshotHashMismatchError If the supplied hash does not match
     //! the hash recorded in the registry.
     //!
-    void AssertHashMatches(const uint64_t height, const uint256 hash) const
-    {
-        if (const Entry* entry = TryHeight(height)) {
-            entry->AssertHash(hash);
-        }
-    }
+    void AssertHashMatches(const uint64_t height, const uint256 hash) const;
 
     //!
     //! \brief Add the height of a new accrual snapshot to the registry.
@@ -1071,23 +763,7 @@ public:
     //! \return \c false if the registry failed to store the snapshot context
     //! because of an IO error.
     //!
-    bool Register(const uint64_t height, const uint256 snapshot_hash)
-    {
-        assert(m_entries.empty() || height > m_entries.back().m_height);
-
-        const Entry entry(height, snapshot_hash);
-
-        if (!WriteEntry(Action::REGISTER, entry)) {
-            return error("%s: failed to add %" PRIu64, __func__, height);
-        }
-
-        LogPrint(LogFlags::TALLY,
-            "Tally: recorded new accrual snapshot %" PRIu64, height);
-
-        m_entries.emplace_back(entry);
-
-        return true;
-    }
+    bool Register(const uint64_t height, const uint256 snapshot_hash);
 
     //!
     //! \brief Remove the height of a defunct accrual snapshot from the registry.
@@ -1097,27 +773,7 @@ public:
     //! \return \c false if the registry failed to store the snapshot context
     //! because of an IO error.
     //!
-    bool Deregister(const uint64_t height)
-    {
-        assert(!m_entries.empty() && height == m_entries.back().m_height);
-
-        const Entry* entry = TryHeight(height);
-
-        if (!entry) {
-            return true;
-        }
-
-        if (!WriteEntry(Action::DEREGISTER, *entry)) {
-            return error("%s: failed to remove %" PRIu64, __func__, height);
-        }
-
-        LogPrint(LogFlags::TALLY,
-            "Tally: recorded accrual snapshot removal %" PRIu64, height);
-
-        m_entries.pop_back();
-
-        return true;
-    }
+    bool Deregister(const uint64_t height);
 
     //!
     //! \brief Serialize the provided data to the registry file.
@@ -1127,18 +783,7 @@ public:
     //!
     //! TODO: encapsulate this
     //!
-    void write(Span<const std::byte> src)
-    {
-        if (!m_file) {
-            throw std::ios_base::failure(
-                strprintf("%s: file handle is nullptr", __func__));
-        }
-
-        if (fwrite(src.data(), 1, src.size(), m_file) != src.size()) {
-            throw std::ios_base::failure(
-                strprintf("%s: write failed", __func__));
-        }
-    }
+    void write(Span<const std::byte> src);
 private:
     //!
     //! \brief Represents a state change for the snapshot registry.
@@ -1190,29 +835,14 @@ private:
     //!
     //! \brief Get the path to the accrual snapshot registry file.
     //!
-    static fs::path RegistryPath()
-    {
-        return SnapshotDirectory() / "registry.dat";
-    }
+    static fs::path RegistryPath();
 
     //!
     //! \brief Truncate the registry file and reopen it for writing.
     //!
     //! \return \c false if an IO error occurred.
     //!
-    bool ReopenForWrite()
-    {
-        if (!Close()) {
-            return false;
-        }
-
-        m_file = fsbridge::fopen(RegistryPath(), "wb");
-
-        return m_file || error(
-            "%s: failed to open snapshot registry for writing: %s",
-            __func__,
-            RegistryPath().string());
-    }
+    bool ReopenForWrite();
 
     //!
     //! \brief Prunes the registry file of any non-current entries and opens it
@@ -1220,34 +850,7 @@ private:
     //!
     //! \return \c false if an IO error occurred.
     //!
-    bool Rewrite()
-    {
-        if (!ReopenForWrite()) {
-            return false;
-        }
-
-        try {
-            ::Serialize(*this, CURRENT_VERSION);
-        } catch (const std::exception& e) {
-            return error("%s: %s", __func__, e.what());
-        }
-
-        if (m_entries.empty()) {
-            return true;
-        }
-
-        if (!WriteEntry(Action::BASELINE, m_entries.front())) {
-            return false;
-        }
-
-        for (const auto& entry : m_entries) {
-            if (!WriteEntry(Action::REGISTER, entry)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
+    bool Rewrite();
 
     //!
     //! \brief Write a registry entry to disk.
@@ -1257,71 +860,14 @@ private:
     //!
     //! \return \c false if an IO error occurred.
     //!
-    bool WriteEntry(const Action action, const Entry entry)
-    {
-        try {
-            ::Serialize(*this, DiskEntry(action, entry));
-        } catch (const std::exception& e) {
-            return error("%s: %s", __func__, e.what());
-        }
-
-        return fflush(m_file) == 0;
-    }
+    bool WriteEntry(const Action action, const Entry entry);
 
     //!
     //! \brief Read the snapshot registry file from disk.
     //!
     //! \param file Wraps the registry file to deserialize.
     //!
-    void Unserialize(CAutoFile& file)
-    {
-        m_entries.clear();
-
-        uint32_t version;
-        file >> version;
-
-        if (version != CURRENT_VERSION) {
-            // When this is executed by the tally's initialization routine, the
-            // exception will cause the application to rebuild the snapshots:
-            throw SnapshotRegistryVersionMismatchError(version, CURRENT_VERSION);
-        }
-
-        while (true) {
-            try {
-                const DiskEntry entry(deserialize, file);
-
-                switch (entry.m_action) {
-                    case Action::BASELINE:
-                        LogPrint(LogFlags::ACCRUAL,
-                            "  Baseline: %" PRIu64, entry.m_height);
-
-                        m_entries.clear();
-                        break;
-                    case Action::REGISTER:
-                        LogPrint(LogFlags::ACCRUAL,
-                            "  Added: %" PRIu64 " (%s)",
-                            entry.m_height,
-                            entry.m_snapshot_hash.ToString());
-
-                        m_entries.emplace_back(entry);
-                        break;
-                    case Action::DEREGISTER:
-                        LogPrint(LogFlags::ACCRUAL,
-                            "  Removed: %" PRIu64 " (%s)",
-                            entry.m_height,
-                            entry.m_snapshot_hash.ToString());
-
-                        m_entries.pop_back();
-                }
-            } catch (const std::ios_base::failure& e) {
-                if (feof(file.Get())) {
-                    break;
-                }
-
-                throw;
-            }
-        }
-    }
+    void Unserialize(CAutoFile& file);
 }; // AccrualSnapshotRegistry
 
 //!
@@ -1339,20 +885,7 @@ public:
     //! \return \c false if the snapshot system failed to initialize because of
     //! an error.
     //!
-    bool Initialize()
-    {
-        try {
-            fs::create_directory(SnapshotDirectory());
-        } catch (const std::exception& e) {
-            return error(
-                "%s: failed to create the accrual snapshot directory %s: %s",
-                __func__,
-                SnapshotDirectory().string(),
-                e.what());
-        }
-
-        return m_registry.Initialize();
-    }
+    bool Initialize();
 
     //!
     //! \brief Destroy all accrual snapshots. This erases the snapshot files on
@@ -1361,24 +894,7 @@ public:
     //! \return \c false if the snapshot system failed to initialize because of
     //! an error.
     //!
-    bool EraseAll()
-    {
-        if (!m_registry.Close()) {
-            return false;
-        }
-
-        try {
-            fs::remove_all(SnapshotDirectory());
-        } catch (const std::exception& e) {
-            return error(
-                "%s: failed to erase all accrual snapshots in %s: %s",
-                __func__,
-                SnapshotDirectory().string(),
-                e.what());
-        }
-
-        return Initialize();
-    }
+    bool EraseAll();
 
     //!
     //! \brief Assert that the registry contains an entry for a snapshot at the
@@ -1391,41 +907,12 @@ public:
     //! \throws SnapshotMissingError If the registry contains no entry for the
     //! supplied height.
     //!
-    void AssertMatch(const uint64_t height) const
-    {
-        if (const auto* entry = m_registry.TryHeight(height)) {
-            entry->AssertHash(AccrualSnapshotReader::Hash(SnapshotPath(height)));
-        } else {
-            throw SnapshotMissingError(height);
-        }
-    }
+    void AssertMatch(const uint64_t height) const;
 
     //!
     //! \brief Clean up extraneous accrual snapshot files.
     //!
-    void PruneSnapshotFiles() const
-    {
-        for (const auto& file : fs::directory_iterator(SnapshotDirectory())) {
-            const fs::path& file_path = file.path();
-
-            if (file_path.filename() == "registry.dat") {
-                continue;
-            }
-
-            if (const uint64_t height = AccrualSnapshotFile::ParseHeight(file_path)) {
-                if (m_registry.TryHeight(height)) {
-                    continue;
-                }
-            }
-
-            LogPrint(LogFlags::TALLY,
-                "%s: removing extraneous accrual snapshot file %s",
-                __func__,
-                file_path.filename().string());
-
-            AccrualSnapshotFile::Remove(file_path);
-        }
-    }
+    void PruneSnapshotFiles() const;
 
     //!
     //! \brief Determine whether the node already stored a baseline accrual
@@ -1434,10 +921,7 @@ public:
     //! \return \c true if the node previously activated the accrual snapshot
     //! system.
     //!
-    bool HasBaseline() const
-    {
-        return m_registry.BaselineHeight() > 0;
-    }
+    bool HasBaseline() const;
 
     //!
     //! \brief Store a snapshot of accrual for each account as the baseline.
@@ -1447,10 +931,7 @@ public:
     //!
     //! \return \c false when an error occurs while creating a snapshot.
     //!
-    bool StoreBaseline(const uint64_t height, const ResearchAccountMap& accounts)
-    {
-        return m_registry.ResetBaseline(height) && Store(height, accounts);
-    }
+    bool StoreBaseline(const uint64_t height, const ResearchAccountMap& accounts);
 
     //!
     //! \brief Store a snapshot of accrual for each account to disk.
@@ -1460,33 +941,7 @@ public:
     //!
     //! \return \c false when an error occurs while creating a snapshot.
     //!
-    bool Store(const uint64_t height, const ResearchAccountMap& accounts)
-    {
-        LogPrint(LogFlags::TALLY,
-            "Tally: storing new accrual snapshot %" PRIu64 "...", height);
-
-        AccrualSnapshotWriter writer(SnapshotPath(height));
-
-        if (writer.IsNull()) {
-            return error("%s: failed to open %" PRIu64, __func__, height);
-        }
-
-        try {
-            writer.WriteHeader(height);
-
-            for (const auto& account_pair : accounts) {
-                if (account_pair.second.m_accrual > 0) {
-                    writer.WriteRecord(
-                        account_pair.first, // CPID
-                        account_pair.second.m_accrual);
-                }
-            }
-        } catch (const std::exception& e) {
-            return error("%s: %s", __func__, e.what());
-        }
-
-        return m_registry.Register(height, writer.GetHash());
-    }
+    bool Store(const uint64_t height, const ResearchAccountMap& accounts);
 
     //!
     //! \brief Load the most recent accrual snapshot for each account.
@@ -1498,22 +953,7 @@ public:
     //! \throws SnapshotHashMismatchError If the hash of the disk snapshot does
     //! not match the hash recorded in the registry.
     //!
-    bool ApplyLatest(ResearchAccountMap& accounts) const
-    {
-        // No snapshot left to apply. That is the state of a fresh chain whose
-        // first superblock was just disconnected: nothing was ever stored
-        // before it, and there is no baseline to fall back to. The
-        // pre-superblock state is no snapshot accrual for anyone, so restore
-        // that rather than trying to open a snapshot at height 0.
-        if (m_registry.LatestHeight() == 0) {
-            LogPrint(LogFlags::TALLY, "Tally: no accrual snapshot to apply; clearing snapshot accrual.");
-            for (auto& account_pair : accounts) {
-                account_pair.second.m_accrual = 0;
-            }
-            return true;
-        }
-        return Apply(m_registry.LatestHeight(), accounts);
-    }
+    bool ApplyLatest(ResearchAccountMap& accounts) const;
 
     //!
     //! \brief Load the specified accrual snapshot for each account.
@@ -1526,45 +966,7 @@ public:
     //! \throws SnapshotHashMismatchError If the hash of the disk snapshot does
     //! not match the hash recorded in the registry.
     //!
-    bool Apply(const uint64_t height, ResearchAccountMap& accounts) const
-    {
-        LogPrint(LogFlags::TALLY,
-            "Tally: applying accrual snapshot %" PRIu64 "...", height);
-
-        AccrualSnapshotReader reader(SnapshotPath(height));
-
-        if (reader.IsNull()) {
-            return error("%s: failed to open %" PRIu64, __func__, height);
-        }
-
-        AccrualSnapshot snapshot;
-
-        try {
-            snapshot = reader.Read();
-        } catch (const std::exception& e) {
-            return error("%s: %s", __func__, e.what());
-        }
-
-        m_registry.AssertHashMatches(height, reader.GetHash());
-
-        for (auto& account_pair : accounts) {
-            const Cpid& cpid = account_pair.first;
-            ResearchAccount& account = account_pair.second;
-
-            account.m_accrual = snapshot.GetAccrual(cpid);
-        }
-
-        // Apply snapshot accrual for any CPIDs with no accounting record as
-        // of the last superblock:
-        //
-        for (const auto& cpid_pair : snapshot.m_records) {
-            if (accounts.find(cpid_pair.first) == accounts.end()) {
-                accounts[cpid_pair.first].m_accrual = cpid_pair.second;
-            }
-        }
-
-        return true;
-    }
+    bool Apply(const uint64_t height, ResearchAccountMap& accounts) const;
 
     //!
     //! \brief Erase the specified accrual snapshot.
@@ -1573,15 +975,7 @@ public:
     //!
     //! \return \c false when an error occurs while removing a snapshot.
     //!
-    bool Drop(const uint64_t height)
-    {
-        LogPrint(LogFlags::TALLY,
-            "Tally: dropping accrual snapshot %" PRIu64 "...", height);
-
-        AccrualSnapshotFile::Remove(height);
-
-        return m_registry.Deregister(height);
-    }
+    bool Drop(const uint64_t height);
 
     //!
     //! \brief Drop every snapshot whose height is strictly greater than the
@@ -1606,23 +1000,9 @@ public:
     //!         (registry is then in a partially-trimmed state; the caller
     //!         should fall through to RebuildAccrualSnapshots()).
     //!
-    int DropAboveHeight(const uint64_t tip_height)
-    {
-        int dropped = 0;
-        while (m_registry.LatestHeight() > tip_height) {
-            const uint64_t latest = m_registry.LatestHeight();
-            if (!Drop(latest)) {
-                return -1;
-            }
-            ++dropped;
-        }
-        return dropped;
-    }
+    int DropAboveHeight(const uint64_t tip_height);
 
-    bool CloseRegistryFile()
-    {
-        return m_registry.Close();
-    }
+    bool CloseRegistryFile();
 
 private:
     AccrualSnapshotRegistry m_registry; //!< Tracks snapshot files state.
@@ -1640,11 +1020,7 @@ public:
     //!
     //! \param researchers The current set of research accounts for known CPIDs.
     //!
-    SnapshotBaselineBuilder(ResearchAccountMap& researchers)
-        : m_researchers(researchers)
-        , m_superblock(SuperblockPtr::Empty())
-    {
-    }
+    SnapshotBaselineBuilder(ResearchAccountMap& researchers);
 
     //!
     //! \brief Scan the chain to establish the baseline delta snapshot accrual
@@ -1655,96 +1031,7 @@ public:
     //!
     //! \return \c false if an error occurs while processing historical accrual.
     //!
-    bool Run(const CBlockIndex* pindex, const SuperblockPtr current_superblock)
-    {
-        LogPrint(LogFlags::TALLY, "Tally: Building baseline snapshot...");
-
-        // Although research accounts initialize with zero snapshot accrual,
-        // we'll zero-out these again in case something changed those values
-        // (like a testing RPC call):
-        //
-        for (auto& account_pair : m_researchers) {
-            account_pair.second.m_accrual = 0;
-        }
-
-        // The maximum depth to consider for rewards corresponds to the legacy
-        // rule that limits unclaimed accrual validity to roughly six months.
-        //
-        // We establish the baseline when connecting the block below the first
-        // version 11 block, so we add 1 to the maximum depth:
-        //
-        const int64_t max_depth = pindex->nHeight + 1 - BLOCKS_PER_DAY * 30 * 6;
-
-        LogPrint(LogFlags::TALLY, "  Snapshot max depth: %" PRId64, max_depth);
-
-        // Seek to the block before the current superblock.
-        //
-        // We don't include the current superblock in the delta accrual baseline
-        // because an accrual snapshot is active until the next superblock.
-        //
-        for (;
-            pindex && pindex->nHeight >= current_superblock.m_height;
-            pindex = pindex->pprev);
-
-        // Calculate the pending accrual for active CPIDs from each historical
-        // superblock.
-        //
-        // We begin tallying research reward accrual from the superblock prior
-        // to the current superblock and sum the reward for each CPID by using
-        // the magnitudes stored in each of the superblocks to compute accrual
-        // earned during the period that a superblock was active.
-        //
-        int64_t payment_time = current_superblock.m_timestamp;
-
-        for (; pindex && pindex->nHeight > max_depth; pindex = pindex->pprev) {
-            if (!pindex->IsSuperblock()) {
-                continue;
-            }
-
-            if (!LoadSuperblock(pindex)) {
-                return false;
-            }
-
-            TallyAccrual(payment_time);
-
-            payment_time = pindex->nTime;
-        }
-
-        // If the maximum depth is a superblock, we're done.
-        //
-        if (pindex->IsSuperblock()) {
-            return true;
-        }
-
-        // Otherwise, we need to credit the remaining accrual between the last
-        // superblock and the maximum depth for any CPIDs left.
-        //
-        // To accomplish this, we slide back one more superblock to engage the
-        // magnitudes for this window that we then apply to the period between
-        // the maximum depth and the superblock above it.
-        //
-        const CBlockIndex* const pindex_max = pindex;
-
-        for (; pindex; pindex = pindex->pprev) {
-            if (!pindex->IsSuperblock()) {
-                continue;
-            }
-
-            // We intentionally bind the superblock to the wrong block index
-            // to force accrual calculation at the time of the maximum depth
-            // rather than at the time of the superblock's containing block:
-            //
-            if (!LoadSuperblock(pindex, pindex_max)) {
-                return false;
-            }
-
-            TallyAccrual(payment_time);
-
-            break;
-        }
-
-        return true;
-    }
+    bool Run(const CBlockIndex* pindex, const SuperblockPtr current_superblock);
 
 private:
     ResearchAccountMap& m_researchers; //!< Current set of known CPIDs.
@@ -1767,24 +1054,7 @@ private:
     //!
     bool LoadSuperblock(
         const CBlockIndex* const pindex,
-        const CBlockIndex* const pindex_bind = nullptr)
-    {
-        assert(pindex->IsSuperblock());
-
-        LogPrint(LogFlags::TALLY, "  Superblock: %" PRId64, pindex->nHeight);
-
-        CBlock block;
-
-        if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
-            return error(
-                "SnapshotBaselineBuilder: failed to load superblock %" PRIu64,
-                pindex->nHeight);
-        }
-
-        m_superblock = block.GetSuperblock(pindex_bind ? pindex_bind : pindex);
-
-        return true;
-    }
+        const CBlockIndex* const pindex_bind = nullptr);
 
     //!
     //! \brief Apply the accrual earned for the current superblock to the total
@@ -1792,15 +1062,7 @@ private:
     //!
     //! \param payment_time Timestamp of the end of the accrual period.
     //!
-    void TallyAccrual(const int64_t payment_time)
-    {
-        const SnapshotCalculator calc(payment_time, m_superblock);
-
-        for (const auto& cpid_pair : m_superblock->m_cpids) {
-            ResearchAccount& account = m_researchers[cpid_pair.Cpid()];
-            account.m_accrual += calc.AccrualDelta(cpid_pair.Cpid(), account);
-        }
-    }
+    void TallyAccrual(const int64_t payment_time);
 }; // SnapshotBaselineBuilder
 } // namespace GRC
 
