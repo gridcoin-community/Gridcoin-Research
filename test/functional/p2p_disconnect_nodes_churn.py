@@ -70,7 +70,7 @@ class DisconnectNodesChurnTest(GridcoinTestFramework):
         real_disconnectnode = node0.disconnectnode
         injected = []
 
-        def disconnectnode_with_arrival(*args):
+        def disconnectnode_with_arrival(*args, **kwargs):
             # Between the helper's snapshot of node 1's peers and its wait:
             # node 1 gains a peer by dialing node 2 (node 2's one inbound
             # accept). connect_nodes waits for the handshake, so the arrival
@@ -78,7 +78,7 @@ class DisconnectNodesChurnTest(GridcoinTestFramework):
             self.connect_nodes(1, 2)
             assert_equal(node1.getconnectioncount(), 2)
             injected.append(True)
-            return real_disconnectnode(*args)
+            return real_disconnectnode(*args, **kwargs)
 
         node0.disconnectnode = disconnectnode_with_arrival
         try:

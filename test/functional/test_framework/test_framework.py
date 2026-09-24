@@ -659,13 +659,15 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
 
         Completion is detected by the captured peer ids disappearing from the
         dialing sides' getpeerinfo, plus, for each accepting side, enough of
-        the peers it had before the disconnect disappearing to account for the
-        links it accepted. An accepted link cannot be identified by address
-        (the acceptor sees an ephemeral port), but it is in that snapshot and
-        a peer arriving during the wait is not, so an arrival cannot hold the
-        wait open. This arm is a bound, not an identification: a pre-existing
-        peer of the acceptor leaving during the wait satisfies it early, as
-        it did the connection-count bound this replaces.
+        the INBOUND peers it had before the disconnect disappearing to account
+        for the links it accepted. An accepted link cannot be identified by
+        address (the acceptor sees an ephemeral port), but it is always
+        inbound on the acceptor and always in that snapshot, while a peer
+        arriving during the wait is not -- so an arrival cannot hold the wait
+        open, and no outbound peer of the acceptor can be counted by leaving.
+        This arm is still a bound, not an identification: a pre-existing
+        inbound peer of the acceptor leaving during the wait satisfies it
+        early, as it did the connection-count bound this replaces.
         """
         def dialed_peer_ids(node, target_num):
             target = "127.0.0.1:" + str(p2p_port(target_num))
@@ -679,11 +681,13 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
             self.log.warning("disconnect_nodes: {} and {} were not connected".format(a, b))
             return
 
-        # Every peer each side has now. Peer ids come from a per-node counter
-        # that is never reused, so an arrival after this point can never be
-        # mistaken for one of these.
-        before_a = {p['id'] for p in node_a.getpeerinfo()}
-        before_b = {p['id'] for p in node_b.getpeerinfo()}
+        # Every INBOUND peer each side has now. A link the other side dialed is
+        # inbound here, so the accepted links are always among these, and an
+        # outbound peer of this side leaving can never stand in for one. Peer
+        # ids come from a per-node counter that is never reused, so an arrival
+        # after this point can never be mistaken for one of these either.
+        before_in_a = {p['id'] for p in node_a.getpeerinfo() if p['inbound']}
+        before_in_b = {p['id'] for p in node_b.getpeerinfo() if p['inbound']}
 
         for node, ids in ((node_a, ids_a), (node_b, ids_b)):
             for peer_id in ids:
@@ -699,16 +703,17 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         # by peer id. The ACCEPTING side of a dialed link cannot be identified
         # by address (it sees an ephemeral source port), so that side is
         # waited on by elimination: at least as many of its pre-disconnect
-        # peers, other than the ones it dialed itself, must have gone as links
-        # it accepted. A connection-count bound would be held open by any peer
-        # arriving during the wait; a snapshot of ids is not.
+        # INBOUND peers must have gone as links it accepted. A connection-count
+        # bound would be held open by any peer arriving during the wait, and an
+        # all-peers snapshot could be satisfied by an unrelated outbound peer
+        # leaving; an inbound-id snapshot is neither.
         def links_gone():
             live_a = {p['id'] for p in node_a.getpeerinfo()}
             live_b = {p['id'] for p in node_b.getpeerinfo()}
             if (set(ids_a) & live_a) or (set(ids_b) & live_b):
                 return False
-            gone_a = (before_a - set(ids_a)) - live_a
-            gone_b = (before_b - set(ids_b)) - live_b
+            gone_a = before_in_a - live_a
+            gone_b = before_in_b - live_b
             return len(gone_a) >= len(ids_b) and len(gone_b) >= len(ids_a)
 
         wait_until_helper(links_gone, timeout=5,
