@@ -216,7 +216,7 @@ struct SendCoinsResult
     //! FeeExceedsSubtractedAmount, or FeeConfirmationRequired.
     int64_t fee{0};
     //! Committed transaction hash (hex) when status is OK.
-    std::string txid_hex;
+    std::string txid_hex{};
 };
 
 //! Wallet interface for the GUI: wallet queries plus notification

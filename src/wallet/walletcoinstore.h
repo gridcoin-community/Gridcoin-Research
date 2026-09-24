@@ -191,10 +191,10 @@ private:
     struct IntakeItem {
         enum Kind { Upsert, Remove, AddressBook } kind;
         uint256 hash;
-        std::vector<CoinRecord> records;
+        std::vector<CoinRecord> records{};
         bool pending{false};
-        std::string ab_address;
-        std::string ab_label;
+        std::string ab_address{};
+        std::string ab_label{};
     };
 
     //! Worker entry point: the WalletTxStore park/drain loop, verbatim shape.

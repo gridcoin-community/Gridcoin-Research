@@ -874,7 +874,6 @@ UniValue walletcreatefundedpsgt(const UniValue& params)
     if (params.size() > 3)
         fSign = params[3].get_bool();
 
-    bool complete = false;
     if (fSign)
     {
         // Fill UTXO data.
@@ -887,11 +886,14 @@ UniValue walletcreatefundedpsgt(const UniValue& params)
                 psgt.inputs[i].non_witness_utxo = prevTx;
         }
 
-        complete = true;
+        // Sign every input this wallet can. A failure here is not an error: the
+        // point of a PSGT is that the remaining inputs go to another signer.
+        // Whether the set came out complete is not part of this RPC's documented
+        // result ({psgt, fee}) -- walletprocesspsgt and finalizepsgt are the ones
+        // that report it -- so the per-input outcome is not accumulated.
         for (unsigned int i = 0; i < psgt.inputs.size(); ++i)
         {
-            if (!SignPSGTInput(*pwalletMain, psgt, i))
-                complete = false;
+            SignPSGTInput(*pwalletMain, psgt, i);
         }
     }
 

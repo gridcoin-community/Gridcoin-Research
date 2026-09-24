@@ -1123,6 +1123,7 @@ private:
 
             case PollWeightType::PARTICIPANT_COUNT:
                 response_weight = 1 * COIN;
+                break;
 
             case PollWeightType::UNKNOWN:
             case PollWeightType::OUT_OF_BOUND:

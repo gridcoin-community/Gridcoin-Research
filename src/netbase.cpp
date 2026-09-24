@@ -335,7 +335,14 @@ bool static Socks5(string strDest, int port, SOCKET& hSocket)
     // The casts are needed because winsock declares recv as taking char*; POSIX
     // takes void* and would not need them.
     uint8_t pchRet3[256];
-    static_assert(sizeof(pchRet3) > std::numeric_limits<uint8_t>::max(),
+    // Bound named rather than written inline: GCC reports -Wtype-limits on a
+    // direct comparison against numeric_limits<uint8_t>::max(), and neither a
+    // static_cast nor a braced size_t conversion silences it -- the diagnostic is
+    // decided by the range of the type the bound came from, which is the very
+    // thing being asserted. Binding it to a size_t constant first states the same
+    // bound without the mixed-range comparison.
+    constexpr size_t max_domain_name_len = std::numeric_limits<uint8_t>::max();
+    static_assert(sizeof(pchRet3) > max_domain_name_len,
                   "the domain-name length is read from a single byte, so the buffer "
                   "must be larger than any value that byte can hold");
     static_assert(std::is_unsigned_v<std::remove_reference_t<decltype(pchRet3[0])>>,

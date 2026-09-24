@@ -140,17 +140,6 @@ public:
     }
 
     //!
-    //! \brief Generate a quorum hash of the provided scraper statistics.
-    //!
-    //! \param stats The scraper statistics to generate a hash from.
-    //!
-    //! \return A hash that matches the hash of a corresponding superblock.
-    //!
-    static QuorumHash Hash(const ScraperStatsVerifiedBeaconsTotalCredits& stats)
-    {
-        return ScraperStatsQuorumHasher(stats).GetHash();
-    }
-
     //!
     //! \brief Generate a quorum hash of the wrapped scraper statistics.
     //!

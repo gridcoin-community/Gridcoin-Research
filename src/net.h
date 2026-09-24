@@ -723,7 +723,10 @@ public:
 
 private:
     AddrMan m_addrman;
-    const uint64_t nSeed0, nSeed1;
+    //! Upstream feeds these to GetDeterministicRandomizer, which this port does
+    //! not have yet. Retained so the seeds the caller already computes stay
+    //! available to that when it lands, rather than being re-plumbed then.
+    [[maybe_unused]] const uint64_t nSeed0, nSeed1;
     std::atomic<bool> fNetworkActive;
     Options m_options;
     std::vector<std::thread> m_net_threads;

@@ -1546,14 +1546,10 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
     TxState state;
     if (pblock && !pblock->GetHash(true).IsNull()) {
         uint256 block_hash = pblock->GetHash(true);
-        int block_height = -1;
         int position = -1;
 
-        auto it = mapBlockIndex.find(block_hash);
-        if (it != mapBlockIndex.end()) {
-            block_height = it->second->nHeight;
-        }
-
+        // Only the hash and the position are needed: TxStateConfirmed stores no
+        // height, so there is no mapBlockIndex lookup here.
         for (size_t i = 0; i < pblock->vtx.size(); i++) {
             if (pblock->vtx[i].GetHash() == tx.GetHash()) {
                 position = static_cast<int>(i);

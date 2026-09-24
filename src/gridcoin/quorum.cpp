@@ -751,13 +751,6 @@ private: // SuperblockValidator classes
         size_t m_combiner_mask;
 
         //!
-        //! \brief Initialize a new project context object.
-        //!
-        ResolvedProject() : m_combiner_mask(0)
-        {
-        }
-
-        //!
         //! \brief Initialize a new project context object with the provided
         //! manifest part hashes.
         //!

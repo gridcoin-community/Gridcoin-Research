@@ -73,10 +73,6 @@ struct CMutableBitcoinTransaction
         READWRITE(nLockTime);
     }
 
-    uint256 GetHash() const
-    {
-        return SerializeHash(*this);
-    }
 };
 
 CTransaction ConvertFromMutableBitcoinTransaction(CMutableBitcoinTransaction& btx)
@@ -164,7 +160,8 @@ BOOST_AUTO_TEST_CASE(tx_valid)
 
                 // Support both old format (bool enforceP2SH) and new format (string flags)
                 unsigned int verify_flags = test[2].isBool()
-                    ? (test[2].get_bool() ? SCRIPT_VERIFY_P2SH : SCRIPT_VERIFY_NONE)
+                    ? static_cast<unsigned int>(test[2].get_bool() ? SCRIPT_VERIFY_P2SH
+                                                                   : SCRIPT_VERIFY_NONE)
                     : ParseScriptFlags(test[2].get_str());
                 BOOST_CHECK_MESSAGE(VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout], verify_flags, tx, i),
                         strTest);
@@ -238,7 +235,8 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
 
                 // Support both old format (bool enforceP2SH) and new format (string flags)
                 unsigned int verify_flags = test[2].isBool()
-                    ? (test[2].get_bool() ? SCRIPT_VERIFY_P2SH : SCRIPT_VERIFY_NONE)
+                    ? static_cast<unsigned int>(test[2].get_bool() ? SCRIPT_VERIFY_P2SH
+                                                                   : SCRIPT_VERIFY_NONE)
                     : ParseScriptFlags(test[2].get_str());
                 fValid = VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout], verify_flags, tx, i);
             }

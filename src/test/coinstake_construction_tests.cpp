@@ -179,13 +179,6 @@ struct CoinstakeSetup {
     }
 };
 
-static CScript P2PKH(const CKeyID& id)
-{
-    CScript s;
-    s << OP_DUP << OP_HASH160 << id << OP_EQUALVERIFY << OP_CHECKSIG;
-    return s;
-}
-
 } // anonymous namespace
 
 BOOST_FIXTURE_TEST_SUITE(coinstake_construction_tests, CoinstakeSetup)

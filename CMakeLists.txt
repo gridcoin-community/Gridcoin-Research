@@ -159,6 +159,7 @@ option(ENABLE_PIE       "Build position-independent executables. OFF genuinely d
 option(ENABLE_HARDENING "Apply exploit-mitigation compiler and linker flags" ON)
 option(ENABLE_DEBUG_LOCKORDER "Enable run-time lock-order checking (DEBUG_LOCKORDER)" OFF)
 option(WERROR_THREAD_SAFETY "Promote Clang thread-safety diagnostics to build errors" OFF)
+option(WERROR "Promote the selected warning set to build errors (Autotools --enable-werror)" OFF)
 option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" OFF)
 option(ENABLE_UPNP      "Enable UPnP port mapping support" ON)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
@@ -632,6 +633,137 @@ if(HAVE_CLANG_THREAD_SAFETY)
     endif()
 endif()
 
+# Warning flags, restored from the Autotools build.
+#
+# configure.ac carried these until it was deleted (291528e7f, 2026-02-18).
+# CMakeLists.txt never had them -- `git log -S'-Wall' -- CMakeLists.txt` is empty
+# from its introduction (91a84ffd3, 2023-01-28) -- so cmake builds went unwarned
+# for the whole period both systems coexisted, and after the removal nobody was
+# warned at all. -Wthread-safety above is the sole survivor, and only because the
+# analyzer rollout (#2869) re-added it for its own purposes. See issue #3387.
+#
+# Each flag is probed rather than assumed, matching the hardening loop above, so
+# a compiler that does not know one degrades instead of failing to configure.
+#
+# One deliberate difference from configure.ac: it skipped this whole block when
+# CXXFLAGS was given on the configure line. CMake has no equivalent, and faking
+# one would be worse -- CMAKE_CXX_FLAGS is emitted BEFORE directory-level
+# COMPILE_OPTIONS, so keying off it would silently drop every warning for anyone
+# who passes something ordinary like -march=native. These are unconditional.
+set(WARN_CXXFLAGS
+    -Wall
+    -Wextra
+    -Wvla
+    -Wshadow-field
+    -Wloop-analysis
+    -Wunused-member-function
+    -Wdate-time
+    -Wconditional-uninitialized
+    -Wduplicated-branches
+    -Wduplicated-cond
+    -Wlogical-op
+    -Woverloaded-virtual
+    -Wunreachable-code-loop-increment
+    -Wimplicit-fallthrough
+)
+
+# Suppressions the tree was already tuned to under Autotools. These are not new
+# policy: they are the families configure.ac had already decided were not worth
+# chasing here, and starting from them is what keeps this a restoration rather
+# than a triage exercise from zero.
+#
+# -Wimplicit-fallthrough is the one deliberate deviation from configure.ac, and it
+# is enabled rather than suppressed. configure.ac added it to CXXFLAGS and then
+# added -Wno-implicit-fallthrough after it, so the later flag won and the warning
+# was effectively off -- but that suppression came in from upstream Bitcoin, not
+# from a decision here. This tree uses [[fallthrough]] in its own code, so the
+# convention is already followed and only the enforcement was missing.
+# Bare names: the loop below builds both -W<name> (to probe) and -Wno-<name>.
+set(WARN_SUPPRESS_CXXFLAGS
+    unused-parameter
+    self-assign
+    deprecated-register
+    deprecated-copy
+)
+
+# Every flag below is added for C++ only. configure.ac put them in CXXFLAGS, so
+# that is the faithful port, and it is also required: several of them
+# (-Woverloaded-virtual, -Wno-deprecated-copy, -Wshadow-field) are C++-only
+# spellings that make GCC emit a "valid for C++/ObjC++ but not for C" note on
+# every C translation unit if they reach one.
+# Probe under -Werror, the way configure.ac did: it passed $CXXFLAG_WERROR as the
+# fourth argument of every AX_CHECK_COMPILE_FLAG above. Without it the probe only
+# proves the driver did not reject the spelling, and Clang accepts an unknown -W
+# option with nothing worse than -Wunknown-warning-option -- so a flag it does not
+# implement would be probed as supported and then added to every compile. This is
+# the same guard the hardening loop above applies for its own reason; -Werror is
+# itself probed first, because a compiler that does not take it must not have
+# every subsequent check fail.
+check_cxx_compiler_flag("-Werror" WARN_HAVE_WERROR)
+set(_warn_saved_required_flags "${CMAKE_REQUIRED_FLAGS}")
+if(WARN_HAVE_WERROR)
+    string(APPEND CMAKE_REQUIRED_FLAGS " -Werror")
+endif()
+
+# -Wformat-security is probed with -Wformat rather than on its own: GCC answers a
+# lone -Wformat-security with "-Wformat-security ignored without -Wformat", which
+# the -Werror guard above turns into a failed probe, silently dropping the flag.
+# configure.ac probed the pair as one string for exactly this reason. They are
+# added as two separate options because a single add_compile_options string
+# containing a space reaches the compiler as one unrecognised argument.
+check_cxx_compiler_flag("-Wformat -Wformat-security" WARN_CXX_Wformat_security)
+if(WARN_CXX_Wformat_security)
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wformat>"
+                        "$<$<COMPILE_LANGUAGE:CXX>:-Wformat-security>")
+endif()
+
+foreach(flag ${WARN_CXXFLAGS})
+    string(MAKE_C_IDENTIFIER "WARN_CXX${flag}" flag_var)
+    check_cxx_compiler_flag("${flag}" ${flag_var})
+    if(${flag_var})
+        add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${flag}>")
+    endif()
+endforeach()
+
+# GCC ignores an unknown -Wno-* silently but then complains about it if any other
+# warning fires, so probe the POSITIVE form and add the negative one only if the
+# compiler knows it. configure.ac did the same, for the same reason.
+foreach(flag ${WARN_SUPPRESS_CXXFLAGS})
+    string(MAKE_C_IDENTIFIER "WARN_SUPPRESS_CXX_${flag}" flag_var)
+    check_cxx_compiler_flag("-W${flag}" ${flag_var})
+    if(${flag_var})
+        add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-${flag}>")
+    endif()
+endforeach()
+
+# Mirrors Autotools --enable-werror. Thread-safety is deliberately absent: it has
+# its own WERROR_THREAD_SAFETY switch above, which CI already sets.
+if(WERROR)
+    set(WERROR_CXXFLAGS
+        -Werror=vla
+        -Werror=shadow-field
+        -Werror=switch
+        -Werror=range-loop-analysis
+        -Werror=unused-variable
+        -Werror=date-time
+        -Werror=return-type
+        -Werror=conditional-uninitialized
+        -Werror=unreachable-code-loop-increment
+        -Werror=mismatched-tags
+    )
+
+    foreach(flag ${WERROR_CXXFLAGS})
+        string(MAKE_C_IDENTIFIER "WERROR_CXX${flag}" flag_var)
+        check_cxx_compiler_flag("${flag}" ${flag_var})
+        if(${flag_var})
+            add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${flag}>")
+        endif()
+    endforeach()
+endif()
+
+set(CMAKE_REQUIRED_FLAGS "${_warn_saved_required_flags}")
+unset(_warn_saved_required_flags)
+
 if(STATIC_LIBS)
     set(CMAKE_LINK_SEARCH_START_STATIC ON)
     set(CMAKE_FIND_LIBRARY_SUFFIXES "${CMAKE_STATIC_LIBRARY_SUFFIX}")
@@ -680,6 +812,14 @@ list(APPEND CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 check_symbol_exists(pipe2 "unistd.h" HAVE_DECL_PIPE2)
 list(REMOVE_ITEM CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 check_symbol_exists(setsid "unistd.h" HAVE_DECL_SETSID)
+
+# randomenv.cpp gathers entropy from the network interface list under
+# HAVE_DECL_GETIFADDRS && HAVE_DECL_FREEIFADDRS. Nothing has ever defined those:
+# configure.ac had no AC_CHECK_DECLS for them either, so that block has been
+# compiled out since the code was imported, and AddSockaddr sat there unused --
+# which is how -Wunused-function found it.
+check_symbol_exists(getifaddrs "sys/types.h;ifaddrs.h" HAVE_DECL_GETIFADDRS)
+check_symbol_exists(freeifaddrs "sys/types.h;ifaddrs.h" HAVE_DECL_FREEIFADDRS)
 
 check_symbol_exists(le16toh "${ENDIAN_INCLUDES}" HAVE_DECL_LE16TOH)
 check_symbol_exists(le32toh "${ENDIAN_INCLUDES}" HAVE_DECL_LE32TOH)

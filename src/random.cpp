@@ -291,6 +291,8 @@ void GetOSRand(unsigned char *ent32)
     if (getrandom(ent32, NUM_OS_RANDOM_BYTES, 0) != NUM_OS_RANDOM_BYTES) {
         RandFailure();
     }
+    // Silence a compiler warning about unused function.
+    (void)GetDevURandom;
 #elif defined(__OpenBSD__)
     /* OpenBSD. From the arc4random(3) man page:
        "Use of these functions is encouraged for almost all random number

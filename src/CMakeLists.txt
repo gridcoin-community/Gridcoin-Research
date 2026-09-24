@@ -72,6 +72,28 @@ else()
     add_subdirectory(leveldb)
     set(LIBLEVELDB leveldb)
 
+    # src/leveldb is an upstream import that this tree does not style-own -- the
+    # lint suite skips it alongside secp256k1, univalue and the other vendored
+    # trees -- so a local edit here is divergence to carry across every future
+    # import. Two of the restored warnings fire inside it, and both are suppressed
+    # on this target only, leaving the tree's own code under them:
+    #
+    #   -Wimplicit-fallthrough      util/hash.cc annotates with
+    #                               FALLTHROUGH_INTENDED, but the definition it
+    #                               carries is the do-nothing fallback and the
+    #                               comment there says the real one comes from
+    #                               outside.
+    #   -Wconditional-uninitialized db/version_set.cc, Clang only.
+    #
+    # Probed by the same variables the top-level loop set, so a compiler that
+    # rejected the positive form never sees the negative one.
+    if(WARN_CXX_Wimplicit_fallthrough)
+        target_compile_options(leveldb PRIVATE -Wno-implicit-fallthrough)
+    endif()
+    if(WARN_CXX_Wconditional_uninitialized)
+        target_compile_options(leveldb PRIVATE -Wno-conditional-uninitialized)
+    endif()
+
     set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_ORIG})
 endif()
 

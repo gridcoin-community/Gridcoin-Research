@@ -64,7 +64,7 @@ struct CursorDelta {
     //! self-describing, so nothing downstream has to re-derive a stale position.
     //! Also set for Change (one row), so the store can sample its content at
     //! emission. Empty for Reset/Remove, neither of which carries records.
-    std::vector<std::size_t> rows;
+    std::vector<std::size_t> rows{};
 };
 
 class Cursor

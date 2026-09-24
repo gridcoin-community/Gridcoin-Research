@@ -190,7 +190,11 @@ public:
         const std::vector<SideStake_ptr>& active_sidestakes) const;
 
 private:
-    const CBlockIndex* m_pindex_prev;
+    //! Captured by both constructors. No rule reads it today; it is kept because
+    //! every other member of this block of state is the rules' input set and
+    //! dropping one of them would make the constructors disagree about what a
+    //! reward context is.
+    [[maybe_unused]] const CBlockIndex* m_pindex_prev;
     int m_block_version;
     int64_t m_block_time;
 
