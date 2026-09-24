@@ -188,10 +188,13 @@ bool Contains(const std::vector<CTransaction>& txs, const CTransaction& tx)
 // change: they modify an existing builtin seed rather than adding an entry. So the
 // mutation is both unrestored and invisible, and the reset has to be asked for.
 //
-// WalletTxScope is the per-case fixture: the chain is shared, but every case
-// leaves the wallet's entry set as it found it, so the cases hold in any order
-// (--random shuffles them). Without it a case that plants an own transaction
-// and returns without erasing it hands the next case a resend candidate.
+// WalletTxScope is the per-case fixture: the chain is shared, but every
+// unconfirmed entry a case adds is erased at its exit, so no case hands a
+// sibling a resend candidate and the cases hold in any order (--random
+// shuffles them). It does not restore entries a case REMOVES -- the resend
+// case's forced ResendWalletTransactions can erase pre-existing invalid
+// entries -- so this is a no-leak guarantee for what cases add, not a
+// restoration of the whole entry set (see chain_setup.h).
 BOOST_FIXTURE_TEST_SUITE(miner_block_assembly_tests, grc_test::WalletTxScope, *boost::unit_test::fixture<grc_test::RegtestChainSetup>() *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::POOL_REGISTER>>())
 
 //!
@@ -675,10 +678,11 @@ BOOST_AUTO_TEST_CASE(a_size_limit_eviction_reaches_the_wallet)
 //! against the tx index and relayed; marked conflicted it is refused by
 //! RelayWalletTransaction. Had the eviction handler marked it conflicted, the
 //! count after the eviction would be 0. The wallet must have nothing to
-//! re-announce before the case starts, or the counts would not be this case's;
-//! the suite's per-case WalletTxScope guarantees that in any order, and the
-//! entry check names any candidate a sibling left behind rather than only
-//! counting it.
+//! re-announce before the case starts, or the counts would not be this case's.
+//! The suite's per-case WalletTxScope keeps a sibling case's resend candidates
+//! from leaking in, in any order; it says nothing about entries other suites
+//! leave, which is why the entry check below names any relayable candidate it
+//! finds rather than only counting it.
 //!
 BOOST_AUTO_TEST_CASE(a_size_limit_evicted_own_spend_is_rebroadcast)
 {
