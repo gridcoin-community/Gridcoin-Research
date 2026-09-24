@@ -8,8 +8,7 @@
 #include "amount.h"
 #include "gridcoin/accrual/computer.h"
 
-namespace {
-using namespace GRC;
+namespace GRC {
 
 //!
 //! \brief Get the multiplier used to calculate the maximum research reward
@@ -21,7 +20,10 @@ using namespace GRC;
 //! \return A value in units of GRC that represents the maximum research reward
 //! expected per block.
 //!
-CAmount GetMaxResearchSubsidy(const int64_t nTime)
+//! Defined in the header, so it needs the linkage that permits a definition in
+//! every translation unit that includes it. Under the old anonymous namespace
+//! that came for free; in a named namespace it does not.
+inline CAmount GetMaxResearchSubsidy(const int64_t nTime)
 {
     // Gridcoin Global Daily Maximum Researcher Subsidy Schedule
     CAmount MaxSubsidy = 500;
@@ -310,6 +312,6 @@ private:
         return total_mag / 3;
     }
 }; // ResearchAgeComputer
-} // anonymous namespace
+} // namespace GRC
 
 #endif // GRIDCOIN_ACCRUAL_RESEARCH_AGE_H

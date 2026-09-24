@@ -26,6 +26,13 @@
 
 using namespace std;
 
+// Declared rather than inherited. Until the accrual snapshot header was moved
+// out of an anonymous namespace, its `using namespace GRC;` leaked into every
+// includer's global scope, and this file had been relying on that for GRC names
+// unrelated to snapshots (MinerStatus, Cpid and others). The sibling RPC units
+// rawtransaction.cpp, dataacq.cpp and voting.cpp all declare this themselves.
+using namespace GRC;
+
 static const RPCHelpMan getstakinginfo_help{
     "getstakinginfo",
     "Returns an object containing staking-related information.\n"

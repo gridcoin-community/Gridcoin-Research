@@ -28,8 +28,7 @@
 
 class CBlockIndex;
 
-namespace {
-using namespace GRC;
+namespace GRC {
 using LogFlags = BCLog::LogFlags;
 
 //!
@@ -490,10 +489,7 @@ private:
 //!
 //! \brief Get the path to the accrual snapshot storage directory.
 //!
-fs::path SnapshotDirectory()
-{
-    return GetDataDir() / "accrual";
-}
+fs::path SnapshotDirectory();
 
 //!
 //! \brief Get the path to a snapshot file.
@@ -502,10 +498,7 @@ fs::path SnapshotDirectory()
 //!
 //! \return Path to the snapshot file in the snapshot directory.
 //!
-fs::path SnapshotPath(const uint64_t height)
-{
-    return SnapshotDirectory() / strprintf("%" PRIu64 ".dat", height);
-}
+fs::path SnapshotPath(const uint64_t height);
 
 //!
 //! \brief Contains a snapshot of pending research reward accrual for CPIDs in
@@ -599,8 +592,6 @@ public:
         return iter->second;
     }
 }; // AccrualSnapshot
-
-constexpr uint32_t AccrualSnapshot::CURRENT_VERSION; // for clang
 
 //!
 //! \brief Base class for types that read and write accrual snapshot files.
@@ -1811,6 +1802,6 @@ private:
         }
     }
 }; // SnapshotBaselineBuilder
-} // anonymous namespace
+} // namespace GRC
 
 #endif // GRIDCOIN_ACCRUAL_SNAPSHOT_H

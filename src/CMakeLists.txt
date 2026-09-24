@@ -160,6 +160,7 @@ add_library(gridcoin_util STATIC
     dbwrapper.cpp
     fs.cpp
     htlc.cpp
+    gridcoin/accrual/snapshot.cpp
     gridcoin/autogreylist.cpp
     gridcoin/autogreylist_v2.cpp
     gridcoin/backup.cpp

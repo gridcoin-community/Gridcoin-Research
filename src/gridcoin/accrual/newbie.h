@@ -9,8 +9,7 @@
 #include "gridcoin/accrual/computer.h"
 #include "gridcoin/beacon.h"
 
-namespace {
-using namespace GRC;
+namespace GRC {
 
 //!
 //! \brief An accrual calculator for a CPID that never earned a research reward
@@ -145,6 +144,6 @@ private:
     const double m_magnitude_unit; //!< Network magnitude unit to factor in.
     const double m_magnitude;      //!< CPID's magnitude in the last superblock.
 }; // NewbieAccrualComputer
-} // anonymous namespace
+} // namespace GRC
 
 #endif // GRIDCOIN_ACCRUAL_NEWBIE_H
