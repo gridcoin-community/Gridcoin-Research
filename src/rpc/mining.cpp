@@ -9,6 +9,7 @@
 #include <key_io.h>
 #include "miner.h"
 #include "gridcoin/accrual/snapshot.h"
+#include "gridcoin/beacon.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/kernel.h"
@@ -25,6 +26,13 @@
 #include <stdexcept>
 
 using namespace std;
+
+// Declared rather than inherited. Until the accrual snapshot header was moved
+// out of an anonymous namespace, its `using namespace GRC;` leaked into every
+// includer's global scope, and this file had been relying on that for GRC names
+// unrelated to snapshots (MinerStatus, Cpid and others). The sibling RPC units
+// rawtransaction.cpp, dataacq.cpp and voting.cpp all declare this themselves.
+using namespace GRC;
 
 static const RPCHelpMan getstakinginfo_help{
     "getstakinginfo",

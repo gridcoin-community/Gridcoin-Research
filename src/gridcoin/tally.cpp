@@ -8,6 +8,7 @@
 #include "gridcoin/accrual/null.h"
 #include "gridcoin/accrual/research_age.h"
 #include "gridcoin/accrual/snapshot.h"
+#include "gridcoin/beacon.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/cpid.h"
@@ -593,7 +594,8 @@ public:
             // entries describe accrual state for blocks that no longer exist
             // in this chain; if we leave them in place, the first SB the
             // subsequent forward sync re-crosses will trip Register's strict-
-            // monotonic invariant (assertion at snapshot.h:1085) and kill the
+            // monotonic invariant (the assertion in AccrualSnapshotRegistry::
+            // Register, gridcoin/accrual/snapshot.cpp) and kill the
             // wallet during P2P sync.
             //
             // Drop the stale entries here, before the forward walk's
