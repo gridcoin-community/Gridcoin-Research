@@ -11,6 +11,7 @@
 #include "gridcoin/contract/contract.h"
 #include "primitives/transaction.h"
 
+#include <set>
 #include <string>
 #include <vector>
 
@@ -48,6 +49,15 @@ namespace grc_test {
 //! disk-reload path instead of creating genesis. Constructing a second one while
 //! the first is alive asserts.
 //!
+//! A LIGHT per-case fixture alongside the decorator is fine, and is how a suite
+//! keeps its cases order-independent while sharing one chain:
+//!
+//!     BOOST_FIXTURE_TEST_SUITE(my_tests, grc_test::WalletTxScope,
+//!                              *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
+//!
+//! The chain is still built once per suite; only the per-case object is
+//! constructed and destroyed around each case.
+//!
 //! Because it is not a base class under that decorator, the helpers below are
 //! free functions. They are valid only while a RegtestChainSetup is alive.
 //!
@@ -72,6 +82,54 @@ struct RegtestChainSetup
 
     RegtestChainSetup(const RegtestChainSetup&) = delete;
     RegtestChainSetup& operator=(const RegtestChainSetup&) = delete;
+};
+
+//!
+//! \brief Erases the unconfirmed wallet transactions added during its lifetime.
+//!
+//! For a suite that shares one RegtestChainSetup across its cases (see the
+//! LIFETIME note above). Whatever the exit path -- a BOOST_REQUIRE that throws
+//! mid-case unwinds this object too -- every unconfirmed entry the case ADDED is
+//! gone again, so no case inherits a sibling's resend candidates, and a case's
+//! preconditions on the wallet hold in any order.
+//!
+//! What it undoes: the entries added during its lifetime, each with its own
+//! mapTxSpends rows (EraseFromWallet removes exactly those), and then the
+//! vfSpent bits those entries set on their parents. The last part goes through
+//! FixSpentCoins rather than releasing the bits directly, because the direct
+//! release is wrong here: the coinstake draws from the same premine outputs the
+//! fixtures spend, so a fixture conflicted out of the pool can share an input
+//! with a confirmed spend. FixSpentCoins decides each bit from the transaction
+//! index -- it frees what only an erased entry held, keeps what the chain spent,
+//! and its mempool guard keeps anything a still-pooled transaction spends.
+//! Without that step each such case left a premine output unselectable for every
+//! case after it, and the stakeable set only shrank.
+//!
+//! What it does NOT undo: entries the case itself REMOVES. The snapshot holds
+//! keys, not entries, so a pre-existing entry erased during the case stays
+//! erased. The known instance is the forced ResendWalletTransactions in the
+//! resend case, which erases every pre-existing entry that fails revalidation --
+//! accounting_tests' synthetic entries among them. That suite has finished with
+//! them by then, so nothing observes the loss, but the scope does not restore
+//! them and should not be read as if it did.
+//!
+//! Entries in TxStateConfirmed are kept. They belong to the chain the suite-level
+//! fixture still holds (a mined block's coinstake, delivered through
+//! CWallet::BlockConnected), the wallet stakes their outputs in later cases
+//! exactly as it does today, and the fixture's own teardown removes them once
+//! the chain is rewound. Erasing them would take the coinstake outputs out of
+//! the wallet's stakeable set while the chain still holds them.
+//!
+struct WalletTxScope
+{
+    WalletTxScope();
+    ~WalletTxScope();
+
+    WalletTxScope(const WalletTxScope&) = delete;
+    WalletTxScope& operator=(const WalletTxScope&) = delete;
+
+private:
+    std::set<uint256> m_preexisting;
 };
 
 //! \brief The key the regtest genesis premine pays to.

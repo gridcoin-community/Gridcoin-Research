@@ -357,6 +357,55 @@ RegtestChainSetup::~RegtestChainSetup()
     g_state.reset();
 }
 
+WalletTxScope::WalletTxScope()
+{
+    if (!pwalletMain) return;
+
+    LOCK(pwalletMain->cs_wallet);
+
+    for (const auto& entry : pwalletMain->mapWallet) {
+        m_preexisting.insert(entry.first);
+    }
+}
+
+WalletTxScope::~WalletTxScope()
+{
+    if (!pwalletMain) return;
+
+    std::vector<uint256> added;
+
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        for (const auto& entry : pwalletMain->mapWallet) {
+            if (m_preexisting.count(entry.first)) continue;
+            // A confirmed entry is the chain's, not the case's; see the header.
+            if (entry.second.isConfirmed()) continue;
+            added.push_back(entry.first);
+        }
+    }
+
+    for (const uint256& hash : added) {
+        pwalletMain->EraseFromWallet(hash);
+    }
+
+    // Reconcile the wallet's spent flags against the chain. EraseFromWallet
+    // drops an entry and its own mapTxSpends rows but not the vfSpent bits it
+    // set on its parents, so a case that planted an unconfirmed spend of a
+    // premine output would otherwise leave that output unselectable for every
+    // case after it -- the stakeable set shrinks with each one and nothing
+    // gives it back. Releasing those bits blindly would be wrong the other
+    // way: the coinstake draws from the same premine outputs, so a fixture
+    // conflicted out of the pool can share an input with a confirmed spend.
+    // FixSpentCoins decides each bit from the transaction index, so it frees
+    // what only an erased entry held and keeps what the chain spent -- and its
+    // mempool guard keeps anything a still-pooled transaction spends.
+    int mismatch = 0;
+    CAmount in_question = 0;
+    pwalletMain->FixSpentCoins(mismatch, in_question);
+
+}
+
 const CKey& PremineKey() { return State().m_key; }
 
 const CBasicKeyStore& PremineKeystore() { return State().m_keystore; }
