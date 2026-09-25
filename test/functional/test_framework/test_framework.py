@@ -648,10 +648,9 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         connected to instead. connect_nodes(x, y) makes x dial
         127.0.0.1:<p2p_port(y)>, and x's getpeerinfo reports exactly that
         string as "addr". The accepting side only sees an ephemeral port, so
-        the disconnect is issued from whichever side dialed, and completion is
-        checked by both connection counts falling by the number of links. The
-        RPC server takes positional params only, so nodeid is passed with an
-        empty address in front of it.
+        the disconnect is issued from whichever side dialed. The RPC server
+        takes positional params only, so nodeid is passed with an empty
+        address in front of it.
 
         Re-dialing a node within 5 s of its last inbound accept from the same
         IP is dropped by the daemon's inbound rate limit (and scored as
@@ -659,9 +658,16 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         accepting node's clock forward with setmocktime, or wait, in between.
 
         Completion is detected by the captured peer ids disappearing from the
-        dialing sides' getpeerinfo, plus each accepting side's connection
-        count dropping by the links it accepted (an accepted link cannot be
-        identified by address -- the acceptor sees an ephemeral port).
+        dialing sides' getpeerinfo, plus, for each accepting side, enough of
+        the INBOUND peers it had before the disconnect disappearing to account
+        for the links it accepted. An accepted link cannot be identified by
+        address (the acceptor sees an ephemeral port), but it is always
+        inbound on the acceptor and always in that snapshot, while a peer
+        arriving during the wait is not -- so an arrival cannot hold the wait
+        open, and no outbound peer of the acceptor can be counted by leaving.
+        This arm is still a bound, not an identification: a pre-existing
+        inbound peer of the acceptor leaving during the wait satisfies it
+        early, as it did the connection-count bound this replaces.
         """
         def dialed_peer_ids(node, target_num):
             target = "127.0.0.1:" + str(p2p_port(target_num))
@@ -675,8 +681,13 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
             self.log.warning("disconnect_nodes: {} and {} were not connected".format(a, b))
             return
 
-        count_a_before = node_a.getconnectioncount()
-        count_b_before = node_b.getconnectioncount()
+        # Every INBOUND peer each side has now. A link the other side dialed is
+        # inbound here, so the accepted links are always among these, and an
+        # outbound peer of this side leaving can never stand in for one. Peer
+        # ids come from a per-node counter that is never reused, so an arrival
+        # after this point can never be mistaken for one of these either.
+        before_in_a = {p['id'] for p in node_a.getpeerinfo() if p['inbound']}
+        before_in_b = {p['id'] for p in node_b.getpeerinfo() if p['inbound']}
 
         for node, ids in ((node_a, ids_a), (node_b, ids_b)):
             for peer_id in ids:
@@ -689,18 +700,21 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
                         raise
 
         # Two-part completion check. The dialing side of each link is waited on
-        # by peer id -- precise, immune to unrelated churn. The ACCEPTING side
-        # of a dialed link cannot be identified by address (it sees an
-        # ephemeral source port), so that side is bounded by its connection
-        # count dropping by the number of links it accepted; id-precision
-        # where identifiable, count-bound where not.
+        # by peer id. The ACCEPTING side of a dialed link cannot be identified
+        # by address (it sees an ephemeral source port), so that side is
+        # waited on by elimination: at least as many of its pre-disconnect
+        # INBOUND peers must have gone as links it accepted. A connection-count
+        # bound would be held open by any peer arriving during the wait, and an
+        # all-peers snapshot could be satisfied by an unrelated outbound peer
+        # leaving; an inbound-id snapshot is neither.
         def links_gone():
             live_a = {p['id'] for p in node_a.getpeerinfo()}
             live_b = {p['id'] for p in node_b.getpeerinfo()}
             if (set(ids_a) & live_a) or (set(ids_b) & live_b):
                 return False
-            return (node_a.getconnectioncount() <= count_a_before - len(ids_b)
-                    and node_b.getconnectioncount() <= count_b_before - len(ids_a))
+            gone_a = before_in_a - live_a
+            gone_b = before_in_b - live_b
+            return len(gone_a) >= len(ids_b) and len(gone_b) >= len(ids_a)
 
         wait_until_helper(links_gone, timeout=5,
                           timeout_factor=self.options.timeout_factor)

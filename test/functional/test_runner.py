@@ -131,6 +131,7 @@ BASE_SCRIPTS = [
     #   - wallet_backup.py: backupwallet + dumpprivkey/importprivkey round-trip
     #   - mempool_accept.py: sendrawtransaction accept + double-spend rejection
     #   - rpc_net.py: two-node peer state, disconnectnode, disconnect_nodes
+    #   - p2p_disconnect_nodes_churn.py: disconnect_nodes with a peer arriving mid-wait
     #   - feature_sidestake.py: local sidestaking config + reward split
     # Phase 4A.2 adds RPCHelpMan-surface tests (investor-mode, no beacon/CPID):
     #   - rpc_signmessage.py: signmessage/verifymessage/validateaddress
@@ -185,6 +186,7 @@ BASE_SCRIPTS = [
     'interface_cli.py',
     'mempool_accept.py',
     'rpc_net.py',
+    'p2p_disconnect_nodes_churn.py',
     'rpc_net_connman.py',
     'feature_sidestake.py',
     'feature_generatesuperblock.py',
