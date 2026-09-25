@@ -23,7 +23,7 @@ Serialize(const CScript& s)
 }
 
 static bool
-Verify(const CScript& scriptSig, const CScript& scriptPubKey, bool fStrict)
+Verify(const CScript& scriptSig, const CScript& scriptPubKey, unsigned int flags)
 {
     // Create dummy to/from transactions:
     CMutableTransaction txFrom;
@@ -38,7 +38,7 @@ Verify(const CScript& scriptSig, const CScript& scriptPubKey, bool fStrict)
     txTo.vin[0].scriptSig = scriptSig;
     txTo.vout[0].nValue = 1;
 
-    return VerifyScript(scriptSig, scriptPubKey, fStrict ? SCRIPT_VERIFY_P2SH : SCRIPT_VERIFY_NONE, CTransaction(txTo), 0);
+    return VerifyScript(scriptSig, scriptPubKey, flags, CTransaction(txTo), 0);
 }
 
 
@@ -130,7 +130,7 @@ BOOST_AUTO_TEST_CASE(norecurse)
     scriptSig << Serialize(invalidAsScript);
 
     // Should not verify, because it will try to execute OP_INVALIDOPCODE
-    BOOST_CHECK(!Verify(scriptSig, p2sh, true));
+    BOOST_CHECK(!Verify(scriptSig, p2sh, SCRIPT_VERIFY_P2SH));
 
     // Try to recur, and verification should succeed because
     // the inner HASH160 <> EQUAL should only check the hash:
@@ -139,7 +139,7 @@ BOOST_AUTO_TEST_CASE(norecurse)
     CScript scriptSig2;
     scriptSig2 << Serialize(invalidAsScript) << Serialize(p2sh);
 
-    BOOST_CHECK(Verify(scriptSig2, p2sh2, true));
+    BOOST_CHECK(Verify(scriptSig2, p2sh2, SCRIPT_VERIFY_P2SH));
 }
 
 BOOST_AUTO_TEST_CASE(set)
@@ -249,9 +249,62 @@ BOOST_AUTO_TEST_CASE(switchover)
     fund.SetDestination(notValid.GetID());
 
     // Validation should succeed under old rules (hash is correct):
-    BOOST_CHECK(Verify(scriptSig, fund, false));
+    BOOST_CHECK(Verify(scriptSig, fund, SCRIPT_VERIFY_NONE));
     // Validation should fail under new rules:
-    BOOST_CHECK(!Verify(scriptSig, fund, true));
+    BOOST_CHECK(!Verify(scriptSig, fund, SCRIPT_VERIFY_P2SH));
+}
+
+//!
+//! CLEANSTACK judges the stack the redeem script leaves, not the outer one.
+//!
+//! Signature-free on purpose: the redeem scripts are OP_1 (anyone-can-spend,
+//! leaves one item) and OP_1 OP_1 (leaves two), so every verdict below is
+//! about stack shape and nothing else. Each rejection is paired with the same
+//! spend under SCRIPT_VERIFY_P2SH alone, which must pass, so a case cannot
+//! fail for a reason unrelated to CLEANSTACK.
+//!
+BOOST_AUTO_TEST_CASE(cleanstack_judges_the_redeem_script_stack)
+{
+    const unsigned int p2sh = SCRIPT_VERIFY_P2SH;
+    const unsigned int p2sh_clean = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_CLEANSTACK;
+
+    CScript clean_redeem;
+    clean_redeem << OP_1;
+    CScript fund_clean;
+    fund_clean.SetDestination(clean_redeem.GetID());
+
+    // Exactly the redeem script: one item is left once it has run.
+    CScript clean_sig;
+    clean_sig << Serialize(clean_redeem);
+    BOOST_CHECK(Verify(clean_sig, fund_clean, p2sh));
+    BOOST_CHECK(Verify(clean_sig, fund_clean, p2sh_clean));
+
+    // A stray push beneath the redeem script survives its evaluation.
+    CScript dirty_sig;
+    dirty_sig << OP_1 << Serialize(clean_redeem);
+    BOOST_CHECK(Verify(dirty_sig, fund_clean, p2sh));
+    BOOST_CHECK(!Verify(dirty_sig, fund_clean, p2sh_clean));
+
+    // The redeem script itself leaves two items behind a clean scriptSig.
+    // The outer evaluation holds exactly one item here, so this is what
+    // tells "judges the redeem-script stack" apart from "judges the outer
+    // stack".
+    CScript leftover_redeem;
+    leftover_redeem << OP_1 << OP_1;
+    CScript fund_leftover;
+    fund_leftover.SetDestination(leftover_redeem.GetID());
+    CScript leftover_sig;
+    leftover_sig << Serialize(leftover_redeem);
+    BOOST_CHECK(Verify(leftover_sig, fund_leftover, p2sh));
+    BOOST_CHECK(!Verify(leftover_sig, fund_leftover, p2sh_clean));
+
+    // Bare output: the flag was already live off the P2SH path.
+    CScript bare;
+    bare << OP_1;
+    CScript bare_dirty_sig;
+    bare_dirty_sig << OP_1;
+    BOOST_CHECK(Verify(bare_dirty_sig, bare, p2sh));
+    BOOST_CHECK(!Verify(bare_dirty_sig, bare, p2sh_clean));
 }
 
 BOOST_AUTO_TEST_CASE(AreInputsStandard)
