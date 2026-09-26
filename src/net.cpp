@@ -386,7 +386,8 @@ std::shared_ptr<CNode> CConnman::ConnectNode(CAddress addrConnect, const char *p
         if (ioctlsocket(hSocket, FIONBIO, &nOne) == SOCKET_ERROR)
             LogPrintf("ConnectSocket() : ioctlsocket non-blocking setting error %d", WSAGetLastError());
 #else
-        if (fcntl(hSocket, F_SETFL, O_NONBLOCK) == SOCKET_ERROR)
+        const int fFlags = fcntl(hSocket, F_GETFL, 0);
+        if (fFlags == -1 || fcntl(hSocket, F_SETFL, fFlags | O_NONBLOCK) == SOCKET_ERROR)
             LogPrintf("ConnectSocket() : fcntl non-blocking setting error %d", errno);
 #endif
 
@@ -1874,7 +1875,8 @@ bool BindListenPort(const CService &addrBind, string& strError)
     // Set to non-blocking, incoming connections will also inherit this
     if (ioctlsocket(hListenSocket, FIONBIO, (u_long*)&nOne) == SOCKET_ERROR)
 #else
-    if (fcntl(hListenSocket, F_SETFL, O_NONBLOCK) == SOCKET_ERROR)
+    const int listen_flags = fcntl(hListenSocket, F_GETFL, 0);
+    if (listen_flags == -1 || fcntl(hListenSocket, F_SETFL, listen_flags | O_NONBLOCK) == SOCKET_ERROR)
 #endif
     {
         strError = strprintf("Error: Couldn't set properties on socket for incoming connections (error %d)", WSAGetLastError());
