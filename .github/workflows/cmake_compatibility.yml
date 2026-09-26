@@ -128,9 +128,9 @@ jobs:
           sudo apt-get -f install -y
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build zipcmp zipmerge ziptool qemu-user-static \
-            g++-aarch64-linux-gnu qt6-base-dev:arm64 qt6-charts-dev:arm64 qt6-svg-dev:arm64 \
+            g++-aarch64-linux-gnu qt6-base-dev:arm64 qt6-svg-dev:arm64 \
             qt6-l10n-tools qt6-tools-dev:arm64 qt6-tools-dev-tools:arm64 \
-            libqt6core5compat6-dev:arm64 libssl-dev:arm64 libzip-dev:arm64 \
+            libssl-dev:arm64 libzip-dev:arm64 \
             libcurl4-openssl-dev:arm64 libboost-system-dev:arm64 libboost-filesystem-dev:arm64 \
             libboost-thread-dev:arm64 libboost-iostreams-dev:arm64 libboost-program-options-dev:arm64 \
             libboost-serialization-dev:arm64 libboost-chrono-dev:arm64 libboost-test-dev:arm64 \
@@ -219,9 +219,9 @@ jobs:
           sudo apt-get -f install -y
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build zipcmp zipmerge ziptool qemu-user-static \
-            g++-arm-linux-gnueabihf qt6-base-dev:armhf qt6-charts-dev:armhf qt6-svg-dev:armhf \
+            g++-arm-linux-gnueabihf qt6-base-dev:armhf qt6-svg-dev:armhf \
             qt6-l10n-tools:armhf qt6-tools-dev:armhf qt6-tools-dev-tools:armhf \
-            libqt6core5compat6-dev:armhf libssl-dev:armhf libzip-dev:armhf \
+            libssl-dev:armhf libzip-dev:armhf \
             libcurl4-openssl-dev:armhf libboost-system-dev:armhf libboost-filesystem-dev:armhf \
             libboost-thread-dev:armhf libboost-iostreams-dev:armhf libboost-program-options-dev:armhf \
             libboost-serialization-dev:armhf libboost-chrono-dev:armhf libboost-test-dev:armhf \

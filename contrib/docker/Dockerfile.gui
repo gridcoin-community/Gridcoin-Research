@@ -50,9 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libqt6gui6t64 \
         libqt6widgets6t64 \
         libqt6network6t64 \
-        libqt6charts6 \
         libqt6svg6 \
-        libqt6core5compat6 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY entrypoint.sh /entrypoint.sh

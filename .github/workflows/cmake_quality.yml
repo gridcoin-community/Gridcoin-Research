@@ -251,7 +251,7 @@ jobs:
             libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
             capnproto libcapnp-dev \
             qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
-            libqt6charts6-dev libqt6svg6-dev libqt6core5compat6-dev \
+            libqt6svg6-dev \
             libxkbcommon-dev libcurl4-openssl-dev libzip-dev zipcmp zipmerge \
             ziptool ccache
 
