@@ -29,6 +29,7 @@ add_executable(test_gridcoin
     bip32_tests.cpp
     #compilerbug_tests.cpp
     crypto_tests.cpp
+    diagnose_tests.cpp
     fs_tests.cpp
     getarg_tests.cpp
     gridcoin_tests.cpp
