@@ -127,8 +127,12 @@ void OptionsModel::readNodeSettings()
     // ("gridcoin-mainnet.desktop" / "gridcoin-testnet.desktop"), not by datadir, so
     // all same-network nodes share one entry. Per-node QSettings state would let the
     // UI show an autostart status that disagrees with the single OS entry. Use flat
-    // (network-scoped, via ApplicationName) keys so the stored state matches the
-    // actual per-network behavior. Keep this in sync with the setData() cases.
+    // keys. They are only as network-scoped as the QSettings store itself: the
+    // ApplicationName is "Gridcoin-Qt-testnet" when -testnet is on the command line
+    // and "Gridcoin-Qt" otherwise, so regtest reads and writes mainnet's values.
+    // That is safe only because SetStartOnSystemStartup does nothing on regtest
+    // and the options dialog hides the checkboxes there. Keep this in sync with
+    // the setData() cases.
     fStartAtStartup = settings.value("fStartAtStartup", false).toBool();
     fStartMin = settings.value("fStartMin", true).toBool();
     fMinimizeToTray = settings.value(GUIUtil::nodeSettingsKey("fMinimizeToTray"), false).toBool();
@@ -295,8 +299,8 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             if (fStartAtStartup != value.toBool())
             {
                 fStartAtStartup = value.toBool();
-                // Flat (network-scoped) key, not per-node: the OS autostart entry is
-                // per-network, not per-datadir. See readNodeSettings().
+                // Flat key, not per-node: the OS autostart entry is per-network,
+                // not per-datadir. See readNodeSettings().
                 settings.setValue("fStartAtStartup", fStartAtStartup);
                 successful = GUIUtil::SetStartOnSystemStartup(fStartAtStartup, fStartMin);
             }
@@ -305,7 +309,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             if (fStartMin != value.toBool())
             {
                 fStartMin = value.toBool();
-                // Flat (network-scoped) key, not per-node: see readNodeSettings().
+                // Flat key, not per-node: see readNodeSettings().
                 settings.setValue("fStartMin", fStartMin);
                 successful = GUIUtil::SetStartOnSystemStartup(fStartAtStartup, fStartMin);
             }

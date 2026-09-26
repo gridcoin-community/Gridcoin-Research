@@ -4,13 +4,14 @@
 #include "bitcoinunits.h"
 #include "util.h"
 // GUI-process-local network identity: GetAutoStartupArguments() must decide the
-// autostart shortcut suffix / relaunch args from the network THIS GUI process
-// selected on its own command line. In the separated (multiprocess) build there
+// autostart shortcut suffix / relaunch args, and AutoStartupAvailable() whether
+// there is a login item at all, from the network THIS GUI process selected on
+// its own command line. In the separated (multiprocess) build there
 // is no core process yet to answer a Node::isTestNet() call -- resolving the
 // GUI's own -testnet/-chain arg locally is precisely what tells the GUI which
-// core (mainnet vs testnet) to connect to. So this one file reads OnTestnet()
-// (the GUI's own SelectParams() result) directly; documented exception in
-// test/lint/lint-qt-includes.sh.
+// core (mainnet vs testnet) to connect to. So this file reads OnTestnet() and
+// OnMainnet() (the GUI's own SelectParams() result) directly; chainparams.h is
+// outside lint-qt-includes.sh's forbidden list.
 #include "chainparams.h"
 #include "clientversion.h"
 #include "util/strencodings.h" // For SanitizeString (per-node QSettings key).
@@ -505,6 +506,19 @@ struct AutoStartupArguments
     std::string arguments;
 };
 
+// Whether this GUI process has an OS login item to manage. The item is named and
+// relaunched for mainnet or testnet only (GetAutoStartupArguments()), so on any
+// other chain -- regtest, a private and usually disposable one -- it would start a
+// mainnet node. Regtest also shares mainnet's QSettings store and so its flat
+// fStartAtStartup key, and the GUI regenerates the item at every start-up. Off
+// mainnet and testnet, Get/SetStartOnSystemStartup therefore do nothing: no entry
+// of their own, and no rewrite or removal of the mainnet one. The options dialog
+// hides the checkboxes on the same condition.
+[[maybe_unused]] static bool AutoStartupAvailable()
+{
+    return OnMainnet() || OnTestnet();
+}
+
 AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
 {
     // This helper function checks for the presence of certain startup arguments
@@ -514,7 +528,8 @@ AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
     // and then adds the other three as arguments if they were specified for the
     // running instance. This allows two different automatic startups, one for
     // mainnet, and the other for testnet, and each of them can have different datadir,
-    // scraper, and/or explorer arguments.
+    // scraper, and/or explorer arguments. Its callers run only where
+    // AutoStartupAvailable() holds, so the else branch below is mainnet.
 
     AutoStartupArguments result;
 
@@ -566,13 +581,18 @@ fs::path static StartupShortcutPath()
 
 bool GetStartOnSystemStartup()
 {
+    if (!AutoStartupAvailable()) return false;
+
     // check for Gridcoin.lnk
     return fs::exists(StartupShortcutPath());
 }
 
 bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 {
-    // Remove the legacy shortcut unconditionally.
+    // Touch nothing off mainnet and testnet; see AutoStartupAvailable().
+    if (!AutoStartupAvailable()) return false;
+
+    // Remove the legacy shortcut whether or not autostart is on.
     fs::remove(StartupShortcutLegacyPath());
 
     // If the shortcut exists already, remove it for updating
@@ -678,6 +698,8 @@ fs::path static GetAutostartFilePath()
 
 bool GetStartOnSystemStartup()
 {
+    if (!AutoStartupAvailable()) return false;
+
     fsbridge::ifstream optionFile(GetAutostartFilePath());
     if (!optionFile.good())
         return false;
@@ -697,6 +719,9 @@ bool GetStartOnSystemStartup()
 
 bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 {
+    // Touch nothing off mainnet and testnet; see AutoStartupAvailable().
+    if (!AutoStartupAvailable()) return false;
+
     // Remove legacy autostart path if it exists.
     if (fs::exists(GetAutostartLegacyFilePath()))
     {
