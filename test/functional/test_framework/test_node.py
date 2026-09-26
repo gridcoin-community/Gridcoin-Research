@@ -530,12 +530,17 @@ class TestNode():
     def wait_until_stopped(self, timeout=GRIDCOIND_PROC_WAIT_TIMEOUT):
         wait_until_helper(self.is_node_stopped, timeout=timeout, timeout_factor=self.timeout_factor)
 
+    @property
+    def debug_log_path(self):
+        """The node's debug.log, under the chain subdirectory of its datadir."""
+        return os.path.join(self.datadir, chain_subdir(self.chain), 'debug.log')
+
     @contextlib.contextmanager
     def assert_debug_log(self, expected_msgs, unexpected_msgs=None, timeout=2):
         if unexpected_msgs is None:
             unexpected_msgs = []
         time_end = time.time() + timeout * self.timeout_factor
-        debug_log = os.path.join(self.datadir, chain_subdir(self.chain), 'debug.log')
+        debug_log = self.debug_log_path
         with open(debug_log, encoding='utf-8') as dl:
             dl.seek(0, 2)
             prev_size = dl.tell()

@@ -279,6 +279,53 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
 
         self.success = TestStatus.PASSED
 
+    # A DEBUG_LOCKORDER daemon reports a lock-order inversion to its debug.log
+    # and carries on (sync.cpp: g_debug_lockorder_abort is off), so the test
+    # itself passes and, without this, the report is deleted with the tmpdir.
+    # A daemon built without the checker never writes the banner, so on every
+    # other build the scan finds nothing.
+    LOCK_ORDER_REPORT_START = "POTENTIAL DEADLOCK DETECTED"
+    LOCK_ORDER_REPORT_END = "potential deadlock detected:"
+    LOCK_ORDER_REPORT_MAX_LINES = 80
+
+    def _check_lock_order_reports(self):
+        """Fail the test if any node's debug.log holds a lock-order report.
+
+        Every report found is logged, whatever the test's status; a passing test
+        is marked failed, which also keeps its tmpdir for inspection. A report
+        runs from the banner to the "potential deadlock detected: a -> b -> a"
+        line; one thrown rather than logged has no closing line, so each is
+        capped.
+        """
+        found = 0
+        for i, node in enumerate(self.nodes):
+            try:
+                with open(node.debug_log_path, encoding='utf-8', errors='replace') as f:
+                    lines = f.read().splitlines()
+            except FileNotFoundError:
+                continue
+
+            block = None
+            for line in lines:
+                if self.LOCK_ORDER_REPORT_START in line:
+                    block = [line]
+                elif block is not None:
+                    block.append(line)
+
+                if block is not None and (self.LOCK_ORDER_REPORT_END in line
+                                          or len(block) >= self.LOCK_ORDER_REPORT_MAX_LINES):
+                    found += 1
+                    self.log.error("node%d reported a lock-order inversion:\n%s", i, "\n".join(block))
+                    block = None
+
+            if block is not None:
+                found += 1
+                self.log.error("node%d reported a lock-order inversion:\n%s", i, "\n".join(block))
+
+        if found and self.success == TestStatus.PASSED:
+            self.log.error("%d lock-order report(s) in the nodes' debug.log; failing the test", found)
+            self.success = TestStatus.FAILED
+
     def shutdown(self):
         """Call this method to shut down the test framework object."""
 
@@ -302,7 +349,12 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         if not self.options.noshutdown:
             self.log.info("Stopping nodes")
             if self.nodes:
-                self.stop_nodes()
+                # The scan runs even when stopping raised: a node that failed to
+                # stop cleanly is exactly the run whose reports are worth reading.
+                try:
+                    self.stop_nodes()
+                finally:
+                    self._check_lock_order_reports()
         else:
             for node in self.nodes:
                 node.cleanup_on_exit = False
