@@ -61,9 +61,9 @@ static const RPCHelpMan getstakinginfo_help{
             {RPCResult::Type::NUM, "ideal_cumulative_weight", "Cumulative ideal weight."},
             {RPCResult::Type::NUM, "staking_efficiency", "Overall staking efficiency."},
             {RPCResult::Type::OBJ, "stake-splitting", "Stake-splitting enabled flag and (when enabled) parameters.",
-                {{RPCResult::Type::ELISION, "", "Stake-splitting enabled flag and (when enabled) parameters."}}},
+                {{RPCResult::Type::ELISION, "", ""}}},
             {RPCResult::Type::OBJ, "side_staking", "Local side-staking enabled flag and active side-stake allocations.",
-                {{RPCResult::Type::ELISION, "", "Local side-staking enabled flag and active side-stake allocations."}}},
+                {{RPCResult::Type::ELISION, "", ""}}},
             {RPCResult::Type::OBJ, "difficulty", "",
                 {
                     {RPCResult::Type::NUM, "current", "Current difficulty."},

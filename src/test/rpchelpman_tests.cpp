@@ -489,6 +489,25 @@ BOOST_AUTO_TEST_CASE(listsinceblock_help_renders)
     BOOST_CHECK(what.find("Examples:") != std::string::npos);
 }
 
+// An ELISION child renders its own description on the "..." line, so one that
+// repeats its parent's description prints the sentence twice. getstakinginfo's
+// stake-splitting and side_staking objects did exactly that.
+BOOST_AUTO_TEST_CASE(getstakinginfo_help_prints_each_object_description_once)
+{
+    const std::string what = getstakinginfo_helpman().ToString();
+
+    const auto occurrences = [&what](const std::string& needle) {
+        size_t count = 0;
+        for (size_t pos = what.find(needle); pos != std::string::npos; pos = what.find(needle, pos + needle.size())) {
+            ++count;
+        }
+        return count;
+    };
+
+    BOOST_CHECK_EQUAL(occurrences("Stake-splitting enabled flag and (when enabled) parameters."), 1U);
+    BOOST_CHECK_EQUAL(occurrences("Local side-staking enabled flag and active side-stake allocations."), 1U);
+}
+
 // Invalid-subcommand path for addnode: the JSONRPCError throw at net.cpp:62-63
 // fires before any LOCK(cs_vAddedNodes) or vNodes/ConnectNode access, so this
 // is safe to exercise without a node/net fixture.
