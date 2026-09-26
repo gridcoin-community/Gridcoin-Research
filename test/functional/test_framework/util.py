@@ -284,12 +284,28 @@ def sha256sum_file(filename):
 # The maximum number of nodes a single test can spawn
 MAX_NODES = 12
 # Don't assign rpc or p2p ports lower than this.
-# Gridcoin reserves: main P2P 32749 / RPC 15715, testnet P2P 32748 / RPC 25715,
-# regtest P2P 32747 / RPC 35715. Test ports occupy [PORT_MIN, PORT_MIN + 2*PORT_RANGE),
-# so we start at 41000 to stay clear of all reserved ranges.
-PORT_MIN = int(os.getenv('TEST_RUNNER_PORT_MIN', default=41000))
-# The number of ports to "reserve" for p2p and rpc, each
-PORT_RANGE = 5000
+# Test ports occupy [PORT_MIN, PORT_MIN + 2*PORT_RANGE) = [16000, 20000) by default:
+# p2p in the lower half, rpc in the upper. The window must stay clear of two things:
+#  - Gridcoin's default ports, which a developer's own live nodes may hold: main
+#    P2P 32749 / RPC 15715, testnet P2P 32748 / RPC 25715, regtest P2P 32747 / RPC 35715.
+#  - The OS ephemeral (outgoing-connection) port range: Linux 32768-60999,
+#    macOS/Windows 49152-65535. A test port inside it can already be held by an
+#    unrelated outgoing connection, so a node fails to bind at random.
+# No single default can satisfy every OS: OpenBSD allocates outgoing ports from
+# 1024-49151 and FreeBSD from 10000-65535 by default, and together with the
+# macOS/Windows 49152-65535 range these cover every unprivileged port (1024-65535).
+# The set of ports outside all default ephemeral ranges is empty. This default
+# clears the Linux and macOS ranges, where CI runs the functional suite, and the
+# Windows range; OpenBSD and FreeBSD are not directly exercised in CI. On a BSD, about 8% of
+# outgoing connections land in this window, so a rare random bind failure remains
+# possible there. If it recurs, set TEST_RUNNER_PORT_MIN to a range outside the local
+# sysctl (OpenBSD net.inet.ip.portfirst/portlast, FreeBSD
+# net.inet.ip.portrange.first/last).
+PORT_MIN = int(os.getenv('TEST_RUNNER_PORT_MIN', default=16000))
+# The number of ports to "reserve" for p2p and rpc, each. Each portseed takes
+# MAX_NODES ports, and test_runner hands out one portseed per test attempt, so 2000
+# covers ~165 attempts before the modulo wraps.
+PORT_RANGE = 2000
 
 
 class PortSeed:
