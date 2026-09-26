@@ -93,3 +93,14 @@ std::vector<int64_t> TimeOffsetVotes::Sorted() const
 
     return sorted;
 }
+
+bool WithinTimeDrift(int64_t a, int64_t b, uint64_t max_drift)
+{
+    // For a >= b, uint64_t(a) - uint64_t(b) is exactly a - b, which lies in
+    // [0, 2^64 - 1]; likewise the other way round.
+    const uint64_t drift = a >= b
+        ? static_cast<uint64_t>(a) - static_cast<uint64_t>(b)
+        : static_cast<uint64_t>(b) - static_cast<uint64_t>(a);
+
+    return drift <= max_drift;
+}

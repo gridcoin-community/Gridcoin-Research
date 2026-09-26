@@ -155,6 +155,9 @@ BASE_SCRIPTS = [
     # (issue #3123 -- StopRPCThreads must interrupt a worker parked in recv).
     'feature_shutdown.py',
     'p2p_version_handshake.py',
+    # p2p_version_timedrift.py: the VERSION handshake's 480 s clock-drift gate,
+    # including a crafted nTime that overflowed the old abs() check.
+    'p2p_version_timedrift.py',
     # p2p_time_votes.py: an outbound peer's time vote is cast on connect and
     # withdrawn when the connection is deleted.
     'p2p_time_votes.py',

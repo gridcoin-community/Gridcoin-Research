@@ -18,6 +18,7 @@
 #include "banman.h"
 #include "checkpoints.h"
 #include "txdb.h"
+#include "timedata.h"
 #include "init.h"
 #include "node/ui_interface.h"
 #include "gridcoin/beacon.h"
@@ -632,11 +633,17 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LogPrint(BCLog::LogFlags::NOISY, "received aries version %i ...", pfrom->nVersion);
 
-        int64_t timedrift = std::abs(GetAdjustedTime() - nTime);
+        // Never by signed subtraction: nTime is peer-supplied, and
+        // GetAdjustedTime() - nTime overflows (undefined behaviour) for extreme
+        // values. For nTime == GetAdjustedTime() + INT64_MIN it wraps to
+        // INT64_MIN, whose std::abs() is negative, and GCC builds let the peer
+        // through with an extreme time sample. WithinTimeDrift() is exact for
+        // every pair of times, a mocked clock near either end included.
+        const int64_t adjusted_now = GetAdjustedTime();
 
-        if (timedrift > (8*60))
+        if (!WithinTimeDrift(nTime, adjusted_now, 8 * 60))
         {
-            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting unauthorized peer with Network Time so far off by %" PRId64 " seconds!", timedrift);
+            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting unauthorized peer with Network Time %" PRId64 " so far off our adjusted time %" PRId64 "!", nTime, adjusted_now);
             pfrom->Misbehaving(100);
             pfrom->fDisconnect = true;
             return false;

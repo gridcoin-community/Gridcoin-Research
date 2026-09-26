@@ -322,6 +322,37 @@ BOOST_AUTO_TEST_CASE(the_memory_bound_drops_the_vote_cast_longest_ago)
     BOOST_CHECK_EQUAL(std::count(sorted.begin(), sorted.end(), -77), 0);
 }
 
+BOOST_AUTO_TEST_CASE(within_time_drift_is_exact_across_the_int64_range)
+{
+    const int64_t max = std::numeric_limits<int64_t>::max();
+    const int64_t min = std::numeric_limits<int64_t>::min();
+    const int64_t now = 1790429664;
+    const uint64_t limit = 8 * 60;
+
+    // The band edges, both ways round.
+    BOOST_CHECK(WithinTimeDrift(now, now, limit));
+    BOOST_CHECK(WithinTimeDrift(now + 480, now, limit));
+    BOOST_CHECK(WithinTimeDrift(now - 480, now, limit));
+    BOOST_CHECK(!WithinTimeDrift(now + 481, now, limit));
+    BOOST_CHECK(!WithinTimeDrift(now - 481, now, limit));
+    BOOST_CHECK(WithinTimeDrift(now, now - 480, limit));
+    BOOST_CHECK(!WithinTimeDrift(now, now + 481, limit));
+
+    // A peer time that made the old std::abs(now - nTime) negative.
+    BOOST_CHECK(!WithinTimeDrift(min + now, now, limit));
+
+    // A clock mocked near either end, where now +/- 480 would overflow.
+    BOOST_CHECK(WithinTimeDrift(max, max - 100, limit));
+    BOOST_CHECK(!WithinTimeDrift(max, max - 481, limit));
+    BOOST_CHECK(WithinTimeDrift(min, min + 480, limit));
+    BOOST_CHECK(!WithinTimeDrift(min + 481, min, limit));
+
+    // The whole range apart: 2^64 - 1.
+    BOOST_CHECK(!WithinTimeDrift(min, max, limit));
+    BOOST_CHECK(!WithinTimeDrift(max, min, limit));
+    BOOST_CHECK(WithinTimeDrift(min, max, std::numeric_limits<uint64_t>::max()));
+}
+
 BOOST_AUTO_TEST_CASE(add_time_data_sets_the_weighted_offset)
 {
     // Through the real entry points: group keying from CNetAddr, the odd and

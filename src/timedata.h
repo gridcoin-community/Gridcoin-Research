@@ -99,4 +99,13 @@ private:
     uint64_t m_sequence = 0;
 };
 
+//!
+//! \brief Whether two times are at most \p max_drift seconds apart.
+//!
+//! Exact for every pair of int64 values: the difference is taken in unsigned
+//! arithmetic, so neither a peer-supplied time nor a mocked clock near either
+//! end of the range can overflow it.
+//!
+bool WithinTimeDrift(int64_t a, int64_t b, uint64_t max_drift);
+
 #endif // GRIDCOIN_TIMEDATA_H
