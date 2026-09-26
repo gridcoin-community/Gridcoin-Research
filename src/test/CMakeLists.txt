@@ -46,6 +46,7 @@ add_executable(test_gridcoin
     gridcoin/mnemonics_tests.cpp
     gridcoin/mrc_tests.cpp
     gridcoin/poll_result_cache_tests.cpp
+    gridcoin/pool_chain_tests.cpp
     gridcoin/pool_tests.cpp
     gridcoin/project_tests.cpp
     gridcoin/protocol_tests.cpp
