@@ -4,13 +4,13 @@
 #include <QDialog>
 #include <QString>
 
+#include "sendcoinsentry.h"
 #include "walletmodel.h"
 
 namespace Ui {
     class SendCoinsDialog;
 }
 class ClientModel;
-class SendCoinsEntry;
 
 QT_BEGIN_NAMESPACE
 class QUrl;
