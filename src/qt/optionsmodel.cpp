@@ -31,9 +31,10 @@ std::string FormatReserveBalanceSetting(qint64 sat)
 //! Push the effective proxy to the core -proxy setting: the GUI keeps its three
 //! proxy fields (enable + address) as local editing state in QSettings, and the
 //! effective value (the address when enabled, empty when disabled) is mirrored to
-//! gridcoinsettings.json through the node. Empty disables/erases -proxy; netbase
-//! cannot clear a live proxy, so disabling is effective on restart (unchanged
-//! from the previous behavior).
+//! gridcoinsettings.json through the node. Empty erases -proxy, so a -proxy on the
+//! command line or in the config file still applies; netbase cannot clear a live
+//! proxy, so disabling is effective on restart (unchanged from the previous
+//! behavior).
 bool PushEffectiveProxy(interfaces::Node& node, QSettings& settings)
 {
     const bool use_proxy = settings.value(GUIUtil::nodeSettingsKey("fUseProxy"), false).toBool();
@@ -358,9 +359,11 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             // Clamp negatives: a reserve is never negative, and core ParseMoney
             // would reject a "-..." string, leaving the value stale.
             const qint64 sat = value.toLongLong() > 0 ? value.toLongLong() : 0;
-            // Store as a plain money string (empty when zero => erase/no reserve).
+            // Store as a plain money string, zero included. An empty value would
+            // erase the setting instead, and a -reservebalance in the config file
+            // would then apply again rather than the zero chosen here.
             successful = m_node.changeSettings(
-                {{"reservebalance", sat > 0 ? FormatReserveBalanceSetting(sat) : std::string()}}).ok;
+                {{"reservebalance", FormatReserveBalanceSetting(sat)}}).ok;
             if (successful) {
                 emit reserveBalanceChanged(sat);
             }

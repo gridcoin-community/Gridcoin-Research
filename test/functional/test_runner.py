@@ -188,6 +188,10 @@ BASE_SCRIPTS = [
     'rpc_net.py',
     'p2p_disconnect_nodes_churn.py',
     'rpc_net_connman.py',
+    # rpc_changesettings.py: an empty value erases a setting, handing it back to
+    # the command line, config file or default, rather than forcing an empty
+    # string that reads as true.
+    'rpc_changesettings.py',
     'feature_sidestake.py',
     'feature_generatesuperblock.py',
     # feature_reorg_resurrect.py: a wallet transaction whose block is

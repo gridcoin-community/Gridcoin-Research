@@ -134,7 +134,10 @@ static const RPCHelpMan changesettings_help = RPCHelpMan{
     "Store or change one or more configuration settings.\n"
     "\n"
     "Settings must be passed in the same format as config file entries (name=value).\n"
-    "Additional name=value pairs may be supplied as further positional arguments.",
+    "Additional name=value pairs may be supplied as further positional arguments.\n"
+    "\n"
+    "An empty value (name=) removes the stored setting, so the value from the command line\n"
+    "or config file, or else the default, applies again.",
     {
         {"setting", RPCArg::Type::STR, RPCArg::Optional::NO,
             "Setting to store/change in the form name=value. Pass additional positional arguments "
@@ -173,9 +176,9 @@ UniValue changesettings(const UniValue& params)
 
     // Parse the "name=value" positionals into pairs. The shared ChangeSettings()
     // core (src/init.cpp) does validation, persistence to gridcoinsettings.json,
-    // the ForceSetArg, and the immediate side-effect application -- the same code
-    // path interfaces::Node::changeSettings() uses for the GUI, so the two never
-    // diverge.
+    // the update of the running args, and the immediate side-effect application --
+    // the same code path interfaces::Node::changeSettings() uses for the GUI, so
+    // the two never diverge.
     std::vector<std::pair<std::string, std::string>> settings;
     settings.reserve(params.size());
 
