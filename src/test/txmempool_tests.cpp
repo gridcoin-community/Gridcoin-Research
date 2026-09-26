@@ -11,8 +11,11 @@
 
 #include "test/state_guard.h"
 
+#include <consensus/validation.h>
 #include <key.h>
 #include <primitives/transaction.h>
+#include <script/script.h>
+#include <validation.h>
 #include <txmempool.h>
 #include <uint256.h>
 #include <node/mempool_persist.h>
@@ -640,8 +643,9 @@ BOOST_AUTO_TEST_CASE(unbroadcast_cleared_when_tx_leaves_pool)
 
 BOOST_AUTO_TEST_CASE(unbroadcast_persist_roundtrip)
 {
-    // The on-disk (tx, entry_time) round-trip, exercised without AcceptToMemoryPool
-    // (the reload's re-acceptance path is covered by functional testing).
+    // The on-disk (tx, entry_time) round-trip, exercised without AcceptToMemoryPool.
+    // LoadUnbroadcast's already-pooled branch is covered further down; its
+    // re-acceptance branch needs spendable inputs and has no test of its own.
     node::MempoolPersistEntries entries;
     const CTransaction a = MakePlainTx(41);
     const CTransaction b = MakePlainTx(42);
@@ -682,6 +686,66 @@ BOOST_AUTO_TEST_CASE(unbroadcast_dump_reflects_pool)
     BOOST_REQUIRE(node::ReadMempoolEntries(path, loaded));
     BOOST_REQUIRE_EQUAL(loaded.size(), 1U); // `other` is in the pool but not the set
     BOOST_CHECK(loaded[0].first.GetHash() == ours.GetHash());
+
+    fs::remove(path);
+}
+
+namespace {
+//! A transaction that AcceptToMemoryPool carries as far as its "already in the
+//! pool?" check: version 2, one input, a push-only scriptSig and one standard
+//! P2PKH output. The input spends nothing real; ATMP only looks inputs up after
+//! that check, so it is never reached for a pooled copy.
+CTransaction MakeWalletShapedTx()
+{
+    CKey key;
+    key.MakeNewKey(true);
+
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.vin.emplace_back(COutPoint(InsecureRand256(), 0));
+    mtx.vin[0].scriptSig = CScript() << std::vector<unsigned char>(72, 0x30) << key.GetPubKey();
+    mtx.vout.emplace_back();
+    mtx.vout[0].nValue = COIN;
+    mtx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
+    return CTransaction(mtx);
+}
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(unbroadcast_reload_rearms_an_already_pooled_transaction)
+{
+    // At startup the wallet re-accepts its own unconfirmed transactions into the
+    // pool before LoadUnbroadcast runs. Reloading one of them must still restore
+    // its marker, even though AcceptToMemoryPool refuses a transaction that is
+    // already pooled.
+    CTxMemPool pool;
+    const CTransaction ours = MakeWalletShapedTx();
+    const CTransaction bystander = MakeWalletShapedTx();
+    pool.addUnchecked(ours.GetHash(), MakeEntryFee(ours, 10));
+    pool.addUnchecked(bystander.GetHash(), MakeEntryFee(bystander, 10));
+
+    // The refusal the reload meets is the silent already-pooled one, not a
+    // validation failure: every earlier ATMP check marks the state invalid.
+    {
+        LOCK(cs_main);
+        CValidationState state;
+        CTransaction copy = ours;
+        BOOST_REQUIRE(!AcceptToMemoryPool(pool, copy, state, nullptr));
+        BOOST_REQUIRE(!state.IsInvalid());
+    }
+
+    node::MempoolPersistEntries entries;
+    entries.emplace_back(ours, 111);
+    const fs::path path = fs::temp_directory_path()
+                          / fs::unique_path("gridcoin_unbroadcast_reload_%%%%%%%%.dat");
+    BOOST_REQUIRE(node::WriteMempoolEntries(path, entries));
+
+    BOOST_REQUIRE(node::LoadUnbroadcast(pool, path));
+
+    BOOST_CHECK(pool.IsUnbroadcastTx(ours.GetHash()));
+    BOOST_CHECK(pool.IsCancellableUnbroadcast(ours.GetHash()));
+    // Only what was persisted is re-armed, not everything that happens to be pooled.
+    BOOST_CHECK(!pool.IsUnbroadcastTx(bystander.GetHash()));
+    BOOST_CHECK_EQUAL(pool.GetUnbroadcast().size(), 1U);
 
     fs::remove(path);
 }
