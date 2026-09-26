@@ -155,6 +155,9 @@ BASE_SCRIPTS = [
     # (issue #3123 -- StopRPCThreads must interrupt a worker parked in recv).
     'feature_shutdown.py',
     'p2p_version_handshake.py',
+    # p2p_time_votes.py: an outbound peer's time vote is cast on connect and
+    # withdrawn when the connection is deleted.
+    'p2p_time_votes.py',
     'p2p_block_tx_relay.py',
     # The PSGT multi-node tests run under deterministic mock-time lockstep
     # (sync_clocks/advance_to_next_stake_slot, #3165): no wall-clock sleeps on

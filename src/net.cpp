@@ -800,6 +800,10 @@ void CConnman::ThreadSocketHandler2()
                     }
                     if (fDelete)
                     {
+                        // No thread can reach the node any more, so no
+                        // AddTimeData() for it can still be in flight. Withdraw
+                        // its time vote (a no-op if it never cast one).
+                        RemoveTimeData(pnode->GetId());
                         it = vNodesDisconnected.erase(it);
                         continue;
                     }

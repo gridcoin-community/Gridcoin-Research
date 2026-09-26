@@ -756,7 +756,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         int64_t nOffsetSample = nTime - GetTime();
         pfrom->nTimeOffset = nOffsetSample;
         if (!pfrom->fInbound && gArgs.GetBoolArg("-synctime", true))
-            AddTimeData(pfrom->addr, nOffsetSample);
+            AddTimeData(pfrom->GetId(), pfrom->addr, nOffsetSample);
 
         // Change version
         pfrom->PushMessage(NetMsgType::VERACK);
