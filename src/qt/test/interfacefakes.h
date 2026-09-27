@@ -6,12 +6,15 @@
 #define BITCOIN_QT_TEST_INTERFACEFAKES_H
 
 #include "interfaces/handler.h"
+#include "interfaces/node.h"
 #include "interfaces/researcher.h"
 #include "interfaces/sidestake.h"
 
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 //! Hand-rolled test doubles for the interfaces:: boundary (Phase 1f). A model
@@ -152,6 +155,132 @@ public:
     }
 
     std::unique_ptr<interfaces::Handler> handleBlocksChanged(interfaces::BlocksChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+};
+
+//! Fake interfaces::Node: holds the read-write settings in an in-memory map and
+//! records every changeSettings batch, so a test can assert what a model would
+//! have written to gridcoinsettings.json (changeSettings is how
+//! OptionsModel::setData persists a core setting). getSettingStr and isSettingSet
+//! match the node; getSettingBool and getSettingInt are approximations (the node
+//! reads "true"/"false" as false and parses integers leniently). Everything else
+//! answers with an empty default.
+class FakeNode : public interfaces::Node
+{
+public:
+    // The effective settings, by name without the leading dash (set by the test).
+    std::map<std::string, std::string> m_settings;
+
+    // Recorded calls.
+    std::vector<std::vector<std::pair<std::string, std::string>>> m_change_calls;
+
+    std::string getSettingStr(const std::string& name, const std::string& default_val) override
+    {
+        const auto it = m_settings.find(name);
+        return it == m_settings.end() ? default_val : it->second;
+    }
+
+    bool isSettingSet(const std::string& name) override { return m_settings.count(name) != 0; }
+
+    bool getSettingBool(const std::string& name, bool default_val) override
+    {
+        const auto it = m_settings.find(name);
+        return it == m_settings.end() ? default_val : it->second != "0";
+    }
+
+    int64_t getSettingInt(const std::string& name, int64_t default_val) override
+    {
+        const auto it = m_settings.find(name);
+        return it == m_settings.end() ? default_val : std::stoll(it->second);
+    }
+
+    //! Applies the batch as the node does: an empty value erases the setting.
+    interfaces::SettingChangeResult changeSettings(
+        const std::vector<std::pair<std::string, std::string>>& settings) override
+    {
+        m_change_calls.push_back(settings);
+        for (const auto& [name, value] : settings) {
+            if (value.empty()) {
+                m_settings.erase(name);
+            } else {
+                m_settings[name] = value;
+            }
+        }
+        interfaces::SettingChangeResult result;
+        result.ok = true;
+        return result;
+    }
+
+    int getNodeCount() override { return 0; }
+    uint64_t getTotalBytesRecv() override { return 0; }
+    uint64_t getTotalBytesSent() override { return 0; }
+    int getNumBlocks() override { return 0; }
+    uint256 getBestBlockHash() override { return uint256(); }
+    int64_t getLastBlockTime() override { return 0; }
+    int getNumBlocksOfPeers() override { return 0; }
+    std::optional<int> tryGetNumBlocksOfPeers() override { return std::nullopt; }
+    double getDifficulty() override { return 0.0; }
+    bool isInitialBlockDownload() override { return false; }
+    bool isOutOfSyncByAge() override { return false; }
+    std::string getWarnings() override { return {}; }
+    std::string getClientVersion() override { return {}; }
+    bool isTestNet() override { return false; }
+    bool isMainNet() override { return false; }
+    void startShutdown() override {}
+    interfaces::LatestVersionInfo checkForLatestUpdate() override { return {}; }
+    std::vector<interfaces::DiagnosticResult> runDiagnostics() override { return {}; }
+    double getBlockDifficulty(uint32_t /*target_bits*/) override { return 0.0; }
+    std::string getAlertStatusBarMessage(const uint256& /*hash*/) override { return {}; }
+    std::vector<interfaces::BannedNode> getBanned() override { return {}; }
+    std::vector<interfaces::PeerInfo> getPeers() override { return {}; }
+    void banNode(int64_t /*node_id*/, int64_t /*ban_time_seconds*/) override {}
+    bool unban(const std::string& /*subnet*/) override { return false; }
+    bool disconnectNode(int64_t /*node_id*/) override { return false; }
+    interfaces::RpcConsoleResult executeRpcConsoleCommand(const std::string& /*method*/,
+                                                          const std::vector<std::string>& /*args*/) override
+    {
+        return {};
+    }
+    std::vector<std::string> listRpcCommands() override { return {}; }
+    interfaces::ScraperConvergenceSnapshot getScraperConvergenceSnapshot() override { return {}; }
+
+    // The subscription callbacks are dropped, as in the fakes above.
+    std::unique_ptr<interfaces::Handler> handleRwSettingsUpdated(RwSettingsUpdatedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+    std::unique_ptr<interfaces::Handler> handleInitShutdown(InitShutdownFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+    std::unique_ptr<interfaces::Handler> handleNotifyBlocksChanged(NotifyBlocksChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+    std::unique_ptr<interfaces::Handler> handleNotifyNumConnectionsChanged(
+        NotifyNumConnectionsChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+    std::unique_ptr<interfaces::Handler> handleBannedListChanged(BannedListChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+    std::unique_ptr<interfaces::Handler> handleNotifyAlertChanged(NotifyAlertChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+    std::unique_ptr<interfaces::Handler> handleMinerStatusChanged(MinerStatusChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+    std::unique_ptr<interfaces::Handler> handlePSGTPoolChanged(PSGTPoolChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+    std::unique_ptr<interfaces::Handler> handleNotifyScraperEvent(NotifyScraperEventFn /*fn*/) override
     {
         return interfaces::MakeCleanupHandler([] {});
     }

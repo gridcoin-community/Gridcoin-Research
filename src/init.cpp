@@ -1427,6 +1427,11 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
                 // of the session. Cleared, the arg falls back to the command line,
                 // then the config file, then its default. That includes a value
                 // init soft-set at startup for this same arg, which is forced too.
+                //
+                // An erase of a value that already reads empty does not reach
+                // here, so a forced empty value stays in place. Its one in-tree
+                // source is researcher.cpp's ForceSetArg("-email", email), which
+                // mirrors the running researcher mode, so it is left alone.
                 gArgs.ClearForcedArg(name);
             } else {
                 gArgs.ForceSetArg(name, value);

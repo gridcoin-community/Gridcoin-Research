@@ -300,7 +300,8 @@ public:
     //! Change one or more settings (name/value, no leading dash). The node
     //! validates, persists to gridcoinsettings.json, and applies immediate side
     //! effects -- the same path as the changesettings RPC. An empty value erases
-    //! the setting (unset -> default). This is deliberately a generic catch-all:
+    //! the setting, so the arg falls back to the command line, then the config
+    //! file, then its default. This is deliberately a generic catch-all:
     //! the caller (OptionsModel) is typed and formats each value; the transport
     //! is name/value strings; the node coerces at read time.
     virtual SettingChangeResult changeSettings(

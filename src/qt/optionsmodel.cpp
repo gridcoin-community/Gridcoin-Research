@@ -363,6 +363,15 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             // Clamp negatives: a reserve is never negative, and core ParseMoney
             // would reject a "-..." string, leaving the value stale.
             const qint64 sat = value.toLongLong() > 0 ? value.toLongLong() : 0;
+            // The Options dialog's mapper submits every mapped field on OK, edited
+            // or not. Writing an unchanged reserve would pin it into
+            // gridcoinsettings.json, which outranks the config file, so a
+            // -reservebalance added there later would be ignored. Only a change
+            // is stored.
+            if (sat == getReserveBalance()) {
+                successful = true;
+                break;
+            }
             // Store as a plain money string, zero included. An empty value would
             // erase the setting instead, and a -reservebalance in the config file
             // would then apply again rather than the zero chosen here.
