@@ -85,7 +85,7 @@ Gridcoin Logic:     Contract System  |  Beacon  |  Tally/Accrual  |  Quorum/Supe
                     (src/gridcoin/)
                                          |
 Blockchain Core:    Block Validation  |  Staking  |  P2P Network  |  Wallet
-                    (src/main.cpp, miner.cpp, net.cpp, wallet.cpp)
+                    (validation.cpp, node/, miner.cpp, net*.cpp, wallet/)
                                          |
 Data/Network:       LevelDB  |  BDB (wallet)  |  Scraper (src/gridcoin/scraper/)
 ```
@@ -99,7 +99,7 @@ These are what differentiate Gridcoin from Bitcoin:
 - **Tally** (`tally.h/cpp`): Tracks per-CPID research reward accruals using periodic snapshots for O(1) lookups.
 - **Superblock/Quorum** (`superblock.h/cpp`, `quorum.h/cpp`): Daily consensus snapshots of network research statistics. Scraper convergence (not voting) achieves consensus in current protocol.
 - **Scraper** (`scraper/`): Distributed BOINC statistics collection. Active scrapers download project stats and publish signed manifests; subscriber nodes receive manifests and run convergence to build superblocks.
-- **AutoGreylist** (`project.h/cpp`): Automatically excludes unresponsive BOINC projects based on Zero Credit Days (ZCD) and Whitelist Activity Score (WAS).
+- **AutoGreylist** (`autogreylist.h/cpp`, `autogreylist_v2.h/cpp`, `project.h/cpp`): Automatically excludes unresponsive BOINC projects based on Zero Credit Days (ZCD) and Whitelist Activity Score (WAS).
 - **MRC** (`mrc.h/cpp`): Manual Research Claims for non-staking researchers.
 - **Side Stakes** (`sidestake.h/cpp`): Automatic reward distribution to configured addresses.
 
@@ -107,11 +107,15 @@ These are what differentiate Gridcoin from Bitcoin:
 
 | File | Role |
 |------|------|
-| `src/main.cpp` | Block/transaction validation, chain management (includes contract validation) |
+| `src/validation.cpp` | Block/transaction validation (`CheckBlock`, `ConnectBlock`, `AcceptBlock`, `AcceptToMemoryPool`), including contract and MRC validation |
+| `src/node/chainman.cpp` | Chain management: `ProcessBlock`, `SetBestChain`, reorganization |
+| `src/node/blockstorage.cpp` | Block files and block index loading (`LoadBlockIndex`) |
 | `src/miner.cpp` | Proof-of-stake block creation, research reward claiming, sidestake application |
-| `src/net.cpp` | P2P networking |
-| `src/wallet.cpp` | Wallet operations |
+| `src/net.cpp`, `src/net_processing.cpp` | P2P networking and message handling |
+| `src/wallet/wallet.cpp` | Wallet operations |
 | `src/init.cpp` | Startup/shutdown orchestration |
+
+`src/main.cpp` and `src/main.h` no longer exist. The #3125 refactor series moved their contents out, mostly into the files above, and deleted `main.cpp` (`29cb43458`); its successor #3269 retired the `main.h` umbrella (`1b1cc5633`).
 
 ### Registry Access Pattern
 
@@ -123,7 +127,7 @@ GetSideStakeRegistry(), GetScraperRegistry()
 
 ### Thread Architecture
 
-Key threads: `ThreadStakeMiner` (block generation), `ThreadScraper`/`ThreadScraperSubscriber` (statistics collection, mutually exclusive), `ThreadSocketHandler`/`ThreadMessageHandler` (P2P), `ThreadRPCServer`. Full list in `doc/developer-notes.md`.
+Key threads: `ThreadStakeMiner` (block generation), `ThreadScraper`/`ThreadScraperSubscriber` (statistics collection, mutually exclusive), `ThreadSocketHandler`/`ThreadMessageHandler` (P2P), and the RPC server thread pool (`src/rpc/server.cpp`). Full list in `doc/developer-notes.md`.
 
 ### Lock Ordering
 
@@ -154,7 +158,10 @@ Every `vRPCCommands[]` row in `src/rpc/server.cpp` carries a **mandatory heritag
 - Framework: Boost Unit Test
 - Test files: `src/test/<source>_tests.cpp` or `src/test/gridcoin/<source>_tests.cpp`
 - Suite naming: `<source_filename>_tests`
-- Fixture: `TestingSetup` (a `BOOST_GLOBAL_FIXTURE` in `src/test/test_gridcoin.cpp`) runs for every test — it sets up an in-memory tx database, a mock wallet (`pwalletMain`), ECC, and quiescent net managers. It does **not** build a block chain: there is no `CreateAndProcessBlock` helper and no 100-block fixture. (`TestChain100Setup` appears once in `util_tests.cpp` but is not defined in-tree and lives in a disabled suite — do not rely on it.) Tests that need block context build mock `CBlockIndex` entries with `GRC::MockBlockIndex::InsertBlockIndex(...)` (see `beacon_tests.cpp`, `mrc_tests.cpp`, `pool_tests.cpp`).
+- Global fixture: `TestingSetup` (a `BOOST_GLOBAL_FIXTURE` in `src/test/test_gridcoin.cpp`) runs for every test — it sets up an in-memory tx database, a mock wallet (`pwalletMain`), ECC, and quiescent net managers. It does **not** build a block chain. (`TestChain100Setup` appears once in `util_tests.cpp`, inside a commented-out block; it is not defined in-tree — do not rely on it.)
+- Real chain: `grc_test::RegtestChainSetup` (`src/test/chain_setup.h`) builds the regtest genesis with spendable premine outputs through the production `LoadBlockIndex()`. Attach it **per suite** with `BOOST_AUTO_TEST_SUITE(x, *boost::unit_test::fixture<grc_test::RegtestChainSetup>())`, never per case — see the header comment for why, and `chainman_reorg_tests.cpp` / `miner_block_assembly_tests.cpp` for users.
+- Mock block context: tests that only need `CBlockIndex` entries use `GRC::MockBlockIndex::InsertBlockIndex(...)` (see `gridcoin/beacon_tests.cpp`, `gridcoin/mrc_tests.cpp`, `wallet_tests.cpp`).
+- State isolation: all suites share one process, so a suite that leaves a global changed fails the run via the leak detector (`src/test/state_leak_detector.h`). Restore globals with `StateGuard` and its opt-ins in `src/test/state_guard.h`.
 
 ## PR Title Prefixes
 

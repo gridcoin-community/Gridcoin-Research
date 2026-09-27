@@ -73,7 +73,7 @@ This checklist ensures contributions meet quality standards before submission. U
 - [ ] **Lock order respected**
   - Always: `cs_main` → `cs_wallet`
   - No potential deadlocks introduced
-  - Tip: Compile with `-DDEBUG_LOCKORDER` to detect violations at runtime
+  - Tip: Configure with `-DENABLE_DEBUG_LOCKORDER=ON` to detect violations at runtime
 
 - [ ] **No trailing whitespace in code**
   - Check: `grep -En '[[:space:]]+$' *.cpp *.h`
@@ -89,7 +89,7 @@ This checklist ensures contributions meet quality standards before submission. U
 - [ ] **Unit tests added/updated**
   - New features have test coverage
   - Changed features have updated tests
-  - All tests pass: `./src/test/test_gridcoinresearch`
+  - All tests pass: `./build/src/test/test_gridcoin`
 
 - [ ] **Manual testing completed**
   - Tested on testnet first
@@ -309,8 +309,8 @@ This checklist ensures contributions meet quality standards before submission. U
 
 - [ ] **All tests pass**
   ```bash
-  cmake --build . --target test_gridcoinresearch
-  ./src/test/test_gridcoinresearch
+  cmake --build . --target test_gridcoin
+  ./src/test/test_gridcoin
   ```
 
 - [ ] **No trailing whitespace anywhere**
@@ -383,7 +383,7 @@ This checklist may seem extensive, but remember:
 test/lint/lint-all.sh
 
 # Run unit tests
-./src/test/test_gridcoinresearch
+./build/src/test/test_gridcoin
 
 # Check for trailing whitespace
 grep -rEn '[[:space:]]+$' --include="*.cpp" --include="*.h" src/

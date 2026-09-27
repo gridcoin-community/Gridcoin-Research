@@ -182,7 +182,7 @@ tail -f ~/.GridcoinResearch/testnet/debug.log
 **Reading Blockchain State**:
 ```cpp
 LOCK(cs_main);
-CBlockIndex* pindex = chainActive.Tip();
+CBlockIndex* pindex = pindexBest;  // chain.h; Gridcoin has no chainActive
 int height = pindex->nHeight;
 ```
 
@@ -331,7 +331,7 @@ MyNewTypeRegistry& GetMyNewTypeRegistry();
 Create `src/gridcoin/mynewtype.cpp`:
 ```cpp
 #include "gridcoin/mynewtype.h"
-#include "main.h"  // For cs_main
+#include "chain.h"  // For cs_main
 
 using namespace GRC;
 
@@ -445,7 +445,7 @@ set(GRIDCOIN_SOURCES
 ```
 
 #### 2.6 Create RPC Commands
-Add commands in `src/rpc/contract.cpp` or create new file for managing your contract type.
+Add commands next to the existing contract RPCs (`advertisebeacon`, `beaconstatus`, `superblocks` in `src/rpc/blockchain.cpp`), or create a new file for managing your contract type. Every new `vRPCCommands[]` row in `src/rpc/server.cpp` needs a heritage classification; see the RPC Heritage Ledger section of `CLAUDE.md`.
 
 #### 2.7 Add Tests
 Create `src/test/gridcoin/mynewtype_tests.cpp`:
@@ -485,10 +485,10 @@ Consensus changes require:
 
 #### 3.1 Identify the Change Location
 Common consensus locations:
-- **Block validation**: `src/main.cpp` → `CheckBlock()`, `AcceptBlock()`
-- **Transaction validation**: `src/main.cpp` → `CheckTransaction()`
-- **Reward calculation**: `src/miner.cpp` → Reward functions
-- **Difficulty adjustment**: `src/main.cpp` → `GetNextTargetRequired()`
+- **Block validation**: `src/validation.cpp` → `CheckBlock()`, `AcceptBlock()`, `ConnectBlock()`
+- **Transaction validation**: `src/validation.cpp` → `CheckTransaction()`, `ConnectInputs()`
+- **Reward calculation**: `src/gridcoin/staking/reward.cpp` → `GetProofOfStakeReward()`; `src/miner.cpp` → `CreateGridcoinReward()` adds the reward to the coinstake (`CreateMRCRewards()` and stake splitting / sidestaking add the extra outputs)
+- **Difficulty adjustment**: `src/gridcoin/staking/difficulty.cpp` → `GRC::GetNextTargetRequired()`
 
 #### 3.2 Add Version/Height Gating
 Always gate consensus changes by block height or version:
@@ -523,7 +523,7 @@ If adding substantial changes:
 // src/primitives/block.h
 static const int32_t CURRENT_VERSION = 12;  // Increment
 
-// src/main.cpp - Check version
+// src/validation.cpp - Check version
 if (block.nVersion < MINIMUM_VERSION) {
     return state.DoS(100, error("version too old"));
 }
@@ -562,7 +562,7 @@ CAmount GetBlockSubsidy(int nHeight) {
 
 **Adding New Validation**:
 ```cpp
-// src/main.cpp in block validation
+// src/validation.cpp in block validation
 if (pindex->nHeight >= NEW_RULE_HEIGHT) {
     if (!ValidateNewRule(block, pindex)) {
         return state.DoS(100, error("new rule violation"));
@@ -748,7 +748,7 @@ A user reports incorrect research rewards, zero magnitude, or beacon problems.
 #### 5.1 Check Researcher Status
 ```bash
 # RPC command
-./gridcoinresearch-cli getstakinginfo
+./gridcoinresearchd getstakinginfo
 
 # Look for:
 # - "researcher_status": Should be "active"
@@ -758,7 +758,7 @@ A user reports incorrect research rewards, zero magnitude, or beacon problems.
 
 #### 5.2 Verify Beacon Status
 ```bash
-./gridcoinresearch-cli beaconstatus
+./gridcoinresearchd beaconstatus
 
 # Check:
 # - Beacon age (should be < 6 months)
@@ -768,7 +768,7 @@ A user reports incorrect research rewards, zero magnitude, or beacon problems.
 
 #### 5.3 Check BOINC Detection
 ```bash
-./gridcoinresearch-cli listprojects
+./gridcoinresearchd listprojects
 
 # Verify:
 # - Projects are detected
@@ -779,17 +779,17 @@ A user reports incorrect research rewards, zero magnitude, or beacon problems.
 #### 5.4 Examine Current Superblock
 ```bash
 # Get current superblock
-./gridcoinresearch-cli superblocks
+./gridcoinresearchd superblocks
 
 # Check specific CPID magnitude
-./gridcoinresearch-cli magnitude <cpid>
+./gridcoinresearchd magnitude <cpid>
 ```
 
 #### 5.5 Check Accrual
 ```bash
-./gridcoinresearch-cli getaccrual <cpid>
+./gridcoinresearchd magnitude <cpid>
 
-# Returns pending research rewards
+# Pending research rewards are the "Owed" field
 ```
 
 #### 5.6 Debug Logging
@@ -834,16 +834,16 @@ You need to add tests or debug failing tests.
 
 ```bash
 # Build tests
-cmake --build . --target test_gridcoinresearch
+cmake --build . --target test_gridcoin
 
 # Run all tests
-./src/test/test_gridcoinresearch
+./src/test/test_gridcoin
 
 # Run specific test suite
-./src/test/test_gridcoinresearch --run_test=beacon_tests
+./src/test/test_gridcoin --run_test=beacon_tests
 
 # Run with verbose output
-./src/test/test_gridcoinresearch --log_level=all
+./src/test/test_gridcoin --log_level=all
 ```
 
 ### Writing Unit Tests
@@ -879,22 +879,27 @@ BOOST_AUTO_TEST_SUITE_END()
 ```
 
 ### Test Fixtures
-For tests requiring blockchain state:
+For tests requiring blockchain state, use `grc_test::RegtestChainSetup` (`src/test/chain_setup.h`). It builds the regtest genesis with spendable premine outputs (`SpendablePremineOutputs()`, `PremineKey()`). Attach it once per suite with the decorator, never as the fixture argument of `BOOST_FIXTURE_TEST_SUITE`, which would rebuild it for every case. The header comment explains why, and shows how to add a light per-case fixture such as `grc_test::WalletTxScope` alongside the decorator:
 ```cpp
-#include "test/test_gridcoin.h"  // Provides TestChain100Setup
+#include "chain.h"
+#include "sync.h"
+#include "test/chain_setup.h"
 
-BOOST_FIXTURE_TEST_SUITE(myfeature_tests, TestChain100Setup)
+BOOST_AUTO_TEST_SUITE(myfeature_tests,
+                      *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
 
 BOOST_AUTO_TEST_CASE(it_works_with_blockchain)
 {
-    // You have a 100-block chain available
-    BOOST_CHECK(chainActive.Height() == 100);
+    LOCK(cs_main);
+    // The chain holds only the regtest genesis block
+    BOOST_CHECK_EQUAL(nBestHeight, 0);
 
     // Test code
 }
 
 BOOST_AUTO_TEST_SUITE_END()
 ```
+There is no `TestChain100Setup` in this tree. For tests that only need `CBlockIndex` entries, use `GRC::MockBlockIndex::InsertBlockIndex(...)` instead.
 
 ---
 
@@ -907,22 +912,22 @@ Node is stuck, forked, or showing unexpected behavior.
 
 ```bash
 # Check sync status
-./gridcoinresearch-cli getblockchaininfo
+./gridcoinresearchd getblockchaininfo
 
 # Get current best block
-./gridcoinresearch-cli getbestblockhash
+./gridcoinresearchd getbestblockhash
 
 # Check specific block
-./gridcoinresearch-cli getblock <hash>
+./gridcoinresearchd getblock <hash>
 
 # View mempool
-./gridcoinresearch-cli getrawmempool
+./gridcoinresearchd getrawmempool
 
 # Check peers
-./gridcoinresearch-cli getpeerinfo
+./gridcoinresearchd getpeerinfo
 
 # Examine connections
-./gridcoinresearch-cli getnetworkinfo
+./gridcoinresearchd getnetworkinfo
 ```
 
 ### Common Fixes
@@ -930,7 +935,7 @@ Node is stuck, forked, or showing unexpected behavior.
 **Node Stuck Syncing**:
 ```bash
 # Restart with fresh peers
-./gridcoinresearch-cli stop
+./gridcoinresearchd stop
 rm ~/.GridcoinResearch/peers.dat
 ./gridcoinresearchd -daemon
 ```
@@ -938,19 +943,18 @@ rm ~/.GridcoinResearch/peers.dat
 **Potential Fork**:
 ```bash
 # Compare block hash with explorer
-./gridcoinresearch-cli getblockhash <height>
+./gridcoinresearchd getblockhash <height>
 
 # If forked, may need to resync
-./gridcoinresearch-cli stop
+./gridcoinresearchd stop
 # Backup wallet first!
-rm -rf ~/.GridcoinResearch/blocks ~/.GridcoinResearch/chainstate
-./gridcoinresearchd -daemon
+./gridcoinresearchd -resetblockchaindata -daemon
 ```
 
 **Debug Validation Failures**:
 ```bash
 # Enable verbose validation logging
-./gridcoinresearchd -debug=validation -printtoconsole
+./gridcoinresearchd -debug=verbose -printtoconsole
 ```
 
 ---
@@ -961,13 +965,13 @@ rm -rf ~/.GridcoinResearch/blocks ~/.GridcoinResearch/chainstate
 You need to change how statistics are collected or processed.
 
 ### Key Files
-- `src/scraper/scraper.cpp`: Main scraper logic
-- `src/scraper/http.cpp`: HTTP downloading
+- `src/gridcoin/scraper/scraper.cpp`: Main scraper logic
+- `src/gridcoin/scraper/http.cpp`: HTTP downloading
 - `src/gridcoin/quorum.cpp`: Convergence algorithm
 
 ### Example: Adding Project Validation
 
-Edit `src/scraper/scraper.cpp`:
+Edit `src/gridcoin/scraper/scraper.cpp`:
 ```cpp
 bool ValidateProjectStats(const ProjectStats& stats) {
     // Add custom validation
@@ -991,7 +995,7 @@ bool ValidateProjectStats(const ProjectStats& stats) {
 tail -f ~/.GridcoinResearch/debug.log | grep -i scraper
 
 # Check manifest generation
-./gridcoinresearch-cli getscrapermanifest
+./gridcoinresearchd listmanifests
 ```
 
 ---
@@ -1011,12 +1015,10 @@ Need to modify protocol parameters (stake age, superblock interval, etc.)
 
 Edit consensus parameters:
 ```cpp
-// src/gridcoin/quorum.cpp
-int64_t GetSuperblockInterval() {
-    if (nBestHeight >= FORK_HEIGHT) {
-        return NEW_INTERVAL;
-    }
-    return OLD_INTERVAL;
+// src/chainparams.h -- a real height-gated parameter (superblock spacing)
+inline int GetSuperblockAgeSpacing(int nHeight)
+{
+    return (OnTestnet() ? 86400 : (nHeight > 364500) ? 86400 : 43200);
 }
 ```
 
@@ -1282,7 +1284,7 @@ Validate a specific Linux distro:
 
 **Common Issues**:
 - **Lint failures**: Run `test/lint/lint-all.sh` locally first
-- **Test failures**: Run `./src/test/test_gridcoinresearch --log_level=all` for verbose output
+- **Test failures**: Run `./build/src/test/test_gridcoin --log_level=all` for verbose output
 - **Sanitizer errors**: Run with ASan locally: `./contrib/devtools/run-local-ci.sh workflow=.github/workflows/cmake_quality.yml job=sanitizers`
 
 #### Understanding Workflow Structure
@@ -1325,7 +1327,7 @@ every attached asset.
 
 **Pre-Push Checklist**:
 - [ ] Run linters locally (`test/lint/lint-all.sh`)
-- [ ] Run unit tests (`./src/test/test_gridcoinresearch`)
+- [ ] Run unit tests (`./build/src/test/test_gridcoin`)
 - [ ] Test CI job for your platform if making build system changes
 - [ ] Check that code follows `01-coding.md` style guide
 
@@ -1348,7 +1350,7 @@ For complete documentation on:
 - Distro isolation strategies
 - Caching and optimization
 
-**See**: `Gridcoin-Research/doc/ci_cd.md`
+**See**: `doc/ci_cd.md`
 
 ---
 
@@ -1358,6 +1360,6 @@ For complete documentation on:
 - **Glossary**: `03-core-concepts-glossary.md`
 - **Components**: `04-component-guide.md`
 - **Coding Style**: `01-coding.md`
-- **CI/CD Technical Details**: `Gridcoin-Research/doc/ci_cd.md`
+- **CI/CD Technical Details**: `doc/ci_cd.md`
 
 This guide provides practical workflows for common tasks. Always take Baby Steps™ - make one focused change at a time, test thoroughly, and document your work. **The process is the product.**

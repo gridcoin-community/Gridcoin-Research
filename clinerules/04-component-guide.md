@@ -387,8 +387,11 @@ Determines consensus from multiple scraper manifests:
 **Key Functions**:
 - `StakeMiner()`: Main staking loop
 - `CreateCoinStake()`: Build coinstake transaction
-- `CreateBlock()`: Assemble complete block
-- `CheckStake()`: Kernel validation
+- `CreateRestOfTheBlock()`: Fill the block with mempool transactions
+- `CreateGridcoinReward()`: Compute the stake and research reward, add it to the coinstake, and fill in the claim
+- `CreateMRCRewards()`: Add the MRC reward outputs
+- `SignStakeBlock()`: Sign the finished block
+- `CheckProofOfStakeV8()` (`src/gridcoin/staking/kernel.cpp`): Kernel validation
 
 **Staking Process**:
 ```
@@ -416,25 +419,27 @@ Apply Sidestakes → Build Block → Sign → Broadcast
 - `blockchain.cpp`: Block/chain queries
 - `mining.cpp`: Staking controls (getmininginfo, getstakinginfo)
 
-**Wallet**:
-- `wallet.cpp`: Balance, transactions, addresses
+**Wallet** (in `src/wallet/`, not `src/rpc/`):
+- `wallet/rpcwallet.cpp`: Balance, transactions, addresses
+- `wallet/rpcdump.cpp`: Key import/export
 
 **Gridcoin-Specific**:
-- `researcher.cpp`: BOINC status, beacon management
-- `superblock.cpp`: Superblock queries
-- `contract.cpp`: Contract operations
+- `blockchain.cpp`: Also holds the researcher, beacon, superblock, protocol and scraper RPCs (`beaconstatus`, `magnitude`, `superblocks`, `listprotocolentries`, `listscrapers`, `addkey`)
+- `voting.cpp`: Polls and votes
 
 **Network**:
 - `net.cpp`: Peer management
 - `server.cpp`: RPC server core
 
-**Registration Pattern**:
+**Registration Pattern** (one row per command in `vRPCCommands[]`, `src/rpc/server.cpp`):
 ```cpp
-static const CRPCCommand commands[] = {
-    {"category", "commandname", &commandfunction, {params}, description},
+static const CRPCCommand vRPCCommands[] =
+{
+    { "name", &impl, cat_x, &impl_helpman, heritage_<bucket>, "<fp>" },
     // ...
 };
 ```
+The heritage bucket and fingerprint are mandatory; see the RPC Heritage Ledger section of `CLAUDE.md`.
 
 ---
 
@@ -473,9 +478,11 @@ static const CRPCCommand commands[] = {
 
 | File | Purpose |
 |------|---------|
-| `main.h/cpp` | Block validation, chain management, consensus |
-| `net.h/cpp` | P2P networking, peer management |
-| `wallet.cpp` | Wallet operations, transaction creation |
+| `validation.h/cpp` | Block and transaction validation, consensus |
+| `node/chainman.h/cpp` | Chain management: `ProcessBlock`, `SetBestChain`, reorganization |
+| `node/blockstorage.h/cpp` | Block files and block index loading |
+| `net.h/cpp`, `net_processing.h/cpp` | P2P networking, peer management, message handling |
+| `wallet/wallet.h/cpp` | Wallet operations, transaction creation |
 | `init.cpp` | Initialization and shutdown |
 | `txdb.h` | Transaction database interface |
 | `chainparams.h/cpp` | Network parameters (mainnet, testnet) |
@@ -567,10 +574,10 @@ static const CRPCCommand commands[] = {
    └─→ Include CPID and research subsidy in transaction
 
 7. Build and sign block
-   └─→ src/miner.cpp: CreateBlock()
+   └─→ src/miner.cpp: CreateRestOfTheBlock(), CreateGridcoinReward(), SignStakeBlock()
 
 8. Validate claim
-   └─→ src/main.cpp: Block validation
+   └─→ src/validation.cpp: ConnectBlock() / GridcoinConnectBlock()
    └─→ src/gridcoin/claim.cpp: Claim::VerifySignature()
 
 9. Record payment
@@ -581,7 +588,7 @@ static const CRPCCommand commands[] = {
 
 ```
 1. Scrapers collect stats independently
-   └─→ src/scraper/scraper.cpp: Scraper::DownloadStats()
+   └─→ src/gridcoin/scraper/scraper.cpp: ProcessProjectStatsFromStreamByCPID()
 
 2. Create manifests
    └─→ Sign and publish via P2P
@@ -638,11 +645,11 @@ static const CRPCCommand commands[] = {
 - `gridcoin/beacon_tests.cpp` - Beacon system
 - `gridcoin/claim_tests.cpp` - Research claims
 - `gridcoin/superblock_tests.cpp` - Superblock parsing/validation
-- `gridcoin/tally_tests.cpp` - Accrual calculations
+- `gridcoin/mrc_tests.cpp` - Manual research claims and their accrual
 
 **Running Tests**:
 ```bash
-src/test/test_gridcoinresearch
+./build/src/test/test_gridcoin
 ```
 
 ---
@@ -664,13 +671,13 @@ src/test/test_gridcoinresearch
 | Beacon logic | `src/gridcoin/beacon.h/cpp` |
 | Accrual calculation | `src/gridcoin/tally.h/cpp` |
 | Superblock validation | `src/gridcoin/quorum.cpp`, `superblock.cpp` |
-| Staking rewards | `src/miner.cpp`, `src/main.cpp` |
+| Staking rewards | `src/miner.cpp`, `src/gridcoin/staking/reward.cpp` |
 | RPC command | `src/rpc/<category>.cpp` |
 | GUI dialog | `src/qt/<feature>/` |
 | Contract type | Add to `src/gridcoin/contract/` |
-| Consensus rules | `src/main.cpp`, `src/gridcoin/<component>` |
+| Consensus rules | `src/validation.cpp`, `src/gridcoin/<component>` |
 | Network protocol | `src/net.cpp`, `src/protocol.cpp` |
-| Scraper statistics | `src/scraper/scraper.cpp` |
+| Scraper statistics | `src/gridcoin/scraper/scraper.cpp` |
 
 ---
 
