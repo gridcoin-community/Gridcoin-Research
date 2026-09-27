@@ -177,7 +177,11 @@ BOOST_AUTO_TEST_CASE(a_mined_pool_register_reverts_on_disconnect_and_reapplies_o
     BOOST_REQUIRE_MESSAGE(opened.m_hash == open_tx.GetHash(), "the OPEN did not apply");
     BOOST_REQUIRE(opened.m_authorized_operator_key == operator_key.GetPubKey());
 
-    GRC::PoolRegisterPayload payload(cpid, "grcpool.com", "https://grcpool.com/", operator_key.GetPubKey());
+    // Not the builtin seed's name and URL, which the OPEN's entry carries, so a
+    // value carried over from the OPEN cannot pass the connected check.
+    const std::string pool_name = "grcpool.com-claimed";
+    const std::string pool_url = "https://example.org/pool/";
+    GRC::PoolRegisterPayload payload(cpid, pool_name, pool_url, operator_key.GetPubKey());
     BOOST_REQUIRE(payload.Sign(operator_key, GRC::ContractAction::ADD, opened.m_hash));
     const GRC::Contract contract =
         GRC::MakeContract<GRC::PoolRegisterPayload>(GRC::ContractAction::ADD, std::move(payload));
@@ -224,6 +228,16 @@ BOOST_AUTO_TEST_CASE(a_mined_pool_register_reverts_on_disconnect_and_reapplies_o
     BOOST_CHECK_EQUAL(registered.m_height, start_height + 1);
     BOOST_CHECK_EQUAL(registered.m_timestamp, register_time);
     BOOST_REQUIRE(registered.m_timestamp != opened.m_timestamp);
+    // Like m_timestamp, the name and URL change on connect, so the disconnect
+    // checks below pin that they come back.
+    BOOST_REQUIRE(pool_name != opened.m_name);
+    BOOST_REQUIRE(pool_url != opened.m_url);
+    BOOST_CHECK_EQUAL(registered.m_name, pool_name);
+    BOOST_CHECK_EQUAL(registered.m_url, pool_url);
+    // A REGISTER writes a fresh entry (PoolRegistry::ApplyRegister), so the
+    // authorization the OPEN recorded is not carried onto it.
+    BOOST_CHECK(!registered.m_authorized_operator_key.IsValid());
+    BOOST_CHECK_EQUAL(registered.m_authorization_height, -1);
 
     // Disconnected by a reorganize: the entry the OPEN left, every field.
     ReorganizeTo(start_tip, "the starting tip");
