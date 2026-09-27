@@ -609,6 +609,98 @@ BOOST_AUTO_TEST_CASE(a_transaction_newer_than_the_block_is_skipped)
     mempool.clear();
 }
 
+namespace {
+
+//! A signed spend of premine output \p n with nLockTime \p lock_time. The one
+//! input's sequence is non-final, so the lock comparison decides the result:
+//! with a final sequence the transaction would be final whatever its lock.
+//!
+//! Every field is set before signing. SIGHASH_ALL covers nLockTime and
+//! nSequence, and the miner's ConnectInputs verifies the signature, so a
+//! transaction changed after signing would be dropped there on any build and a
+//! case asserting that it is NOT selected could not fail.
+CTransaction CreateTimeLockedSpend(uint32_t n, CAmount fee, uint32_t lock_time)
+{
+    const CTransaction& from = PremineCoinbase();
+    BOOST_REQUIRE(n < from.vout.size());
+
+    const CAmount value_out = from.vout[n].nValue - fee;
+    BOOST_REQUIRE_MESSAGE(value_out > 0, "fee exceeds the value of the input");
+
+    CMutableTransaction mtx;
+    mtx.nTime = static_cast<unsigned int>(grc_test::FixtureTxTime());
+    mtx.nLockTime = lock_time;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(from.GetHash(), n);
+    mtx.vin[0].nSequence = 0xfffffffe;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = value_out;
+    mtx.vout[0].scriptPubKey = grc_test::PremineScript();
+
+    BOOST_REQUIRE(SignSignature(grc_test::PremineKeystore(), from, mtx, 0));
+
+    const CTransaction tx(mtx);
+    BOOST_REQUIRE(fee >= GetMinFee(tx));
+
+    return tx;
+}
+
+} // anonymous namespace
+
+//!
+//! A transaction that is not final at the block's own time is skipped.
+//!
+//! The miner judges finality at block.GetBlockTime(), the time AcceptBlock uses.
+//! MakeBlockAndCoinstake stamps the block at FixtureTxTime() + 1000, and the
+//! fixture's mock clock starts later, at or after 1700000000. The two REQUIREs
+//! below check that the block and the clock fall where this case needs them,
+//! against the block the miner actually fills.
+//!
+//! `ontime` is built the same way with its lock below the block time. Its selection
+//! shows that a spend built by CreateTimeLockedSpend is valid and selectable, so
+//! the absence of `locked` is down to its lock and nothing else.
+//!
+BOOST_AUTO_TEST_CASE(a_transaction_final_only_at_adjusted_time_is_skipped)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    const CTransaction locked =
+        CreateTimeLockedSpend(coins[0].n, 200000, grc_test::FixtureTxTime() + 2000);
+    const CTransaction ontime =
+        CreateTimeLockedSpend(coins[1].n, 150000, grc_test::FixtureTxTime() + 500);
+
+    AddToMempool(locked, 200000);
+    AddToMempool(ontime, 150000);
+
+    CBlock block;
+    CMutableTransaction coinbase;
+    CMutableTransaction coinstake;
+    MakeBlockAndCoinstake(block, coinbase, coinstake);
+
+    BOOST_REQUIRE(block.GetBlockTime() <= (int64_t)locked.nLockTime
+                  && (int64_t)locked.nLockTime < GetAdjustedTime());
+    BOOST_REQUIRE((int64_t)ontime.nLockTime < block.GetBlockTime());
+
+    MrcMap mrc_map;
+
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(pindexBest != nullptr);
+        BOOST_REQUIRE(CreateRestOfTheBlock(block, coinbase, coinstake, pindexBest, mrc_map));
+    }
+
+    BOOST_REQUIRE(block.vtx.size() >= 2);
+    const std::vector<CTransaction> selected(block.vtx.begin() + 2, block.vtx.end());
+
+    BOOST_CHECK(!Contains(selected, locked));
+    BOOST_CHECK(Contains(selected, ontime));
+
+    mempool.clear();
+}
+
 //!
 //! A coinstake sitting in the mempool is never selected.
 //!

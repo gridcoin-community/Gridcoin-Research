@@ -425,7 +425,8 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
         for (const auto& [_, entry] : mempool.mapTx)
         {
             const CTransaction& tx = entry.GetTx();
-            if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight))
+            // Finality is judged at the block's own time, as AcceptBlock judges it.
+            if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight, block.GetBlockTime()))
                 continue;
 
             // Double-check that contracts pass contextual validation again so
