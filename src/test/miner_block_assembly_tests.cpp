@@ -58,6 +58,7 @@
 
 #include <algorithm>
 #include <map>
+#include <numeric>
 #include <set>
 #include <string>
 #include <vector>
@@ -1359,6 +1360,167 @@ BOOST_AUTO_TEST_CASE(a_stale_mrc_is_removed_when_a_block_connects)
         BOOST_CHECK_MESSAGE(pwalletMain->mapWallet.count(current_tx.GetHash()) == 1,
             "an MRC anchored to the head was erased from the wallet");
     }
+
+    mempool.clear();
+}
+
+//!
+//! A transaction paying exactly a raised -mintxfee is selected.
+//!
+//! -mintxfee is a floor, so a rate equal to it must qualify. The miner's rate is
+//! a double, fee / (bytes / 1000.0), and at some (fee, size) pairs whose exact
+//! rate IS the floor that expression rounds a hair below it. At the default
+//! floor no relayable transaction gets that close, so the pair is searched for
+//! at a raised one: the first size and floor where a fee of exactly
+//! floor * size / 1000 evaluates below the floor as a double.
+//!
+//! Two controls pay just under the floor and must stay out. The second has a
+//! size at which floor * size / 1000 is not a whole number, so its fee (rounded
+//! down) is short of the floor by less than one satoshi in total. An exact check
+//! that rounded the required fee down instead of up would admit it.
+//!
+//! Every candidate pays at least the miner's flat absolute floor, so the rate
+//! floor is the only thing that can exclude one.
+//!
+BOOST_AUTO_TEST_CASE(a_transaction_paying_exactly_a_raised_floor_is_selected)
+{
+    mempool.clear();
+
+    // StateGuard does not capture the -mintxfee global, so put it back however
+    // the case exits.
+    struct MinTxFeeRestorer {
+        CAmount m_saved{nMinerMinTxFee};
+        ~MinTxFeeRestorer() { nMinerMinTxFee = m_saved; }
+    } restore_floor;
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 3u);
+
+    // The miner's own rate expression, on a fee and size rather than a built
+    // transaction.
+    const auto rate_as_double = [](CAmount fee, unsigned int size) {
+        return (double)fee / (double(size) / 1000.0);
+    };
+
+    // Search for the size and floor. A floor F gives a whole-satoshi fee at size
+    // s only when F is a multiple of `step`. Floors that are multiples of 500 are
+    // skipped: every output is the same P2PKH script, so a larger control differs
+    // in size by a multiple of 34 bytes, and F * size would then be a multiple of
+    // 1000 at every size, leaving no control with a fractional fee. The 2% margin
+    // on the starting floor keeps every control's fee at or above the flat
+    // absolute floor even if its signature is a byte or two shorter.
+    bool found = false;
+    int n_outputs = 0;
+    unsigned int size = 0;
+    CAmount floor = 0;
+    CAmount fee = 0;
+
+    for (int n = 1; n <= 40 && !found; ++n) {
+        const CTransaction probe = CreateSpend(PremineCoinbase(), coins[0].n, COIN, n);
+        const unsigned int s = TxSize(probe);
+        const CAmount step = 1000 / std::gcd((CAmount)s, CAmount{1000});
+
+        if (step % 500 == 0) continue;
+
+        CAmount start = (CAmount{102000000} + s - 1) / s;
+        start = (start + step - 1) / step * step;
+
+        for (int k = 0; k < 20000; ++k) {
+            const CAmount candidate = start + k * step;
+
+            if (candidate % 500 == 0) continue;
+
+            if (rate_as_double(candidate * s / 1000, s) < (double)candidate) {
+                floor = candidate;
+                break;
+            }
+        }
+
+        if (floor == 0) continue;
+
+        const CTransaction rebuilt = CreateSpend(PremineCoinbase(), coins[0].n, floor * s / 1000, n);
+
+        if (TxSize(rebuilt) != s) {
+            floor = 0;
+            continue;
+        }
+
+        n_outputs = n;
+        size = s;
+        fee = floor * s / 1000;
+        found = true;
+    }
+
+    BOOST_REQUIRE_MESSAGE(found, "no size and raised floor at which the miner's double "
+                                 "rate misrounds an exact-floor fee");
+
+    const CTransaction exact = CreateSpend(PremineCoinbase(), coins[0].n, fee, n_outputs);
+    BOOST_REQUIRE_EQUAL(TxSize(exact), size);
+
+    // What makes the case discriminate: the fee is exactly the floor rate, yet
+    // the miner's double puts it below the floor.
+    BOOST_REQUIRE_EQUAL(fee * 1000, floor * (CAmount)size);
+    BOOST_REQUIRE_LT(FeePerKb(exact, fee), (double)floor);
+    BOOST_REQUIRE_GE(fee, GetMinFee(exact));
+
+    // Control 1: the same shape, one satoshi under the smallest fee that meets
+    // the floor at its own size.
+    const CTransaction below_probe = CreateSpend(PremineCoinbase(), coins[1].n, COIN, n_outputs);
+    const unsigned int below_size = TxSize(below_probe);
+    const CAmount below_fee = (floor * below_size + 999) / 1000 - 1;
+    const CTransaction below = CreateSpend(PremineCoinbase(), coins[1].n, below_fee, n_outputs);
+    BOOST_REQUIRE_EQUAL(TxSize(below), below_size);
+    BOOST_REQUIRE_LT(below_fee * 1000, floor * (CAmount)below_size);
+    BOOST_REQUIRE_GE(below_fee, GetMinFee(below));
+
+    // Control 2: a larger size at which floor * size / 1000 has a fractional
+    // part, paying that amount rounded down.
+    bool found_nonintegral = false;
+    unsigned int nonintegral_size = 0;
+    CAmount nonintegral_fee = 0;
+    int nonintegral_outputs = 0;
+
+    for (int n = n_outputs + 1; n <= n_outputs + 40 && !found_nonintegral; ++n) {
+        const CTransaction probe = CreateSpend(PremineCoinbase(), coins[2].n, COIN, n);
+        const unsigned int s = TxSize(probe);
+
+        if ((floor * (CAmount)s) % 1000 == 0) continue;
+
+        const CAmount f = floor * s / 1000;
+        const CTransaction rebuilt = CreateSpend(PremineCoinbase(), coins[2].n, f, n);
+
+        if (TxSize(rebuilt) != s) continue;
+
+        nonintegral_outputs = n;
+        nonintegral_size = s;
+        nonintegral_fee = f;
+        found_nonintegral = true;
+    }
+
+    BOOST_REQUIRE_MESSAGE(found_nonintegral, "no larger size at which the floor rate "
+                                             "gives a fractional fee");
+
+    const CTransaction below_nonintegral =
+        CreateSpend(PremineCoinbase(), coins[2].n, nonintegral_fee, nonintegral_outputs);
+    BOOST_REQUIRE_EQUAL(TxSize(below_nonintegral), nonintegral_size);
+    BOOST_REQUIRE_LT(nonintegral_fee * 1000, floor * (CAmount)nonintegral_size);
+    BOOST_REQUIRE_GE(nonintegral_fee, GetMinFee(below_nonintegral));
+
+    nMinerMinTxFee = floor;
+
+    AddToMempool(exact, fee);
+    AddToMempool(below, below_fee);
+    AddToMempool(below_nonintegral, nonintegral_fee);
+
+    BOOST_TEST_MESSAGE("-mintxfee " << floor << " sat/KB; exact-floor fee " << fee
+                       << " sat over " << size << " bytes");
+
+    CAmount fees = 0;
+    const std::vector<CTransaction> sel = AssembleBlock(fees);
+
+    BOOST_CHECK(Contains(sel, exact));
+    BOOST_CHECK(!Contains(sel, below));
+    BOOST_CHECK(!Contains(sel, below_nonintegral));
 
     mempool.clear();
 }
