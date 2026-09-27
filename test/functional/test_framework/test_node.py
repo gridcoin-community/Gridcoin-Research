@@ -446,6 +446,16 @@ class TestNode():
                 # named-arg dicts ({"wait": 0}) with "Params must be an array".
                 # The `wait` kwarg is preserved on stop_node()'s signature for
                 # caller compatibility but not forwarded to the RPC.
+                #
+                # A node whose RPC never connected cannot take the stop RPC,
+                # and self.stop() would raise AssertionError from the
+                # connection guard in __getattr__. The except below does not
+                # catch AssertionError, so the SIGTERM fallback further down
+                # was unreachable for exactly the case it was written for.
+                # Raise the same message as a ConnectionError instead, so the
+                # fallback runs and the error is still re-raised afterwards.
+                if not self.use_cli and not (self.rpc_connected and self.rpc is not None):
+                    raise ConnectionError(self._node_msg("Error: no RPC connection"))
                 self.stop()
             except (http.client.CannotSendRequest,
                     JSONRPCException,
