@@ -640,8 +640,15 @@ class msg_version:
         return r
 
     def __repr__(self):
+        try:
+            when = time.ctime(self.nTime)
+        except (OverflowError, OSError, ValueError):
+            # An nTime no C time_t can hold (p2p_version_timedrift.py sends
+            # some). Show it raw: send_message() logs this repr on the network
+            # thread, and an exception there drops the message unsent.
+            when = str(self.nTime)
         return 'msg_version(nVersion=%i nServices=%i nTime=%s nNonce=%i strSubVer=%s nStartingHeight=%i)' \
-            % (self.nVersion, self.nServices, time.ctime(self.nTime), self.nNonce,
+            % (self.nVersion, self.nServices, when, self.nNonce,
                self.strSubVer, self.nStartingHeight)
 
 

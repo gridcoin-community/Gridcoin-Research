@@ -7,6 +7,7 @@
 #include "netbase.h" // for AddTimeData
 #include "support/cleanse.h"
 #include "sync.h"
+#include "timedata.h"
 #include "version.h"
 #include "node/ui_interface.h"
 #include <random.h>
@@ -26,8 +27,6 @@
 #include <codecvt>
 
 using namespace std;
-
-CMedianFilter<int64_t> vTimeOffsets(200,0);
 
 // Moved from main.cpp (issue #3125 C9); declared in util.h.
 const std::string strMessageMagic = "Gridcoin Signed Message:\n";
@@ -260,11 +259,13 @@ std::string GetFileContents(const fs::path filepath)
 #ifndef UPGRADERFLAG
 // avoid including unnecessary files for standalone upgrader
 
-// Atomic: written by the message-handler thread inside AddTimeData() (which
-// runs from ProcessMessage's VERSION-handling path) and read both there and
-// from the GUI thread via GetTimeOffset() -> GetAdjustedTime() (e.g. poll
-// expiry checks). No common lock; Bitcoin Core fixed the same pattern years
-// ago by making this atomic.
+// Atomic: written under g_time_offset_votes_mutex by AddTimeData() (the
+// message-handler thread, from ProcessMessage's VERSION-handling path),
+// RemoveTimeData() (the socket thread, deleting a disconnected node) and
+// ResetTimeDataForTesting() (unit tests), and read without a lock through
+// GetTimeOffset() -> GetAdjustedTime() from many threads (GUI, miner,
+// validation, RPC). Bitcoin Core fixed the same pattern years ago by making
+// this atomic.
 static std::atomic<int64_t> nTimeOffset{0};
 
 int64_t GetTimeOffset()
@@ -277,53 +278,97 @@ int64_t GetAdjustedTime()
     return GetTime() + GetTimeOffset();
 }
 
-void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
+// Peer time votes: one per connected outbound peer, counted once per network
+// group (see TimeOffsetVotes). Only AddTimeData(), RemoveTimeData() and
+// ResetTimeDataForTesting() touch them. The mutex is a leaf: nothing else is
+// acquired while it is held, and AddTimeData() releases it before it logs,
+// warns or calls into the UI.
+static Mutex g_time_offset_votes_mutex;
+static TimeOffsetVotes g_time_offset_votes GUARDED_BY(g_time_offset_votes_mutex);
+
+//! Store the offset the live votes give, and return whether the 70-minute check
+//! rejected it. Called under the votes mutex, so the stored offset always
+//! matches the latest vote set, whichever thread changed it last.
+static bool StoreTimeOffset(const std::optional<int64_t>& median) EXCLUSIVE_LOCKS_REQUIRED(g_time_offset_votes_mutex)
 {
-    // Ignore duplicates
-    static set<CNetAddr> setKnown;
-    if (!setKnown.insert(ip).second)
-        return;
+    // We believe the median of the other nodes 95% and our own node's time ("0" initial offset) 5%. This will also act to gently converge the network to consensus UTC, in case
+    // the entire network is displaced for some reason. Without a quorum of live votes, our own
+    // clock is all we have.
+    int64_t offset = median ? static_cast<int64_t>(0.95 * *median) : 0;
+    // Only let other nodes change our time by so much
+    const bool rejected = abs64(offset) >= 70 * 60;
+    if (rejected)
+        offset = 0;
+    nTimeOffset = offset;
+    return rejected;
+}
 
-    // Add data
-    vTimeOffsets.input(nOffsetSample);
-    LogPrint(BCLog::LogFlags::NOISY, "Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
-    if (vTimeOffsets.size() >= 5 && vTimeOffsets.size() % 2 == 1)
+void AddTimeData(int64_t node_id, const CNetAddr& ip, int64_t nOffsetSample)
+{
+    // The vote lasts until RemoveTimeData() withdraws it when this peer's
+    // connection is deleted, and peers in one network group count once.
+    const TimeOffsetVotes::Group group = ip.GetGroup();
+    std::vector<int64_t> vSorted;
+    bool rejected;
     {
-        // We believe the median of the other nodes 95% and our own node's time ("0" initial offset) 5%. This will also act to gently converge the network to consensus UTC, in case
-        // the entire network is displaced for some reason.
-        nTimeOffset = 0.95 * vTimeOffsets.median();
-        std::vector<int64_t> vSorted = vTimeOffsets.sorted();
-        // Only let other nodes change our time by so much
-        if (abs64(nTimeOffset) >= 70 * 60)
+        LOCK(g_time_offset_votes_mutex);
+        rejected = StoreTimeOffset(g_time_offset_votes.Add(node_id, group, nOffsetSample));
+        vSorted = g_time_offset_votes.Sorted();
+    }
+
+    LogPrint(BCLog::LogFlags::NOISY, "Added time data, votes %d, offset %+" PRId64 " (%+" PRId64 " minutes)", vSorted.size(), nOffsetSample, nOffsetSample/60);
+    if (rejected)
+    {
+        static bool fDone;
+        if (!fDone)
         {
-            nTimeOffset = 0;
+            // If nobody has a time different than ours but within 5 minutes of ours, give a warning
+            bool fMatch = false;
+            for (auto const& nOffset : vSorted)
+                if (nOffset != 0 && abs64(nOffset) < 5 * 60)
+                    fMatch = true;
 
-            static bool fDone;
-            if (!fDone)
+            if (!fMatch)
             {
-                // If nobody has a time different than ours but within 5 minutes of ours, give a warning
-                bool fMatch = false;
-                for (auto const& nOffset : vSorted)
-                    if (nOffset != 0 && abs64(nOffset) < 5 * 60)
-                        fMatch = true;
-
-                if (!fMatch)
-                {
-                    fDone = true;
-                    string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.");
-                    strMiscWarning = strMessage;
-                    LogPrintf("*** %s", strMessage);
-                    uiInterface.ThreadSafeMessageBox(strMessage+" ", string("Gridcoin"), CClientUIInterface::MSG_WARNING);
-                }
+                fDone = true;
+                string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.");
+                strMiscWarning = strMessage;
+                LogPrintf("*** %s", strMessage);
+                uiInterface.ThreadSafeMessageBox(strMessage+" ", string("Gridcoin"), CClientUIInterface::MSG_WARNING);
             }
         }
-        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY)) {
-            for (auto const& n : vSorted)
-                LogPrintf("%+" PRId64 "  ", n);
-            LogPrintf("|  ");
-        }
-        LogPrint(BCLog::LogFlags::NOISY, "nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)", nTimeOffset, nTimeOffset/60);
     }
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY)) {
+        for (auto const& n : vSorted)
+            LogPrintf("%+" PRId64 "  ", n);
+        LogPrintf("|  ");
+    }
+    const int64_t offset = GetTimeOffset();
+    LogPrint(BCLog::LogFlags::NOISY, "nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)", offset, offset/60);
+}
+
+void RemoveTimeData(int64_t node_id)
+{
+    // Recompute over the votes still live, so a departed peer leaves no trace
+    // in the offset either. The 70-minute check still applies, silently: its
+    // warning calls into the UI, and this runs on the socket thread under
+    // m_nodes_mutex.
+    {
+        LOCK(g_time_offset_votes_mutex);
+        if (!g_time_offset_votes.Remove(node_id)) {
+            return;
+        }
+        StoreTimeOffset(g_time_offset_votes.Median());
+    }
+
+    LogPrint(BCLog::LogFlags::NOISY, "Withdrew time vote of peer %d, nTimeOffset = %+" PRId64, node_id, GetTimeOffset());
+}
+
+void ResetTimeDataForTesting()
+{
+    LOCK(g_time_offset_votes_mutex);
+    g_time_offset_votes = TimeOffsetVotes{};
+    nTimeOffset = 0;
 }
 
 

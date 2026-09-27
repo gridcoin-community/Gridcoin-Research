@@ -263,6 +263,7 @@ add_library(gridcoin_util STATIC
     support/cleanse.cpp
     support/lockedpool.cpp
     sync.cpp
+    timedata.cpp
     txmempool.cpp
     uint256.cpp
     util.cpp

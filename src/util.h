@@ -115,7 +115,12 @@ std::string GetFileContents(const fs::path filepath);
 
 int64_t GetTimeOffset();
 int64_t GetAdjustedTime();
-void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample);
+//! Record an outbound peer's VERSION time offset as its time vote (see TimeOffsetVotes).
+void AddTimeData(int64_t node_id, const CNetAddr& ip, int64_t nOffsetSample);
+//! Withdraw a peer's time vote. Call only once no other thread can still reach the peer.
+void RemoveTimeData(int64_t node_id);
+//! Tests only: forget every time vote and reset the offset to 0.
+void ResetTimeDataForTesting();
 #if HAVE_SYSTEM
 void runCommand(std::string strCommand);
 #endif

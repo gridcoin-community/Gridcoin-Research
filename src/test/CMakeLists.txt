@@ -158,6 +158,7 @@ add_executable(test_gridcoin
     sigopcount_tests.cpp
     sync_tests.cpp
     test_gridcoin.cpp
+    timedata_tests.cpp
     transaction_identity_tests.cpp
     transaction_tests.cpp
     txmempool_tests.cpp

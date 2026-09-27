@@ -363,8 +363,8 @@ class TestNode():
         """The node's adjusted time as tracked Python-side: the mock clock when
         one is pinned, the real clock otherwise. Matches the daemon's
         GetAdjustedTime() in functional tests -- the peer time offset stays 0
-        because AddTimeData needs five distinct peer addresses and every test
-        peer is 127.0.0.1."""
+        because AddTimeData needs votes from four distinct peer network groups
+        (plus the node's own), and every test peer is 127.0.0.1, one group."""
         return self._mocktime if self._mocktime is not None else int(time.time())
 
     def advance_mocktime_to(self, timestamp):
