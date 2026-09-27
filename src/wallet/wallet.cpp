@@ -3124,8 +3124,8 @@ CWalletTx::RevalidateResult CWalletTx::RevalidateTransaction(CTxDB& txdb) EXCLUS
 {
     CTransaction tx = (CTransaction) *this;
 
-    // The checks that never read the inputs run first, in AcceptToMemoryPool's
-    // order. What they reject is invalid whatever the inputs turn out to be, so
+    // The checks that never read the inputs run first, as in AcceptToMemoryPool.
+    // What they reject is invalid whatever the inputs turn out to be, so
     // an input that cannot be resolved right now must not hide that verdict
     // behind INPUTS_UNAVAILABLE and keep the transaction in the wallet.
 
