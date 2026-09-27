@@ -34,6 +34,8 @@
 #include "chainparams.h"
 #include "consensus/consensus.h"
 #include "consensus/tx_verify.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/contract/contract.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/pool.h"
 #include "gridcoin/mrc.h"
@@ -1143,6 +1145,72 @@ BOOST_AUTO_TEST_CASE(an_input_independent_verdict_beats_an_unresolvable_input)
 
     BOOST_CHECK_MESSAGE(!InWallet(v1_hash), "the unsent version 1 transaction was kept");
     BOOST_CHECK_EQUAL(CountNotices(seen, seen_before, v1_hash, CT_DELETED), 1);
+}
+
+//!
+//! The same for AcceptToMemoryPool's claim rule: from V15 (switched on here for
+//! the case) a claim in a transaction that is not a coinbase can never be
+//! accepted, so it is erased even though its input cannot be resolved.
+//!
+//! The claim is well formed and passes contract validation (CLAIM falls to the
+//! permissive handler), so only the claim rule can erase it; without that rule
+//! the missing parent reads "not resolvable" and the transaction is kept.
+//!
+BOOST_AUTO_TEST_CASE(a_claim_outside_a_coinbase_is_erased_whatever_its_inputs)
+{
+    mempool.clear();
+    grc_test::V15HeightGuard v15(0);
+
+    std::vector<std::pair<uint256, ChangeType>> seen;
+    boost::signals2::scoped_connection watch = pwalletMain->NotifyTransactionChanged.connect(
+        [&seen](CWallet*, const uint256& hash, ChangeType status) { seen.emplace_back(hash, status); });
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 3u);
+
+    GRC::Claim claim;
+    claim.m_version = GRC::Claim::CURRENT_VERSION;
+    claim.m_client_version = "test";
+    claim.m_mining_id = GRC::MiningId::ForNoncruncher();
+    claim.m_block_subsidy = 1;
+    const GRC::Contract contract = GRC::MakeContract<GRC::Claim>(GRC::ContractAction::ADD, claim);
+    BOOST_REQUIRE(contract.WellFormed());
+
+    // The parent exists only here: it is signed but never offered to the pool. No
+    // burn: a claim's required burn is MAX_MONEY, so that no one can send one by
+    // hand, and nothing on this path gets as far as checking it.
+    const CTransaction nowhere = CreateSpend(PremineCoinbase(), coins[2].n, 150000, 1);
+    const CTransaction loose = grc_test::CreateSpendWithContract(nowhere, 0, 150000, contract, 0, 0);
+    const uint256 loose_hash = loose.GetHash();
+
+    LOCK(cs_main);
+    BOOST_REQUIRE(IsV15Enabled(nBestHeight + 1));
+
+    const std::string leaked = DescribeRelayableCandidates();
+    BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+    {
+        int DoS = 0;
+        BOOST_REQUIRE_MESSAGE(GRC::ValidateContracts(loose, DoS), "contract validation alone refuses the claim");
+    }
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+
+        CWalletDB walletdb(pwalletMain->strWalletFile);
+        CWalletTx planted(pwalletMain, loose);
+        BOOST_REQUIRE(pwalletMain->AddToWallet(planted, &walletdb));
+
+        CWalletTx& wtx = pwalletMain->mapWallet.at(loose_hash);
+        wtx.SetTxState(TxStateInMempool{});
+        BOOST_REQUIRE_EQUAL(wtx.GetDepthInMainChain(), -1);
+    }
+
+    const size_t seen_before = seen.size();
+    BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+
+    BOOST_CHECK_MESSAGE(!InWallet(loose_hash), "the claim outside a coinbase was kept");
+    BOOST_CHECK_EQUAL(CountNotices(seen, seen_before, loose_hash, CT_DELETED), 1);
 }
 
 //!

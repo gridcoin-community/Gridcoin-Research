@@ -3146,6 +3146,17 @@ CWalletTx::RevalidateResult CWalletTx::RevalidateTransaction(CTxDB& txdb) EXCLUS
         return RevalidateResult::INVALID;
     }
 
+    // As in AcceptToMemoryPool: from V15, judged at the next height, a claim in a
+    // transaction that is not a coinbase can never be accepted.
+    if (IsV15Enabled(nBestHeight + 1)) {
+        for (const auto& contract : tx.GetContracts()) {
+            if (contract.m_type == GRC::ContractType::CLAIM) {
+                error("%s: claim contract in non-coinbase tx %s", __func__, tx.GetHash().ToString());
+                return RevalidateResult::INVALID;
+            }
+        }
+    }
+
     if (!tx.GetContracts().empty()) {
         int DoS = 0;
         if (!GRC::ValidateContracts(tx, DoS)) {
