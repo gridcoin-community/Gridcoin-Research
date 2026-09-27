@@ -150,6 +150,7 @@ BASE_SCRIPTS = [
     #     string->JSON arg conversion (RPCConvertValues) round-trips for int/
     #     bool/array/object args plus the dual-mode `logging <category>` form
     'feature_hello.py',
+    'feature_stop_node_without_rpc.py',
     'feature_regtest_staking.py',
     # feature_shutdown.py: `stop` must not hang on an in-service RPC connection
     # (issue #3123 -- StopRPCThreads must interrupt a worker parked in recv).
