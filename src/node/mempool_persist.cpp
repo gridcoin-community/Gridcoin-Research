@@ -144,9 +144,14 @@ bool LoadUnbroadcast(CTxMemPool& pool, const fs::path& load_path)
             if (AcceptToMemoryPool(pool, mutable_tx, state, nullptr, entry_time)) {
                 pool.AddUnbroadcast(mutable_tx.GetHash());
                 ++accepted;
-            } else if (pool.exists(mutable_tx.GetHash())) {
-                // Already pooled, which ATMP refuses without saying so. This is the
-                // ordinary case for the wallet's own transactions, not an edge case:
+            } else if (!state.IsInvalid() && pool.exists(mutable_tx.GetHash())) {
+                // Already pooled, which ATMP refuses without saying so. The state
+                // check matters: ATMP runs validity checks before the duplicate check
+                // (among them the V15 claim rule and the contract validation), so a
+                // pooled transaction can also be refused as invalid, and that one must
+                // not be re-armed. The already-pooled refusal leaves the state valid.
+                //
+                // Already pooled is the ordinary case for the wallet's own transactions:
                 // the wallet's startup re-accept puts every restarted own unconfirmed
                 // transaction back in the pool before this load runs, so without this
                 // branch the marker persisted for exactly those transactions would be
@@ -164,7 +169,7 @@ bool LoadUnbroadcast(CTxMemPool& pool, const fs::path& load_path)
         }
     }
 
-    LogPrintf("Reloaded unbroadcast transactions: %d re-accepted, %d already in the pool, of %d persisted\n",
+    LogPrintf("Reloaded unbroadcast transactions: %d re-accepted, %d already in the pool, of %d persisted",
               accepted, already_pooled, (int)entries.size());
     return true;
 }

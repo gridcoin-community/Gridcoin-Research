@@ -720,21 +720,32 @@ BOOST_AUTO_TEST_CASE(unbroadcast_reload_rearms_an_already_pooled_transaction)
     CTxMemPool pool;
     const CTransaction ours = MakeWalletShapedTx();
     const CTransaction bystander = MakeWalletShapedTx();
+    // Pooled, but a reload refuses it as invalid: it has no inputs, so
+    // CheckTransaction fails ahead of the duplicate check. Its marker must not be
+    // re-armed.
+    const CTransaction invalid = MakePlainTx(43);
     pool.addUnchecked(ours.GetHash(), MakeEntryFee(ours, 10));
     pool.addUnchecked(bystander.GetHash(), MakeEntryFee(bystander, 10));
+    pool.addUnchecked(invalid.GetHash(), MakeEntryFee(invalid, 10));
 
-    // The refusal the reload meets is the silent already-pooled one, not a
-    // validation failure: every earlier ATMP check marks the state invalid.
+    // The refusal the reload meets for ours is the silent already-pooled one, not
+    // a validation failure, which marks the state invalid.
     {
         LOCK(cs_main);
         CValidationState state;
         CTransaction copy = ours;
         BOOST_REQUIRE(!AcceptToMemoryPool(pool, copy, state, nullptr));
         BOOST_REQUIRE(!state.IsInvalid());
+
+        CValidationState invalid_state;
+        CTransaction invalid_copy = invalid;
+        BOOST_REQUIRE(!AcceptToMemoryPool(pool, invalid_copy, invalid_state, nullptr));
+        BOOST_REQUIRE(invalid_state.IsInvalid());
     }
 
     node::MempoolPersistEntries entries;
     entries.emplace_back(ours, 111);
+    entries.emplace_back(invalid, 112);
     const fs::path path = fs::temp_directory_path()
                           / fs::unique_path("gridcoin_unbroadcast_reload_%%%%%%%%.dat");
     BOOST_REQUIRE(node::WriteMempoolEntries(path, entries));
@@ -745,6 +756,7 @@ BOOST_AUTO_TEST_CASE(unbroadcast_reload_rearms_an_already_pooled_transaction)
     BOOST_CHECK(pool.IsCancellableUnbroadcast(ours.GetHash()));
     // Only what was persisted is re-armed, not everything that happens to be pooled.
     BOOST_CHECK(!pool.IsUnbroadcastTx(bystander.GetHash()));
+    BOOST_CHECK(!pool.IsUnbroadcastTx(invalid.GetHash()));
     BOOST_CHECK_EQUAL(pool.GetUnbroadcast().size(), 1U);
 
     fs::remove(path);

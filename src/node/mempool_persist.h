@@ -38,7 +38,8 @@ bool DumpUnbroadcast(const CTxMemPool& pool, const fs::path& dump_path);
 //! Reload persisted unbroadcast transactions: re-accept each through
 //! AcceptToMemoryPool (which drops anything already confirmed or now invalid) and
 //! re-arm the survivors for rebroadcast. A persisted transaction that is already in
-//! the pool, as the wallet's startup re-accept leaves its own ones, is re-armed too.
+//! the pool, as the wallet's startup re-accept leaves its own ones, is re-armed too,
+//! unless AcceptToMemoryPool now refuses it as invalid.
 //! Returns false only on a read error.
 bool LoadUnbroadcast(CTxMemPool& pool, const fs::path& load_path);
 
