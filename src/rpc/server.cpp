@@ -1126,7 +1126,7 @@ void StartRPCThreads()
 
         // Not an error on its own: a host without IPv6 lands here on every start,
         // and the IPv4 listener below is what serves it.
-        LogPrintf("INFO: StartRPCThreads: not listening on IPv6 [%s]:%u: %s\n",
+        LogPrintf("INFO: StartRPCThreads: not listening on IPv6 [%s]:%u: %s",
                   endpoint.address().to_string(), endpoint.port(), e.what());
     }
 
@@ -1158,12 +1158,13 @@ void StartRPCThreads()
         // With the IPv6 listener up the node starts anyway, and this was the only
         // trace of the failure -- strerr is read only when nothing bound. Say what
         // it costs: clients that connect over IPv4, 127.0.0.1 by default, are
-        // refused while the node looks healthy.
+        // refused while the node looks healthy. Only the loopback path has a
+        // client-facing address to name; the wildcard bind address is not one.
         if (fListening) {
             LogPrintf("WARNING: StartRPCThreads: not listening on IPv4 %s:%u: %s. RPC is reachable over "
-                      "IPv6 only; clients connecting to %s will be refused.\n",
+                      "IPv6 only; %s will be refused.",
                       endpoint.address().to_string(), endpoint.port(), e.what(),
-                      endpoint.address().to_string());
+                      loopback ? "clients connecting to 127.0.0.1" : "IPv4 clients");
         }
     }
     } // !bind_specified

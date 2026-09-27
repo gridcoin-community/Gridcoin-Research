@@ -4,8 +4,8 @@
 # file COPYING or https://opensource.org/licenses/mit-license.php.
 """An IPv4 RPC listener that cannot bind is reported, not swallowed.
 
-With no -rpcbind the daemon listens on the loopback interfaces: [::1] first,
-then 127.0.0.1 on the same port. When the IPv4 bind failed after the IPv6 one
+With neither -rpcbind nor -rpcallowip the daemon listens on the loopback
+interfaces: [::1] first, then 127.0.0.1 on the same port. When the IPv4 bind failed after the IPv6 one
 succeeded, the node started normally and served RPC on [::1] only, and nothing
 in debug.log said so -- the failure text was kept for the "nothing bound" error
 that never came. A client on 127.0.0.1, which is every default client and this
@@ -72,7 +72,7 @@ class RPCBindIPv4ConflictTest(GridcoinTestFramework):
                     expected_msgs=[
                         'RPC: bound and listening on [::1]:%d' % port,
                         'WARNING: StartRPCThreads: not listening on IPv4 127.0.0.1:%d' % port,
-                        'RPC is reachable over IPv6 only',
+                        'RPC is reachable over IPv6 only; clients connecting to 127.0.0.1 will be refused.',
                         'RPC server started: 1 acceptor(s)',
                     ],
                     unexpected_msgs=['bound and listening on 127.0.0.1:']):
