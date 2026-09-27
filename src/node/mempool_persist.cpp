@@ -152,17 +152,19 @@ bool LoadUnbroadcast(CTxMemPool& pool, const fs::path& load_path)
                 // not be re-armed. The already-pooled refusal leaves the state valid.
                 //
                 // Already pooled is the ordinary case for the wallet's own transactions:
-                // the wallet's startup re-accept puts every restarted own unconfirmed
-                // transaction back in the pool before this load runs, so without this
-                // branch the marker persisted for exactly those transactions would be
-                // dropped, and with it the rebroadcast and the cancel gate.
+                // before this load runs, the wallet's startup re-accept puts each
+                // restarted own unconfirmed transaction that AcceptToMemoryPool still
+                // accepts back in the pool, so without this branch the marker persisted
+                // for exactly those transactions would be dropped, and with it the
+                // rebroadcast and the cancel gate.
                 //
                 // Restored as NeverSent, which is what was persisted: no peer asked
-                // this node for it last session. The one gap is the time between the
-                // node starting and this load, when a peer that sends "mempool" could
-                // fetch it without the fetch being recorded. No Gridcoin node sends
-                // that message, and the gate is already documented as a strong signal
-                // rather than a proof.
+                // this node for it last session. The network starts before this load,
+                // so in between a peer that sends "mempool" could fetch it without the
+                // fetch being recorded, or a peer that already has it could relay it
+                // in; either way it is still restored as NeverSent. No Gridcoin node
+                // sends "mempool", and the gate is already documented as a strong
+                // signal rather than a proof.
                 pool.AddUnbroadcast(mutable_tx.GetHash());
                 ++already_pooled;
             }
