@@ -478,9 +478,11 @@ class TestNode():
             # starting, so we never had an RPC connection), the daemon is still
             # running and nothing has told it to exit. Send SIGTERM so
             # wait_until_stopped() doesn't burn the full timeout and we don't
-            # leak a daemon that would starve the next parallel test. SIGTERM is
-            # graceful (the daemon's signal handler exits 0, keeping
-            # is_node_stopped()'s return-code assertion valid); we never kill -9.
+            # leak a daemon that would starve the next parallel test. Once the
+            # node is past RPC startup, SIGTERM exits 0 (its handler requests a
+            # normal shutdown). A node still in early init exits non-zero, and
+            # is_node_stopped()'s return-code assertion then reports that. We
+            # never kill -9.
             # stop_exc is still re-raised below, so the failure stays visible.
             if stop_exc is not None and self.process is not None and self.process.poll() is None:
                 self.process.terminate()
