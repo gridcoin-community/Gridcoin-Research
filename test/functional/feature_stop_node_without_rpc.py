@@ -12,7 +12,8 @@ before the SIGTERM fallback could run: nothing told the daemon to exit, and
 every later wait_until_stopped() spent its whole timeout on it.
 
 The node here starts fully but serves RPC on a port the framework does not
-poll (-rpcport moved up by 2000), so the framework's RPC connection is never
+poll (-rpcport set to node 1's RPC port, unused in this one-node test and inside
+the test port window), so the framework's RPC connection is never
 made while the daemon itself is healthy. The test starts it without
 wait_for_rpc_connection and asserts that stop_node() raises ConnectionError
 (the fallback path) rather than AssertionError, and that the daemon then exits
@@ -45,7 +46,7 @@ class FeatureStopNodeWithoutRpcTest(GridcoinTestFramework):
     def setup_network(self):
         # Add the node but do not start it: start_nodes() would wait for an RPC
         # connection that, by design, never comes.
-        self.moved_rpc_port = rpc_port(0) + 2000
+        self.moved_rpc_port = rpc_port(1)
         self.add_nodes(self.num_nodes, [["-rpcport=%d" % self.moved_rpc_port]])
 
     def run_test(self):
