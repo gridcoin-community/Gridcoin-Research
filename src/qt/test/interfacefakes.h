@@ -9,6 +9,7 @@
 #include "interfaces/node.h"
 #include "interfaces/researcher.h"
 #include "interfaces/sidestake.h"
+#include "util/strencodings.h"
 
 #include <map>
 #include <memory>
@@ -163,10 +164,10 @@ public:
 //! Fake interfaces::Node: holds the read-write settings in an in-memory map and
 //! records every changeSettings batch, so a test can assert what a model would
 //! have written to gridcoinsettings.json (changeSettings is how
-//! OptionsModel::setData persists a core setting). getSettingStr and isSettingSet
-//! match the node; getSettingBool and getSettingInt are approximations (the node
-//! reads "true"/"false" as false and parses integers leniently). Everything else
-//! answers with an empty default.
+//! OptionsModel::setData persists a core setting). getSettingStr, getSettingInt
+//! and isSettingSet match the node for the string values held here;
+//! getSettingBool is an approximation (the node reads "true"/"false" as false).
+//! Everything else answers with an empty default.
 class FakeNode : public interfaces::Node
 {
 public:
@@ -193,7 +194,11 @@ public:
     int64_t getSettingInt(const std::string& name, int64_t default_val) override
     {
         const auto it = m_settings.find(name);
-        return it == m_settings.end() ? default_val : std::stoll(it->second);
+        if (it == m_settings.end()) return default_val;
+        // As ArgsManager::GetArg: a value that does not parse reads as zero.
+        int64_t value{0};
+        if (!ParseInt64(it->second, &value)) return 0;
+        return value;
     }
 
     //! Applies the batch as the node does: an empty value erases the setting.
