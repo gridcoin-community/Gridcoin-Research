@@ -1157,14 +1157,23 @@ void StartRPCThreads()
 
         // With the IPv6 listener up the node starts anyway, and this was the only
         // trace of the failure -- strerr is read only when nothing bound. Say what
-        // it costs: clients that connect over IPv4, 127.0.0.1 by default, are
-        // refused while the node looks healthy. Only the loopback path has a
-        // client-facing address to name; the wildcard bind address is not one.
+        // it costs. On the loopback path the IPv6 socket is bound to ::1, which
+        // never serves 127.0.0.1, so IPv4 clients are refused while the node looks
+        // healthy. On the wildcard path this bind runs, with the IPv6 listener up,
+        // only because v6_only_error is set: turning IPV6_V6ONLY off failed, so the
+        // IPv6 socket may or may not already serve IPv4, and the warning says may.
+        // The wildcard bind address is not one a client connects to, so it is not
+        // named as one.
         if (fListening) {
-            LogPrintf("WARNING: StartRPCThreads: not listening on IPv4 %s:%u: %s. RPC is reachable over "
-                      "IPv6 only; %s will be refused.",
-                      endpoint.address().to_string(), endpoint.port(), e.what(),
-                      loopback ? "clients connecting to 127.0.0.1" : "IPv4 clients");
+            if (loopback) {
+                LogPrintf("WARNING: StartRPCThreads: not listening on IPv4 %s:%u: %s. RPC is reachable over "
+                          "IPv6 only; clients connecting to 127.0.0.1 will be refused.",
+                          endpoint.address().to_string(), endpoint.port(), e.what());
+            } else {
+                LogPrintf("WARNING: StartRPCThreads: not listening on IPv4 %s:%u: %s. The IPv6 listener could "
+                          "not be made dual-stack (%s), so it may not serve IPv4; IPv4 clients may be refused.",
+                          endpoint.address().to_string(), endpoint.port(), e.what(), v6_only_error.message());
+            }
         }
     }
     } // !bind_specified
