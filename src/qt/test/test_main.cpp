@@ -2,6 +2,7 @@
 #include <QTest>
 #include <QObject>
 
+#include "autostarttests.h"
 #include "bitcoinunitstests.h"
 #include "coinselectionmodeltests.h"
 #include "coinselectionviewtests.h"
@@ -66,6 +67,10 @@ int main(int argc, char *argv[])
 
     ResearcherWizardPageTests test7;
     if (QTest::qExec(&test7) != 0)
+        fInvalid = true;
+
+    AutoStartTests test8;
+    if (QTest::qExec(&test8) != 0)
         fInvalid = true;
 
     return fInvalid;

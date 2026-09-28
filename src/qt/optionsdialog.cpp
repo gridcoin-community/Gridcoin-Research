@@ -172,6 +172,16 @@ void OptionsDialog::setModel(OptionsModel *model)
             ui->disableUpdateCheck->setHidden(true);
         }
 
+        // Hide the login-item options off mainnet and testnet, where
+        // GUIUtil::SetStartOnSystemStartup does nothing. On regtest the value
+        // shown would be mainnet's anyway: the two share one flat setting.
+        // Done before the mapper loads that value, and hideStartMinimized()
+        // keeps the minimised box hidden once it does.
+        if (!model->isMainNet() && !model->isTestNet()) {
+            ui->gridcoinAtStartup->setHidden(true);
+            ui->gridcoinAtStartupMinimised->setHidden(true);
+        }
+
         mapper->setModel(model);
         setMapper();
         mapper->toFirst();
@@ -430,7 +440,11 @@ void OptionsDialog::hideStartMinimized()
 {
     if (model)
     {
-        ui->gridcoinAtStartupMinimised->setHidden(!ui->gridcoinAtStartup->isChecked());
+        // Follows the autostart box, and stays hidden wherever that box is
+        // hidden (macOS, regtest): loading a checked value must not show the
+        // minimised box on its own.
+        ui->gridcoinAtStartupMinimised->setHidden(ui->gridcoinAtStartup->isHidden()
+                                                  || !ui->gridcoinAtStartup->isChecked());
     }
 }
 
