@@ -732,7 +732,6 @@ static void JoinGuiArchiveThread()
     }
 }
 
-#ifndef BITCOIN_QT_TEST
 int GuiMain(int argc, char* argv[], GuiFrontEndFactory make_frontend)
 {
 #ifdef WIN32
@@ -1684,5 +1683,3 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
     return EXIT_SUCCESS;
 }
-
-#endif // BITCOIN_QT_TEST
