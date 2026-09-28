@@ -1404,11 +1404,14 @@ BOOST_AUTO_TEST_CASE(a_transaction_paying_exactly_a_raised_floor_is_selected)
 
     // Search for the size and floor. A floor F gives a whole-satoshi fee at size
     // s only when F is a multiple of `step`. Floors that are multiples of 500 are
-    // skipped: every output is the same P2PKH script, so a larger control differs
-    // in size by a multiple of 34 bytes, and F * size would then be a multiple of
-    // 1000 at every size, leaving no control with a fractional fee. The 2% margin
-    // on the starting floor keeps every control's fee at or above the flat
-    // absolute floor even if its signature is a byte or two shorter.
+    // skipped: every output is the same P2PKH script, so for controls with the
+    // same signature length a larger control differs in size by a multiple of 34
+    // bytes, and F * size would then be a multiple of 1000 at every such size,
+    // leaving no control with a fractional fee. The skip makes a size with a
+    // fractional fee likely rather than certain; the upward scan for the second
+    // control requires one. The 2% margin on the starting floor keeps every
+    // control's fee at or above the flat absolute floor even if its signature is
+    // a byte or two shorter.
     bool found = false;
     int n_outputs = 0;
     unsigned int size = 0;
