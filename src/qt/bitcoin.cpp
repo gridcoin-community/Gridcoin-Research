@@ -128,8 +128,8 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                     interfaces::Node& gui_node, interfaces::Init* interface_init,
                     const GuiIpcInfo& ipc_info, GuiFrontEnd& frontend);
 
-//! Early, deliberately LIMITED local settings read — run in main() BEFORE the Qt
-//! translator is installed and BEFORE the Intro data-directory dialog.
+//! Early, deliberately LIMITED local settings read — run in GuiMain() BEFORE the
+//! Qt translator is installed and BEFORE the Intro data-directory dialog.
 //!
 //! Exactly two GUI-client-scoped preferences must be in gArgs this early:
 //!   -lang    : the Qt translator (installed right after) reads it; it is a
@@ -744,7 +744,7 @@ int GuiMain(int argc, char* argv[], GuiFrontEndFactory make_frontend)
     // by a different route but creates the same artifacts.
     util::SetOwnerOnlyUmask();
 
-    // Reinit default timer to ensure it is zeroed out at the start of main.
+    // Reinit default timer to ensure it is zeroed out at the start of GuiMain().
     g_timer.InitTimer("default", false);
 
     SetupEnvironment();
@@ -1192,8 +1192,8 @@ int GuiMain(int argc, char* argv[], GuiFrontEndFactory make_frontend)
     // Its QSettings-backed GUI-local preferences are read exactly as before. The
     // makeX / migrateCoreSettings calls are IPC round-trips in the split build; if
     // the daemon drops here (after a successful connect) libmultiprocess throws, and
-    // main() has no enclosing try (unlike StartGridcoinQt, which the models used to
-    // live inside), so wrap them and exit gracefully rather than std::terminate.
+    // GuiMain() has no enclosing try (unlike StartGridcoinQt, which the models used
+    // to live inside), so wrap them and exit gracefully rather than std::terminate.
     // optionsModel is heap-allocated only so it can be declared before the try and
     // outlive it for the StartGridcoinQt call below.
     std::unique_ptr<interfaces::SideStakeManager> sidestake_manager;
@@ -1281,9 +1281,10 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
     // Core-initiated shutdown (RPC stop / SIGTERM / low-disk abort) -> quit the
     // GUI, via the node interface's QueueShutdown bridge. gui_node is deliberately
-    // the LOCAL node (main()'s local_init), NOT the remote one: in the split build
-    // the GUI quits on the socket disconnect (#3227), and delivering the daemon's
-    // shutdown over IPC would be the descoped core->GUI "shutdown-imminent" push.
+    // the LOCAL node (GuiMain()'s local_init), NOT the remote one: in the split
+    // build the GUI quits on the socket disconnect (#3227), and delivering the
+    // daemon's shutdown over IPC would be the descoped core->GUI
+    // "shutdown-imminent" push.
     // So in the monolith this fires on real core shutdown; in the split build it is
     // dormant (the local node's QueueShutdown never fires) and the disconnect hook
     // drives the quit. The returned Handler is kept only to keep the subscription
@@ -1335,7 +1336,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
         if (multiprocess)
         {
-            // The connect + GUI-side identity binding already ran in main() (so
+            // The connect + GUI-side identity binding already ran in GuiMain() (so
             // OptionsModel could be built from the remote node's Init, which is
             // `interface_init` here). What remains needs the main window / event
             // loop: surface the mixed-build banner (empty commit strings = nothing
@@ -1348,7 +1349,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             // Populate the About dialog's multiprocess connection section.
             frontend.setIpcConnectionInfo(ipc_info);
 
-            // The multiprocess GUI logs to its own file (set up in main() before
+            // The multiprocess GUI logs to its own file (set up in GuiMain() before
             // this function) but, unlike the node, runs no core scheduler to rotate
             // it. Drive the same daily-archive check the node schedules in
             // GRC::ScheduleBackgroundJobs: every 5 minutes archive(false) is a cheap
@@ -1401,7 +1402,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         else
         {
             // Monolithic build: run core init in this process. interface_init (the
-            // local Init created in main()) is already set; just start the init
+            // local Init created in GuiMain()) is already set; just start the init
             // thread. The readiness wait below polls interface_init->isCoreReady().
             if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
             {
@@ -1625,8 +1626,9 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             // here). Only in the monolithic build: there the core runs in this
             // process. In the multiprocess build the core lives in the daemon
             // and manages its own lifetime; the GUI merely drops its connection
-            // when main() unwinds after this returns (node_connection now lives in
-            // main(), so it and the interfaces built from it outlive this call).
+            // when GuiMain() unwinds after this returns (node_connection now lives
+            // in GuiMain(), so it and the interfaces built from it outlive this
+            // call).
             if (!multiprocess)
             {
                 GUILogPrintf("Main calling Shutdown...");

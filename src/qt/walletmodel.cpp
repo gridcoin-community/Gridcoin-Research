@@ -196,9 +196,10 @@ void WalletModel::drainEventQueue()
     // walletEventsDrained (each windowed view's getRows) and checkBalanceChanged
     // — is a synchronous IPC call that throws std::runtime_error("IPC client
     // method called after disconnect.") once the node process is gone. A drop can
-    // land mid-drain, and a posted BitcoinGUI::requestQuit() (from the IPC
-    // disconnect hook, bitcoin.cpp) cannot preempt a drain already running on this
-    // thread, so an uncaught throw here would escape a Qt slot and abort the GUI.
+    // land mid-drain, and the quit the IPC disconnect hook (bitcoin.cpp) posts,
+    // RequestGuiQuit() and then the front end's requestQuit(), cannot preempt a
+    // drain already running on this thread, so an uncaught throw here would escape
+    // a Qt slot and abort the GUI.
     // Catch it, stop the periodic drain, and bail; the disconnect hook drives the
     // graceful quit. e.what() is logged so a non-disconnect exception is still
     // surfaced rather than silently swallowed.

@@ -985,11 +985,13 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         // Teardown (Phase 1c-ii-c): drive the tx-table view holders to detach
         // their per-view models (OverviewTxModel / DetailedTxModel) NOW, while
         // the previous WalletModel and its node-side WalletTxSource are still
-        // alive. bitcoin.cpp calls setWalletModel(nullptr) before destroying the
-        // model and the source; without this propagation those view models would
-        // instead be destroyed later with this window — after the source is gone
-        // — and their destructors' unregisterView() would dereference freed
-        // state. Only the two tx-table holders own such views.
+        // alive. WidgetsFrontEnd's detach hooks, driven by StartGridcoinQt's
+        // teardown (in bitcoin.cpp) through GuiFrontEnd::detachModels(), call
+        // setWalletModel(nullptr) before the model and the source are destroyed;
+        // without this propagation those view models would instead be destroyed
+        // later with this window — after the source is gone — and their
+        // destructors' unregisterView() would dereference freed state. Only the
+        // two tx-table holders own such views.
         transactionView->setModel(nullptr);
         overviewPage->setWalletModel(nullptr);
     }
@@ -1001,8 +1003,10 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
 
     // Propagate BEFORE the detach early-return below. OverviewPage and the
     // diagnostics dialog each keep their own raw copy of this pointer, and
-    // bitcoin.cpp calls setResearcherModel(nullptr) while ResearcherModel is
-    // still alive but about to leave scope. Returning early on nullptr (as this
+    // WidgetsFrontEnd's detach hooks, driven by StartGridcoinQt's teardown (in
+    // bitcoin.cpp) through GuiFrontEnd::detachModels(), call
+    // setResearcherModel(nullptr) while ResearcherModel is still alive but about
+    // to leave scope. Returning early on nullptr (as this
     // used to) left both copies dangling for the rest of the window's life --
     // asymmetric with setVotingModel() / setPSGTPoolContext(), which already
     // propagate first and only then decide whether there is anything to wire up.
