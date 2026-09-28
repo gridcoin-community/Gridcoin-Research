@@ -301,7 +301,7 @@ endif()
 if(BUNDLED_OPENSSL)
     hunter_add_package(OpenSSL)
 endif()
-find_package(OpenSSL REQUIRED)
+find_package(OpenSSL 1.1.0 REQUIRED)
 
 if(BUNDLED_CURL)
     hunter_add_package(CURL)
