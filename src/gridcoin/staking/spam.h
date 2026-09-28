@@ -12,6 +12,7 @@
 
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <map>
 #include <vector>
 
@@ -224,10 +225,20 @@ private:
         static const size_t a = (GetRand<size_t>() * 2) + 1;
         static const size_t b = GetRand<size_t>(std::pow(2, w - M) - 1);
 
+        // x is the sum of the proof hash read as whole words. The bound is the
+        // hash's size in bytes: a bound in bits read past the end of the hash
+        // wherever size_t is narrower than 8 bytes, so the slot depended on
+        // whatever followed the hash in memory. The words are copied out rather
+        // than read in place because the hash bytes carry no alignment guarantee.
+        static_assert(sizeof(uint256) % sizeof(size_t) == 0,
+                      "the proof hash must be a whole number of words");
+
         size_t x = 0;
 
-        for (size_t i = 0; i < (256 / sizeof(size_t)); i += sizeof(size_t)) {
-            x += *reinterpret_cast<const size_t*>(hashProof.begin() + i);
+        for (size_t i = 0; i < sizeof(uint256); i += sizeof(size_t)) {
+            size_t word;
+            std::memcpy(&word, hashProof.begin() + i, sizeof(word));
+            x += word;
         }
 
         return (a * x + b) >> (w - M);
