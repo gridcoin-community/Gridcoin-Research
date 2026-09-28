@@ -1527,21 +1527,24 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // keeps that order).
                 const ModelBundle models{clientModel, walletModel, mrcModel, researcherModel, votingModel,
                                          psgt_pool_context.get()};
-                frontend.attachModels(models);
 
                 // Exception-safe teardown of the view models (Phase 1c-ii-c).
                 // The main window lives in an OUTER scope than the models and
-                // their sources, so on an exception thrown below (showMain /
-                // ipcInit / app.exec) the unwind would free the models and
-                // sources FIRST and then destroy the window, whose view models
+                // their sources, so on an exception thrown below (attachModels /
+                // showMain / ipcInit / app.exec) the unwind would free the models
+                // and sources FIRST and then destroy the window, whose view models
                 // would unregister from an already-freed source (UAF). This guard
                 // is declared AFTER the models and sources, so its destructor
                 // runs BEFORE theirs on every exit path and detaches every model
-                // while the sources are still alive. After the explicit
+                // while the sources are still alive. It is armed BEFORE
+                // attachModels(), so it also covers a throw part-way through the
+                // attach; the detach hooks tolerate a window whose models were
+                // never or only partly attached. After the explicit
                 // detachModels() on the normal path below it has nothing left to
                 // run; if a hook throws inside that call, it resumes the detach at
                 // the next hook. On any other throw path it is the only teardown.
                 FrontEndDetachGuard frontend_detach_guard{frontend};
+                frontend.attachModels(models);
 
                 // If -min option passed, start window minimized.
                 frontend.showMain(gArgs.GetBoolArg("-min"));

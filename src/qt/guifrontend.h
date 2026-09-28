@@ -127,8 +127,11 @@ private:
 //! still runs, each at most once. Declare it after the models and their sources,
 //! so it runs before their destructors: otherwise an exception unwinds the
 //! models and sources first, and the front end's view models later unregister
-//! from a freed source (UAF). On the normal path the explicit detachModels()
-//! call runs first and leaves this nothing to run.
+//! from a freed source (UAF). Declare it before GuiFrontEnd::attachModels(), so
+//! it also covers a throw part-way through the attach: the detach hooks must
+//! therefore tolerate models that were never or only partly attached. On the
+//! normal path the explicit detachModels() call runs first and leaves this
+//! nothing to run.
 struct FrontEndDetachGuard
 {
     GuiFrontEnd& frontend;
