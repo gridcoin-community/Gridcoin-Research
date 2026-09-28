@@ -15,6 +15,7 @@
 #include "gridcoin/cpid.h"
 #include "gridcoin/support/enumbytes.h"
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -610,6 +611,16 @@ public:
 };
 
 //!
+//! \brief Get the ownership proof carried by a v3 beacon advertisement in a transaction.
+//!
+//! \param tx        Transaction to search.
+//! \param beacon_id Key ID of the advertised beacon.
+//!
+//! \return The proof, if the transaction contains a v3 beacon advertisement for that key that carries one.
+//!
+std::optional<OwnershipProof> GetOwnershipProofFromTx(const CTransaction& tx, const CKeyID& beacon_id);
+
+//!
 //! \brief Stores and manages researcher beacons.
 //!
 class BeaconRegistry : public IContractHandler
@@ -908,8 +919,9 @@ private:
     //!
     //! \brief In-memory side map of ownership proofs for pending beacons.
     //!
-    //! Keyed by the pending beacon's CKeyID. Rebuilt from contract replay on
-    //! restart (same lifecycle as m_pending itself). Not persisted to LevelDB.
+    //! Keyed by the pending beacon's CKeyID. Not persisted to LevelDB: a pending
+    //! beacon loaded or restored from the beacon db gets its proof back from its
+    //! advertisement transaction (see RestoreOwnershipProof()).
     //!
     std::map<CKeyID, OwnershipProof> m_pending_ownership_proofs GUARDED_BY(cs_main);
 
@@ -949,6 +961,19 @@ private:
     //! \return Success or failure of renewal attempt.
     //!
     bool TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, const BeaconPayload& payload) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Put back the ownership proof of a pending beacon loaded or restored from the beacon db.
+    //!
+    //! The beacon db does not store ownership proofs, so the proof is read from the v3 beacon contract in the
+    //! transaction that advertised the pending beacon. A pending beacon whose advertisement carries no proof, or
+    //! whose transaction cannot be read, is left without one.
+    //!
+    //! \param pending_beacon The pending beacon. Its m_hash is the hash of its advertisement transaction.
+    //!
+    //! \return true if a proof was restored.
+    //!
+    bool RestoreOwnershipProof(const Beacon_ptr& pending_beacon) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 public:
     //!

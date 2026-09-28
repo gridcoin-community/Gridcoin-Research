@@ -1370,6 +1370,66 @@ BOOST_AUTO_TEST_CASE(it_includes_ownership_proof_in_v3_hash)
     BOOST_CHECK(hasher1.GetHash() != hasher2.GetHash());
 }
 
+BOOST_AUTO_TEST_CASE(it_gets_the_ownership_proof_from_a_v3_advertisement)
+{
+    GRC::OwnershipProof proof;
+    proof.m_master_url = "https://example.com/project/";
+    proof.m_account_id = 42;
+    proof.m_rsa_signature.resize(256, 0xAA);
+
+    GRC::BeaconPayload payload(TestKey::Cpid(), GRC::Beacon(TestKey::Public()), GRC::OwnershipProof(proof));
+    payload.m_signature = TestKey::Signature(payload);
+
+    CMutableTransaction advertisement;
+    advertisement.vContracts.push_back(GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload));
+    const CTransaction tx(advertisement);
+
+    const std::optional<GRC::OwnershipProof> found = GRC::GetOwnershipProofFromTx(tx, TestKey::KeyId());
+
+    BOOST_REQUIRE(found.has_value());
+    BOOST_CHECK_EQUAL(found->m_master_url, proof.m_master_url);
+    BOOST_CHECK_EQUAL(found->m_account_id, proof.m_account_id);
+    BOOST_CHECK(found->m_rsa_signature == proof.m_rsa_signature);
+
+    // The transaction advertises no beacon under any other key.
+    CKey other_key;
+    other_key.MakeNewKey(true);
+
+    BOOST_CHECK(!GRC::GetOwnershipProofFromTx(tx, other_key.GetPubKey().GetID()).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(it_gets_no_ownership_proof_without_a_v3_advertisement)
+{
+    // A v2 advertisement carries no proof.
+    GRC::BeaconPayload v2_payload {2, TestKey::Cpid(), GRC::Beacon(TestKey::Public())};
+    v2_payload.m_signature = TestKey::Signature(v2_payload);
+
+    CMutableTransaction v2_advertisement;
+    v2_advertisement.vContracts.push_back(
+        GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, v2_payload));
+
+    BOOST_CHECK(!GRC::GetOwnershipProofFromTx(CTransaction(v2_advertisement), TestKey::KeyId()).has_value());
+
+    // A v3 payload in a removal is not an advertisement.
+    GRC::OwnershipProof proof;
+    proof.m_master_url = "https://example.com/project/";
+    proof.m_account_id = 42;
+    proof.m_rsa_signature.resize(256, 0xAA);
+
+    GRC::BeaconPayload v3_payload(TestKey::Cpid(), GRC::Beacon(TestKey::Public()), std::move(proof));
+    v3_payload.m_signature = TestKey::Signature(v3_payload);
+
+    CMutableTransaction removal;
+    removal.vContracts.push_back(GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::REMOVE, v3_payload));
+
+    BOOST_CHECK(!GRC::GetOwnershipProofFromTx(CTransaction(removal), TestKey::KeyId()).has_value());
+
+    // Nor is a transaction without contracts.
+    const CMutableTransaction no_contracts;
+
+    BOOST_CHECK(!GRC::GetOwnershipProofFromTx(CTransaction(no_contracts), TestKey::KeyId()).has_value());
+}
+
 BOOST_AUTO_TEST_CASE(beaconstorage_testnet_test)
 {
     // These should be set to correspond to the dumpcontracts run used to create testnet_beacon.bin
@@ -1840,6 +1900,59 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     if (original_activated_beacon_found) {
         BOOST_CHECK_EQUAL(circular_corruption_detected, true);
     }
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_readvertisement_without_a_proof_drops_the_old_proof)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+
+    registry.Reset();
+
+    // A v3 advertisement leaves a pending beacon with its proof.
+    CMutableTransaction tx1 {};
+    tx1.nTime = int64_t {1};
+    const CTransaction ctx_tx1(tx1);
+
+    CBlockIndex index1 {};
+    index1.nVersion = 13;
+    index1.nHeight = 1;
+    index1.nTime = tx1.nTime;
+
+    GRC::OwnershipProof proof;
+    proof.m_master_url = "https://example.com/project/";
+    proof.m_account_id = 42;
+    proof.m_rsa_signature.resize(256, 0xAA);
+
+    GRC::BeaconPayload payload1(TestKey::Cpid(), GRC::Beacon(TestKey::Public()), std::move(proof));
+    payload1.m_signature = TestKey::Signature(payload1);
+
+    GRC::Contract contract1 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload1);
+    registry.Add({contract1, ctx_tx1, &index1});
+
+    BOOST_CHECK_EQUAL(registry.PendingOwnershipProofs().count(TestKey::KeyId()), 1U);
+
+    // A v2 advertisement of the same key replaces the pending beacon, and takes the proof with it.
+    CMutableTransaction tx2 {};
+    tx2.nTime = int64_t {2};
+    const CTransaction ctx_tx2(tx2);
+
+    CBlockIndex index2 {};
+    index2.nVersion = 13;
+    index2.nHeight = 2;
+    index2.nTime = tx2.nTime;
+
+    GRC::BeaconPayload payload2 {2, TestKey::Cpid(), GRC::Beacon(TestKey::Public())};
+    payload2.m_signature = TestKey::Signature(payload2);
+
+    GRC::Contract contract2 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload2);
+    registry.Add({contract2, ctx_tx2, &index2});
+
+    BOOST_CHECK_EQUAL(registry.PendingBeacons().count(TestKey::KeyId()), 1U);
+    BOOST_CHECK_EQUAL(registry.PendingOwnershipProofs().count(TestKey::KeyId()), 0U);
+
+    registry.Reset();
 }
 
 #if defined(__clang__)
