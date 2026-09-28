@@ -34,6 +34,7 @@
 #include "chainparams.h"
 #include "consensus/consensus.h"
 #include "consensus/tx_verify.h"
+#include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/cpid.h"
@@ -1211,6 +1212,68 @@ BOOST_AUTO_TEST_CASE(a_claim_outside_a_coinbase_is_erased_whatever_its_inputs)
 
     BOOST_CHECK_MESSAGE(!InWallet(loose_hash), "the claim outside a coinbase was kept");
     BOOST_CHECK_EQUAL(CountNotices(seen, seen_before, loose_hash, CT_DELETED), 1);
+}
+
+//!
+//! The same for contract validation: a contract GRC::ValidateContracts refuses is
+//! refused whatever the inputs turn out to be, so the transaction is erased even
+//! though its input cannot be resolved.
+//!
+//! It is not a claim, it is version 2, and CheckTransaction reads no contracts,
+//! so only contract validation can erase it: a default beacon payload is
+//! malformed, and the beacon handler refuses it before it reads any chain state.
+//! With that check moved back after FetchInputs, the missing parent reads "not
+//! resolvable" and the transaction is kept.
+//!
+BOOST_AUTO_TEST_CASE(a_contract_validation_refusal_is_erased_whatever_its_inputs)
+{
+    mempool.clear();
+
+    std::vector<std::pair<uint256, ChangeType>> seen;
+    boost::signals2::scoped_connection watch = pwalletMain->NotifyTransactionChanged.connect(
+        [&seen](CWallet*, const uint256& hash, ChangeType status) { seen.emplace_back(hash, status); });
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 3u);
+
+    const GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD);
+    BOOST_REQUIRE(contract.m_type == GRC::ContractType::BEACON);
+
+    // The parent exists only here: it is signed but never offered to the pool.
+    const CTransaction nowhere = CreateSpend(PremineCoinbase(), coins[2].n, 150000, 1);
+    const CTransaction bad = grc_test::CreateSpendWithContract(nowhere, 0, 150000, contract, 0, 0);
+    const uint256 bad_hash = bad.GetHash();
+    BOOST_REQUIRE_EQUAL(bad.nVersion, 2);
+
+    LOCK(cs_main);
+
+    const std::string leaked = DescribeRelayableCandidates();
+    BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+    {
+        CValidationState state;
+        BOOST_REQUIRE_MESSAGE(CheckTransaction(bad, state), "CheckTransaction alone refuses it");
+        int DoS = 0;
+        BOOST_REQUIRE_MESSAGE(!GRC::ValidateContracts(bad, DoS), "contract validation accepts it");
+    }
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+
+        CWalletDB walletdb(pwalletMain->strWalletFile);
+        CWalletTx planted(pwalletMain, bad);
+        BOOST_REQUIRE(pwalletMain->AddToWallet(planted, &walletdb));
+
+        CWalletTx& wtx = pwalletMain->mapWallet.at(bad_hash);
+        wtx.SetTxState(TxStateInMempool{});
+        BOOST_REQUIRE_EQUAL(wtx.GetDepthInMainChain(), -1);
+    }
+
+    const size_t seen_before = seen.size();
+    BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+
+    BOOST_CHECK_MESSAGE(!InWallet(bad_hash), "the transaction contract validation refuses was kept");
+    BOOST_CHECK_EQUAL(CountNotices(seen, seen_before, bad_hash, CT_DELETED), 1);
 }
 
 //!
