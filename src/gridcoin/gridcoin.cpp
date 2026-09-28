@@ -403,13 +403,11 @@ void InitializeScraper(ThreadHandlerPtr threads)
         // test/functional/feature_beacon_activation.py.
         //
         // What genuinely has no regtest route is the scraper's own v3
-        // ownership-proof check -- the mProjectPublicKeys lookup and
-        // GRC::VerifyRSASHA512() in ProcessProjectRacFileByCPID -- because it runs
-        // inside the scraper, which is exactly what is suppressed here. Injecting a
-        // key at startup would only populate a map nothing reads on this chain.
-        // Covering that wants a unit test against a checked-in test RSA keypair,
-        // which is a much smaller ask than a chain-level trust anchor and blocks
-        // nothing.
+        // ownership-proof check, because it runs inside the scraper, which is
+        // exactly what is suppressed here. Injecting a key at startup would only
+        // populate a map nothing reads on this chain. That check is
+        // FindOwnershipProofVerifiedBeacon(), which is covered instead by unit
+        // tests against a checked-in test RSA key (src/test/gridcoin/scraper_tests.cpp).
         //
         // None of this blocks PR #2955 testing (pool registry is master-key +
         // operator-key, no beacons / CPIDs).
