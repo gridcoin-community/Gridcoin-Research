@@ -73,4 +73,19 @@ BOOST_AUTO_TEST_CASE(it_rejects_an_empty_message)
     BOOST_CHECK(!GRC::VerifyRSASHA512(empty_message, signature, g_test_pem_pubkey));
 }
 
+BOOST_AUTO_TEST_CASE(it_gets_the_same_der_for_the_same_key_in_different_pem_text)
+{
+    const std::vector<uint8_t> der = GRC::GetPublicKeyDER(g_test_pem_pubkey);
+
+    BOOST_CHECK(!der.empty());
+    BOOST_CHECK(der == GRC::GetPublicKeyDER(rsa_test_vectors::g_test_pem_pubkey_rewrapped));
+    BOOST_CHECK(der != GRC::GetPublicKeyDER(rsa_test_vectors::g_test_pem_pubkey_2));
+}
+
+BOOST_AUTO_TEST_CASE(it_gets_no_der_for_an_invalid_pem_key)
+{
+    BOOST_CHECK(GRC::GetPublicKeyDER("not a valid PEM key").empty());
+    BOOST_CHECK(GRC::GetPublicKeyDER("").empty());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

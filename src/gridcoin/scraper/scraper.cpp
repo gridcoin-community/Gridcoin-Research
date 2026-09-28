@@ -2508,6 +2508,32 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_TeamIDMap)
     return true;
 }
 
+std::vector<std::string> RemoveDuplicateProjectPublicKeys(std::map<std::string, std::string>& project_public_keys)
+{
+    std::map<std::vector<uint8_t>, std::vector<std::string>> urls_by_key;
+
+    for (const auto& [master_url, pem_key] : project_public_keys) {
+        std::vector<uint8_t> der = GRC::GetPublicKeyDER(pem_key);
+
+        if (der.empty()) continue;
+
+        urls_by_key[std::move(der)].push_back(master_url);
+    }
+
+    std::vector<std::string> removed;
+
+    for (const auto& [der, master_urls] : urls_by_key) {
+        if (master_urls.size() < 2) continue;
+
+        for (const auto& master_url : master_urls) {
+            project_public_keys.erase(master_url);
+            removed.push_back(master_url);
+        }
+    }
+
+    return removed;
+}
+
 void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist)
 {
     _log(logattribute::INFO, __func__, "Downloading project public keys for ownership proof verification.");
@@ -2562,6 +2588,13 @@ void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist)
              + " (master_url: " + master_url + ")");
 
         project_public_keys.insert(std::make_pair(std::move(master_url), std::move(pem_key)));
+    }
+
+    for (const auto& master_url : RemoveDuplicateProjectPublicKeys(project_public_keys))
+    {
+        _log(logattribute::WARNING, __func__,
+             "Discarding the ownership proof public key of project " + master_url
+             + ": it duplicates the key of another whitelisted project.");
     }
 
     // Update the global under lock.

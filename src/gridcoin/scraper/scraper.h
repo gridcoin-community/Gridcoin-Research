@@ -280,6 +280,18 @@ std::vector<std::string> GetProjectsExternalAdapterRequired();
 std::set<std::string> GetProjectsWithOwnershipProofSupport();
 
 /**
+ * @brief Removes duplicate project ownership proof public keys.
+ *
+ * Each project is expected to have its own key, so a key found under more than one project is treated as a
+ * misconfiguration and removed for all of them. Keys are compared by their DER encoding, so the same key in
+ * different PEM text is still a duplicate. A key that does not parse is left alone.
+ *
+ * @param project_public_keys Project RSA public keys (PEM) by normalized master URL.
+ * @return The master URLs whose keys were removed.
+ */
+std::vector<std::string> RemoveDuplicateProjectPublicKeys(std::map<std::string, std::string>& project_public_keys);
+
+/**
  * @brief Finds the pending beacon that a project stats user record verifies through a v3 ownership proof.
  *
  * A candidate verifies when its proof names the project whose stats are being processed, its account ID is the

@@ -157,4 +157,33 @@ BOOST_AUTO_TEST_CASE(it_counts_signature_failures)
     BOOST_CHECK_EQUAL(signature_failures, 1U);
 }
 
+BOOST_AUTO_TEST_CASE(it_removes_duplicate_project_keys)
+{
+    const std::string PROJECT_C = "https://project-c.example.org/";
+
+    // Projects A and B serve the same key, in different PEM text; project C serves its own.
+    std::map<std::string, std::string> keys {
+        {PROJECT_A, rsa_test_vectors::g_test_pem_pubkey},
+        {PROJECT_B, rsa_test_vectors::g_test_pem_pubkey_rewrapped},
+        {PROJECT_C, rsa_test_vectors::g_test_pem_pubkey_2},
+    };
+
+    const std::vector<std::string> removed = RemoveDuplicateProjectPublicKeys(keys);
+
+    BOOST_CHECK(removed == std::vector<std::string>({PROJECT_A, PROJECT_B}));
+    BOOST_CHECK_EQUAL(keys.size(), 1U);
+    BOOST_CHECK(keys.count(PROJECT_C) == 1);
+}
+
+BOOST_AUTO_TEST_CASE(it_keeps_distinct_project_keys)
+{
+    std::map<std::string, std::string> keys {
+        {PROJECT_A, rsa_test_vectors::g_test_pem_pubkey},
+        {PROJECT_B, rsa_test_vectors::g_test_pem_pubkey_2},
+    };
+
+    BOOST_CHECK(RemoveDuplicateProjectPublicKeys(keys).empty());
+    BOOST_CHECK_EQUAL(keys.size(), 2U);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
