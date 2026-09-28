@@ -133,6 +133,7 @@ bool LoadUnbroadcast(CTxMemPool& pool, const fs::path& load_path)
               [](const auto& a, const auto& b) { return a.second < b.second; });
 
     int accepted = 0;
+    int already_pooled = 0;
     {
         LOCK(cs_main);
         for (auto& [tx, entry_time] : entries) {
@@ -143,12 +144,35 @@ bool LoadUnbroadcast(CTxMemPool& pool, const fs::path& load_path)
             if (AcceptToMemoryPool(pool, mutable_tx, state, nullptr, entry_time)) {
                 pool.AddUnbroadcast(mutable_tx.GetHash());
                 ++accepted;
+            } else if (!state.IsInvalid() && pool.exists(mutable_tx.GetHash())) {
+                // Already pooled, which ATMP refuses without saying so. The state
+                // check matters: ATMP runs validity checks before the duplicate check
+                // (among them the V15 claim rule and the contract validation), so a
+                // pooled transaction can also be refused as invalid, and that one must
+                // not be re-armed. The already-pooled refusal leaves the state valid.
+                //
+                // Already pooled is the ordinary case for the wallet's own transactions:
+                // before this load runs, the wallet's startup re-accept puts each
+                // restarted own unconfirmed transaction that AcceptToMemoryPool still
+                // accepts back in the pool, so without this branch the marker persisted
+                // for exactly those transactions would be dropped, and with it the
+                // rebroadcast and the cancel gate.
+                //
+                // Restored as NeverSent, which is what was persisted: no peer asked
+                // this node for it last session. The network starts before this load,
+                // so in between a peer that sends "mempool" could fetch it without the
+                // fetch being recorded, or a peer that already has it could relay it
+                // in; either way it is still restored as NeverSent. No Gridcoin node
+                // sends "mempool", and the gate is already documented as a strong
+                // signal rather than a proof.
+                pool.AddUnbroadcast(mutable_tx.GetHash());
+                ++already_pooled;
             }
         }
     }
 
-    LogPrintf("Reloaded unbroadcast transactions: %d re-accepted of %d persisted\n",
-              accepted, (int)entries.size());
+    LogPrintf("Reloaded unbroadcast transactions: %d re-accepted, %d already in the pool, of %d persisted",
+              accepted, already_pooled, (int)entries.size());
     return true;
 }
 
