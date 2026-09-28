@@ -83,6 +83,14 @@ namespace GUIUtil
     //! OptionsModel::readNodeSettings and the note in bitcoin.cpp.
     QString nodeSettingsKey(const QString& key);
 
+    /** Extract the first suffix from a filter pattern "Description (*.foo)" or
+        "Description (*.foo *.bar ...)"; empty if none.
+
+      @param[in] filter  Filter specification such as "Comma Separated Files (*.csv)"
+      @returns the first suffix, without its "*." prefix
+     */
+    QString ExtractFirstSuffixFromFilter(const QString& filter);
+
     /** Get save filename, mimics QFileDialog::getSaveFileName, except that it appends a default suffix
         when no suffix is provided by the user.
 

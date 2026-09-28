@@ -371,6 +371,23 @@ QString nodeSettingsKey(const QString& key)
     return group.isEmpty() ? key : group + "/" + key;
 }
 
+QString ExtractFirstSuffixFromFilter(const QString& filter)
+{
+    /* Extract first suffix from filter pattern "Description (*.foo)" or "Description (*.foo *.bar ...) */
+    // \A...\z reproduces QRegExp::exactMatch, which anchored the whole subject
+    // implicitly where QRegularExpression::match does not. This is the form
+    // QRegularExpression::anchoredPattern() generates; it is spelled out because
+    // that helper is Qt 5.12 and this tree still builds against 5.9.5.
+    QRegularExpression filter_re("\\A(?:.* \\(\\*\\.(.*)[ \\)])\\z");
+    QString selectedSuffix;
+    const QRegularExpressionMatch filter_match = filter_re.match(filter);
+    if(filter_match.hasMatch())
+    {
+        selectedSuffix = filter_match.captured(1);
+    }
+    return selectedSuffix;
+}
+
 QString getSaveFileName(QWidget *parent, const QString &caption,
                                  const QString &dir,
                                  const QString &filter,
@@ -384,18 +401,7 @@ QString getSaveFileName(QWidget *parent, const QString &caption,
                     : dir;
     QString result = QFileDialog::getSaveFileName(parent, caption, myDir, filter, &selectedFilter);
 
-    /* Extract first suffix from filter pattern "Description (*.foo)" or "Description (*.foo *.bar ...) */
-    // \A...\z reproduces QRegExp::exactMatch, which anchored the whole subject
-    // implicitly where QRegularExpression::match does not. This is the form
-    // QRegularExpression::anchoredPattern() generates; it is spelled out because
-    // that helper is Qt 5.12 and this tree still builds against 5.9.5.
-    QRegularExpression filter_re("\\A(?:.* \\(\\*\\.(.*)[ \\)])\\z");
-    QString selectedSuffix;
-    const QRegularExpressionMatch filter_match = filter_re.match(selectedFilter);
-    if(filter_match.hasMatch())
-    {
-        selectedSuffix = filter_match.captured(1);
-    }
+    QString selectedSuffix = ExtractFirstSuffixFromFilter(selectedFilter);
 
     /* Add suffix if needed */
     QFileInfo info(result);

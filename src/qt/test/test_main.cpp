@@ -6,6 +6,7 @@
 #include "bitcoinunitstests.h"
 #include "coinselectionmodeltests.h"
 #include "coinselectionviewtests.h"
+#include "guiutiltests.h"
 #include "optionsmodeltests.h"
 #include "psgttoastdamptests.h"
 #include "researcherwizardpagetests.h"
@@ -76,6 +77,10 @@ int main(int argc, char *argv[])
 
     OptionsModelTests test9;
     if (QTest::qExec(&test9) != 0)
+        fInvalid = true;
+
+    GUIUtilTests test10;
+    if (QTest::qExec(&test10) != 0)
         fInvalid = true;
 
     return fInvalid;

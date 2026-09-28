@@ -9,6 +9,7 @@ add_executable(test_gridcoin-qt
     researcherwizardpagetests.cpp
     autostarttests.cpp
     optionsmodeltests.cpp
+    guiutiltests.cpp
 )
 
 set_target_properties(test_gridcoin-qt PROPERTIES
