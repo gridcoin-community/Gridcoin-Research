@@ -50,6 +50,8 @@ add_library(gridcoinqt STATIC
     editaddressdialog.cpp
     editsidestakedialog.cpp
     favoritespage.cpp
+    guifrontend.cpp
+    guifrontend.h
     guilog.cpp
     guiutil.cpp
     intro.cpp
@@ -119,6 +121,8 @@ add_library(gridcoinqt STATIC
     voting/votingmodel.cpp
     voting/votingpage.cpp
     walletmodel.cpp
+    widgetsfrontend.cpp
+    widgetsfrontend.h
     winshutdownmonitor.cpp
 
     bitcoin.qrc

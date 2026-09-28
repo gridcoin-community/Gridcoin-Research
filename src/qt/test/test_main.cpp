@@ -7,6 +7,7 @@
 #include "coinselectionmodeltests.h"
 #include "coinselectionviewtests.h"
 #include "guieventlooptests.h"
+#include "guifrontendtests.h"
 #include "guiutiltests.h"
 #include "optionsmodeltests.h"
 #include "psgttoastdamptests.h"
@@ -86,6 +87,10 @@ int main(int argc, char *argv[])
 
     GuiEventLoopTests test11;
     if (QTest::qExec(&test11) != 0)
+        fInvalid = true;
+
+    GUIFrontEndTests test12;
+    if (QTest::qExec(&test12) != 0)
         fInvalid = true;
 
     return fInvalid;
