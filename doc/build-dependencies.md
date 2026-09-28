@@ -17,6 +17,9 @@ sudo apt-get install \
     qt6-base-dev qt6-tools-dev qt6-l10n-tools qt6-svg-dev
 ````
 
+On Ubuntu 22.04 (Jammy), which has only the old package name, install `libqt6svg6-dev` in place of
+`qt6-svg-dev`, or run `install_dependencies.sh`, which picks whichever name the distro provides.
+
 ### Fedora / RHEL
 
 ```bash
