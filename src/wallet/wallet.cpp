@@ -73,14 +73,14 @@ bool ValidateTxStateConfirmed(const TxStateConfirmed& state, const uint256& txid
     // about the block this state claims confirmation in. That's the
     // "unknown block" failure mode this function exists to catch.
     if (GetConfirmedHeight(state) < 0) {
-        LogPrintf("ValidateTxStateConfirmed: Block %s not found in index for tx %s\n",
+        LogPrintf("ValidateTxStateConfirmed: Block %s not found in index for tx %s",
                   state.m_confirmed_block_hash.ToString().substr(0,10),
                   txid.ToString().substr(0,10));
         return false;
     }
 
     if (state.m_position_in_block < 0) {
-        LogPrintf("ValidateTxStateConfirmed: Negative position %d for tx %s in block %s\n",
+        LogPrintf("ValidateTxStateConfirmed: Negative position %d for tx %s in block %s",
                   state.m_position_in_block,
                   txid.ToString().substr(0,10),
                   state.m_confirmed_block_hash.ToString().substr(0,10));
@@ -103,13 +103,13 @@ void LogStateTransition(const TxState& from_state, const TxState& to_state)
         const auto& to_conf = std::get<TxStateConfirmed>(to_state);
         if (from_conf.m_confirmed_block_hash != to_conf.m_confirmed_block_hash) {
             LogPrint(BCLog::LogFlags::VERBOSE,
-                     "LogStateTransition: Confirmed block changed (likely reorg)\n");
+                     "LogStateTransition: Confirmed block changed (likely reorg)");
         }
     }
     if (std::holds_alternative<TxStateInactive>(from_state) &&
         std::holds_alternative<TxStateConfirmed>(to_state)) {
         LogPrint(BCLog::LogFlags::VERBOSE,
-                 "LogStateTransition: Inactive -> Confirmed (unusual but possible)\n");
+                 "LogStateTransition: Inactive -> Confirmed (unusual but possible)");
     }
 }
 
@@ -142,7 +142,7 @@ bool TryConfirmFromTxIndex(CWalletTx& wtx, const CTxIndex& txindex) EXCLUSIVE_LO
 
     int vtx_index = FindTxInBlock(block, wtx.GetHash());
     if (vtx_index < 0) {
-        LogPrintf("WARNING: TryConfirmFromTxIndex: tx %s not found in block vtx despite valid txindex\n",
+        LogPrintf("WARNING: TryConfirmFromTxIndex: tx %s not found in block vtx despite valid txindex",
                   wtx.GetHash().ToString());
         return false;
     }
@@ -199,29 +199,29 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
                 if (vtx_index >= 0) {
                     LogPrint(BCLog::LogFlags::VERBOSE,
                             "ReacceptWalletTransactions: migrating unrecognized tx %s to confirmed "
-                            "(using deserialized hashBlock, vtx index %d, height=%d)\n",
+                            "(using deserialized hashBlock, vtx index %d, height=%d)",
                             wtx.GetHash().ToString(), vtx_index, it->second->nHeight);
                     wtx.SetTxState(TxStateConfirmed(legacy_hash, vtx_index));
                 } else {
                     LogPrintf("WARNING: ReacceptWalletTransactions: tx %s not found in block vtx "
-                             "despite valid hashBlock %s, marking inactive\n",
+                             "despite valid hashBlock %s, marking inactive",
                              wtx.GetHash().ToString(), legacy_hash.ToString().substr(0,10));
                     wtx.SetTxState(TxStateInactive{false});
                 }
             } else {
                 LogPrintf("WARNING: ReacceptWalletTransactions: Failed to read block %s for tx %s, "
-                         "marking inactive\n",
+                         "marking inactive",
                          legacy_hash.ToString().substr(0,10), wtx.GetHash().ToString());
                 wtx.SetTxState(TxStateInactive{false});
             }
         } else {
             if (it == mapBlockIndex.end()) {
                 LogPrint(BCLog::LogFlags::VERBOSE,
-                        "ReacceptWalletTransactions: tx %s hashBlock %s not in mapBlockIndex, marking inactive\n",
+                        "ReacceptWalletTransactions: tx %s hashBlock %s not in mapBlockIndex, marking inactive",
                         wtx.GetHash().ToString(), legacy_hash.ToString().substr(0,10));
             } else {
                 LogPrint(BCLog::LogFlags::VERBOSE,
-                        "ReacceptWalletTransactions: tx %s block orphaned, marking inactive\n",
+                        "ReacceptWalletTransactions: tx %s block orphaned, marking inactive",
                         wtx.GetHash().ToString());
             }
             wtx.SetTxState(TxStateInactive{false});
@@ -234,7 +234,7 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
     if (!fResolved && fTxIndexFound) {
         if (TryConfirmFromTxIndex(wtx, txindex)) {
             LogPrint(BCLog::LogFlags::VERBOSE,
-                    "ReacceptWalletTransactions: migrating unrecognized tx %s to confirmed (from CTxDB, vtx index %d)\n",
+                    "ReacceptWalletTransactions: migrating unrecognized tx %s to confirmed (from CTxDB, vtx index %d)",
                     wtx.GetHash().ToString(), wtx.nIndex);
             fUpdated = true;
             fRepeat = true;
@@ -245,7 +245,7 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
     // THIRD: check mempool
     if (!fResolved && mempool.exists(wtx.GetHash())) {
         LogPrint(BCLog::LogFlags::VERBOSE,
-                "ReacceptWalletTransactions: migrating unrecognized tx %s to mempool\n",
+                "ReacceptWalletTransactions: migrating unrecognized tx %s to mempool",
                 wtx.GetHash().ToString());
         wtx.SetTxState(TxStateInMempool{});
         fUpdated = true;
@@ -331,7 +331,7 @@ std::pair<bool, bool> ValidateConfirmedTx(CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIR
     auto it = mapBlockIndex.find(conf->m_confirmed_block_hash);
     if (it == mapBlockIndex.end() || !it->second->IsInMainChain()) {
         LogPrint(BCLog::LogFlags::VERBOSE,
-                "ReacceptWalletTransactions: tx %s block orphaned, marking inactive\n",
+                "ReacceptWalletTransactions: tx %s block orphaned, marking inactive",
                 wtx.GetHash().ToString());
         wtx.SetTxState(TxStateInactive{false});
         return {true, true};
@@ -350,7 +350,7 @@ std::pair<bool, bool> ValidateMempoolTx(CWalletTx& wtx, const CTxIndex& txindex,
     // No longer in mempool — try to confirm from txindex
     if (fTxIndexFound && TryConfirmFromTxIndex(wtx, txindex)) {
         LogPrint(BCLog::LogFlags::VERBOSE,
-                "ReacceptWalletTransactions: tx %s now confirmed, updating state (vtx index %d)\n",
+                "ReacceptWalletTransactions: tx %s now confirmed, updating state (vtx index %d)",
                 wtx.GetHash().ToString(), wtx.nIndex);
         return {true, true};
     }
@@ -374,14 +374,14 @@ std::pair<bool, bool> ValidateMempoolTx(CWalletTx& wtx, const CTxIndex& txindex,
         if (HasChainSpentInput(wtx, txdb)) {
             LogPrint(BCLog::LogFlags::VERBOSE,
                     "ReacceptWalletTransactions: tx %s not in mempool or chain and an input is "
-                    "spent by a confirmed transaction, marking inactive\n",
+                    "spent by a confirmed transaction, marking inactive",
                     wtx.GetHash().ToString());
             wtx.SetTxState(TxStateInactive{false});
             return {true, false};
         }
         LogPrint(BCLog::LogFlags::VERBOSE,
                 "ReacceptWalletTransactions: tx %s not in mempool or chain, left unconfirmed "
-                "for rebroadcast\n",
+                "for rebroadcast",
                 wtx.GetHash().ToString());
         return {false, false};
     }
@@ -398,7 +398,7 @@ std::pair<bool, bool> RecoverInactiveTx(CWalletTx& wtx, const CTxIndex& txindex,
 
     if (TryConfirmFromTxIndex(wtx, txindex)) {
         LogPrint(BCLog::LogFlags::VERBOSE,
-                "ReacceptWalletTransactions: inactive tx %s now confirmed, updating state (vtx index %d)\n",
+                "ReacceptWalletTransactions: inactive tx %s now confirmed, updating state (vtx index %d)",
                 wtx.GetHash().ToString(), wtx.nIndex);
         return {true, true};
     }
@@ -1305,13 +1305,13 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIV
                                     vtx_index
                                 ));
                             } else {
-                                LogPrintf("WARNING: AddToWallet: tx %s not found in block vtx despite valid txindex\n",
+                                LogPrintf("WARNING: AddToWallet: tx %s not found in block vtx despite valid txindex",
                                          wtx.GetHash().ToString());
                                 wtx.SetTxState(TxStateInactive{false});
                             }
 
                             LogPrint(BCLog::LogFlags::VERBOSE,
-                                    "AddToWallet: Updated unrecognized tx %s to confirmed state (height %d)\n",
+                                    "AddToWallet: Updated unrecognized tx %s to confirmed state (height %d)",
                                     wtx.GetHash().ToString(), it->second->nHeight);
                         } else {
                             wtx.SetTxState(TxStateInactive{false});
@@ -1420,7 +1420,7 @@ bool CWallet::SyncTransaction(const CTransactionRef& ptx,
     // notification below can distinguish a new entry (CT_NEW) from an update.
     const bool fInsertedNew = !mapWallet.count(hash);
 
-    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::SyncTransaction: tx=%s, state type=%d\n",
+    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::SyncTransaction: tx=%s, state type=%d",
              hash.ToString(), state.index());
 
     if (!AddToWalletIfInvolvingMe(ptx, state, update_tx)) {
@@ -1450,7 +1450,7 @@ bool CWallet::SyncTransaction(const CTransactionRef& ptx,
                 CWalletTx& parent_wtx = mi->second;
 
                 if (txin.prevout.n >= parent_wtx.vout.size()) {
-                    LogPrintf("WARNING: SyncTransaction: Invalid prevout.n %d for tx %s\n",
+                    LogPrintf("WARNING: SyncTransaction: Invalid prevout.n %d for tx %s",
                              txin.prevout.n, txin.prevout.hash.ToString());
                     continue;
                 }
@@ -1459,7 +1459,7 @@ bool CWallet::SyncTransaction(const CTransactionRef& ptx,
                     (IsMine(parent_wtx.vout[txin.prevout.n]) != ISMINE_NO)) {
 
                     LogPrint(BCLog::LogFlags::VERBOSE,
-                            "SyncTransaction: Marking output %s:%d as spent by %s\n",
+                            "SyncTransaction: Marking output %s:%d as spent by %s",
                             txin.prevout.hash.ToString(), txin.prevout.n, hash.ToString());
 
                     parent_wtx.MarkSpent(txin.prevout.n);
@@ -1528,7 +1528,7 @@ bool CWallet::SyncTransaction(const CTransactionRef& ptx,
             }
 
             LogPrint(BCLog::LogFlags::VERBOSE,
-                    "SyncTransaction: Persisted %d transaction(s) for tx %s (state type %d)\n",
+                    "SyncTransaction: Persisted %d transaction(s) for tx %s (state type %d)",
                     txns_to_write.size(), hash.ToString(), state.index());
         }
     }
@@ -1666,7 +1666,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
 
         if (const auto* conf = wtx.state<TxStateConfirmed>()) {
             if (!ValidateTxStateConfirmed(*conf, hash)) {
-                LogPrintf("WARNING: AddToWalletIfInvolvingMe: Invalid confirmed state for new tx %s, falling back to unrecognized\n",
+                LogPrintf("WARNING: AddToWalletIfInvolvingMe: Invalid confirmed state for new tx %s, falling back to unrecognized",
                          hash.ToString());
                 wtx.SetTxState(TxStateUnrecognized{});
             }
@@ -1678,12 +1678,12 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
         }
         it = ret.first;
 
-        LogPrint(BCLog::LogFlags::VERBOSE, "AddToWalletIfInvolvingMe: New transaction %s (state type: %d)\n",
+        LogPrint(BCLog::LogFlags::VERBOSE, "AddToWalletIfInvolvingMe: New transaction %s (state type: %d)",
                  hash.ToString(), state.index());
     } else {
         CWalletTx& wtx = it->second;
 
-        LogPrint(BCLog::LogFlags::VERBOSE, "AddToWalletIfInvolvingMe: %s transaction %s (state type: %d%s)\n",
+        LogPrint(BCLog::LogFlags::VERBOSE, "AddToWalletIfInvolvingMe: %s transaction %s (state type: %d%s)",
                  fUpdate ? "Updating" : "Processing",
                  hash.ToString(),
                  wtx.GetState().index(),
@@ -1695,7 +1695,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
 
             if (const auto* conf = std::get_if<TxStateConfirmed>(&state)) {
                 if (!ValidateTxStateConfirmed(*conf, hash)) {
-                    LogPrintf("WARNING: AddToWalletIfInvolvingMe: Invalid confirmed state for tx %s\n",
+                    LogPrintf("WARNING: AddToWalletIfInvolvingMe: Invalid confirmed state for tx %s",
                              hash.ToString());
                 }
             }
@@ -1708,7 +1708,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
         // Ensure vfSpent vector matches output count
         if (wtx.vfSpent.size() != tx.vout.size()) {
             LogPrint(BCLog::LogFlags::VERBOSE,
-                     "AddToWalletIfInvolvingMe: Resizing vfSpent for tx %s from %d to %d\n",
+                     "AddToWalletIfInvolvingMe: Resizing vfSpent for tx %s from %d to %d",
                      hash.ToString(), wtx.vfSpent.size(), tx.vout.size());
             wtx.vfSpent.resize(tx.vout.size(), false);
         }
@@ -1725,7 +1725,7 @@ void CWallet::TransactionAddedToMempool(const CTransactionRef& tx)
 {
     LOCK(cs_wallet);
 
-    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::TransactionAddedToMempool: %s\n",
+    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::TransactionAddedToMempool: %s",
              tx->GetHash().ToString());
 
     // Sync with mempool state
@@ -1754,7 +1754,7 @@ void CWallet::BlockConnected(const CBlock& block, int height)
 
     const uint256& block_hash = block.GetHash();
 
-    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::BlockConnected: %s at height %d\n",
+    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::BlockConnected: %s at height %d",
              block_hash.ToString(), height);
 
     // Sync each transaction in the block that involves this wallet.
@@ -1786,7 +1786,7 @@ void CWallet::TransactionRemovedFromMempool(const CTransactionRef& tx,
 
     const uint256& hash = tx->GetHash();
 
-    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::TransactionRemovedFromMempool: %s (reason: %d)\n",
+    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::TransactionRemovedFromMempool: %s (reason: %d)",
              hash.ToString(), static_cast<int>(reason));
 
     // If removed because it was included in a block, blockConnected handles it
@@ -1837,7 +1837,7 @@ void CWallet::TransactionRemovedFromMempool(const CTransactionRef& tx,
             // for reorged transactions. Don't duplicate the state change here.
             LogPrint(BCLog::LogFlags::VERBOSE,
                     "CWallet::TransactionRemovedFromMempool: tx %s removed due to reorg, "
-                    "deferring to blockDisconnected\n",
+                    "deferring to blockDisconnected",
                     hash.ToString());
             break;
 
@@ -1846,7 +1846,7 @@ void CWallet::TransactionRemovedFromMempool(const CTransactionRef& tx,
             // Unknown or manual removal — conservatively mark as inactive
             LogPrint(BCLog::LogFlags::VERBOSE,
                     "CWallet::TransactionRemovedFromMempool: tx %s removed for unknown reason (%d), "
-                    "marking inactive\n",
+                    "marking inactive",
                     hash.ToString(), static_cast<int>(reason));
             SyncTransaction(tx, TxStateInactive{false});
             break;
@@ -1904,7 +1904,7 @@ void CWallet::BlockDisconnected(const CBlock& block, int height)
 
     const uint256& block_hash = block.GetHash();
 
-    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::BlockDisconnected: %s at height %d\n",
+    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::BlockDisconnected: %s at height %d",
              block_hash.ToString(), height);
 
     /**
@@ -1942,7 +1942,7 @@ void CWallet::BlockDisconnected(const CBlock& block, int height)
         // Validate current state is confirmed
         if (!wtx.isConfirmed()) {
             LogPrint(BCLog::LogFlags::VERBOSE,
-                    "CWallet::blockDisconnected: tx %s not in confirmed state, skipping\n",
+                    "CWallet::blockDisconnected: tx %s not in confirmed state, skipping",
                     hash.ToString());
             continue;
         }
@@ -1955,14 +1955,14 @@ void CWallet::BlockDisconnected(const CBlock& block, int height)
             if (in_mempool) {
                 // Back to mempool - tx is still valid but unconfirmed
                 LogPrint(BCLog::LogFlags::VERBOSE,
-                        "CWallet::blockDisconnected: tx %s returned to mempool\n",
+                        "CWallet::blockDisconnected: tx %s returned to mempool",
                         hash.ToString());
                 SyncTransaction(MakeTransactionRef(tx), TxStateInMempool{});
             } else {
                 // Not in mempool - could be conflicted or invalid
                 // Mark as inactive (will be resolved by ReacceptWalletTransactions)
                 LogPrint(BCLog::LogFlags::VERBOSE,
-                        "CWallet::blockDisconnected: tx %s removed from mempool, marking inactive\n",
+                        "CWallet::blockDisconnected: tx %s removed from mempool, marking inactive",
                         hash.ToString());
                 SyncTransaction(MakeTransactionRef(tx), TxStateInactive{false});
             }
@@ -1976,7 +1976,7 @@ void CWallet::BlockDisconnected(const CBlock& block, int height)
 
                 // Validate output index
                 if (txin.prevout.n >= parent_wtx.vout.size()) {
-                    LogPrintf("WARNING: blockDisconnected: Invalid prevout.n %d for parent tx %s\n",
+                    LogPrintf("WARNING: blockDisconnected: Invalid prevout.n %d for parent tx %s",
                              txin.prevout.n, txin.prevout.hash.ToString());
                     continue;
                 }
@@ -1986,7 +1986,7 @@ void CWallet::BlockDisconnected(const CBlock& block, int height)
                 if (IsMine(parent_wtx.vout[txin.prevout.n]) != ISMINE_NO) {
                     LogPrint(BCLog::LogFlags::VERBOSE,
                             "CWallet::blockDisconnected: unmarking spent parent output %s:%d "
-                            "(was consumed by disconnected tx %s)\n",
+                            "(was consumed by disconnected tx %s)",
                             txin.prevout.hash.ToString(), txin.prevout.n, hash.ToString());
                     parent_wtx.MarkUnspent(txin.prevout.n);
                     parent_wtx.MarkDirty();
@@ -2023,10 +2023,10 @@ void CWallet::BlockDisconnected(const CBlock& block, int height)
         if (it != mapBlockIndex.end()) {
             m_last_block_processed = it->second->GetBlockHash();
             LogPrint(BCLog::LogFlags::VERBOSE,
-                    "CWallet::blockDisconnected: updated m_last_block_processed to %s (height %d)\n",
+                    "CWallet::blockDisconnected: updated m_last_block_processed to %s (height %d)",
                     m_last_block_processed.ToString(), m_last_block_processed_height);
         } else {
-            LogPrintf("WARNING: CWallet::blockDisconnected: Could not find previous block %s\n",
+            LogPrintf("WARNING: CWallet::blockDisconnected: Could not find previous block %s",
                      block.hashPrevBlock.ToString());
         }
     } else {
@@ -2700,7 +2700,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
                         CWalletTx& wtx = it->second;
                         wtx.WriteToDisk(&walletdb);
                         LogPrint(BCLog::LogFlags::VERBOSE,
-                                "ScanForWalletTransactions: Persisted tx %s with confirmed state (height %d) to wallet.dat\n",
+                                "ScanForWalletTransactions: Persisted tx %s with confirmed state (height %d) to wallet.dat",
                                 ptx->GetHash().ToString(), block_height);
                     }
                 }
@@ -2802,7 +2802,7 @@ void CWallet::ReacceptWalletTransactions()
                 if (fUpdated) {
                     // But write if we updated the state
                     LogPrint(BCLog::LogFlags::VERBOSE,
-                            "ReacceptWalletTransactions: updated tx %s (state type: %d)\n",
+                            "ReacceptWalletTransactions: updated tx %s (state type: %d)",
                             wtx.GetHash().ToString(), wtx.GetState().index());
                     wtx.MarkDirty();
                     CWalletDB walletdb(strWalletFile);
@@ -2849,7 +2849,7 @@ void CWallet::ReacceptWalletTransactions()
 
             if (fUpdated) {
                 LogPrint(BCLog::LogFlags::VERBOSE,
-                        "ReacceptWalletTransactions: updated tx %s (state type: %d)\n",
+                        "ReacceptWalletTransactions: updated tx %s (state type: %d)",
                         wtx.GetHash().ToString(), wtx.GetState().index());
                 wtx.MarkDirty();
                 CWalletDB walletdb(strWalletFile);
@@ -2876,7 +2876,7 @@ bool CWalletTx::QueueRelay(CTxDB& txdb, DeferredRelay& relay) const
 {
     // Don't relay inactive (abandoned/conflicted) transactions
     if (isInactive()) {
-        LogPrint(BCLog::LogFlags::VERBOSE, "RelayWalletTransaction: skipping inactive tx %s\n",
+        LogPrint(BCLog::LogFlags::VERBOSE, "RelayWalletTransaction: skipping inactive tx %s",
                  GetHash().ToString().substr(0,10));
         return false;
     }
@@ -5686,7 +5686,7 @@ bool CWallet::AbandonTransaction(const uint256& txid, unsigned int* inputs_relea
     // that resolver change, the only thing that made them abandonable was the
     // bug of remarking them inactive on every restart.
     if (wtx.isConfirmed() || mempool.exists(txid)) {
-        LogPrintf("AbandonTransaction: Cannot abandon confirmed or mempool tx %s\n",
+        LogPrintf("AbandonTransaction: Cannot abandon confirmed or mempool tx %s",
                   txid.ToString());
         return false;
     }
@@ -5695,7 +5695,7 @@ bool CWallet::AbandonTransaction(const uint256& txid, unsigned int* inputs_relea
     if (wtx.isInactive()) {
         const auto* inactive = wtx.state<TxStateInactive>();
         if (inactive && inactive->m_abandoned) {
-            LogPrint(BCLog::LogFlags::VERBOSE, "AbandonTransaction: tx %s already abandoned\n",
+            LogPrint(BCLog::LogFlags::VERBOSE, "AbandonTransaction: tx %s already abandoned",
                      txid.ToString());
             return true; // Already abandoned, nothing to do
         }
@@ -5726,7 +5726,7 @@ bool CWallet::AbandonTransaction(const uint256& txid, unsigned int* inputs_relea
         }
 
         // Mark as abandoned
-        LogPrint(BCLog::LogFlags::VERBOSE, "AbandonTransaction: Abandoning tx %s\n",
+        LogPrint(BCLog::LogFlags::VERBOSE, "AbandonTransaction: Abandoning tx %s",
                  now.ToString());
 
         cur_wtx.SetTxState(TxStateInactive{true});

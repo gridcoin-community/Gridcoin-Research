@@ -3119,6 +3119,149 @@ BOOST_AUTO_TEST_CASE(reaccept_marks_own_unconfirmed_tx_conflicted_when_input_spe
     }
 }
 
+BOOST_AUTO_TEST_CASE(reaccept_log_lines_carry_no_extra_newline)
+{
+    // LogPrint and LogPrintf append the line's newline themselves, so a format
+    // string that also ends in "\n" writes a blank line after the message.
+    // Builds the two scenarios of the cases above -- an own tx left
+    // unconfirmed for rebroadcast, and one marked inactive because its input
+    // is spent in the chain -- and requires every re-accept line logged while
+    // processing them to end in exactly one newline.
+    std::vector<std::string> lines;
+
+    //! Captures log output through a print callback with VERBOSE enabled, and
+    //! on destruction removes the callback and restores VERBOSE as it found
+    //! it, so neither leaks into later cases.
+    struct VerboseLogCapture {
+        const bool was;
+        std::list<std::function<void(const std::string&)>>::iterator it;
+
+        explicit VerboseLogCapture(std::vector<std::string>& out)
+            : was(LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
+        {
+            LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
+            it = LogInstance().PushBackCallback([&out](const std::string& s) { out.push_back(s); });
+        }
+        ~VerboseLogCapture()
+        {
+            LogInstance().DeleteCallback(it);
+            if (!was) LogInstance().DisableCategory(BCLog::LogFlags::VERBOSE);
+        }
+        VerboseLogCapture(const VerboseLogCapture&) = delete;
+        VerboseLogCapture& operator=(const VerboseLogCapture&) = delete;
+    };
+
+    // Scenario 1, as in reaccept_keeps_own_unconfirmed_tx_rebroadcastable: the
+    // input's parent is indexed with its output unspent, so re-accept leaves
+    // the tx unconfirmed for rebroadcast.
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key));
+    }
+
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(1);
+    parent_mtx.vout[0].nValue = 2 * COIN;
+    parent_mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction parent(parent_mtx);
+    {
+        CTxIndex parent_index(CDiskTxPos(1, 1, 1), 1);
+        CTxDB txdb("r+");
+        BOOST_REQUIRE(txdb.TxnBegin());
+        BOOST_REQUIRE(txdb.UpdateTxIndex(parent.GetHash(), parent_index));
+        BOOST_REQUIRE(txdb.TxnCommit());
+    }
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(parent.GetHash(), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        wtx.fFromMe = true;
+        pwalletMain->mapWallet[hash] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+
+    // Scenario 2, as in
+    // reaccept_marks_own_unconfirmed_tx_conflicted_when_input_spent_in_chain:
+    // the parent's only output is already spent by someone else, so re-accept
+    // marks the tx inactive and writes the update.
+    CKey key2;
+    key2.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key2));
+    }
+
+    CMutableTransaction parent2_mtx;
+    parent2_mtx.vout.resize(1);
+    parent2_mtx.vout[0].nValue = 3 * COIN;
+    parent2_mtx.vout[0].scriptPubKey = CScript() << key2.GetPubKey() << OP_CHECKSIG;
+    const CTransaction parent2(parent2_mtx);
+    {
+        CTxIndex parent_index(CDiskTxPos(1, 1, 1), 1);
+        parent_index.vSpent[0] = CDiskTxPos(2, 2, 2);
+        CTxDB txdb("r+");
+        BOOST_REQUIRE(txdb.TxnBegin());
+        BOOST_REQUIRE(txdb.UpdateTxIndex(parent2.GetHash(), parent_index));
+        BOOST_REQUIRE(txdb.TxnCommit());
+    }
+
+    CMutableTransaction mtx2;
+    mtx2.vin.resize(1);
+    mtx2.vin[0].prevout = COutPoint(parent2.GetHash(), 0);
+    mtx2.vout.resize(1);
+    mtx2.vout[0].nValue = 1 * COIN;
+    mtx2.vout[0].scriptPubKey = CScript() << key2.GetPubKey() << OP_CHECKSIG;
+    CTransaction tx2(mtx2);
+    const uint256 hash2 = tx2.GetHash();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx2);
+        wtx.SetTxState(TxStateInMempool{});
+        wtx.fFromMe = true;
+        pwalletMain->mapWallet[hash2] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash2));
+
+    {
+        VerboseLogCapture capture(lines);
+        pwalletMain->ReacceptWalletTransactions();
+    }
+
+    // Clean up before checking, so a failed check leaves nothing behind.
+    // EraseFromWallet drops each entry from mapWallet and from the wallet DB,
+    // as re-accept may have written a state change through CWalletDB.
+    BOOST_REQUIRE(pwalletMain->EraseFromWallet(hash));
+    BOOST_REQUIRE(pwalletMain->EraseFromWallet(hash2));
+    {
+        CTxDB txdb("r+");
+        BOOST_REQUIRE(txdb.TxnBegin());
+        BOOST_REQUIRE(txdb.EraseTxIndex(parent));
+        BOOST_REQUIRE(txdb.EraseTxIndex(parent2));
+        BOOST_REQUIRE(txdb.TxnCommit());
+    }
+
+    BOOST_REQUIRE(std::any_of(lines.begin(), lines.end(), [](const std::string& line) {
+        return line.find("ReacceptWalletTransactions:") != std::string::npos;
+    }));
+    for (const std::string& line : lines) {
+        if (line.find("ReacceptWalletTransactions") == std::string::npos) continue;
+        BOOST_CHECK_MESSAGE(!(line.size() >= 2 && line.compare(line.size() - 2, 2, "\n\n") == 0), line);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // MigrateFromLegacyHashBlock tests — all 4 branches
 // ---------------------------------------------------------------------------
