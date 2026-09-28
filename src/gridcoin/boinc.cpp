@@ -77,29 +77,34 @@ static fs::path FindBoincDataDir()
         KEY_READ|KEY_WOW64_64KEY,
         &hKey) == ERROR_SUCCESS)
     {
-        wchar_t szPath[MAX_PATH];
-        DWORD dwSize = sizeof(szPath);
+        // One slot more than the size passed in, so the value can always be
+        // terminated: a registry string is not guaranteed to carry its NUL.
+        wchar_t szPath[MAX_PATH + 1] = {};
+        DWORD dwType = 0;
+        DWORD dwSize = MAX_PATH * sizeof(wchar_t);
 
-        if (RegQueryValueEx(
+        const LONG status = RegQueryValueEx(
             hKey,
             L"DATADIR",
             nullptr,
-            nullptr,
-            (LPBYTE)&szPath,
-            &dwSize) == ERROR_SUCCESS)
-        {
-            RegCloseKey(hKey);
+            &dwType,
+            reinterpret_cast<LPBYTE>(szPath),
+            &dwSize);
+
+        // Closed here, once, before anything below can return.
+        RegCloseKey(hKey);
+
+        if (status == ERROR_SUCCESS && dwType == REG_SZ) {
+            szPath[dwSize / sizeof(wchar_t)] = L'\0';
 
             fs::path path = std::wstring(szPath);
 
-            if (PathExists(path)){
+            if (PathExists(path)) {
                 return path;
-            } else {
-                LogPrintf("Cannot find BOINC data dir %s.", path.string());
             }
-        }
 
-        RegCloseKey(hKey);
+            LogPrintf("Cannot find BOINC data dir %s.", path.string());
+        }
     }
 
     if (PathExists("C:\\ProgramData\\BOINC\\")){
