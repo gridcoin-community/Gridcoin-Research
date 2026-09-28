@@ -1316,10 +1316,11 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     {
         guiref = frontend.construct();
         // The main window dies at the end of this try block, including on
-        // unwind.
+        // unwind. guiref is cleared before the window is destroyed, so the
+        // static never dangles.
         struct MainWindowScope {
             GuiFrontEnd& fe;
-            ~MainWindowScope() { fe.destroyMain(); }
+            ~MainWindowScope() { guiref = nullptr; fe.destroyMain(); }
         } main_window_scope{frontend};
 
         GUILogPrintf("Starting Gridcoin");
