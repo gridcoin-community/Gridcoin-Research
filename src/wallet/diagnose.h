@@ -640,14 +640,20 @@ class VerifyTCPPort : public Diagnose
 private:
     boost::asio::ip::tcp::socket m_tcpSocket;
     const std::string m_host;
+    const boost::asio::ip::resolver_base::flags m_resolve_flags;
     void handle_connect(const boost::system::error_code& err);
 
     void TCPFinished();
 
 public:
     //! \param host The port test site to connect to. Only tests pass anything else.
-    explicit VerifyTCPPort(std::string host = "portquiz.net")
-        : Diagnose {Diagnose::VerifyTCPPort}, m_tcpSocket(s_ioService), m_host(std::move(host))
+    //! \param resolve_flags Passed to the resolver. The default is what the plain
+    //! resolve() call passes; a test passes numeric_host, which refuses a name
+    //! without asking a resolver, to reach the failure path offline.
+    explicit VerifyTCPPort(std::string host = "portquiz.net",
+                           boost::asio::ip::resolver_base::flags resolve_flags = boost::asio::ip::resolver_base::flags())
+        : Diagnose {Diagnose::VerifyTCPPort}, m_tcpSocket(s_ioService), m_host(std::move(host)),
+          m_resolve_flags(resolve_flags)
     {
     }
     ~VerifyTCPPort() {}
@@ -678,7 +684,7 @@ public:
         // walletdiagnose or the Diagnostics dialog.
         boost::asio::ip::tcp::resolver resolver(s_ioService);
         boost::system::error_code resolve_error;
-        auto resolved = resolver.resolve(m_host, "http", resolve_error);
+        auto resolved = resolver.resolve(m_host, "http", m_resolve_flags, resolve_error);
 
         if (resolve_error) {
             handle_connect(boost::asio::error::host_unreachable);
