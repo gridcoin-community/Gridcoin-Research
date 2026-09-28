@@ -17,6 +17,7 @@ what it lost, and that it is still serving over IPv6.
 """
 
 import os
+import re
 import socket
 import sys
 
@@ -40,6 +41,8 @@ class RPCBindIPv4ConflictTest(GridcoinTestFramework):
         self.num_nodes = 1
         self.setup_clean_chain = True
         self.extra_args = [["-connect=0", "-listen=0"]]
+        # gridcoin-cli dials 127.0.0.1, the address this test holds on purpose.
+        self.supports_cli = False
 
     def setup_network(self):
         # The node is added here and started in run_test, once the port is held.
@@ -61,7 +64,8 @@ class RPCBindIPv4ConflictTest(GridcoinTestFramework):
         # before the node's first start.
         chain_dir = os.path.join(node.datadir, chain_subdir(node.chain))
         os.makedirs(chain_dir, exist_ok=True)
-        open(os.path.join(chain_dir, 'debug.log'), 'a', encoding='utf-8').close()
+        debug_log = os.path.join(chain_dir, 'debug.log')
+        open(debug_log, 'a', encoding='utf-8').close()
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as blocker:
             blocker.bind(('127.0.0.1', port))
@@ -77,6 +81,16 @@ class RPCBindIPv4ConflictTest(GridcoinTestFramework):
                     ],
                     unexpected_msgs=['bound and listening on 127.0.0.1:']):
                 self.start_node(0)
+
+            # assert_debug_log matches substrings, so the lines above would still
+            # match with the bind error dropped. The error text belongs to the OS
+            # and its locale: check only that the warning carries one.
+            with open(debug_log, encoding='utf-8', errors='replace') as f:
+                log = f.read()
+            m = re.search(r'not listening on IPv4 127\.0\.0\.1:%d: (\S[^\n]*?)\. RPC is reachable over IPv6 only'
+                          % port, log)
+            assert m, "the IPv4 warning names no bind error"
+            self.log.info("the warning names the bind error: %s", m.group(1))
 
             self.log.info("and it still serves RPC over [::1]")
             assert_equal(node.getblockcount(), 0)
