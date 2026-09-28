@@ -1196,7 +1196,7 @@ UniValue splitunspent(const UniValue& params)
     {
         int32_t nParsedCount = 0;
         if (!params[2].isNum() || !ParseInt32(params[2].getValStr(), &nParsedCount)) {
-            throw JSONRPCError(RPC_TYPE_ERROR, "piece_count must be a JSON integer.");
+            throw JSONRPCError(RPC_TYPE_ERROR, "piece_count must be a JSON integer in the 32-bit range.");
         }
         nPieceCount = nParsedCount;
     }
