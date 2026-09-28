@@ -28,11 +28,18 @@ which wait_until_stopped() would report as a non-zero exit code.
 CLI transport is not supported: under --usecli, self.stop() goes through
 gridcoin-cli and fails with CalledProcessError, which the except in
 stop_node() does not catch either.
+
+Skipped on Windows: the fallback is Popen.terminate(), which there is
+TerminateProcess, not SIGTERM. The daemon's shutdown handler never runs, it
+exits non-zero, and wait_until_stopped() asserts a zero exit code. The skip is
+raised before the node starts, so the framework's own shutdown never reaches
+that path either.
 """
 
 import socket
+import sys
 
-from test_framework.test_framework import GridcoinTestFramework
+from test_framework.test_framework import GridcoinTestFramework, SkipTest
 from test_framework.util import assert_raises_message, rpc_port
 
 
@@ -50,6 +57,12 @@ class FeatureStopNodeWithoutRpcTest(GridcoinTestFramework):
         self.add_nodes(self.num_nodes, [["-rpcport=%d" % self.moved_rpc_port]])
 
     def run_test(self):
+        if sys.platform == 'win32':
+            # Before node.start(): once the node runs, the framework's shutdown would
+            # take the same TerminateProcess path and fail the same way.
+            raise SkipTest("the SIGTERM fallback cannot stop a node cleanly on Windows: "
+                           "terminate() is TerminateProcess")
+
         node = self.nodes[0]
         node.start()
 
