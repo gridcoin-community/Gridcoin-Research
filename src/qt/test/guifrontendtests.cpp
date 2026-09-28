@@ -11,6 +11,7 @@
 #include <QMetaObject>
 #include <QString>
 
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -18,8 +19,9 @@
 //!
 //! \file guifrontendtests.cpp
 //! \brief The GuiFrontEnd seam's teardown contract (the detach order, its
-//! idempotence and the exception-path guard) and the slot signatures the
-//! string-invoked core bridges in bitcoin.cpp depend on.
+//! idempotence, its resumption after a hook throws and the exception-path
+//! guard) and the slot signatures the string-invoked core bridges in
+//! bitcoin.cpp depend on.
 //!
 
 namespace {
@@ -30,6 +32,9 @@ class FakeGuiFrontEnd : public GuiFrontEnd
 {
 public:
     std::vector<std::string> calls;
+    //! Hooks named here record their call and then throw std::runtime_error, on
+    //! their first call only.
+    std::set<std::string> throw_in;
 
     QObject* construct() override { return nullptr; }
     void destroyMain() override {}
@@ -44,13 +49,20 @@ public:
     void requestQuit() override {}
 
 protected:
-    void hideMain() override { calls.emplace_back("hideMain"); }
-    void detachClient() override { calls.emplace_back("detachClient"); }
-    void detachWallet() override { calls.emplace_back("detachWallet"); }
-    void detachMRC() override { calls.emplace_back("detachMRC"); }
-    void detachResearcher() override { calls.emplace_back("detachResearcher"); }
-    void detachVoting() override { calls.emplace_back("detachVoting"); }
-    void detachPSGT() override { calls.emplace_back("detachPSGT"); }
+    void hideMain() override { Record("hideMain"); }
+    void detachClient() override { Record("detachClient"); }
+    void detachWallet() override { Record("detachWallet"); }
+    void detachMRC() override { Record("detachMRC"); }
+    void detachResearcher() override { Record("detachResearcher"); }
+    void detachVoting() override { Record("detachVoting"); }
+    void detachPSGT() override { Record("detachPSGT"); }
+
+private:
+    void Record(const std::string& name)
+    {
+        calls.emplace_back(name);
+        if (throw_in.erase(name) > 0) throw std::runtime_error(name + " threw");
+    }
 };
 
 //! Compare the recorded hooks element by element, so a failure names the first
@@ -94,6 +106,50 @@ void GUIFrontEndTests::guardRunsDetachOnThrow()
 
     QCOMPARE(fake.calls.size(), size_t{7});
     QCOMPARE(QString::fromStdString(fake.calls.front()), QStringLiteral("hideMain"));
+}
+
+void GUIFrontEndTests::detachResumesAfterThrowingHook()
+{
+    FakeGuiFrontEnd fake;
+    fake.throw_in = {"detachClient"};
+
+    {
+        FrontEndDetachGuard guard{fake};
+        bool threw = false;
+        size_t calls_at_throw = 0;
+        try {
+            fake.detachModels();
+        } catch (const std::runtime_error&) {
+            // detachClient threw out of the explicit call. Leaving the block runs
+            // the guard, which must resume at the next hook.
+            threw = true;
+            calls_at_throw = fake.calls.size();
+        }
+        // detachModels() lets a hook's exception propagate to its caller.
+        QVERIFY(threw);
+        // The explicit call stopped at the hook that threw: only hideMain and
+        // detachClient ran before the exception left it.
+        QCOMPARE(calls_at_throw, size_t{2});
+    }
+
+    CompareCalls(fake.calls, {"hideMain", "detachClient", "detachWallet", "detachMRC",
+                              "detachResearcher", "detachVoting", "detachPSGT"});
+}
+
+void GUIFrontEndTests::guardRunsEveryHookPastTwoThrows()
+{
+    FakeGuiFrontEnd fake;
+    fake.throw_in = {"detachClient", "detachResearcher"};
+
+    try {
+        FrontEndDetachGuard guard{fake};
+        throw std::runtime_error("unwind");
+    } catch (const std::runtime_error&) {
+    }
+
+    // The guard alone, during unwinding, gets past both throwing hooks.
+    CompareCalls(fake.calls, {"hideMain", "detachClient", "detachWallet", "detachMRC",
+                              "detachResearcher", "detachVoting", "detachPSGT"});
 }
 
 void GUIFrontEndTests::bridgeSlotSignatures()

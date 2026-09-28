@@ -15,6 +15,8 @@ class GUIFrontEndTests : public QObject
 private Q_SLOTS:
     void detachSequence();
     void guardRunsDetachOnThrow();
+    void detachResumesAfterThrowingHook();
+    void guardRunsEveryHookPastTwoThrows();
     void bridgeSlotSignatures();
 };
 

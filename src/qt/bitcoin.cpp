@@ -1536,9 +1536,10 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // would unregister from an already-freed source (UAF). This guard
                 // is declared AFTER the models and sources, so its destructor
                 // runs BEFORE theirs on every exit path and detaches every model
-                // while the sources are still alive. The explicit detachModels()
-                // on the normal path below makes this a no-op there; on the
-                // throw path it is the only teardown.
+                // while the sources are still alive. After the explicit
+                // detachModels() on the normal path below it has nothing left to
+                // run; if a hook throws inside that call, it resumes the detach at
+                // the next hook. On any other throw path it is the only teardown.
                 FrontEndDetachGuard frontend_detach_guard{frontend};
 
                 // If -min option passed, start window minimized.
@@ -1591,7 +1592,9 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                     // model and source in this block is still alive (the GuiFrontEnd
                     // detach hooks say why each must precede its model's
                     // destruction). frontend_detach_guard above enforces the same on
-                    // the exception path; this call makes the guard a no-op.
+                    // the exception path. After this call the guard has nothing left
+                    // to run; if a hook throws here, the guard resumes at the next
+                    // hook as the exception unwinds.
                     frontend.detachModels();
                     guiref = nullptr;
                 });

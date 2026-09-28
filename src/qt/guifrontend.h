@@ -85,9 +85,17 @@ public:
     //! Detach every model from the front end, in the order StartGridcoinQt's
     //! teardown has always used: hide the main window, then client, wallet, MRC,
     //! researcher, voting and PSGT.
-    //! Idempotent: only the first call reaches the hooks, so the exception-path
-    //! guard and the normal-path call can both run it.
+    //! Each call runs, in that order, the hooks not yet started. The progress
+    //! index moves past a hook before the hook runs, so a hook that throws is
+    //! never re-entered and its exception propagates to the caller. After such a
+    //! throw, a later call resumes at the next hook; once every hook has started,
+    //! a call runs none. So the normal-path call and the exception-path guard can
+    //! both run it, and each hook runs at most once.
     void detachModels();
+
+    //! True once every detach hook has been started. FrontEndDetachGuard loops
+    //! on it.
+    bool detached() const;
 
 protected:
     //! Hide the main window before its models go away.
@@ -108,15 +116,19 @@ protected:
     virtual void detachPSGT() = 0;
 
 private:
-    bool m_detached{false};
+    //! The next detach hook to start, as an index into detachModels()'s
+    //! sequence. It equals the number of hooks once every hook has started.
+    int m_next_hook{0};
 };
 
-//! Runs GuiFrontEnd::detachModels() when it goes out of scope, on every exit
-//! path. Declare it after the models and their sources, so it runs before their
-//! destructors: otherwise an exception unwinds the models and sources first, and
-//! the front end's view models later unregister from a freed source (UAF). On
-//! the normal path the explicit detachModels() call runs first and this is a
-//! no-op.
+//! Runs GuiFrontEnd::detachModels() until GuiFrontEnd::detached() when it goes
+//! out of scope, on every exit path. It logs and swallows each exception a hook
+//! throws and calls detachModels() again, so every hook after a throwing one
+//! still runs, each at most once. Declare it after the models and their sources,
+//! so it runs before their destructors: otherwise an exception unwinds the
+//! models and sources first, and the front end's view models later unregister
+//! from a freed source (UAF). On the normal path the explicit detachModels()
+//! call runs first and leaves this nothing to run.
 struct FrontEndDetachGuard
 {
     GuiFrontEnd& frontend;
