@@ -17,7 +17,7 @@ Build-Depends:
  libxkbcommon-dev,
  libssl-dev,
  libevent-dev,
- libboost-filesystem-dev (>= 1.63),
+ libboost-filesystem-dev (>= 1.66),
  libboost-iostreams-dev,
  libboost-thread-dev,
  libboost-serialization-dev,
