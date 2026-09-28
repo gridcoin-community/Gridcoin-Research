@@ -374,11 +374,8 @@ QString nodeSettingsKey(const QString& key)
 QString ExtractFirstSuffixFromFilter(const QString& filter)
 {
     /* Extract first suffix from filter pattern "Description (*.foo)" or "Description (*.foo *.bar ...) */
-    // \A...\z reproduces QRegExp::exactMatch, which anchored the whole subject
-    // implicitly where QRegularExpression::match does not. This is the form
-    // QRegularExpression::anchoredPattern() generates; it is spelled out because
-    // that helper is Qt 5.12 and this tree still builds against 5.9.5.
-    QRegularExpression filter_re("\\A(?:.* \\(\\*\\.(.*)[ \\)])\\z");
+    // Unanchored and lazy, so a multi-extension filter yields its first extension, as in Bitcoin Core.
+    QRegularExpression filter_re(QStringLiteral(".* \\(\\*\\.(.*)[ \\)]"), QRegularExpression::InvertedGreedinessOption);
     QString selectedSuffix;
     const QRegularExpressionMatch filter_match = filter_re.match(filter);
     if(filter_match.hasMatch())
