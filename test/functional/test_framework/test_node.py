@@ -446,6 +446,16 @@ class TestNode():
                 # named-arg dicts ({"wait": 0}) with "Params must be an array".
                 # The `wait` kwarg is preserved on stop_node()'s signature for
                 # caller compatibility but not forwarded to the RPC.
+                #
+                # A node whose RPC never connected cannot take the stop RPC,
+                # and self.stop() would raise AssertionError from the
+                # connection guard in __getattr__. The except below does not
+                # catch AssertionError, so the SIGTERM fallback further down
+                # was unreachable for exactly the case it was written for.
+                # Raise the same message as a ConnectionError instead, so the
+                # fallback runs and the error is still re-raised afterwards.
+                if not self.use_cli and not (self.rpc_connected and self.rpc is not None):
+                    raise ConnectionError(self._node_msg("Error: no RPC connection"))
                 self.stop()
             except (http.client.CannotSendRequest,
                     JSONRPCException,
@@ -468,9 +478,12 @@ class TestNode():
             # starting, so we never had an RPC connection), the daemon is still
             # running and nothing has told it to exit. Send SIGTERM so
             # wait_until_stopped() doesn't burn the full timeout and we don't
-            # leak a daemon that would starve the next parallel test. SIGTERM is
-            # graceful (the daemon's signal handler exits 0, keeping
-            # is_node_stopped()'s return-code assertion valid); we never kill -9.
+            # leak a daemon that would starve the next parallel test. On POSIX,
+            # once the node is past RPC startup, SIGTERM exits 0 (its handler
+            # requests a normal shutdown). A node still in early init exits
+            # non-zero, and is_node_stopped()'s return-code assertion then
+            # reports that. On Windows terminate() is TerminateProcess, so the
+            # handler never runs and the exit is non-zero. We never kill -9.
             # stop_exc is still re-raised below, so the failure stays visible.
             if stop_exc is not None and self.process is not None and self.process.poll() is None:
                 self.process.terminate()
