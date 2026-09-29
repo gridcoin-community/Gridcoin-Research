@@ -298,6 +298,15 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             wtx = std::move(wtx_tmp);
             wtx.BindWallet(pwallet);
 
+            // Record which outputs this transaction spends, as AddToWalletIfInvolvingMe does for one seen live.
+            // At load nothing else records the spends of an unconfirmed transaction that is not in the mempool (a
+            // rescan covers only the blocks it scans, and none on a clean restart); without them AbandonTransaction
+            // cannot find the unconfirmed descendants of what it abandons. An abandoned transaction is skipped:
+            // AbandonTransaction erased its rows, and rebuilding them here would undo that on every load.
+            if (!pwallet->IsAbandoned(hash)) {
+                pwallet->AddToSpends(wtx, hash);
+            }
+
             // Undo serialize changes in 31600
             if (31404 <= wtx.fTimeReceivedIsTxTime && wtx.fTimeReceivedIsTxTime <= 31703)
             {
