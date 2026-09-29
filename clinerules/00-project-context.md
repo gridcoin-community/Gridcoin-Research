@@ -160,7 +160,7 @@ These dependencies are required for building the Qt GUI on Linux systems:
 
 ### Build & Development Tools
 
-- **CMake 3.18+** - Build system generator
+- **CMake 3.21+** - Build system generator
 - **pkg-config** - Library metadata helper
 - **Python 3** - Build scripts and utilities
 

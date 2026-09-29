@@ -8,7 +8,7 @@ Build-Depends:
  pkg-config,
  bsdmainutils,
  python3,
- cmake (>= 3.18),
+ cmake (>= 3.21),
  ccache,
  doxygen,
  graphviz,
