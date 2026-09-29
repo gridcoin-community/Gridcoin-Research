@@ -357,6 +357,18 @@ jobs:
           # of this: the same wind-down that removed the Intel bottles is
           # reaching macos-14 arm64. #3366 tracks moving off it.
           brew update
+          # The image hand-links a leftover openssl@1.1 at $(brew --prefix)/bin/openssl
+          # (a plain ln -s, so `brew unlink` cannot remove it). The image's openssl@3
+          # keg is linked, so upgrading it relinks it. Until homebrew-core f2e47cf7746c
+          # (2026-09-27) openssl@3 declared link_overwrite for bin/openssl and brew
+          # moved the old link aside. That commit made openssl@3 keg-only and dropped
+          # link_overwrite, so the relink now fails and brew install exits 1. Nothing
+          # here needs 1.1: the build names openssl@3 by prefix (OPENSSL_ROOT_DIR
+          # below), and the signing step's `openssl rand` works with any openssl on PATH.
+          openssl_link="$(brew --prefix)/bin/openssl"
+          case "$(readlink "$openssl_link" 2>/dev/null)" in
+            */openssl@1.1/bin/openssl) rm -f "$openssl_link" ;;
+          esac
           brew install qtbase qttools qtsvg qttranslations qtdeclarative openssl@3 $MACOS_BREW_DEPS
 
       - name: Configure Ccache
