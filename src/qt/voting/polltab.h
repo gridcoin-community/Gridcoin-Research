@@ -6,6 +6,7 @@
 #define GRIDCOIN_QT_VOTING_POLLTAB_H
 
 #include "interfaces/voting.h"
+#include "qt/voting/votingmodel.h"
 
 #include <memory>
 #include <QDateTime>
@@ -17,7 +18,6 @@ class PollTab;
 
 class LoadingBar;
 class NoResult;
-class PollItem;
 class PollTableModel;
 class VotingModel;
 
