@@ -800,7 +800,8 @@ static const RPCHelpMan consolidateunspent_help{
             "Target consolidation output size. Omit or pass null for no size limit."},
         {"max_inputs", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
             "Defaults and is clamped to the value returned by GetMaxInputsForConsolidationTxn() to prevent "
-            "transaction failures. Must not be negative (omit or pass null for the default maximum)."},
+            "transaction failures. Must not be negative (omit or pass null for the default maximum). "
+            "0 or 1 selects fewer than two inputs, so the call does nothing."},
         {"sweep_all_addresses", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
             "If true, source inputs from all wallet addresses (output still goes to <address>). "
             "Otherwise only the source address contributes inputs."},
