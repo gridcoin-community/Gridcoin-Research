@@ -3423,6 +3423,409 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_cascades_to_children)
 }
 
 // ---------------------------------------------------------------------------
+// mapTxSpends is rebuilt from what the wallet loads, so the abandon cascade
+// reaches descendants after a restart
+// ---------------------------------------------------------------------------
+
+namespace {
+// The mock BDB env backs every wallet file name with one shared in-memory database, so a case
+// that reloads a wallet sees every record any earlier case wrote (and an earlier case's vin-less
+// records make LoadWallet fail). This moves those records aside for the life of the scope and puts
+// them back afterwards, in both directions: the case's own records are deleted again before the
+// put-back. The restore-pin case pins the second direction.
+class MockWalletDbScope : private CDB
+{
+public:
+    explicit MockWalletDbScope(const std::string& file) : CDB(file, "cr+")
+    {
+        BOOST_REQUIRE(bitdb.IsMock());
+        BOOST_REQUIRE(pdb != nullptr);
+
+        BOOST_REQUIRE(Walk(m_saved));
+
+        // From the first del on, nothing below may throw.
+        bool all_deleted = true;
+        for (const CDBEnv::KeyValPair& kv : m_saved) {
+            if (Del(kv) != 0) all_deleted = false;
+        }
+
+        std::vector<CDBEnv::KeyValPair> left;
+        const bool walked = Walk(left);
+        m_isolated = all_deleted && walked && left.empty();
+    }
+
+    ~MockWalletDbScope()
+    {
+        std::vector<CDBEnv::KeyValPair> present;
+        if (!Walk(present)) BOOST_ERROR("MockWalletDbScope: cannot walk the database to restore it");
+        for (const CDBEnv::KeyValPair& kv : present) {
+            if (Del(kv) != 0) BOOST_ERROR("MockWalletDbScope: cannot delete a case record");
+        }
+        for (const CDBEnv::KeyValPair& kv : m_saved) {
+            Dbt k(const_cast<unsigned char*>(kv.first.data()), kv.first.size());
+            Dbt v(const_cast<unsigned char*>(kv.second.data()), kv.second.size());
+            if (pdb->put(nullptr, &k, &v, 0) != 0) BOOST_ERROR("MockWalletDbScope: cannot restore a record");
+        }
+    }
+
+    bool isolated() const { return m_isolated; }
+
+private:
+    // Reads every record; the cursor is closed before returning so the caller may del and put.
+    bool Walk(std::vector<CDBEnv::KeyValPair>& out)
+    {
+        out.clear();
+        Dbc* pcursor = GetCursor();
+        if (!pcursor) return false;
+        bool ok = true;
+        while (true) {
+            CDataStream ss_key(SER_DISK, CLIENT_VERSION);
+            CDataStream ss_value(SER_DISK, CLIENT_VERSION);
+            const int ret = ReadAtCursor(pcursor, ss_key, ss_value, DB_NEXT);
+            if (ret == DB_NOTFOUND) break;
+            if (ret != 0) {
+                ok = false;
+                break;
+            }
+            out.emplace_back(std::vector<unsigned char>{UCharCast(ss_key.data()), UCharCast(ss_key.data()) + ss_key.size()},
+                             std::vector<unsigned char>{UCharCast(ss_value.data()), UCharCast(ss_value.data()) + ss_value.size()});
+        }
+        pcursor->close();
+        return ok;
+    }
+
+    int Del(const CDBEnv::KeyValPair& kv)
+    {
+        Dbt k(const_cast<unsigned char*>(kv.first.data()), kv.first.size());
+        return pdb->del(nullptr, &k, 0);
+    }
+
+    std::vector<CDBEnv::KeyValPair> m_saved;
+    bool m_isolated{false};
+};
+} // namespace
+
+// Passes on the unfixed build too: it pins the guard, not the production change.
+BOOST_AUTO_TEST_CASE(mock_wallet_db_scope_restores_prior_records)
+{
+    const std::string file = "wallet_g30_scope.dat";
+    const int64_t sentinel = 987654321;
+
+    CKey sentinel_key;
+    sentinel_key.MakeNewKey(true);
+    const CKeyPool written(sentinel_key.GetPubKey());
+
+    CKey case_key;
+    case_key.MakeNewKey(true);
+
+    // A record written before any scope, as an earlier case would leave it.
+    BOOST_REQUIRE(CWalletDB(file, "cr+").WritePool(sentinel, written));
+
+    {
+        MockWalletDbScope db_scope(file);
+        BOOST_REQUIRE(db_scope.isolated());
+
+        CKeyPool tmp;
+        BOOST_CHECK(!CWalletDB(file).ReadPool(sentinel, tmp));
+
+        BOOST_REQUIRE(CWalletDB(file).WritePool(sentinel + 1, CKeyPool(case_key.GetPubKey())));
+    }
+
+    CKeyPool back;
+    BOOST_CHECK(CWalletDB(file).ReadPool(sentinel, back));
+    BOOST_CHECK(back.vchPubKey == written.vchPubKey);
+    BOOST_CHECK_EQUAL(back.nTime, written.nTime);
+
+    CKeyPool gone;
+    BOOST_CHECK(!CWalletDB(file).ReadPool(sentinel + 1, gone));
+
+    BOOST_CHECK(CWalletDB(file).ErasePool(sentinel));
+}
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_cascades_to_children_after_reload)
+{
+    MockWalletDbScope db_scope("wallet_g30_reload.dat");
+    BOOST_REQUIRE(db_scope.isolated());
+
+    // A bad record on load would soft-set -rescan for the rest of the process.
+    grc_test::StateGuard guard;
+
+    const std::string file = "wallet_g30_reload.dat";
+    bool first = false;
+
+    CWallet w(file);
+    BOOST_REQUIRE_EQUAL(w.LoadWallet(first), DB_LOAD_OK);
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(w.cs_wallet);
+        BOOST_REQUIRE(w.AddKey(key));
+    }
+    const CScript pay_key = CScript() << key.GetPubKey() << OP_CHECKSIG;
+
+    // U: the co-input, spent by C.
+    CMutableTransaction u_mtx;
+    u_mtx.vin.resize(1);
+    u_mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+    u_mtx.vout.resize(1);
+    u_mtx.vout[0].nValue = 10 * COIN;
+    u_mtx.vout[0].scriptPubKey = pay_key;
+    const CTransaction u_tx(u_mtx);
+    const uint256 u_hash = u_tx.GetHash();
+
+    // P: the parent, three outputs, each spent by a different child.
+    CMutableTransaction p_mtx;
+    p_mtx.vin.resize(1);
+    p_mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+    p_mtx.vout.resize(3);
+    p_mtx.vout[0].nValue = 5 * COIN;
+    p_mtx.vout[1].nValue = 4 * COIN;
+    p_mtx.vout[2].nValue = 1 * COIN;
+    for (auto& out : p_mtx.vout) out.scriptPubKey = pay_key;
+    const CTransaction p_tx(p_mtx);
+    const uint256 p_hash = p_tx.GetHash();
+
+    // C: spends P:0 and the co-input U:0.
+    CMutableTransaction c_mtx;
+    c_mtx.vin.resize(2);
+    c_mtx.vin[0].prevout = COutPoint(p_hash, 0);
+    c_mtx.vin[1].prevout = COutPoint(u_hash, 0);
+    c_mtx.vout.resize(1);
+    c_mtx.vout[0].nValue = 14 * COIN;
+    c_mtx.vout[0].scriptPubKey = pay_key;
+    const CTransaction c_tx(c_mtx);
+    const uint256 c_hash = c_tx.GetHash();
+
+    // D: already abandoned before the restart; spends P:1.
+    CMutableTransaction d_mtx;
+    d_mtx.vin.resize(1);
+    d_mtx.vin[0].prevout = COutPoint(p_hash, 1);
+    d_mtx.vout.resize(1);
+    d_mtx.vout[0].nValue = 3 * COIN;
+    d_mtx.vout[0].scriptPubKey = pay_key;
+    const CTransaction d_tx(d_mtx);
+    const uint256 d_hash = d_tx.GetHash();
+
+    // E: inactive but not abandoned (this tree's single "conflicted" state); spends P:2.
+    CMutableTransaction e_mtx;
+    e_mtx.vin.resize(1);
+    e_mtx.vin[0].prevout = COutPoint(p_hash, 2);
+    e_mtx.vout.resize(1);
+    e_mtx.vout[0].nValue = COIN / 2;
+    e_mtx.vout[0].scriptPubKey = pay_key;
+    const CTransaction e_tx(e_mtx);
+    const uint256 e_hash = e_tx.GetHash();
+
+    // Everything is written straight to the mock wallet DB and NOT put in w.mapWallet, so the
+    // only way mapTxSpends can hold a row afterwards is the load path. The default state is
+    // used because TxStateInMempool has no on-disk form: these load as Unrecognized.
+    {
+        CWalletDB db(file);
+
+        CWalletTx u_wtx(&w, u_tx);
+        u_wtx.vfSpent = {true};
+        BOOST_REQUIRE(db.WriteTx(u_hash, u_wtx));
+
+        CWalletTx p_wtx(&w, p_tx);
+        p_wtx.vfSpent = {true, false, true};
+        BOOST_REQUIRE(db.WriteTx(p_hash, p_wtx));
+
+        CWalletTx c_wtx(&w, c_tx);
+        BOOST_REQUIRE(db.WriteTx(c_hash, c_wtx));
+
+        CWalletTx d_wtx(&w, d_tx);
+        d_wtx.SetTxState(TxStateInactive{true});
+        BOOST_REQUIRE(db.WriteTx(d_hash, d_wtx));
+
+        CWalletTx e_wtx(&w, e_tx);
+        e_wtx.SetTxState(TxStateInactive{false});
+        BOOST_REQUIRE(db.WriteTx(e_hash, e_wtx));
+    }
+
+    CWallet w2(file);
+    BOOST_REQUIRE_EQUAL(w2.LoadWallet(first), DB_LOAD_OK);
+
+    LOCK2(cs_main, w2.cs_wallet);
+
+    // Non-vacuity: everything was loaded, in the shape the checks below assume.
+    for (const uint256& h : {u_hash, p_hash, c_hash, d_hash, e_hash}) {
+        BOOST_REQUIRE_EQUAL(w2.mapWallet.count(h), 1u);
+    }
+    BOOST_REQUIRE(w2.HaveKey(key.GetPubKey().GetID()));
+    BOOST_REQUIRE(w2.mapWallet[u_hash].IsSpent(0));
+    BOOST_REQUIRE(w2.mapWallet[p_hash].IsSpent(0));
+    BOOST_REQUIRE(w2.mapWallet[p_hash].IsSpent(2));
+    BOOST_REQUIRE(!mempool.exists(p_hash));
+    BOOST_REQUIRE(!mempool.exists(c_hash));
+    BOOST_REQUIRE(w2.mapWallet[p_hash].isUnrecognized() && w2.mapWallet[c_hash].isUnrecognized());
+    BOOST_REQUIRE(w2.mapWallet[e_hash].isInactive() && !w2.IsAbandoned(e_hash));
+
+    // 1. C's row on P:0 was recorded at load.
+    BOOST_CHECK_EQUAL(w2.mapTxSpends.count(COutPoint(p_hash, 0)), 1u);
+    // 2. D is abandoned: AbandonTransaction erased its rows, and the load must not restore them.
+    BOOST_CHECK_EQUAL(w2.mapTxSpends.count(COutPoint(p_hash, 1)), 0u);
+    // 2b. E is conflicted but not abandoned, so it does get a row.
+    BOOST_CHECK_EQUAL(w2.mapTxSpends.count(COutPoint(p_hash, 2)), 1u);
+
+    // 3. The cascade.
+    unsigned int released = 0;
+    BOOST_REQUIRE(w2.AbandonTransaction(p_hash, &released));
+
+    // 4. It reached both unpooled descendants.
+    BOOST_CHECK(w2.IsAbandoned(p_hash));
+    BOOST_CHECK(w2.IsAbandoned(c_hash));
+    BOOST_CHECK(w2.IsAbandoned(e_hash));
+
+    // 5. C's co-input is spendable again.
+    BOOST_CHECK(!w2.mapWallet[u_hash].IsSpent(0));
+
+    // 6. P:0 and U:0 released by C's step, P:2 by E's; P's own input is not in the wallet.
+    BOOST_CHECK_EQUAL(released, 3u);
+}
+
+BOOST_AUTO_TEST_CASE(add_to_wallet_records_the_spends)
+{
+    // AddToWallet is where a self-originated transaction (CommitTransaction) enters mapWallet.
+    MockWalletDbScope db_scope("wallet_g30_addtowallet.dat");
+    BOOST_REQUIRE(db_scope.isolated());
+
+    grc_test::StateGuard guard;
+
+    const std::string file = "wallet_g30_addtowallet.dat";
+    bool first = false;
+
+    CWallet w(file);
+    BOOST_REQUIRE_EQUAL(w.LoadWallet(first), DB_LOAD_OK);
+    CWalletDB db(file);
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(2);
+    mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+    mtx.vin[1].prevout = COutPoint(GetRandHash(), 1);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    const CTransaction tx(mtx);
+
+    CWalletTx wtx(&w, tx);
+    wtx.SetTxState(TxStateInMempool{});
+
+    LOCK2(cs_main, w.cs_wallet);
+
+    BOOST_REQUIRE(w.AddToWallet(wtx, &db));
+    BOOST_CHECK_EQUAL(w.mapTxSpends.count(tx.vin[0].prevout), 1u);
+    BOOST_CHECK_EQUAL(w.mapTxSpends.count(tx.vin[1].prevout), 1u);
+
+    // A repeat is a no-op, not a duplicate row.
+    BOOST_REQUIRE(w.AddToWallet(wtx, &db));
+    BOOST_CHECK_EQUAL(w.mapTxSpends.count(tx.vin[0].prevout), 1u);
+    BOOST_CHECK_EQUAL(w.mapTxSpends.count(tx.vin[1].prevout), 1u);
+}
+
+BOOST_AUTO_TEST_CASE(a_coinbase_records_no_spends)
+{
+    // A coinbase's null prevout is not a spend of anything. A row for it would make every held
+    // coinbase appear to conflict with every other (they all share the null prevout).
+    CWallet test_wallet;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_REQUIRE(test_wallet.AddKey(key));
+    }
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout.SetNull();
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 10 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction tx(mtx);
+    BOOST_REQUIRE(tx.IsCoinBase());
+
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(test_wallet.AddToWalletIfInvolvingMe(tx, nullptr, true, false));
+    }
+    LOCK(test_wallet.cs_wallet);
+    BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(COutPoint()), 0u);
+}
+
+BOOST_AUTO_TEST_CASE(a_live_sighting_records_the_spends)
+{
+    // Pins the live site (AddToWalletIfInvolvingMe) so moving the row-recording out of it is
+    // caught. Green on the unfixed tree by design.
+    CWallet test_wallet;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_REQUIRE(test_wallet.AddKey(key));
+    }
+    const CScript pay_key = CScript() << key.GetPubKey() << OP_CHECKSIG;
+
+    // (i) A new entry.
+    {
+        CMutableTransaction mtx;
+        mtx.vin.resize(2);
+        mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+        mtx.vin[1].prevout = COutPoint(GetRandHash(), 0);
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = 1 * COIN;
+        mtx.vout[0].scriptPubKey = pay_key;
+        const CTransaction tx(mtx);
+        BOOST_REQUIRE(!tx.IsCoinBase());
+
+        {
+            LOCK(cs_main);
+            BOOST_REQUIRE(test_wallet.AddToWalletIfInvolvingMe(tx, nullptr, true, false));
+        }
+        {
+            LOCK(test_wallet.cs_wallet);
+            BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[0].prevout), 1u);
+            BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[1].prevout), 1u);
+        }
+        {
+            LOCK(cs_main);
+            BOOST_REQUIRE(test_wallet.AddToWalletIfInvolvingMe(tx, nullptr, true, false));
+        }
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[0].prevout), 1u);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[1].prevout), 1u);
+    }
+
+    // (ii) An entry already in mapWallet without rows: a later sighting adds them.
+    {
+        CMutableTransaction mtx;
+        mtx.vin.resize(2);
+        mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+        mtx.vin[1].prevout = COutPoint(GetRandHash(), 0);
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = 1 * COIN;
+        mtx.vout[0].scriptPubKey = pay_key;
+        const CTransaction tx2(mtx);
+
+        {
+            LOCK(test_wallet.cs_wallet);
+            CWalletTx planted(&test_wallet, tx2);
+            planted.SetTxState(TxStateInMempool{});
+            test_wallet.mapWallet[tx2.GetHash()] = planted;
+            BOOST_REQUIRE_EQUAL(test_wallet.mapTxSpends.count(tx2.vin[0].prevout), 0u);
+            BOOST_REQUIRE_EQUAL(test_wallet.mapTxSpends.count(tx2.vin[1].prevout), 0u);
+        }
+        {
+            LOCK(cs_main);
+            BOOST_REQUIRE(test_wallet.AddToWalletIfInvolvingMe(tx2, nullptr, true, false));
+        }
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx2.vin[0].prevout), 1u);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx2.vin[1].prevout), 1u);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // AbandonTransaction: hashBlock sentinel verification (Fix B)
 // ---------------------------------------------------------------------------
 
