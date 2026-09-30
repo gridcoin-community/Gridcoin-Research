@@ -833,6 +833,8 @@ You need to add tests or debug failing tests.
 ### Running Tests
 
 ```bash
+# Run these from inside the build directory (e.g. build/)
+
 # Build tests
 cmake --build . --target test_gridcoin
 

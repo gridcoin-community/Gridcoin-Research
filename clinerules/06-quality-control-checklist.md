@@ -309,6 +309,7 @@ This checklist ensures contributions meet quality standards before submission. U
 
 - [ ] **All tests pass**
   ```bash
+  # Run these from inside the build directory (e.g. build/)
   cmake --build . --target test_gridcoin
   ./src/test/test_gridcoin
   ```
