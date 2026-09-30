@@ -175,6 +175,12 @@ jobs:
       - name: Add ARMhf Architecture
         run: |
           sudo dpkg --add-architecture armhf
+          # Take phased updates. While an Ubuntu update is phasing, apt keeps the
+          # installed amd64 copy of a package back but can pick the new version
+          # for the armhf copy it installs. Multi-Arch: same packages (mesa, for
+          # one) must match across architectures, so without this the install
+          # fails with "held broken packages" on any runner outside the phase.
+          echo 'APT::Get::Always-Include-Phased-Updates "true";' | sudo tee /etc/apt/apt.conf.d/99-phased-updates
           sudo add-apt-repository -y universe
           sudo add-apt-repository -y multiverse
           sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
