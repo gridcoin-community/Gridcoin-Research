@@ -198,7 +198,7 @@ option(BUNDLED_QT5      "Use the bundled version of Qt 5" ${HUNTER_ENABLED})
 
 set(MINIUPNPC_USE_STATIC_LIBS ${STATIC_LIBS})
 
-set(QT5_MINIMUM_VERSION 5.9.5)
+set(QT5_MINIMUM_VERSION 5.15.0)
 set(QT6_MINIMUM_VERSION 6.2.0)
 set(QT_COMPONENTS Core Concurrent Gui LinguistTools Network Widgets Svg)
 set(QT_HUNTER_COMPONENTS qtbase qttools)
