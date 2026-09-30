@@ -358,6 +358,50 @@ class WalletSplitUnspentTest(GridcoinTestFramework):
         assert_equal(node.consolidateunspent(addr["A"]),
                      {"result": False, "UTXOs consolidated": 0})
 
+        # consolidateunspent max_inputs: a negative used to wrap to UINT_MAX and
+        # be clamped to the maximum, so -1 silently meant "the maximum".
+        assert_raises_rpc_error(-8, "max_inputs cannot be negative.",
+                                node.consolidateunspent, addr["A"], 100000, -1)
+
+        # A wrong-type or non-integer max_inputs is a type error, not the generic
+        # -1 from get_int(). These are Python floats: authproxy sends Decimal as a
+        # JSON string.
+        for v in ("10", "", True, [], 2.5, 10.0, 3000000000):
+            assert_raises_rpc_error(-3, "max_inputs must be a JSON integer",
+                                    node.consolidateunspent, addr["A"], 100000, v)
+
+        # A JSON null is "omitted" for every optional argument. A holds one UTXO,
+        # so each call is the no-op.
+        assert_equal(node.consolidateunspent(addr["A"], 100000, None),
+                     {"result": False, "UTXOs consolidated": 0})
+        assert_equal(node.consolidateunspent(addr["A"], 100000, 599, None),
+                     {"result": False, "UTXOs consolidated": 0})
+        assert_equal(node.consolidateunspent(addr["A"], 100000, 599, False, None),
+                     {"result": False, "UTXOs consolidated": 0})
+
+        # Null utxo_size means no size limit and null max_inputs means the default
+        # maximum. The 0 and 1 limits are valid and stay valid: fewer than two
+        # inputs is the no-op, so these two guards also pass on the unfixed build
+        # and pin behaviour that must not change.
+        r = node.splitunspent(addr["A"], 0, 3)
+        assert_equal(r["pieces_created"], 3)
+        # 3 pieces + 1 change (the change always holds at least the fee slack)
+        held = [u for u in node.listunspent(0) if u["address"] == addr["A"]]
+        assert_equal(len(held), 4)
+        for limit in (0, 1):
+            assert_equal(node.consolidateunspent(addr["A"], 100000, limit),
+                         {"result": False, "UTXOs consolidated": 0})
+        assert_equal(len([u for u in node.listunspent(0) if u["address"] == addr["A"]]), 4)
+        r = node.consolidateunspent(addr["A"], None, None, None, None)
+        assert_equal(r["result"], True)
+        assert_equal(r["utxos_consolidated"], len(held))
+        assert_equal(len([u for u in node.listunspent(0) if u["address"] == addr["A"]]), 1)
+
+        # consolidatemsunspent: a negative max_inputs is rejected before the
+        # block-range check (height 0 here would otherwise say "Invalid block-start").
+        assert_raises_rpc_error(-8, "max_inputs cannot be negative.",
+                                node.consolidatemsunspent, addr["A"], 1, 2, 0, -1)
+
         self.log.info("splitunspent count/size/optimal, fee floor, piece cap, "
                       "-minstakesplitvalue floor, error paths and round trip all pass "
                       "at height %d", node.getblockcount())

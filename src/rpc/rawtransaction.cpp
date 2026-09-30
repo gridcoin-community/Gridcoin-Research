@@ -797,10 +797,11 @@ static const RPCHelpMan consolidateunspent_help{
         {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
             "The Gridcoin address target for consolidation. Must exist in the wallet."},
         {"utxo_size", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
-            "Target consolidation output size."},
+            "Target consolidation output size. Omit or pass null for no size limit."},
         {"max_inputs", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
             "Defaults and is clamped to the value returned by GetMaxInputsForConsolidationTxn() to prevent "
-            "transaction failures."},
+            "transaction failures. Must not be negative (omit or pass null for the default maximum). "
+            "0 or 1 selects fewer than two inputs, so the call does nothing."},
         {"sweep_all_addresses", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
             "If true, source inputs from all wallet addresses (output still goes to <address>). "
             "Otherwise only the source address contributes inputs."},
@@ -830,13 +831,25 @@ UniValue consolidateunspent(const UniValue& params)
     // Note this value is ignored if sweep_all_addresses is set to true.
     bool sweep_change = false;
 
-    if (params.size() > 1) nConsolidateLimit = AmountFromValue(params[1]);
+    if (params.size() > 1 && !params[1].isNull()) nConsolidateLimit = AmountFromValue(params[1]);
 
-    if (params.size() > 2) nInputNumberLimit = params[2].get_int();
+    // A wrong type is RPC_TYPE_ERROR rather than get_int()'s generic RPC_MISC_ERROR, and a negative is rejected
+    // instead of wrapping to UINT_MAX on assignment to nInputNumberLimit and being clamped to the maximum below.
+    if (params.size() > 2 && !params[2].isNull())
+    {
+        int32_t nParsedLimit = 0;
+        if (!params[2].isNum() || !ParseInt32(params[2].getValStr(), &nParsedLimit)) {
+            throw JSONRPCError(RPC_TYPE_ERROR, "max_inputs must be a JSON integer in the 32-bit range.");
+        }
+        if (nParsedLimit < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "max_inputs cannot be negative.");
+        }
+        nInputNumberLimit = static_cast<unsigned int>(nParsedLimit);
+    }
 
-    if (params.size() > 3) sweep_all_addresses = params[3].get_bool();
+    if (params.size() > 3 && !params[3].isNull()) sweep_all_addresses = params[3].get_bool();
 
-    if (params.size() > 4 && !sweep_all_addresses) sweep_change = params[4].get_bool();
+    if (params.size() > 4 && !params[4].isNull() && !sweep_all_addresses) sweep_change = params[4].get_bool();
 
     // Clamp InputNumberLimit to GetMaxInputsForConsolidationTxn(). Above that number of inputs risks an invalid transaction
     // due to the size.
@@ -1587,7 +1600,8 @@ static const RPCHelpMan consolidatemsunspent_help{
         {"max_grc", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
             "Highest UTXO value to include in search results, in halfords (default: 0 = unlimited)."},
         {"max_inputs", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-            "Maximum inputs desired. If the calculated max inputs is less than this argument, it is overridden."},
+            "Maximum inputs desired. If the calculated max inputs is less than this argument, it is overridden. "
+            "Must not be negative; 0 means the calculated maximum."},
     },
     RPCResult{RPCResult::Type::OBJ, "", "",
         {{RPCResult::Type::ELISION, "",
@@ -1621,6 +1635,10 @@ UniValue consolidatemsunspent(const UniValue& params)
 
     if (params.size() > 4)
         nMaxInputs = params[4].get_int();
+
+    // A negative survives the nEqMaxInputs rewrite below and disables the fill loop's input cap.
+    if (nMaxInputs < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "max_inputs cannot be negative.");
 
     // Parameter Sanity Check
     {
