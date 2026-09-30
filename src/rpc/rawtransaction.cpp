@@ -1201,7 +1201,18 @@ UniValue splitunspent(const UniValue& params)
         }
     }
 
-    if (params.size() > 2 && !params[2].isNull()) nPieceCount = params[2].get_int();
+    // piece_count is a JSON integer or null only (see the help). Check it here rather than letting
+    // get_int() throw, so a wrong type is RPC_TYPE_ERROR -- the family piece_size's AmountFromValue
+    // uses -- instead of a generic RPC_MISC_ERROR. ParseInt32 also rejects a number that is not an
+    // integer (2.5, 10.0), which get_int() reported as "out of range".
+    if (params.size() > 2 && !params[2].isNull())
+    {
+        int32_t nParsedCount = 0;
+        if (!params[2].isNum() || !ParseInt32(params[2].getValStr(), &nParsedCount)) {
+            throw JSONRPCError(RPC_TYPE_ERROR, "piece_count must be a JSON integer in the 32-bit range.");
+        }
+        nPieceCount = nParsedCount;
+    }
 
     if (nPieceCount < 0)
     {

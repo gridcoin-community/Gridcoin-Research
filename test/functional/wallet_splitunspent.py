@@ -282,6 +282,14 @@ class WalletSplitUnspentTest(GridcoinTestFramework):
                                 node.splitunspent, addr["E"], 1000, 10)
         assert_raises_rpc_error(-8, "piece_count cannot be negative.",
                                 node.splitunspent, addr["E"], 0, -1)
+        # piece_count is a JSON integer or null only. Every other type, and a number
+        # that is not an integer, is a type error (-3), the family piece_size uses,
+        # not get_int()'s generic -1. "0" is included on purpose: unlike piece_size,
+        # a string zero is NOT the unset sentinel. 2.5 and 10.0 are Python floats, so
+        # they arrive as JSON numbers (a Decimal would be sent as a quoted string).
+        for piece_count in ("10", "0", "", True, [], 2.5, 10.0, 3000000000):
+            assert_raises_rpc_error(-3, "piece_count must be a JSON integer",
+                                    node.splitunspent, addr["E"], 0, piece_count)
         assert_raises_rpc_error(-8, "results in pieces below the minimum piece size of 800.00 GRC",
                                 node.splitunspent, addr["E"], 0, 1)
         assert_raises_rpc_error(-8, "is too small to create one piece of 800.00 after the fee.",
