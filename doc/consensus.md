@@ -819,7 +819,7 @@ Both call `GetPoolRegistry().ActivePoolsAtHeight(poll_start_height)` where `poll
 
 ### 11.5 Replay-Clamp Special-Case
 
-`RegistryBookmarks::GetLowestRegistryBlockHeight` in `src/gridcoin/contract/registry.h` is extended with a POOL block analogous to the existing SIDESTAKE block: a conditional max that raises a `POOL_REGISTER` or `POOL_APPROVE` bookmark below `GetBlockV15Height()` (which honours `-blockv15height`) up to that height. Before activation `GetBlockV15Height()` is `std::numeric_limits<int>::max()`, so POOL bookmarks clamp to `::max()` and can never lower the replay floor. With V15 activated, the clamp keeps contract replay from descending below the V15 height while the POOL bookmark is still 0, and keeps a real bookmark once it has advanced past V15.
+`RegistryBookmarks::GetLowestRegistryBlockHeight` in `src/gridcoin/contract/registry.h` is extended with a POOL block analogous to the existing SIDESTAKE block: a conditional max that raises a `POOL_REGISTER` or `POOL_APPROVE` bookmark below `GetBlockV15Height()` (which honours `-blockv15height`) up to that height. Before activation `GetBlockV15Height()` is `std::numeric_limits<int>::max()`, so POOL bookmarks clamp to `::max()`. That value drops out: the function returns the lowest height across all registry bookmarks, so a `::max()` entry can never lower the replay floor. With V15 activated, the clamp keeps contract replay from descending below the V15 height while the POOL bookmark is still 0, and keeps a real bookmark once it has advanced past V15.
 
 ---
 
