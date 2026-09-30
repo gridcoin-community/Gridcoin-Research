@@ -443,6 +443,15 @@ public:
 
     void MarkDirty();
     bool AddToWallet(const CWalletTx& wtxIn, CWalletDB *pwalletdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    /** Record in mapTxSpends that \p tx spends each of its inputs. A row already present is not
+     *  duplicated, and a coinbase spends nothing and records nothing. Every wallet transaction that
+     *  is not abandoned must have its rows, so every path that adds a transaction with inputs to
+     *  mapWallet calls this.
+     *  AbandonTransaction removes an abandoned transaction's rows and the load does not restore
+     *  them, so a reader that must reach abandoned transactions has to walk mapWallet. */
+    void AddToSpends(const CTransaction& tx, const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
     bool EraseFromWallet(uint256 hash);
 
     /** Central entry point for updating wallet transaction state.

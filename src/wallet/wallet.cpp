@@ -1187,6 +1187,29 @@ void CWallet::MarkDirty()
     }
 }
 
+void CWallet::AddToSpends(const CTransaction& tx, const uint256& hash)
+{
+    AssertLockHeld(cs_wallet);
+
+    // Coinbases don't spend anything: the null prevout is not an output.
+    if (tx.IsCoinBase()) return;
+
+    // Guard against duplicate mapTxSpends entries (multimap allows duplicates)
+    for (const auto& txin : tx.vin) {
+        bool already_tracked = false;
+        auto range = mapTxSpends.equal_range(txin.prevout);
+        for (auto iter = range.first; iter != range.second; ++iter) {
+            if (iter->second == hash) {
+                already_tracked = true;
+                break;
+            }
+        }
+        if (!already_tracked) {
+            mapTxSpends.insert(std::make_pair(txin.prevout, hash));
+        }
+    }
+}
+
 bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     uint256 hash = wtxIn.GetHash();
@@ -1244,6 +1267,9 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIV
             }
             fUpdated |= wtx.UpdateSpent(wtxIn.vfSpent);
         }
+
+        // Self-originated transactions come through here, not AddToWalletIfInvolvingMe.
+        AddToSpends(wtx, hash);
 
         // Only resolve unrecognized state for NEW transactions to avoid
         // expensive CTxDB lookups during rescan. Existing transactions get
@@ -1688,20 +1714,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
         }
     }
 
-    // Guard against duplicate mapTxSpends entries (multimap allows duplicates)
-    for (const auto& txin : tx.vin) {
-        bool already_tracked = false;
-        auto range = mapTxSpends.equal_range(txin.prevout);
-        for (auto iter = range.first; iter != range.second; ++iter) {
-            if (iter->second == hash) {
-                already_tracked = true;
-                break;
-            }
-        }
-        if (!already_tracked) {
-            mapTxSpends.insert(std::make_pair(txin.prevout, hash));
-        }
-    }
+    AddToSpends(tx, hash);
 
     return true;
 }
