@@ -3258,6 +3258,7 @@ BOOST_AUTO_TEST_CASE(reaccept_log_lines_carry_no_extra_newline)
     }));
     for (const std::string& line : lines) {
         if (line.find("ReacceptWalletTransactions") == std::string::npos) continue;
+        BOOST_CHECK_MESSAGE(!line.empty() && line.back() == '\n', line);
         BOOST_CHECK_MESSAGE(!(line.size() >= 2 && line.compare(line.size() - 2, 2, "\n\n") == 0), line);
     }
 }
