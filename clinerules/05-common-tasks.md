@@ -535,7 +535,7 @@ if (block.nVersion < MINIMUM_VERSION) {
 cmake --build . --target gridcoinresearchd
 
 # Run testnet node
-./gridcoinresearchd -testnet -daemon
+./bin/gridcoinresearchd -testnet -daemon
 
 # Monitor for issues
 tail -f ~/.GridcoinResearch/testnet/debug.log
@@ -732,8 +732,8 @@ set(QT_MOC_CPP
 
 #### 4.6 Test the GUI
 ```bash
-cmake --build . --target gridcoinresearch-qt
-./gridcoinresearch-qt -testnet
+cmake --build . --target gridcoinresearch
+./bin/gridcoinresearch -testnet
 ```
 
 ---
@@ -1036,7 +1036,7 @@ cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
 cmake --build .
 
 # Run with profiler
-valgrind --tool=callgrind ./gridcoinresearchd
+valgrind --tool=callgrind ./bin/gridcoinresearchd
 
 # Analyze
 kcachegrind callgrind.out.*
