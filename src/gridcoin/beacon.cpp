@@ -1279,6 +1279,7 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
                       __func__,
                       superblock_hash.GetHex(),
                       cpid.ToString());
+                ++iter;
                 continue;
             }
 
@@ -1307,6 +1308,16 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
     for (const auto& iter : m_expired_pending) {
         // Get the pending beacon entry that is the antecedent of the expired entry.
         auto pending_beacon_entry = m_beacon_db.find(iter->m_previous_hash);
+
+        if (pending_beacon_entry == m_beacon_db.end()) {
+            error("%s: Superblock hash %s: No pending beacon found to resurrect for expired pending beacon hash %s, "
+                  "cpid %s.",
+                  __func__,
+                  superblock_hash.GetHex(),
+                  iter->m_hash.GetHex(),
+                  iter->m_cpid.ToString());
+            continue;
+        }
 
         // Resurrect pending beacon entry
         if (!m_pending.insert(std::make_pair(pending_beacon_entry->second->GetId(), pending_beacon_entry->second)).second) {

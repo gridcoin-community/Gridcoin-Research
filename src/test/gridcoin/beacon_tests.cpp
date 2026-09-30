@@ -1955,6 +1955,93 @@ BOOST_AUTO_TEST_CASE(beacon_registry_readvertisement_without_a_proof_drops_the_o
     registry.Reset();
 }
 
+namespace {
+//!
+//! \brief Apply a v2 beacon advertisement to the registry, as a block at the given height would.
+//!
+//! \return The hash of the advertisement transaction, which is also the key of the pending beacon's record.
+//!
+uint256 AddPendingBeacon(GRC::BeaconRegistry& registry, const GRC::Cpid& cpid, const CPubKey& key,
+                         const int64_t time, const int height)
+{
+    CMutableTransaction mtx;
+    mtx.nTime = time;
+    mtx.nLockTime = static_cast<uint32_t>(height);
+    const CTransaction tx(mtx);
+
+    CBlockIndex index;
+    index.nVersion = 13;
+    index.nHeight = height;
+    index.nTime = time;
+
+    GRC::BeaconPayload payload {2, cpid, GRC::Beacon(key)};
+    const GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload);
+
+    registry.Add({contract, tx, &index});
+
+    return tx.GetHash();
+}
+
+//!
+//! \brief Reload the registry from the beacon db, as a restarted node does.
+//!
+void ReloadRegistry(GRC::BeaconRegistry& registry)
+{
+    registry.ResetInMemoryOnly();
+    registry.Initialize();
+}
+
+constexpr int64_t DAY = 60 * 60 * 24;
+constexpr int64_t START_TIME = 1600000000;
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(beacon_registry_deactivate_skips_missing_pending_records)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key_1;
+    key_1.MakeNewKey(true);
+    CKey key_2;
+    key_2.MakeNewKey(true);
+
+    const GRC::Cpid cpid_1 = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const GRC::Cpid cpid_2 = GRC::Cpid::Parse("15141312111009080706050403020100");
+
+    const uint256 advertisement_1 = AddPendingBeacon(registry, cpid_1, key_1.GetPubKey(), START_TIME, 1);
+    const uint256 advertisement_2 = AddPendingBeacon(registry, cpid_2, key_2.GetPubKey(), START_TIME, 2);
+
+    // The superblock activates the first beacon and expires the second.
+    const uint256 superblock = uint256S("0303030303030303030303030303030303030303030303030303030303030303");
+
+    registry.ActivatePending({key_1.GetPubKey().GetID()},
+                             START_TIME + GRC::PendingBeacon::RETENTION_AGE + DAY, superblock, 3);
+
+    BOOST_REQUIRE(registry.Try(cpid_1) != nullptr);
+    BOOST_REQUIRE(registry.PendingBeacons().empty());
+    BOOST_REQUIRE_EQUAL(registry.ExpiredBeacons().size(), 1U);
+
+    // Neither pending record is in the db any more.
+    registry.GetBeaconDB().erase(advertisement_1);
+    registry.GetBeaconDB().erase(advertisement_2);
+
+    // Deactivate has nothing to restore either beacon to, and returns.
+    registry.Deactivate(superblock);
+
+    BOOST_CHECK(registry.PendingBeacons().empty());
+    BOOST_CHECK(registry.Try(cpid_1) != nullptr);
+
+    // A restart computes the same state.
+    ReloadRegistry(registry);
+
+    BOOST_CHECK(registry.PendingBeacons().empty());
+    BOOST_CHECK(registry.Try(cpid_1) != nullptr);
+
+    registry.Reset();
+}
+
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
