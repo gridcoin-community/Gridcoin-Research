@@ -279,4 +279,38 @@ std::vector<std::string> GetProjectsExternalAdapterRequired();
 /** Returns the set of project master URLs for which ownership proof public keys are available. */
 std::set<std::string> GetProjectsWithOwnershipProofSupport();
 
+/**
+ * @brief Removes duplicate project ownership proof public keys.
+ *
+ * Each project is expected to have its own key, so a key found under more than one project is treated as a
+ * misconfiguration and removed for all of them. Keys are compared by their DER encoding, so the same key in
+ * different PEM text is still a duplicate. A key that does not parse is left alone.
+ *
+ * @param project_public_keys Project RSA public keys (PEM) by normalized master URL.
+ * @return The master URLs whose keys were removed.
+ */
+std::vector<std::string> RemoveDuplicateProjectPublicKeys(std::map<std::string, std::string>& project_public_keys);
+
+/**
+ * @brief Finds the pending beacon that a project stats user record verifies through a v3 ownership proof.
+ *
+ * A candidate verifies when its proof names the project whose stats are being processed, its account ID is the
+ * user record's account ID, and that project's RSA public key verifies the signature over
+ * "{account_id} {beacon_public_key_hex}".
+ *
+ * @param candidates Pending beacon map entries with ownership proofs for the user record's CPID.
+ * @param project_master_url Normalized master URL of the project whose stats are being processed.
+ * @param user_account_id Account ID from the user record.
+ * @param project_public_keys Project RSA public keys (PEM) by normalized master URL.
+ * @param signature_failures Incremented for each candidate for this project and account whose signature did not
+ *                           verify.
+ * @return The candidate that verified, or nullptr if none did.
+ */
+const ScraperPendingBeaconMap::value_type* FindOwnershipProofVerifiedBeacon(
+    const std::vector<const ScraperPendingBeaconMap::value_type*>& candidates,
+    const std::string& project_master_url,
+    uint32_t user_account_id,
+    const std::map<std::string, std::string>& project_public_keys,
+    unsigned int& signature_failures);
+
 #endif // GRIDCOIN_SCRAPER_SCRAPER_H

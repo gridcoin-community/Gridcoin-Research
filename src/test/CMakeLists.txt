@@ -54,6 +54,7 @@ add_executable(test_gridcoin
     gridcoin/rsaverify_tests.cpp
     gridcoin/scraper_net_tests.cpp
     gridcoin/scraper_registry_tests.cpp
+    gridcoin/scraper_tests.cpp
     gridcoin/seen_stakes_tests.cpp
     gridcoin/sidestake_tests.cpp
     gridcoin/superblock_tests.cpp

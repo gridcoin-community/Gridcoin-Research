@@ -470,6 +470,63 @@ bool BeaconRegistry::TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, con
     return true;
 }
 
+std::optional<OwnershipProof> GRC::GetOwnershipProofFromTx(const CTransaction& tx, const CKeyID& beacon_id)
+{
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type != ContractType::BEACON
+                || contract.m_action != ContractAction::ADD
+                || contract.m_version < 2) {
+            continue;
+        }
+
+        const auto payload = contract.SharePayloadAs<BeaconPayload>();
+
+        if (payload->m_version >= 3
+                && !payload->m_ownership_proof.Empty()
+                && payload->m_beacon.GetId() == beacon_id) {
+            return payload->m_ownership_proof;
+        }
+    }
+
+    return std::nullopt;
+}
+
+bool BeaconRegistry::RestoreOwnershipProof(const Beacon_ptr& pending_beacon)
+{
+    const CKeyID beacon_id = pending_beacon->GetId();
+
+    // The proof, if any, comes from this pending beacon's own advertisement.
+    m_pending_ownership_proofs.erase(beacon_id);
+
+    CTransaction tx;
+
+    if (!CTxDB("r").ReadDiskTx(pending_beacon->m_hash, tx)) {
+        LogPrintf("WARNING: %s: Unable to read the advertisement transaction %s of the pending beacon for cpid %s, "
+                  "address %s.",
+                  __func__,
+                  pending_beacon->m_hash.GetHex(),
+                  pending_beacon->m_cpid.ToString(),
+                  EncodeDestination(pending_beacon->GetAddress()));
+
+        return false;
+    }
+
+    std::optional<OwnershipProof> proof = GetOwnershipProofFromTx(tx, beacon_id);
+
+    if (!proof) {
+        return false;
+    }
+
+    m_pending_ownership_proofs[beacon_id] = std::move(*proof);
+
+    LogPrint(LogFlags::BEACON, "INFO: %s: Restored ownership proof of pending beacon for cpid %s, address %s.",
+             __func__,
+             pending_beacon->m_cpid.ToString(),
+             EncodeDestination(pending_beacon->GetAddress()));
+
+    return true;
+}
+
 void BeaconRegistry::Add(const ContractContext& ctx)
 {
     // Poor man's mock. This is to prevent the tests from polluting the LevelDB database
@@ -566,8 +623,12 @@ void BeaconRegistry::Add(const ContractContext& ctx)
     // For v3 payloads, store the ownership proof in the side map keyed by
     // the pending beacon's key ID. The proof data is still valid in the
     // payload even though m_beacon was moved (m_ownership_proof wasn't).
+    // An advertisement without a proof replaces any proof an earlier one
+    // left under the same key.
     if (payload.m_version >= 3 && !payload.m_ownership_proof.Empty()) {
         m_pending_ownership_proofs[pending.GetId()] = std::move(payload.m_ownership_proof);
+    } else {
+        m_pending_ownership_proofs.erase(pending.GetId());
     }
 }
 
@@ -802,6 +863,7 @@ void BeaconRegistry::Revert(const ContractContext& ctx)
                 else if (beacon_to_restore_ptr->m_status == BeaconStatusForStorage::PENDING)
                 {
                     m_pending[beacon_to_restore_ptr->GetId()] = beacon_to_restore_ptr;
+                    RestoreOwnershipProof(beacon_to_restore_ptr);
                 }
                 else
                 {
@@ -1223,6 +1285,7 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
             // Resurrect the pending record prior to the activation. This points to the pending record still in the db.
             m_pending[static_cast<PendingBeacon>(*pending_beacon_entry->second).GetId()] =
                     pending_beacon_entry->second;
+            RestoreOwnershipProof(pending_beacon_entry->second);
 
             // Erase the entry from the active beacons map. This also increments the iterator.
             iter = m_beacons.erase(iter);
@@ -1255,6 +1318,8 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
                       superblock_hash.GetHex(),
                       EncodeDestination(pending_beacon_entry->second->GetAddress())
                       );
+        } else {
+            RestoreOwnershipProof(pending_beacon_entry->second);
         }
     }
 
@@ -1430,6 +1495,17 @@ int BeaconRegistry::Initialize()
 
     LogPrint(LogFlags::BEACON, "INFO: %s: m_beacon_db size after load: %u", __func__, m_beacon_db.size());
     LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons size after load: %u", __func__, m_beacons.size());
+
+    // The contract replay that follows skips the beacon contracts the db already covers, so it does not bring back
+    // the ownership proofs of the pending beacons loaded here.
+    unsigned int proofs_restored = 0;
+
+    for (const auto& pending : m_pending) {
+        if (RestoreOwnershipProof(pending.second)) ++proofs_restored;
+    }
+
+    LogPrint(LogFlags::BEACON, "INFO: %s: Restored ownership proofs for %u of %u pending beacons.",
+             __func__, proofs_restored, m_pending.size());
 
     return height;
 }

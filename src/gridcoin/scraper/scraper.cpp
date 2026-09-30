@@ -598,7 +598,8 @@ void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist);
 //! room for the rest of the record.
 constexpr size_t MAX_RAC_FIELD_BYTES = 64;
 
-bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
+bool ProcessProjectRacFileByCPID(const std::string& project, const std::string& project_master_url,
+                                 const fs::path& file, const std::string& etag,
                                  BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
                                  ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit)
                                  EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
@@ -2507,6 +2508,32 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_TeamIDMap)
     return true;
 }
 
+std::vector<std::string> RemoveDuplicateProjectPublicKeys(std::map<std::string, std::string>& project_public_keys)
+{
+    std::map<std::vector<uint8_t>, std::vector<std::string>> urls_by_key;
+
+    for (const auto& [master_url, pem_key] : project_public_keys) {
+        std::vector<uint8_t> der = GRC::GetPublicKeyDER(pem_key);
+
+        if (der.empty()) continue;
+
+        urls_by_key[std::move(der)].push_back(master_url);
+    }
+
+    std::vector<std::string> removed;
+
+    for (const auto& [der, master_urls] : urls_by_key) {
+        if (master_urls.size() < 2) continue;
+
+        for (const auto& master_url : master_urls) {
+            project_public_keys.erase(master_url);
+            removed.push_back(master_url);
+        }
+    }
+
+    return removed;
+}
+
 void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist)
 {
     _log(logattribute::INFO, __func__, "Downloading project public keys for ownership proof verification.");
@@ -2561,6 +2588,13 @@ void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist)
              + " (master_url: " + master_url + ")");
 
         project_public_keys.insert(std::make_pair(std::move(master_url), std::move(pem_key)));
+    }
+
+    for (const auto& master_url : RemoveDuplicateProjectPublicKeys(project_public_keys))
+    {
+        _log(logattribute::WARNING, __func__,
+             "Discarding the ownership proof public key of project " + master_url
+             + ": it duplicates the key of another whitelisted project.");
     }
 
     // Update the global under lock.
@@ -2744,7 +2778,7 @@ bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist) EX
         double all_cpid_total_credit = 0.0;
 
         // Now that the source file is handled, process the file.
-        ProcessProjectRacFileByCPID(prjs.m_name, rac_file, sRacETag, Consensus,
+        ProcessProjectRacFileByCPID(prjs.m_name, NormalizeProjectUrl(prjs.BaseUrl()), rac_file, sRacETag, Consensus,
                                     GlobalVerifiedBeaconsCopy, IncomingVerifiedBeacons, all_cpid_total_credit);
 
         // If in explorer mode, save user (rac) source xml files to file manifest map with exclude from CSManifest flag set
@@ -2794,8 +2828,40 @@ bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist) EX
     return true;
 }
 
+const ScraperPendingBeaconMap::value_type* FindOwnershipProofVerifiedBeacon(
+    const std::vector<const ScraperPendingBeaconMap::value_type*>& candidates,
+    const std::string& project_master_url,
+    uint32_t user_account_id,
+    const std::map<std::string, std::string>& project_public_keys,
+    unsigned int& signature_failures)
+{
+    // Look up the key of the project whose stats are being processed.
+    const auto key_iter = project_public_keys.find(project_master_url);
+
+    if (key_iter == project_public_keys.end()) return nullptr;
+
+    for (const auto* candidate : candidates)
+    {
+        const ScraperPendingBeaconEntry& entry = candidate->second;
+
+        if (entry.ownership_master_url != project_master_url || entry.ownership_account_id != user_account_id) continue;
+
+        // Reconstruct the signed message: "{account_id} {beacon_public_key_hex}"
+        const std::string signed_message = ToString(entry.ownership_account_id) + " " + entry.beacon_public_key_hex;
+
+        const std::vector<uint8_t> message_bytes(signed_message.begin(), signed_message.end());
+
+        if (GRC::VerifyRSASHA512(message_bytes, entry.ownership_rsa_signature, key_iter->second)) return candidate;
+
+        ++signature_failures;
+    }
+
+    return nullptr;
+}
+
 // This version uses a consensus beacon map (and teamid, if team filtering is specified by policy) to filter statistics.
-bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
+bool ProcessProjectRacFileByCPID(const std::string& project, const std::string& project_master_url,
+                                 const fs::path& file, const std::string& etag,
                                  BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
                                  ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit)
                                  EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
@@ -2847,13 +2913,14 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     // Build a lookup map of v3 pending beacon entries (those with ownership proofs) by CPID
     // for efficient v3 verification path lookup during user record processing. Multiple
     // pending beacons may exist for the same CPID (e.g. from different wallets or projects),
-    // so each CPID maps to a vector of candidates that are all checked during verification.
-    std::unordered_map<std::string, std::vector<const ScraperPendingBeaconEntry*>> v3_pending_by_cpid;
+    // so each CPID maps to a vector of candidates. FindOwnershipProofVerifiedBeacon() checks
+    // each against the project being processed.
+    std::unordered_map<std::string, std::vector<const ScraperPendingBeaconMap::value_type*>> v3_pending_by_cpid;
     for (const auto& entry : Consensus.mPendingMap)
     {
         if (entry.second.has_ownership_proof)
         {
-            v3_pending_by_cpid[entry.second.cpid].push_back(&entry.second);
+            v3_pending_by_cpid[entry.second.cpid].push_back(&entry);
         }
     }
 
@@ -2895,7 +2962,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
                 bool v3_verified = false;
 
                 // v3 path: ownership proof verification via RSA-SHA512 signature from the BOINC project.
-                // Multiple v3 pending beacons may exist for the same CPID, so iterate all candidates.
+                // Multiple v3 pending beacons may exist for the same CPID, so all candidates are offered.
                 auto v3_iter = v3_pending_by_cpid.find(cpid);
                 if (v3_iter != v3_pending_by_cpid.end())
                 {
@@ -2905,56 +2972,32 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
                     if (!s_user_id.empty() && ParseUInt32(s_user_id, &user_account_id))
                     {
-                        for (const auto* v3_entry : v3_iter->second)
+                        unsigned int signature_failures = 0;
+
+                        const ScraperPendingBeaconMap::value_type* verified_entry =
+                            FindOwnershipProofVerifiedBeacon(v3_iter->second, project_master_url, user_account_id,
+                                                             Consensus.mProjectPublicKeys, signature_failures);
+
+                        if (signature_failures)
                         {
-                            if (user_account_id != v3_entry->ownership_account_id) continue;
+                            _log(logattribute::WARNING, __func__,
+                                 "RSA signature verification failed for " + ToString(signature_failures)
+                                 + " ownership proof(s) for cpid " + cpid
+                                 + ", account_id " + ToString(user_account_id)
+                                 + ", project " + project_master_url);
+                        }
 
-                            // Account ID matches — look up the project RSA public key.
-                            auto key_iter = Consensus.mProjectPublicKeys.find(v3_entry->ownership_master_url);
+                        if (verified_entry)
+                        {
+                            IncomingVerifiedBeacons.mVerifiedMap[verified_entry->first] = verified_entry->second;
 
-                            if (key_iter == Consensus.mProjectPublicKeys.end()) continue;
+                            _log(logattribute::INFO, __func__,
+                                 "Verified pending beacon via ownership proof for cpid " + cpid
+                                 + ", account_id " + ToString(user_account_id)
+                                 + ", project " + project_master_url);
 
-                            // Reconstruct the signed message: "{account_id} {beacon_public_key_hex}"
-                            const std::string signed_message = ToString(v3_entry->ownership_account_id)
-                                                               + " " + v3_entry->beacon_public_key_hex;
-
-                            std::vector<uint8_t> message_bytes(signed_message.begin(), signed_message.end());
-
-                            if (GRC::VerifyRSASHA512(message_bytes, v3_entry->ownership_rsa_signature, key_iter->second))
-                            {
-                                // RSA verification succeeded. Find the pending map entry by verification code
-                                // (the key in mPendingMap) to add to verified beacons.
-                                for (const auto& pending_entry : Consensus.mPendingMap)
-                                {
-                                    if (pending_entry.second.cpid == cpid
-                                            && pending_entry.second.has_ownership_proof
-                                            && pending_entry.second.ownership_account_id == v3_entry->ownership_account_id)
-                                    {
-                                        IncomingVerifiedBeacons.mVerifiedMap[pending_entry.first] = pending_entry.second;
-
-                                        _log(logattribute::INFO, __func__,
-                                             "Verified pending beacon via ownership proof for cpid " + cpid
-                                             + ", account_id " + ToString(v3_entry->ownership_account_id)
-                                             + ", project " + v3_entry->ownership_master_url);
-
-                                        IncomingVerifiedBeacons.timestamp = GetAdjustedTime();
-                                        v3_verified = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                _log(logattribute::WARNING, __func__,
-                                     "RSA signature verification failed for cpid " + cpid
-                                     + ", account_id " + ToString(v3_entry->ownership_account_id)
-                                     + ", project " + v3_entry->ownership_master_url);
-                            }
-
-                            // If this candidate verified, no need to check remaining candidates
-                            // for this user record. Other candidates for this CPID may still verify
-                            // against different user records (different account IDs on this project).
-                            if (v3_verified) break;
+                            IncomingVerifiedBeacons.timestamp = GetAdjustedTime();
+                            v3_verified = true;
                         }
                     }
                 }

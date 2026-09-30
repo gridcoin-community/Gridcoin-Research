@@ -219,6 +219,7 @@ BASE_SCRIPTS = [
     'feature_research_reward.py',
     'feature_mrc.py',
     'feature_contract_replay.py',
+    'feature_beacon_pending_proofs.py',
     # feature_blockindex_verification.py: LoadBlockIndex's startup
     # verification pass over a block whose payload was corrupted without
     # disturbing its header, the one corruption class that arms its
