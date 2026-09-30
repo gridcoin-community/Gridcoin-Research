@@ -687,6 +687,8 @@ public:
         auto resolved = resolver.resolve(m_host, "http", m_resolve_flags, resolve_error);
 
         if (resolve_error) {
+            // The check reports only that the site cannot be reached; the log keeps the cause.
+            LogPrintf("WARNING: VerifyTCPPort: cannot resolve %s: %s", m_host, resolve_error.message());
             handle_connect(boost::asio::error::host_unreachable);
             return;
         }

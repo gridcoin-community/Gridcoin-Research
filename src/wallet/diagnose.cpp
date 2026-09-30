@@ -126,6 +126,10 @@ void VerifyClock::connectToNTPHost()
                         boost::bind(&VerifyClock::sockRecvHandle, this,
                                     boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
         }
+    } catch (const std::exception& e) {
+        // Reported as a timeout, like any failure here; the log keeps the cause.
+        LogPrintf("WARNING: VerifyClock: NTP query failed: %s", e.what());
+        clkReportResults(0, true);
     } catch (...) {
         clkReportResults(0, true);
     }
