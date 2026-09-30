@@ -1214,6 +1214,12 @@ jobs:
       - name: Add ARM64 Architecture
         run: |
           sudo dpkg --add-architecture arm64
+          # Take phased updates. While an Ubuntu update is phasing, apt keeps the
+          # installed amd64 copy of a package back but can pick the new version
+          # for the arm64 copy it installs. Multi-Arch: same packages (mesa, for
+          # one) must match across architectures, so without this the install
+          # fails with "held broken packages" on any runner outside the phase.
+          echo 'APT::Get::Always-Include-Phased-Updates "true";' | sudo tee /etc/apt/apt.conf.d/99-phased-updates
           # Remove all existing sources and write clean amd64-only + arm64 config.
           # The runner image adds sources (microsoft-prod, azure-cli, ubuntu) with
           # varying formats that break when arm64 is added as an architecture.
