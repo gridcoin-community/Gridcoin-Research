@@ -792,8 +792,13 @@ public:
     //! \p pwalletdb may be null for a wallet that is not file-backed. Takes the
     //! caller's database session rather than opening its own, so a cascade writes
     //! through one handle.
+    //!
+    //! An output another wallet transaction still spends -- one the wallet still
+    //! tags in-mempool (pooled or evicted), unrecognized, or confirmed on the
+    //! active chain -- keeps its bit: vfSpent does not record which transaction
+    //! set it, so it is not this one's alone to clear.
     unsigned int ReleaseTransactionInputs(const CTransaction& tx, CWalletDB* pwalletdb)
-        EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet);
 
     //!
     //! \brief Get the time that the wallet last created a backup.
@@ -1498,7 +1503,13 @@ public:
     bool RelayWalletTransaction(CTxDB& txdb);
     bool RelayWalletTransaction();
 
-    bool RevalidateTransaction(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    //! What ResendWalletTransactions may do with a transaction it is about to
+    //! re-announce. INPUTS_UNAVAILABLE is not a verdict on the transaction: an
+    //! input is in neither the transaction index nor the mempool, which is what a
+    //! child reads after its parent was evicted with it.
+    enum class RevalidateResult { VALID, INPUTS_UNAVAILABLE, INVALID };
+
+    RevalidateResult RevalidateTransaction(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     GRC::MinedType GetGeneratedType(uint32_t vout_offset) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
