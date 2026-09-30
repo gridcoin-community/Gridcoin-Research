@@ -28,9 +28,10 @@ HunterGate(
 # substitutes it into LSMinimumSystemVersion, so without a default here every
 # build that does not pass -DCMAKE_OSX_DEPLOYMENT_TARGET -- build_targets.sh
 # TARGET=macos, and any plain cmake invocation -- would stamp the bundle with an
-# empty minimum. CI passes the same value explicitly (MACOS_DEPLOYMENT_TARGET in
-# .github/workflows/cmake_production.yml); this makes local bundles agree with
-# the released ones instead of depending on the caller.
+# empty minimum. The Intel CI job passes the same value explicitly
+# (MACOS_DEPLOYMENT_TARGET in .github/workflows/cmake_production.yml); this makes
+# local bundles agree with the released ones instead of depending on the caller.
+# The Apple Silicon job declares a higher floor; see below.
 #
 # FORCE is required, not tidiness. On macOS, CMake's own
 # Platform/Darwin-Initialize.cmake unconditionally caches this variable --
@@ -48,10 +49,13 @@ HunterGate(
 # darwin_CFLAGS/CXXFLAGS/LDFLAGS, so applying this default there would put two
 # contradictory version-min specs on the same compile and link lines.
 #
-# 14.0 is what the dependency stack supports for the native Homebrew builds this
-# governs: every library CI links is built on macOS 14 and carries minos 14.0
-# (see contrib/devtools/macos-pinned-kegs.txt for how that is held true), and
-# Qt 6 does not support anything below macOS 13.
+# 14.0 is what the Intel dependency stack supports: every library the Intel CI
+# job links is built on macOS 14 and carries minos 14.0 (see
+# contrib/devtools/macos-pinned-kegs.txt for how that is held true), and Qt 6
+# does not support anything below macOS 13. The Apple Silicon CI job declares
+# 15.0 instead, because Homebrew has stopped building Apple Silicon bottles for
+# macOS 14; a local Apple Silicon bundle meant to match the release needs
+# -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0.
 if(NOT CMAKE_TOOLCHAIN_FILE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "Minimum macOS version (ignored off Apple platforms)" FORCE)
 endif()

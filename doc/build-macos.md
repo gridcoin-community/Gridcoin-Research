@@ -32,9 +32,10 @@ Options:
   --help, -h          Show this help message.
 ```
 
-**macOS 14 (Sonoma) or newer is required**, for both Apple Silicon and Intel.
+**The released app requires macOS 15 (Sequoia) or newer on Apple Silicon, and
+macOS 14 (Sonoma) or newer on Intel.**
 
-That is the floor the dependency stack imposes rather than a preference.
+Those are the floors the dependency stacks impose rather than a preference.
 Homebrew sets no deployment target when it builds a bottle, so a bottle's
 minimum is simply whatever macOS it was compiled on, and the bundle's real floor
 is the highest minimum among every library it ships -- not whatever
@@ -44,20 +45,24 @@ newest), and a formula with no bottle for your architecture at all, which is
 built from source against the machine you are on. Qt 6 does not support anything
 below macOS 13 in any case.
 
-CI therefore links only macOS 14-built libraries. The ARM job runs on a macOS 14
-runner, so its bottles carry a 14.0 minimum. The Intel job runs on macOS 15, so
-every formula that Homebrew would raise above 14.0 by either route is pinned to a
-keg built on a native Intel macOS 14 machine and mirrored to S3 -- see
-`contrib/devtools/macos-pinned-kegs.txt`, which records why each one is there.
-Both jobs then verify the finished DMG: the packaging step measures the
+The ARM job runs on a macOS 15 runner, so its bottles carry a 15.0 minimum and
+the Apple Silicon app declares 15.0. It used to run on macOS 14, but Homebrew has
+moved Apple Silicon on macOS 14 to Tier 3 and no longer builds bottles for it
+when a formula is revised. The Intel job keeps the 14.0 floor: it runs on
+macOS 15, so every formula that Homebrew would raise above 14.0 by either route
+is pinned to a keg built on a native Intel macOS 14 machine and mirrored to S3 --
+see `contrib/devtools/macos-pinned-kegs.txt`, which records why each one is
+there. Both jobs then verify the finished DMG: the packaging step measures the
 `LC_BUILD_VERSION` minimum of every Mach-O in the bundle and fails if any of them
 needs a newer macOS than the version the bundle declares.
 
 The released binaries declare the floor explicitly: CI passes
 `-DCMAKE_OSX_DEPLOYMENT_TARGET` (see `MACOS_DEPLOYMENT_TARGET` in
-`.github/workflows/cmake_production.yml`), `CMakeLists.txt` carries the same
-value as the project default for builds that do not, and the app bundle
-substitutes it into `LSMinimumSystemVersion`.
+`.github/workflows/cmake_production.yml`), and the app bundle substitutes it into
+`LSMinimumSystemVersion`. `CMakeLists.txt` carries the Intel value, 14.0, as the
+project default for builds that do not pass one; pass
+`-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0` for an Apple Silicon bundle that matches the
+release.
 
 If you use the build helper script above:
 
@@ -74,7 +79,9 @@ If you use the build helper script above:
 
 ### Prerequisites
 
-1. macOS 14 (Sonoma) or newer is required.
+1. macOS 14 (Sonoma) or newer is required to build. On Apple Silicon, macOS 14 is
+   a Homebrew Tier 3 configuration, so expect some formulae to build from source
+   there.
 2. Xcode Command Line Tools: Install these by running the following in your terminal:
 
 ```
