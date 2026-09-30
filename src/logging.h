@@ -219,7 +219,7 @@ static inline void LogPrintf(const char* fmt, const Args&... args)
         try {
             log_msg = tfm::format(fmt, args...);
         } catch (tinyformat::format_error& fmterr) {
-            /* Original format string will have newline so don't add one here */
+            /* Log the raw format string; the newline appended below covers this path too. */
             log_msg = "Error \"" + std::string(fmterr.what()) + "\" while formatting log message: " + fmt;
         }
         // The \n here is for legacy formatting of Gridcoin LogPrintf's, which usually don't have \n's on them.
