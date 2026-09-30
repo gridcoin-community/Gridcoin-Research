@@ -86,14 +86,29 @@ public:
     const CTransaction* ptx;
     set<uint256> setDependsOn;
     double dFeePerKb;
+    CAmount nFee;
 
     COrphan(const CTransaction* ptxIn)
     {
         ptx = ptxIn;
         dFeePerKb = 0;
+        nFee = 0;
     }
 
 };
+
+//! Whether `fee` over `tx_size` bytes pays less than `fee_rate` per 1000 bytes,
+//! i.e. fee * 1000 < fee_rate * tx_size, evaluated exactly: fee < ceil(fee_rate *
+//! tx_size / 1000), with the rate split into whole satoshi per byte and a remainder
+//! so neither product can overflow.
+bool PaysBelowFeeRate(CAmount fee, unsigned int tx_size, CAmount fee_rate)
+{
+    const CAmount per_byte = fee_rate / 1000;
+    const CAmount remainder = fee_rate % 1000;
+    if (per_byte > MAX_MONEY / (CAmount)tx_size) return true; // no valid fee reaches it
+    const CAmount required = per_byte * tx_size + (remainder * tx_size + 999) / 1000;
+    return fee < required;
+}
 
 //!
 //! \brief Sign the research reward claim context for a newly-minted block.
@@ -402,7 +417,7 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
         map<uint256, vector<COrphan*> > mapDependers;
 
         // This vector will be sorted into a priority queue:
-        std::vector<std::pair<double, const CTransaction*>> vecPriority;
+        std::vector<std::tuple<double, const CTransaction*, CAmount>> vecPriority;
         vecPriority.reserve(mempool.mapTx.size());
 
         Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
@@ -560,10 +575,11 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
             if (porphan)
             {
                 porphan->dFeePerKb = dFeePerKb;
+                porphan->nFee = total_fee;
             }
             else
             {
-                vecPriority.push_back(std::make_pair(dFeePerKb, &tx));
+                vecPriority.emplace_back(dFeePerKb, &tx, total_fee);
             }
         }
 
@@ -590,8 +606,9 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
         while (!vecPriority.empty())
         {
             // Take highest priority transaction off the priority queue:
-            double dFeePerKb = vecPriority.front().first;
-            const CTransaction& tx = *(vecPriority.front().second);
+            double dFeePerKb = std::get<0>(vecPriority.front());
+            const CTransaction& tx = *std::get<1>(vecPriority.front());
+            const CAmount nCandidateFee = std::get<2>(vecPriority.front());
 
             std::pop_heap(vecPriority.begin(), vecPriority.end());
             vecPriority.pop_back();
@@ -620,16 +637,20 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
             // MAX_STANDARD_TX_SIZE-1, IsStandardTx being unconditional on that
             // path -- the resulting rate stays above the floor. The margin is
             // thinnest at the top: 100001 sat/KB at 99999 bytes, i.e. 1 sat/KB.
-            // dFeePerKb is a double, but its error here is ~1e-11 sat/KB, ten
-            // orders of magnitude inside that margin, so the comparison is not
-            // at risk. The floor bites only when an operator raises the option.
+            // The floor bites only when an operator raises the option.
+            //
+            // The check uses the exact integer fee, not dFeePerKb. At a raised
+            // floor a rate exactly at the floor can evaluate below it as a
+            // double: 137751 sat over 340 bytes is exactly 405150 sat/KB, yet
+            // the double comes out just under 405150. The option is a floor, so
+            // paying exactly the floor must pass.
             //
             // Note this is stricter than the pre-1421209a0 check, which also
             // required (nBlockSize + nTxSize >= nBlockMinSize) and so left a
             // free area at the front of the block. nBlockMinSize went with the
             // free-transaction path; the floor is unconditional now, which is
             // what -mintxfee's documented meaning describes.
-            if (dFeePerKb < nMinTxFee)
+            if (PaysBelowFeeRate(nCandidateFee, nTxSize, nMinTxFee))
             {
                 ++nMinTxFeeRejected;
 
@@ -787,7 +808,7 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
 
             if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || gArgs.GetBoolArg("-printpriority"))
             {
-                LogPrintf("feerate %.1f GRC/KB txid %s",
+                LogPrintf("feerate %.1f sat/KB txid %s",
                        dFeePerKb, tx.GetHash().ToString());
             }
 
@@ -802,7 +823,7 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                         porphan->setDependsOn.erase(hash);
                         if (porphan->setDependsOn.empty())
                         {
-                            vecPriority.push_back(std::make_pair(porphan->dFeePerKb, porphan->ptx));
+                            vecPriority.emplace_back(porphan->dFeePerKb, porphan->ptx, porphan->nFee);
                             std::push_heap(vecPriority.begin(), vecPriority.end());
                         }
                     }

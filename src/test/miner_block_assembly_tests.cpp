@@ -61,7 +61,10 @@
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
+#include <functional>
 #include <map>
+#include <numeric>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -181,6 +184,80 @@ bool Contains(const std::vector<CTransaction>& txs, const CTransaction& tx)
     }
 
     return false;
+}
+
+// StateGuard does not capture the -mintxfee global, so put it back however
+// the case exits.
+struct MinTxFeeRestorer {
+    CAmount m_saved{nMinerMinTxFee};
+    ~MinTxFeeRestorer() { nMinerMinTxFee = m_saved; }
+};
+
+// GetBaseFee's x10 for nVersion >= 2, plus 2%
+constexpr CAmount FLAT_FLOOR_WITH_MARGIN = MIN_TX_FEE * 10 * 102 / 100;
+
+//! A size and a raised -mintxfee at which a fee of exactly floor * size / 1000
+//! evaluates below the floor in the miner's double rate.
+struct ExactFloorMisround {
+    int n_outputs;
+    unsigned int size;
+    CAmount floor;
+    CAmount fee;
+};
+
+//! Search for an ExactFloorMisround. `build(fee, n_outputs)` makes the
+//! transaction to measure; it is called once with a placeholder fee to size a
+//! shape and once more to rebuild it at the found fee.
+//!
+//! A floor F gives a whole-satoshi fee at size s only when F is a multiple of
+//! `step`. A shape is skipped when that step is a multiple of 500, and so is a
+//! floor that is. The misround test is the miner's own rate expression on the
+//! exact-floor fee. A rebuild whose size differs from the probe's moves on to
+//! the next shape. The search starts at FLAT_FLOOR_WITH_MARGIN, the miner's
+//! flat absolute floor plus 2%, so every fee it can return also clears that
+//! floor even if a signature is a byte or two shorter.
+std::optional<ExactFloorMisround> FindExactFloorMisround(
+    const std::function<CTransaction(CAmount, int)>& build)
+{
+    // The miner's own rate expression, on a fee and size rather than a built
+    // transaction.
+    const auto rate_as_double = [](CAmount fee, unsigned int size) {
+        return (double)fee / (double(size) / 1000.0);
+    };
+
+    for (int n = 1; n <= 40; ++n) {
+        const CTransaction probe = build(COIN, n);
+        const unsigned int s = TxSize(probe);
+        const CAmount step = 1000 / std::gcd((CAmount)s, CAmount{1000});
+
+        if (step % 500 == 0) continue;
+
+        CAmount start = (FLAT_FLOOR_WITH_MARGIN * 1000 + s - 1) / s;
+        start = (start + step - 1) / step * step;
+
+        CAmount floor = 0;
+
+        for (int k = 0; k < 20000; ++k) {
+            const CAmount candidate = start + k * step;
+
+            if (candidate % 500 == 0) continue;
+
+            if (rate_as_double(candidate * s / 1000, s) < (double)candidate) {
+                floor = candidate;
+                break;
+            }
+        }
+
+        if (floor == 0) continue;
+
+        const CTransaction rebuilt = build(floor * s / 1000, n);
+
+        if (TxSize(rebuilt) != s) continue;
+
+        return ExactFloorMisround{n, s, floor, floor * s / 1000};
+    }
+
+    return std::nullopt;
 }
 
 } // anonymous namespace
@@ -1887,6 +1964,194 @@ BOOST_AUTO_TEST_CASE(a_stale_mrc_is_removed_when_a_block_connects)
             "a stale MRC was removed from the mempool but left in the wallet");
         BOOST_CHECK_MESSAGE(pwalletMain->mapWallet.count(current_tx.GetHash()) == 1,
             "an MRC anchored to the head was erased from the wallet");
+    }
+
+    mempool.clear();
+}
+
+//!
+//! A transaction paying exactly a raised -mintxfee is selected.
+//!
+//! -mintxfee is a floor, so a rate equal to it must qualify. The miner's rate is
+//! a double, fee / (bytes / 1000.0), and at some (fee, size) pairs whose exact
+//! rate IS the floor that expression rounds a hair below it. At the default
+//! floor no relayable transaction gets that close, so the pair is searched for
+//! at a raised one: the first size and floor where a fee of exactly
+//! floor * size / 1000 evaluates below the floor as a double.
+//!
+//! Two controls pay just under the floor and must stay out. The second has a
+//! size at which floor * size / 1000 is not a whole number, so its fee (rounded
+//! down) is short of the floor by less than one satoshi in total. An exact check
+//! that rounded the required fee down instead of up would admit it.
+//!
+//! Every candidate pays at least the miner's flat absolute floor, so the rate
+//! floor is the only thing that can exclude one.
+//!
+BOOST_AUTO_TEST_CASE(a_transaction_paying_exactly_a_raised_floor_is_selected)
+{
+    mempool.clear();
+    MinTxFeeRestorer restore_floor;
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 3u);
+
+    const auto found = FindExactFloorMisround([&](CAmount f, int n) {
+        return CreateSpend(PremineCoinbase(), coins[0].n, f, n);
+    });
+
+    BOOST_REQUIRE_MESSAGE(found, "no size and raised floor at which the miner's double "
+                                 "rate misrounds an exact-floor fee");
+
+    const int n_outputs = found->n_outputs;
+    const unsigned int size = found->size;
+    const CAmount floor = found->floor;
+    const CAmount fee = found->fee;
+
+    const CTransaction exact = CreateSpend(PremineCoinbase(), coins[0].n, fee, n_outputs);
+    BOOST_REQUIRE_EQUAL(TxSize(exact), size);
+
+    // What makes the case discriminate: the fee is exactly the floor rate, yet
+    // the miner's double puts it below the floor.
+    BOOST_REQUIRE_EQUAL(fee * 1000, floor * (CAmount)size);
+    BOOST_REQUIRE_LT(FeePerKb(exact, fee), (double)floor);
+    BOOST_REQUIRE_GE(fee, GetMinFee(exact));
+
+    // Control 1: the same shape, one satoshi under the smallest fee that meets
+    // the floor at its own size.
+    const CTransaction below_probe = CreateSpend(PremineCoinbase(), coins[1].n, COIN, n_outputs);
+    const unsigned int below_size = TxSize(below_probe);
+    const CAmount below_fee = (floor * below_size + 999) / 1000 - 1;
+    const CTransaction below = CreateSpend(PremineCoinbase(), coins[1].n, below_fee, n_outputs);
+    BOOST_REQUIRE_EQUAL(TxSize(below), below_size);
+    BOOST_REQUIRE_LT(below_fee * 1000, floor * (CAmount)below_size);
+    BOOST_REQUIRE_GE(below_fee, GetMinFee(below));
+
+    // Control 2: a larger size at which floor * size / 1000 has a fractional
+    // part, paying that amount rounded down. Every output is the same P2PKH
+    // script, so for controls with the same signature length a larger control
+    // differs in size by a multiple of 34 bytes, and a floor that is a multiple
+    // of 500 would make F * size a multiple of 1000 at every such size, leaving
+    // no control with a fractional fee. FindExactFloorMisround's
+    // `floor % 500 != 0` filter is what makes this control findable: it makes a
+    // size with a fractional fee likely rather than certain, and this upward
+    // scan requires one.
+    bool found_nonintegral = false;
+    unsigned int nonintegral_size = 0;
+    CAmount nonintegral_fee = 0;
+    int nonintegral_outputs = 0;
+
+    for (int n = n_outputs + 1; n <= n_outputs + 40 && !found_nonintegral; ++n) {
+        const CTransaction probe = CreateSpend(PremineCoinbase(), coins[2].n, COIN, n);
+        const unsigned int s = TxSize(probe);
+
+        if ((floor * (CAmount)s) % 1000 == 0) continue;
+
+        const CAmount f = floor * s / 1000;
+        const CTransaction rebuilt = CreateSpend(PremineCoinbase(), coins[2].n, f, n);
+
+        if (TxSize(rebuilt) != s) continue;
+
+        nonintegral_outputs = n;
+        nonintegral_size = s;
+        nonintegral_fee = f;
+        found_nonintegral = true;
+    }
+
+    BOOST_REQUIRE_MESSAGE(found_nonintegral, "no larger size at which the floor rate "
+                                             "gives a fractional fee");
+
+    const CTransaction below_nonintegral =
+        CreateSpend(PremineCoinbase(), coins[2].n, nonintegral_fee, nonintegral_outputs);
+    BOOST_REQUIRE_EQUAL(TxSize(below_nonintegral), nonintegral_size);
+    BOOST_REQUIRE_LT(nonintegral_fee * 1000, floor * (CAmount)nonintegral_size);
+    BOOST_REQUIRE_GE(nonintegral_fee, GetMinFee(below_nonintegral));
+
+    nMinerMinTxFee = floor;
+
+    AddToMempool(exact, fee);
+    AddToMempool(below, below_fee);
+    AddToMempool(below_nonintegral, nonintegral_fee);
+
+    BOOST_TEST_MESSAGE("-mintxfee " << floor << " sat/KB; exact-floor fee " << fee
+                       << " sat over " << size << " bytes");
+
+    CAmount fees = 0;
+    const std::vector<CTransaction> sel = AssembleBlock(fees);
+
+    BOOST_CHECK(Contains(sel, exact));
+    BOOST_CHECK(!Contains(sel, below));
+    BOOST_CHECK(!Contains(sel, below_nonintegral));
+
+    mempool.clear();
+}
+
+//!
+//! A child paying exactly a raised -mintxfee is selected after its parent.
+//!
+//! A mempool transaction whose input is another mempool transaction waits as a
+//! COrphan until its parent is included. It then enters the candidate queue
+//! with the fee recorded on the COrphan, and that fee is what the miner
+//! compares against -mintxfee. The child here pays exactly the floor at a
+//! (fee, size) pair where the double rate rounds below it, so it is selected
+//! only if its real integer fee is carried through the orphan path and
+//! compared exactly.
+//!
+BOOST_AUTO_TEST_CASE(a_child_paying_exactly_a_raised_floor_is_selected_after_its_parent)
+{
+    mempool.clear();
+    MinTxFeeRestorer restore_floor;
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 1u);
+
+    const CAmount parent_fee = COIN / 10;
+    const CTransaction parent = CreateSpend(PremineCoinbase(), coins[0].n, parent_fee, 1);
+
+    const auto found = FindExactFloorMisround([&](CAmount f, int n) {
+        return CreateSpend(parent, 0, f, n);
+    });
+
+    BOOST_REQUIRE_MESSAGE(found, "no size and raised floor at which the child's exact-floor fee misrounds");
+
+    const CTransaction child = CreateSpend(parent, 0, found->fee, found->n_outputs);
+
+    BOOST_REQUIRE_EQUAL(TxSize(child), found->size);
+    BOOST_REQUIRE_EQUAL(found->fee * 1000, found->floor * (CAmount)found->size);
+    BOOST_REQUIRE_LT(FeePerKb(child, found->fee), (double)found->floor);
+    BOOST_REQUIRE_GE(found->fee, GetMinFee(child));
+    BOOST_REQUIRE_GE(parent_fee, GetMinFee(parent));
+    // Cannot fail at the floors the search can return (at most about 5.5e6
+    // sat/KB); a guard only.
+    BOOST_REQUIRE_GE(parent_fee * 1000, 2 * found->floor * (CAmount)TxSize(parent));
+
+    // The child reaches the miner as a COrphan only while its parent is not
+    // indexed on disk.
+    BOOST_REQUIRE(child.vin[0].prevout.hash == parent.GetHash());
+    {
+        LOCK(cs_main);
+        CTxDB txdb("r");
+        CTxIndex idx;
+        BOOST_REQUIRE_MESSAGE(!txdb.ReadTxIndex(parent.GetHash(), idx),
+                              "parent is indexed on disk, so the child would bypass the orphan path");
+    }
+
+    nMinerMinTxFee = found->floor;
+
+    AddToMempool(parent, parent_fee);
+    AddToMempool(child, found->fee);
+
+    BOOST_TEST_MESSAGE("-mintxfee " << found->floor << " sat/KB; child's exact-floor fee " << found->fee
+                       << " sat over " << found->size << " bytes");
+
+    CAmount fees = 0;
+    const std::vector<CTransaction> sel = AssembleBlock(fees);
+
+    BOOST_CHECK(Contains(sel, parent));
+    BOOST_CHECK(Contains(sel, child));
+
+    if (sel.size() == 2) {
+        BOOST_CHECK_EQUAL(sel[0].GetHash().ToString(), parent.GetHash().ToString());
+        BOOST_CHECK_EQUAL(sel[1].GetHash().ToString(), child.GetHash().ToString());
     }
 
     mempool.clear();
