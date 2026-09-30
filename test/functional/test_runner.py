@@ -155,6 +155,9 @@ BASE_SCRIPTS = [
     # feature_shutdown.py: `stop` must not hang on an in-service RPC connection
     # (issue #3123 -- StopRPCThreads must interrupt a worker parked in recv).
     'feature_shutdown.py',
+    # feature_rpc_bind_v4_conflict.py: an IPv4 RPC listener that cannot bind
+    # (the port already held on 127.0.0.1) is logged, not swallowed.
+    'feature_rpc_bind_v4_conflict.py',
     'p2p_version_handshake.py',
     # p2p_version_timedrift.py: the VERSION handshake's 480 s clock-drift gate,
     # including a crafted nTime that overflowed the old abs() check.

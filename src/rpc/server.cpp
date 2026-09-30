@@ -1123,6 +1123,11 @@ void StartRPCThreads()
     catch(boost::system::system_error &e)
     {
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s"), endpoint.port(), e.what());
+
+        // Not an error on its own: a host without IPv6 lands here on every start,
+        // and the IPv4 listener below is what serves it.
+        LogPrintf("INFO: StartRPCThreads: not listening on IPv6 [%s]:%u: %s",
+                  endpoint.address().to_string(), endpoint.port(), e.what());
     }
 
     try
@@ -1149,6 +1154,27 @@ void StartRPCThreads()
     catch(boost::system::system_error &e)
     {
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv4: %s"), endpoint.port(), e.what());
+
+        // With the IPv6 listener up the node starts anyway, and this was the only
+        // trace of the failure -- strerr is read only when nothing bound. Say what
+        // it costs. On the loopback path the IPv6 socket is bound to ::1, which
+        // never serves 127.0.0.1, so IPv4 clients are refused while the node looks
+        // healthy. On the wildcard path this bind runs, with the IPv6 listener up,
+        // only because v6_only_error is set: turning IPV6_V6ONLY off failed, so the
+        // IPv6 socket may or may not already serve IPv4, and the warning says may.
+        // The wildcard bind address is not one a client connects to, so it is not
+        // named as one.
+        if (fListening) {
+            if (loopback) {
+                LogPrintf("WARNING: StartRPCThreads: not listening on IPv4 %s:%u: %s. RPC is reachable over "
+                          "IPv6 only; clients connecting to 127.0.0.1 will be refused.",
+                          endpoint.address().to_string(), endpoint.port(), e.what());
+            } else {
+                LogPrintf("WARNING: StartRPCThreads: not listening on IPv4 %s:%u: %s. The IPv6 listener could "
+                          "not be made dual-stack (%s), so it may not serve IPv4; IPv4 clients may be refused.",
+                          endpoint.address().to_string(), endpoint.port(), e.what(), v6_only_error.message());
+            }
+        }
     }
     } // !bind_specified
 
