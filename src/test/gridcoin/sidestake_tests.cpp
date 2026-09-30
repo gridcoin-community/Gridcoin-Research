@@ -10,6 +10,11 @@
 #include <gridcoin/sidestake.h>
 #include <interfaces/sidestake.h>
 #include <key_io.h>
+#include <node/ui_interface.h>
+
+#include <boost/signals2/connection.hpp>
+
+#include <memory>
 
 // Suite-level guard: the sidestake editors write read-write settings
 // (sidestakeaddresses / allocations / descriptions) that nothing removes.
@@ -324,6 +329,69 @@ BOOST_AUTO_TEST_CASE(sidestake_editors_do_not_revert_the_field_not_being_edited)
     }
 
     registry.NonContractDelete(dest, /*save_to_file=*/false);
+}
+
+// SaveLocalSideStakesToConfig() arms a flag so that LoadLocalSideStakesFromConfig()
+// skips the reload its own settings write triggers. RwSettingsUpdated is emitted
+// synchronously from inside updateRwSettings(), so the flag has to be armed before
+// that call. Armed after it, the save's own signal has already gone by, and the
+// flag swallows the NEXT RwSettingsUpdated from any source instead: a
+// changesettings of the sidestake keys made after a GUI edit is not reloaded.
+//
+// The registry is never subscribed in this binary (SubscribeToCoreSignals() runs
+// from Initialize(), and UnsubscribeFromCoreSignals() is a no-op, so subscribing
+// here would leak a slot into every later suite). A scoped connection stands in
+// for that subscription.
+BOOST_AUTO_TEST_CASE(sidestake_save_does_not_swallow_the_next_settings_reload)
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+    uint160 hash;
+    *(hash.begin()) = 0x5c;
+    const CTxDestination dest = CKeyID(hash);
+    const std::string address = EncodeDestination(dest);
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false); // start clean
+
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    // Clear the sidestake keys an earlier case left in the read-write settings, so
+    // the reloads below cannot bring its entries back. Nothing is connected yet.
+    const std::vector<std::pair<std::string, util::SettingsValue>> clear_keys{
+        {"sidestakeaddresses", util::SettingsValue{}},
+        {"sidestakeallocations", util::SettingsValue{}},
+        {"sidestakedescriptions", util::SettingsValue{}},
+        {"sidestake_reload_probe", util::SettingsValue{}},
+    };
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+
+    {
+        boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect(
+            [&registry] { registry.LoadLocalSideStakesFromConfig(); })};
+
+        // A save made with nothing connected (the case above) leaves the flag armed.
+        // Consume it, so the steps below start from a cleared flag.
+        BOOST_REQUIRE(updateRwSetting("sidestake_reload_probe", util::SettingsValue{"0"}));
+
+        std::unique_ptr<interfaces::SideStakeManager> manager = interfaces::MakeSideStakeManager();
+        BOOST_REQUIRE(manager != nullptr);
+        BOOST_REQUIRE(manager->addLocal(address, 10.0, "reload probe").status == interfaces::SideStakeEditStatus::OK);
+
+        // The save's own signal has passed. The next one, here the updateRwSetting()
+        // emission changesettings uses, must reload the registry.
+        const uint64_t before = registry.GetLocalSideStakeRevision();
+        BOOST_REQUIRE(updateRwSetting("sidestake_reload_probe", util::SettingsValue{"1"}));
+        BOOST_CHECK_GT(registry.GetLocalSideStakeRevision(), before);
+    }
+
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+    registry.NonContractDelete(dest, /*save_to_file=*/false);
+
+    BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+    BOOST_CHECK(getRwSetting("sidestake_reload_probe").isNull());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
