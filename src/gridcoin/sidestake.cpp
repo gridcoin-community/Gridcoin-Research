@@ -1292,9 +1292,16 @@ bool SideStakeRegistry::SaveLocalSideStakesToConfig()
     settings.push_back(std::make_pair("sidestakeallocations", allocations));
     settings.push_back(std::make_pair("sidestakedescriptions", descriptions));
 
-    status = updateRwSettings(settings);
-
+    // Arm the flag before the write. updateRwSettings() emits RwSettingsUpdated
+    // synchronously, before it writes the file, so LoadLocalSideStakesFromConfig()
+    // sees this save's own signal inside the call below and skips it, whether or
+    // not the file write then succeeds. Armed after the call, the flag would outlive
+    // the save and swallow the next RwSettingsUpdated from any source, such as a
+    // changesettings of the sidestake keys. One flag covers one connected slot's
+    // reload.
     m_local_entry_already_saved_to_config.store(true, std::memory_order_relaxed);
+
+    status = updateRwSettings(settings);
 
     return status;
 }
