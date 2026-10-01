@@ -94,8 +94,8 @@ consensus-critical at a specific block version activation height. The
 | `StandardContractReplayLookback` | 180 days | `BlockV11Height` | Contract validity window for types without registry DB (not applicable v13+ for protocol entries) |
 | `PendingPoolRetention` | 28,800 blocks (~30 days at ~90s spacing) | `BlockV15Height` | PENDING pool registrations and POOL_APPROVE OPEN authorizations are query-time expired after this many blocks (issue #1783). Overridable for isolated-testnet via hidden `-pendingpoolretention`; consensus-affecting. See §11.3.1. |
 
-> **Source:** `src/chainparams.cpp:61-91` (mainnet), `src/chainparams.cpp:184-213`
-> (testnet)
+> **Source:** `CMainParams` (mainnet), `CTestNetParams`
+> (testnet) in `src/chainparams.cpp`
 
 ### Other Inline Height Helpers
 
@@ -105,7 +105,7 @@ consensus-critical at a specific block version activation height. The
 | `GetOrigNewbieSnapshotFixHeight()` | 2,104,000 / 1,393,000 | First attempt at newbie accrual fix |
 | `GetNewbieSnapshotFixHeight()` | 2,197,000 / 1,480,000 | Corrected newbie accrual fix |
 
-> **Source:** `src/chainparams.h:187-201`
+> **Source:** `src/chainparams.h` — `GetSuperblockAgeSpacing()`, `GetOrigNewbieSnapshotFixHeight()`, `GetNewbieSnapshotFixHeight()`
 
 ---
 
@@ -127,7 +127,7 @@ Defined in `src/consensus/consensus.h`:
 | `nStakeMaxAge` | unlimited | No upper bound on stake age |
 | `nGrandfather` | 1,034,700 (mainnet), 196,550 (testnet) | Block height below which relaxed validation applies |
 
-> **Source:** `src/consensus/consensus.h`, `src/main.cpp:82-83,127-128,1651-1653`
+> **Source:** `src/consensus/consensus.h`; `nStakeMinAge` and `nStakeMaxAge` in `src/gridcoin/staking/kernel.cpp`; `nCoinbaseMaturity` and `nGrandfather` in `src/validation.cpp`; testnet/regtest overrides in `LoadBlockIndex()` (`src/node/blockstorage.cpp`)
 
 ---
 
@@ -140,7 +140,7 @@ Defined in `src/consensus/consensus.h`:
 - Proof-of-work phase runs from block 0 through `LAST_POW_BLOCK` (2,050)
 - After block 2,050, only proof-of-stake blocks are accepted
 
-> **Source:** `src/chainparams.cpp:47-54`, `src/consensus/consensus.h:6`
+> **Source:** `CreateGenesisBlock()` in `src/chainparams.cpp`, `LAST_POW_BLOCK` in `src/consensus/consensus.h`
 
 ### 3.2 Protocol v2 (Mainnet > 85,400)
 
@@ -175,7 +175,7 @@ Defined in `src/consensus/consensus.h`:
 - Payment-per-day limit: lifetime average magnitude × magnitude unit × 5
 - Minimum accrual block span: 10 blocks (returns 0 accrual if fewer)
 
-> **Source:** `src/gridcoin/accrual/research_age.h:24-42,83-273`
+> **Source:** `src/gridcoin/accrual/research_age.h` — `GetMaxResearchSubsidy()`, `ResearchAgeComputer`
 
 ### 3.4 Pre-v10 Coin-Year Interest Rate (Staking Reward)
 
@@ -198,7 +198,7 @@ Interest rate schedule:
 | Aug 1, 2015 – Nov 20, 2015 | 3% |
 | Nov 21, 2015 – forever | 1.5% |
 
-> **Source:** `src/gridcoin/staking/reward.cpp:11-26,101-111`
+> **Source:** `src/gridcoin/staking/reward.cpp` — `GetCoinYearReward()`, `GRC::GetProofOfStakeReward()`
 
 ### 3.5 Legacy PoS v3 Kernel (Block Version 7 and Below)
 
@@ -214,7 +214,7 @@ hash(RSA_weight, input_block.nTime, input_tx.nTime, input_tx.hash, outpoint.n, c
   or > `nGrandfather`), the legacy proof hash is computed via
   `CalculateLegacyV3HashProof()` to carry stake modifiers into v8+
 
-> **Source:** `src/gridcoin/staking/kernel.cpp:438-467`
+> **Source:** `GRC::CalculateLegacyV3HashProof()` in `src/gridcoin/staking/kernel.cpp`
 
 ### 3.6 Grandfather Rule
 
@@ -229,13 +229,13 @@ relaxed validation. Certain checks are skipped:
 Version 8+ blocks have **no grandfather exceptions** — strict validation
 always applies.
 
-> **Source:** `src/validation.cpp:416-422,1542,1939,1984,2110-2218`, `src/main.cpp:127-128,1653`
+> **Source:** `src/validation.cpp` — `nGrandfather` and its checks in `ConnectInputs()`, `GridcoinConnectBlock()`, `CheckBlock()`, `AcceptBlock()`; testnet value set in `LoadBlockIndex()` (`src/node/blockstorage.cpp`)
 
 ### 3.7 Coinstake Output Limit (Pre-v10)
 
 Maximum coinstake outputs: **3**
 
-> **Source:** `src/validation.cpp:598-602`
+> **Source:** `GetCoinstakeOutputLimit()` in `src/validation.cpp`
 
 ---
 
@@ -259,7 +259,7 @@ Key changes from v3:
 - Stake modifier is the most recently generated modifier walking back from
   `pindexPrev`
 
-> **Source:** `src/gridcoin/staking/kernel.cpp:509-525`, `src/gridcoin/staking/kernel.h:15,30-33`
+> **Source:** `GRC::CalculateStakeHashV8()` in `src/gridcoin/staking/kernel.cpp`; `STAKE_TIMESTAMP_MASK`, `MaskStakeTime()` in `src/gridcoin/staking/kernel.h`
 
 ### 4.2 V8 Stake Weight
 
@@ -281,7 +281,7 @@ hash(kernel_inputs) <= target * weight
 
 where `target` is derived from `nBits` using a 320-bit multiplication.
 
-> **Source:** `src/gridcoin/staking/kernel.cpp:545-555,581-657`
+> **Source:** `src/gridcoin/staking/kernel.cpp` — `GRC::CalculateStakeWeightV8()`, `GRC::CheckProofOfStakeV8()`
 
 ### 4.3 Strict Validation
 
@@ -295,7 +295,7 @@ as `hashProof` for:
 - Duplicate stake detection via `g_seen_stakes`
 - Stake modifier computation for subsequent blocks
 
-> **Source:** `src/validation.cpp:2168-2193`
+> **Source:** `AcceptBlock()` in `src/validation.cpp` (the `block.nVersion >= 8` branch)
 
 ---
 
@@ -342,7 +342,7 @@ else
     return nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
 ```
 
-> **Source:** `src/gridcoin/staking/reward.cpp:33-111`
+> **Source:** `src/gridcoin/staking/reward.cpp` — `GRC::GetConstantBlockReward()`, `GRC::GetProofOfStakeReward()`
 
 ### 6.2 Coinstake Output Limit
 
@@ -350,7 +350,7 @@ Raised from 3 to **8** for block versions 10 and 11. This enables:
 - Stake splitting (multiple outputs back to staker)
 - Voluntary sidestaking (outputs to configured addresses)
 
-> **Source:** `src/validation.cpp:605-606`
+> **Source:** `GetCoinstakeOutputLimit()` in `src/validation.cpp` (the v10-v11 branch)
 
 ---
 
@@ -380,7 +380,7 @@ v2.
 Contract types: BEACON, CLAIM, POLL, PROJECT, PROTOCOL, SCRAPER, VOTE, MRC,
 SIDESTAKE (last two added in later versions).
 
-> **Source:** `src/gridcoin/contract/contract.h:46-57`, `src/validation.cpp:147-200`
+> **Source:** `Contract` in `src/gridcoin/contract/contract.h`, `CheckContracts()` in `src/validation.cpp`
 
 ### 7.2 Beacon Registry (Beacon Payload v2)
 
@@ -400,7 +400,7 @@ Replaces Research Age accrual with periodic snapshots:
 - Delta accrual since the active superblock is added to the snapshot
 - O(1) lookup for any CPID's pending accrual
 
-> **Source:** `src/gridcoin/accrual/snapshot.h:40-80`
+> **Source:** `SnapshotCalculator` in `src/gridcoin/accrual/snapshot.h`
 
 ### 7.4 Superblock v2 (SHA256 Quorum Hash)
 
@@ -425,8 +425,8 @@ blocks; claim v2 was a pre-release format and never appeared on mainnet. No
 consensus rule gates claim version by height — the verifier accepts whichever
 version it finds and selects the matching hash branch in `GetClaimHash()`.
 
-> **Source:** `src/gridcoin/claim.h:27-69`, `src/gridcoin/claim.cpp:44-75`,
-> `src/miner.cpp:1299-1300`
+> **Source:** `Claim` in `src/gridcoin/claim.h`, `GetClaimHash()` in `src/gridcoin/claim.cpp`,
+> `CreateGridcoinReward()` in `src/miner.cpp` (the `IsV12Enabled` branch)
 
 ---
 
@@ -457,7 +457,7 @@ coinstake:
   sidestake if foundation allocation is nonzero)
 - Testnet: **3** MRC outputs per coinstake (2 + 1 foundation)
 
-> **Source:** `src/validation.cpp:645-666`
+> **Source:** `GetMRCOutputLimit()` in `src/validation.cpp`
 
 ### 8.3 Coinstake Output Limit (v12+)
 
@@ -473,7 +473,7 @@ For testnet: 10 + 3 = **13** total coinstake outputs.
 The base limit of 10 accommodates the staker's own outputs plus anticipated
 mandatory (non-MRC) sidestakes.
 
-> **Source:** `src/validation.cpp:607-611`
+> **Source:** `GetCoinstakeOutputLimit()` in `src/validation.cpp` (the v12+ branch)
 
 ### 8.4 Claim v4
 
@@ -496,7 +496,7 @@ if (Block.nVersion >= 12) {
 This enforces 16-second timestamp granularity on coinstake transactions
 (since `STAKE_TIMESTAMP_MASK = 15`, masking zeroes the bottom 4 bits).
 
-> **Source:** `src/gridcoin/staking/kernel.cpp:618-622`
+> **Source:** `GRC::CheckProofOfStakeV8()` in `src/gridcoin/staking/kernel.cpp` (the `nVersion >= 12` branch)
 
 ### 8.6 Poll v3
 
@@ -513,7 +513,7 @@ This enforces 16-second timestamp granularity on coinstake transactions
 New compressed master key installed at height 2,671,700 (mainnet) and
 1,964,600 (testnet), replacing the original uncompressed key.
 
-> **Source:** `src/chainparams.cpp:172-175,254-257`
+> **Source:** `masterkeys` in `CMainParams` and `CTestNetParams` (`src/chainparams.cpp`)
 
 ---
 
@@ -534,7 +534,7 @@ New compressed master key installed at height 2,671,700 (mainnet) and
 - Administrative contracts (master key required) to add/remove mandatory
   sidestakes
 
-> **Source:** `src/validation.cpp:616-619`, `src/gridcoin/sidestake.h:491-495`
+> **Source:** `GetMandatorySideStakeOutputLimit()` in `src/validation.cpp`, `SideStakePayload::CURRENT_VERSION` in `src/gridcoin/sidestake.h`
 
 ### 9.2 Configurable CBR
 
@@ -544,7 +544,7 @@ Block reward is configurable via protocol entry `"blockreward1"`:
 - Ceiling: 500 GRC (`ConstantBlockRewardCeiling`)
 - No lookback window limitation for protocol entries (v13+)
 
-> **Source:** `src/gridcoin/staking/reward.cpp:61-73`
+> **Source:** `GRC::GetConstantBlockReward()` in `src/gridcoin/staking/reward.cpp` (the `IsV13Enabled` branch)
 
 ### 9.3 Configurable Magnitude Unit
 
@@ -653,25 +653,29 @@ fields:
 - `CalculateSequenceLocks()` and `EvaluateSequenceLocks()` enforce the rules
 - Checked via `CheckSequenceLocks()` during transaction validation
 
-> **Source:** `src/consensus/tx_verify.cpp:74-207`
+> **Source:** `src/consensus/tx_verify.cpp` — `CalculateSequenceLocks()`, `EvaluateSequenceLocks()`, `CheckSequenceLocks()`
 
 ### 10.4 Script Flags Activation
 
 ```cpp
-unsigned int GetBlockScriptFlags(const CBlockIndex& block_index)
+unsigned int GetBlockScriptFlags(int nHeight)
 {
     unsigned int flags{SCRIPT_VERIFY_P2SH};
 
-    if (IsV14Enabled(block_index.nHeight)) {
+    if (IsV14Enabled(nHeight)) {
         flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
         flags |= SCRIPT_VERIFY_CHECKSEQUENCEVERIFY;
+    }
+
+    if (IsV15Enabled(nHeight)) {
+        flags |= V15_SCRIPT_VERIFY_FLAGS;
     }
 
     return flags;
 }
 ```
 
-> **Source:** `src/validation.cpp:1624-1635`
+> **Source:** `GetBlockScriptFlags()` in `src/validation.cpp`
 
 ### 10.5 HTLC Support
 
@@ -691,7 +695,7 @@ for trustless atomic operations.
   (`advertisebeaconv3`) are supported. The v3 beacon is an additional option,
   not a replacement — researchers may use either method.
 
-> **Source:** `src/gridcoin/beacon.h:334-338`
+> **Source:** `BeaconPayload::CURRENT_VERSION` in `src/gridcoin/beacon.h`
 
 ---
 
@@ -718,7 +722,7 @@ RPC surface emitting these contracts: `registerpool` (operator `POOL_REGISTER` A
 
 ### 11.2 Grandfathered Builtins
 
-To eliminate a flag-day regression of pool-mode detection, `PoolRegistry`'s constructor pre-populates the same 5 CPIDs that the legacy `MiningPools` list carried (`src/gridcoin/researcher.h:88-95`). Each builtin is seeded at `m_height = 0`, status `ACTIVE`, with an invalid operator key (the slot is unclaimed until the foundation explicitly opens it). Synthetic per-CPID sentinel hashes (`Hash("POOL_BUILTIN_SEED:" + cpid)`) anchor the `m_previous_hash` chain so `Revert` of a first-real-contract restores the builtin unchanged.
+To eliminate a flag-day regression of pool-mode detection, `PoolRegistry`'s constructor pre-populates the same 5 CPIDs that the legacy `MiningPools` list carried (`MiningPools` in `src/gridcoin/researcher.h`). Each builtin is seeded at `m_height = 0`, status `ACTIVE`, with an invalid operator key (the slot is unclaimed until the foundation explicitly opens it). Synthetic per-CPID sentinel hashes (`Hash("POOL_BUILTIN_SEED:" + cpid)`) anchor the `m_previous_hash` chain so `Revert` of a first-real-contract restores the builtin unchanged.
 
 Pre-V15, `ActivePoolsAtHeight(height < BlockV15Height)` returns the same set of CPIDs/names/URLs as the legacy list (membership, not order — AVW consumes the set, not a sequence; verified by the `builtin_pools_match_g_mining_pools_pre_v15` unit test in `pool_tests.cpp`).
 
@@ -815,7 +819,7 @@ Both call `GetPoolRegistry().ActivePoolsAtHeight(poll_start_height)` where `poll
 
 ### 11.5 Replay-Clamp Special-Case
 
-`RegistryBookmarks::GetLowestRegistryBlockHeight` in `src/gridcoin/contract/registry.h:174` is extended with a POOL block analogous to the existing SIDESTAKE block, guarded on `BlockV15Height != std::numeric_limits<int>::max()`. Without the guard, an unactivated V15 would clamp the replay floor to `::max()` and break the clamp's overall semantics. With V15 activated, the clamp prevents contract replay from descending below `BlockV15Height` when the POOL bookmark height is still 0.
+`RegistryBookmarks::GetLowestRegistryBlockHeight` in `src/gridcoin/contract/registry.h` is extended with a POOL block analogous to the existing SIDESTAKE block: a conditional max that raises a `POOL_REGISTER` or `POOL_APPROVE` bookmark below `GetBlockV15Height()` (which honours `-blockv15height`) up to that height. Before activation `GetBlockV15Height()` is `std::numeric_limits<int>::max()`, so POOL bookmarks clamp to `::max()`. That value drops out: the function returns the lowest height across all registry bookmarks, so a `::max()` entry can never lower the replay floor. With V15 activated, the clamp keeps contract replay from descending below the V15 height while the POOL bookmark is still 0, and keeps a real bookmark once it has advanced past V15.
 
 ---
 
@@ -829,11 +833,14 @@ Script verification flags vary by block version:
 |---|---|
 | All versions | `SCRIPT_VERIFY_P2SH` |
 | v14+ | + `SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY` + `SCRIPT_VERIFY_CHECKSEQUENCEVERIFY` |
+| v15+ (not yet scheduled) | + `V15_SCRIPT_VERIFY_FLAGS` = LOW_S, DERSIG, STRICTENC, NULLDUMMY, MINIMALDATA, CLEANSTACK |
 
-Policy-level flags (applied to mempool transactions, not consensus):
-`MANDATORY_SCRIPT_VERIFY_FLAGS` = P2SH | DERSIG | NULLDUMMY
+Mempool acceptance uses the same consensus flags, taken at the tip's next height. The mempool-only
+tier, `POLICY_SCRIPT_VERIFY_FLAGS` in `ConnectInputs()`, is currently empty.
+`STANDARD_SCRIPT_VERIFY_FLAGS` (built on `MANDATORY_SCRIPT_VERIFY_FLAGS` = P2SH | DERSIG | NULLDUMMY)
+is used only for wallet signing, PSGT and raw-transaction checks.
 
-> **Source:** `src/validation.cpp:1624-1635`, `src/policy/policy.h:19-21`
+> **Source:** `GetBlockScriptFlags()` and `ConnectInputs()` in `src/validation.cpp`; `V15_SCRIPT_VERIFY_FLAGS`, `STANDARD_SCRIPT_VERIFY_FLAGS` and `MANDATORY_SCRIPT_VERIFY_FLAGS` in `src/policy/policy.h`
 
 ### 12.2 Block Version Enforcement
 
@@ -862,9 +869,11 @@ where `nInterval = TARGET_TIMESPAN / nTargetSpacing`
 - Result clamped to `PROOF_OF_STAKE_LIMIT` (~arith_uint256() >> 20)
 - Special difficulty resets:
   - Heights 91,387–91,500 (mainnet): reset to limit (Dec 2014 difficulty fix)
-  - Any time current difficulty > 10^16: reset to limit
+  - Any time current difficulty (`GetCurrentDifficulty()`) > 900,000: reset to limit
+  - The separate 10^16 threshold is not a reset: `CheckBlock()` rejects blocks above it when
+    height > `nGrandfather` (see §3.6)
 
-> **Source:** `src/gridcoin/staking/difficulty.cpp:22-90`
+> **Source:** `GRC::GetNextTargetRequired()`, `TARGET_TIMESPAN` and `PROOF_OF_STAKE_LIMIT` in `src/gridcoin/staking/difficulty.cpp`; the 10^16 rejection is in `CheckBlock()` in `src/validation.cpp`
 
 ### 12.4 Stake Modifier Computation
 
@@ -883,7 +892,7 @@ window and assembling their entropy bits:
 Special case: mainnet height 1,009,994 has a hardcoded modifier reset to
 `0xdf209a3032807577` to correct a bug from the grandfather rule era.
 
-> **Source:** `src/gridcoin/staking/kernel.cpp:20-384`
+> **Source:** `GRC::ComputeNextStakeModifier()` and its helpers in `src/gridcoin/staking/kernel.cpp`
 
 ### 12.5 Stake Timestamp Mask
 
@@ -904,7 +913,7 @@ The `STAKE_TIMESTAMP_MASK` is 15 (0xF), which means:
   (cumulative since last wallet restart) by counting mask intervals
   elapsed vs. successful stakes.
 
-> **Source:** `src/gridcoin/staking/kernel.h:15,30-33`, `src/gridcoin/staking/status.cpp`
+> **Source:** `STAKE_TIMESTAMP_MASK`, `MaskStakeTime()` in `src/gridcoin/staking/kernel.h`; `src/gridcoin/staking/status.cpp`
 
 ### 12.6 Transaction Version Requirements
 
@@ -919,7 +928,7 @@ output with a burn amount >= the required burn fee:
 - Standard burn: **0.5 GRC** per contract
 - Administrative contracts: validated by master key ownership, not burn fee
 
-> **Source:** `src/gridcoin/contract/contract.h:57`, `src/validation.cpp:163-197`
+> **Source:** `Contract::STANDARD_BURN_AMOUNT` in `src/gridcoin/contract/contract.h`, `CheckContracts()` in `src/validation.cpp`
 
 ### 12.8 Superblock Spacing
 
@@ -928,7 +937,7 @@ Superblocks are produced approximately once per day:
 - Post-height 364,500 (mainnet): every 86,400 seconds (24 hours)
 - Testnet: always 86,400 seconds
 
-> **Source:** `src/chainparams.h:187-190`
+> **Source:** `GetSuperblockAgeSpacing()` in `src/chainparams.h`
 
 ### 12.9 Coinbase Maturity
 
@@ -937,7 +946,7 @@ spent:
 - Mainnet: **100** blocks (+10 for `GetBlocksToMaturity()`)
 - Testnet: **10** blocks
 
-> **Source:** `src/main.cpp:86,695-696,1652`
+> **Source:** `nCoinbaseMaturity` in `src/validation.cpp`; `CMerkleTx::GetBlocksToMaturity()` in `src/wallet/wallet.cpp`; testnet value set in `LoadBlockIndex()` (`src/node/blockstorage.cpp`)
 
 ---
 
@@ -962,7 +971,7 @@ Notes:
 - `GetCoinstakeOutputLimit()` returns base + MRC (the total)
 - `GetMandatorySideStakeOutputLimit()` returns 4 for v13+, 0 otherwise
 
-> **Source:** `src/validation.cpp:598-666`
+> **Source:** `src/validation.cpp` — `GetCoinstakeOutputLimit()`, `GetMandatorySideStakeOutputLimit()`, `GetMRCOutputLimit()`
 
 ---
 
@@ -1003,29 +1012,29 @@ Notes:
 - † Claim v2 was the initial binary-serialized format introduced during v11
   development. It was superseded by v3 (coinstake in signature) before v11
   activated on mainnet — no v11+ block has ever contained a v2 claim. The
-  miner unconditionally emits v3 for pre-v12 blocks (`src/miner.cpp:1299`),
+  miner unconditionally emits v3 for pre-v12 blocks (`CreateGridcoinReward()` in `src/miner.cpp`),
   and there is no consensus rule keying claim version to height; v2 remains
   only as a serialization branch retained for completeness.
 - ‡ Vote v1 is native binary, introduced at v11 alongside the binary contract
   system. Unlike the other "v1 is the legacy form" payloads, pre-v11 votes
-  are represented by a separate `LegacyVote` class (`src/gridcoin/voting/vote.h:180`)
+  are represented by a separate `LegacyVote` class (`src/gridcoin/voting/vote.h`)
   and are not parsed as Vote v1.
 
 Current `CURRENT_VERSION` constants:
 
 | Type | `CURRENT_VERSION` | Source |
 |---|---|---|
-| Contract (envelope) | 3 | `src/gridcoin/contract/contract.h:51` |
-| Beacon (BeaconPayload) | 3 | `src/gridcoin/beacon.h:338` |
-| Claim | 4 | `src/gridcoin/claim.h:38` |
-| Poll (PollPayload) | 3 | `src/gridcoin/voting/payloads.h:29` |
-| Vote | 1 | `src/gridcoin/voting/vote.h:28` |
-| Project (ProjectEntry) | 4 | `src/gridcoin/project.h:66` |
-| Protocol (ProtocolEntryPayload) | 2 | `src/gridcoin/protocol.h:215` |
-| Scraper (ScraperEntryPayload) | 2 | `src/gridcoin/scraper/scraper_registry.h:245` |
-| Superblock | 3 | `src/gridcoin/superblock.h:272` |
-| MRC | 1 | `src/gridcoin/mrc.h:49` |
-| Sidestake (SideStakePayload) | 1 | `src/gridcoin/sidestake.h:495` |
+| Contract (envelope) | 3 | `Contract::CURRENT_VERSION` (`src/gridcoin/contract/contract.h`) |
+| Beacon (BeaconPayload) | 3 | `BeaconPayload::CURRENT_VERSION` (`src/gridcoin/beacon.h`) |
+| Claim | 4 | `Claim::CURRENT_VERSION` (`src/gridcoin/claim.h`) |
+| Poll (PollPayload) | 3 | `PollPayload::CURRENT_VERSION` (`src/gridcoin/voting/payloads.h`) |
+| Vote | 1 | `Vote::CURRENT_VERSION` (`src/gridcoin/voting/vote.h`) |
+| Project (ProjectEntry) | 4 | `ProjectEntry::CURRENT_VERSION` (`src/gridcoin/project.h`) |
+| Protocol (ProtocolEntryPayload) | 2 | `ProtocolEntryPayload::CURRENT_VERSION` (`src/gridcoin/protocol.h`) |
+| Scraper (ScraperEntryPayload) | 2 | `ScraperEntryPayload::CURRENT_VERSION` (`src/gridcoin/scraper/scraper_registry.h`) |
+| Superblock | 3 | `Superblock::CURRENT_VERSION` (`src/gridcoin/superblock.h`) |
+| MRC | 1 | `MRC::CURRENT_VERSION` (`src/gridcoin/mrc.h`) |
+| Sidestake (SideStakePayload) | 1 | `SideStakePayload::CURRENT_VERSION` (`src/gridcoin/sidestake.h`) |
 
 ---
 
@@ -1057,7 +1066,7 @@ staking_reward = GetConstantBlockReward(pindexLast)
 - Pre-v13 clamp: [0, 20 GRC]
 - V13+ clamp: [0, 500 GRC]
 
-> **Source:** `src/gridcoin/staking/reward.cpp:33-99`
+> **Source:** `GRC::GetConstantBlockReward()` in `src/gridcoin/staking/reward.cpp`
 
 ### 15.3 Research Accrual: Snapshot (v11+)
 
@@ -1080,7 +1089,7 @@ The daily maximum research subsidy per CPID decreased over time (see
 the cap is **50 GRC/day** per CPID. Maximum single-block payout:
 50 × 255 = **12,750 GRC**.
 
-> **Source:** `src/gridcoin/accrual/research_age.h:24-42`
+> **Source:** `GetMaxResearchSubsidy()` in `src/gridcoin/accrual/research_age.h`
 
 ### 15.5 MRC Fees (v12+)
 
@@ -1090,7 +1099,7 @@ When a researcher submits an MRC:
 2. Otherwise: fees start at **40%** and decay over time
 3. MRC fees are split between the staker and the foundation sidestake
 
-> **Source:** `src/consensus/params.h:70-77`
+> **Source:** `MRC::ComputeMRCFee()` in `src/gridcoin/mrc.cpp`; parameters `Consensus::Params::InitialMRCFeeFractionPostZeroInterval` and `MRCZeroPaymentInterval` in `src/consensus/params.h`
 
 ---
 
@@ -1099,10 +1108,12 @@ When a researcher submits an MRC:
 | File | Contents |
 |---|---|
 | `src/consensus/params.h` | `Consensus::Params` struct — all consensus parameters |
-| `src/consensus/consensus.h` | Block size, PoW limits, maturity constants |
+| `src/consensus/consensus.h` | Block size, PoW cutoff, fee constants |
 | `src/chainparams.h` | `Is*Enabled()` height predicates, spacing helpers |
 | `src/chainparams.cpp` | Mainnet/testnet parameter initialization |
-| `src/validation.cpp` | `CheckReward`, coinstake output limits, `GetBlockScriptFlags`, `ConnectBlock` |
+| `src/validation.cpp` | Coinstake output limits, `GetBlockScriptFlags`, `ConnectBlock`, `nCoinbaseMaturity`, `nGrandfather` |
+| `src/gridcoin/consensus/block_rewards.cpp` | `GRC::BlockRewardRules::CheckReward` |
+| `src/node/blockstorage.cpp` | `LoadBlockIndex` testnet/regtest overrides of the staking and maturity globals |
 | `src/validation.h` | `nGrandfather` |
 | `src/primitives/block.h` | `GetTargetSpacing` |
 | `src/gridcoin/staking/kernel.h` | `nStakeMinAge`, `STAKE_TIMESTAMP_MASK`, `MaskStakeTime`, kernel function declarations |

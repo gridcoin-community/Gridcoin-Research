@@ -109,8 +109,10 @@ Two timer-polled refresh paths were also converted to event-driven:
 
 - The 4-second `WalletModel::pollBalanceChanged` poll is replaced by a
   `ChainTipChangedPayload` event, pushed by a subscriber to
-  `uiInterface.NotifyBlocksChanged` (fired in `main.cpp::SetBestChain` after
-  every chain-tip advance). `checkBalanceChanged()` keeps its `TRY_LOCK`
+  `uiInterface.NotifyBlocksChanged`. `SetBestChain` (`node/chainman.cpp`) emits
+  `GetMainSignals().UpdatedBlockTip` after every chain-tip advance, and
+  `UINotificationBridge::UpdatedBlockTip` in `init.cpp` re-emits it as
+  `uiInterface.NotifyBlocksChanged`. `checkBalanceChanged()` keeps its `TRY_LOCK`
   guards and its 4-second stale-time gate on the expensive `Get*Balance()`
   calls.
 - The 30-second `ResearcherModel::refresh_timer` is replaced by the same

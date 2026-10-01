@@ -46,14 +46,14 @@ The code is multi-threaded, and uses mutexes and locking macros to protect data 
 - `cs_wallet`: Wallet operations
 - `pwalletMain->cs_wallet`: Wallet instance lock
 
-**Lock Order**: Generally acquire `cs_main` before `cs_wallet` to prevent deadlocks. The `-DDEBUG_LOCKORDER` compile flag detects lock order violations.
+**Lock Order**: Generally acquire `cs_main` before `cs_wallet` to prevent deadlocks. The `-DENABLE_DEBUG_LOCKORDER=ON` CMake option detects lock order violations.
 
 **Legacy**: `CRITICAL_BLOCK`/`TRY_CRITICAL_BLOCK` are deprecated and being replaced with modern `LOCK` macros.
 
 Deadlocks due to inconsistent lock ordering (thread 1 locks cs_main
 and then cs_wallet, while thread 2 locks them in the opposite order:
 result, deadlock as each waits for the other to release its lock) are
-a problem. Compile with -DDEBUG_LOCKORDER to get lock order
+a problem. Configure with -DENABLE_DEBUG_LOCKORDER=ON to get lock order
 inconsistencies reported in the debug.log file.
 
 Re-architecting the core code so there are better-defined interfaces

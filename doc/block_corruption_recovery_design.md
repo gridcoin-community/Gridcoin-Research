@@ -83,7 +83,7 @@ Collecting in the forward pass (rather than during the backward walk as original
 
 ## Abandonment-style rewind + surgical chainstate cleanup
 
-When the walk returns a non-tip `pindex_consistent`, we cannot use the existing `DisconnectBlocksBatch` primitive (`src/main.cpp:933`). That function reads each block from disk to compute the inverse of its effect on the chainstate — but for the blocks we're abandoning, the on-disk data is by definition unreadable or unhashable. Chicken-and-egg.
+When the walk returns a non-tip `pindex_consistent`, we cannot use the existing `DisconnectBlocksBatch` primitive (`src/node/chainman.cpp`). That function reads each block from disk to compute the inverse of its effect on the chainstate — but for the blocks we're abandoning, the on-disk data is by definition unreadable or unhashable. Chicken-and-egg.
 
 What we *can* do is roll back the chainstate effects of those blocks directly in the `CTxIndex` LevelDB table without needing the block data. Gridcoin's chainstate is much simpler than Bitcoin Core's modern UTXO database — `CTxIndex` (`src/index/txindex.h:12`) is just `{pos, vector<CDiskTxPos> vSpent}` keyed by tx hash, stored under LevelDB key `("tx", hash)`. The entire effect of `ConnectBlock` on chainstate is:
 

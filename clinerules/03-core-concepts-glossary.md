@@ -142,7 +142,7 @@ This glossary provides definitions for Gridcoin-specific terminology. Understand
   - Creates signed manifest
   - Publishes for network convergence
 - **Independence**: Multiple scrapers operate independently
-- **Location**: `src/scraper/`
+- **Location**: `src/gridcoin/scraper/`
 
 ### Manifest
 - **Definition**: Signed package of scraped BOINC statistics
@@ -403,7 +403,7 @@ This glossary provides definitions for Gridcoin-specific terminology. Understand
 ### Lock Order
 - **Definition**: Sequence in which mutexes must be acquired
 - **Critical**: Prevents deadlocks in multi-threaded code
-- **Debug**: `-DDEBUG_LOCKORDER` flag detects violations
+- **Debug**: the `-DENABLE_DEBUG_LOCKORDER=ON` CMake option detects violations
 - **Standard**: `cs_main` before `cs_wallet`
 
 ---
