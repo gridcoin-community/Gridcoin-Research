@@ -3047,8 +3047,9 @@ unsigned int CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQU
         // spent, which is still marked spent -- in the wallet indefinitely.
         //
         // The walk reads the spenders from mapWallet, not from mapTxSpends:
-        // mapTxSpends is filled only as transactions arrive and is not rebuilt
-        // when the wallet loads, so after a restart it would miss them. The
+        // AbandonTransaction erases an abandoned transaction's rows and the
+        // load does not restore them, yet an abandoned transaction can still
+        // spend an output of one being erased. The
         // predicate is AbandonTransaction's: unconfirmed and not pooled. The
         // closure is taken before anything is erased.
         std::vector<uint256> todo;
