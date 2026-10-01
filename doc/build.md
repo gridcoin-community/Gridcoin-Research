@@ -22,11 +22,11 @@ This document covers these build targets:
 
 ## Prerequisites
 
-  * **CMake:** 3.18 or later
+  * **CMake:** 3.21 or later
   * **Compiler:** GCC (C++17 support required) or Clang. If your system compiler is not compliant, you will need to install
     a compiler that is C++17 compliant and use -DCMAKE_CXX_COMPILER=\< C++ compiler \> and -DCMAKE_C_COMPILER=\< C compiler \>
-  * **Qt:** Version 5.15 or 6.x
-  * **Boost:** Version 1.63 or later
+  * **Qt:** Version 5.15 or later (Qt 5), or 6.2.0 or later (Qt 6)
+  * **Boost:** Version 1.66 or later
   * Please refer to [link](build-dependencies.md) (build-dependencies.md) for packages that must be installed before building.
 
 -----

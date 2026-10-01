@@ -1888,9 +1888,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         }
     }
 
-    #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
-        LogPrintf("Using OpenSSL version %s\n", SSLeay_version(SSLEAY_VERSION));
-    #elif defined OPENSSL_VERSION
+    #if defined OPENSSL_VERSION
         LogPrintf("Using OpenSSL version %s\n", OpenSSL_version(OPENSSL_VERSION));
     #elif defined LIBRESSL_VERSION_TEXT
         LogPrintf("Using %s\n", LIBRESSL_VERSION_TEXT);

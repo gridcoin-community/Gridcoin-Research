@@ -1,6 +1,6 @@
 # CMake is the official build system for Gridcoin.
 
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.21)
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cmake")
 set(CPACK_MODULE_PATH "${CPACK_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cpack")
 
@@ -198,7 +198,7 @@ option(BUNDLED_QT5      "Use the bundled version of Qt 5" ${HUNTER_ENABLED})
 
 set(MINIUPNPC_USE_STATIC_LIBS ${STATIC_LIBS})
 
-set(QT5_MINIMUM_VERSION 5.9.5)
+set(QT5_MINIMUM_VERSION 5.15.0)
 set(QT6_MINIMUM_VERSION 6.2.0)
 set(QT_COMPONENTS Core Concurrent Gui LinguistTools Network Widgets Svg)
 set(QT_HUNTER_COMPONENTS qtbase qttools)
@@ -301,7 +301,7 @@ endif()
 if(BUNDLED_OPENSSL)
     hunter_add_package(OpenSSL)
 endif()
-find_package(OpenSSL REQUIRED)
+find_package(OpenSSL 1.1.0 REQUIRED)
 
 if(BUNDLED_CURL)
     hunter_add_package(CURL)
@@ -778,7 +778,7 @@ if(STATIC_RUNTIME)
 endif()
 
 # Set endianness
-if(CMAKE_CXX_BYTE_ORDER EQUAL BIG_ENDIAN)
+if(CMAKE_CXX_BYTE_ORDER STREQUAL "BIG_ENDIAN")
     set(WORDS_BIGENDIAN 1)
 endif()
 

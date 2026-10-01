@@ -63,7 +63,7 @@ This is the Gridcoin-Research cryptocurrency project - an open-source blockchain
 
 ### Core Dependencies (Required)
 
-- **Boost 1.89.0** (minimum 1.63.0) - C++ utility libraries for filesystem, threading, iostreams, serialization, and date_time operations
+- **Boost 1.89.0** (minimum 1.66.0) - C++ utility libraries for filesystem, threading, iostreams, serialization, and date_time operations
   - Location: External via depends/ or system
   - Components: filesystem, iostreams, thread, serialization, date_time, interprocess, test framework
 
@@ -114,7 +114,7 @@ This is the Gridcoin-Research cryptocurrency project - an open-source blockchain
 
 ### GUI Dependencies (Optional - Qt-based GUI only)
 
-- **Qt 6.7.3** (Qt6 minimum 6.2.0, Qt5 minimum 5.9.5) - Cross-platform GUI framework
+- **Qt 6.7.3** (Qt6 minimum 6.2.0, Qt5 minimum 5.15.0) - Cross-platform GUI framework
   - Location: External via depends/ or system
   - Components: qtbase, qttools, qttranslations, qtsvg, qt5compat
   - Required modules: Core, Concurrent, Gui, LinguistTools, Network, Widgets, Svg
@@ -160,7 +160,7 @@ These dependencies are required for building the Qt GUI on Linux systems:
 
 ### Build & Development Tools
 
-- **CMake 3.18+** - Build system generator
+- **CMake 3.21+** - Build system generator
 - **pkg-config** - Library metadata helper
 - **Python 3** - Build scripts and utilities
 
