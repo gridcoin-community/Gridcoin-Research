@@ -162,6 +162,9 @@ BASE_SCRIPTS = [
     # p2p_version_timedrift.py: the VERSION handshake's 480 s clock-drift gate,
     # including a crafted nTime that overflowed the old abs() check.
     'p2p_version_timedrift.py',
+    # p2p_version_floor.py: the VERSION handshake accepts the previous release's
+    # protocol version and drops anything older.
+    'p2p_version_floor.py',
     # p2p_time_votes.py: an outbound peer's time vote is cast on connect and
     # withdrawn when the connection is deleted.
     'p2p_time_votes.py',

@@ -649,31 +649,27 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
-        // Disconnect peers on protocol versions older than the newest activated
-        // block-version fork requires, after a grace period past that fork's
-        // activation height. A per-fork ladder rather than a single
-        // PROTOCOL_VERSION comparison so that bumping PROTOCOL_VERSION for a
-        // future fork (v15) neither cuts off peers that satisfy every activated
-        // fork nor loses the staged enforcement of earlier ones (v14). Each
-        // fork is skipped entirely while unscheduled (height == INT_MAX), also
-        // avoiding signed integer overflow UB in the addition.
+        // Disconnect peers older than MIN_PEER_PROTO_VERSION, the previous
+        // release's protocol version, at once. Peers on that previous version
+        // satisfy every fork before the one this PROTOCOL_VERSION carries, so
+        // they are disconnected only once the grace period past that fork's
+        // activation height has elapsed. The next fork's PROTOCOL_VERSION bump
+        // moves both bounds up by one, and fork_height below must move to that
+        // fork in the same change.
         const int nLocalBestHeight = WITH_LOCK(cs_main, return pindexBest ? pindexBest->nHeight : 0);
-        const Consensus::Params& consensus = Params().GetConsensus();
-        const auto past_fork_grace = [&](int fork_height) {
-            // int64_t arithmetic: fork_height can come from a user-supplied
-            // -blockv15height near INT_MAX, where fork_height + grace would
-            // overflow signed int (UB). The != max() guard handles "unscheduled".
-            return fork_height != std::numeric_limits<int>::max()
-                && nLocalBestHeight > (int64_t)fork_height + consensus.ProtocolVersionGracePeriod;
-        };
+        // GetBlockV15Height() rather than the raw consensus field, so the
+        // -blockv15height override that activates v15 early on
+        // isolated-testnet/regtest also drives this disconnect.
+        const int fork_height = GetBlockV15Height();
+        // Skipped while the fork is unscheduled (height == INT_MAX). int64_t
+        // arithmetic: fork_height can come from a user-supplied -blockv15height
+        // near INT_MAX, where fork_height + grace would overflow signed int (UB).
+        const bool past_fork_grace = fork_height != std::numeric_limits<int>::max()
+            && nLocalBestHeight > (int64_t)fork_height + Params().GetConsensus().ProtocolVersionGracePeriod;
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION
             || (DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD
-                && ((pfrom->nVersion < V14_MIN_PROTO_VERSION && past_fork_grace(consensus.BlockV14Height))
-                    // Use GetBlockV15Height() (not the raw consensus field) so the
-                    // -blockv15height override that activates v15 early on
-                    // isolated-testnet/regtest also drives this disconnect rung.
-                    || (pfrom->nVersion < PROTOCOL_VERSION && past_fork_grace(GetBlockV15Height())))
-                )
+                && pfrom->nVersion < PROTOCOL_VERSION
+                && past_fork_grace)
             ) {
             // disconnect from peers older than this proto version
             LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting",
