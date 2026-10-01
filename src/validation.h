@@ -192,6 +192,18 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CTxDB& txdb, CBlockInd
 bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//! Where a block's stamp falls against the timestamp window.
+enum class BlockTimeCheck {
+    OK,                //!< Inside the window.
+    TOO_EARLY,         //!< Trails the parent's stamp by more than the past bound.
+    AHEAD_UNPENALIZED, //!< From v15: ahead of the receiver's clock by more than the future bound, but 128 s or less.
+    TOO_FAR_AHEAD,     //!< Ahead of the receiver's clock by more than 128 s.
+};
+
+//! Classify a v12+ block's stamp against its parent's stamp and the receiver's adjusted time. Before v15 the window
+//! is [parent - 128, now + 128]; from v15 it is [parent - 48, now + 48].
+BlockTimeCheck CheckBlockTime(int64_t block_time, int64_t parent_time, int64_t adjusted_now, bool v15);
 bool CheckBlockSignature(const CBlock& block);
 
 // Returns the script flags which should be checked for a given block

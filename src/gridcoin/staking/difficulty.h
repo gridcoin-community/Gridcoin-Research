@@ -30,6 +30,11 @@ constexpr int64_t V15_EASING_THRESHOLD = 300;
 constexpr int64_t V15_EASING_DOUBLING = 256;
 constexpr int64_t V15_EASING_MAX_DOUBLINGS = 64;
 
+//! v15 block timestamp window, in seconds: a block's stamp may trail its parent's by at most V15_PAST_TIME_BOUND and
+//! lead the receiver's adjusted time by at most V15_FUTURE_TIME_BOUND.
+constexpr int64_t V15_PAST_TIME_BOUND = 48;
+constexpr int64_t V15_FUTURE_TIME_BOUND = 48;
+
 //! The proof-of-stake target limit, the easiest target a block may use.
 const arith_uint256& GetProofOfStakeLimit();
 

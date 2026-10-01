@@ -8,6 +8,7 @@
 #include "rpc/blockchain.h"
 #include "test/state_guard.h"
 #include "test/test_gridcoin.h"
+#include "validation.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -253,6 +254,25 @@ BOOST_FIXTURE_TEST_CASE(next_target_v15_ignores_the_difficulty_valve, grc_test::
         grc_test::V15HeightGuard at(tip->nHeight + 1);
         BOOST_CHECK_EQUAL(GRC::GetNextTargetRequired(tip), GRC::RetargetLogLinear(FromCompact(bits), 16).GetCompact());
     }
+}
+
+BOOST_AUTO_TEST_CASE(timestamp_window_classifies_both_eras)
+{
+    const int64_t P = 1790000000, N = 1790000100;   // parent stamp, receiver adjusted time
+    // Before v15: [parent - 128, now + 128].
+    BOOST_CHECK(CheckBlockTime(P - 128, P, N, false) == BlockTimeCheck::OK);
+    BOOST_CHECK(CheckBlockTime(P - 129, P, N, false) == BlockTimeCheck::TOO_EARLY);
+    BOOST_CHECK(CheckBlockTime(N + 128, P, N, false) == BlockTimeCheck::OK);
+    BOOST_CHECK(CheckBlockTime(N + 129, P, N, false) == BlockTimeCheck::TOO_FAR_AHEAD);
+    // From v15: [parent - 48, now + 48]; (now + 48, now + 128] unpenalized; beyond that DoS.
+    BOOST_CHECK(CheckBlockTime(P - 48, P, N, true) == BlockTimeCheck::OK);
+    BOOST_CHECK(CheckBlockTime(P - 49, P, N, true) == BlockTimeCheck::TOO_EARLY);
+    BOOST_CHECK(CheckBlockTime(N + 48, P, N, true) == BlockTimeCheck::OK);
+    BOOST_CHECK(CheckBlockTime(N + 49, P, N, true) == BlockTimeCheck::AHEAD_UNPENALIZED);
+    BOOST_CHECK(CheckBlockTime(N + 128, P, N, true) == BlockTimeCheck::AHEAD_UNPENALIZED);
+    BOOST_CHECK(CheckBlockTime(N + 129, P, N, true) == BlockTimeCheck::TOO_FAR_AHEAD);
+    // The past bound is checked first: a stamp that is both too early and too far ahead is TOO_EARLY.
+    BOOST_CHECK(CheckBlockTime(P - 1000, P + 2000, N, true) == BlockTimeCheck::TOO_EARLY);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
