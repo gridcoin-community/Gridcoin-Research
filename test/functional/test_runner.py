@@ -241,6 +241,9 @@ BASE_SCRIPTS = [
     # CScheduler runs on the real clock and setmocktime cannot reach the
     # 60-second delay.
     'feature_no_update_check_on_regtest.py',
+    # feature_no_network_diagnose_on_regtest.py: walletdiagnose's NTP and port
+    # checks report NA on regtest instead of reaching outside hosts (#3359).
+    'feature_no_network_diagnose_on_regtest.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled

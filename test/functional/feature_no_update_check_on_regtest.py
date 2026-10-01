@@ -26,12 +26,9 @@ the wrong reason -- a node whose scheduler never started logs neither line --
 but it is kept because it is the property actually being demanded, and it stays
 meaningful if the decline log and the arming ever stop being adjacent.
 
-Deliberately not exercised: the walletdiagnose RPC, which also funnels through
-the leaf guard. It runs two further ungated outbound checks in the same loop --
-a UDP NTP query and a TCP connect to portquiz.net, the latter through a throwing
-resolver with no handler -- so calling it from a test would reintroduce exactly
-the unsolicited network traffic this test exists to forbid, and would fail
-outright on a runner without DNS.
+Not exercised here: the walletdiagnose RPC, which also funnels through the leaf
+guard. Its two other outbound checks, the NTP query and the port test, are not
+run on regtest either; feature_no_network_diagnose_on_regtest.py covers them.
 """
 
 import os
