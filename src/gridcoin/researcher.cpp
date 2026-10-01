@@ -71,8 +71,16 @@ bool UpdateRWSettingsForMode(const ResearcherMode mode, const std::string& email
 {
     std::vector<std::pair<std::string, util::SettingsValue>> settings;
 
-    // Ensure old (legacy) investor key is removed.
-    settings.push_back(std::make_pair("investor", util::SettingsValue(UniValue::VNULL)));
+    // Store the legacy investor key as "0" rather than erasing it. Email()
+    // and ConfiguredForNoncruncherMode() still read -investor, and the
+    // read-write settings outrank the config file, so a "0" here keeps a
+    // legacy investor=1 in the config file from overriding the mode chosen
+    // here, in this session and after a restart. Erased, the config-file value
+    // would apply again. A value given on the command line still outranks it.
+    // Every mode change now leaves this key in the settings file, so the
+    // deprecated -investor registration cannot be removed until this line
+    // erases the key again.
+    settings.push_back(std::make_pair("investor", "0"));
 
     if (mode == ResearcherMode::NONCRUNCHER) {
         settings.push_back(std::make_pair("email", util::SettingsValue(UniValue::VNULL)));
