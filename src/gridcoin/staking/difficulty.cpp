@@ -14,6 +14,7 @@
 #include "wallet/wallet.h"
 #include "consensus/consensus.h"
 
+#include <algorithm>
 #include <vector>
 
 using namespace GRC;
@@ -34,6 +35,72 @@ const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfSta
 // -----------------------------------------------------------------------------
 // Functions
 // -----------------------------------------------------------------------------
+
+const arith_uint256& GRC::GetProofOfStakeLimit()
+{
+    return PROOF_OF_STAKE_LIMIT;
+}
+
+namespace {
+//! Floor division for a positive divisor. C++ integer division truncates toward zero.
+int64_t FloorDiv(int64_t num, int64_t den)
+{
+    const int64_t q = num / den;
+    return (num % den != 0 && num < 0) ? q - 1 : q;
+}
+} // anonymous namespace
+
+arith_uint256 GRC::ScaleTargetExp2(const arith_uint256& target_in, int64_t exponent_q16, const arith_uint256& limit)
+{
+    const arith_uint256 target = target_in > limit ? limit : target_in;
+
+    int64_t shifts = FloorDiv(exponent_q16, 65536);
+    const uint64_t frac = static_cast<uint64_t>(exponent_q16 - shifts * 65536); // [0, 65535]
+
+    // 2^frac in Q16, the aserti3-2d cubic. The sum fits in uint64 for frac <= 65535.
+    const uint64_t factor = 65536 + ((uint64_t{195766423245049} * frac
+                                      + uint64_t{971821376} * frac * frac
+                                      + uint64_t{5127} * frac * frac * frac
+                                      + (uint64_t{1} << 47)) >> 48);
+
+    // The proof-of-stake limit is below 2^236 and factor is below 2^17, so the product fits in 256 bits.
+    arith_uint256 next = target * arith_uint256(factor);
+
+    shifts -= 16;
+    if (shifts <= 0) {
+        next = (-shifts >= 256) ? arith_uint256(0) : (next >> static_cast<unsigned int>(-shifts));
+    } else if (shifts >= 256) {
+        next = limit;
+    } else {
+        const arith_uint256 shifted = next << static_cast<unsigned int>(shifts);
+        next = ((shifted >> static_cast<unsigned int>(shifts)) == next) ? shifted : limit;
+    }
+
+    if (next == 0) return arith_uint256(1);
+    return next > limit ? limit : next;
+}
+
+arith_uint256 GRC::RetargetLogLinear(const arith_uint256& parent_target, int64_t spacing)
+{
+    // Valid chains keep the spacing at -128 s or more. The lower clamp only bounds the arithmetic for inputs no valid
+    // chain produces, so the numerator below always stays well inside int64.
+    const int64_t t = std::clamp(spacing, -V15_SPACING_CAP, V15_SPACING_CAP);
+    // Q16 exponent of 2 (t - 90) / (990 ln 2), with ln 2 taken as 0.693147.
+    const int64_t exponent_q16 = FloorDiv((t - V15_TARGET_SPACING) * 2 * 65536 * 1000000,
+                                          V15_RETARGET_TIME_CONSTANT * 693147);
+    return ScaleTargetExp2(parent_target, exponent_q16, PROOF_OF_STAKE_LIMIT);
+}
+
+arith_uint256 GRC::EaseTarget(const arith_uint256& base_target, int64_t elapsed)
+{
+    if (elapsed <= V15_EASING_THRESHOLD) {
+        return base_target > PROOF_OF_STAKE_LIMIT ? PROOF_OF_STAKE_LIMIT : base_target;
+    }
+    const int64_t e = std::min(elapsed, V15_EASING_THRESHOLD + V15_EASING_DOUBLING * V15_EASING_MAX_DOUBLINGS);
+    // The doubling time divides 65536, so the Q16 exponent is exact.
+    const int64_t exponent_q16 = (e - V15_EASING_THRESHOLD) * (65536 / V15_EASING_DOUBLING);
+    return ScaleTargetExp2(base_target, exponent_q16, PROOF_OF_STAKE_LIMIT);
+}
 
 unsigned int GRC::GetNextTargetRequired(const CBlockIndex* pindexLast) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
