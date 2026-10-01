@@ -473,27 +473,31 @@ bool DetectSplitCpid(const MiningProjectMap& projects)
 //!
 void StoreResearcher(Researcher context)
 {
+    // Work out the text first; the lock guards only the string.
     // TODO: this belongs in presentation layer code:
-    {
-        LOCK(cs_msMiningErrors);
+    std::optional<std::string> status_text;
 
-        switch (context.Status()) {
-            case ResearcherStatus::ACTIVE:
-                msMiningErrors = _("Eligible for Research Rewards");
-                break;
-            case ResearcherStatus::POOL:
-                msMiningErrors = _("Staking Only - Pool Detected");
-                break;
-            case ResearcherStatus::NO_PROJECTS:
-                msMiningErrors = _("Staking Only - No Eligible Research Projects");
-                break;
-            case ResearcherStatus::NO_BEACON:
-                msMiningErrors = _("Staking Only - No active beacon");
-                break;
-            case ResearcherStatus::NONCRUNCHER:
-                msMiningErrors = _("Staking Only - Non-cruncher Mode");
-                break;
-        }
+    switch (context.Status()) {
+        case ResearcherStatus::ACTIVE:
+            status_text = _("Eligible for Research Rewards");
+            break;
+        case ResearcherStatus::POOL:
+            status_text = _("Staking Only - Pool Detected");
+            break;
+        case ResearcherStatus::NO_PROJECTS:
+            status_text = _("Staking Only - No Eligible Research Projects");
+            break;
+        case ResearcherStatus::NO_BEACON:
+            status_text = _("Staking Only - No active beacon");
+            break;
+        case ResearcherStatus::NONCRUNCHER:
+            status_text = _("Staking Only - Non-cruncher Mode");
+            break;
+    }
+
+    if (status_text) {
+        LOCK(cs_msMiningErrors);
+        msMiningErrors = std::move(*status_text);
     }
 
     std::atomic_store(
