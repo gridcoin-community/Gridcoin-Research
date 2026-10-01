@@ -5,6 +5,7 @@
 #include "arith_uint256.h"
 #include "chainparams.h"
 #include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/kernel.h"
 #include "rpc/blockchain.h"
 #include "test/state_guard.h"
 #include "test/test_gridcoin.h"
@@ -273,6 +274,65 @@ BOOST_AUTO_TEST_CASE(timestamp_window_classifies_both_eras)
     BOOST_CHECK(CheckBlockTime(N + 129, P, N, true) == BlockTimeCheck::TOO_FAR_AHEAD);
     // The past bound is checked first: a stamp that is both too early and too far ahead is TOO_EARLY.
     BOOST_CHECK(CheckBlockTime(P - 1000, P + 2000, N, true) == BlockTimeCheck::TOO_EARLY);
+}
+
+BOOST_FIXTURE_TEST_CASE(kernel_target_eases_only_from_v15_and_only_past_300s, grc_test::StateGuard)
+{
+    LOCK(cs_main);
+    SelectParams(CBaseChainParams::MAIN);
+    const unsigned int bits = 0x1c194e41;
+    CBlockIndex* parent = BuildChain({1790000000, 1790000090}, bits);
+    const arith_uint256 base = FromCompact(bits);
+
+    {
+        grc_test::V15HeightGuard below(parent->nHeight + 2);
+        BOOST_CHECK(GRC::GetKernelTarget(bits, parent->GetBlockTime() + 812, parent) == base);
+    }
+    {
+        grc_test::V15HeightGuard at(parent->nHeight + 1);
+        BOOST_CHECK(GRC::GetKernelTarget(bits, parent->GetBlockTime() + 300, parent) == base);
+        BOOST_CHECK(GRC::GetKernelTarget(bits, parent->GetBlockTime() + 812, parent) == GRC::EaseTarget(base, 812));
+        BOOST_CHECK(GRC::GetKernelTarget(bits, parent->GetBlockTime() + 812, parent) > base);
+        // A stamp before the parent (negative elapsed time) is never eased. Unsigned arithmetic would wrap here.
+        BOOST_CHECK(GRC::GetKernelTarget(bits, parent->GetBlockTime() - 16, parent) == base);
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(kernel_target_on_a_limit_base_is_never_harder, grc_test::StateGuard)
+{
+    LOCK(cs_main);
+    SelectParams(CBaseChainParams::MAIN);
+    // A chain sitting at the proof-of-stake limit (regtest, testnet, a fresh chain).
+    const unsigned int bits = GRC::GetProofOfStakeLimit().GetCompact();
+    CBlockIndex* parent = BuildChain({1790000000, 1790000090}, bits);
+    const arith_uint256 base = FromCompact(bits);
+    grc_test::V15HeightGuard at(parent->nHeight + 1);
+
+    for (const int64_t e : {-48, 0, 300, 301, 812, 5000, 100000}) {
+        const arith_uint256 target = GRC::GetKernelTarget(bits, parent->GetBlockTime() + e, parent);
+        BOOST_CHECK_MESSAGE(target >= base && target <= GRC::GetProofOfStakeLimit(), "e = " << e);
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(kernel_target_is_monotone_over_long_outages, grc_test::StateGuard)
+{
+    LOCK(cs_main);
+    SelectParams(CBaseChainParams::MAIN);
+    const unsigned int bits = 0x1c194e41;
+    CBlockIndex* parent = BuildChain({1790000000, 1790000090}, bits);
+    const arith_uint256 base = FromCompact(bits);
+    grc_test::V15HeightGuard at(parent->nHeight + 1);
+
+    // From a stamp 48 s before the parent to a six-hour outage, in 16 s steps: never below the base, never zero,
+    // never above the limit, non-decreasing, and at the limit by the end.
+    arith_uint256 previous = base;
+    for (int64_t e = -48; e <= 6 * 60 * 60; e += 16) {
+        const arith_uint256 target = GRC::GetKernelTarget(bits, parent->GetBlockTime() + e, parent);
+        BOOST_REQUIRE_MESSAGE(target >= previous && target >= base && target <= GRC::GetProofOfStakeLimit(),
+                              "e = " << e);
+        previous = target;
+    }
+    BOOST_CHECK(previous == GRC::GetProofOfStakeLimit());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

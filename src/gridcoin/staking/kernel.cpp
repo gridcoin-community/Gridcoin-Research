@@ -5,6 +5,8 @@
 
 #include "amount.h"
 #include "arith_uint256.h"
+#include "chainparams.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/kernel.h"
 #include "txdb.h"
 #include "random.h"
@@ -589,6 +591,20 @@ bool GRC::FindStakeModifierRev(uint64_t& nStakeModifier, CBlockIndex* pindexPrev
 
 // Block Version 8+ check procedure
 
+arith_uint256 GRC::GetKernelTarget(unsigned int nBits, int64_t block_time, const CBlockIndex* pindexPrev)
+{
+    arith_uint256 base;
+    base.SetCompact(nBits);
+
+    if (!IsV15Enabled(pindexPrev->nHeight + 1)) {
+        return base;
+    }
+
+    // Signed elapsed time. A stamp up to 48 s before the parent is valid and gets no easing.
+    const int64_t elapsed = block_time - pindexPrev->GetBlockTime();
+    return EaseTarget(base, elapsed);
+}
+
 bool GRC::CheckProofOfStakeV8(
     CTxDB& txdb,
     CBlockIndex* pindexPrev, //previous block in chain index
@@ -645,8 +661,14 @@ bool GRC::CheckProofOfStakeV8(
     int64_t Weight = CalculateStakeWeightV8(txPrev, prevout.n);
     arith_uint320 bnHashProof = arith_uint320(hashProofOfStake);
 
-    // Base target
-    arith_uint320 bnTarget = arith_uint256().SetCompact(Block.nBits);
+    // Base target, eased from v15 when the block is long after its parent
+    arith_uint320 bnTarget = GetKernelTarget(Block.nBits, Block.GetBlockTime(), pindexPrev);
+
+    if (bnTarget != arith_uint320(arith_uint256().SetCompact(Block.nBits))) {
+        LogPrint(BCLog::LogFlags::VERBOSE, "CheckProofOfStakeV8: eased kernel target, elapsed %d s",
+                 Block.GetBlockTime() - pindexPrev->GetBlockTime());
+    }
+
     // Weighted target
     bnTarget *= arith_uint320(Weight);
 

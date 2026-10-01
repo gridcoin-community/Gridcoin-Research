@@ -7,6 +7,7 @@
 #define GRIDCOIN_STAKING_KERNEL_H
 
 #include "amount.h"
+#include "arith_uint256.h"
 #include "chain.h"  // cs_main (required for clang's EXCLUSIVE_LOCKS_REQUIRED analyzer), CBlock, CBlockHeader, uint256
 
 class CTransaction;
@@ -113,6 +114,10 @@ bool CheckProofOfStakeV8(
     uint256& hashProofOfStake) EXCLUSIVE_LOCKS_REQUIRED(cs_main); //proof hash out-parameter
 
 bool FindStakeModifierRev(uint64_t& StakeModifier, CBlockIndex* pindexPrev, int &nHeight) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//! The base kernel target, before the UTXO weight, for a block stamped \p block_time on \p pindexPrev. From v15 the
+//! nBits target is eased by the block's elapsed time since its parent; nBits itself is never eased.
+arith_uint256 GetKernelTarget(unsigned int nBits, int64_t block_time, const CBlockIndex* pindexPrev);
 
 // Kernel for V8
 uint256 CalculateStakeHashV8(
