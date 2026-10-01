@@ -335,4 +335,32 @@ BOOST_FIXTURE_TEST_CASE(kernel_target_is_monotone_over_long_outages, grc_test::S
     BOOST_CHECK(previous == GRC::GetProofOfStakeLimit());
 }
 
+BOOST_FIXTURE_TEST_CASE(stake_time_is_masked_and_guarded_from_v15, grc_test::StateGuard)
+{
+    LOCK(cs_main);
+    SelectParams(CBaseChainParams::MAIN);
+    CBlockIndex* parent = BuildChain({1790000000, 1790000096}, 0x1c194e41);   // parent stamp on the 16 s grid
+    const int64_t P = parent->GetBlockTime();
+
+    {
+        grc_test::V15HeightGuard below(parent->nHeight + 2);
+        BOOST_CHECK_EQUAL(GRC::GetStakeTime(parent, P + 21), P + 21);             // unchanged below v15
+    }
+
+    grc_test::V15HeightGuard at(parent->nHeight + 1);
+    BOOST_CHECK_EQUAL(GRC::GetStakeTime(parent, P + 21), GRC::MaskStakeTime(P + 21));
+    // A clock behind the parent by more than 48 s is lifted to parent - 48 (masked parent stamps are on the grid).
+    BOOST_CHECK_EQUAL(GRC::GetStakeTime(parent, P - 200), P - 48);
+
+    for (int64_t now = P - 500; now <= P + 500; now += 7) {
+        const int64_t stamp = GRC::GetStakeTime(parent, now);
+        BOOST_CHECK_EQUAL(stamp, GRC::MaskStakeTime(stamp));
+        // The stamp always passes the past bound. It passes the node's own validation whenever the clock is at most
+        // 96 s behind the parent; further behind, the node's own window rejects it, so the miner must skip.
+        BOOST_CHECK(P - stamp <= GRC::V15_PAST_TIME_BOUND);
+        const bool accepted = CheckBlockTime(stamp, P, now, true) == BlockTimeCheck::OK;
+        BOOST_CHECK_MESSAGE(accepted == (now >= P - 2 * GRC::V15_PAST_TIME_BOUND), "now = P + " << now - P);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

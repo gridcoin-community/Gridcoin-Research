@@ -17,6 +17,8 @@
 
 #include <node/blockstorage.h>
 
+#include <algorithm>
+
 using namespace std;
 using namespace GRC;
 
@@ -603,6 +605,16 @@ arith_uint256 GRC::GetKernelTarget(unsigned int nBits, int64_t block_time, const
     // Signed elapsed time. A stamp up to 48 s before the parent is valid and gets no easing.
     const int64_t elapsed = block_time - pindexPrev->GetBlockTime();
     return EaseTarget(base, elapsed);
+}
+
+int64_t GRC::GetStakeTime(const CBlockIndex* pindexPrev, int64_t adjusted_now)
+{
+    if (!IsV15Enabled(pindexPrev->nHeight + 1)) {
+        return adjusted_now;
+    }
+
+    // Stamps from v12 are on the 16 s grid, so parent - 48 is too.
+    return std::max<int64_t>(pindexPrev->GetBlockTime() - V15_PAST_TIME_BOUND, MaskStakeTime(adjusted_now));
 }
 
 bool GRC::CheckProofOfStakeV8(
