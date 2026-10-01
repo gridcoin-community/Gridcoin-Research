@@ -504,20 +504,22 @@ void SelectParams(const std::string& network)
     globalChainParams = CreateChainParams(network);
 }
 
+bool g_unit_test_consensus_overrides = false;
+
 int GetBlockV15Height()
 {
     // Hidden `-blockv15height` arg lets isolated testnet / regtest activate
     // POOL contracts at a low height for end-to-end exercise. Defaults to the
     // chainparams value (std::numeric_limits<int>::max() until pinned).
-    return gArgs.GetArg("-blockv15height", Params().GetConsensus().BlockV15Height);
+    return GetConsensusOverride("-blockv15height", Params().GetConsensus().BlockV15Height);
 }
 
 int GetMessageContractDisableHeight()
 {
     // Hidden `-messagecontractdisableheight` arg lets isolated testnet / regtest disable
     // MESSAGE contracts at a lower height for end-to-end exercise.
-    return gArgs.GetArg("-messagecontractdisableheight",
-                        Params().GetConsensus().MessageContractDisableHeight);
+    return GetConsensusOverride("-messagecontractdisableheight",
+                                Params().GetConsensus().MessageContractDisableHeight);
 }
 
 int GetPendingPoolRetention()
@@ -528,5 +530,5 @@ int GetPendingPoolRetention()
     // blocks. Consensus-affecting on shared networks: nodes with different
     // values will disagree on POOL_REGISTER admission across expiration
     // boundaries and fork. Defaults to the chainparams value (28800).
-    return gArgs.GetArg("-pendingpoolretention", Params().GetConsensus().PendingPoolRetention);
+    return GetConsensusOverride("-pendingpoolretention", Params().GetConsensus().PendingPoolRetention);
 }

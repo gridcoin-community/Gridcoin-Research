@@ -82,6 +82,81 @@ BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock312000InTestnet)
     BOOST_CHECK(IsV8Enabled(312000) == true);
 }
 
+namespace {
+//! Clears the unit-test opt-in for one case, so ConsensusOverridesAllowed()
+//! answers as it does in a node, and puts it back afterwards.
+class NodeOverrideRules
+{
+public:
+    NodeOverrideRules() : m_saved(g_unit_test_consensus_overrides) { g_unit_test_consensus_overrides = false; }
+    ~NodeOverrideRules() { g_unit_test_consensus_overrides = m_saved; }
+
+private:
+    bool m_saved;
+};
+
+//! Sets every consensus override to 5, a value no network's chainparams uses
+//! for any of them.
+void SetConsensusOverrides()
+{
+    for (const char* arg : CONSENSUS_OVERRIDE_ARGS) {
+        gArgs.ForceSetArg(arg, "5");
+    }
+}
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(gridcoin_consensus_overrides_are_ignored_on_mainnet)
+{
+    // Restores the network and the forced settings.
+    grc_test::StateGuard guard;
+    NodeOverrideRules node_rules;
+
+    SelectParams(CBaseChainParams::MAIN);
+    SetConsensusOverrides();
+    const Consensus::Params& consensus = Params().GetConsensus();
+
+    BOOST_CHECK(!ConsensusOverridesAllowed());
+    BOOST_CHECK_EQUAL(GetBlockV15Height(), consensus.BlockV15Height);
+    BOOST_CHECK_EQUAL(GetMessageContractDisableHeight(), consensus.MessageContractDisableHeight);
+    BOOST_CHECK_EQUAL(GetPendingPoolRetention(), consensus.PendingPoolRetention);
+    BOOST_CHECK_EQUAL(IsPollMultiAddressEnabled(5), 5 >= consensus.PollMultiAddressHeight);
+    BOOST_CHECK_EQUAL(IsAutoGreylistDeepCopyEnabled(5), 5 >= consensus.AutoGreylistDeepCopyHeight);
+    BOOST_CHECK_EQUAL(IsAutoGreylistTotalCreditFixEnabled(5), 5 >= consensus.AutoGreylistTotalCreditFixHeight);
+    BOOST_CHECK_EQUAL(IsAutoGreylistRedesignEnabled(5), 5 >= consensus.AutoGreylistRedesignHeight);
+
+    // The unit-test opt-in is what lets the suites drive them on mainnet params.
+    g_unit_test_consensus_overrides = true;
+    BOOST_CHECK(ConsensusOverridesAllowed());
+    BOOST_CHECK_EQUAL(GetBlockV15Height(), 5);
+}
+
+BOOST_AUTO_TEST_CASE(gridcoin_consensus_overrides_apply_on_testnet_and_regtest)
+{
+    grc_test::StateGuard guard;
+    NodeOverrideRules node_rules;
+
+    for (const std::string& chain : {CBaseChainParams::TESTNET, CBaseChainParams::REGTEST}) {
+        BOOST_TEST_MESSAGE("chain " << chain);
+        SelectParams(chain);
+        SetConsensusOverrides();
+
+        BOOST_CHECK(ConsensusOverridesAllowed());
+        BOOST_CHECK_EQUAL(GetBlockV15Height(), 5);
+        BOOST_CHECK_EQUAL(GetMessageContractDisableHeight(), 5);
+        BOOST_CHECK_EQUAL(GetPendingPoolRetention(), 5);
+        // Each gate opens at the override height, not the chainparams one
+        // (0 on regtest, unscheduled on testnet).
+        BOOST_CHECK(!IsPollMultiAddressEnabled(4));
+        BOOST_CHECK(IsPollMultiAddressEnabled(5));
+        BOOST_CHECK(!IsAutoGreylistDeepCopyEnabled(4));
+        BOOST_CHECK(IsAutoGreylistDeepCopyEnabled(5));
+        BOOST_CHECK(!IsAutoGreylistTotalCreditFixEnabled(4));
+        BOOST_CHECK(IsAutoGreylistTotalCreditFixEnabled(5));
+        BOOST_CHECK(!IsAutoGreylistRedesignEnabled(4));
+        BOOST_CHECK(IsAutoGreylistRedesignEnabled(5));
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 //

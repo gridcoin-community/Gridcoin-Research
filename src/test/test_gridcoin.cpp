@@ -120,6 +120,9 @@ struct TestingSetup {
             gArgs.ForceSetArg("-datadir", m_path_root.string());
             gArgs.ClearPathCache();
             SelectParams(CBaseChainParams::MAIN);
+            // The suites run on mainnet params and set the hidden consensus
+            // overrides (-blockv15height and the rest); let them apply.
+            g_unit_test_consensus_overrides = true;
 
             // Forces logger to log to the console, and also not log to the debug.log file.
             gArgs.ForceSetArg("-debuglogfile", "none");
