@@ -65,6 +65,8 @@ std::atomic<bool> g_researcher_dirty(true);
 //! \param email The email address to update the directive to. If empty, set
 //! the configuration to non-cruncher mode.
 //!
+//! On a successful write, it also clears any value forced for the keys it wrote.
+//!
 //! \return \c false if an error occurs during the update.
 //!
 bool UpdateRWSettingsForMode(const ResearcherMode mode, const std::string& email)
@@ -90,7 +92,27 @@ bool UpdateRWSettingsForMode(const ResearcherMode mode, const std::string& email
         settings.push_back(std::make_pair("noncruncher", "0"));
     }
 
-    return ::updateRwSettings(settings);
+    if (!::updateRwSettings(settings)) {
+        return false;
+    }
+
+    // The write succeeded, so the read-write settings now hold the chosen
+    // mode. A changesettings of any of these keys forced its value into the
+    // running args, and a forced value outranks the read-write settings. Left
+    // in place, a forced legacy investor flag keeps Email() and
+    // ConfiguredForNoncruncherMode() in non-cruncher mode for the rest of the
+    // session, whatever mode was chosen. Clear them, so the running args read
+    // what a restart would read. ChangeMode() forces email and noncruncher
+    // again as soon as this returns. On a failed write nothing is cleared:
+    // ChangeMode() returns before it forces or reloads anything, and every
+    // forced value stays as it was. A value given on the command line is not a
+    // forced value, so it still outranks the settings file, as it does after a
+    // restart.
+    for (const auto& setting : settings) {
+        gArgs.ClearForcedArg("-" + setting.first);
+    }
+
+    return true;
 }
 
 //!
