@@ -3,9 +3,15 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "arith_uint256.h"
+#include "chainparams.h"
 #include "gridcoin/staking/difficulty.h"
+#include "rpc/blockchain.h"
+#include "test/state_guard.h"
+#include "test/test_gridcoin.h"
 
 #include <boost/test/unit_test.hpp>
+
+#include <vector>
 
 namespace {
 struct RetargetVector { unsigned int parent; int64_t t; unsigned int expected; };
@@ -95,6 +101,24 @@ const EaseVector EASE_VECTORS[] = {
 };
 
 arith_uint256 FromCompact(unsigned int c) { arith_uint256 v; v.SetCompact(c); return v; }
+
+//! A linear chain of proof-of-stake block indexes with the given stamps and nBits. Returns the tip. The entries
+//! live in mapBlockIndex; the StateGuard fixture erases them afterwards.
+CBlockIndex* BuildChain(const std::vector<int64_t>& times, unsigned int bits) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    CBlockIndex* prev = nullptr;
+    for (size_t i = 0; i < times.size(); ++i) {
+        CBlockIndex* idx = GRC::MockBlockIndex::InsertBlockIndex(InsecureRand256());
+        idx->nHeight = 4000000 + static_cast<int>(i);
+        idx->nTime = static_cast<unsigned int>(times[i]);
+        idx->nBits = bits;
+        idx->SetProofOfStake();
+        idx->pprev = prev;
+        if (prev) prev->pnext = idx;
+        prev = idx;
+    }
+    return prev;
+}
 } // namespace
 
 BOOST_AUTO_TEST_SUITE(difficulty_tests)
@@ -177,6 +201,58 @@ BOOST_AUTO_TEST_CASE(scale_exp2_handles_extreme_exponents)
     BOOST_CHECK(GRC::ScaleTargetExp2(base, int64_t{300} << 16, limit) == limit);   // shift >= 256: overflow
     BOOST_CHECK(GRC::ScaleTargetExp2(base, -(int64_t{300} << 16), limit) == arith_uint256(1)); // underflow -> 1
     BOOST_CHECK(GRC::ScaleTargetExp2(base, 65536, limit) == base * 2);                // exactly one doubling
+}
+
+BOOST_FIXTURE_TEST_CASE(next_target_switches_to_log_linear_exactly_at_v15, grc_test::StateGuard)
+{
+    LOCK(cs_main);
+    SelectParams(CBaseChainParams::MAIN);
+    const unsigned int bits = 0x1c194e41;
+    // Parent spacing 16 s: the old rule gives (810 + 32) / 990, the log-linear rule 2^(2 (16 - 90) / (990 ln 2)).
+    CBlockIndex* tip = BuildChain({1790000000, 1790000016, 1790000032}, bits);
+
+    {
+        grc_test::V15HeightGuard below(tip->nHeight + 2);   // the next block (tip + 1) is below v15
+        arith_uint256 old_expected = FromCompact(bits);
+        old_expected *= 810 + 2 * 16;
+        old_expected /= arith_uint256(990);
+        BOOST_CHECK_EQUAL(GRC::GetNextTargetRequired(tip), old_expected.GetCompact());
+    }
+    {
+        grc_test::V15HeightGuard at(tip->nHeight + 1);      // the next block is the first v15 block
+        BOOST_CHECK_EQUAL(GRC::GetNextTargetRequired(tip), GRC::RetargetLogLinear(FromCompact(bits), 16).GetCompact());
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(next_target_v15_uses_signed_parent_spacing, grc_test::StateGuard)
+{
+    LOCK(cs_main);
+    SelectParams(CBaseChainParams::MAIN);
+    const unsigned int bits = 0x1c194e41;
+    // Parent stamped 32 s before its own parent: the old rule treats that as 90 s, the v15 rule uses -32.
+    CBlockIndex* tip = BuildChain({1790000064, 1790000080, 1790000048}, bits);
+    grc_test::V15HeightGuard at(0);
+    BOOST_CHECK_EQUAL(GRC::GetNextTargetRequired(tip), GRC::RetargetLogLinear(FromCompact(bits), -32).GetCompact());
+}
+
+BOOST_FIXTURE_TEST_CASE(next_target_v15_ignores_the_difficulty_valve, grc_test::StateGuard)
+{
+    LOCK(cs_main);
+    SelectParams(CBaseChainParams::MAIN);
+    // Difficulty 2^24, above the 900000 valve, with the chain tip as pindexBest so that the valve reads it.
+    const unsigned int bits = 0x1a00ffff;
+    CBlockIndex* tip = BuildChain({1790000000, 1790000016, 1790000032}, bits);
+    pindexBest = tip;
+    BOOST_REQUIRE_GT(GRC::GetCurrentDifficulty(), 900000.0);
+
+    {
+        grc_test::V15HeightGuard below(tip->nHeight + 2);
+        BOOST_CHECK_EQUAL(GRC::GetNextTargetRequired(tip), GRC::GetProofOfStakeLimit().GetCompact());
+    }
+    {
+        grc_test::V15HeightGuard at(tip->nHeight + 1);
+        BOOST_CHECK_EQUAL(GRC::GetNextTargetRequired(tip), GRC::RetargetLogLinear(FromCompact(bits), 16).GetCompact());
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

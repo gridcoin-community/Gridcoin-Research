@@ -118,6 +118,16 @@ unsigned int GRC::GetNextTargetRequired(const CBlockIndex* pindexLast) EXCLUSIVE
         return PROOF_OF_STAKE_LIMIT.GetCompact(); // second block
     }
 
+    // From v15 the retarget is log-linear in the signed parent spacing, which removes the upward bias of the linear
+    // rule and the clamp of negative spacings to the target. The difficulty valve and the GetTargetSpacing height
+    // lookup below apply only to the older rule.
+    if (IsV15Enabled(pindexLast->nHeight + 1)) {
+        arith_uint256 parent_target;
+        parent_target.SetCompact(pindexPrev->nBits);
+        const int64_t spacing = pindexPrev->GetBlockTime() - pindexPrevPrev->GetBlockTime();
+        return RetargetLogLinear(parent_target, spacing).GetCompact();
+    }
+
     const int64_t nTargetSpacing = GetTargetSpacing(pindexLast->nHeight);
     int64_t nActualSpacing = pindexPrev->GetBlockTime() - pindexPrevPrev->GetBlockTime();
 
