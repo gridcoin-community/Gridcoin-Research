@@ -358,3 +358,99 @@ void OptionsModelTests::changedProxyIsPushed()
     QCOMPARE(node.m_change_calls.size(), size_t{2});
     QCOMPARE(node.m_change_calls.back(), (SettingsBatch{{"proxy", "127.0.0.1:9150"}}));
 }
+
+void OptionsModelTests::proxyFailedEnableRetries()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    OptionsModel model(node, sidestakes);
+
+    node.m_fail_changes = true;
+    QVERIFY(!model.setData(model.index(OptionsModel::ProxyUse), QVariant(true), Qt::EditRole));
+    QVERIFY(!QSettings().contains(GUIUtil::nodeSettingsKey("fUseProxy")));
+    QCOMPARE(node.m_change_calls.size(), size_t{1});
+
+    // An identical resubmit must push again.
+    node.m_fail_changes = false;
+    QVERIFY(model.setData(model.index(OptionsModel::ProxyUse), QVariant(true), Qt::EditRole));
+    QCOMPARE(node.m_change_calls.size(), size_t{2});
+    QCOMPARE(node.m_change_calls.back(), (SettingsBatch{{"proxy", "127.0.0.1:9050"}}));
+    QVERIFY(QSettings().value(GUIUtil::nodeSettingsKey("fUseProxy"), false).toBool());
+}
+
+void OptionsModelTests::proxyFailedHostRetries()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    OptionsModel model(node, sidestakes);
+    {
+        QSettings settings;
+        settings.setValue(GUIUtil::nodeSettingsKey("fUseProxy"), true);
+        settings.setValue(GUIUtil::nodeSettingsKey("addrProxy"), QStringLiteral("127.0.0.1:9050"));
+    }
+
+    node.m_fail_changes = true;
+    QVERIFY(!model.setData(model.index(OptionsModel::ProxyIP), QVariant(QStringLiteral("10.0.0.2")), Qt::EditRole));
+    QCOMPARE(QSettings().value(GUIUtil::nodeSettingsKey("addrProxy")).toString(), QStringLiteral("127.0.0.1:9050"));
+    QCOMPARE(node.m_change_calls.size(), size_t{1});
+
+    node.m_fail_changes = false;
+    QVERIFY(model.setData(model.index(OptionsModel::ProxyIP), QVariant(QStringLiteral("10.0.0.2")), Qt::EditRole));
+    QCOMPARE(node.m_change_calls.size(), size_t{2});
+    QCOMPARE(node.m_change_calls.back(), (SettingsBatch{{"proxy", "10.0.0.2:9050"}}));
+    QCOMPARE(QSettings().value(GUIUtil::nodeSettingsKey("addrProxy")).toString(), QStringLiteral("10.0.0.2:9050"));
+}
+
+void OptionsModelTests::proxyFailedPortRetries()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    OptionsModel model(node, sidestakes);
+    {
+        QSettings settings;
+        settings.setValue(GUIUtil::nodeSettingsKey("fUseProxy"), true);
+        settings.setValue(GUIUtil::nodeSettingsKey("addrProxy"), QStringLiteral("127.0.0.1:9050"));
+    }
+
+    node.m_fail_changes = true;
+    QVERIFY(!model.setData(model.index(OptionsModel::ProxyPort), QVariant(QString("9150")), Qt::EditRole));
+    QCOMPARE(QSettings().value(GUIUtil::nodeSettingsKey("addrProxy")).toString(), QStringLiteral("127.0.0.1:9050"));
+    QCOMPARE(node.m_change_calls.size(), size_t{1});
+
+    node.m_fail_changes = false;
+    QVERIFY(model.setData(model.index(OptionsModel::ProxyPort), QVariant(QString("9150")), Qt::EditRole));
+    QCOMPARE(node.m_change_calls.size(), size_t{2});
+    QCOMPARE(node.m_change_calls.back(), (SettingsBatch{{"proxy", "127.0.0.1:9150"}}));
+    QCOMPARE(QSettings().value(GUIUtil::nodeSettingsKey("addrProxy")).toString(), QStringLiteral("127.0.0.1:9150"));
+}
+
+void OptionsModelTests::proxyFailedEnableThenValidHost()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    OptionsModel model(node, sidestakes);
+
+    // A stale address the node would reject; the proxy is disabled.
+    {
+        QSettings settings;
+        settings.setValue(GUIUtil::nodeSettingsKey("addrProxy"), QStringLiteral("invalid-proxy-address"));
+    }
+
+    // Enabling pushes the stale address, which fails, so the enable is undone.
+    node.m_fail_changes = true;
+    QVERIFY(!model.setData(model.index(OptionsModel::ProxyUse), QVariant(true), Qt::EditRole));
+    QVERIFY(!QSettings().contains(GUIUtil::nodeSettingsKey("fUseProxy")));
+
+    // A valid host later in the same submit is stored, and pushed with the proxy
+    // still disabled.
+    node.m_fail_changes = false;
+    QVERIFY(model.setData(model.index(OptionsModel::ProxyIP), QVariant(QStringLiteral("10.0.0.2")), Qt::EditRole));
+    QCOMPARE(node.m_change_calls.size(), size_t{2});
+    QCOMPARE(node.m_change_calls.back(), (SettingsBatch{{"proxy", ""}}));
+    QCOMPARE(QSettings().value(GUIUtil::nodeSettingsKey("addrProxy")).toString(), QStringLiteral("10.0.0.2:9050"));
+
+    // Re-ticking the box applies the host.
+    QVERIFY(model.setData(model.index(OptionsModel::ProxyUse), QVariant(true), Qt::EditRole));
+    QCOMPARE(node.m_change_calls.size(), size_t{3});
+    QCOMPARE(node.m_change_calls.back(), (SettingsBatch{{"proxy", "10.0.0.2:9050"}}));
+}

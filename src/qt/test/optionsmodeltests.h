@@ -47,6 +47,10 @@ private slots:
     void unchangedProxyKeepsNodeProxy();
     void unchangedProxyTypedReadBack();
     void changedProxyIsPushed();
+    void proxyFailedEnableRetries();
+    void proxyFailedHostRetries();
+    void proxyFailedPortRetries();
+    void proxyFailedEnableThenValidHost();
 
 private:
     // Suite-wide QSettings redirect (see initTestCase) and what it replaced.
