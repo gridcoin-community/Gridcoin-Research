@@ -129,6 +129,7 @@ class TestNode():
         self.start_perf = start_perf
 
         self.running = False
+        self._stop_ran = False
         self.process = None
         self.rpc_connected = False
         self.rpc = None
@@ -226,6 +227,7 @@ class TestNode():
             stdout = tempfile.NamedTemporaryFile(dir=self.stdout_dir, delete=False)
         self.stderr = stderr
         self.stdout = stdout
+        self._stop_ran = False
 
         if cwd is None:
             cwd = self.cwd
@@ -434,9 +436,25 @@ class TestNode():
         `ConnectionError`, `socket.timeout`, etc., when the daemon is mid-
         shutdown. The original error is logged and re-raised at the end so
         the caller still sees the failure.
+
+        Once it has run for a start, a further call before the node is seen to
+        stop cleanly returns without doing anything, so wait_until_stopped()
+        reports why the node did not stop.
         """
         if not self.running:
             return
+        if self._stop_ran:
+            # stop_node() already ran for this start (it sets _stop_ran), and
+            # its finally closed the stdout/stderr handles. The node is still
+            # marked running because is_node_stopped() has not seen it exit
+            # with code 0: it exited non-zero, it has not exited yet, or
+            # wait_until_stopped() never ran because that first stop_node()
+            # raised. Stopping again would seek the closed stderr and raise
+            # ValueError, which stop_nodes() would report in place of the real
+            # failure. Leave the report to wait_until_stopped().
+            self.log.debug("stop_node() already ran since the last start; not stopping again")
+            return
+        self._stop_ran = True
         self.log.debug("Stopping node")
         stop_exc = None
         try:
@@ -460,7 +478,8 @@ class TestNode():
             except (http.client.CannotSendRequest,
                     JSONRPCException,
                     ConnectionError,
-                    OSError) as e:
+                    OSError,
+                    subprocess.CalledProcessError) as e:
                 self.log.exception("Unable to stop node cleanly: %s", e)
                 stop_exc = e
 
