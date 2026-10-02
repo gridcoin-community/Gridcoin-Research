@@ -10,6 +10,7 @@
 
 #include "amount.h" // For MIN_STAKE_SPLIT_VALUE_GRC.
 
+#include <optional>
 #include <utility>
 
 namespace {
@@ -42,6 +43,17 @@ bool PushEffectiveProxy(interfaces::Node& node, QSettings& settings)
         use_proxy ? settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString().toStdString()
                   : std::string();
     return node.changeSettings({{"proxy", addr}}).ok;
+}
+
+//! Put a proxy field back as it was before a push that failed: its previous
+//! value, or no value when it had none.
+void RestoreProxyField(QSettings& settings, const QString& key, const std::optional<QVariant>& previous)
+{
+    if (previous) {
+        settings.setValue(key, *previous);
+    } else {
+        settings.remove(key);
+    }
 }
 
 //! Split a stored "host:port" proxy string into host and port, IPv6-aware
@@ -367,28 +379,47 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         // address: the first untouched submit rewrites it once and pushes.
         // Compare as bool and string: a value read back from the settings file
         // is text.
-        case ProxyUse:
-            if (value.toBool() == settings.value(GUIUtil::nodeSettingsKey("fUseProxy"), false).toBool()) break;
-            settings.setValue(GUIUtil::nodeSettingsKey("fUseProxy"), value.toBool());
+        //
+        // A push that fails restores the field it changed, or removes it if it had
+        // no value, so QSettings never holds a proxy field the node did not accept,
+        // and an identical resubmit pushes again. A failed enable is undone even
+        // when a later field in the same submit makes the address valid. The host
+        // is then stored with the proxy disabled, and re-ticking the box applies it.
+        case ProxyUse: {
+            const QString key = GUIUtil::nodeSettingsKey("fUseProxy");
+            if (value.toBool() == settings.value(key, false).toBool()) break;
+            const std::optional<QVariant> previous =
+                settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
+            settings.setValue(key, value.toBool());
             successful = PushEffectiveProxy(m_node, settings);
-            break;
+            if (!successful) RestoreProxyField(settings, key, previous);
+        }
+        break;
         case ProxyIP: {
             // Replace the host part of the stored address; port is kept. IPv6-aware
             // via SplitProxy/FormatProxy (brackets round-trip correctly).
-            const QString stored = settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString();
+            const QString key = GUIUtil::nodeSettingsKey("addrProxy");
+            const QString stored = settings.value(key, "127.0.0.1:9050").toString();
             const QString updated = FormatProxy(value.toString(), SplitProxy(stored).second);
             if (updated == stored) break;
-            settings.setValue(GUIUtil::nodeSettingsKey("addrProxy"), updated);
+            const std::optional<QVariant> previous =
+                settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
+            settings.setValue(key, updated);
             successful = PushEffectiveProxy(m_node, settings);
+            if (!successful) RestoreProxyField(settings, key, previous);
         }
         break;
         case ProxyPort: {
             // Replace the port part of the stored address; host is kept.
-            const QString stored = settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString();
+            const QString key = GUIUtil::nodeSettingsKey("addrProxy");
+            const QString stored = settings.value(key, "127.0.0.1:9050").toString();
             const QString updated = FormatProxy(SplitProxy(stored).first, value.toInt());
             if (updated == stored) break;
-            settings.setValue(GUIUtil::nodeSettingsKey("addrProxy"), updated);
+            const std::optional<QVariant> previous =
+                settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
+            settings.setValue(key, updated);
             successful = PushEffectiveProxy(m_node, settings);
+            if (!successful) RestoreProxyField(settings, key, previous);
         }
         break;
         case ReserveBalance: {
