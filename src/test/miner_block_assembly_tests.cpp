@@ -2186,6 +2186,48 @@ BOOST_AUTO_TEST_CASE(an_unconfirmed_coinstake_is_not_a_stake_candidate)
     }
 }
 
+BOOST_AUTO_TEST_CASE(the_minimum_stake_age_runs_from_the_confirming_block)
+{
+    // CheckProofOfStakeV8 measures the minimum stake age from the time of the block that confirmed the staked output,
+    // not from the transaction's own time, which is earlier when the transaction waited in the mempool. Record an
+    // output as confirmed in the tip with a transaction time well before the tip's, then ask for candidates at times
+    // between the two.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    const CBlockIndex* tip = pindexBest;
+    BOOST_REQUIRE(tip);
+
+    CMutableTransaction mtx;
+    mtx.nTime = tip->nTime - 1000;
+    mtx.vin.emplace_back(COutPoint(uint256S("01"), 0));
+    mtx.vout.emplace_back(10 * COIN, grc_test::PremineScript());
+    CWalletTx wtx(pwalletMain, CTransaction(mtx));
+    wtx.SetTxState(TxStateConfirmed{tip->GetBlockHash(), 1});
+    const uint256 hash = wtx.GetHash();
+
+    // The entry claims a confirmation the chain does not have, so take it out again on every exit path: the suite's
+    // per-case scope keeps confirmed entries, and a later case could stake it.
+    struct EraseOnExit {
+        uint256 hash;
+        ~EraseOnExit() { pwalletMain->EraseFromWallet(hash); }
+    } erase_on_exit{hash};
+
+    CWalletDB walletdb(pwalletMain->strWalletFile);
+    BOOST_REQUIRE(pwalletMain->AddToWallet(wtx, &walletdb));
+
+    const auto is_candidate_at = [&](int64_t spend_time) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+        std::vector<StakeCandidate> candidates;
+        GRC::MinerStatus::ErrorFlags error_flag = GRC::MinerStatus::NONE;
+        int64_t balance = 0;
+        pwalletMain->SelectCoinsForStaking(spend_time, candidates, error_flag, balance);
+        return std::any_of(candidates.begin(), candidates.end(),
+                           [&](const StakeCandidate& candidate) { return candidate.tx->GetHash() == hash; });
+    };
+
+    // nStakeMinAge is 0 on regtest, so the output may stake from its block's time on, and not before.
+    BOOST_CHECK(!is_candidate_at(tip->nTime - 1));
+    BOOST_CHECK(is_candidate_at(tip->nTime));
+}
+
 BOOST_AUTO_TEST_CASE(stake_candidates_carry_their_confirming_block_time)
 {
     // Mine one block so that the candidates come from two confirming blocks: the genesis premine outputs and the new

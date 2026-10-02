@@ -3423,8 +3423,10 @@ void CWallet::AvailableCoinsForStaking(vector<StakeCandidate>& vCoins, unsigned 
                 balance_out += pcoin->vout[i].nValue;
             }
 
-            // Filtering by tx timestamp instead of block timestamp may give false positives but never false negatives
-            if (pcoin->nTime + nStakeMinAge > nSpendTime) continue;
+            // The minimum stake age runs from the time of the block that confirmed the output, as CheckProofOfStakeV8
+            // checks it. An output with no main-chain confirming block cannot stake and is dropped by the depth checks
+            // below.
+            if (pindex_confirmed && pindex_confirmed->GetBlockTime() + nStakeMinAge > nSpendTime) continue;
 
             // We avoid GetBlocksToMaturity(), because that also calls GetDepthInMainChain(), so the older code,
             // to get nDepth, still had to call GetDepthInMainChain(), so that meant it was called twice for EVERY
