@@ -14,15 +14,16 @@ stop_nodes() would report in place of the node's non-zero exit.
 
 The two kill cases each kill their node (a non-zero exit), stop it once, and
 assert that the next stop_nodes() raises is_node_stopped()'s non-zero-exit
-assertion. The third case stops a live node:
+assertion. The cases:
 
 - a connected node whose stop RPC fails because the process is gone. The
   framework's stop_node() then raises before it calls wait_until_stopped(),
   the restart_node() path;
 - a node the framework never connected to, stopped by stop_nodes() twice, the
   start_nodes() failure path followed by shutdown();
-- a CLI stop that cannot connect still sends SIGTERM, so a live node exits
-  cleanly. Skipped on Windows, where terminate() is TerminateProcess.
+- a live node whose CLI stop cannot connect: the SIGTERM fallback still runs,
+  so the node exits cleanly. Skipped on Windows, where terminate() is
+  TerminateProcess.
 
 The two kill cases then mark their node stopped, as
 assert_start_raises_init_error() does, so the framework's own shutdown does not
