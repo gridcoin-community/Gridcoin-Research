@@ -2088,4 +2088,122 @@ BOOST_AUTO_TEST_CASE(readlinebounded_handles_an_empty_stream)
     BOOST_CHECK(line.empty());
 }
 
+BOOST_AUTO_TEST_CASE(changesettings_listener_reads_the_value_being_stored)
+{
+    // ChangeSettings() stores through updateRwSetting(), which writes the settings
+    // file and so needs a real data directory. TestingSetup points -datadir at a temp
+    // path but never creates it.
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    // ChangeSettings() accepts only registered names, and this binary registers none.
+    // A probe name also keeps the side-stake registry out of the test. The
+    // registration outlives the case: the registered-argument table is outside the
+    // suite's StateGuard snapshot. The check avoids AddArg()'s duplicate assert.
+    if (!gArgs.GetArgFlags("-changesettings_listener_probe")) {
+        gArgs.AddArg("-changesettings_listener_probe", "unit-test probe", ArgsManager::ALLOW_ANY, OptionsCategory::HIDDEN);
+    }
+
+    // Record what a listener reads during each RwSettingsUpdated emission. It reads
+    // through GetArg(), as the side-stake reload does, where a forced value outranks
+    // the read-write settings.
+    std::vector<std::string> seen;
+    boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect([&seen] {
+        seen.push_back(gArgs.GetArg("-changesettings_listener_probe", "<unset>"));
+    })};
+
+    const auto change = [](const std::string& value) {
+        bool requires_restart = false;
+        std::vector<std::string> no_change;
+        std::vector<std::string> immediate;
+        std::vector<std::string> requires_restart_list;
+        bool invalid_input = false;
+        std::string error;
+        return ChangeSettings({{"changesettings_listener_probe", value}}, requires_restart, no_change, immediate,
+                              requires_restart_list, invalid_input, error);
+    };
+
+    BOOST_REQUIRE(change("first"));  // nothing is forced yet
+    BOOST_REQUIRE(change("second")); // "first" is forced now
+    BOOST_REQUIRE(change(""));       // the erase branch, with "second" forced; also the cleanup
+
+    BOOST_REQUIRE_EQUAL(seen.size(), 3u);
+    BOOST_CHECK_EQUAL(seen[0], "first"); // control: green on both builds
+    BOOST_CHECK_EQUAL(seen[1], "second");
+    BOOST_CHECK_EQUAL(seen[2], "<unset>");
+
+    conn.disconnect();
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-changesettings_listener_probe", "<unset>"), "<unset>");
+    BOOST_CHECK(getRwSetting("changesettings_listener_probe").isNull());
+}
+
+// A changesettings whose store fails must change nothing: not the read-write
+// settings and not the running (forced) value, which outranks them. A guard: it
+// passes whether the running value is applied after the store or inside the
+// store's own step, and fails if the running value is applied before the store
+// without being restored when the store fails.
+BOOST_AUTO_TEST_CASE(changesettings_failed_store_changes_nothing)
+{
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    // A registered probe name, as in the case above; the registration outlives
+    // the case, outside the suite's StateGuard snapshot.
+    if (!gArgs.GetArgFlags("-changesettings_failed_store_probe")) {
+        gArgs.AddArg("-changesettings_failed_store_probe", "unit-test probe", ArgsManager::ALLOW_ANY, OptionsCategory::HIDDEN);
+    }
+
+    struct Outcome {
+        bool ok{false};
+        bool invalid_input{true};
+        std::string error;
+    };
+    const auto change = [](const std::string& value) {
+        bool requires_restart = false;
+        std::vector<std::string> no_change;
+        std::vector<std::string> immediate;
+        std::vector<std::string> requires_restart_list;
+        Outcome out;
+        out.ok = ChangeSettings({{"changesettings_failed_store_probe", value}}, requires_restart, no_change,
+                                immediate, requires_restart_list, out.invalid_input, out.error);
+        return out;
+    };
+
+    BOOST_REQUIRE(change("first").ok); // "first" is stored and forced
+
+    std::vector<std::string> seen;
+    boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect([&seen] {
+        seen.push_back(gArgs.GetArg("-changesettings_failed_store_probe", "<unset>"));
+    })};
+
+    {
+        SettingsWriteBlocker block;
+
+        const Outcome set = change("second");
+        BOOST_CHECK(!set.ok);
+        BOOST_CHECK(!set.invalid_input);
+        BOOST_CHECK(set.error.rfind("Error storing setting", 0) == 0);
+        BOOST_CHECK_EQUAL(gArgs.GetArg("-changesettings_failed_store_probe", "<unset>"), "first");
+        BOOST_REQUIRE_EQUAL(seen.size(), 1u);
+        BOOST_CHECK_EQUAL(seen.back(), "first");
+
+        const Outcome erase = change("");
+        BOOST_CHECK(!erase.ok);
+        BOOST_CHECK(!erase.invalid_input);
+        BOOST_CHECK(erase.error.rfind("Error storing setting", 0) == 0);
+        BOOST_CHECK_EQUAL(gArgs.GetArg("-changesettings_failed_store_probe", "<unset>"), "first");
+        BOOST_REQUIRE_EQUAL(seen.size(), 2u);
+        BOOST_CHECK_EQUAL(seen.back(), "first");
+    }
+
+    conn.disconnect();
+    BOOST_REQUIRE(change("").ok); // the cleanup
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-changesettings_failed_store_probe", "<unset>"), "<unset>");
+    BOOST_CHECK(getRwSetting("changesettings_failed_store_probe").isNull());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
