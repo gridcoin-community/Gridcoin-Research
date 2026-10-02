@@ -873,7 +873,7 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
     txnew.vout.clear();
 
     // Choose coins to use
-    vector<pair<const CWalletTx*,unsigned int>> CoinsToStake;
+    std::vector<StakeCandidate> CoinsToStake;
     GRC::MinerStatus::ErrorFlags error_flag;
 
     // This will be used to calculate the staking efficiency.
@@ -911,23 +911,15 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
                                     "pindex->nStakeModifier = %" PRId64,
                                     nHeight_mod, StakeModifier);
 
-    for (const auto& pcoin : CoinsToStake)
+    for (const StakeCandidate& candidate : CoinsToStake)
     {
-        const CWalletTx &CoinTx = *pcoin.first; //transaction that produced this coin
-        unsigned int CoinTxN = pcoin.second; //index of this coin inside it
-
-        unsigned int block_time;
-
-        const auto* coin_conf = CoinTx.state<TxStateConfirmed>();
-        if (!coin_conf) {
-            LogPrintf("ERROR: %s: stake input not in confirmed state", __func__);
-            return false;
-        }
-        block_time = mapBlockIndex[coin_conf->m_confirmed_block_hash]->nTime;
+        const CWalletTx &CoinTx = *candidate.tx; //transaction that produced this coin
+        const unsigned int CoinTxN = candidate.n; //index of this coin inside it
 
         CoinWeight = GRC::CalculateStakeWeightV8(CoinTx, CoinTxN);
 
-        StakeKernelHash = UintToArith256(GRC::CalculateStakeHashV8(block_time, CoinTx, CoinTxN, txnew.nTime, StakeModifier));
+        StakeKernelHash = UintToArith256(GRC::CalculateStakeHashV8(candidate.block_time, CoinTx, CoinTxN, txnew.nTime,
+                                                                   StakeModifier));
 
         arith_uint320 StakeTarget = arith_uint256().SetCompact(blocknew.nBits);
         StakeTarget *= arith_uint320(CoinWeight);
@@ -995,7 +987,7 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
             }
 
             txnew.vin.push_back(CTxIn(CoinTx.GetHash(), CoinTxN));
-            StakeInputs.push_back(pcoin.first);
+            StakeInputs.push_back(candidate.tx);
 
             int64_t nCredit = CoinTx.vout[CoinTxN].nValue;
 
@@ -1008,7 +1000,7 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
 
             break;
         } // if (StakeKernelHash <= StakeTarget)
-    } // for (const auto& pcoin : CoinsToStake)
+    } // for (const StakeCandidate& candidate : CoinsToStake)
 
     g_miner_status.UpdateLastSearch(
         kernel_found,

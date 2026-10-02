@@ -227,7 +227,7 @@ uint64_t GRC::GetStakeWeight(const CWallet& wallet)
 
     const int64_t now = GetAdjustedTime();
 
-    std::vector<std::pair<const CWalletTx*, unsigned int>> coins;
+    std::vector<StakeCandidate> coins;
     GRC::MinerStatus::ErrorFlags unused;
     int64_t balance = 0;
 
@@ -240,15 +240,15 @@ uint64_t GRC::GetStakeWeight(const CWallet& wallet)
     CTxDB txdb("r");
     uint64_t weight = 0;
 
-    for (const auto& pcoin : coins) {
+    for (const StakeCandidate& candidate : coins) {
         CTxIndex txindex;
 
-        if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex)) {
+        if (!txdb.ReadTxIndex(candidate.tx->GetHash(), txindex)) {
             continue;
         }
 
-        if (now - pcoin.first->nTime > nStakeMinAge) {
-            weight += (pcoin.first->vout[pcoin.second].nValue);
+        if (now - candidate.tx->nTime > nStakeMinAge) {
+            weight += (candidate.tx->vout[candidate.n].nValue);
         }
     }
 

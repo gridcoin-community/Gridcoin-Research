@@ -40,6 +40,7 @@
 #include "gridcoin/cpid.h"
 #include "gridcoin/pool.h"
 #include "gridcoin/mrc.h"
+#include "gridcoin/staking/kernel.h"
 #include "init.h"
 #include "miner.h"
 #include "node/blockstorage.h"
@@ -2155,6 +2156,63 @@ BOOST_AUTO_TEST_CASE(a_child_paying_exactly_a_raised_floor_is_selected_after_its
     }
 
     mempool.clear();
+}
+
+BOOST_AUTO_TEST_CASE(an_unconfirmed_coinstake_is_not_a_stake_candidate)
+{
+    // Regtest lets coinbase and coinstake outputs skip the maturity checks, but they still need a depth of 1 or more,
+    // like any other output. An unconfirmed own coinstake is therefore not a candidate.
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE(!coins.empty());
+    const CTransaction coinstake = grc_test::CreateCoinstakeShaped(PremineCoinbase(), coins[0].n, 10000);
+    BOOST_REQUIRE(coinstake.IsCoinStake());
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CWalletTx wtx(pwalletMain, coinstake);
+    wtx.fFromMe = true; // as the wallet records its own coinstakes
+    CWalletDB walletdb(pwalletMain->strWalletFile);
+    BOOST_REQUIRE(pwalletMain->AddToWallet(wtx, &walletdb));
+
+    std::vector<StakeCandidate> candidates;
+    GRC::MinerStatus::ErrorFlags error_flag = GRC::MinerStatus::NONE;
+    int64_t balance = 0;
+    BOOST_REQUIRE(pwalletMain->SelectCoinsForStaking(GetAdjustedTime(), candidates, error_flag, balance));
+    BOOST_REQUIRE(!candidates.empty());
+
+    for (const StakeCandidate& candidate : candidates) {
+        BOOST_CHECK(candidate.tx->GetHash() != coinstake.GetHash());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(stake_candidates_carry_their_confirming_block_time)
+{
+    // Mine one block so that the candidates come from two confirming blocks: the genesis premine outputs and the new
+    // block's coinstake.
+    CBlock block;
+    std::string err;
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    std::vector<StakeCandidate> candidates;
+    GRC::MinerStatus::ErrorFlags error_flag = GRC::MinerStatus::NONE;
+    int64_t balance = 0;
+    BOOST_REQUIRE(pwalletMain->SelectCoinsForStaking(GetAdjustedTime(), candidates, error_flag, balance));
+    BOOST_REQUIRE(!candidates.empty());
+
+    // Validation takes the time from the header ReadStakedInput reads through the transaction index, so compare with
+    // that rather than with the wallet's own record of the confirming block.
+    CTxDB txdb("r");
+    std::set<unsigned int> block_times;
+    for (const StakeCandidate& candidate : candidates) {
+        CBlockHeader header;
+        CTransaction tx_prev;
+        BOOST_REQUIRE(GRC::ReadStakedInput(txdb, candidate.tx->GetHash(), header, tx_prev));
+        BOOST_CHECK_EQUAL(candidate.block_time, header.nTime);
+        block_times.insert(candidate.block_time);
+    }
+    BOOST_CHECK_GE(block_times.size(), 2U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

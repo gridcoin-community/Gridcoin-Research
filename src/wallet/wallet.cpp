@@ -3369,7 +3369,7 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
 }
 
 // A lock must be taken on cs_main before calling this function.
-void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& balance_out,
+void CWallet::AvailableCoinsForStaking(vector<StakeCandidate>& vCoins, unsigned int nSpendTime, int64_t& balance_out,
                                        bool fMiner) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
 
@@ -3391,8 +3391,24 @@ void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSp
             // Track number of transactions processed for instrumentation purposes.
             ++transactions;
 
-            int nDepth = pcoin->GetDepthInMainChain();
-            std::vector<std::pair<const CWalletTx*, int>> possible_vCoins;
+            // Unspent outputs of ours first. The check is cheap, and most transactions in an old wallet have none, so
+            // they never pay for the depth lookup below.
+            std::vector<unsigned int> possible_outputs;
+            for (unsigned int i = 0; i < pcoin->vout.size(); ++i)
+            {
+                if (!(pcoin->IsSpent(i))
+                        && (IsMine(pcoin->vout[i]) != ISMINE_NO)
+                        && pcoin->vout[i].nValue > 0)
+                {
+                    possible_outputs.push_back(i);
+                }
+            }
+
+            if (possible_outputs.empty()) continue;
+
+            // The depth lookup also yields the confirming block, whose time the kernel hash commits to.
+            CBlockIndex* pindex_confirmed = nullptr;
+            const int nDepth = pcoin->GetDepthInMainChain(pindex_confirmed);
 
             // Do the balance computation here after the GetDepthInMainChain() call.
             // This avoids the expensive IsTrusted() and IsConfirmed() calls in the GetBalance() function, which each
@@ -3400,23 +3416,12 @@ void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSp
             // calculation here, to include recently staked amounts. The number here should be equal or very close to
             // the "Total" field on the GUI overview screen. This is the proper number to use to be able to do the
             // efficiency calculations.
-            if (nDepth > 0 || (pcoin->fFromMe && (pcoin->AreDependenciesConfirmed() || pcoin->IsCoinStake())))
-            {
-                for (unsigned int i = 0; i < pcoin->vout.size(); ++i)
-                {
-                    if (!(pcoin->IsSpent(i))
-                            && (IsMine(pcoin->vout[i]) != ISMINE_NO)
-                            && pcoin->vout[i].nValue > 0)
-                    {
-                        balance_out += pcoin->vout[i].nValue;
-                        possible_vCoins.push_back(std::make_pair(pcoin, i));
-                    }
-                }
-            }
+            if (!(nDepth > 0 || (pcoin->fFromMe && (pcoin->AreDependenciesConfirmed() || pcoin->IsCoinStake())))) continue;
 
-            // If there are no possible (pre-qualified) outputs, continue, so we avoid the expensive GetDepthInMainChain()
-            // call.
-            if (possible_vCoins.empty()) continue;
+            for (const unsigned int i : possible_outputs)
+            {
+                balance_out += pcoin->vout[i].nValue;
+            }
 
             // Filtering by tx timestamp instead of block timestamp may give false positives but never false negatives
             if (pcoin->nTime + nStakeMinAge > nSpendTime) continue;
@@ -3442,14 +3447,18 @@ void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSp
                 if (nDepth < 1) continue;
             }
 
+            // Both paths above require a depth of 1 or more, which always sets pindex_confirmed. This only guards the
+            // dereference below.
+            if (!pindex_confirmed) continue;
+
             bool available_output = false;
 
-            for (const auto& iter : possible_vCoins)
+            for (const unsigned int i : possible_outputs)
             {
                 // We need to respect the nMinimumInputValue parameter and include only those outputs that pass.
-                if (iter.first->vout[iter.second].nValue >= nMinimumInputValue)
+                if (pcoin->vout[i].nValue >= nMinimumInputValue)
                 {
-                    vCoins.push_back(COutput(iter.first, iter.second, nDepth));
+                    vCoins.push_back({pcoin, i, pindex_confirmed->nTime});
                     available_output = true;
                 }
             }
@@ -3798,7 +3807,7 @@ bool CWallet::SelectContractCoins(int64_t nTargetValue, unsigned int nSpendTime,
 //
 // Formula Stakable = ((SPENDABLE - RESERVED) > UTXO)
 */
-bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<const CWalletTx*,unsigned int> >& vCoinsRet,
+bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<StakeCandidate>& vCoinsRet,
                                     GRC::MinerStatus::ErrorFlags& not_staking_error,
                                     int64_t& balance_out,
                                     bool fMiner) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -3806,7 +3815,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     std::string function = __func__;
     function += ": ";
 
-    vector<COutput> vCoins;
+    vector<StakeCandidate> vCoins;
 
     // The balance is now calculated INSIDE of AvailableCoinsForStaking while iterating through wallet map
     // and reported back out to maintain compatibility with overall MinerStatus fields, which all are retained
@@ -3857,10 +3866,10 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     // to get rid of this iteration too, but unfortunately, we need the computed balance for the test.
     vCoinsRet.clear();
 
-    for (const COutput& output : vCoins)
+    for (const StakeCandidate& candidate : vCoins)
     {
-        const CWalletTx *pcoin = output.tx;
-        int i = output.i;
+        const CWalletTx *pcoin = candidate.tx;
+        const unsigned int i = candidate.n;
 
         // If the Spendable balance is more then utxo value it is classified as able to stake
         if (BalanceToConsider >= pcoin->vout[i].nValue)
@@ -3873,7 +3882,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
                           pcoin->vout[i].nValue / (double) COIN);
             }
 
-            vCoinsRet.push_back(make_pair(pcoin, i));
+            vCoinsRet.push_back(candidate);
         }
      }
 
