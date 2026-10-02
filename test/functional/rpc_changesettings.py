@@ -19,6 +19,9 @@ effect without a restart.
   - node1, -enablesidestaking=0 on the command line: a changesettings value
     still overrides it, and erasing that value hands the setting back to the
     command line.
+  - node0, a side-stake allocation changed a second time: the side-stake
+    reload reads the new value, not the one the first change forced into the
+    running args.
 """
 
 from test_framework.test_framework import GridcoinTestFramework
@@ -34,6 +37,13 @@ def stored_settings(node):
     for entry in node.listsettings()["setting_file_args"]:
         stored.update(key for key in entry if key != "changeable_without_restart")
     return stored
+
+
+def local_allocation_pct(node, address):
+    for entry in node.getstakinginfo()["side_staking"]["side_staking_allocations"]:
+        if entry["address"] == address:
+            return round(entry["allocation_pct"], 6)
+    return None
 
 
 class ChangeSettingsEraseTest(GridcoinTestFramework):
@@ -71,6 +81,17 @@ class ChangeSettingsEraseTest(GridcoinTestFramework):
 
         node1.changesettings("enablesidestaking=")
         assert_equal(side_staking_enabled(node1), False)
+
+        self.log.info("A side-stake setting changed again is reloaded at its new value")
+        address = node0.getnewaddress()
+        node0.changesettings("enablesidestaking=1")
+        node0.changesettings(f"sidestakeaddresses={address}", "sidestakeallocations=10")
+        assert_equal(local_allocation_pct(node0, address), 10)
+
+        # The first call forced "10" into the running args. The side-stake reload
+        # that this call triggers must read the "20" it stores.
+        node0.changesettings("sidestakeallocations=20")
+        assert_equal(local_allocation_pct(node0, address), 20)
 
 
 if __name__ == "__main__":

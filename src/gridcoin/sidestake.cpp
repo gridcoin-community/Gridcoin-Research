@@ -1263,8 +1263,6 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 
 bool SideStakeRegistry::SaveLocalSideStakesToConfig()
 {
-    bool status = false;
-
     std::string addresses;
     std::string allocations;
     std::string descriptions;
@@ -1292,11 +1290,35 @@ bool SideStakeRegistry::SaveLocalSideStakesToConfig()
     settings.push_back(std::make_pair("sidestakeallocations", allocations));
     settings.push_back(std::make_pair("sidestakedescriptions", descriptions));
 
-    status = updateRwSettings(settings);
-
+    // Arm the flag before the write. updateRwSettings() emits RwSettingsUpdated
+    // once, synchronously, after the write and any restore, so
+    // LoadLocalSideStakesFromConfig() sees this save's own signal inside the
+    // call below and skips it, whether or not the file write succeeds. Armed
+    // after the call, the flag would outlive the save and swallow the next
+    // RwSettingsUpdated from any source, such as a changesettings of the
+    // sidestake keys. One flag covers one connected slot's reload.
     m_local_entry_already_saved_to_config.store(true, std::memory_order_relaxed);
 
-    return status;
+    // A failed save leaves the read-write settings as they were (updateRwSettings
+    // restores them), but the registry already holds the edit, and this save's own
+    // RwSettingsUpdated emission was skipped by the flag armed above. So reload
+    // here from the restored settings. Clearing the flag first also covers a run
+    // with no reload slot connected, where nothing consumed it. cs_lock is
+    // recursive, and the reload takes cs_lock then cs_args, the order this save
+    // already uses.
+    bool ok = false;
+    try {
+        ok = updateRwSettings(settings);
+    } catch (...) {
+        m_local_entry_already_saved_to_config.store(false, std::memory_order_relaxed);
+        LoadLocalSideStakesFromConfig();
+        throw;
+    }
+    if (!ok) {
+        m_local_entry_already_saved_to_config.store(false, std::memory_order_relaxed);
+        LoadLocalSideStakesFromConfig();
+    }
+    return ok;
 }
 
 Allocation SideStakeRegistry::GetMandatoryAllocationsTotal() const

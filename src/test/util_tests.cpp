@@ -8,6 +8,9 @@
 #include <boost/test/unit_test.hpp>
 
 #include "test/state_guard.h"
+#include "init.h"
+#include <node/ui_interface.h>
+#include <boost/signals2/connection.hpp>
 #include "univalue/include/univalue.h"
 
 #include <wallet/wallet.h>
@@ -1856,6 +1859,142 @@ BOOST_AUTO_TEST_CASE(util_ReplaceAll)
     BOOST_CHECK_EQUAL(shrink, "");
 }
 
+namespace {
+//! Makes settings-file writes fail while it is alive. WriteSettingsFile() writes
+//! the temporary file first, and a directory at that path cannot be opened as a
+//! file, also as root and on Windows. Create it only after a successful write, so
+//! no temporary file is in the way. The directory is removed on destruction.
+class SettingsWriteBlocker
+{
+public:
+    SettingsWriteBlocker()
+    {
+        BOOST_REQUIRE(gArgs.GetSettingsPath(&m_path, /*temp=*/true));
+        fs::create_directories(m_path);
+        BOOST_REQUIRE(fs::is_directory(m_path));
+    }
+    ~SettingsWriteBlocker()
+    {
+        try {
+            fs::remove(m_path);
+        } catch (...) {
+        }
+    }
+
+private:
+    fs::path m_path;
+};
+
+//! A read-write setting as text, "<null>" when it is absent.
+std::string RwValue(const std::string& name)
+{
+    const util::SettingsValue value = getRwSetting(name);
+    return value.isNull() ? std::string("<null>") : value.get_str();
+}
+} // namespace
+
+// A failed settings-file write must leave the read-write settings as they were,
+// so memory never holds what the file does not. The one RwSettingsUpdated
+// emission must come after the restore, so a listener reads the final state.
+BOOST_AUTO_TEST_CASE(updaterwsetting_failed_write_leaves_memory_unchanged)
+{
+    // The settings-file write needs a real data directory. TestingSetup points
+    // -datadir at a temp path but never creates it.
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    const std::string probe = "rw_settings_rollback_probe";
+    const std::string absent = "rw_settings_rollback_absent_probe";
+    BOOST_REQUIRE(updateRwSettings({{probe, util::SettingsValue{"before"}}, {absent, util::SettingsValue{}}}));
+
+    // What a listener reads through GetArg() during each emission.
+    std::vector<std::string> seen;
+    boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect([&seen] {
+        seen.push_back(gArgs.GetArg("-rw_settings_rollback_probe", "<unset>"));
+    })};
+
+    // A set.
+    seen.clear();
+    {
+        SettingsWriteBlocker block;
+        BOOST_CHECK(!updateRwSetting(probe, util::SettingsValue{"after"}));
+    }
+    BOOST_CHECK_EQUAL(getRwSetting(probe).get_str(), "before");
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-rw_settings_rollback_probe", ""), "before");
+    BOOST_REQUIRE_EQUAL(seen.size(), 1u);
+    BOOST_CHECK_EQUAL(seen.back(), "before");
+
+    // An erase. Re-seed first, so each variant starts from "before" on any build.
+    BOOST_REQUIRE(updateRwSetting(probe, util::SettingsValue{"before"}));
+    seen.clear();
+    {
+        SettingsWriteBlocker block;
+        BOOST_CHECK(!updateRwSetting(probe, util::SettingsValue{}));
+    }
+    BOOST_CHECK_EQUAL(RwValue(probe), "before");
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-rw_settings_rollback_probe", "<unset>"), "before");
+    BOOST_REQUIRE_EQUAL(seen.size(), 1u);
+    BOOST_CHECK_EQUAL(seen.back(), "before");
+
+    // A batch in which one key was absent before.
+    BOOST_REQUIRE(updateRwSetting(probe, util::SettingsValue{"before"}));
+    seen.clear();
+    {
+        SettingsWriteBlocker block;
+        BOOST_CHECK(!updateRwSettings({{probe, util::SettingsValue{"after"}}, {absent, util::SettingsValue{"new"}}}));
+    }
+    BOOST_CHECK_EQUAL(RwValue(probe), "before");
+    BOOST_CHECK_EQUAL(RwValue(absent), "<null>");
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-rw_settings_rollback_absent_probe", "<unset>"), "<unset>");
+    BOOST_REQUIRE_EQUAL(seen.size(), 1u);
+    BOOST_CHECK_EQUAL(seen.back(), "before");
+
+    conn.disconnect();
+    BOOST_REQUIRE(updateRwSettings({{probe, util::SettingsValue{}}, {absent, util::SettingsValue{}}}));
+    BOOST_CHECK(getRwSetting(probe).isNull());
+}
+
+// A throwing settings-file write must leave the read-write settings as they
+// were too, and the exception must still reach the caller.
+BOOST_AUTO_TEST_CASE(updaterwsetting_throwing_write_leaves_memory_unchanged)
+{
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    const std::string probe = "rw_settings_rollback_probe";
+    BOOST_REQUIRE(updateRwSetting(probe, util::SettingsValue{"before"}));
+
+    {
+        // WriteSettingsFile() throws when GetSettingsPath() reads the settings
+        // file as disabled, which takes a boolean false "settings" value. A string
+        // "0" from SoftSetBoolArg() is not read as negated, and "-nosettings" given
+        // to SoftSetArg() writes the unread key "nosettings", so set the forced
+        // value directly, and erase it on every exit from this scope.
+        bool had_forced = true;
+        gArgs.LockSettings([&](util::Settings& s) { had_forced = s.forced_settings.count("settings") != 0; });
+        BOOST_REQUIRE(!had_forced);
+        struct ForcedSettingsEraser {
+            ~ForcedSettingsEraser()
+            {
+                gArgs.LockSettings([](util::Settings& s) { s.forced_settings.erase("settings"); });
+            }
+        } eraser;
+        gArgs.LockSettings([](util::Settings& s) { s.forced_settings["settings"] = false; });
+        BOOST_REQUIRE(!gArgs.GetSettingsPath());
+
+        BOOST_CHECK_THROW(updateRwSetting(probe, util::SettingsValue{"after"}), std::logic_error);
+        BOOST_CHECK_EQUAL(getRwSetting(probe).get_str(), "before");
+        BOOST_CHECK_EQUAL(gArgs.GetArg("-rw_settings_rollback_probe", ""), "before");
+    }
+
+    BOOST_REQUIRE(updateRwSetting(probe, util::SettingsValue{}));
+    BOOST_CHECK(getRwSetting(probe).isNull());
+}
+
 
 //!
 //! ReadLineBounded: the scraper's part parser reads every record through this,
@@ -1947,6 +2086,124 @@ BOOST_AUTO_TEST_CASE(readlinebounded_handles_an_empty_stream)
     BOOST_CHECK(!ReadLineBounded(in, line, 64, overlong));
     BOOST_CHECK(!overlong);
     BOOST_CHECK(line.empty());
+}
+
+BOOST_AUTO_TEST_CASE(changesettings_listener_reads_the_value_being_stored)
+{
+    // ChangeSettings() stores through updateRwSetting(), which writes the settings
+    // file and so needs a real data directory. TestingSetup points -datadir at a temp
+    // path but never creates it.
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    // ChangeSettings() accepts only registered names, and this binary registers none.
+    // A probe name also keeps the side-stake registry out of the test. The
+    // registration outlives the case: the registered-argument table is outside the
+    // suite's StateGuard snapshot. The check avoids AddArg()'s duplicate assert.
+    if (!gArgs.GetArgFlags("-changesettings_listener_probe")) {
+        gArgs.AddArg("-changesettings_listener_probe", "unit-test probe", ArgsManager::ALLOW_ANY, OptionsCategory::HIDDEN);
+    }
+
+    // Record what a listener reads during each RwSettingsUpdated emission. It reads
+    // through GetArg(), as the side-stake reload does, where a forced value outranks
+    // the read-write settings.
+    std::vector<std::string> seen;
+    boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect([&seen] {
+        seen.push_back(gArgs.GetArg("-changesettings_listener_probe", "<unset>"));
+    })};
+
+    const auto change = [](const std::string& value) {
+        bool requires_restart = false;
+        std::vector<std::string> no_change;
+        std::vector<std::string> immediate;
+        std::vector<std::string> requires_restart_list;
+        bool invalid_input = false;
+        std::string error;
+        return ChangeSettings({{"changesettings_listener_probe", value}}, requires_restart, no_change, immediate,
+                              requires_restart_list, invalid_input, error);
+    };
+
+    BOOST_REQUIRE(change("first"));  // nothing is forced yet
+    BOOST_REQUIRE(change("second")); // "first" is forced now
+    BOOST_REQUIRE(change(""));       // the erase branch, with "second" forced; also the cleanup
+
+    BOOST_REQUIRE_EQUAL(seen.size(), 3u);
+    BOOST_CHECK_EQUAL(seen[0], "first"); // control: green on both builds
+    BOOST_CHECK_EQUAL(seen[1], "second");
+    BOOST_CHECK_EQUAL(seen[2], "<unset>");
+
+    conn.disconnect();
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-changesettings_listener_probe", "<unset>"), "<unset>");
+    BOOST_CHECK(getRwSetting("changesettings_listener_probe").isNull());
+}
+
+// A changesettings whose store fails must change nothing: not the read-write
+// settings and not the running (forced) value, which outranks them. A guard: it
+// passes whether the running value is applied after the store or inside the
+// store's own step, and fails if the running value is applied before the store
+// without being restored when the store fails.
+BOOST_AUTO_TEST_CASE(changesettings_failed_store_changes_nothing)
+{
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    // A registered probe name, as in the case above; the registration outlives
+    // the case, outside the suite's StateGuard snapshot.
+    if (!gArgs.GetArgFlags("-changesettings_failed_store_probe")) {
+        gArgs.AddArg("-changesettings_failed_store_probe", "unit-test probe", ArgsManager::ALLOW_ANY, OptionsCategory::HIDDEN);
+    }
+
+    struct Outcome {
+        bool ok{false};
+        bool invalid_input{true};
+        std::string error;
+    };
+    const auto change = [](const std::string& value) {
+        bool requires_restart = false;
+        std::vector<std::string> no_change;
+        std::vector<std::string> immediate;
+        std::vector<std::string> requires_restart_list;
+        Outcome out;
+        out.ok = ChangeSettings({{"changesettings_failed_store_probe", value}}, requires_restart, no_change,
+                                immediate, requires_restart_list, out.invalid_input, out.error);
+        return out;
+    };
+
+    BOOST_REQUIRE(change("first").ok); // "first" is stored and forced
+
+    std::vector<std::string> seen;
+    boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect([&seen] {
+        seen.push_back(gArgs.GetArg("-changesettings_failed_store_probe", "<unset>"));
+    })};
+
+    {
+        SettingsWriteBlocker block;
+
+        const Outcome set = change("second");
+        BOOST_CHECK(!set.ok);
+        BOOST_CHECK(!set.invalid_input);
+        BOOST_CHECK(set.error.rfind("Error storing setting", 0) == 0);
+        BOOST_CHECK_EQUAL(gArgs.GetArg("-changesettings_failed_store_probe", "<unset>"), "first");
+        BOOST_REQUIRE_EQUAL(seen.size(), 1u);
+        BOOST_CHECK_EQUAL(seen.back(), "first");
+
+        const Outcome erase = change("");
+        BOOST_CHECK(!erase.ok);
+        BOOST_CHECK(!erase.invalid_input);
+        BOOST_CHECK(erase.error.rfind("Error storing setting", 0) == 0);
+        BOOST_CHECK_EQUAL(gArgs.GetArg("-changesettings_failed_store_probe", "<unset>"), "first");
+        BOOST_REQUIRE_EQUAL(seen.size(), 2u);
+        BOOST_CHECK_EQUAL(seen.back(), "first");
+    }
+
+    conn.disconnect();
+    BOOST_REQUIRE(change("").ok); // the cleanup
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-changesettings_failed_store_probe", "<unset>"), "<unset>");
+    BOOST_CHECK(getRwSetting("changesettings_failed_store_probe").isNull());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -1415,32 +1415,35 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
 
         // An empty value erases the setting; a null SettingsValue removes the key
         // from gridcoinsettings.json.
-        if (!updateRwSetting(name, value.empty() ? util::SettingsValue() : util::SettingsValue(value))) {
+        //
+        // A changed value is applied to the running args in the same step
+        // (apply_to_running_args), before RwSettingsUpdated is emitted. A listener
+        // that reads the setting during the emission therefore reads the new
+        // value: the side-stake registry reloads its keys there, and a forced
+        // value outranks the read-write settings. If the write fails, the
+        // read-write and the running value are both left as they were.
+        //
+        // Erasing must also drop any value forced into the running args, not force
+        // an empty one. A forced value outranks every other source, and an empty
+        // string reads as true for a boolean arg, so "enablesidestaking=" used to
+        // switch side staking ON for the rest of the session. Cleared, the arg
+        // falls back to the command line, then the config file, then its default.
+        // That includes a value init soft-set at startup for this same arg, which
+        // is forced too.
+        //
+        // An erase of a value that already reads empty is not a change, so it is
+        // stored without apply_to_running_args, and a forced empty value stays in
+        // place. Its main in-tree source is researcher.cpp's ForceSetArg("-email",
+        // email) on a switch to pool or non-cruncher mode, which passes an empty
+        // email. A non-empty value researcher.cpp forces (-email, -noncruncher) is
+        // cleared by an erase like any other.
+        if (!updateRwSetting(name, value.empty() ? util::SettingsValue() : util::SettingsValue(value),
+                             /*apply_to_running_args=*/value_changed)) {
             error_out = "Error storing setting in read-write settings file: " + name;
             return false;
         }
 
         if (value_changed) {
-            if (value.empty()) {
-                // Erasing must also drop any value forced into the running args,
-                // not force an empty one. A forced value outranks every other
-                // source, and an empty string reads as true for a boolean arg, so
-                // "enablesidestaking=" used to switch side staking ON for the rest
-                // of the session. Cleared, the arg falls back to the command line,
-                // then the config file, then its default. That includes a value
-                // init soft-set at startup for this same arg, which is forced too.
-                //
-                // An erase of a value that already reads empty does not reach
-                // here, so a forced empty value stays in place. Its main in-tree
-                // source is researcher.cpp's ForceSetArg("-email", email) on a
-                // switch to pool or non-cruncher mode, which passes an empty
-                // email. A non-empty value researcher.cpp forces (-email,
-                // -noncruncher) is cleared by an erase like any other.
-                gArgs.ClearForcedArg(name);
-            } else {
-                gArgs.ForceSetArg(name, value);
-            }
-
             if (immediate_effect) {
                 ApplyRwSettingSideEffect(name);
                 immediate_out.push_back(param);
