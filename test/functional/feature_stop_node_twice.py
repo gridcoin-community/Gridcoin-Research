@@ -12,36 +12,43 @@ stop_nodes(), for example the one in shutdown(). That second stop_node() must
 not seek the closed stderr ("ValueError: seek of closed file"), which
 stop_nodes() would report in place of the node's non-zero exit.
 
-Each case kills its node (a non-zero exit), stops it once, and asserts that the
-next stop_nodes() raises is_node_stopped()'s non-zero-exit assertion:
+The two kill cases each kill their node (a non-zero exit), stop it once, and
+assert that the next stop_nodes() raises is_node_stopped()'s non-zero-exit
+assertion. The third case stops a live node:
 
 - a connected node whose stop RPC fails because the process is gone. The
   framework's stop_node() then raises before it calls wait_until_stopped(),
   the restart_node() path;
 - a node the framework never connected to, stopped by stop_nodes() twice, the
-  start_nodes() failure path followed by shutdown().
+  start_nodes() failure path followed by shutdown();
+- a CLI stop that cannot connect still sends SIGTERM, so a live node exits
+  cleanly. Skipped on Windows, where terminate() is TerminateProcess.
 
-Each case then marks its node stopped, as assert_start_raises_init_error()
-does, so the framework's own shutdown does not report the exit this test caused
-on purpose. The stop_node() and wait_until_stopped() errors logged along the
-way are expected.
+The two kill cases then mark their node stopped, as
+assert_start_raises_init_error() does, so the framework's own shutdown does not
+report the exit this test caused on purpose. The stop_node() and
+wait_until_stopped() errors logged along the way are expected.
 """
 
+import sys
+
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_raises, assert_raises_message
+from test_framework.util import assert_raises, assert_raises_message, assert_raises_process_error
 
 
 class FeatureStopNodeTwiceTest(GridcoinTestFramework):
     def set_test_params(self):
-        self.num_nodes = 2
+        self.num_nodes = 3
         self.chain = "regtest"
         self.setup_clean_chain = True
-        # Under --usecli the stop goes through gridcoin-cli and raises
-        # CalledProcessError, which stop_node() does not catch.
+        # Under --usecli both kill cases' stops go through the CLI
+        # (gridcoinresearchd as RPC client) and raise CalledProcessError, not
+        # the OSError and ConnectionError asserted here. The CLI path is pinned
+        # by its own step, which switches use_cli on for one stop.
         self.supports_cli = False
 
     def setup_network(self):
-        # Add both nodes but start neither: each case starts its own node.
+        # Add the nodes but start none: each case starts its own node.
         self.add_nodes(self.num_nodes)
 
     def kill_node(self, i):
@@ -61,6 +68,7 @@ class FeatureStopNodeTwiceTest(GridcoinTestFramework):
     def run_test(self):
         self.stop_after_failed_stop_rpc()
         self.stop_nodes_twice_never_connected()
+        self.cli_stop_falls_back_to_sigterm()
 
     def stop_after_failed_stop_rpc(self):
         node = self.nodes[0]
@@ -89,6 +97,31 @@ class FeatureStopNodeTwiceTest(GridcoinTestFramework):
         self.log.info("The second stop_nodes() reports the non-zero exit")
         assert_raises_message(AssertionError, "non-zero exit code", self.stop_nodes)
         self.mark_node_stopped(node)
+
+    def cli_stop_falls_back_to_sigterm(self):
+        if sys.platform == 'win32':
+            self.log.info("Skipping the CLI SIGTERM step on Windows: terminate() is TerminateProcess")
+            return
+
+        node = self.nodes[2]
+        self.start_node(2)
+        assert node.rpc_connected
+
+        self.log.info("Live node, CLI stop that cannot connect: stop_node() raises and still sends SIGTERM")
+        use_cli, cli = node.use_cli, node.cli
+        try:
+            # Send this one stop through the CLI (gridcoinresearchd as RPC
+            # client). Its -rpcport=1 overrides the port in the node's conf, so
+            # the stop never reaches the node and the CLI exits 1.
+            node.use_cli = True
+            node.cli = node.cli("-rpcport=1")
+            assert_raises_process_error(1, "couldn't connect to server", node.stop_node)
+
+            # wait_until_stopped() asserts a zero exit code.
+            node.wait_until_stopped()
+            assert not node.running
+        finally:
+            node.use_cli, node.cli = use_cli, cli
 
 
 if __name__ == "__main__":
