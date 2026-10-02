@@ -478,7 +478,8 @@ class TestNode():
             except (http.client.CannotSendRequest,
                     JSONRPCException,
                     ConnectionError,
-                    OSError) as e:
+                    OSError,
+                    subprocess.CalledProcessError) as e:
                 self.log.exception("Unable to stop node cleanly: %s", e)
                 stop_exc = e
 

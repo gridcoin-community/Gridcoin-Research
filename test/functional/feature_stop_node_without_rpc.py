@@ -6,7 +6,7 @@
 
 stop_node() sends the stop RPC through self.stop(). On a node the framework
 never connected to, that goes through TestNode.__getattr__, whose connection
-guard raises AssertionError. stop_node() catches only CannotSendRequest,
+guard raises AssertionError. stop_node() caught only CannotSendRequest,
 JSONRPCException, ConnectionError and OSError, so the AssertionError escaped
 before the SIGTERM fallback could run: nothing told the daemon to exit, and
 every later wait_until_stopped() spent its whole timeout on it.
@@ -25,9 +25,9 @@ shutdown request. Once the port accepts, a SIGTERM lets the daemon exit 0.
 Before that, a SIGTERM can make AppInit2 return false and the daemon exit 1,
 which wait_until_stopped() would report as a non-zero exit code.
 
-CLI transport is not supported: under --usecli, self.stop() goes through
-gridcoin-cli and fails with CalledProcessError, which the except in
-stop_node() does not catch either.
+CLI transport is not supported: under --usecli, stop_node() skips the
+never-connected guard this test exercises, so the ConnectionError it asserts
+is never raised.
 
 Skipped on Windows: the fallback is Popen.terminate(), which there is
 TerminateProcess, not SIGTERM. The daemon's shutdown handler never runs, it
