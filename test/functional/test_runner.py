@@ -430,15 +430,6 @@ RETRY_SIGNATURES = (
 def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=False, args=None, combined_logs_len=0, failfast=False, attempts=1, use_term_control):
     args = args or []
 
-    # Warn if gridcoinresearchd is already running
-    try:
-        # pgrep exits with code zero when one or more matching processes found
-        if subprocess.run(["pgrep", "-x", "gridcoinresearchd"], stdout=subprocess.DEVNULL).returncode == 0:
-            print("%sWARNING!%s There is already a gridcoinresearchd process running on this system. Tests may fail unexpectedly due to resource contention!" % (BOLD[1], BOLD[0]))
-    except OSError:
-        # pgrep not supported
-        pass
-
     # Warn if there is a cache directory
     cache_dir = "%s/test/cache" % build_dir
     if os.path.isdir(cache_dir):
