@@ -504,19 +504,49 @@ bool GRC::CalculateLegacyV3HashProof(
 // V8 Kernel Protocol
 // Tomas Brod 05.06.2017 (dd.mm.yyy)
 // Plug proof-of-work exploit.
-// TODO: Stake modifier is included without much understanding.
-// Without the modifier, attacker can create transactions which output will
-// stake at desired time. In other words attacker can check whether transaction
-// output will stake in the future and create transactions accordingly.
-// Thus including modifier, even not completely researched, increases security.
+//
+// The stake modifier stops an owner from choosing outputs that will stake at
+// times of their choosing. Without it, anyone creating a transaction could
+// compute whether its outputs would win at future times, and grind the
+// transaction until they did. It is also why the transaction hash can be in
+// the kernel, although the ppcoin developers advised against it (the earlier
+// Gridcoin kernel already used it): nobody knows the modifier a coin will
+// stake with when the coin is created.
+//
+// Why the modifier is unknown when an output is created:
+// - A block generates a new modifier when its parent's time falls in a later
+//   10-minute bucket (nModifierInterval) than the block that generated the
+//   current one (ComputeNextStakeModifier). The modifier takes one bit, the
+//   last bit of the block hash, from each of up to 64 blocks. They are chosen,
+//   by a hash of each block's proof and the previous modifier, from the blocks
+//   between 21135 s (about 5.9 h) before the start of the parent's bucket and
+//   the parent.
+// - The kernel uses the modifier in effect at its parent (FindStakeModifierRev).
+// - An output cannot stake until nStakeMinAge after the block that confirmed
+//   it (CheckProofOfStakeV8). With 16 h (57600 s) on mainnet, every block
+//   feeding a modifier the output can stake with is stamped at least 35137 s
+//   (9.76 h) after the output's block: 57600 s less two buckets (1200 s), the
+//   selection window (21135 s) and the 128 s past bound (48 s from v15, which
+//   gives 35217 s), less the length of any stretch with no blocks.
+//
+// Limits:
+// - A stretch of about 10 h or more with no blocks between creating and
+//   staking an output removes that margin.
+// - Testnet (1 h) and regtest (0) have shorter minimum ages.
+// - A staker chooses the entropy bit of its own blocks and can withhold blocks
+//   near the end of a selection window. That gives it a few alternative
+//   modifiers, at the cost of the blocks it withholds. This is inherent to the
+//   modifier design.
+//
+// CheckProofOfStakeV8 checks the kernel input's signature with
+// SCRIPT_VERIFY_P2SH only. ConnectInputs checks it again with the block's full
+// consensus flags (GetBlockScriptFlags) when a block above the last checkpoint
+// is connected. Below the last checkpoint ConnectInputs skips signature checks,
+// so the P2SH-only check is the only one there.
+//
 // Note: Rsa or Magnitude weight not included due to multiplication issue.
 // Note: Payment age and magnitude restrictions not included as they are not
 // important in my view and are too restrictive for honest users.
-// TODO: flags?
-// Note: Transaction hash is used here even though ppcoin devs advised against it,
-// Gridcoin already used txhash in previous kernel, trying to brute-force
-// good tx hash is not possible as it is not known what stake modifier will be
-// after the coins mature!
 
 uint256 GRC::CalculateStakeHashV8(
     const CBlockHeader& CoinBlock,
@@ -569,8 +599,14 @@ CAmount GRC::CalculateStakeValueV8(int64_t weight)
     return weight * STAKE_WEIGHT_UNIT_V8;
 }
 
-// Another version of GetKernelStakeModifier (TomasBrod)
-// Todo: security considerations
+// Find the stake modifier a kernel on pindexPrev uses: the modifier of the most
+// recent block at or before pindexPrev that generated one. The miner
+// (CreateCoinStake) and validation (CheckProofOfStakeV8) both pass the block's
+// parent, so they always agree. The walk ends, because the genesis block always
+// counts as having generated a modifier (ComputeNextStakeModifier), and it
+// covers only the blocks since the last modifier, normally those of one
+// 10-minute bucket. The V8 kernel notes above CalculateStakeHashV8 say what the
+// modifier protects against.
 bool GRC::FindStakeModifierRev(uint64_t& nStakeModifier, CBlockIndex* pindexPrev, int& nHeight_mod) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     nStakeModifier = 0;
