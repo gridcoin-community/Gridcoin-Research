@@ -8,7 +8,9 @@
 
 // network protocol versioning
 //
-//! The current protocol version
+//! The current protocol version. It is bumped once per hard fork, in the release
+//! that carries that fork, and the post-grace disconnect in net_processing.cpp
+//! (the VERSION handler) must then be pointed at that fork's activation height.
 static const int PROTOCOL_VERSION = 180330;
 
 //! Minimum protocol version required to gate PSGT pool relay (MSG_PSGT, #2910).
@@ -20,23 +22,22 @@ static const int PROTOCOL_VERSION = 180330;
 //! of later protocol versions. Hence the literal rather than an alias.
 static const int PSGT_PROTO_VERSION = 180330;
 
-//! Minimum protocol version required once the block v14 hard fork grace
-//! period has elapsed. Kept when PROTOCOL_VERSION moved on to 180330 (v15)
-//! so the staged v14 transition still disconnects pre-v14 peers without
-//! cutting off 180329 (v14-capable) peers.
-static const int V14_MIN_PROTO_VERSION = 180329;
-
 //! Note that there may be special logic implemented for
 //! a hard fork that actually disconnects nodes less than
-//! the version its fork height requires after a grace period above that
-//! height. This is activated by setting the
+//! PROTOCOL_VERSION after a grace period above the height of
+//! the fork this PROTOCOL_VERSION carries. This is activated by setting the
 //! DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD to true.
 static const bool DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD = true;
 
 //! The disconnect grace period is now per-network in Consensus::Params::ProtocolVersionGracePeriod.
 
 //! Disconnect from peers older than this proto version. This is absolute.
-static const int MIN_PEER_PROTO_VERSION = 180327;
+//! It is always the previous release's protocol version: such a peer
+//! satisfies every fork before the one this release carries, so it stays
+//! connected until that fork's grace period has elapsed. Anything older
+//! predates an activated fork. Derived rather than a literal so it cannot
+//! fall behind a PROTOCOL_VERSION bump.
+static const int MIN_PEER_PROTO_VERSION = PROTOCOL_VERSION - 1;
 
 //! initial proto version, to be increased after version/verack negotiation.
 static const int INIT_PROTO_VERSION = 180275;

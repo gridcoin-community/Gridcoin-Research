@@ -44,7 +44,7 @@ COIN = 100000000  # 1 GRC in halflings
 
 # Protocol constants (src/version.h)
 MY_VERSION = 180330          # PROTOCOL_VERSION
-MIN_PEER_PROTO_VERSION = 180327
+MIN_PEER_PROTO_VERSION = MY_VERSION - 1  # the previous release's protocol version
 INIT_PROTO_VERSION = 180275
 PSGT_PROTO_VERSION = 180330  # peers below this never receive MSG_PSGT invs
 

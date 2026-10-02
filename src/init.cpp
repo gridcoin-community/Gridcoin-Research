@@ -1071,9 +1071,11 @@ void SetupServerArgs()
     // window on POOL contracts (issue #1783). Default chainparams value is
     // 28800 blocks (~30 days at mainnet ~90s spacing); this arg shortens
     // the window so dev runs can exercise expiration boundaries without
-    // waiting weeks. CONSENSUS-AFFECTING — nodes with differing values
-    // disagree on POOL_REGISTER admission across expiration boundaries
-    // and will fork off the network if used on mainnet/public-testnet.
+    // waiting weeks. Ignored on mainnet, like every hidden consensus
+    // override (ConsensusOverridesAllowed()). On regtest and testnet it is
+    // CONSENSUS-AFFECTING — nodes with differing values disagree on
+    // POOL_REGISTER admission across expiration boundaries, so on the
+    // public testnet a node with a different value forks off.
     // Read via GetPendingPoolRetention in chainparams.cpp.
     hidden_args.emplace_back("-pendingpoolretention");
 
@@ -1784,6 +1786,17 @@ bool AppInit2(ThreadHandlerPtr threads)
     // mismatch across nodes is diagnosable (the value is consensus-affecting).
     LogPrintf("POOL pending/open retention configured at %d blocks", GetPendingPoolRetention());
 
+    // The hidden consensus overrides apply only on regtest and testnet, so on
+    // mainnet the heights logged here are the chainparams ones. Say why when an
+    // override was set anyway.
+    if (!ConsensusOverridesAllowed()) {
+        for (const char* arg : CONSENSUS_OVERRIDE_ARGS) {
+            if (gArgs.IsArgSet(arg)) {
+                LogPrintf("WARNING: %s is ignored on this network: consensus overrides apply only on regtest and testnet", arg);
+            }
+        }
+    }
+
     // Same rationale for the AutoGreylist activation heights: all four are
     // consensus-affecting, all four carry hidden isolated-testnet overrides, and
     // none of them was previously surfaced -- so a node running a different
@@ -1794,12 +1807,14 @@ bool AppInit2(ThreadHandlerPtr threads)
         // gate is already crossed on mainnet and testnet, so an override would be a pure
         // footgun). Reading a nonexistent override here would log a value consensus ignores.
         const int64_t audit_height = Params().GetConsensus().AutoGreylistAuditHeight;
-        const int64_t deep_copy_height = gArgs.GetArg("-autogreylistdeepcopyheight",
-                                                      Params().GetConsensus().AutoGreylistDeepCopyHeight);
-        const int64_t total_credit_fix_height = gArgs.GetArg("-autogreylisttotalcreditfixheight",
-                                                             Params().GetConsensus().AutoGreylistTotalCreditFixHeight);
-        const int64_t redesign_height = gArgs.GetArg("-autogreylistredesignheight",
-                                                     Params().GetConsensus().AutoGreylistRedesignHeight);
+        // Through GetConsensusOverride(), so the logged and ordering-checked values are the
+        // ones consensus uses, which are the chainparams values where overrides do not apply.
+        const int64_t deep_copy_height = GetConsensusOverride("-autogreylistdeepcopyheight",
+                                                              Params().GetConsensus().AutoGreylistDeepCopyHeight);
+        const int64_t total_credit_fix_height = GetConsensusOverride("-autogreylisttotalcreditfixheight",
+                                                                     Params().GetConsensus().AutoGreylistTotalCreditFixHeight);
+        const int64_t redesign_height = GetConsensusOverride("-autogreylistredesignheight",
+                                                             Params().GetConsensus().AutoGreylistRedesignHeight);
 
         LogPrintf("AutoGreylist audit configured for block %" PRId64, audit_height);
         LogPrintf("AutoGreylist deep-copy configured for block %" PRId64, deep_copy_height);

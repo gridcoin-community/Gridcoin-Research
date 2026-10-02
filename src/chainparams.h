@@ -11,6 +11,7 @@
 #include "consensus/params.h"
 #include "protocol.h"
 
+#include <array>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -147,6 +148,42 @@ inline bool OnMainnet()
     return Params().NetworkIDString() == CBaseChainParams::MAIN;
 }
 
+//! The hidden consensus-override arguments that ConsensusOverridesAllowed()
+//! governs. Each is read through GetConsensusOverride().
+inline constexpr std::array<const char*, 7> CONSENSUS_OVERRIDE_ARGS {
+    "-blockv15height",
+    "-messagecontractdisableheight",
+    "-pendingpoolretention",
+    "-pollmultiaddressheight",
+    "-autogreylistdeepcopyheight",
+    "-autogreylisttotalcreditfixheight",
+    "-autogreylistredesignheight",
+};
+
+//! Set only by the unit-test fixture (src/test/test_gridcoin.cpp), whose
+//! suites run on mainnet params and drive the overrides above. No
+//! configuration or command-line argument reaches it.
+extern bool g_unit_test_consensus_overrides;
+
+/**
+ * Whether the hidden consensus-override arguments are honoured. They exist for
+ * testing on regtest and on isolated test networks such as the mesh, before
+ * the real heights are set in chainparams, and are never honoured on mainnet.
+ * Testnet stays in the condition until its heights are set in chainparams;
+ * after that this becomes regtest only.
+ */
+inline bool ConsensusOverridesAllowed()
+{
+    return Params().IsMockableChain() || OnTestnet() || g_unit_test_consensus_overrides;
+}
+
+//! The value of the hidden consensus-override argument \p arg where
+//! ConsensusOverridesAllowed(), otherwise \p chainparams_value.
+inline int64_t GetConsensusOverride(const std::string& arg, int64_t chainparams_value)
+{
+    return ConsensusOverridesAllowed() ? gArgs.GetArg(arg, chainparams_value) : chainparams_value;
+}
+
 /**
  * Sets the params returned by Params() to those for the given chain name.
  * @throws std::runtime_error when the chain is not supported.
@@ -217,7 +254,7 @@ inline bool IsPollMultiAddressEnabled(int nHeight)
 {
     // The argument-driven override is temporary, to facilitate testing on the
     // isolated testnet before the activation height is set in chainparams.
-    return nHeight >= gArgs.GetArg("-pollmultiaddressheight", Params().GetConsensus().PollMultiAddressHeight);
+    return nHeight >= GetConsensusOverride("-pollmultiaddressheight", Params().GetConsensus().PollMultiAddressHeight);
 }
 
 inline bool IsAutoGreylistAuditEnabled(int nHeight)
@@ -227,23 +264,23 @@ inline bool IsAutoGreylistAuditEnabled(int nHeight)
 
 inline bool IsAutoGreylistDeepCopyEnabled(int nHeight)
 {
-    // The argument driven override temporarily here to facilitate isolated/public testnet testing
-    // ahead of the v15 activation height.
-    return nHeight >= gArgs.GetArg("-autogreylistdeepcopyheight", Params().GetConsensus().AutoGreylistDeepCopyHeight);
+    // The argument-driven override is temporary, to facilitate testing on isolated
+    // test networks ahead of the v15 activation height (see ConsensusOverridesAllowed()).
+    return nHeight >= GetConsensusOverride("-autogreylistdeepcopyheight", Params().GetConsensus().AutoGreylistDeepCopyHeight);
 }
 
 inline bool IsAutoGreylistTotalCreditFixEnabled(int nHeight)
 {
-    // The argument driven override temporarily here to facilitate isolated/public testnet testing
-    // ahead of the v15 activation height.
-    return nHeight >= gArgs.GetArg("-autogreylisttotalcreditfixheight", Params().GetConsensus().AutoGreylistTotalCreditFixHeight);
+    // The argument-driven override is temporary, to facilitate testing on isolated
+    // test networks ahead of the v15 activation height (see ConsensusOverridesAllowed()).
+    return nHeight >= GetConsensusOverride("-autogreylisttotalcreditfixheight", Params().GetConsensus().AutoGreylistTotalCreditFixHeight);
 }
 
 inline bool IsAutoGreylistRedesignEnabled(int nHeight)
 {
-    // The argument driven override temporarily here to facilitate isolated/public testnet testing
-    // ahead of the v15 activation height.
-    return nHeight >= gArgs.GetArg("-autogreylistredesignheight", Params().GetConsensus().AutoGreylistRedesignHeight);
+    // The argument-driven override is temporary, to facilitate testing on isolated
+    // test networks ahead of the v15 activation height (see ConsensusOverridesAllowed()).
+    return nHeight >= GetConsensusOverride("-autogreylistredesignheight", Params().GetConsensus().AutoGreylistRedesignHeight);
 }
 
 inline bool IsSuperblockV3Enabled(int nHeight)
