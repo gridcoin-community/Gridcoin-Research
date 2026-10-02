@@ -421,7 +421,10 @@ util::SettingsValue getRwSetting(const std::string& name);
 //! are restored to what they were before the call, so memory never holds what
 //! the file does not. RwSettingsUpdated is emitted once, after the write and any
 //! restore and outside the settings lock, so a listener reads the final state.
-bool updateRwSetting(const std::string& name, const util::SettingsValue& value);
+//! With apply_to_running_args, the setting's forced (running) value is set to the
+//! new value, or dropped when the value is null, in the same step, before the
+//! signal, and restored with the read-write value if the write fails.
+bool updateRwSetting(const std::string& name, const util::SettingsValue& value, bool apply_to_running_args = false);
 
 // This is to address what I think is a miss in the Bitcoin implementation, which is to efficiently update
 // more than one setting at once (avoids multiple file rewrites).

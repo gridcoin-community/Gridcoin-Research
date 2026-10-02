@@ -1216,12 +1216,21 @@ UniValue ArgsManager::OutputArgs() const
 }
 
 namespace {
+//! One read-write setting change for CommitRwSettings.
+struct RwSettingChange {
+    std::string name;            // setting name without the leading dash
+    util::SettingsValue value;   // null erases
+    bool apply_to_running_args{false};
+};
+
 //! Store the given read-write settings (a null value erases a key) and write the
-//! settings file, as one step under one hold of the settings lock. If the write
-//! fails or throws, every key is put back as it was before the call. The
+//! settings file, as one step under one hold of the settings lock. A change with
+//! apply_to_running_args also sets (or, for a null value, drops) the setting's
+//! forced value in the same step. If the write fails or throws, every key is put
+//! back as it was before the call, forced entries included. The
 //! RwSettingsUpdated signal is emitted once, after the outcome and outside the
 //! lock, so a listener reads the final state; a throw is rethrown after it.
-bool CommitRwSettings(const std::vector<std::pair<std::string, util::SettingsValue>>& changes)
+bool CommitRwSettings(const std::vector<RwSettingChange>& changes)
 {
     bool written = false;
     std::exception_ptr write_error;
@@ -1229,17 +1238,32 @@ bool CommitRwSettings(const std::vector<std::pair<std::string, util::SettingsVal
     // recursive; WriteSettingsFile() locks it again and does its I/O under it),
     // so no other writer can persist this call's values before a restore.
     gArgs.LockSettings([&](util::Settings& settings) {
-        std::vector<std::pair<std::string, std::optional<util::SettingsValue>>> previous;
+        struct Previous {
+            std::string name;
+            std::optional<util::SettingsValue> rw;
+            bool forced_touched{false};
+            std::optional<util::SettingsValue> forced;
+        };
+        std::vector<Previous> previous;
         previous.reserve(changes.size());
-        for (const auto& [name, value] : changes) {
-            const auto it = settings.rw_settings.find(name);
-            previous.emplace_back(name, it == settings.rw_settings.end()
-                                            ? std::nullopt
-                                            : std::optional<util::SettingsValue>{it->second});
-            if (value.isNull()) {
-                settings.rw_settings.erase(name);
+        for (const auto& change : changes) {
+            Previous prev;
+            prev.name = change.name;
+            const auto rw_it = settings.rw_settings.find(change.name);
+            if (rw_it != settings.rw_settings.end()) prev.rw = rw_it->second;
+            if (change.apply_to_running_args) {
+                prev.forced_touched = true;
+                const auto forced_it = settings.forced_settings.find(change.name);
+                if (forced_it != settings.forced_settings.end()) prev.forced = forced_it->second;
+            }
+            previous.push_back(std::move(prev));
+
+            if (change.value.isNull()) {
+                settings.rw_settings.erase(change.name);
+                if (change.apply_to_running_args) settings.forced_settings.erase(change.name);
             } else {
-                settings.rw_settings[name] = value;
+                settings.rw_settings[change.name] = change.value;
+                if (change.apply_to_running_args) settings.forced_settings[change.name] = change.value;
             }
         }
         try {
@@ -1251,10 +1275,17 @@ bool CommitRwSettings(const std::vector<std::pair<std::string, util::SettingsVal
             // Restore in reverse order, so a key given twice ends at its value
             // from before the call.
             for (auto it = previous.rbegin(); it != previous.rend(); ++it) {
-                if (it->second) {
-                    settings.rw_settings[it->first] = *it->second;
+                if (it->rw) {
+                    settings.rw_settings[it->name] = *it->rw;
                 } else {
-                    settings.rw_settings.erase(it->first);
+                    settings.rw_settings.erase(it->name);
+                }
+                if (it->forced_touched) {
+                    if (it->forced) {
+                        settings.forced_settings[it->name] = *it->forced;
+                    } else {
+                        settings.forced_settings.erase(it->name);
+                    }
                 }
             }
         }
@@ -1281,14 +1312,19 @@ util::SettingsValue getRwSetting(const std::string& name)
     return result;
 }
 
-bool updateRwSetting(const std::string& name, const util::SettingsValue& value)
+bool updateRwSetting(const std::string& name, const util::SettingsValue& value, bool apply_to_running_args)
 {
-    return CommitRwSettings({{name, value}});
+    return CommitRwSettings({{name, value, apply_to_running_args}});
 }
 
 bool updateRwSettings(const std::vector<std::pair<std::string, util::SettingsValue>>& settings_in)
 {
-    return CommitRwSettings(settings_in);
+    std::vector<RwSettingChange> changes;
+    changes.reserve(settings_in.size());
+    for (const auto& [name, value] : settings_in) {
+        changes.push_back({name, value, /*apply_to_running_args=*/false});
+    }
+    return CommitRwSettings(changes);
 }
 
 bool RenameOver(fs::path src, fs::path dest)
