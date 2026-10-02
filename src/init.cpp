@@ -1071,9 +1071,11 @@ void SetupServerArgs()
     // window on POOL contracts (issue #1783). Default chainparams value is
     // 28800 blocks (~30 days at mainnet ~90s spacing); this arg shortens
     // the window so dev runs can exercise expiration boundaries without
-    // waiting weeks. CONSENSUS-AFFECTING — nodes with differing values
-    // disagree on POOL_REGISTER admission across expiration boundaries
-    // and will fork off the network if used on mainnet/public-testnet.
+    // waiting weeks. Ignored on mainnet, like every hidden consensus
+    // override (ConsensusOverridesAllowed()). On regtest and testnet it is
+    // CONSENSUS-AFFECTING — nodes with differing values disagree on
+    // POOL_REGISTER admission across expiration boundaries, so on the
+    // public testnet a node with a different value forks off.
     // Read via GetPendingPoolRetention in chainparams.cpp.
     hidden_args.emplace_back("-pendingpoolretention");
 

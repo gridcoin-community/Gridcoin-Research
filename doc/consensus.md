@@ -92,7 +92,7 @@ consensus-critical at a specific block version activation height. The
 | `DefaultMagnitudeWeightFactor` | 100/567 (~0.1764) | `BlockV11Height` | Voting weight conversion factor; configurable from `BlockV13Height` |
 | `MaxMagnitudeWeightFactor` | 1 | `BlockV13Height` | Upper clamp for voting magnitude weight factor |
 | `StandardContractReplayLookback` | 180 days | `BlockV11Height` | Contract validity window for types without registry DB (not applicable v13+ for protocol entries) |
-| `PendingPoolRetention` | 28,800 blocks (~30 days at ~90s spacing) | `BlockV15Height` | PENDING pool registrations and POOL_APPROVE OPEN authorizations are query-time expired after this many blocks (issue #1783). Overridable for isolated-testnet via hidden `-pendingpoolretention`; consensus-affecting. See §11.3.1. |
+| `PendingPoolRetention` | 28,800 blocks (~30 days at ~90s spacing) | `BlockV15Height` | PENDING pool registrations and POOL_APPROVE OPEN authorizations are query-time expired after this many blocks (issue #1783). Overridable on regtest and testnet (ignored on mainnet) via hidden `-pendingpoolretention`; consensus-affecting. See §11.3.1. |
 
 > **Source:** `CMainParams` (mainnet), `CTestNetParams`
 > (testnet) in `src/chainparams.cpp`
@@ -785,7 +785,7 @@ Both checks are pure functions of stored fields — no state mutation at the exp
 
 #### Hidden `-pendingpoolretention` override
 
-For isolated-testnet / regtest runs that need to exercise expiration boundaries without waiting ~30 days of mainnet-paced blocks, the hidden `-pendingpoolretention=N` arg (registered in `init.cpp`) shortens the window. **CONSENSUS-AFFECTING:** nodes with differing values disagree on POOL_REGISTER admission across expiration boundaries and **will fork off the network** if used on mainnet / public testnet. Mirrors the existing `-blockv15height` pattern in scope and warning.
+For isolated-testnet / regtest runs that need to exercise expiration boundaries without waiting ~30 days of mainnet-paced blocks, the hidden `-pendingpoolretention=N` arg (registered in `init.cpp`) shortens the window. Like every hidden consensus override, it is **ignored on mainnet** and honoured only on regtest and testnet (`ConsensusOverridesAllowed()` in `src/chainparams.h`). **CONSENSUS-AFFECTING where honoured:** nodes with differing values disagree on POOL_REGISTER admission across expiration boundaries, so a node on the public testnet with a different value **will fork off the network**. Mirrors the existing `-blockv15height` pattern in scope and warning.
 
 > **Source:** `src/gridcoin/pool.cpp` `IsPendingExpired` / `IsAuthorizationExpired`; `src/chainparams.cpp` `GetPendingPoolRetention`; `src/init.cpp` hidden_args registration.
 
