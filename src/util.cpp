@@ -285,6 +285,17 @@ int64_t GetAdjustedTime()
 // warns or calls into the UI.
 static Mutex g_time_offset_votes_mutex;
 static TimeOffsetVotes g_time_offset_votes GUARDED_BY(g_time_offset_votes_mutex);
+//! The median the live votes gave at the last StoreTimeOffset(), or nullopt without a quorum.
+static std::optional<int64_t> g_time_median GUARDED_BY(g_time_offset_votes_mutex);
+
+//! A peer time median further than this from the local clock, in seconds, raises the clock warning.
+static constexpr int64_t CLOCK_WARNING_THRESHOLD = 24;
+
+static std::atomic<uint64_t> g_lead_seen{0};
+static std::atomic<uint64_t> g_lead_over16{0};
+static std::atomic<uint64_t> g_lead_over32{0};
+static std::atomic<uint64_t> g_lead_over48{0};
+static std::atomic<uint64_t> g_lead_over128{0};
 
 //! Store the offset the live votes give, and return whether the 70-minute check
 //! rejected it. Called under the votes mutex, so the stored offset always
@@ -294,6 +305,7 @@ static bool StoreTimeOffset(const std::optional<int64_t>& median) EXCLUSIVE_LOCK
     // We believe the median of the other nodes 95% and our own node's time ("0" initial offset) 5%. This will also act to gently converge the network to consensus UTC, in case
     // the entire network is displaced for some reason. Without a quorum of live votes, our own
     // clock is all we have.
+    g_time_median = median;
     int64_t offset = median ? static_cast<int64_t>(0.95 * *median) : 0;
     // Only let other nodes change our time by so much
     const bool rejected = abs64(offset) >= 70 * 60;
@@ -368,7 +380,57 @@ void ResetTimeDataForTesting()
 {
     LOCK(g_time_offset_votes_mutex);
     g_time_offset_votes = TimeOffsetVotes{};
+    g_time_median.reset();
     nTimeOffset = 0;
+}
+
+bool HasTimeQuorum()
+{
+    LOCK(g_time_offset_votes_mutex);
+    return g_time_median.has_value();
+}
+
+int64_t GetPeerTimeMedian()
+{
+    LOCK(g_time_offset_votes_mutex);
+    return g_time_median.value_or(0);
+}
+
+std::string GetClockWarning(bool staking)
+{
+    std::optional<int64_t> median;
+    {
+        LOCK(g_time_offset_votes_mutex);
+        median = g_time_median;
+    }
+
+    if (!median) {
+        return staking
+            ? _("Warning: staking without a network time quorum; this node is using its own clock.")
+            : std::string();
+    }
+
+    // Compared without abs(), which is undefined for the most negative value.
+    if (*median > CLOCK_WARNING_THRESHOLD || *median < -CLOCK_WARNING_THRESHOLD) {
+        return _("Warning: this computer's clock differs from the network by more than 24 seconds.");
+    }
+
+    return std::string();
+}
+
+void RecordBlockLead(int64_t lead)
+{
+    ++g_lead_seen;
+    if (lead > 16) ++g_lead_over16;
+    if (lead > 32) ++g_lead_over32;
+    if (lead > 48) ++g_lead_over48;
+    if (lead > 128) ++g_lead_over128;
+}
+
+BlockLeadCounts GetBlockLeadCounts()
+{
+    return {g_lead_seen.load(), g_lead_over16.load(), g_lead_over32.load(), g_lead_over48.load(),
+            g_lead_over128.load()};
 }
 
 

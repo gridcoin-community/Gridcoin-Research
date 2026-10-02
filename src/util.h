@@ -121,6 +121,24 @@ void AddTimeData(int64_t node_id, const CNetAddr& ip, int64_t nOffsetSample);
 void RemoveTimeData(int64_t node_id);
 //! Tests only: forget every time vote and reset the offset to 0.
 void ResetTimeDataForTesting();
+//! Whether the live time votes form a quorum, so that the offset follows the peer median.
+bool HasTimeQuorum();
+//! The peer time median the live votes give, in seconds, or 0 without a quorum.
+int64_t GetPeerTimeMedian();
+//! The clock warning, or an empty string: a staking node without a time quorum (it uses its own clock), or a peer
+//! time median more than 24 s from this computer's clock.
+std::string GetClockWarning(bool staking);
+//! Count a received block's lead over the adjusted time, in seconds, for the getclockstats diagnostics.
+void RecordBlockLead(int64_t lead);
+//! Cumulative counts of received blocks, and of those more than 16, 32, 48 and 128 s ahead of the adjusted time.
+struct BlockLeadCounts {
+    uint64_t seen;
+    uint64_t over16;
+    uint64_t over32;
+    uint64_t over48;
+    uint64_t over128;
+};
+BlockLeadCounts GetBlockLeadCounts();
 #if HAVE_SYSTEM
 void runCommand(std::string strCommand);
 #endif

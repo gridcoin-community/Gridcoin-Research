@@ -623,6 +623,45 @@ UniValue getnettotals(const UniValue& params)
     return obj;
 }
 
+static const RPCHelpMan getclockstats_help{
+    "getclockstats",
+    "Returns the network time state and counts of received blocks by how far their timestamps were ahead of this\n"
+    "node's adjusted time when they arrived. The counts are cumulative since startup and exclude blocks this node\n"
+    "staked.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "time_quorum", "Whether the live peer time votes form a quorum"},
+            {RPCResult::Type::NUM, "peer_median", "The peer time median in seconds, or 0 without a quorum"},
+            {RPCResult::Type::NUM, "offset", "The offset applied to the local clock, in seconds"},
+            {RPCResult::Type::NUM, "blocks_seen", "Received blocks counted"},
+            {RPCResult::Type::NUM, "lead_over_16", "Received blocks more than 16 s ahead"},
+            {RPCResult::Type::NUM, "lead_over_32", "Received blocks more than 32 s ahead"},
+            {RPCResult::Type::NUM, "lead_over_48", "Received blocks more than 48 s ahead"},
+            {RPCResult::Type::NUM, "lead_over_128", "Received blocks more than 128 s ahead"},
+        }},
+    RPCExamples{
+        HelpExampleCli("getclockstats", "") +
+        HelpExampleRpc("getclockstats", "")},
+};
+const RPCHelpMan& getclockstats_helpman() { return getclockstats_help; }
+
+UniValue getclockstats(const UniValue& params)
+{
+    const BlockLeadCounts leads = GetBlockLeadCounts();
+
+    UniValue obj(UniValue::VOBJ);
+    obj.pushKV("time_quorum", HasTimeQuorum());
+    obj.pushKV("peer_median", GetPeerTimeMedian());
+    obj.pushKV("offset", GetTimeOffset());
+    obj.pushKV("blocks_seen", leads.seen);
+    obj.pushKV("lead_over_16", leads.over16);
+    obj.pushKV("lead_over_32", leads.over32);
+    obj.pushKV("lead_over_48", leads.over48);
+    obj.pushKV("lead_over_128", leads.over128);
+    return obj;
+}
+
 static const RPCHelpMan listalerts_help{
     "listalerts",
     "Returns information about alerts.",

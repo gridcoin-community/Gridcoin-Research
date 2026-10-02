@@ -1767,6 +1767,10 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
     }
 
     if (block.nVersion >= 12) {
+        if (!generated_by_me) {
+            RecordBlockLead(block.GetBlockTime() - GetAdjustedTime());
+        }
+
         // Check timestamp
         switch (CheckBlockTime(block.GetBlockTime(), pindexPrev->GetBlockTime(), GetAdjustedTime(),
                                IsV15Enabled(nHeight))) {
