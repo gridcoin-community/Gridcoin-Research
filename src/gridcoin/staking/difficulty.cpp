@@ -312,13 +312,18 @@ uint64_t GRC::GetStakeWeight(const CWallet& wallet)
         return 0;
     }
 
-    uint64_t weight = 0;
+    return GetStakingValue(coins);
+}
 
-    for (const StakeCandidate& candidate : coins) {
-        weight += candidate.tx->vout[candidate.n].nValue;
+CAmount GRC::GetStakingValue(const std::vector<StakeCandidate>& candidates)
+{
+    int64_t weight = 0;
+
+    for (const StakeCandidate& candidate : candidates) {
+        weight += CalculateStakeWeightV8(candidate.tx->vout[candidate.n].nValue);
     }
 
-    return weight;
+    return CalculateStakeValueV8(weight);
 }
 
 double GRC::GetEstimatedNetworkWeight(unsigned int nPoSInterval) EXCLUSIVE_LOCKS_REQUIRED(cs_main)

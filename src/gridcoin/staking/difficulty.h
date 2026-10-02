@@ -6,12 +6,15 @@
 #ifndef GRIDCOIN_STAKING_DIFFICULTY_H
 #define GRIDCOIN_STAKING_DIFFICULTY_H
 
+#include "amount.h"
 #include "arith_uint256.h"
 #include "sync.h"
 
 #include <cstdint>
+#include <vector>
 class CBlockIndex;
 class CWallet;
+struct StakeCandidate;
 #include <cmath>
 
 extern CCriticalSection cs_main;
@@ -73,6 +76,9 @@ double GetSmoothedDifficulty(int64_t nStakeableBalance) EXCLUSIVE_LOCKS_REQUIRED
 //! Self-managed locking: takes LOCK2(cs_main, wallet.cs_wallet) internally.
 //! Safe to call with or without cs_main already held (cs_main is recursive).
 uint64_t GetStakeWeight(const CWallet& wallet);
+
+//! The value the candidates stake with: each coin's value in whole V8 weight units, which is all the kernel weighs.
+CAmount GetStakingValue(const std::vector<StakeCandidate>& candidates);
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
