@@ -1736,6 +1736,7 @@ void StakeMiner(CWallet *pwallet)
         if (!IsMiningAllowed(pwallet))
         {
             g_miner_status.ClearLastSearch();
+            SetClockWarningStaking(false);
             continue;
         }
 
@@ -1764,6 +1765,7 @@ void StakeMiner(CWallet *pwallet)
         if (IsV15Enabled(pindexPrev->nHeight + 1)
             && CheckBlockTime(StakeBlock.nTime, pindexPrev->GetBlockTime(), adjusted_now, true) != BlockTimeCheck::OK) {
             LogPrint(BCLog::LogFlags::MINER, "%s: clock too far behind the last block to stake on it", __func__);
+            SetClockWarningStaking(true);
             continue;
         }
 
@@ -1778,6 +1780,7 @@ void StakeMiner(CWallet *pwallet)
         vector<const CWalletTx*> StakeInputs;
 
         bool createcoinstake_success = CreateCoinStake(StakeBlock, mtxCoinstake, BlockKey, StakeInputs, *pwallet, pindexPrev);
+        SetClockWarningStaking(g_miner_status.StakingActive());
 
         g_timer.GetTimes(function + "CreateCoinStake", "miner");
 

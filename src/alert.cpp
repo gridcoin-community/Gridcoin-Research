@@ -9,7 +9,6 @@
 
 #include "alert.h"
 #include "chainparams.h"
-#include "gridcoin/staking/status.h"
 #include "clientversion.h"
 #include "key.h"
 #include "net.h"
@@ -305,8 +304,7 @@ string GetWarnings(string strFor)
         nPriority = 1000;
         strStatusBar = strMiscWarning;
     }
-    else if (const std::string clock_warning = GetClockWarning(g_miner_status.StakingActive());
-             !clock_warning.empty())
+    else if (const std::string clock_warning = GetCurrentClockWarning(); !clock_warning.empty())
     {
         nPriority = 1000;
         strStatusBar = clock_warning;

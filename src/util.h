@@ -128,6 +128,11 @@ int64_t GetPeerTimeMedian();
 //! The clock warning, or an empty string: a staking node without a time quorum (it uses its own clock), or a peer
 //! time median more than 24 s from this computer's clock.
 std::string GetClockWarning(bool staking);
+//! Tell the clock warning whether the stake miner is trying to stake. The miner calls it every round. Each change of
+//! the clock warning is logged once, whether it follows a miner round or a change to the time votes.
+void SetClockWarningStaking(bool staking);
+//! The clock warning for the staking state the stake miner last reported.
+std::string GetCurrentClockWarning();
 //! Count a received block's lead over the adjusted time, in seconds, for the getclockstats diagnostics.
 void RecordBlockLead(int64_t lead);
 //! Cumulative counts of received blocks, and of those more than 16, 32, 48 and 128 s ahead of the adjusted time.

@@ -17,6 +17,8 @@ Two connected nodes, v15 at height H, mock clocks set explicitly per block:
   penalty, and the peer asks for it again by itself once its clock is within
   48 s of the block's time.
 - getclockstats counts received blocks by lead, and not the node's own blocks.
+- A staking node whose clock is too far behind the tip to stake, with no time
+  quorum, warns in the RPC errors field and in its log.
 """
 
 import time
@@ -194,6 +196,17 @@ class FeatureV15SpacingTest(GridcoinTestFramework):
             assert_equal(blocks[h]["version"] >= 15, h >= V15_HEIGHT)
         # The crossing saw negative parent spacing under the v15 rule.
         assert any(blocks[h - 1]["time"] < blocks[h - 2]["time"] for h in range(V15_HEIGHT, len(blocks)))
+
+        self.log.info("A staking node too far behind the tip warns and logs it")
+        # restart_node puts node0 back on the real clock, which the mocked chain tip is far ahead of, so the miner
+        # skips every round. Regtest peers share one network group, so there is no time quorum either.
+        lead = node0.getblock(node0.getbestblockhash())["time"] - int(time.time())
+        assert lead > 2 * 48 + 60, "the tip must be well over 96 s ahead of the real clock for this check, got %d" % lead
+        staking_args = [a for a in self.extra_args[0] if a != "-staking=0"] + ["-staking=1"]
+        with node0.assert_debug_log(["Clock warning: staking without a network time quorum"], timeout=60):
+            self.restart_node(0, extra_args=staking_args)
+            self.wait_until(lambda: "time quorum" in node0.getnetworkinfo()["errors"], timeout=60)
+        assert_equal(node0.getbestblockhash(), blocks[-1]["hash"])
 
 
 if __name__ == '__main__':

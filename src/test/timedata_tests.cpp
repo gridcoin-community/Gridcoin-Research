@@ -469,6 +469,64 @@ BOOST_AUTO_TEST_CASE(clock_warning_follows_the_quorum_and_the_peer_median)
     BOOST_CHECK(GetClockWarning(false).empty());
 }
 
+BOOST_AUTO_TEST_CASE(clock_warning_follows_the_staking_state_the_miner_reports)
+{
+    const TimeDataReset reset;
+
+    // No quorum: the warning shows only while the miner reports that it is trying to stake.
+    SetClockWarningStaking(true);
+    BOOST_CHECK(!GetCurrentClockWarning().empty());
+    SetClockWarningStaking(false);
+    BOOST_CHECK(GetCurrentClockWarning().empty());
+}
+
+BOOST_AUTO_TEST_CASE(clock_warning_changes_are_logged_once_each)
+{
+    const TimeDataReset reset;
+
+    std::vector<std::string> lines;
+    const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) {
+        if (s.find("Clock warning") != std::string::npos) lines.push_back(s);
+    });
+
+    SetClockWarningStaking(true);   // no quorum while staking
+    SetClockWarningStaking(true);   // unchanged: not logged again
+    BOOST_REQUIRE_EQUAL(lines.size(), 1U);
+    BOOST_CHECK(lines[0].find("staking without a network time quorum") != std::string::npos);
+
+    for (int i = 1; i <= 4; ++i) {
+        AddTimeData(i, Addr(strprintf("%d.%d.0.1", i, i)), 30);   // quorum, median 30 s
+    }
+    BOOST_REQUIRE_EQUAL(lines.size(), 2U);
+    BOOST_CHECK(lines[1].find("+30") != std::string::npos);
+
+    for (int i = 1; i <= 4; ++i) {
+        AddTimeData(i, Addr(strprintf("%d.%d.0.1", i, i)), 10);   // median 10 s: cleared
+    }
+    BOOST_REQUIRE_EQUAL(lines.size(), 3U);
+    BOOST_CHECK(lines[2].find("cleared") != std::string::npos);
+
+    LogInstance().DeleteCallback(callback);
+}
+
+BOOST_AUTO_TEST_CASE(a_rejected_offset_raises_the_clock_warning_not_the_old_one)
+{
+    const TimeDataReset reset;
+    const std::string saved = strMiscWarning;
+    strMiscWarning.clear();
+
+    // Every peer two hours ahead: the 70-minute check rejects the offset. The clock warning reports it; the old
+    // one-shot message box warning is gone.
+    for (int i = 1; i <= 4; ++i) {
+        AddTimeData(i, Addr(strprintf("%d.%d.0.1", i, i)), 2 * 60 * 60);
+    }
+    BOOST_CHECK_EQUAL(GetTimeOffset(), 0);
+    BOOST_CHECK(strMiscWarning.empty());
+    BOOST_CHECK(!GetClockWarning(/* staking */ false).empty());
+
+    strMiscWarning = saved;
+}
+
 BOOST_AUTO_TEST_CASE(block_lead_counters_bucket_by_threshold)
 {
     // The counters are process-wide and cumulative, so compare deltas.

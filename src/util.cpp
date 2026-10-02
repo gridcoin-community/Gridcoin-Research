@@ -297,22 +297,77 @@ static std::atomic<uint64_t> g_lead_over32{0};
 static std::atomic<uint64_t> g_lead_over48{0};
 static std::atomic<uint64_t> g_lead_over128{0};
 
-//! Store the offset the live votes give, and return whether the 70-minute check
-//! rejected it. Called under the votes mutex, so the stored offset always
-//! matches the latest vote set, whichever thread changed it last.
-static bool StoreTimeOffset(const std::optional<int64_t>& median) EXCLUSIVE_LOCKS_REQUIRED(g_time_offset_votes_mutex)
+namespace {
+enum class ClockState { OK, STAKING_WITHOUT_QUORUM, FAR_FROM_PEERS };
+
+ClockState GetClockState(const std::optional<int64_t>& median, bool staking)
+{
+    if (!median) {
+        return staking ? ClockState::STAKING_WITHOUT_QUORUM : ClockState::OK;
+    }
+
+    // Compared without abs(), which is undefined for the most negative value.
+    if (*median > CLOCK_WARNING_THRESHOLD || *median < -CLOCK_WARNING_THRESHOLD) {
+        return ClockState::FAR_FROM_PEERS;
+    }
+
+    return ClockState::OK;
+}
+} // anonymous namespace
+
+//! Whether the stake miner last reported that it is trying to stake.
+static std::atomic<bool> g_clock_warning_staking{false};
+//! The clock state last logged, so that each change is logged once. A leaf, like the votes mutex, and never held
+//! with it.
+static Mutex g_clock_log_mutex;
+static ClockState g_logged_clock_state GUARDED_BY(g_clock_log_mutex) = ClockState::OK;
+
+static std::optional<int64_t> GetTimeMedian()
+{
+    LOCK(g_time_offset_votes_mutex);
+    return g_time_median;
+}
+
+//! Log the clock state if it changed since it was last logged. Called after every change to the time votes and on
+//! every stake miner round, never with the votes mutex held.
+static void LogClockStateChange()
+{
+    const std::optional<int64_t> median = GetTimeMedian();
+    const ClockState state = GetClockState(median, g_clock_warning_staking.load());
+
+    LOCK(g_clock_log_mutex);
+    if (state == g_logged_clock_state) return;
+    g_logged_clock_state = state;
+
+    switch (state) {
+    case ClockState::OK:
+        LogPrintf("Clock warning cleared");
+        break;
+    case ClockState::STAKING_WITHOUT_QUORUM:
+        LogPrintf("Clock warning: staking without a network time quorum; this node is using its own clock");
+        break;
+    case ClockState::FAR_FROM_PEERS:
+        LogPrintf("Clock warning: the peer time median is %+d s from this computer's clock (more than %d s)",
+                  *median, CLOCK_WARNING_THRESHOLD);
+        break;
+    }
+}
+
+//! Store the offset the live votes give. Called under the votes mutex, so the
+//! stored offset always matches the latest vote set, whichever thread changed
+//! it last.
+static void StoreTimeOffset(const std::optional<int64_t>& median) EXCLUSIVE_LOCKS_REQUIRED(g_time_offset_votes_mutex)
 {
     // We believe the median of the other nodes 95% and our own node's time ("0" initial offset) 5%. This will also act to gently converge the network to consensus UTC, in case
     // the entire network is displaced for some reason. Without a quorum of live votes, our own
     // clock is all we have.
     g_time_median = median;
     int64_t offset = median ? static_cast<int64_t>(0.95 * *median) : 0;
-    // Only let other nodes change our time by so much
-    const bool rejected = abs64(offset) >= 70 * 60;
-    if (rejected)
+    // Only let other nodes change our time by so much. A median beyond this
+    // still raises the clock warning (see GetClockState).
+    if (abs64(offset) >= 70 * 60)
         offset = 0;
     nTimeOffset = offset;
-    return rejected;
 }
 
 void AddTimeData(int64_t node_id, const CNetAddr& ip, int64_t nOffsetSample)
@@ -321,35 +376,13 @@ void AddTimeData(int64_t node_id, const CNetAddr& ip, int64_t nOffsetSample)
     // connection is deleted, and peers in one network group count once.
     const TimeOffsetVotes::Group group = ip.GetGroup();
     std::vector<int64_t> vSorted;
-    bool rejected;
     {
         LOCK(g_time_offset_votes_mutex);
-        rejected = StoreTimeOffset(g_time_offset_votes.Add(node_id, group, nOffsetSample));
+        StoreTimeOffset(g_time_offset_votes.Add(node_id, group, nOffsetSample));
         vSorted = g_time_offset_votes.Sorted();
     }
 
     LogPrint(BCLog::LogFlags::NOISY, "Added time data, votes %d, offset %+" PRId64 " (%+" PRId64 " minutes)", vSorted.size(), nOffsetSample, nOffsetSample/60);
-    if (rejected)
-    {
-        static bool fDone;
-        if (!fDone)
-        {
-            // If nobody has a time different than ours but within 5 minutes of ours, give a warning
-            bool fMatch = false;
-            for (auto const& nOffset : vSorted)
-                if (nOffset != 0 && abs64(nOffset) < 5 * 60)
-                    fMatch = true;
-
-            if (!fMatch)
-            {
-                fDone = true;
-                string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.");
-                strMiscWarning = strMessage;
-                LogPrintf("*** %s", strMessage);
-                uiInterface.ThreadSafeMessageBox(strMessage+" ", string("Gridcoin"), CClientUIInterface::MSG_WARNING);
-            }
-        }
-    }
     if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY)) {
         for (auto const& n : vSorted)
             LogPrintf("%+" PRId64 "  ", n);
@@ -357,6 +390,8 @@ void AddTimeData(int64_t node_id, const CNetAddr& ip, int64_t nOffsetSample)
     }
     const int64_t offset = GetTimeOffset();
     LogPrint(BCLog::LogFlags::NOISY, "nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)", offset, offset/60);
+
+    LogClockStateChange();
 }
 
 void RemoveTimeData(int64_t node_id)
@@ -374,48 +409,54 @@ void RemoveTimeData(int64_t node_id)
     }
 
     LogPrint(BCLog::LogFlags::NOISY, "Withdrew time vote of peer %d, nTimeOffset = %+" PRId64, node_id, GetTimeOffset());
+    LogClockStateChange();
 }
 
 void ResetTimeDataForTesting()
 {
-    LOCK(g_time_offset_votes_mutex);
-    g_time_offset_votes = TimeOffsetVotes{};
-    g_time_median.reset();
-    nTimeOffset = 0;
+    {
+        LOCK(g_time_offset_votes_mutex);
+        g_time_offset_votes = TimeOffsetVotes{};
+        g_time_median.reset();
+        nTimeOffset = 0;
+    }
+    g_clock_warning_staking = false;
+    LOCK(g_clock_log_mutex);
+    g_logged_clock_state = ClockState::OK;
 }
 
 bool HasTimeQuorum()
 {
-    LOCK(g_time_offset_votes_mutex);
-    return g_time_median.has_value();
+    return GetTimeMedian().has_value();
 }
 
 int64_t GetPeerTimeMedian()
 {
-    LOCK(g_time_offset_votes_mutex);
-    return g_time_median.value_or(0);
+    return GetTimeMedian().value_or(0);
 }
 
 std::string GetClockWarning(bool staking)
 {
-    std::optional<int64_t> median;
-    {
-        LOCK(g_time_offset_votes_mutex);
-        median = g_time_median;
-    }
-
-    if (!median) {
-        return staking
-            ? _("Warning: staking without a network time quorum; this node is using its own clock.")
-            : std::string();
-    }
-
-    // Compared without abs(), which is undefined for the most negative value.
-    if (*median > CLOCK_WARNING_THRESHOLD || *median < -CLOCK_WARNING_THRESHOLD) {
+    switch (GetClockState(GetTimeMedian(), staking)) {
+    case ClockState::OK:
+        return std::string();
+    case ClockState::STAKING_WITHOUT_QUORUM:
+        return _("Warning: staking without a network time quorum; this node is using its own clock.");
+    case ClockState::FAR_FROM_PEERS:
         return _("Warning: this computer's clock differs from the network by more than 24 seconds.");
     }
-
     return std::string();
+}
+
+std::string GetCurrentClockWarning()
+{
+    return GetClockWarning(g_clock_warning_staking.load());
+}
+
+void SetClockWarningStaking(bool staking)
+{
+    g_clock_warning_staking = staking;
+    LogClockStateChange();
 }
 
 void RecordBlockLead(int64_t lead)
