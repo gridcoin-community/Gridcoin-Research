@@ -415,10 +415,18 @@ extern ArgsManager gArgs;
 
 // When we port the interfaces file over from Bitcoin, these two functions should be moved there.
 util::SettingsValue getRwSetting(const std::string& name);
+
+//! Store a read-write setting (a null value erases it) and write the settings
+//! file. If the write fails (returns false) or throws, the read-write settings
+//! are restored to what they were before the call, so memory never holds what
+//! the file does not. RwSettingsUpdated is emitted once, after the write and any
+//! restore and outside the settings lock, so a listener reads the final state.
 bool updateRwSetting(const std::string& name, const util::SettingsValue& value);
 
 // This is to address what I think is a miss in the Bitcoin implementation, which is to efficiently update
 // more than one setting at once (avoids multiple file rewrites).
+//! The same contract as updateRwSetting, for every key in the batch: on failure or a throw all of them are
+//! restored, and the signal is emitted once.
 bool updateRwSettings(const std::vector<std::pair<std::string, util::SettingsValue>>& settings_in);
 
 const fs::path &GetDataDir(bool fNetSpecific = true);

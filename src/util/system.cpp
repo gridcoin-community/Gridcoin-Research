@@ -14,6 +14,8 @@
 
 #include <chainparamsbase.h>
 
+#include <exception>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 #include <typeinfo>
@@ -1213,6 +1215,59 @@ UniValue ArgsManager::OutputArgs() const
     return result;
 }
 
+namespace {
+//! Store the given read-write settings (a null value erases a key) and write the
+//! settings file, as one step under one hold of the settings lock. If the write
+//! fails or throws, every key is put back as it was before the call. The
+//! RwSettingsUpdated signal is emitted once, after the outcome and outside the
+//! lock, so a listener reads the final state; a throw is rethrown after it.
+bool CommitRwSettings(const std::vector<std::pair<std::string, util::SettingsValue>>& changes)
+{
+    bool written = false;
+    std::exception_ptr write_error;
+    // One hold of cs_args across record, apply, write and restore (cs_args is
+    // recursive; WriteSettingsFile() locks it again and does its I/O under it),
+    // so no other writer can persist this call's values before a restore.
+    gArgs.LockSettings([&](util::Settings& settings) {
+        std::vector<std::pair<std::string, std::optional<util::SettingsValue>>> previous;
+        previous.reserve(changes.size());
+        for (const auto& [name, value] : changes) {
+            const auto it = settings.rw_settings.find(name);
+            previous.emplace_back(name, it == settings.rw_settings.end()
+                                            ? std::nullopt
+                                            : std::optional<util::SettingsValue>{it->second});
+            if (value.isNull()) {
+                settings.rw_settings.erase(name);
+            } else {
+                settings.rw_settings[name] = value;
+            }
+        }
+        try {
+            written = gArgs.WriteSettingsFile();
+        } catch (...) {
+            write_error = std::current_exception();
+        }
+        if (!written) {
+            // Restore in reverse order, so a key given twice ends at its value
+            // from before the call.
+            for (auto it = previous.rbegin(); it != previous.rend(); ++it) {
+                if (it->second) {
+                    settings.rw_settings[it->first] = *it->second;
+                } else {
+                    settings.rw_settings.erase(it->first);
+                }
+            }
+        }
+    });
+    // Notify once, after the outcome, so a listener reads the final state, and
+    // outside cs_args: the side-stake reload takes the registry's lock, and the
+    // side-stake save takes that lock before cs_args, so emitting under cs_args
+    // would invert that order.
+    uiInterface.RwSettingsUpdated();
+    if (write_error) std::rethrow_exception(write_error);
+    return written;
+}
+} // namespace
 
 // When we port the interfaces file over from Bitcoin, these two functions should be moved there.
 util::SettingsValue getRwSetting(const std::string& name)
@@ -1228,35 +1283,12 @@ util::SettingsValue getRwSetting(const std::string& name)
 
 bool updateRwSetting(const std::string& name, const util::SettingsValue& value)
 {
-    gArgs.LockSettings([&](util::Settings& settings) {
-        if (value.isNull()) {
-            settings.rw_settings.erase(name);
-        } else {
-            settings.rw_settings[name] = value;
-        }
-    });
-
-    uiInterface.RwSettingsUpdated();
-
-    return gArgs.WriteSettingsFile();
+    return CommitRwSettings({{name, value}});
 }
 
 bool updateRwSettings(const std::vector<std::pair<std::string, util::SettingsValue>>& settings_in)
 {
-    gArgs.LockSettings([&](util::Settings& settings)  {
-        for (const auto& iter : settings_in)
-        {
-            if (iter.second.isNull()) {
-                settings.rw_settings.erase(iter.first);
-            } else {
-                settings.rw_settings[iter.first] = iter.second;
-            }
-        }
-    });
-
-    uiInterface.RwSettingsUpdated();
-
-    return gArgs.WriteSettingsFile();
+    return CommitRwSettings(settings_in);
 }
 
 bool RenameOver(fs::path src, fs::path dest)
