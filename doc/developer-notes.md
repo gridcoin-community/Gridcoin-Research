@@ -413,7 +413,7 @@ invocation of `perf record` like this:
 ```sh
 $ perf record \
     -g --call-graph dwarf --per-thread -F 140 \
-    -p `pgrep gridcoinresearchd` -- sleep 60
+    -p `pidof -s gridcoinresearchd` -- sleep 60
 ```
 
 You could then analyze the results by running:
