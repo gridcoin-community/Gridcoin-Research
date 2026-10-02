@@ -201,6 +201,9 @@ enum class BlockTimeCheck {
     TOO_FAR_AHEAD,     //!< Ahead of the receiver's clock by more than 128 s.
 };
 
+//! The reject reason for a block rejected as BlockTimeCheck::AHEAD_UNPENALIZED.
+inline const std::string REJECT_TIME_TOO_NEW{"time-too-new"};
+
 //! Classify a v12+ block's stamp against its parent's stamp and the receiver's adjusted time. Before v15 the window
 //! is [parent - 128, now + 128]; from v15 it is [parent - 48, now + 48].
 BlockTimeCheck CheckBlockTime(int64_t block_time, int64_t parent_time, int64_t adjusted_now, bool v15);

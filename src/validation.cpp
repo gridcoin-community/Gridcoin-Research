@@ -1779,7 +1779,8 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
         case BlockTimeCheck::TOO_FAR_AHEAD:
             return state.DoS(25, error("%s: block timestamp too far in future", __func__));
         case BlockTimeCheck::AHEAD_UNPENALIZED:
-            return state.Invalid(error("%s: block timestamp ahead of the acceptance window", __func__));
+            return state.Invalid(error("%s: block timestamp ahead of the acceptance window", __func__),
+                                 REJECT_TIME_TOO_NEW);
         case BlockTimeCheck::OK:
             break;
         }

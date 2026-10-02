@@ -14,7 +14,8 @@ Two connected nodes, v15 at height H, mock clocks set explicitly per block:
 - A node whose clock is 60 s behind the tip stamps parent - 48 and its block is
   accepted; 200 s behind, it refuses to build a block its own window rejects.
 - A block 64 s ahead of a peer's clock is rejected by that peer without
-  penalty and accepted once the peer's clock catches up.
+  penalty, and the peer asks for it again by itself once its clock is within
+  48 s of the block's time.
 - getclockstats counts received blocks by lead, and not the node's own blocks.
 """
 
@@ -147,7 +148,7 @@ class FeatureV15SpacingTest(GridcoinTestFramework):
 
         # 64 s ahead on the grid keeps every stamp generatetoaddress can use (leads of 64-112 s)
         # inside the penalty-free band (48, 128].
-        self.log.info("A block 64 s ahead of node1 is rejected without penalty, then accepted")
+        self.log.info("A block 64 s ahead of node1 is rejected without penalty, then fetched again")
         now = (max(parent["time"], node1.mock_now()) // SLOT + 1) * SLOT
         self.set_clock(node1, now)
         self.set_clock(node0, now + 64)
@@ -158,6 +159,9 @@ class FeatureV15SpacingTest(GridcoinTestFramework):
         assert_equal(node1.getbestblockhash(), parent["hash"])
         assert_equal(node1.listbanned(), [])
         assert_equal(node1.getconnectioncount(), 1)
+        # No child block and no other peer: node1 must ask for the block again itself once now + 48 >= its time.
+        self.set_clock(node1, ahead["time"] - 48)
+        self.wait_until(lambda: node1.getbestblockhash() == ahead["hash"], timeout=30)
 
         self.set_clock(node1, ahead["time"] + SLOT)
         self.set_clock(node0, ahead["time"] + SLOT)
