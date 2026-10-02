@@ -40,6 +40,7 @@
 #include "gridcoin/cpid.h"
 #include "gridcoin/pool.h"
 #include "gridcoin/mrc.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/kernel.h"
 #include "init.h"
 #include "miner.h"
@@ -2213,6 +2214,29 @@ BOOST_AUTO_TEST_CASE(stake_candidates_carry_their_confirming_block_time)
         block_times.insert(candidate.block_time);
     }
     BOOST_CHECK_GE(block_times.size(), 2U);
+}
+
+BOOST_AUTO_TEST_CASE(stake_weight_is_the_value_of_the_stake_candidates)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    std::vector<StakeCandidate> candidates;
+    GRC::MinerStatus::ErrorFlags error_flag = GRC::MinerStatus::NONE;
+    int64_t balance = 0;
+    BOOST_REQUIRE(pwalletMain->SelectCoinsForStaking(GetAdjustedTime(), candidates, error_flag, balance));
+    BOOST_REQUIRE(!candidates.empty());
+
+    // Every candidate is a confirmed main-chain output, so its transaction is indexed. GetStakeWeight relies on this
+    // instead of reading the index for each candidate.
+    CTxDB txdb("r");
+    uint64_t value = 0;
+    for (const StakeCandidate& candidate : candidates) {
+        CTxIndex txindex;
+        BOOST_CHECK(txdb.ReadTxIndex(candidate.tx->GetHash(), txindex));
+        value += candidate.tx->vout[candidate.n].nValue;
+    }
+
+    BOOST_CHECK_EQUAL(GRC::GetStakeWeight(*pwalletMain), value);
 }
 
 BOOST_AUTO_TEST_CASE(kernel_detail_is_logged_only_under_the_miner_category)

@@ -221,35 +221,24 @@ double GRC::GetSmoothedDifficulty(int64_t nStakeableBalance) EXCLUSIVE_LOCKS_REQ
 
 uint64_t GRC::GetStakeWeight(const CWallet& wallet)
 {
-    if (wallet.GetBalance() <= nReserveBalance) {
-        return 0;
-    }
-
-    const int64_t now = GetAdjustedTime();
-
     std::vector<StakeCandidate> coins;
     GRC::MinerStatus::ErrorFlags unused;
     int64_t balance = 0;
 
     LOCK2(cs_main, wallet.cs_wallet);
 
-    if (!wallet.SelectCoinsForStaking(now, coins, unused, balance)) {
+    // SelectCoinsForStaking returns false when there is nothing to stake: no coins, no mature coins, or a balance the
+    // reserve covers. Its reserve check uses the staking balance, which also counts own coinstake outputs that are not
+    // in the main chain. Its candidates are confirmed main-chain outputs that pass the miner's own maturity and age
+    // filters, so they need no further checks here.
+    if (!wallet.SelectCoinsForStaking(GetAdjustedTime(), coins, unused, balance)) {
         return 0;
     }
 
-    CTxDB txdb("r");
     uint64_t weight = 0;
 
     for (const StakeCandidate& candidate : coins) {
-        CTxIndex txindex;
-
-        if (!txdb.ReadTxIndex(candidate.tx->GetHash(), txindex)) {
-            continue;
-        }
-
-        if (now - candidate.tx->nTime > nStakeMinAge) {
-            weight += (candidate.tx->vout[candidate.n].nValue);
-        }
+        weight += candidate.tx->vout[candidate.n].nValue;
     }
 
     return weight;
