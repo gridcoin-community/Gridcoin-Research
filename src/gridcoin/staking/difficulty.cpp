@@ -336,7 +336,8 @@ double GRC::GetEstimatedNetworkWeight(unsigned int nPoSInterval) EXCLUSIVE_LOCKS
     // get the familiar 9544517.40667
     result = 763561392.533 * GetAverageDifficulty(nPoSInterval);
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedNetworkWeight debug: Network Weight = %f", result);
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedNetworkWeight debug: Network Weight in GRC = %f", result / 80.0);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedNetworkWeight debug: Network Weight in GRC = %f",
+             result / STAKE_WEIGHT_UNITS_PER_COIN);
 
     return result;
 }
@@ -544,10 +545,9 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
         nValue = value;
 
         // Only consider UTXO's that are actually stakeable - which means that each one must be less than the available balance
-        // subtracting the reserve. Each UTXO also has to be greater than 1/80 GRC to result in a weight greater than zero in the CreateCoinStake loop,
-        // so eliminate UTXO's with less than 0.0125 GRC balances right here. The test with Satoshi units for that is
-        // nValue >= 1250000.
-        if (BalanceAvailForStaking >= nValue && nValue >= 1250000)
+        // subtracting the reserve. Each UTXO also needs at least one stake weight unit (0.0125 GRC) to have a weight
+        // greater than zero in the CreateCoinStake loop.
+        if (BalanceAvailForStaking >= nValue && nValue >= STAKE_WEIGHT_UNIT_V8)
         {
         vUTXO.push_back(std::pair<int64_t, CAmount>( nTime, nValue));
         nStakeableBalance += nValue;
@@ -603,8 +603,7 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
             // accumulation for that UTXO.
             if(nTime >= iterUTXO.first)
             {
-                // The below weight calculation is just like the CalculateStakeWeightV8 in kernel.cpp.
-                nCoinWeight = iterUTXO.second / 1250000;
+                nCoinWeight = CalculateStakeWeightV8(iterUTXO.second);
 
                 dProbAccumulator = 1 - ((1 - dProbAccumulator) * (1 - (dUnitStakeProbability * nCoinWeight)));
                 LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dProbAccumulator = %e", dProbAccumulator);

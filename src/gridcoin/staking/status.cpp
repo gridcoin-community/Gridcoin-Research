@@ -256,7 +256,7 @@ void MinerStatus::ClearErrors()
 
 double SearchReport::CoinWeight() const
 {
-    return m_weight_sum / 80.0;
+    return m_weight_sum / static_cast<double>(STAKE_WEIGHT_UNITS_PER_COIN);
 }
 
 size_t SearchReport::KernelsRejected() const

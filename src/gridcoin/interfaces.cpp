@@ -25,6 +25,7 @@
 #include "gridcoin/scraper/scraper.h"
 #include "gridcoin/sidestake.h"
 #include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/kernel.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
@@ -70,6 +71,10 @@ extern CWallet* pwalletMain;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 
 namespace interfaces {
+
+static_assert(STAKE_WEIGHT_UNITS_PER_COIN == GRC::STAKE_WEIGHT_UNITS_PER_COIN,
+              "the interface's stake weight units per GRC must match the kernel's");
+
 namespace {
 
 //! In-process StakingStatus implementation wrapping g_miner_status and the

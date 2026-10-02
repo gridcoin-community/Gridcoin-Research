@@ -144,6 +144,10 @@ uint256 CalculateStakeHashV8(
 //! Halfords per unit of V8 stake weight. A UTXO's weight is its value in whole units.
 constexpr CAmount STAKE_WEIGHT_UNIT_V8 = 1250000;
 
+//! V8 stake weight units per GRC.
+constexpr int64_t STAKE_WEIGHT_UNITS_PER_COIN = COIN / STAKE_WEIGHT_UNIT_V8;
+static_assert(COIN % STAKE_WEIGHT_UNIT_V8 == 0, "a GRC must be a whole number of stake weight units");
+
 int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN);
 int64_t CalculateStakeWeightV8(const CAmount& nValueIn);
 
