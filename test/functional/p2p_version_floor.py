@@ -10,7 +10,13 @@ previous version is disconnected only once the grace period past the
 activation height of the fork the current PROTOCOL_VERSION carries has
 elapsed. That fork, v15, is unscheduled on regtest, so this checks the floor
 itself: PROTOCOL_VERSION and PROTOCOL_VERSION - 1 complete the handshake, and
-PROTOCOL_VERSION - 2 and an ancient version are dropped.
+PROTOCOL_VERSION - 2 and an old version are dropped -- by the floor check, which
+each dropped case asserts from the node's log, not by some earlier check.
+
+The old version is 180325, the oldest one that sends the current VERSION
+layout. At 180324 and below the node reads five legacy strings before
+nServices, and this framework always sends the current layout, so such a peer
+would be misparsed and dropped by the time-drift check instead.
 
 The floor used to be a literal that was not bumped with PROTOCOL_VERSION. On
 regtest, where the v14 grace period has not elapsed at height 0,
@@ -91,11 +97,23 @@ class P2PVersionFloorTest(GridcoinTestFramework):
             ("PROTOCOL_VERSION", MY_VERSION, True),
             ("PROTOCOL_VERSION - 1, the previous release", MY_VERSION - 1, True),
             ("PROTOCOL_VERSION - 2", MY_VERSION - 2, False),
-            ("an ancient version", 180300, False),
+            ("the oldest version with the current VERSION layout", 180325, False),
         ):
             self.log.info("peer on %s (%d): expect %s", label, version,
                           "accepted" if expected else "disconnected")
-            assert_equal(self.connect(node, version), expected)
+            # The floor check names the version it drops. A drop for any other
+            # reason, such as a misparsed VERSION failing the time-drift check,
+            # must not pass as a floor rejection.
+            floor_msg = "using obsolete version %d; disconnecting" % version
+            drift_msg = "so far off our adjusted time"
+            if expected:
+                log_check = node.assert_debug_log(expected_msgs=[],
+                                                  unexpected_msgs=[floor_msg, drift_msg])
+            else:
+                log_check = node.assert_debug_log(expected_msgs=[floor_msg],
+                                                  unexpected_msgs=[drift_msg])
+            with log_check:
+                assert_equal(self.connect(node, version), expected)
 
 
 if __name__ == "__main__":
