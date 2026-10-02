@@ -1927,12 +1927,22 @@ bool TryMineRegtestBlock(CWallet* pwallet,
     // target fails, and (because generatetoaddress mines many blocks within one
     // 16-second wall-clock window) a same-slot retry re-rolls nothing. Stepping
     // to the next slot rerolls the kernel. Offset 0 (the first attempt) keeps
-    // the original behaviour. From v15 a stamp more than 48 s ahead is not accepted, so retries stay inside the window.
-    const int max_offset = IsV15Enabled(pindexPrev->nHeight + 1)
+    // the original behaviour. From v15 a stamp more than 48 s ahead is not
+    // accepted, so the retries stay inside the window.
+    const bool v15 = IsV15Enabled(pindexPrev->nHeight + 1);
+    const int max_offset = v15
         ? static_cast<int>(GRC::V15_FUTURE_TIME_BOUND / (GRC::STAKE_TIMESTAMP_MASK + 1))
         : stake_time_slot_offset;
-    StakeBlock.nTime = GRC::GetStakeTime(pindexPrev, GetAdjustedTime()
+    const int64_t adjusted_now = GetAdjustedTime();
+    StakeBlock.nTime = GRC::GetStakeTime(pindexPrev, adjusted_now
         + static_cast<int64_t>(std::min(stake_time_slot_offset, max_offset)) * (GRC::STAKE_TIMESTAMP_MASK + 1));
+
+    // As in StakeMiner: a clock more than 96 s behind the parent cannot build a
+    // block its own validation accepts.
+    if (v15 && CheckBlockTime(StakeBlock.nTime, pindexPrev->GetBlockTime(), adjusted_now, true) != BlockTimeCheck::OK) {
+        err = "stake time is outside this node's block acceptance window (clock too far behind the last block)";
+        return false;
+    }
     StakeBlock.nNonce = 0;
     StakeBlock.nBits = GRC::GetNextTargetRequired(pindexPrev);
     StakeBlock.vtx.resize(2);
