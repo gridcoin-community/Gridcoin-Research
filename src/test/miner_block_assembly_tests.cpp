@@ -2215,4 +2215,35 @@ BOOST_AUTO_TEST_CASE(stake_candidates_carry_their_confirming_block_time)
     BOOST_CHECK_GE(block_times.size(), 2U);
 }
 
+BOOST_AUTO_TEST_CASE(kernel_detail_is_logged_only_under_the_miner_category)
+{
+    // Restores the MINER category and removes the callback on every exit path.
+    struct MinerLogCapture {
+        std::vector<std::string> lines;
+        const bool was_enabled{LogInstance().WillLogCategory(BCLog::LogFlags::MINER)};
+        std::list<std::function<void(const std::string&)>>::iterator it{
+            LogInstance().PushBackCallback([this](const std::string& s) {
+                if (s.find("CreateCoinStake: V") != std::string::npos) lines.push_back(s);
+            })};
+        ~MinerLogCapture()
+        {
+            LogInstance().DeleteCallback(it);
+            if (was_enabled) LogInstance().EnableCategory(BCLog::LogFlags::MINER);
+            else LogInstance().DisableCategory(BCLog::LogFlags::MINER);
+        }
+    } capture;
+
+    CBlock block;
+    std::string err;
+
+    LogInstance().DisableCategory(BCLog::LogFlags::MINER);
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+    BOOST_CHECK(capture.lines.empty());
+
+    LogInstance().EnableCategory(BCLog::LogFlags::MINER);
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+    BOOST_REQUIRE(!capture.lines.empty());
+    BOOST_CHECK(capture.lines.back().find(" Diff ") != std::string::npos);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

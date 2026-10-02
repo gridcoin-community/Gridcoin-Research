@@ -860,7 +860,6 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
 
     int64_t CoinWeight;
     arith_uint256 StakeKernelHash;
-    CTxDB txdb("r");
     int64_t StakeWeightSum = 0;
     int64_t StakeWeightMin = MAX_MONEY;
     int64_t StakeWeightMax = 0;
@@ -911,6 +910,9 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
                                     "pindex->nStakeModifier = %" PRId64,
                                     nHeight_mod, StakeModifier);
 
+    // The kernel target before the UTXO weight is the same for every coin.
+    const arith_uint320 base_kernel_target = arith_uint256().SetCompact(blocknew.nBits);
+
     for (const StakeCandidate& candidate : CoinsToStake)
     {
         const CWalletTx &CoinTx = *candidate.tx; //transaction that produced this coin
@@ -921,26 +923,28 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
         StakeKernelHash = UintToArith256(GRC::CalculateStakeHashV8(candidate.block_time, CoinTx, CoinTxN, txnew.nTime,
                                                                    StakeModifier));
 
-        arith_uint320 StakeTarget = arith_uint256().SetCompact(blocknew.nBits);
+        arith_uint320 StakeTarget = base_kernel_target;
         StakeTarget *= arith_uint320(CoinWeight);
         StakeWeightSum += CoinWeight;
         StakeWeightMin = std::min(StakeWeightMin, CoinWeight);
         StakeWeightMax = std::max(StakeWeightMax, CoinWeight);
-        double StakeKernelDiff = GRC::GetBlockDifficulty(StakeKernelHash.GetCompact())*CoinWeight;
+        // Per-coin detail, computed only when MINER logging is enabled.
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::MINER)) {
+            const double StakeKernelDiff = GRC::GetBlockDifficulty(StakeKernelHash.GetCompact()) * CoinWeight;
 
-        LogPrint(BCLog::LogFlags::MINER,
-                 "CreateCoinStake: V%d Time %d, Bits %u, Weight %" PRId64 "\n"
-                 " Stk %72s\n"
-                 " Trg %72s\n"
-                 " Diff %0.7f of %0.7f",
-                 blocknew.nVersion,
-                 txnew.nTime,
-                 blocknew.nBits,
-                 CoinWeight,
-                 StakeKernelHash.GetHex(),
-                 StakeTarget.GetHex(),
-                 StakeKernelDiff,
-                 GRC::GetBlockDifficulty(blocknew.nBits));
+            LogPrintf("CreateCoinStake: V%d Time %d, Bits %u, Weight %" PRId64 "\n"
+                      " Stk %72s\n"
+                      " Trg %72s\n"
+                      " Diff %0.7f of %0.7f",
+                      blocknew.nVersion,
+                      txnew.nTime,
+                      blocknew.nBits,
+                      CoinWeight,
+                      StakeKernelHash.GetHex(),
+                      StakeTarget.GetHex(),
+                      StakeKernelDiff,
+                      GRC::GetBlockDifficulty(blocknew.nBits));
+        }
 
         if (arith_uint320(StakeKernelHash) <= StakeTarget)
         {
