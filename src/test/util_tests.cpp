@@ -8,6 +8,9 @@
 #include <boost/test/unit_test.hpp>
 
 #include "test/state_guard.h"
+#include "init.h"
+#include <node/ui_interface.h>
+#include <boost/signals2/connection.hpp>
 #include "univalue/include/univalue.h"
 
 #include <wallet/wallet.h>
@@ -1854,6 +1857,142 @@ BOOST_AUTO_TEST_CASE(util_ReplaceAll)
     std::string shrink("aaa");
     ReplaceAll(shrink, "a", "");     // empty substitute with consecutive matches terminates
     BOOST_CHECK_EQUAL(shrink, "");
+}
+
+namespace {
+//! Makes settings-file writes fail while it is alive. WriteSettingsFile() writes
+//! the temporary file first, and a directory at that path cannot be opened as a
+//! file, also as root and on Windows. Create it only after a successful write, so
+//! no temporary file is in the way. The directory is removed on destruction.
+class SettingsWriteBlocker
+{
+public:
+    SettingsWriteBlocker()
+    {
+        BOOST_REQUIRE(gArgs.GetSettingsPath(&m_path, /*temp=*/true));
+        fs::create_directories(m_path);
+        BOOST_REQUIRE(fs::is_directory(m_path));
+    }
+    ~SettingsWriteBlocker()
+    {
+        try {
+            fs::remove(m_path);
+        } catch (...) {
+        }
+    }
+
+private:
+    fs::path m_path;
+};
+
+//! A read-write setting as text, "<null>" when it is absent.
+std::string RwValue(const std::string& name)
+{
+    const util::SettingsValue value = getRwSetting(name);
+    return value.isNull() ? std::string("<null>") : value.get_str();
+}
+} // namespace
+
+// A failed settings-file write must leave the read-write settings as they were,
+// so memory never holds what the file does not. The one RwSettingsUpdated
+// emission must come after the restore, so a listener reads the final state.
+BOOST_AUTO_TEST_CASE(updaterwsetting_failed_write_leaves_memory_unchanged)
+{
+    // The settings-file write needs a real data directory. TestingSetup points
+    // -datadir at a temp path but never creates it.
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    const std::string probe = "rw_settings_rollback_probe";
+    const std::string absent = "rw_settings_rollback_absent_probe";
+    BOOST_REQUIRE(updateRwSettings({{probe, util::SettingsValue{"before"}}, {absent, util::SettingsValue{}}}));
+
+    // What a listener reads through GetArg() during each emission.
+    std::vector<std::string> seen;
+    boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect([&seen] {
+        seen.push_back(gArgs.GetArg("-rw_settings_rollback_probe", "<unset>"));
+    })};
+
+    // A set.
+    seen.clear();
+    {
+        SettingsWriteBlocker block;
+        BOOST_CHECK(!updateRwSetting(probe, util::SettingsValue{"after"}));
+    }
+    BOOST_CHECK_EQUAL(getRwSetting(probe).get_str(), "before");
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-rw_settings_rollback_probe", ""), "before");
+    BOOST_REQUIRE_EQUAL(seen.size(), 1u);
+    BOOST_CHECK_EQUAL(seen.back(), "before");
+
+    // An erase. Re-seed first, so each variant starts from "before" on any build.
+    BOOST_REQUIRE(updateRwSetting(probe, util::SettingsValue{"before"}));
+    seen.clear();
+    {
+        SettingsWriteBlocker block;
+        BOOST_CHECK(!updateRwSetting(probe, util::SettingsValue{}));
+    }
+    BOOST_CHECK_EQUAL(RwValue(probe), "before");
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-rw_settings_rollback_probe", "<unset>"), "before");
+    BOOST_REQUIRE_EQUAL(seen.size(), 1u);
+    BOOST_CHECK_EQUAL(seen.back(), "before");
+
+    // A batch in which one key was absent before.
+    BOOST_REQUIRE(updateRwSetting(probe, util::SettingsValue{"before"}));
+    seen.clear();
+    {
+        SettingsWriteBlocker block;
+        BOOST_CHECK(!updateRwSettings({{probe, util::SettingsValue{"after"}}, {absent, util::SettingsValue{"new"}}}));
+    }
+    BOOST_CHECK_EQUAL(RwValue(probe), "before");
+    BOOST_CHECK_EQUAL(RwValue(absent), "<null>");
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-rw_settings_rollback_absent_probe", "<unset>"), "<unset>");
+    BOOST_REQUIRE_EQUAL(seen.size(), 1u);
+    BOOST_CHECK_EQUAL(seen.back(), "before");
+
+    conn.disconnect();
+    BOOST_REQUIRE(updateRwSettings({{probe, util::SettingsValue{}}, {absent, util::SettingsValue{}}}));
+    BOOST_CHECK(getRwSetting(probe).isNull());
+}
+
+// A throwing settings-file write must leave the read-write settings as they
+// were too, and the exception must still reach the caller.
+BOOST_AUTO_TEST_CASE(updaterwsetting_throwing_write_leaves_memory_unchanged)
+{
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    const std::string probe = "rw_settings_rollback_probe";
+    BOOST_REQUIRE(updateRwSetting(probe, util::SettingsValue{"before"}));
+
+    {
+        // WriteSettingsFile() throws when GetSettingsPath() reads the settings
+        // file as disabled, which takes a boolean false "settings" value. A string
+        // "0" from SoftSetBoolArg() is not read as negated, and "-nosettings" given
+        // to SoftSetArg() writes the unread key "nosettings", so set the forced
+        // value directly, and erase it on every exit from this scope.
+        bool had_forced = true;
+        gArgs.LockSettings([&](util::Settings& s) { had_forced = s.forced_settings.count("settings") != 0; });
+        BOOST_REQUIRE(!had_forced);
+        struct ForcedSettingsEraser {
+            ~ForcedSettingsEraser()
+            {
+                gArgs.LockSettings([](util::Settings& s) { s.forced_settings.erase("settings"); });
+            }
+        } eraser;
+        gArgs.LockSettings([](util::Settings& s) { s.forced_settings["settings"] = false; });
+        BOOST_REQUIRE(!gArgs.GetSettingsPath());
+
+        BOOST_CHECK_THROW(updateRwSetting(probe, util::SettingsValue{"after"}), std::logic_error);
+        BOOST_CHECK_EQUAL(getRwSetting(probe).get_str(), "before");
+        BOOST_CHECK_EQUAL(gArgs.GetArg("-rw_settings_rollback_probe", ""), "before");
+    }
+
+    BOOST_REQUIRE(updateRwSetting(probe, util::SettingsValue{}));
+    BOOST_CHECK(getRwSetting(probe).isNull());
 }
 
 

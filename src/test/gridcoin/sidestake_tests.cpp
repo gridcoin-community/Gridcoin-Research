@@ -16,6 +16,33 @@
 
 #include <memory>
 
+namespace {
+//! Makes settings-file writes fail while it is alive. WriteSettingsFile() writes
+//! the temporary file first, and a directory at that path cannot be opened as a
+//! file, also as root and on Windows. Create it only after a successful write, so
+//! no temporary file is in the way. The directory is removed on destruction.
+class SettingsWriteBlocker
+{
+public:
+    SettingsWriteBlocker()
+    {
+        BOOST_REQUIRE(gArgs.GetSettingsPath(&m_path, /*temp=*/true));
+        fs::create_directories(m_path);
+        BOOST_REQUIRE(fs::is_directory(m_path));
+    }
+    ~SettingsWriteBlocker()
+    {
+        try {
+            fs::remove(m_path);
+        } catch (...) {
+        }
+    }
+
+private:
+    fs::path m_path;
+};
+} // namespace
+
 // Suite-level guard: the sidestake editors write read-write settings
 // (sidestakeaddresses / allocations / descriptions) that nothing removes.
 BOOST_AUTO_TEST_SUITE(sidestake_tests, *boost::unit_test::fixture<grc_test::StateGuard>())
@@ -382,6 +409,193 @@ BOOST_AUTO_TEST_CASE(sidestake_save_does_not_swallow_the_next_settings_reload)
 
         // The save's own signal has passed. The next one, here the updateRwSetting()
         // emission changesettings uses, must reload the registry.
+        const uint64_t before = registry.GetLocalSideStakeRevision();
+        BOOST_REQUIRE(updateRwSetting("sidestake_reload_probe", util::SettingsValue{"1"}));
+        BOOST_CHECK_GT(registry.GetLocalSideStakeRevision(), before);
+    }
+
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+    registry.NonContractDelete(dest, /*save_to_file=*/false);
+
+    BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+    BOOST_CHECK(getRwSetting("sidestake_reload_probe").isNull());
+}
+
+// A side-stake edit whose save fails must not stay in effect. The settings
+// write restores the read-write settings, and the save's own RwSettingsUpdated
+// emission is consumed by the skip-flag the save arms, so the registry must
+// reload itself from the restored settings. The editor still reports OK: the
+// interface has no storage-failure status. As in the case above, a scoped
+// connection stands in for the registry's subscription.
+BOOST_AUTO_TEST_CASE(sidestake_failed_save_leaves_no_active_entry)
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+    uint160 hash;
+    *(hash.begin()) = 0x5d;
+    const CTxDestination dest = CKeyID(hash);
+    const std::string address = EncodeDestination(dest);
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false); // start clean
+
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    const std::vector<std::pair<std::string, util::SettingsValue>> clear_keys{
+        {"sidestakeaddresses", util::SettingsValue{}},
+        {"sidestakeallocations", util::SettingsValue{}},
+        {"sidestakedescriptions", util::SettingsValue{}},
+        {"sidestake_reload_probe", util::SettingsValue{}},
+    };
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+
+    {
+        boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect(
+            [&registry] { registry.LoadLocalSideStakesFromConfig(); })};
+
+        // Consume a flag an earlier save made with nothing connected left armed.
+        BOOST_REQUIRE(updateRwSetting("sidestake_reload_probe", util::SettingsValue{"0"}));
+
+        std::unique_ptr<interfaces::SideStakeManager> manager = interfaces::MakeSideStakeManager();
+        BOOST_REQUIRE(manager != nullptr);
+
+        {
+            SettingsWriteBlocker block;
+            BOOST_CHECK(manager->addLocal(address, 10.0, "fail probe").status == interfaces::SideStakeEditStatus::OK);
+            BOOST_CHECK(getRwSetting("sidestakeaddresses").isNull());
+            BOOST_CHECK(registry.TryActive(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+        }
+
+        // The failed save leaves no skip-flag armed: the next emission reloads.
+        const uint64_t before = registry.GetLocalSideStakeRevision();
+        BOOST_REQUIRE(updateRwSetting("sidestake_reload_probe", util::SettingsValue{"1"}));
+        BOOST_CHECK_GT(registry.GetLocalSideStakeRevision(), before);
+    }
+
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+    registry.NonContractDelete(dest, /*save_to_file=*/false);
+
+    BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+    BOOST_CHECK(getRwSetting("sidestake_reload_probe").isNull());
+}
+
+// The same failing save with nothing connected to RwSettingsUpdated, as in a
+// run where the registry has not subscribed. The save must clear the skip-flag
+// it armed before it reloads: otherwise the reload consumes the flag and returns,
+// and the edit stays in effect.
+BOOST_AUTO_TEST_CASE(sidestake_failed_save_without_reload_slot_clears_the_flag)
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+    uint160 hash;
+    *(hash.begin()) = 0x5e;
+    const CTxDestination dest = CKeyID(hash);
+    const std::string address = EncodeDestination(dest);
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false); // start clean
+
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    const std::vector<std::pair<std::string, util::SettingsValue>> clear_keys{
+        {"sidestakeaddresses", util::SettingsValue{}},
+        {"sidestakeallocations", util::SettingsValue{}},
+        {"sidestakedescriptions", util::SettingsValue{}},
+        {"sidestake_reload_probe", util::SettingsValue{}},
+    };
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+
+    std::unique_ptr<interfaces::SideStakeManager> manager = interfaces::MakeSideStakeManager();
+    BOOST_REQUIRE(manager != nullptr);
+
+    // Nothing is connected, so only the save itself can clear the flag it arms.
+    {
+        SettingsWriteBlocker block;
+        BOOST_CHECK(manager->addLocal(address, 10.0, "no slot probe").status == interfaces::SideStakeEditStatus::OK);
+        BOOST_CHECK(getRwSetting("sidestakeaddresses").isNull());
+        BOOST_CHECK(registry.TryActive(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+    }
+
+    {
+        boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect(
+            [&registry] { registry.LoadLocalSideStakesFromConfig(); })};
+
+        // No flag is left armed, so the first emission after connecting reloads.
+        const uint64_t before = registry.GetLocalSideStakeRevision();
+        BOOST_REQUIRE(updateRwSetting("sidestake_reload_probe", util::SettingsValue{"1"}));
+        BOOST_CHECK_GT(registry.GetLocalSideStakeRevision(), before);
+    }
+
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+    registry.NonContractDelete(dest, /*save_to_file=*/false);
+
+    BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+    BOOST_CHECK(getRwSetting("sidestake_reload_probe").isNull());
+}
+
+// A side-stake save that throws (dynamic settings disabled) must not leave the
+// edit in effect either. The exception still reaches the caller, and with
+// nothing connected to RwSettingsUpdated the save must clear the skip-flag it
+// armed before it reloads.
+BOOST_AUTO_TEST_CASE(sidestake_throwing_save_rolls_back_and_clears_the_flag)
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+    uint160 hash;
+    *(hash.begin()) = 0x5f;
+    const CTxDestination dest = CKeyID(hash);
+    const std::string address = EncodeDestination(dest);
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false); // start clean
+
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    const std::vector<std::pair<std::string, util::SettingsValue>> clear_keys{
+        {"sidestakeaddresses", util::SettingsValue{}},
+        {"sidestakeallocations", util::SettingsValue{}},
+        {"sidestakedescriptions", util::SettingsValue{}},
+        {"sidestake_reload_probe", util::SettingsValue{}},
+    };
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+
+    std::unique_ptr<interfaces::SideStakeManager> manager = interfaces::MakeSideStakeManager();
+    BOOST_REQUIRE(manager != nullptr);
+
+    {
+        // WriteSettingsFile() throws when GetSettingsPath() reads the settings
+        // file as disabled, which takes a boolean false "settings" value. Set the
+        // forced value directly, and erase it on every exit from this scope.
+        bool had_forced = true;
+        gArgs.LockSettings([&](util::Settings& s) { had_forced = s.forced_settings.count("settings") != 0; });
+        BOOST_REQUIRE(!had_forced);
+        struct ForcedSettingsEraser {
+            ~ForcedSettingsEraser()
+            {
+                gArgs.LockSettings([](util::Settings& s) { s.forced_settings.erase("settings"); });
+            }
+        } eraser;
+        gArgs.LockSettings([](util::Settings& s) { s.forced_settings["settings"] = false; });
+        BOOST_REQUIRE(!gArgs.GetSettingsPath());
+
+        // Nothing is connected, so only the save itself can clear the flag it arms.
+        BOOST_CHECK_THROW(manager->addLocal(address, 10.0, "throw probe"), std::logic_error);
+        BOOST_CHECK(getRwSetting("sidestakeaddresses").isNull());
+        BOOST_CHECK(registry.TryActive(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+    }
+
+    // The forced value is erased now, so settings writes succeed again.
+    {
+        boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect(
+            [&registry] { registry.LoadLocalSideStakesFromConfig(); })};
+
+        // No flag is left armed, so the first emission after connecting reloads.
         const uint64_t before = registry.GetLocalSideStakeRevision();
         BOOST_REQUIRE(updateRwSetting("sidestake_reload_probe", util::SettingsValue{"1"}));
         BOOST_CHECK_GT(registry.GetLocalSideStakeRevision(), before);
