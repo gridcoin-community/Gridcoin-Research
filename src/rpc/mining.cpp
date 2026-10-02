@@ -126,7 +126,9 @@ UniValue getstakinginfo(const UniValue& params)
     weight.pushKV("minimum", search.m_weight_min);
     weight.pushKV("maximum", search.m_weight_max);
     weight.pushKV("combined", search.m_weight_sum);
-    weight.pushKV("valuesum", search.m_value_sum);
+    // The value the combined weight represents. Each UTXO's weight drops its value below a whole weight unit, so this
+    // is at most one unit (0.0125 GRC) per searched UTXO below their raw total.
+    weight.pushKV("valuesum", ValueFromAmount(GRC::CalculateStakeValueV8(search.m_weight_sum)));
     weight.pushKV("legacy", nWeight / (double)COIN);
     obj.pushKV("stakeweight", weight);
 

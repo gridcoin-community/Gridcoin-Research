@@ -862,7 +862,6 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
     arith_uint256 StakeKernelHash;
     CTxDB txdb("r");
     int64_t StakeWeightSum = 0;
-    double StakeValueSum = 0;
     int64_t StakeWeightMin = MAX_MONEY;
     int64_t StakeWeightMax = 0;
 
@@ -887,7 +886,6 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
             txnew.nTime,
             blocknew.nVersion,
             StakeWeightSum,
-            StakeValueSum,
             0, // This should be set to zero for an unsuccessful iteration due to no stakeable coins.
             StakeWeightMax,
             GRC::CalculateStakeWeightV8(balance));
@@ -926,8 +924,6 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
             return false;
         }
         block_time = mapBlockIndex[coin_conf->m_confirmed_block_hash]->nTime;
-
-        StakeValueSum += CoinTx.vout[CoinTxN].nValue / (double) COIN;
 
         CoinWeight = GRC::CalculateStakeWeightV8(CoinTx, CoinTxN);
 
@@ -1019,7 +1015,6 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
         txnew.nTime,
         blocknew.nVersion,
         StakeWeightSum,
-        StakeValueSum,
         StakeWeightMin,
         StakeWeightMax,
         GRC::CalculateStakeWeightV8(balance));

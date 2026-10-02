@@ -57,7 +57,6 @@ public:
         uint64_t m_weight_sum = 0;
         uint64_t m_weight_min = 0;
         uint64_t m_weight_max = 0;
-        double m_value_sum = 0;
 
         uint64_t m_blocks_created = 0;
         uint64_t m_blocks_accepted = 0;
@@ -208,7 +207,6 @@ public:
     //! \param search_timestamp Timestamp of the last kernel search in seconds.
     //! \param block_version    The current miner block format.
     //! \param weight_sum       Total kernel weight of staked UTXOs.
-    //! \param value_sum        Total amount of staked UTXOs in GRC.
     //! \param weight_min       Smallest weight of a UTXO searched.
     //! \param weight_max       Greatest weight of a UTXO searched.
     //! \param balance_weight   Total weight of balance for efficiency metrics.
@@ -218,7 +216,6 @@ public:
         int64_t search_timestamp,
         int block_version,
         uint64_t weight_sum,
-        double value_sum,
         uint64_t weight_min,
         uint64_t weight_max,
         int64_t balance_weight);
