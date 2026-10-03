@@ -3677,6 +3677,82 @@ BOOST_AUTO_TEST_CASE(refresh_after_the_whitelist_loads_recomputes_the_startup_gr
     BOOST_CHECK(entry.GetUpdateHistory().front().m_total_credit == std::optional<uint64_t>(1000));
 }
 
+//!
+//! Below the AutoGreylist redesign gate, Superblock::FromConvergence refreshes the cache against a candidate
+//! superblock bound to the chain tip, so that it can stamp the candidate's project status record. Afterwards the
+//! cache must again hold the committed superblock's greylist: the next convergence computes its statistics from
+//! it, as it did before #2997, when every Whitelist::Snapshot read refreshed the cache first.
+//!
+BOOST_AUTO_TEST_CASE(convergence_refresh_restores_the_committed_greylist)
+{
+    GRC::Whitelist& whitelist = GRC::GetWhitelist();
+    std::shared_ptr<GRC::AutoGreylistService> auto_greylist = GRC::GetAutoGreylistCache();
+
+    const std::string name = "convergence_refresh_test_project";
+
+    // Null the chain-tip globals on entry and restore them on exit; the test points pindexBest at its own tip.
+    grc_test::StateGuard chain_guard(grc_test::StateGuard::CHAIN);
+
+    whitelist.Reset();
+    auto_greylist->Reset();
+
+    AddProjectEntryWithStatus(name, "http://convergence.refresh.test", GRC::ProjectEntryStatus::UNKNOWN, 20, 0);
+
+    // The committed superblock, and a chain tip past it that the candidate binds to.
+    auto superblock_index = std::make_unique<CBlockIndex>();
+    superblock_index->nHeight = 50;
+    superblock_index->nTime = 50000;
+    superblock_index->MarkAsSuperblock();
+
+    auto tip = std::make_unique<CBlockIndex>();
+    tip->nHeight = 60;
+    tip->nTime = 60000;
+    tip->pprev = superblock_index.get();
+
+    GRC::Superblock committed;
+    committed.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.insert(std::make_pair(name, 1000));
+
+    GRC::SuperblockPtr committed_ptr;
+    committed_ptr.Replace(committed);
+    committed_ptr.Rebind(superblock_index.get());
+
+    GRC::Quorum::PushSuperblock(committed_ptr);
+
+    // Undo the push and the registry changes on every exit path, including a failed BOOST_REQUIRE.
+    struct Cleanup {
+        const CBlockIndex* index;
+        ~Cleanup()
+        {
+            pindexBest = nullptr;
+            GRC::Quorum::PopSuperblock(index);
+            GRC::GetAutoGreylistCache()->Reset();
+            GRC::GetWhitelist().Reset();
+        }
+    } cleanup{superblock_index.get()};
+
+    const auto baseline_total_credit = [&]() {
+        BOOST_REQUIRE_EQUAL(auto_greylist->size(), 1U);
+        return auto_greylist->begin()->second.GetUpdateHistory().front().m_total_credit;
+    };
+
+    BOOST_REQUIRE(baseline_total_credit() == std::optional<uint64_t>(1000));
+
+    pindexBest = tip.get();
+    nBestHeight = tip->nHeight;
+
+    // The V1 path is the one under test; above the redesign gate the service never touches the V1 cache.
+    BOOST_REQUIRE(!IsAutoGreylistRedesignEnabled(tip->nHeight));
+
+    // A candidate built from a later convergence, with a different total credit.
+    GRC::Superblock candidate;
+    candidate.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.insert(std::make_pair(name, 2000));
+
+    auto_greylist->RefreshWithAndUpdateSuperblock(candidate, uint256(), true, tip.get());
+
+    // The cache is back on the committed superblock's baseline.
+    BOOST_CHECK(baseline_total_credit() == std::optional<uint64_t>(1000));
+}
+
 BOOST_AUTO_TEST_CASE(it_does_not_throw_when_the_40SB_average_truncates_to_zero)
 {
     // Regression test for the GetWAS() divide-by-zero that crashed mainnet nodes in

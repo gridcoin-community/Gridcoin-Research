@@ -656,6 +656,14 @@ void AutoGreylist::RefreshWithAndUpdateSuperblock(Superblock& superblock) EXCLUS
         LOCK(autogreylist_lock);
         m_superblock_hash = Superblock().GetHash();
     }
+
+    // Put the cache back on the committed superblock now, as the next Whitelist::Snapshot read did until #2997.
+    // Otherwise only the next superblock (or a getautogreylist call) refreshes it, and the next convergence reads
+    // this candidate's greylist while a node that just restarted reads the committed one. That reaches the
+    // statistics where the deep-copy overlay is active below the redesign gate; with the in-place overlay, the
+    // Snapshot above has already written this candidate's greylist into the registry entries either way.
+    // Called after autogreylist_lock is released, because Refresh() takes cs_lock, which comes first in lock order.
+    Refresh();
 }
 
 void AutoGreylist::Reset()
@@ -700,7 +708,8 @@ WhitelistSnapshot Whitelist::Snapshot(GreylistState state,
     // activation, Quorum::PopSuperblock on reorg, Quorum::LoadSuperblockIndex on startup, repeated by
     // GRC::Initialize once the contract registries have loaded) and additionally via
     // Superblock::FromConvergence's RefreshWithAndUpdateSuperblock when scrapers/subscribers build a candidate
-    // superblock with version > 2 (the FromConvergence path is version-gated; see superblock.cpp). Snapshot()
+    // superblock with version > 2 (the FromConvergence path is version-gated; see superblock.cpp; below the
+    // redesign gate it refreshes the cache back to the committed superblock when it is done). Snapshot()
     // itself does NOT trigger a refresh -- it is a cs_lock leaf in lock ordering. NOTE: pre-gate (when
     // m_deep_copy_active is false) the override loop below still mutates m_project_entries->m_status in place
     // via shallow-copied shared_ptrs; that legacy behavior is the bug the deep-copy gate fixes, not a contract
