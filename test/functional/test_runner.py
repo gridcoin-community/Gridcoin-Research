@@ -151,6 +151,9 @@ BASE_SCRIPTS = [
     #     bool/array/object args plus the dual-mode `logging <category>` form
     'feature_hello.py',
     'feature_stop_node_without_rpc.py',
+    # feature_stop_node_twice.py: a second stop of a node that exited non-zero
+    # reports that exit, not a ValueError from the closed stderr.
+    'feature_stop_node_twice.py',
     'feature_regtest_staking.py',
     # feature_shutdown.py: `stop` must not hang on an in-service RPC connection
     # (issue #3123 -- StopRPCThreads must interrupt a worker parked in recv).
