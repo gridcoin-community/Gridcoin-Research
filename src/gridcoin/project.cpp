@@ -697,7 +697,8 @@ WhitelistSnapshot Whitelist::Snapshot(GreylistState state,
     }
 
     // The AutoGreylist cache is refreshed explicitly at the chain handler points (Quorum::PushSuperblock for v2+
-    // activation, Quorum::PopSuperblock on reorg, Quorum::LoadSuperblockIndex on startup) and additionally via
+    // activation, Quorum::PopSuperblock on reorg, Quorum::LoadSuperblockIndex on startup, repeated by
+    // GRC::Initialize once the contract registries have loaded) and additionally via
     // Superblock::FromConvergence's RefreshWithAndUpdateSuperblock when scrapers/subscribers build a candidate
     // superblock with version > 2 (the FromConvergence path is version-gated; see superblock.cpp). Snapshot()
     // itself does NOT trigger a refresh -- it is a cs_lock leaf in lock ordering. NOTE: pre-gate (when

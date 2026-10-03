@@ -104,7 +104,8 @@ public:
     //!
     //! \brief Refresh against the current committed superblock (the authoritative anchor).
     //! Called from the chain handler points: Quorum::PushSuperblock, Quorum::PopSuperblock and
-    //! Quorum::LoadSuperblockIndex.
+    //! Quorum::LoadSuperblockIndex, and from GRC::Initialize once the contract registries have loaded
+    //! (the LoadSuperblockIndex call runs before the project whitelist is loaded).
     //!
     void Refresh();
 

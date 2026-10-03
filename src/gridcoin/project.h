@@ -944,7 +944,8 @@ public:
     //! provides the original ACTIVE project only view. The auto-greylist overlay (selected by GreylistState)
     //! is computed from the current AutoGreylist cache; the cache is refreshed explicitly at the chain handler
     //! points (Quorum::PushSuperblock for v2+ activation, Quorum::PopSuperblock on reorg,
-    //! Quorum::LoadSuperblockIndex on startup) and additionally via Superblock::FromConvergence's
+    //! Quorum::LoadSuperblockIndex on startup, repeated by GRC::Initialize once the contract registries
+    //! have loaded) and additionally via Superblock::FromConvergence's
     //! RefreshWithAndUpdateSuperblock when scrapers/subscribers build a candidate superblock (only for
     //! superblock version > 2; the call is gated at superblock.cpp). Snapshot() itself does NOT trigger
     //! a refresh -- it is a cs_lock leaf in lock ordering. NOTE: pre-gate (m_deep_copy_active=false)

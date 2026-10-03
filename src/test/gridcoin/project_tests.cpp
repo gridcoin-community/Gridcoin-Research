@@ -3610,6 +3610,73 @@ BOOST_AUTO_TEST_CASE(push_superblock_heals_corruption_at_gate_crossing)
     whitelist.Reset();
 }
 
+//!
+//! Startup order: GRC::Initialize loads the superblock index (whose AutoGreylist refresh runs against an
+//! empty project whitelist) before the contract registries, then refreshes again once the whitelist is
+//! loaded. That second refresh only recomputes if the first one left the cache unstamped. This pins that
+//! precondition, below the AutoGreylist redesign gate (the V1 cache).
+//!
+BOOST_AUTO_TEST_CASE(refresh_after_the_whitelist_loads_recomputes_the_startup_greylist)
+{
+    GRC::Whitelist& whitelist = GRC::GetWhitelist();
+    std::shared_ptr<GRC::AutoGreylistService> auto_greylist = GRC::GetAutoGreylistCache();
+
+    const std::string name = "startup_refresh_test_project";
+
+    // Null the chain-tip globals so the refresh's backward walk (BlockFinder::FindByHeight) stops at its null
+    // check instead of following a CBlockIndex left behind by an earlier test.
+    grc_test::StateGuard chain_guard(grc_test::StateGuard::CHAIN);
+
+    whitelist.Reset();
+    auto_greylist->Reset();
+
+    // The committed superblock. Its total credits enter the quorum hash, so its hash differs from the empty
+    // superblock hash that marks the cache as unstamped.
+    auto superblock_index = std::make_unique<CBlockIndex>();
+    superblock_index->nHeight = 50;
+    superblock_index->nTime = 50000;
+    superblock_index->MarkAsSuperblock();
+
+    GRC::Superblock superblock;
+    superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.insert(std::make_pair(name, 1000));
+
+    GRC::SuperblockPtr superblock_ptr;
+    superblock_ptr.Replace(superblock);
+    superblock_ptr.Rebind(superblock_index.get());
+
+    BOOST_REQUIRE(superblock_ptr->GetHash() != GRC::Superblock().GetHash());
+
+    // Startup, step 1: the superblock index loads and refreshes the cache while the whitelist is empty.
+    // PushSuperblock ends in the same Refresh() call as Quorum::LoadSuperblockIndex.
+    GRC::Quorum::PushSuperblock(superblock_ptr);
+
+    // Undo the push and the registry changes on every exit path, including a failed BOOST_REQUIRE.
+    struct Cleanup {
+        const CBlockIndex* index;
+        ~Cleanup()
+        {
+            GRC::Quorum::PopSuperblock(index);
+            GRC::GetAutoGreylistCache()->Reset();
+            GRC::GetWhitelist().Reset();
+        }
+    } cleanup{superblock_index.get()};
+
+    BOOST_CHECK_EQUAL(auto_greylist->size(), 0U);
+
+    // Startup, step 2: the project registry loads. The cache is still empty.
+    AddProjectEntryWithStatus(name, "http://startup.refresh.test", GRC::ProjectEntryStatus::UNKNOWN, 20, 0);
+    BOOST_CHECK_EQUAL(auto_greylist->size(), 0U);
+
+    // Startup, step 3: the refresh against the same committed superblock recomputes the cache, with that
+    // superblock's total credit as the baseline.
+    auto_greylist->Refresh();
+    BOOST_REQUIRE_EQUAL(auto_greylist->size(), 1U);
+
+    const GRC::AutoGreylist::GreylistCandidateEntry& entry = auto_greylist->begin()->second;
+    BOOST_CHECK(entry.m_project_name == name);
+    BOOST_CHECK(entry.GetUpdateHistory().front().m_total_credit == std::optional<uint64_t>(1000));
+}
+
 BOOST_AUTO_TEST_CASE(it_does_not_throw_when_the_40SB_average_truncates_to_zero)
 {
     // Regression test for the GetWAS() divide-by-zero that crashed mainnet nodes in

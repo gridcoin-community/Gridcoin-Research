@@ -1957,7 +1957,9 @@ void Quorum::LoadSuperblockIndex(const CBlockIndex* pindexLast) EXCLUSIVE_LOCKS_
 
     // Refresh the AutoGreylist cache against the reloaded superblock index (startup path). Moved out
     // of Whitelist::Snapshot() (stage 3a) so the cache is populated explicitly here rather than
-    // lazily on the first Snapshot read.
+    // lazily on the first Snapshot read. At startup this runs before the contract registries load, so
+    // below the redesign gate the project whitelist is still empty here; GRC::Initialize refreshes
+    // again once it is loaded.
     GetAutoGreylistCache()->Refresh();
 }
 
@@ -2049,7 +2051,8 @@ bool Quorum::CommitSuperblock(const uint32_t height) EXCLUSIVE_LOCKS_REQUIRED(cs
     // so g_superblock_index.Commit() can only return true for v1 superblocks committed via m_pending --
     // a path that exists today only during initial-sync replay of pre-v11 history. The AutoGreylist cache
     // refresh and project-registry deep-copy gate-crossing rebuild live at Quorum::PushSuperblock (the
-    // v2+ activation point), Quorum::PopSuperblock (reorg) and Quorum::LoadSuperblockIndex (startup);
+    // v2+ activation point), Quorum::PopSuperblock (reorg) and Quorum::LoadSuperblockIndex (startup, repeated
+    // by GRC::Initialize once the contract registries have loaded);
     // neither is needed here because RefreshWithSuperblock bails on m_version < 3 and
     // IsAutoGreylistDeepCopyEnabled is false at any v1-superblock height under default consensus params.
     // Keeping this function as a thin wrapper preserves the pre-v11 priming callers
