@@ -184,10 +184,15 @@ jobs:
           sudo add-apt-repository -y universe
           sudo add-apt-repository -y multiverse
           sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
+          # The armhf sources come from Azure's ports mirror, like every amd64 pocket
+          # above. Multi-Arch: same packages (mesa, krb5, ...) must be the identical
+          # version in both architectures, and two different mirrors can be a
+          # generation apart (ports.ubuntu.com served a stale mesa for hours after
+          # Azure had the new one), which apt reports as "held broken packages".
           cat <<EOF | sudo tee /etc/apt/sources.list.d/armhf.list
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-security main universe multiverse restricted
+          deb [arch=armhf] http://azure.ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted
+          deb [arch=armhf] http://azure.ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted
+          deb [arch=armhf] http://azure.ports.ubuntu.com/ubuntu-ports noble-security main universe multiverse restricted
           EOF
           sudo apt-get update
 

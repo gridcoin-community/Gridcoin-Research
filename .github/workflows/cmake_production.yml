@@ -1213,12 +1213,17 @@ jobs:
           Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 
           Types: deb
-          URIs: http://security.ubuntu.com/ubuntu
+          URIs: http://azure.archive.ubuntu.com/ubuntu
           Suites: noble-security
           Components: main universe multiverse restricted
           Architectures: amd64
           Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
           EOF
+          # The arm64 sources come from Azure's ports mirror, like every amd64 pocket
+          # above. Multi-Arch: same packages (mesa, krb5, ...) must be the identical
+          # version in both architectures, and two different mirrors can be a
+          # generation apart (ports.ubuntu.com served a stale mesa for hours after
+          # Azure had the new one), which apt reports as "held broken packages".
           cat <<'EOF' | sudo tee /etc/apt/sources.list.d/arm64.list
           deb [arch=arm64] http://azure.ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted
           deb [arch=arm64] http://azure.ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted
