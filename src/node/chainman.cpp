@@ -246,15 +246,17 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
         //
         // A resurrected transaction left the peers' pools too when the block
         // that carried it connected, so something has to offer it again, and
-        // the wallet's periodic resend covers neither outcome here.
+        // the wallet's periodic resend does not announce a successful one.
         // CWallet::BlockDisconnected has already run for every transaction in
         // these blocks, above, and marked each one inactive, because the pool
         // could not hold it before TxnCommit. A resurrection that SUCCEEDS is
         // promoted back out of inactive by the mempool-added signal, and then
         // sits at depth 0, which the resend skips because it selects only
-        // depth -1. One that FAILS stays inactive, and RelayWalletTransaction
-        // refuses inactive outright. So the unbroadcast entry is the only thing
-        // that announces a successful resurrection.
+        // depth -1. So the unbroadcast entry is the only thing that announces a
+        // successful resurrection. One that FAILS stays inactive, which
+        // RelayWalletTransaction refuses outright; ResendWalletTransactions
+        // offers it back to the mempool on each pass instead (#3382), so a
+        // refusal that later clears does not strand it.
         //
         // Reannounce, not the default: peers have certainly seen these -- they
         // were in a block -- so the entry must not open the cancel gate.

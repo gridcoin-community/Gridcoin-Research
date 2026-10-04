@@ -1959,8 +1959,10 @@ void CWallet::BlockDisconnected(const CBlock& block, int height)
                         hash.ToString());
                 SyncTransaction(MakeTransactionRef(tx), TxStateInMempool{});
             } else {
-                // Not in mempool - could be conflicted or invalid
-                // Mark as inactive (will be resolved by ReacceptWalletTransactions)
+                // Not in mempool: the connect removed it, and the resurrect loop
+                // has not yet offered it back. A resurrection marks it in-mempool
+                // again; one that is refused is retried by
+                // ResendWalletTransactions (#3382).
                 LogPrint(BCLog::LogFlags::VERBOSE,
                         "CWallet::blockDisconnected: tx %s removed from mempool, marking inactive",
                         hash.ToString());
@@ -2953,6 +2955,12 @@ unsigned int CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQU
     unsigned int txns_inputs_unavailable = 0;
     unsigned int txns_failed_validation = 0;
     unsigned int txns_erased_from_wallet = 0;
+    unsigned int txns_reoffer_refused = 0;
+
+    // Inactive transactions to offer back to the mempool, in the chronological
+    // order below so a parent goes before its child. Offered once cs_wallet is
+    // released: the mempool-added signal takes it again.
+    std::vector<CTransaction> to_reoffer;
 
     CTxDB txdb("r");
 
@@ -2995,8 +3003,27 @@ unsigned int CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQU
 
             switch (wtx.RevalidateTransaction(txdb)) {
             case CWalletTx::RevalidateResult::VALID:
-                // Transaction is valid for relaying; an inactive one is still
-                // refused by QueueRelay and does not count.
+                // An inactive transaction is not relayed as it stands (QueueRelay
+                // refuses it), but one that is not abandoned is offered back to
+                // the mempool below (#3382). Nothing else ever does: the
+                // disconnect handler marks every wallet transaction of a
+                // disconnected block inactive before the resurrect loop offers
+                // it back, and a resurrection refused for a reason that later
+                // clears -- an nLockTime the shorter chain has not reached, as
+                // an HTLC refund has -- would otherwise stay inactive for good.
+                //
+                // The mempool decides, so a conflict that is still real keeps it
+                // inactive: the input is spent on chain or by a pooled
+                // transaction, and replacement is disabled. Abandoned stays
+                // terminal, and a coinbase or coinstake is only valid in its
+                // block.
+                if (const auto* inactive = wtx.state<TxStateInactive>()) {
+                    if (!inactive->m_abandoned && !wtx.IsCoinBase() && !wtx.IsCoinStake()) {
+                        to_reoffer.push_back(static_cast<const CTransaction&>(wtx));
+                    }
+                    break;
+                }
+
                 if (wtx.QueueRelay(txdb, relay)) {
                     ++txns_relayed;
                 }
@@ -3027,7 +3054,36 @@ unsigned int CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQU
         }
     }
 
-    // cs_wallet is released; announce before the erase pass below takes it again.
+    // cs_wallet is released. On acceptance the mempool-added signal moves the
+    // transaction out of inactive and marks its inputs spent again. Peers saw
+    // it in a block, so the unbroadcast entry is Reannounce, as the resurrect
+    // loop registers it, and must not open the cancel gate. A refusal leaves
+    // it inactive for the next pass; one whose input is a parent re-pooled in
+    // this same pass waits for that next pass too, since its revalidation ran
+    // before the parent was back.
+    for (CTransaction& tx : to_reoffer) {
+        CValidationState reoffer_state;
+        bool missing_inputs = false;
+
+        if (::AcceptToMemoryPool(mempool, tx, reoffer_state, &missing_inputs)) {
+            mempool.AddUnbroadcast(tx.GetHash(), UnbroadcastReason::Reannounce);
+            relay.AddTransaction(tx, tx.GetHash());
+
+            LogPrintf("%s: inactive transaction %s re-offered to the mempool and relayed.",
+                      __func__, tx.GetHash().ToString());
+
+            ++txns_relayed;
+        } else {
+            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: inactive transaction %s not re-offered%s%s",
+                     __func__, tx.GetHash().ToString(),
+                     missing_inputs ? ": missing inputs" : "",
+                     reoffer_state.GetRejectReason().empty() ? "" : ": " + reoffer_state.GetRejectReason());
+
+            ++txns_reoffer_refused;
+        }
+    }
+
+    // Announce before the erase pass below takes cs_wallet again.
     relay.Flush();
 
     if (to_be_erased.size()) {
@@ -3123,11 +3179,13 @@ unsigned int CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQU
     }
 
     LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: %u transactions relayed, %u transactions left for a later pass "
-                                       "with inputs not resolvable, %u transactions failed validation, "
+                                       "with inputs not resolvable, %u inactive transactions refused by the "
+                                       "mempool, %u transactions failed validation, "
                                        "%u transactions erased from wallet.",
              __func__,
              txns_relayed,
              txns_inputs_unavailable,
+             txns_reoffer_refused,
              txns_failed_validation,
              txns_erased_from_wallet);
 

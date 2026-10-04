@@ -651,24 +651,33 @@ struct MaxSizeRestorer {
 };
 
 //! The wallet entries a forced ResendWalletTransactions could relay right now:
-//! unconfirmed, depth -1, and not inactive. Inactive entries are selected too
-//! but RelayWalletTransaction refuses them, so they never reach the count; an
-//! earlier suite in this binary (accounting_tests) leaves three of those in the
-//! process wallet, and they are as invisible to the count as they always were.
+//! unconfirmed and depth -1. An inactive one counts only if the resend would
+//! offer it back to the mempool (#3382): not abandoned, not a coinbase or
+//! coinstake, and VALID on revalidation. Anything else inactive never reaches
+//! the count; an earlier suite in this binary (accounting_tests) leaves three
+//! input-less ones in the process wallet, which revalidation rejects.
 //! Empty when nothing a sibling left could be counted as this case's.
 std::string DescribeRelayableCandidates()
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    CTxDB txdb("r");
     std::string out;
 
-    for (const auto& item : pwalletMain->mapWallet) {
-        const CWalletTx& wtx = item.second;
+    for (auto& item : pwalletMain->mapWallet) {
+        CWalletTx& wtx = item.second;
 
-        if (wtx.isConfirmed() || wtx.isInactive() || wtx.GetDepthInMainChain() != -1) continue;
+        if (wtx.isConfirmed() || wtx.GetDepthInMainChain() != -1) continue;
 
-        const char* state = wtx.state<TxStateInMempool>() ? "in-mempool tag, not pooled"
-                                                         : "unrecognized";
+        const auto* inactive = wtx.state<TxStateInactive>();
+        if (inactive && (inactive->m_abandoned || wtx.IsCoinBase() || wtx.IsCoinStake()
+                         || wtx.RevalidateTransaction(txdb) != CWalletTx::RevalidateResult::VALID)) {
+            continue;
+        }
+
+        const char* state = inactive                         ? "inactive, not abandoned"
+                          : wtx.state<TxStateInMempool>()    ? "in-mempool tag, not pooled"
+                                                             : "unrecognized";
 
         if (!out.empty()) out += ", ";
         out += item.first.GetHex() + " (" + state + ")";
@@ -754,13 +763,13 @@ BOOST_AUTO_TEST_CASE(a_size_limit_eviction_reaches_the_wallet)
 //! An evicted own spend is the input ResendWalletTransactions exists for:
 //! unconfirmed, no longer in the mempool, and not conflicted. The forced
 //! resend must relay exactly that spend, and nothing while it is still pooled
-//! or once it is marked inactive.
+//! or once it is abandoned.
 //!
 //! Discriminates on the relayed count. While the spend is in the pool it reads
 //! depth 0 and is skipped; after the eviction it reads -1 and is revalidated
-//! against the tx index and relayed; marked conflicted it is refused by
-//! RelayWalletTransaction. Had the eviction handler marked it conflicted, the
-//! count after the eviction would be 0. The wallet must have nothing to
+//! against the tx index and relayed; abandoned it is neither relayed nor
+//! offered back to the mempool. Had the eviction handler marked it conflicted,
+//! it would have been offered back instead of relayed as it stood (#3382). The wallet must have nothing to
 //! re-announce before the case starts, or the counts would not be this case's.
 //! The suite's per-case WalletTxScope keeps a sibling case's resend candidates
 //! from leaking in, in any order; it says nothing about entries other suites
@@ -811,12 +820,132 @@ BOOST_AUTO_TEST_CASE(a_size_limit_evicted_own_spend_is_rebroadcast)
         BOOST_CHECK(pwalletMain->mapWallet.count(first_hash));
     }
 
-    // Conflicted: refused, whatever depth says.
+    // Abandoned: refused, whatever depth says, and not offered back.
     {
         LOCK(pwalletMain->cs_wallet);
-        pwalletMain->mapWallet.at(first_hash).SetTxState(TxStateInactive{false});
+        pwalletMain->mapWallet.at(first_hash).SetTxState(TxStateInactive{true});
     }
     BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+    BOOST_CHECK(!mempool.exists(first_hash));
+
+    mempool.clear();
+}
+
+//!
+//! An inactive own spend that the mempool would take again is offered back to
+//! it and relayed (#3382).
+//!
+//! The setup is what the disconnect handler leaves when the resurrect loop's
+//! offer is refused for a reason that later clears: out of the pool, marked
+//! inactive and not abandoned. Nothing used to move it on from there --
+//! RelayWalletTransaction refuses inactive, and startup recovery only consults
+//! the tx index -- so the count was 0 and the pool stayed empty for good.
+//!
+//! Discriminates on the count and on the pool: the forced resend must return 1
+//! and leave the spend pooled, in-mempool in the wallet, and registered for
+//! re-announcement without opening the cancel gate, since peers saw it in a
+//! block. A second pass then finds nothing to do.
+//!
+BOOST_AUTO_TEST_CASE(a_stranded_inactive_own_spend_is_offered_back_and_relayed)
+{
+    mempool.clear();
+
+    const SignalsForThisCase signals;
+
+    CAmount fee = 0;
+    CTransaction spend = MakeCandidate(0, 1, 2000, fee);
+    const uint256 hash = spend.GetHash();
+
+    LOCK(cs_main);
+
+    const std::string leaked = DescribeRelayableCandidates();
+    BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+    BOOST_REQUIRE_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+
+    CValidationState state;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, spend, state, nullptr),
+                          "spend rejected: " + state.GetRejectReason());
+
+    // Out of the pool without a signal, then marked inactive, as the disconnect
+    // handler leaves it.
+    mempool.clear();
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->mapWallet.count(hash));
+        pwalletMain->mapWallet.at(hash).SetTxState(TxStateInactive{false});
+    }
+
+    BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 1u);
+    BOOST_CHECK(mempool.exists(hash));
+    BOOST_CHECK(mempool.IsUnbroadcastTx(hash));
+    BOOST_CHECK(!mempool.IsCancellableUnbroadcast(hash));
+    {
+        LOCK(pwalletMain->cs_wallet);
+        const CWalletTx& wtx = pwalletMain->mapWallet.at(hash);
+        BOOST_CHECK(wtx.isInMempool());
+        BOOST_CHECK_EQUAL(wtx.GetDepthInMainChain(), 0);
+    }
+
+    // Pooled again: nothing left to re-announce.
+    BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+
+    mempool.clear();
+}
+
+//!
+//! An inactive own spend whose conflict is real stays inactive and is not
+//! relayed (#3382).
+//!
+//! Another spend of the same output is pooled, so the mempool refuses the
+//! offer (txn-mempool-conflict; replacement is disabled). Discriminates on the
+//! pool keeping the competing spend and the wallet entry staying inactive: an
+//! offer that bypassed the mempool's verdict, or a relay of the entry as it
+//! stood, would show in the count or in the pool.
+//!
+BOOST_AUTO_TEST_CASE(a_stranded_inactive_spend_whose_conflict_is_real_stays_inactive)
+{
+    mempool.clear();
+
+    const SignalsForThisCase signals;
+
+    // The same premine output, spent two ways: one output or two.
+    CAmount fee_stranded = 0, fee_winner = 0;
+    CTransaction stranded = MakeCandidate(0, 1, 2000, fee_stranded);
+    CTransaction winner = MakeCandidate(0, 2, 2000, fee_winner);
+    const uint256 stranded_hash = stranded.GetHash();
+    const uint256 winner_hash = winner.GetHash();
+    BOOST_REQUIRE(stranded_hash != winner_hash);
+
+    LOCK(cs_main);
+
+    const std::string leaked = DescribeRelayableCandidates();
+    BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+    BOOST_REQUIRE_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+
+    CValidationState state_stranded;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, stranded, state_stranded, nullptr),
+                          "stranded spend rejected: " + state_stranded.GetRejectReason());
+    mempool.clear();
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->mapWallet.count(stranded_hash));
+        pwalletMain->mapWallet.at(stranded_hash).SetTxState(TxStateInactive{false});
+    }
+
+    CValidationState state_winner;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, winner, state_winner, nullptr),
+                          "competing spend rejected: " + state_winner.GetRejectReason());
+
+    BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+    BOOST_CHECK(!mempool.exists(stranded_hash));
+    BOOST_CHECK(mempool.exists(winner_hash));
+    {
+        LOCK(pwalletMain->cs_wallet);
+        const CWalletTx& wtx = pwalletMain->mapWallet.at(stranded_hash);
+        const auto* inactive = wtx.state<TxStateInactive>();
+        BOOST_REQUIRE(inactive);
+        BOOST_CHECK(!inactive->m_abandoned);
+    }
 
     mempool.clear();
 }
