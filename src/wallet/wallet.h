@@ -645,8 +645,12 @@ public:
     //! is the case for WalletImpl::sendCoins (#3391).
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey, DeferredRelay* relay = nullptr);
 
-    //! \param relay Forwarded to CommitTransaction. A caller holding cs_wallet
-    //! across this call must supply one that outlives its own guard (#3391).
+    //! \param relay Forwarded to CommitTransaction. When null, SendMoney queues
+    //! the announcement itself and makes it once its own lock is released. A
+    //! caller holding cs_wallet across this call should supply one that
+    //! outlives its own guard, so the announcement is not made under the
+    //! wallet lock (#3391). Announcing under it is safe (the lock rule on
+    //! CConnman::ForEachNode, #3443); the queue only shortens the hold.
     std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew,
                           DeferredRelay* relay = nullptr);
     std::string SendMoneyToDestination(const CTxDestination &address, int64_t nValue, CWalletTx& wtxNew,

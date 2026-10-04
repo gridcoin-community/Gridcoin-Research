@@ -761,8 +761,10 @@ bool CWallet::RestrictToStakingOnly()
 {
     // cs_wallet, then cs_KeyStore inside: the canonical order, and the reason
     // this wrapper exists. The spend chokepoint reads the scope while holding
-    // cs_wallet for the whole build, so narrowing has to wait for that build
-    // rather than slipping in behind its check.
+    // cs_wallet for the whole build, and every path that commits holds it
+    // through the commit as well (SendMoney and SendContractTx since #3389), so
+    // narrowing waits for an in-flight send to finish rather than slipping in
+    // behind its check.
     LOCK(cs_wallet);
 
     return CCryptoKeyStore::RestrictToStakingOnly();
@@ -4007,18 +4009,19 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
         // makes the check and the signing atomic with respect to that. It still
         // precedes nFeeRet below, which the caller's failure branch may read.
         //
-        // It guards BUILDING, not committing, and that is deliberate. SendMoney
-        // and SendContractTx take no lock of their own, so cs_wallet is released
-        // between here and CommitTransaction, and a narrowing can land in that
-        // gap -- an already-signed spend is then still recorded and relayed.
+        // It guards BUILDING; committing is covered by the callers' lock, not by
+        // a second check. Every path that commits holds cs_wallet from the build
+        // through CommitTransaction -- SendMoney and SendContractTx since #3389,
+        // and WalletImpl::sendCoins and the RPCs that commit directly under
+        // their own cs_main and cs_wallet scope -- so a narrowing cannot land
+        // between building and committing. The GUI's fee dialog sits outside that scope: sendCoins
+        // returns without committing, and the re-invocation after the user
+        // accepts rebuilds the transaction, passing this check again.
         //
-        // Checking again at commit would be worse. Authorisation belongs at the
-        // START of an operation: a send that was permitted when it began should
-        // finish, and a second gate would make a legitimate send fail after
-        // signing whenever the unlock expired while a fee dialog was open. It
-        // would also need the renewal exemption threaded through commit. The
-        // residual needs a SECOND operation narrowing concurrently, by someone
-        // who already holds the passphrase. Tracked rather than closed here.
+        // So a re-check at commit would add nothing, and authorisation belongs
+        // at the START of an operation anyway: a send that was permitted when it
+        // began should finish. It would also need the renewal exemption
+        // threaded through commit.
         if (IsUnlockedForStakingOnly() && !permitted_while_staking_only) {
             return error("%s: wallet is unlocked for staking only", __func__);
         }
@@ -4427,10 +4430,23 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey, Defe
 
 string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, DeferredRelay* relay)
 {
+    // A caller that passes no relay still gets its announcement deferred: this
+    // one is declared before the lock below, so it flushes after the lock is
+    // released (#3391). Relaying under cs_wallet would be safe (the lock rule on
+    // CConnman::ForEachNode, #3443), but there is no reason to hold the wallet
+    // across the broadcast.
+    DeferredRelay own_relay;
+
+    // Held across the whole send -- the scope checks, the build and the commit --
+    // so a narrowing to staking-only (RestrictToStakingOnly takes cs_wallet) waits
+    // for an in-flight send to finish instead of landing between building and
+    // committing it (#3389). cs_main first is the canonical order, and both are
+    // recursive, so callers that already hold them are unaffected.
+    LOCK2(cs_main, cs_wallet);
+
     CReserveKey reservekey(this);
     // Initialised: the failure branch below reads it, and CreateTransaction can
-    // now return before seeding it. The checks above do not rule that out,
-    // since the scope can change before the builder takes cs_wallet.
+    // return before seeding it.
     int64_t nFeeRequired = 0;
 
     if (IsLocked())
@@ -4458,7 +4474,7 @@ string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNe
         return strError;
     }
 
-    if (!CommitTransaction(wtxNew, reservekey, relay))
+    if (!CommitTransaction(wtxNew, reservekey, relay ? relay : &own_relay))
         return _("Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.");
 
     return "";

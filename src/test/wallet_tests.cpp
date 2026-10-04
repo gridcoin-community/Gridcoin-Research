@@ -5,7 +5,10 @@
 #include <boost/test/unit_test.hpp>
 
 #include "gridcoin/mnemonics.h"
+#include "gridcoin/contract/contract.h"
+#include "gridcoin/contract/message.h"
 #include "gridcoin/sidestake.h"
+#include "gridcoin/tx_message.h"
 #include "init.h"
 #include "wallet/wallet.h"
 #include "net_processing.h"
@@ -956,6 +959,152 @@ BOOST_AUTO_TEST_CASE(the_transaction_builder_refuses_a_staking_only_wallet)
         // to set the fee, which the staking-only case never reaches.
         BOOST_CHECK(!staking.CreateTransaction(recipients, wtx, reservekey, fee));
         BOOST_CHECK(fee != sentinel);
+    }
+
+    staking.Lock();
+}
+
+//!
+//! A narrowing that lands while a send is waiting to start is seen by that
+//! send's own scope check (#3389).
+//!
+//! SendMoney holds cs_main and cs_wallet from its scope checks through
+//! CommitTransaction, so RestrictToStakingOnly, which takes cs_wallet, cannot
+//! land between building and committing a send. This case pins the observable
+//! half of that: the send is held off before it starts, the wallet is narrowed
+//! meanwhile, and the send must then refuse with its own staking-only message.
+//!
+//! Before #3389 the scope checks ran outside the lock: the send passed them on
+//! the full unlock, waited inside the builder, and failed there instead, with
+//! the builder's message. Discriminates on the message for that reason. The
+//! sleep only gives that older code time to pass its checks; the fixed code
+//! refuses the same way whatever the timing.
+//!
+BOOST_AUTO_TEST_CASE(a_send_held_off_by_a_narrowing_refuses_on_its_own_scope_check)
+{
+    CWallet staking;
+    struct SwapWallet {
+        CWallet* m_saved;
+        explicit SwapWallet(CWallet* replacement) : m_saved(pwalletMain) { pwalletMain = replacement; }
+        ~SwapWallet() { pwalletMain = m_saved; }
+    } swap(&staking);
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(staking.cs_wallet);
+        BOOST_REQUIRE(staking.AddKey(key));
+    }
+
+    const SecureString passphrase("send-scope-test");
+    BOOST_REQUIRE(staking.EncryptWallet(passphrase));
+    staking.Lock();
+    BOOST_REQUIRE(staking.Unlock(passphrase, UnlockScope::Full));
+    BOOST_REQUIRE(!staking.IsUnlockedForStakingOnly());
+
+    CScript destination;
+    destination.SetDestination(key.GetPubKey().GetID());
+
+    std::string result;
+    std::thread sender;
+    // Joins on every exit. A failed BOOST_REQUIRE in the block below throws past
+    // sender.join(), and destroying a joinable std::thread calls std::terminate,
+    // which would take the whole test binary down. Declared after sender, so it
+    // runs first on unwind -- and after the block's locks are released, so the
+    // sender can finish.
+    struct JoinOnExit {
+        std::thread& m_thread;
+        ~JoinOnExit() { if (m_thread.joinable()) m_thread.join(); }
+    } join_on_exit{sender};
+    {
+        // Stands in for an operation already holding the wallet.
+        LOCK2(cs_main, staking.cs_wallet);
+
+        sender = std::thread([&] {
+            CWalletTx wtx;
+            result = staking.SendMoney(destination, CENT, wtx);
+        });
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        BOOST_REQUIRE(staking.RestrictToStakingOnly());
+        BOOST_REQUIRE(staking.IsUnlockedForStakingOnly());
+    }
+    sender.join();
+
+    BOOST_CHECK_EQUAL(result, _("Error: Wallet unlocked for staking only, unable to create transaction."));
+
+    staking.Lock();
+}
+
+//!
+//! The same for a contract send (#3389): SendContractTx holds cs_wallet from
+//! its scope check through CommitTransaction, so a narrowing that lands while
+//! the send waits for the wallet is seen by that send's own check.
+//!
+//! Before #3389 SendContractTx took no wallet lock: the send passed its scope
+//! check on the full unlock, then waited in GetBalance and failed on the empty
+//! wallet's balance instead. Discriminates on the message for that reason. The
+//! sleep only gives that older code time to pass its check, as above.
+//!
+BOOST_AUTO_TEST_CASE(a_contract_send_held_off_by_a_narrowing_refuses_on_its_own_scope_check)
+{
+    CWallet staking;
+    struct SwapWallet {
+        CWallet* m_saved;
+        explicit SwapWallet(CWallet* replacement) : m_saved(pwalletMain) { pwalletMain = replacement; }
+        ~SwapWallet() { pwalletMain = m_saved; }
+    } swap(&staking);
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(staking.cs_wallet);
+        BOOST_REQUIRE(staking.AddKey(key));
+    }
+
+    const SecureString passphrase("contract-scope-test");
+    BOOST_REQUIRE(staking.EncryptWallet(passphrase));
+    staking.Lock();
+    BOOST_REQUIRE(staking.Unlock(passphrase, UnlockScope::Full));
+    BOOST_REQUIRE(!staking.IsUnlockedForStakingOnly());
+
+    // Never built: the send refuses before the builder in both outcomes.
+    const auto make_contract = [] {
+        return GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "contract-scope-test");
+    };
+
+    std::string result;
+    std::thread sender;
+    // Joins on every exit, as in the SendMoney case above.
+    struct JoinOnExit {
+        std::thread& m_thread;
+        ~JoinOnExit() { if (m_thread.joinable()) m_thread.join(); }
+    } join_on_exit{sender};
+    {
+        // Stands in for an operation already holding the wallet. cs_wallet
+        // only: the sender takes cs_main first, as SendContract requires, and
+        // then waits here, which keeps the canonical order.
+        LOCK(staking.cs_wallet);
+
+        sender = std::thread([&] {
+            LOCK(cs_main);
+            result = GRC::SendContract(make_contract()).second;
+        });
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        BOOST_REQUIRE(staking.RestrictToStakingOnly());
+        BOOST_REQUIRE(staking.IsUnlockedForStakingOnly());
+    }
+    sender.join();
+
+    BOOST_CHECK_EQUAL(result, _("Error: Wallet unlocked for staking only, unable to create transaction."));
+
+    // The automated beacon renewal's exemption still passes the check: it goes
+    // on to the balance check, which the empty wallet fails.
+    {
+        LOCK(cs_main);
+        BOOST_CHECK_EQUAL(GRC::SendContract(make_contract(), /*permitted_while_staking_only=*/true).second,
+                          _("Balance too low to create a contract."));
     }
 
     staking.Lock();
