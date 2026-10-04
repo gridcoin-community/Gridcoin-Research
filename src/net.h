@@ -649,6 +649,26 @@ public:
     //! Invoke func for every current node under m_nodes_mutex (issue #2558 PR 9b).
     //! Iterates all connected nodes (no fDisconnect filter), matching the
     //! direct m_nodes loops it replaces.
+    //!
+    //! LOCK RULE (#3400): callers announce transactions while holding
+    //! cs_wallet, with or without cs_main (cs_wallet -> m_nodes_mutex ->
+    //! cs_inventory). That is safe only while no thread that holds
+    //! m_nodes_mutex waits for cs_wallet, either directly or on a lock whose
+    //! holder is waiting for it. So func must not:
+    //!
+    //!   - take cs_wallet, directly or through anything it calls, signal
+    //!     handlers included; or
+    //!   - take a peer's cs_vSend (PushMessage and the Push* helpers built on
+    //!     it). cs_vSend is not a leaf: ThreadMessageHandler holds it, with
+    //!     cs_main, across SendMessages, whose wallet lookup takes cs_wallet.
+    //!     A callback here waiting for that cs_vSend would close
+    //!     cs_wallet -> m_nodes_mutex -> cs_vSend -> cs_wallet with any thread
+    //!     relaying under cs_wallet, although no one thread holds two of them.
+    //!     Push messages through ForEachNodeUnderLock instead.
+    //!
+    //! cs_inventory (PushInventory) is a leaf, so RelayInventory is safe under
+    //! cs_wallet from any caller. Keep these properties rather than
+    //! enumerating callers.
     void ForEachNode(const std::function<void(CNode*)>& func) const;
 
     //! Flag the matching node(s) for disconnection (issue #2558 PR 9b; moved
@@ -676,6 +696,12 @@ public:
     //! Like ForEachNode, but for callers that already hold cs_main and whose
     //! callback reads cs_main-guarded state (issue #2558 PR 9c). Takes m_nodes_mutex
     //! internally, preserving the canonical cs_main -> m_nodes_mutex order.
+    //!
+    //! The only way to reach a peer's cs_vSend from a fan-out (ForEachNode's
+    //! lock rule). The caller's cs_main excludes the message handler, which
+    //! needs cs_main before it holds cs_vSend across SendMessages, so the
+    //! callback cannot wait on a cs_vSend whose holder waits for cs_wallet.
+    //! func must still not take cs_wallet.
     void ForEachNodeUnderLock(const std::function<void(CNode*)>& func) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Relay an inventory item to every node (issue #2558 PR 9c; replaces the

@@ -711,14 +711,28 @@ UniValue listalerts(const UniValue& params)
 }
 
 
+//! Relay a newly signed alert to every peer, for sendalert and sendalert2.
+//!
+//! CAlert::RelayTo pushes a message, taking each peer's cs_vSend while the
+//! fan-out holds m_nodes_mutex. The message handler holds cs_vSend across
+//! SendMessages, whose wallet lookup waits for cs_wallet, so without cs_main
+//! this fan-out could close a cycle with any thread relaying a transaction
+//! under cs_wallet (cs_wallet -> m_nodes_mutex -> cs_vSend -> cs_wallet).
+//! Holding cs_main excludes the handler, which needs it before it takes
+//! cs_vSend; ForEachNodeUnderLock requires it. See the lock rule on
+//! CConnman::ForEachNode and "Known DEBUG_LOCKORDER reports that are not
+//! deadlocks" in doc/developer-notes.md.
+static void RelayAlertToPeers(const CAlert& alert)
+{
+    if (!g_connman) return;
+
+    LOCK(cs_main);
+    g_connman->ForEachNodeUnderLock([&alert](CNode* pnode) {
+        alert.RelayTo(pnode);
+    });
+}
+
 // ppcoin: send alert.
-// The relay below takes each node's cs_vSend (through CAlert::RelayTo and
-// PushMessage) while ForEachNode holds m_nodes_mutex. That once deadlocked
-// against the message handler, which held cs_vSend while waiting for cs_main
-// in SendMessages(); the handler now try-locks cs_main before it try-locks
-// cs_vSend (CConnman::ThreadMessageHandler) and never waits while holding
-// cs_vSend, so this nesting is one-directional. See "Known DEBUG_LOCKORDER
-// reports that are not deadlocks" in doc/developer-notes.md.
 // Variadic: legacy behavior accepted any params.size() >= 6, with the
 // 7th positional (cancelupto) optionally consumed. MarkVariadic() keeps
 // the dispatcher off the upper-bound check so trailing-ignored args keep
@@ -794,12 +808,7 @@ UniValue sendalert(const UniValue& params)
     if(!alert.ProcessAlert())
         throw runtime_error(
             "Failed to process alert.\n");
-    // Relay alert (issue #2558 PR 9b: iterate via the CConnman node-access API).
-    if (g_connman) {
-        g_connman->ForEachNode([&alert](CNode* pnode) {
-            alert.RelayTo(pnode);
-        });
-    }
+    RelayAlertToPeers(alert);
 
     UniValue result(UniValue::VOBJ);
     result.pushKV("strStatusBar", alert.strStatusBar);
@@ -881,12 +890,7 @@ UniValue sendalert2(const UniValue& params)
     if(!alert.ProcessAlert())
         throw runtime_error(
             "Failed to process alert.\n");
-    // Relay alert (issue #2558 PR 9b: iterate via the CConnman node-access API).
-    if (g_connman) {
-        g_connman->ForEachNode([&alert](CNode* pnode) {
-            alert.RelayTo(pnode);
-        });
-    }
+    RelayAlertToPeers(alert);
 
     UniValue result(UniValue::VOBJ);
     result.pushKV("Content", alert.ToString());
