@@ -179,6 +179,9 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
 {
     CInv inv(MSG_TX, hash);
     {
+        // Callers may hold cs_wallet here (#3400), so nothing under cs_mapRelay
+        // may take cs_wallet, or a lock whose holder waits on it -- see the
+        // lock rule on CConnman::ForEachNode.
         LOCK(cs_mapRelay);
         // Expire old relay messages
         while (!vRelayExpiration.empty() && vRelayExpiration.front().first < GetAdjustedTime())
@@ -1441,9 +1444,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (alert.ProcessAlert())
             {
                 // Relay (issue #2558 PR 9c: iterate via the node-access API).
+                // RelayTo pushes a message, taking each peer's cs_vSend, so the
+                // fan-out holds cs_main -- see the lock rule on
+                // CConnman::ForEachNode.
                 pfrom->setKnown.insert(alertHash);
                 if (g_connman) {
-                    g_connman->ForEachNode([&alert](CNode* pnode) {
+                    LOCK(cs_main);
+                    g_connman->ForEachNodeUnderLock([&alert](CNode* pnode) {
                         alert.RelayTo(pnode);
                     });
                 }

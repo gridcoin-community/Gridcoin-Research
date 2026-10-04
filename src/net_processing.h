@@ -119,10 +119,19 @@ void RelayPSGT(const uint256& revision_hash);
 //! So this is a hold-time cleanup, NOT the reason the cs_wallet/cs_inventory
 //! cycle is broken. That comes from SendMessages resolving its wallet answer
 //! before taking cs_inventory, which makes cs_inventory a leaf: a leaf cannot
-//! close a cycle however many cs_wallet -> cs_inventory edges remain. Anything
-//! that wants the class closed properly should give the announcement to the
-//! scheduler, the way ResendUnbroadcastTransactions already does, rather than
-//! threading this queue through another call level.
+//! close a cycle however many cs_wallet -> cs_inventory edges remain.
+//!
+//! The class is closed from the lock side, not the caller side (#3400): an
+//! announcement only queues inventory under cs_inventory, a leaf, and no
+//! thread holding m_nodes_mutex or cs_mapRelay waits for cs_wallet, directly or
+//! through a peer's cs_vSend (the lock rule on CConnman::ForEachNode: fan-outs
+//! that push messages hold cs_main, which excludes the message handler). So
+//! announcing while cs_wallet is held is safe on every path, enumerated or
+//! not. That is also Bitcoin Core's shape: relay only
+//! queues inventory under per-peer locks, and the wallet lock may be held
+//! across it. Handing announcements to the scheduler was considered and not
+//! done: it would change when a transaction reaches the wire for no
+//! correctness gain.
 class DeferredRelay
 {
 public:

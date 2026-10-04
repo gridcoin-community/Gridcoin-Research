@@ -739,13 +739,22 @@ No cycle can close, because of two invariants the net code keeps:
    message handler acquires `cs_main` by `TRY_LOCK` *before* `cs_vSend`, which
    is what retired the old `sendalert` deadlock: the RPC thread blocks on
    `cs_vSend` in `CAlert::RelayTo()` while holding `m_nodes_mutex`, and the
-   handler no longer holds `cs_vSend` while waiting for anything.
+   handler no longer holds `cs_vSend` while waiting for `cs_main`.
 
-The blocking nestings that do exist, `cs_vSend` under `m_nodes_mutex` in the
-alert relay and under `cs_main` plus `m_nodes_mutex` in the getblocks fan-out
-of `src/node/chainman.cpp`, are therefore one-directional: nothing holds
-`cs_vSend` and waits the other way. Keep both invariants when touching the net
-code; a change that turns one of the socket handler's `TRY_LOCK`s into a
+   The handler does wait for one lock under `cs_vSend`: `SendMessages()`'s
+   wallet lookup takes `cs_wallet`. So `cs_vSend` is not a leaf. A fan-out
+   that blocks on `cs_vSend` under `m_nodes_mutex` would close
+   `cs_wallet` -> `m_nodes_mutex` -> `cs_vSend` -> `cs_wallet` with any thread
+   relaying a transaction under `cs_wallet`. Every such fan-out therefore
+   holds `cs_main`, which excludes the handler, and goes through
+   `ForEachNodeUnderLock`, which requires it. The lock rule on
+   `CConnman::ForEachNode` states this for callbacks.
+
+The blocking nestings that do exist, `cs_vSend` under `cs_main` plus
+`m_nodes_mutex` in the alert relays and in the getblocks fan-out of
+`src/node/chainman.cpp`, are therefore one-directional: nothing holds
+`cs_vSend` and waits for `m_nodes_mutex` or `cs_main`. Keep both invariants
+when touching the net code; a change that turns one of the socket handler's `TRY_LOCK`s into a
 `LOCK`, or takes `m_nodes_mutex` from inside `SendMessages()`, creates the
 deadlock the reports describe.
 
