@@ -7,7 +7,7 @@ automation client — in place of the bundled Qt wallet.
 
 It describes the interface **as it exists on this branch** (post the
 identity-handshake work: `NodeIdentity` is `{identity_token, network}`, IPC
-schema major is `3`). It is a companion to, not a replacement for:
+schema major is `4`). It is a companion to, not a replacement for:
 
 - `doc/multiprocess_design.md` — the design of record (rules, decisions, phasing).
 - `doc/multiprocess.md` — how to build, run, and stop the split binaries.
@@ -89,14 +89,20 @@ The node listens on:
 (or `"auto"`) to `<data_dir>/node.sock`, where `<data_dir>` is already the
 network-specific directory (`GetDataDir()`; testnet/regtest nest under the base
 datadir). A custom path may be given as `"unix:<path>"`. The socket is created
-`0600`, its parent directory forced to `0700`, and the node **fails closed** if
-it cannot restrict them (`ProcessImpl::bind`).
+owner-only (`0600`; an owner+SYSTEM protected DACL on Windows) and the node
+**fails closed** if it cannot restrict it (`ProcessImpl::bind`). A directory is
+restricted the same way only when the node itself creates it: the default data
+directory or a network subdirectory, on the start that creates it
+(`util::CreateOwnerOnlyDirectory`, reached from `GetDataDir()`), or the missing
+parent of a custom socket path. An existing directory is left as the operator
+configured it; `ProcessImpl::bind` logs a warning if the socket's directory is
+open to other users.
 
 The node caps the listener at **one simultaneous connection**
-(`mp::ListenConnections<messages::Init>(..., /*max_connections=*/1)` in
-`src/ipc/capnp/protocol.cpp`). An alternative front end must therefore be the
-*only* client attached; a second connection will not be accepted while one is
-live (see §10).
+(`mp::ListenConnectionsFactory<messages::Init, interfaces::Init>(...,
+/*max_connections=*/1, ...)` in `src/ipc/capnp/protocol.cpp`). An alternative
+front end must therefore be the *only* client attached; a second connection will
+not be accepted while one is live (see §10).
 
 ### 2.2 The cookie
 
@@ -106,12 +112,14 @@ Authentication is a shared-secret cookie:
   (hex, `0600`, atomic temp-file + rename) **once per startup**
   (`ipc::WriteCookie`, `src/ipc/handshake.cpp`).
 - The client reads it with `ipc::ReadCookie` (`src/ipc/handshake.cpp`), which
-  trims trailing whitespace. **An absent cookie means the node has never run on
-  this datadir** (or never with `-multiprocess`): there is no credential and
-  nothing to dial — do not attempt to connect.
-- The cookie is **not** removed at shutdown, so a stale cookie can outlive a
-  stopped node. That is harmless: the subsequent `connect()` simply fails with
-  no listener.
+  trims trailing whitespace. **An absent cookie means no `-multiprocess` node is
+  serving this datadir**: none is running with `-multiprocess`, one is still
+  starting (the node writes the cookie only after core init, just before it
+  starts listening), or the last one shut down cleanly. There is no credential
+  and nothing to dial — do not attempt to connect.
+- The node deletes the cookie on a clean shutdown (`ipc::DeleteCookie`). A node
+  that crashed or was killed leaves it behind; that stale cookie is harmless: the
+  subsequent `connect()` simply fails with no listener.
 
 ### 2.3 The handshake, step by step
 
@@ -120,7 +128,7 @@ full ordered sequence a client must perform:
 
 1. **Read the stored identity expectation** (client-side; see §2.4). The bundled
    GUI keys this by a hash of the canonical datadir in `QSettings`.
-2. **Read `ipc.cookie`.** Absent ⇒ node not running; stop.
+2. **Read `ipc.cookie`.** Absent ⇒ no node is serving (§2.2); stop.
 3. **`connect(node.sock)`** — obtain the remote `Init` proxy
    (`Ipc::connectAddress("unix", on_disconnect)`). Returns null if the address
    is empty/disabled or (for `"auto"`) if nothing is listening; throws on an
@@ -194,11 +202,22 @@ daemon disconnects mid-flight. `ClientHandshake` wraps steps 4–7 in one
 exception. A client must apply the same discipline to *every* later call, not
 just the handshake (§6).
 
-> **Doc/code divergence (see §10):** design §4.3 lists an additional step 4,
-> a `SO_PEERCRED` / `LOCAL_PEERCRED` peer-identity check, before
-> `authenticate()`. That check is **not implemented** on this branch —
-> neither `ConnectToNode` nor the node performs it. The cookie is the sole
-> authenticator today.
+> **Peer-credential check.** The peer-identity check in design §4.3 is
+> implemented on both ends, before the cookie is presented. The reference client
+> checks the listening peer inside `Ipc::connectAddress()` (step 3 above) and, if
+> the check fails, refuses to send the cookie, so `ConnectToNode` fails. The node
+> checks each accepted connection and closes it before serving it. Both use
+> `ipc::CheckPeerCredentials` (`src/ipc/peercred.cpp`) and refuse a peer whose OS
+> user differs from their own, or whose user cannot be determined; root is not
+> special-cased. Linux reads `SO_PEERCRED`; macOS and the BSDs use
+> `getpeereid()`. Windows AF_UNIX exposes no peer credentials, so there is no
+> check there; the owner+SYSTEM protected DACL on `node.sock` and `ipc.cookie` is
+> the guard. The daemon logs the mode in force at startup (`IPC: peer-credential
+> enforcement: ...`). Two processes of the same OS user look identical to this
+> check, so the cookie remains the authenticator. `ClientHandshake` itself does
+> no check (its first call hands the cookie to whatever answered), so a client
+> that does not connect through `Ipc::connectAddress()` (§9) must make the same
+> check on its connected socket before it authenticates.
 
 ---
 
@@ -303,11 +322,12 @@ The per-process bootstrap. Beyond the handshake methods (`authenticate`,
 | `makeStakingStatus()` | `StakingStatus` | always available |
 | `makeWallet()` | `Wallet` | null before wallet startup |
 | `makeWalletTxSource()` | `shared_ptr<WalletTxSource>` | null before wallet startup |
+| `makeWalletCoinSource()` | `shared_ptr<WalletCoinSource>` | null before wallet startup |
 | `makeMRC()` | `MRC` | null before wallet startup |
 | `makeVotingManager()` | `VotingManager` | |
 | `makeResearcherContext()` | `ResearcherContext` | null before wallet startup |
 | `makePSGTPoolContext()` | `PSGTPoolContext` | null before wallet startup |
-| `makeSideStakeManager()` | `SideStakeManager` | **monolith only — not in `init.capnp`; see §10** |
+| `makeSideStakeManager()` | `SideStakeManager` | always available |
 
 The `init.capnp` `Init` interface additionally declares `construct @0
 (threadMap …)` — the libmultiprocess lifecycle entry point (a `ThreadMap`
@@ -444,28 +464,19 @@ against the change signal) and `tx_hash_hex` (the unsigned transaction, i.e. the
 pending spend -- shared by every signature revision, changed by an initiator
 supersede). Pool *change* notifications arrive via `Node::handlePSGTPoolChanged`.
 
-### 4.9 SideStakeManager — `src/interfaces/sidestake.h` (no capnp schema)
+### 4.9 SideStakeManager — `src/interfaces/sidestake.h`, `sidestake.capnp`
 
 The unified mandatory + local sidestake table with add/edit/delete commands and a
 versioned-refetch revision (`SideStakeSnapshot::local_revision`, design §4.4).
 `entries`, `localRevision`, `addLocal`, `setAllocation`, `setDescription`,
 `deleteLocal`, `handleRwSettingsUpdated`, `handleMandatorySideStakeChanged`.
 
-**Not served over the IPC wire on this branch.** There is no `sidestake.capnp`, and
-`init.capnp`'s `Init` has no `makeSideStakeManager` method. The bundled MP GUI's
-sidestake table is nonetheless populated because `OptionsModel` (and its
-`SideStakeTableModel`) is still constructed from a **local, in-GUI-process**
-`SideStakeManager` — `bitcoin.cpp` mints it via `gui_init = MakeGridcoinInit();
-gui_init->makeSideStakeManager()` — a deliberately un-migrated Phase-2 piece (the
-`bitcoin.cpp` comment: *"Phase 2 will hand this out from the single process Init
-instead of a locally-minted one"*). That local manager reads the **GUI process's own**
-`SideStakeRegistry`, which reflects the settings-based *local* sidestakes in the shared
-datadir but **not** contract-derived *mandatory* sidestakes or any registry state that
-requires core block sync. So an alternative front end cannot obtain the node's full
-sidestake state through `interfaces::` today; use `Node::executeRpcConsoleCommand` (the
-sidestake RPCs) for the authoritative node-side view. **A follow-up migrates the
-core-state-owned parts of `OptionsModel` (sidestake included) onto the remote node Init
-over IPC** — see §10, gap 1.
+Served over IPC like the other factories (`Init.makeSideStakeManager @13`). The
+node's implementation reads the node's own sidestake registry, so `entries()`
+returns the active mandatory and local sidestakes together (`is_mandatory` tells
+them apart). The bundled MP GUI builds `OptionsModel` (and its
+`SideStakeTableModel`) from the remote node's `Init`, so its sidestake table and
+its edits go to the node (`src/qt/bitcoin.cpp`).
 
 ---
 
@@ -608,11 +619,12 @@ type/status rendering is the client's job (only locale-free data crosses).
   (`ConstantTimeEqual`). Possession of the cookie *is* authorization: anything
   that can read `<datadir>/<network>/ipc.cookie` can drive the wallet. Protect
   it exactly as you would `wallet.dat`.
-- **Transport is local AF_UNIX only.** The socket is `0600` inside a `0700`
-  directory, and the node fails closed if it cannot enforce that (POSIX
-  `chmod`; on Windows the socket and cookie inherit the owner-only datadir ACL).
-  There is no network transport and no TLS — the trust boundary is the local
-  filesystem's access control.
+- **Transport is local AF_UNIX only.** The socket and the cookie are created
+  owner-only (`0600` on POSIX; an explicit owner+SYSTEM protected DACL on
+  Windows), and the node fails closed if it cannot apply that. The directory
+  around them is restricted only if the node creates it (§2.1). There is no
+  network transport and no TLS — the trust boundary is the local filesystem's
+  access control.
 - **Identity binding is *your* responsibility.** The node authenticates you but
   does not stop you from attaching to a *different wallet* than you expect. If
   your front end shows balances, you should persist the `identity_token` per
@@ -626,12 +638,11 @@ type/status rendering is the client's job (only locale-free data crosses).
   transits the AF_UNIX socket. Keys and signing never cross — only the
   passphrase, and only for these calls.
 - **What the node does *not* protect against.** It does not verify *which*
-  process holds the cookie (the design's optional `SO_PEERCRED` peer-credential
-  check is not implemented on this branch, §10). It caps concurrency at one
-  connection but its auth flag is process-global and *sticky* — once any peer
-  authenticates, the flag stays set for the life of the served `Init`
-  (`ServeInit`); per-connection auth is a later hardening. And identity binding,
-  as above, is not enforced node-side at all.
+  process holds the cookie: the peer-credential check (§2.5) refuses a peer
+  running as a different OS user, but it cannot tell two processes of the same
+  user apart, and Windows has no such check. It serves one connection at a time,
+  and each accepted connection must authenticate on its own (§10). And identity
+  binding, as above, is not enforced node-side at all.
 
 ---
 
@@ -641,16 +652,12 @@ The smallest sequence to connect, authenticate, and read the balance, using the
 real symbols (C++/libmultiprocess client):
 
 ```cpp
-// 0. You need an Init to hand MakeIpc even as a connect-only client: it is the
-//    Init this process *would* serve if it listened (the GUI never does). The
-//    in-process monolith Init is cheap. It must outlive the connection.
-std::unique_ptr<interfaces::Init> local_init = interfaces::MakeGridcoinInit();
-
 // 1-3, 4-7. ConnectToNode does the whole handshake: read cookie, connect,
-//    authenticate(cookie), getBuildInfo()/getIdentity(), compatibility checks.
+//    check the peer's OS user, authenticate(cookie), getBuildInfo()/getIdentity(),
+//    compatibility checks. A connect-only client serves no Init of its own.
 std::string err;
 std::optional<ipc::GuiConnection> conn =
-    ipc::ConnectToNode(GetDataDir(), *local_init, err,
+    ipc::ConnectToNode(GetDataDir(), err,
         /*on_disconnect=*/[]{ /* node went away: quit your loop */ });
 if (!conn) { /* err explains the hard fail */ return; }
 
@@ -720,52 +727,32 @@ foreign client is a real undertaking:
 
 Reported honestly so nobody designs against a contract that is not there yet:
 
-1. **`SideStakeManager` is not on the IPC wire, and the MP GUI's sidestake table
-   runs on a local fallback.** `makeSideStakeManager` is a full member of the C++
-   `Init` interface and is wrapped by `ServeInit`, but there is **no
-   `sidestake.capnp`** and **no `makeSideStakeManager` in `init.capnp`**, so it is
-   not served over IPC. The bundled MP GUI still shows a sidestake table because
-   `OptionsModel` is constructed from a **local, in-GUI-process** `SideStakeManager`
-   (`bitcoin.cpp`: `gui_init = MakeGridcoinInit()`), reading the GUI process's own
-   registry — settings-based local sidestakes only, **not** contract-derived
-   mandatory sidestakes or core-synced state. This is a real gap, not just a missing
-   schema: the whole of `OptionsModel` that reads/writes *core-owned* state (the
-   sidestake registry, and any node rw-settings) currently runs against GUI-local
-   globals rather than the node. **A follow-up migrates the core-state-owned parts
-   of `OptionsModel` onto the remote node Init over IPC** (which requires adding
-   `sidestake.capnp` + `makeSideStakeManager @13` to `init.capnp`, and restructuring
-   GUI startup so `OptionsModel` is wired from the remote Init). Until then, use
-   `Node::executeRpcConsoleCommand` (the sidestake RPCs) for the authoritative
-   node-side view.
-2. **The peer-identity check is documented but unimplemented.** Design §4.3
-   step 4 (`SO_PEERCRED` / `LOCAL_PEERCRED` / `SIO_AF_UNIX_GETPEERPID`) is called
-   "best-effort defense-in-depth," but neither `ConnectToNode`/`ClientHandshake`
-   nor the node performs it. The cookie is the only authenticator. Do not assume
-   the node will reject a wrong-PID peer.
-3. **Auth is process-global and sticky, and capped at one connection.**
-   `ServeInit::m_authenticated` is set once and never cleared, shared across the
-   (single allowed) connection; the listener is `max_connections=1`. Per-connection
-   auth and multi-client support are explicitly deferred (`serve_init.cpp`,
-   `protocol.cpp`). An alt front end must be the sole client and cannot rely on
-   any multi-client isolation.
-4. **Versioned-refetch is only partly realized.** Design §4.4 describes every
+1. **One client at a time.** The listener is `max_connections=1` and does not
+   accept a second connection while one is being served (`protocol.cpp`).
+   Authentication is per connection: each accepted connection gets a fresh
+   `ServeInit` and one `authenticate()` attempt (a wrong cookie leaves it
+   permanently unauthenticated), and it is dropped if it has not authenticated
+   within `ipc::IPC_AUTH_DEADLINE`, 30 s (`serve_init.h`; enforced by the
+   listener in `protocol.cpp`). An alt front end must be the sole client, and
+   must authenticate promptly after connecting.
+2. **Versioned-refetch is only partly realized.** Design §4.4 describes every
    void signal growing a `registry_version` parameter. In practice only
-   `SideStakeManager` carries a revision (`local_revision`) — and it is not even
-   IPC-exposed (gap 1). All other notifications are payload-free refetch triggers
-   with no coalescing version on the wire; a client must refetch on every one and
-   cannot dedupe by version except for sidestake.
-5. **The mixed-build warning surfaces as a dismissible banner.**
+   `SideStakeManager` carries a revision (`local_revision`). All other
+   notifications are payload-free refetch triggers with no coalescing version on
+   the wire; a client must refetch on every one and cannot dedupe by version
+   except for sidestake.
+3. **The mixed-build warning surfaces as a dismissible banner.**
    `SoftWarn::GitCommitMismatch` is both logged (`ResolveNodeIdentity`) and shown
    as a dismissible in-window banner (`BitcoinGUI::showBuildMismatchWarning`) in
    the reference GUI, suppressible per instance with `-nobuildwarn`. A client gets
    the soft finding in `HandshakeResult::soft` and decides how to present it.
-6. **Identity-token algorithm precision.** `init.h` and design §4.2 describe the
-   token as `SHA256(domain-tag ‖ wallet_uuid)`; the actual implementation
+4. **Identity-token algorithm precision.** Design §4.2 describes the token as
+   `SHA256(domain-tag ‖ wallet_uuid)`; the actual implementation
    (`ComputeIdentityToken`) is `HEX(SHA256(domain-tag_without_NUL ‖ LE32(len) ‖
    uuid))`. A client only ever *compares* the string the node reports, so the
    shorthand is harmless in practice — but the length-prefixed form is the real
    algorithm if you ever need to reproduce it.
-7. **Interfaces grow per migration.** The surface is intentionally only as wide
+5. **Interfaces grow per migration.** The surface is intentionally only as wide
    as the bundled GUI's migrated consumers need (see each header's phase notes and
    `src/interfaces/README.md`). Methods are added when a consumer needs them, not
    speculatively — so absence of a capability is expected, and
