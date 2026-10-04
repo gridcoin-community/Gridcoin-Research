@@ -7,6 +7,7 @@
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/sidestake.h"
 #include "script.h"
+#include "net_processing.h"
 #include "wallet/wallet.h"
 
 #include "wallet/coincontrol.h"
@@ -135,10 +136,32 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
 //!
 std::string SendContractTx(CWalletTx& wtx_new, bool permitted_while_staking_only) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    // Declared before the lock below, so the announcement flushes after this
+    // function's cs_wallet is released (#3391), as in CWallet::SendMoney.
+    DeferredRelay relay;
+
+    // Held from the scope check through CommitTransaction, as in
+    // CWallet::SendMoney: a narrowing to staking-only waits for this send to
+    // finish instead of landing between building and committing it (#3389).
+    // cs_main is already held (above); cs_wallet is recursive, so callers that
+    // hold it already are unaffected. A caller that holds cs_wallet itself
+    // still announces under it when the relay flushes, which is safe: see the
+    // lock rule on CConnman::ForEachNode (#3443).
+    LOCK(pwalletMain->cs_wallet);
+
     CReserveKey reserve_key(pwalletMain);
 
     if (pwalletMain->IsLocked()) {
         std::string strError = _("Error: Wallet locked, unable to create transaction.");
+        LogPrintf("%s: %s", __func__, strError);
+        return strError;
+    }
+
+    // The builder refuses too, but only as "Transaction creation failed"; this
+    // reports why, as CWallet::SendMoney does. Under the lock above, so a
+    // narrowing that lands while this send waits for the wallet is seen here.
+    if (pwalletMain->IsUnlockedForStakingOnly() && !permitted_while_staking_only) {
+        std::string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
         LogPrintf("%s: %s", __func__, strError);
         return strError;
     }
@@ -173,7 +196,7 @@ std::string SendContractTx(CWalletTx& wtx_new, bool permitted_while_staking_only
         return strError;
     }
 
-    if (!pwalletMain->CommitTransaction(wtx_new, reserve_key)) {
+    if (!pwalletMain->CommitTransaction(wtx_new, reserve_key, &relay)) {
         std::string strError = _(
             "Error: The transaction was rejected. This might happen if some of "
             "the coins in your wallet were already spent, such as if you used "
