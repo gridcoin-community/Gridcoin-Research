@@ -1243,7 +1243,7 @@ jobs:
             libssl-dev:arm64 libzip-dev:arm64 \
             libcurl4-openssl-dev:arm64 libboost-system-dev:arm64 libboost-filesystem-dev:arm64 \
             libboost-thread-dev:arm64 libboost-iostreams-dev:arm64 libboost-program-options-dev:arm64 \
-            libboost-serialization-dev:arm64 libboost-chrono-dev:arm64 \
+            libboost-chrono-dev:arm64 \
             libminiupnpc-dev:arm64 libxkbcommon-dev:arm64 \
             libcups2t64:arm64 \
             libcapnp-dev:arm64 libcapnp-dev capnproto \

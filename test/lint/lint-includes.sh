@@ -85,7 +85,6 @@ EXPECTED_BOOST_INCLUDES=(
     boost/iostreams/stream.hpp
     boost/lexical_cast.hpp
     boost/range/adaptor/reversed.hpp
-    boost/serialization/binary_object.hpp
     boost/shared_ptr.hpp
     boost/signals2/connection.hpp
     boost/signals2/optional_last_value.hpp

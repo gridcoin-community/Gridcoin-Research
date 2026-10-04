@@ -341,7 +341,7 @@ install_deps() {
             append_base miniupnpc libminiupnpc-devel
 
             # Boost Packages
-            append_base libboost_headers-devel libboost_filesystem-devel libboost_thread-devel libboost_date_time-devel libboost_iostreams-devel libboost_serialization-devel libboost_test-devel libboost_atomic-devel libboost_regex-devel
+            append_base libboost_headers-devel libboost_filesystem-devel libboost_thread-devel libboost_date_time-devel libboost_iostreams-devel libboost_test-devel libboost_atomic-devel libboost_regex-devel
 
             # Boost System Logic:
             # Use 'zypper info' to check which version of headers is (or will be) installed.
