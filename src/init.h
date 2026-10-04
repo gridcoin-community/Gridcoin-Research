@@ -75,9 +75,11 @@ void ApplyRwSettingSideEffect(const std::string& name);
 //! no_change_out / immediate_out / requires_restart_list_out and
 //! requires_restart_out is set. On failure returns false with error_out set and
 //! invalid_input_out distinguishing a caller/validation error (true; nothing was
-//! changed) from an internal storage error (false; the settings file write
-//! failed and some earlier settings in the batch may already be applied). Shared
-//! core of the changesettings RPC and interfaces::Node::changeSettings.
+//! changed) from an internal storage error (false). On a storage failure the
+//! failing setting is unchanged in the settings file, in memory and in the
+//! running args. Settings processed before it (in name order, not the order
+//! given) stay applied and stored. The rest are not touched. Shared core of the
+//! changesettings RPC and interfaces::Node::changeSettings.
 bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& settings,
                     bool& requires_restart_out,
                     std::vector<std::string>& no_change_out,

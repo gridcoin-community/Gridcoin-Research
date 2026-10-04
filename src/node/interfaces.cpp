@@ -410,8 +410,21 @@ public:
         const std::vector<std::pair<std::string, std::string>>& settings) override
     {
         SettingChangeResult out;
-        out.ok = ChangeSettings(settings, out.requires_restart, out.no_change, out.immediate,
-                                out.requires_restart_settings, out.invalid_input, out.error);
+        // ChangeSettings() can throw: with dynamic settings disabled (-nosettings)
+        // the settings-file write throws, after the settings are restored. Report
+        // it as a failed change, as the RPC dispatcher does for changesettings,
+        // instead of letting it escape into the caller -- for the GUI that is
+        // OptionsModel::setData and Qt's event loop, where the caller's own
+        // failure handling (the proxy rows' restore, for one) never runs. The
+        // result lists keep whatever was applied before the throw.
+        try {
+            out.ok = ChangeSettings(settings, out.requires_restart, out.no_change, out.immediate,
+                                    out.requires_restart_settings, out.invalid_input, out.error);
+        } catch (const std::exception& e) {
+            out.ok = false;
+            out.invalid_input = false;
+            out.error = e.what();
+        }
         return out;
     }
 

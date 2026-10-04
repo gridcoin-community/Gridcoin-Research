@@ -167,7 +167,8 @@ public:
 //! OptionsModel::setData persists a core setting). getSettingStr, getSettingInt
 //! and isSettingSet match the node for the string values held here;
 //! getSettingBool is an approximation (the node reads "true"/"false" as false).
-//! Everything else answers with an empty default.
+//! Everything else answers with an empty default. m_fail_changes makes
+//! changeSettings fail without applying anything.
 class FakeNode : public interfaces::Node
 {
 public:
@@ -176,6 +177,10 @@ public:
 
     // Recorded calls.
     std::vector<std::vector<std::pair<std::string, std::string>>> m_change_calls;
+
+    // When set, changeSettings records the batch, applies nothing and reports
+    // failure, as the node does when it rejects a value or cannot store it.
+    bool m_fail_changes{false};
 
     std::string getSettingStr(const std::string& name, const std::string& default_val) override
     {
@@ -206,6 +211,11 @@ public:
         const std::vector<std::pair<std::string, std::string>>& settings) override
     {
         m_change_calls.push_back(settings);
+        if (m_fail_changes) {
+            interfaces::SettingChangeResult failure;
+            failure.ok = false;
+            return failure;
+        }
         for (const auto& [name, value] : settings) {
             if (value.empty()) {
                 m_settings.erase(name);

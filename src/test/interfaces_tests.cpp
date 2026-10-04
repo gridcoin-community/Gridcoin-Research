@@ -100,6 +100,54 @@ BOOST_AUTO_TEST_CASE(node_wraps_chain_globals)
     BOOST_CHECK_EQUAL(node->getNodeCount(), 0);
 }
 
+// With dynamic settings disabled, the settings-file write throws. The Node
+// interface must report that as a failed change, not let it escape: the GUI
+// calls changeSettings() from OptionsModel::setData, where a throw would skip
+// the caller's failure handling and reach Qt's event loop.
+BOOST_AUTO_TEST_CASE(node_changesettings_reports_a_throwing_write_as_failure)
+{
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    // A registered probe name, so ChangeSettings() gets past its name check to
+    // the write; the registration outlives the case, as util_tests' probes do.
+    const std::string probe = "node_changesettings_throw_probe";
+    if (!gArgs.GetArgFlags("-" + probe)) {
+        gArgs.AddArg("-" + probe, "unit-test probe", ArgsManager::ALLOW_ANY, OptionsCategory::HIDDEN);
+    }
+
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+    const std::string before = gArgs.GetArg("-" + probe, "unset");
+
+    // A boolean false forced "settings" disables the settings file, as
+    // -nosettings does; erased on every exit from this scope.
+    bool had_forced = true;
+    gArgs.LockSettings([&](util::Settings& s) { had_forced = s.forced_settings.count("settings") != 0; });
+    BOOST_REQUIRE(!had_forced);
+    struct ForcedSettingsEraser {
+        ~ForcedSettingsEraser()
+        {
+            gArgs.LockSettings([](util::Settings& s) { s.forced_settings.erase("settings"); });
+        }
+    } eraser;
+    gArgs.LockSettings([](util::Settings& s) { s.forced_settings["settings"] = false; });
+    BOOST_REQUIRE(!gArgs.GetSettingsPath());
+
+    // A value that differs from the current one, so the store is attempted.
+    const std::string value = before == "after" ? "after2" : "after";
+
+    interfaces::SettingChangeResult result;
+    BOOST_REQUIRE_NO_THROW(result = node->changeSettings({{probe, value}}));
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(!result.invalid_input);
+    BOOST_CHECK(!result.error.empty());
+    // CommitRwSettings restored the setting before the throw.
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-" + probe, "unset"), before);
+    BOOST_CHECK(getRwSetting(probe).isNull());
+}
+
 BOOST_AUTO_TEST_CASE(node_handler_bridges_ui_signal)
 {
     std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();

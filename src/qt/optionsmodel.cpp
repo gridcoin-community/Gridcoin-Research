@@ -10,6 +10,7 @@
 
 #include "amount.h" // For MIN_STAKE_SPLIT_VALUE_GRC.
 
+#include <optional>
 #include <utility>
 
 namespace {
@@ -44,6 +45,17 @@ bool PushEffectiveProxy(interfaces::Node& node, QSettings& settings)
     return node.changeSettings({{"proxy", addr}}).ok;
 }
 
+//! Put a proxy field back as it was before a push that failed: its previous
+//! value, or no value when it had none.
+void RestoreProxyField(QSettings& settings, const QString& key, const std::optional<QVariant>& previous)
+{
+    if (previous) {
+        settings.setValue(key, *previous);
+    } else {
+        settings.remove(key);
+    }
+}
+
 //! Split a stored "host:port" proxy string into host and port, IPv6-aware
 //! (SplitHostPort strips the [] brackets around an IPv6 host and only treats a
 //! colon as the port separator when it is unambiguous). Port defaults to 9050.
@@ -63,6 +75,17 @@ QString FormatProxy(const QString& host, int port)
 {
     const QString h = host.contains(':') ? "[" + host + "]" : host;
     return h + ":" + QString::number(port);
+}
+
+//! Whether a value submitted for a core setting is the one the model reports for
+//! it. The Options dialog's mapper submits every mapped field, edited or not, and
+//! loaded each widget from data(): a checkbox hands back its checked state and a
+//! line edit its text, so an untouched field comes back with the same string form
+//! as data()'s value. data() reads the two numeric settings through
+//! getSettingInt, so their string form is always an integer and compares exactly.
+bool SubmittedValueUnchanged(const QVariant& submitted, const QVariant& shown)
+{
+    return submitted.toString() == shown.toString();
 }
 } // namespace
 
@@ -332,6 +355,14 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             settings.setValue(GUIUtil::nodeSettingsKey("fDisablePollNotifications"), fDisablePollNotifications);
             break;
         case MapPortUPnP:
+            // Core settings are written only when the submitted value differs from
+            // what data() reports. The dialog's mapper submits every field on OK,
+            // Apply and the side-staking toggle, edited or not, and a stored value
+            // outranks the config file, so writing an untouched field would pin the
+            // effective value (config file, command line or an init soft-set) into
+            // gridcoinsettings.json. ReserveBalance guards the same way. The same
+            // guard precedes each core setting's write below.
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
             // Core setting: the node applies it (SetUseUPnP + MapPort start/stop
             // the port-map thread) via the immediate-effect hook.
             successful = m_node.changeSettings({{"upnp", value.toBool() ? "1" : "0"}}).ok;
@@ -340,23 +371,55 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             fMinimizeOnClose = value.toBool();
             settings.setValue(GUIUtil::nodeSettingsKey("fMinimizeOnClose"), fMinimizeOnClose);
             break;
-        case ProxyUse:
-            settings.setValue(GUIUtil::nodeSettingsKey("fUseProxy"), value.toBool());
+        // The proxy fields are GUI state in QSettings, mirrored to the core -proxy
+        // setting only when one of them changes. An untouched submit neither
+        // rewrites them nor pushes, so it no longer erases or overwrites a
+        // node-side proxy the dialog does not show. The exception is a stored
+        // addrProxy not in host:port form, which never equals the rebuilt
+        // address: the first untouched submit rewrites it once and pushes.
+        // Compare as bool and string: a value read back from the settings file
+        // is text.
+        //
+        // A push that fails restores the field it changed, or removes it if it had
+        // no value, so QSettings never holds a proxy field the node did not accept,
+        // and an identical resubmit pushes again. A failed enable is undone even
+        // when a later field in the same submit makes the address valid. The host
+        // is then stored with the proxy disabled, and re-ticking the box applies it.
+        case ProxyUse: {
+            const QString key = GUIUtil::nodeSettingsKey("fUseProxy");
+            if (value.toBool() == settings.value(key, false).toBool()) break;
+            const std::optional<QVariant> previous =
+                settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
+            settings.setValue(key, value.toBool());
             successful = PushEffectiveProxy(m_node, settings);
-            break;
+            if (!successful) RestoreProxyField(settings, key, previous);
+        }
+        break;
         case ProxyIP: {
             // Replace the host part of the stored address; port is kept. IPv6-aware
             // via SplitProxy/FormatProxy (brackets round-trip correctly).
-            const int port = SplitProxy(settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString()).second;
-            settings.setValue(GUIUtil::nodeSettingsKey("addrProxy"), FormatProxy(value.toString(), port));
+            const QString key = GUIUtil::nodeSettingsKey("addrProxy");
+            const QString stored = settings.value(key, "127.0.0.1:9050").toString();
+            const QString updated = FormatProxy(value.toString(), SplitProxy(stored).second);
+            if (updated == stored) break;
+            const std::optional<QVariant> previous =
+                settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
+            settings.setValue(key, updated);
             successful = PushEffectiveProxy(m_node, settings);
+            if (!successful) RestoreProxyField(settings, key, previous);
         }
         break;
         case ProxyPort: {
             // Replace the port part of the stored address; host is kept.
-            const QString host = SplitProxy(settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString()).first;
-            settings.setValue(GUIUtil::nodeSettingsKey("addrProxy"), FormatProxy(host, value.toInt()));
+            const QString key = GUIUtil::nodeSettingsKey("addrProxy");
+            const QString stored = settings.value(key, "127.0.0.1:9050").toString();
+            const QString updated = FormatProxy(SplitProxy(stored).first, value.toInt());
+            if (updated == stored) break;
+            const std::optional<QVariant> previous =
+                settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
+            settings.setValue(key, updated);
             successful = PushEffectiveProxy(m_node, settings);
+            if (!successful) RestoreProxyField(settings, key, previous);
         }
         break;
         case ReserveBalance: {
@@ -445,6 +508,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case DisableUpdateCheck:
             // Core read-write setting (the core scheduler and the GUI both read
             // it); route through the node so it persists to gridcoinsettings.json.
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
             successful = m_node.changeSettings({{"disableupdatecheck", value.toBool() ? "1" : "0"}}).ok;
             break;
         case DataDir:
@@ -456,23 +520,30 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         // The following are core read-write settings stored in
         // gridcoinsettings.json; a stored value overrides the read-only config
         // file. The node validates, persists, and force-sets them (the miner
-        // re-reads them live on each stake).
+        // re-reads them live on each stake). Each is written only when it
+        // changed; see MapPortUPnP.
         case EnableStaking:
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
             successful = m_node.changeSettings({{"staking", value.toBool() ? "1" : "0"}}).ok;
             break;
         case EnableStakeSplit:
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
             successful = m_node.changeSettings({{"enablestakesplit", value.toBool() ? "1" : "0"}}).ok;
             break;
         case EnableSideStaking:
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
             successful = m_node.changeSettings({{"enablesidestaking", value.toBool() ? "1" : "0"}}).ok;
             break;
         case StakingEfficiency:
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
             successful = m_node.changeSettings({{"stakingefficiency", value.toString().toStdString()}}).ok;
             break;
         case MinStakeSplitValue:
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
             successful = m_node.changeSettings({{"minstakesplitvalue", value.toString().toStdString()}}).ok;
             break;
         case ContractChangeToInput:
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
             successful = m_node.changeSettings({{"contractchangetoinputaddress", value.toBool() ? "1" : "0"}}).ok;
             break;
         default:
