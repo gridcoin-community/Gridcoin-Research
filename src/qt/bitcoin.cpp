@@ -39,6 +39,7 @@
 #endif
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
+#include "guieventloop.h"
 #include "txdb.h"
 #include "util.h"
 #include "util/dir_permissions.h"
@@ -1550,47 +1551,49 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // WM_CLOSE via WinShutdownMonitor; the monolith uses the core's.)
                 if (multiprocess) InstallGuiTerminationHandler(app);
 #endif
-                app.exec();
+                RunGuiEventLoop([&] {
+                    app.exec();
 
-                // Give SIGTERM/SIGINT their teeth back immediately. The notifier
-                // that consumed the self-pipe only runs inside the event loop, so
-                // from here on the installed handler would silently absorb both
-                // signals for the whole of teardown -- see RemoveGuiTerminationHandler.
-                RemoveGuiTerminationHandler();
+                    // Give SIGTERM/SIGINT their teeth back immediately. The notifier
+                    // that consumed the self-pipe only runs inside the event loop, so
+                    // from here on the installed handler would silently absorb both
+                    // signals for the whole of teardown -- see RemoveGuiTerminationHandler.
+                    RemoveGuiTerminationHandler();
 
-                // Stop the GUI-process-local URI-listener thread now that the
-                // event loop has returned (it no longer reads the core shutdown
-                // state; see qtipcserver ipcShutdown()).
-                ipcShutdown();
+                    // Stop the GUI-process-local URI-listener thread now that the
+                    // event loop has returned (it no longer reads the core shutdown
+                    // state; see qtipcserver ipcShutdown()).
+                    ipcShutdown();
 
-                window.hide();
-                window.setClientModel(nullptr);
-                // Normal-path detach of the tx-table view models, in order with
-                // the other models. Destroys OverviewTxModel / DetailedTxModel
-                // (via BitcoinGUI -> {transactionView->setModel,
-                // overviewPage->setWalletModel}(nullptr)) while walletModel and
-                // wallet_tx_source below are still alive, so their
-                // unregisterView() reaches a live source. wallet_model_detach_guard
-                // above enforces the same on the exception path; this explicit
-                // call then becomes an idempotent no-op for the guard.
-                window.setWalletModel(nullptr);
-                // Clear the MRC model BEFORE mrcModel (a stack object in this
-                // block) is destroyed: BitcoinGUI and OverviewPage each keep a raw
-                // copy, and OverviewPage::onMRCRequestClicked only checks its copy
-                // for null -- so without this detach the pointer stays non-null and
-                // points at freed memory for the rest of the window's life.
-                window.setMRCModel(nullptr);
-                window.setResearcherModel(nullptr);
-                // Clear the voting model BEFORE the enclosing block exits and
-                // destroys the stack-allocated VotingModel: this propagates to
-                // PollTableModel::setModel(nullptr) which drains any in-flight
-                // QtConcurrent refresh worker still dereferencing the model.
-                window.setVotingModel(nullptr);
-                // Clear the PSGT pool interface from the page + dialog BEFORE the
-                // enclosing block destroys psgt_pool_context: the page's table
-                // model holds a reference to it, so it must be torn down first.
-                window.setPSGTPoolContext(nullptr);
-                guiref = nullptr;
+                    window.hide();
+                    window.setClientModel(nullptr);
+                    // Normal-path detach of the tx-table view models, in order with
+                    // the other models. Destroys OverviewTxModel / DetailedTxModel
+                    // (via BitcoinGUI -> {transactionView->setModel,
+                    // overviewPage->setWalletModel}(nullptr)) while walletModel and
+                    // wallet_tx_source below are still alive, so their
+                    // unregisterView() reaches a live source. wallet_model_detach_guard
+                    // above enforces the same on the exception path; this explicit
+                    // call then becomes an idempotent no-op for the guard.
+                    window.setWalletModel(nullptr);
+                    // Clear the MRC model BEFORE mrcModel (a stack object in this
+                    // block) is destroyed: BitcoinGUI and OverviewPage each keep a raw
+                    // copy, and OverviewPage::onMRCRequestClicked only checks its copy
+                    // for null -- so without this detach the pointer stays non-null and
+                    // points at freed memory for the rest of the window's life.
+                    window.setMRCModel(nullptr);
+                    window.setResearcherModel(nullptr);
+                    // Clear the voting model BEFORE the enclosing block exits and
+                    // destroys the stack-allocated VotingModel: this propagates to
+                    // PollTableModel::setModel(nullptr) which drains any in-flight
+                    // QtConcurrent refresh worker still dereferencing the model.
+                    window.setVotingModel(nullptr);
+                    // Clear the PSGT pool interface from the page + dialog BEFORE the
+                    // enclosing block destroys psgt_pool_context: the page's table
+                    // model holds a reference to it, so it must be torn down first.
+                    window.setPSGTPoolContext(nullptr);
+                    guiref = nullptr;
+                });
 
                 // Drain any still-running pooled worker BEFORE the interfaces built
                 // from this connection are destroyed. The About dialog's version
