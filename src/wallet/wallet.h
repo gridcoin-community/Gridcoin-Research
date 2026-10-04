@@ -590,8 +590,11 @@ public:
     //! \param fForce
     //!
     //! Re-announce own transactions that are unconfirmed and no longer in the
-    //! mempool. Returns how many were relayed; the rate-limit and sync guards
-    //! that fForce bypasses return 0 without looking at the wallet.
+    //! mempool. An inactive one that is not abandoned is offered back to the
+    //! mempool first and announced only if accepted (#3382); a coinbase or
+    //! coinstake never is. Returns how many were relayed, including those; the
+    //! rate-limit and sync guards that fForce bypasses return 0 without looking
+    //! at the wallet.
     unsigned int ResendWalletTransactions(bool fForce = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     int64_t GetBalance() const;
     int64_t GetUnconfirmedBalance() const;

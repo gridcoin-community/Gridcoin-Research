@@ -214,6 +214,10 @@ BASE_SCRIPTS = [
     # disconnected returns to the mempool and stays unconfirmed, not
     # conflicted, and is mined again by the next block.
     'feature_reorg_resurrect.py',
+    # wallet_resend_stranded.py: a wallet transaction whose resurrection is
+    # refused (here an nLockTime the rolled-back chain has not reached) is
+    # offered back by the resend once it can be mined (#3382).
+    'wallet_resend_stranded.py',
     # feature_reorg.py: split two nodes with disconnectnode, build competing
     # branches with node1's clock two stake slots ahead so no coinstake kernel
     # can collide, reconnect, and assert the shorter node reorganizes. It was
