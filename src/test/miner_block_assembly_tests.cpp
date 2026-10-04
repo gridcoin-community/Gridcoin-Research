@@ -40,6 +40,8 @@
 #include "gridcoin/cpid.h"
 #include "gridcoin/pool.h"
 #include "gridcoin/mrc.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/kernel.h"
 #include "init.h"
 #include "miner.h"
 #include "node/blockstorage.h"
@@ -2155,6 +2157,159 @@ BOOST_AUTO_TEST_CASE(a_child_paying_exactly_a_raised_floor_is_selected_after_its
     }
 
     mempool.clear();
+}
+
+BOOST_AUTO_TEST_CASE(an_unconfirmed_coinstake_is_not_a_stake_candidate)
+{
+    // Regtest lets coinbase and coinstake outputs skip the maturity checks, but they still need a depth of 1 or more,
+    // like any other output. An unconfirmed own coinstake is therefore not a candidate.
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE(!coins.empty());
+    const CTransaction coinstake = grc_test::CreateCoinstakeShaped(PremineCoinbase(), coins[0].n, 10000);
+    BOOST_REQUIRE(coinstake.IsCoinStake());
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CWalletTx wtx(pwalletMain, coinstake);
+    wtx.fFromMe = true; // as the wallet records its own coinstakes
+    CWalletDB walletdb(pwalletMain->strWalletFile);
+    BOOST_REQUIRE(pwalletMain->AddToWallet(wtx, &walletdb));
+
+    std::vector<StakeCandidate> candidates;
+    GRC::MinerStatus::ErrorFlags error_flag = GRC::MinerStatus::NONE;
+    int64_t balance = 0;
+    BOOST_REQUIRE(pwalletMain->SelectCoinsForStaking(GetAdjustedTime(), candidates, error_flag, balance));
+    BOOST_REQUIRE(!candidates.empty());
+
+    for (const StakeCandidate& candidate : candidates) {
+        BOOST_CHECK(candidate.tx->GetHash() != coinstake.GetHash());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(the_minimum_stake_age_runs_from_the_confirming_block)
+{
+    // CheckProofOfStakeV8 measures the minimum stake age from the time of the block that confirmed the staked output,
+    // not from the transaction's own time, which is earlier when the transaction waited in the mempool. Record an
+    // output as confirmed in the tip with a transaction time well before the tip's, then ask for candidates at times
+    // between the two.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    const CBlockIndex* tip = pindexBest;
+    BOOST_REQUIRE(tip);
+
+    CMutableTransaction mtx;
+    mtx.nTime = tip->nTime - 1000;
+    mtx.vin.emplace_back(COutPoint(uint256S("01"), 0));
+    mtx.vout.emplace_back(10 * COIN, grc_test::PremineScript());
+    CWalletTx wtx(pwalletMain, CTransaction(mtx));
+    wtx.SetTxState(TxStateConfirmed{tip->GetBlockHash(), 1});
+    const uint256 hash = wtx.GetHash();
+
+    // The entry claims a confirmation the chain does not have, so take it out again on every exit path: the suite's
+    // per-case scope keeps confirmed entries, and a later case could stake it.
+    struct EraseOnExit {
+        uint256 hash;
+        ~EraseOnExit() { pwalletMain->EraseFromWallet(hash); }
+    } erase_on_exit{hash};
+
+    CWalletDB walletdb(pwalletMain->strWalletFile);
+    BOOST_REQUIRE(pwalletMain->AddToWallet(wtx, &walletdb));
+
+    const auto is_candidate_at = [&](int64_t spend_time) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+        std::vector<StakeCandidate> candidates;
+        GRC::MinerStatus::ErrorFlags error_flag = GRC::MinerStatus::NONE;
+        int64_t balance = 0;
+        pwalletMain->SelectCoinsForStaking(spend_time, candidates, error_flag, balance);
+        return std::any_of(candidates.begin(), candidates.end(),
+                           [&](const StakeCandidate& candidate) { return candidate.tx->GetHash() == hash; });
+    };
+
+    // nStakeMinAge is 0 on regtest, so the output may stake from its block's time on, and not before.
+    BOOST_CHECK(!is_candidate_at(tip->nTime - 1));
+    BOOST_CHECK(is_candidate_at(tip->nTime));
+}
+
+BOOST_AUTO_TEST_CASE(stake_candidates_carry_their_confirming_block_time)
+{
+    // Mine one block so that the candidates come from two confirming blocks: the genesis premine outputs and the new
+    // block's coinstake.
+    CBlock block;
+    std::string err;
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    std::vector<StakeCandidate> candidates;
+    GRC::MinerStatus::ErrorFlags error_flag = GRC::MinerStatus::NONE;
+    int64_t balance = 0;
+    BOOST_REQUIRE(pwalletMain->SelectCoinsForStaking(GetAdjustedTime(), candidates, error_flag, balance));
+    BOOST_REQUIRE(!candidates.empty());
+
+    // Validation takes the time from the header ReadStakedInput reads through the transaction index, so compare with
+    // that rather than with the wallet's own record of the confirming block.
+    CTxDB txdb("r");
+    std::set<unsigned int> block_times;
+    for (const StakeCandidate& candidate : candidates) {
+        CBlockHeader header;
+        CTransaction tx_prev;
+        BOOST_REQUIRE(GRC::ReadStakedInput(txdb, candidate.tx->GetHash(), header, tx_prev));
+        BOOST_CHECK_EQUAL(candidate.block_time, header.nTime);
+        block_times.insert(candidate.block_time);
+    }
+    BOOST_CHECK_GE(block_times.size(), 2U);
+}
+
+BOOST_AUTO_TEST_CASE(stake_weight_is_the_value_of_the_stake_candidates)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    std::vector<StakeCandidate> candidates;
+    GRC::MinerStatus::ErrorFlags error_flag = GRC::MinerStatus::NONE;
+    int64_t balance = 0;
+    BOOST_REQUIRE(pwalletMain->SelectCoinsForStaking(GetAdjustedTime(), candidates, error_flag, balance));
+    BOOST_REQUIRE(!candidates.empty());
+
+    // Every candidate is a confirmed main-chain output, so its transaction is indexed. GetStakeWeight relies on this
+    // instead of reading the index for each candidate.
+    CTxDB txdb("r");
+    uint64_t value = 0;
+    for (const StakeCandidate& candidate : candidates) {
+        CTxIndex txindex;
+        BOOST_CHECK(txdb.ReadTxIndex(candidate.tx->GetHash(), txindex));
+        value += candidate.tx->vout[candidate.n].nValue;
+    }
+
+    BOOST_CHECK_EQUAL(GRC::GetStakeWeight(*pwalletMain), value);
+}
+
+BOOST_AUTO_TEST_CASE(kernel_detail_is_logged_only_under_the_miner_category)
+{
+    // Restores the MINER category and removes the callback on every exit path.
+    struct MinerLogCapture {
+        std::vector<std::string> lines;
+        const bool was_enabled{LogInstance().WillLogCategory(BCLog::LogFlags::MINER)};
+        std::list<std::function<void(const std::string&)>>::iterator it{
+            LogInstance().PushBackCallback([this](const std::string& s) {
+                if (s.find("CreateCoinStake: V") != std::string::npos) lines.push_back(s);
+            })};
+        ~MinerLogCapture()
+        {
+            LogInstance().DeleteCallback(it);
+            if (was_enabled) LogInstance().EnableCategory(BCLog::LogFlags::MINER);
+            else LogInstance().DisableCategory(BCLog::LogFlags::MINER);
+        }
+    } capture;
+
+    CBlock block;
+    std::string err;
+
+    LogInstance().DisableCategory(BCLog::LogFlags::MINER);
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+    BOOST_CHECK(capture.lines.empty());
+
+    LogInstance().EnableCategory(BCLog::LogFlags::MINER);
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+    BOOST_REQUIRE(!capture.lines.empty());
+    BOOST_CHECK(capture.lines.back().find(" Diff ") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

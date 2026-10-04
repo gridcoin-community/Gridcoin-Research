@@ -132,8 +132,15 @@ uint256 CalculateStakeHashV8(
     uint64_t StakeModifier);
 
 
+//! Halfords per unit of V8 stake weight. A UTXO's weight is its value in whole units.
+constexpr CAmount STAKE_WEIGHT_UNIT_V8 = 1250000;
+
 int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN);
 int64_t CalculateStakeWeightV8(const CAmount& nValueIn);
+
+//! The value of a V8 stake weight: the smallest value with that weight, so that
+//! CalculateStakeWeightV8(CalculateStakeValueV8(weight)) == weight.
+CAmount CalculateStakeValueV8(int64_t weight);
 } // namespace GRC
 
 #endif // GRIDCOIN_STAKING_KERNEL_H

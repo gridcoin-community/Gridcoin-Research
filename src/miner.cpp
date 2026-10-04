@@ -860,9 +860,7 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
 
     int64_t CoinWeight;
     arith_uint256 StakeKernelHash;
-    CTxDB txdb("r");
     int64_t StakeWeightSum = 0;
-    double StakeValueSum = 0;
     int64_t StakeWeightMin = MAX_MONEY;
     int64_t StakeWeightMax = 0;
 
@@ -874,7 +872,7 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
     txnew.vout.clear();
 
     // Choose coins to use
-    vector<pair<const CWalletTx*,unsigned int>> CoinsToStake;
+    std::vector<StakeCandidate> CoinsToStake;
     GRC::MinerStatus::ErrorFlags error_flag;
 
     // This will be used to calculate the staking efficiency.
@@ -887,7 +885,6 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
             txnew.nTime,
             blocknew.nVersion,
             StakeWeightSum,
-            StakeValueSum,
             0, // This should be set to zero for an unsuccessful iteration due to no stakeable coins.
             StakeWeightMax,
             GRC::CalculateStakeWeightV8(balance));
@@ -913,46 +910,41 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
                                     "pindex->nStakeModifier = %" PRId64,
                                     nHeight_mod, StakeModifier);
 
-    for (const auto& pcoin : CoinsToStake)
+    // The kernel target before the UTXO weight is the same for every coin.
+    const arith_uint320 base_kernel_target = arith_uint256().SetCompact(blocknew.nBits);
+
+    for (const StakeCandidate& candidate : CoinsToStake)
     {
-        const CWalletTx &CoinTx = *pcoin.first; //transaction that produced this coin
-        unsigned int CoinTxN = pcoin.second; //index of this coin inside it
-
-        unsigned int block_time;
-
-        const auto* coin_conf = CoinTx.state<TxStateConfirmed>();
-        if (!coin_conf) {
-            LogPrintf("ERROR: %s: stake input not in confirmed state", __func__);
-            return false;
-        }
-        block_time = mapBlockIndex[coin_conf->m_confirmed_block_hash]->nTime;
-
-        StakeValueSum += CoinTx.vout[CoinTxN].nValue / (double) COIN;
+        const CWalletTx &CoinTx = *candidate.tx; //transaction that produced this coin
+        const unsigned int CoinTxN = candidate.n; //index of this coin inside it
 
         CoinWeight = GRC::CalculateStakeWeightV8(CoinTx, CoinTxN);
 
-        StakeKernelHash = UintToArith256(GRC::CalculateStakeHashV8(block_time, CoinTx, CoinTxN, txnew.nTime, StakeModifier));
+        StakeKernelHash = UintToArith256(GRC::CalculateStakeHashV8(candidate.block_time, CoinTx, CoinTxN, txnew.nTime,
+                                                                   StakeModifier));
 
-        arith_uint320 StakeTarget = arith_uint256().SetCompact(blocknew.nBits);
+        arith_uint320 StakeTarget = base_kernel_target;
         StakeTarget *= arith_uint320(CoinWeight);
         StakeWeightSum += CoinWeight;
         StakeWeightMin = std::min(StakeWeightMin, CoinWeight);
         StakeWeightMax = std::max(StakeWeightMax, CoinWeight);
-        double StakeKernelDiff = GRC::GetBlockDifficulty(StakeKernelHash.GetCompact())*CoinWeight;
+        // Per-coin detail, computed only when MINER logging is enabled.
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::MINER)) {
+            const double StakeKernelDiff = GRC::GetBlockDifficulty(StakeKernelHash.GetCompact()) * CoinWeight;
 
-        LogPrint(BCLog::LogFlags::MINER,
-                 "CreateCoinStake: V%d Time %d, Bits %u, Weight %" PRId64 "\n"
-                 " Stk %72s\n"
-                 " Trg %72s\n"
-                 " Diff %0.7f of %0.7f",
-                 blocknew.nVersion,
-                 txnew.nTime,
-                 blocknew.nBits,
-                 CoinWeight,
-                 StakeKernelHash.GetHex(),
-                 StakeTarget.GetHex(),
-                 StakeKernelDiff,
-                 GRC::GetBlockDifficulty(blocknew.nBits));
+            LogPrintf("CreateCoinStake: V%d Time %d, Bits %u, Weight %" PRId64 "\n"
+                      " Stk %72s\n"
+                      " Trg %72s\n"
+                      " Diff %0.7f of %0.7f",
+                      blocknew.nVersion,
+                      txnew.nTime,
+                      blocknew.nBits,
+                      CoinWeight,
+                      StakeKernelHash.GetHex(),
+                      StakeTarget.GetHex(),
+                      StakeKernelDiff,
+                      GRC::GetBlockDifficulty(blocknew.nBits));
+        }
 
         if (arith_uint320(StakeKernelHash) <= StakeTarget)
         {
@@ -999,7 +991,7 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
             }
 
             txnew.vin.push_back(CTxIn(CoinTx.GetHash(), CoinTxN));
-            StakeInputs.push_back(pcoin.first);
+            StakeInputs.push_back(candidate.tx);
 
             int64_t nCredit = CoinTx.vout[CoinTxN].nValue;
 
@@ -1012,14 +1004,13 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
 
             break;
         } // if (StakeKernelHash <= StakeTarget)
-    } // for (const auto& pcoin : CoinsToStake)
+    } // for (const StakeCandidate& candidate : CoinsToStake)
 
     g_miner_status.UpdateLastSearch(
         kernel_found,
         txnew.nTime,
         blocknew.nVersion,
         StakeWeightSum,
-        StakeValueSum,
         StakeWeightMin,
         StakeWeightMax,
         GRC::CalculateStakeWeightV8(balance));

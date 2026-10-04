@@ -221,35 +221,24 @@ double GRC::GetSmoothedDifficulty(int64_t nStakeableBalance) EXCLUSIVE_LOCKS_REQ
 
 uint64_t GRC::GetStakeWeight(const CWallet& wallet)
 {
-    if (wallet.GetBalance() <= nReserveBalance) {
-        return 0;
-    }
-
-    const int64_t now = GetAdjustedTime();
-
-    std::vector<std::pair<const CWalletTx*, unsigned int>> coins;
+    std::vector<StakeCandidate> coins;
     GRC::MinerStatus::ErrorFlags unused;
     int64_t balance = 0;
 
     LOCK2(cs_main, wallet.cs_wallet);
 
-    if (!wallet.SelectCoinsForStaking(now, coins, unused, balance)) {
+    // SelectCoinsForStaking returns false when there is nothing to stake: no coins, no mature coins, or a balance the
+    // reserve covers. Its reserve check uses the staking balance, which also counts own coinstake outputs that are not
+    // in the main chain. Its candidates are confirmed main-chain outputs that pass the miner's own maturity and age
+    // filters, so they need no further checks here.
+    if (!wallet.SelectCoinsForStaking(GetAdjustedTime(), coins, unused, balance)) {
         return 0;
     }
 
-    CTxDB txdb("r");
     uint64_t weight = 0;
 
-    for (const auto& pcoin : coins) {
-        CTxIndex txindex;
-
-        if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex)) {
-            continue;
-        }
-
-        if (now - pcoin.first->nTime > nStakeMinAge) {
-            weight += (pcoin.first->vout[pcoin.second].nValue);
-        }
+    for (const StakeCandidate& candidate : coins) {
+        weight += candidate.tx->vout[candidate.n].nValue;
     }
 
     return weight;
@@ -409,8 +398,6 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
     int64_t nCurrentTime = GetAdjustedTime();
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nCurrentTime = %i", nCurrentTime);
 
-    CTxDB txdb("r");
-
     // Here I am defining a time mask 16 times as long as the normal stake time mask. This is to quantize the UTXO's into a maximum of
     // 16 hours * 3600 / 256 = 225 time bins for evaluation. Otherwise for a large number of UTXO's, this algorithm could become
     // really expensive.
@@ -418,7 +405,9 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: ETTS_TIMESTAMP_MASK = %x", ETTS_TIMESTAMP_MASK);
 
     CAmount BalanceAvailForStaking = 0;
-    std::vector<COutput> vCoins;
+
+    // The confirming block time and the value of each available output, read while the locks are held.
+    std::vector<std::pair<int64_t, CAmount>> coin_times;
 
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -436,7 +425,18 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
         }
 
         //reminder... void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed=true, const CCoinControl *coinControl=nullptr, bool fIncludeStakingCoins=false) const;
+        std::vector<COutput> vCoins;
         pwalletMain->AvailableCoins(vCoins, true, nullptr, true);
+
+        // The block index has each confirming block's time, so no disk read is needed. An output without a main-chain
+        // confirming block cannot stake and is left out.
+        for (const COutput& out : vCoins)
+        {
+            CBlockIndex* pindex_confirmed = nullptr;
+            if (out.tx->GetDepthInMainChain(pindex_confirmed) < 1 || !pindex_confirmed) continue;
+
+            coin_times.emplace_back(pindex_confirmed->GetBlockTime(), out.tx->vout[out.i].nValue);
+        }
     }
 
 
@@ -454,19 +454,12 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
 
     int64_t nTime = 0;
     int64_t nStakeableBalance = 0;
-    for (const auto& out : vCoins)
+    for (const auto& [block_time, value] : coin_times)
     {
-        CTxIndex txindex;
-        CBlock CoinBlock; //Block which contains CoinTx
-        if (!txdb.ReadTxIndex(out.tx->GetHash(), txindex)) continue; //Ignore transactions that can't be read.
-
-        if (!ReadBlockFromDisk(CoinBlock, txindex.pos.nFile, txindex.pos.nBlockPos, Params().GetConsensus(), false))
-            continue;
-
         // We are going to store as an event the time that the UTXO matures (is available for staking again.)
-        nTime = (CoinBlock.GetBlockTime() & ~ETTS_TIMESTAMP_MASK) + nStakeMinAge;
+        nTime = (block_time & ~ETTS_TIMESTAMP_MASK) + nStakeMinAge;
 
-        nValue = out.tx->vout[out.i].nValue;
+        nValue = value;
 
         // Only consider UTXO's that are actually stakeable - which means that each one must be less than the available balance
         // subtracting the reserve. Each UTXO also has to be greater than 1/80 GRC to result in a weight greater than zero in the CreateCoinStake loop,

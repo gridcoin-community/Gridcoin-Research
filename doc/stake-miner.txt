@@ -30,9 +30,12 @@ information from StakeMiner.
   This is your total, real stake weight.
   The minimum and maximum if then min/max of them.
 * `stakeweight.valuesum`; GRC real;
-  Total balance that is mature and considered for staking.
+  The value the combined weight represents. Each UTXO counts in whole stake
+  weight units of 0.0125 GRC, so this is at most 0.0125 GRC per UTXO below
+  their raw total. It covers the UTXOs the last search evaluated, and a search
+  stops at the first kernel found.
 * `stakeweight.legacy`; GRC real;
-  Calculation of the above, done in different code.
+  Total raw value of the UTXOs that can stake now.
 * `staking`; bool; Indication that the stake miner is doing it's job.
 * `mining-error`; test; Reason why stake miner is not doing it's job.
 * `mining-message`; text;

@@ -552,14 +552,17 @@ uint256 GRC::CalculateStakeHashV8(
 
 int64_t GRC::CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN)
 {
-    CAmount nValueIn = CoinTx.vout[CoinTxN].nValue;
-    nValueIn /= 1250000;
-    return nValueIn;
+    return CalculateStakeWeightV8(CoinTx.vout[CoinTxN].nValue);
 }
 
 int64_t GRC::CalculateStakeWeightV8(const CAmount& nValueIn)
 {
-    return nValueIn / 1250000;
+    return nValueIn / STAKE_WEIGHT_UNIT_V8;
+}
+
+CAmount GRC::CalculateStakeValueV8(int64_t weight)
+{
+    return weight * STAKE_WEIGHT_UNIT_V8;
 }
 
 // Another version of GetKernelStakeModifier (TomasBrod)

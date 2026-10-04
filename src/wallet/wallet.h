@@ -51,6 +51,14 @@ class CReserveKey;
 class COutput;
 class CCoinControl;
 
+//! An output the stake miner may use as a kernel, with the time of the block that confirmed it.
+struct StakeCandidate
+{
+    const CWalletTx* tx{nullptr}; //!< The transaction that created the output.
+    unsigned int n{0};            //!< The output's index in tx.
+    unsigned int block_time{0};   //!< Time of the block that confirmed tx, which the kernel hash commits to.
+};
+
 GRC::MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //! Return the height of the block confirming this state, or -1 if its block
@@ -275,10 +283,11 @@ public:
         return wallet::IsFeatureSupported(nWalletVersion, wf);
     }
 
-    void AvailableCoinsForStaking(std::vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& nBalanceOut,
-                                  bool fMiner = false) const;
-    bool SelectCoinsForStaking(unsigned int nSpendTime, std::vector<std::pair<const CWalletTx*,unsigned int> >& vCoinsRet,
-                               GRC::MinerStatus::ErrorFlags& not_staking_error, int64_t& balance_out, bool fMiner = false) const;
+    void AvailableCoinsForStaking(std::vector<StakeCandidate>& vCoins, unsigned int nSpendTime, int64_t& nBalanceOut,
+                                  bool fMiner = false) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool SelectCoinsForStaking(unsigned int nSpendTime, std::vector<StakeCandidate>& vCoinsRet,
+                               GRC::MinerStatus::ErrorFlags& not_staking_error, int64_t& balance_out, bool fMiner = false) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed = true, const CCoinControl* coinControl = nullptr,
                         bool fIncludeStakingCoins = false) const;
     bool SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins,

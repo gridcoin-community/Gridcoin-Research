@@ -43,6 +43,7 @@ add_executable(test_gridcoin
     gridcoin/contract_tests.cpp
     gridcoin/cpid_tests.cpp
     gridcoin/enumbytes_tests.cpp
+    gridcoin/kernel_tests.cpp
     gridcoin/magnitude_tests.cpp
     gridcoin/mnemonics_tests.cpp
     gridcoin/mrc_tests.cpp
