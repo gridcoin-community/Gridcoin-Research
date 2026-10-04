@@ -137,6 +137,8 @@ Key threads: `ThreadStakeMiner` (block generation), `ThreadScraper`/`ThreadScrap
 
 All consensus rule changes must be gated by block height or version. Mainnet block-version activation heights are set in `src/chainparams.cpp` (`CMainParams`) — check there for the current, authoritative values rather than relying on this file. As of this writing: `BlockV13Height = 3989800`, `BlockV14Height = 3990000` (both set, scheduled as future mainnet activations at the time of this line's last update). Consensus changes require hard fork coordination.
 
+**Feature activation heights are never independent on mainnet.** The per-feature heights (`AutoGreylistDeepCopyHeight`, `AutoGreylistRedesignHeight`, `MessageContractDisableHeight` and the like, with their hidden `-...height` overrides) exist to make testing easy on a private testnet fork, or perhaps in an extraordinary emergency on testnet. On mainnet each one is scheduled with the block version gate of the mandatory release that carries it, normally at the same height (`AutoGreylistAuditHeight`, `ProjectV4Height` and `SuperblockV3Height` all equal `BlockV13Height`). The one deliberate offset so far is `BlockV9TallyHeight`, 120 blocks after `BlockV9Height` as part of the v9 activation. When judging whether a code path matters on mainnet, assume a release's feature gates switch on with its block version gate as scheduled; a path that needs some gates on and others off outside that schedule is reachable only on a test network with split overrides.
+
 ### RPC Heritage Ledger (adding or changing an RPC)
 
 Every `vRPCCommands[]` row in `src/rpc/server.cpp` carries a **mandatory heritage classification** — the `CRPCCommand` constructor requires it, so a new RPC will not compile without one:
