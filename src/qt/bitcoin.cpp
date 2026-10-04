@@ -54,8 +54,8 @@
 #include "decoration.h"
 
 #include <atomic>
-// Not inside the WIN32 guard below: the teardown join uses QThreadPool on every
-// platform, and nothing else on this file's include path pulls it in.
+// Not inside the WIN32 guard below: the explicit teardown join uses QThreadPool
+// on every platform, so this file includes it directly.
 #include <QThreadPool>
 #ifndef WIN32
 #include <QSocketNotifier>
@@ -1551,6 +1551,14 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // WM_CLOSE via WinShutdownMonitor; the monolith uses the core's.)
                 if (multiprocess) InstallGuiTerminationHandler(app);
 #endif
+                // The event loop and the teardown after it run inside
+                // RunGuiEventLoop, which reaps the global QThreadPool before it
+                // returns or lets an exception out. Pooled jobs started from the
+                // event loop use objects declared above: the About dialog's
+                // version check uses `node`, and PollTableModel's refresh uses
+                // votingModel and, through it, voting_manager. On a throw, the
+                // unwind destroys these locals before any catch clause runs, so
+                // a join in the catch would come too late.
                 RunGuiEventLoop([&] {
                     app.exec();
 
@@ -1600,13 +1608,17 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // check runs on the global QThreadPool and dereferences
                 // interfaces::Node; it is deliberately NOT joined when that dialog
                 // closes (that would freeze the GUI thread for the libcurl timeout on
-                // an ordinary close -- see ~AboutDialog), so this is the point where
-                // it has to be reaped.
+                // an ordinary close -- see ~AboutDialog), so it has to be reaped
+                // before this block closes.
                 //
                 // MUST be inside this block: `node` and the other interfaces are
                 // declared here and destroyed at the closing brace below, so joining
                 // after it would join AFTER the worker's Node is already gone --
                 // which is the exact use-after-free this is here to prevent.
+                // RunGuiEventLoop above returns only after it has reaped the pool, so on
+                // this normal path the call finds the pool idle. A throw from the event
+                // loop or the teardown never reaches this line; RunGuiEventLoop reaps on
+                // that path too.
                 QThreadPool::globalInstance()->waitForDone();
             }
             // Shut down the core and its threads (but don't exit Bitcoin-Qt
