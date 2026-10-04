@@ -854,7 +854,10 @@ public:
     //! with the current head of the chain. This mode is used in the scraper during the construction of the superblock contract.
     //!
     //! Note that the AutoGreylist object refreshed this way will also be used to update the referenced superblock
-    //! object
+    //! object. Once that is done, the object is refreshed again against the committed superblock, so later readers
+    //! (including the next convergence) see the committed superblock's greylist, not the candidate's. While the deep
+    //! copy is inactive, the in-place overlay of the stamp has already written the candidate's greylist into the
+    //! registry entries.
     //!
     //! \param superblock The superblock with which to refresh the automatic greylist. This will generally be a candidate superblock
     //! from a scraper convergence, and is used in the call chain from the miner loop. The superblock object project status
@@ -944,9 +947,11 @@ public:
     //! provides the original ACTIVE project only view. The auto-greylist overlay (selected by GreylistState)
     //! is computed from the current AutoGreylist cache; the cache is refreshed explicitly at the chain handler
     //! points (Quorum::PushSuperblock for v2+ activation, Quorum::PopSuperblock on reorg,
-    //! Quorum::LoadSuperblockIndex on startup) and additionally via Superblock::FromConvergence's
+    //! Quorum::LoadSuperblockIndex on startup, repeated by GRC::Initialize once the contract registries
+    //! have loaded) and additionally via Superblock::FromConvergence's
     //! RefreshWithAndUpdateSuperblock when scrapers/subscribers build a candidate superblock (only for
-    //! superblock version > 2; the call is gated at superblock.cpp). Snapshot() itself does NOT trigger
+    //! superblock version > 2; the call is gated at superblock.cpp; below the redesign gate it refreshes
+    //! the cache back to the committed superblock when it is done). Snapshot() itself does NOT trigger
     //! a refresh -- it is a cs_lock leaf in lock ordering. NOTE: pre-gate (m_deep_copy_active=false)
     //! the override loop still mutates m_project_entries via shallow-copied shared_ptrs; that is the
     //! legacy behavior the deep-copy gate is designed to neutralize, not a contract Snapshot() honors

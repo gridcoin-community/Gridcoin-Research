@@ -6,6 +6,7 @@
 #include "gridcoin/scraper/scraper_registry.h"
 #include "txdb.h"
 #include "util/threadnames.h"
+#include "gridcoin/autogreylist.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/registry.h"
@@ -736,6 +737,10 @@ bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest) EXCLUSIV
     // This has to be before InitializeResearchRewardAccounting, because we need the beacon registry
     // populated.
     InitializeContracts(pindexBest);
+
+    // The superblock quorum loads before the contract registries, so its AutoGreylist refresh ran against an
+    // empty project whitelist and left the greylist empty. Refresh again now that the whitelist is loaded.
+    GetAutoGreylistCache()->Refresh();
 
     if (!InitializeResearchRewardAccounting(pindexBest)) {
         return false;
