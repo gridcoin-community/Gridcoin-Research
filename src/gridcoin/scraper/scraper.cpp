@@ -28,7 +28,6 @@
 #include <boost/iostreams/copy.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
-#include <boost/serialization/binary_object.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/exception/exception.hpp>
 #include <boost/exception/diagnostic_information.hpp>

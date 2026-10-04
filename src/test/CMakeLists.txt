@@ -199,7 +199,7 @@ target_link_libraries(test_gridcoin PRIVATE
 
     # Dependencies of gridcoin_util
     ${LIBBDB_CXX} ${LIBLEVELDB} ${LIBSECP256K1} ${LIBUNIVALUE}
-    Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time Boost::serialization Boost::unit_test_framework
+    Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time Boost::unit_test_framework
     CURL::libcurl
     OpenSSL::Crypto OpenSSL::SSL
     Threads::Threads

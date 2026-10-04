@@ -63,9 +63,9 @@ This is the Gridcoin-Research cryptocurrency project - an open-source blockchain
 
 ### Core Dependencies (Required)
 
-- **Boost 1.89.0** (minimum 1.66.0) - C++ utility libraries for filesystem, threading, iostreams, serialization, and date_time operations
+- **Boost 1.89.0** (minimum 1.66.0) - C++ utility libraries for filesystem, threading, iostreams, and date_time operations
   - Location: External via depends/ or system
-  - Components: filesystem, iostreams, thread, serialization, date_time, interprocess, test framework
+  - Components: filesystem, iostreams, thread, date_time, interprocess, test framework
 
 - **OpenSSL 1.1.1l** - Limited cryptographic use (minimal dependency)
   - Location: External via depends/ or system

@@ -224,7 +224,7 @@ endif()
 # io_service shim in rpc/protocol.h still guards at 1.70, so 1.66-1.69 remains
 # intended to work.
 set(BOOST_MINIMUM_VERSION 1.66.0)
-set(BOOST_COMPONENTS filesystem iostreams thread serialization date_time)
+set(BOOST_COMPONENTS filesystem iostreams thread date_time)
 set(BOOST_HUNTER_COMPONENTS system atomic regex ${BOOST_COMPONENTS})
 if(ENABLE_TESTS)
     list(APPEND BOOST_COMPONENTS unit_test_framework)

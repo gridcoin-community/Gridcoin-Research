@@ -20,7 +20,6 @@ Build-Depends:
  libboost-filesystem-dev (>= 1.66),
  libboost-iostreams-dev,
  libboost-thread-dev,
- libboost-serialization-dev,
  libboost-date-time-dev,
  libboost-test-dev,
  libminiupnpc-dev,

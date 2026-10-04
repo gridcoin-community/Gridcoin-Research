@@ -39,12 +39,12 @@ cleanup:
 
 modules:
   # ------------------------------------------------------------------
-  # Boost 1.86.0 (filesystem, iostreams, thread, serialization, etc.)
+  # Boost 1.86.0 (filesystem, iostreams, thread, date_time, etc.)
   # ------------------------------------------------------------------
   - name: boost
     buildsystem: simple
     build-commands:
-      - ./bootstrap.sh --prefix=/app --with-libraries=filesystem,iostreams,thread,serialization,date_time,system,chrono
+      - ./bootstrap.sh --prefix=/app --with-libraries=filesystem,iostreams,thread,date_time,system,chrono
       - ./b2 install --libdir=/app/lib variant=release link=shared threading=multi runtime-link=shared -j $FLATPAK_BUILDER_N_JOBS
     sources:
       - type: archive

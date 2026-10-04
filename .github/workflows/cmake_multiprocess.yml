@@ -211,7 +211,7 @@ jobs:
             libssl-dev:armhf libzip-dev:armhf \
             libcurl4-openssl-dev:armhf libboost-system-dev:armhf libboost-filesystem-dev:armhf \
             libboost-thread-dev:armhf libboost-iostreams-dev:armhf libboost-program-options-dev:armhf \
-            libboost-serialization-dev:armhf libboost-chrono-dev:armhf libboost-test-dev:armhf \
+            libboost-chrono-dev:armhf libboost-test-dev:armhf \
             libminiupnpc-dev:armhf libqrencode-dev:armhf libxkbcommon-dev:armhf \
             libcups2t64:armhf \
             libcapnp-dev:armhf libcapnp-dev capnproto \

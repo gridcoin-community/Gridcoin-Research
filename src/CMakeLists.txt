@@ -314,7 +314,7 @@ target_include_directories(gridcoin_util PUBLIC
 
 target_link_libraries(gridcoin_util PUBLIC
     ${LIBBDB_CXX} ${LIBLEVELDB} ${LIBSECP256K1} ${LIBUNIVALUE}
-    Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time Boost::serialization
+    Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time
     CURL::libcurl
     # OpenSSL::SSL is linked for libcurl, NOT for the RPC server.
     #
@@ -416,7 +416,7 @@ if(ENABLE_DAEMON)
 
         # Dependencies of gridcoin_util
         ${LIBBDB_CXX} ${LIBLEVELDB} ${LIBSECP256K1} ${LIBUNIVALUE}
-        Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time Boost::serialization
+        Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time
         CURL::libcurl
         OpenSSL::Crypto OpenSSL::SSL
         Threads::Threads
