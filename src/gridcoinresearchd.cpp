@@ -195,10 +195,6 @@ bool AppInit(int argc, char* argv[])
             return InitError("Config file cannot be parsed. Cannot continue.\n");
         }
 
-        if (!gArgs.InitSettings(error)) {
-            return InitError("Error initializing settings.\n");
-        }
-
         // Command-line RPC  - single commands execute and exit. Local to this
         // entry point; formerly a util.h global read nowhere else.
         bool fCommandLine = false;
@@ -208,7 +204,19 @@ bool AppInit(int argc, char* argv[])
 
         if (fCommandLine)
         {
+            // The client reads the node's read-write settings, because a connection setting stored there with
+            // changesettings (rpcconnect, rpcport, rpcuser, ...) outranks the config file. It never writes them:
+            // InitSettings rewrites the file through a fixed temporary name, so clients calling the same node at
+            // once raced on it, and a client could write back a setting the node had just changed.
+            std::vector<std::string> errors;
+            if (!gArgs.ReadSettingsFile(&errors)) {
+                return InitError(strprintf("Failed loading settings file:\n- %s\n", Join(errors, "\n- ")));
+            }
             return !CommandLineRPC(argc, argv);
+        }
+
+        if (!gArgs.InitSettings(error)) {
+            return InitError("Error initializing settings.\n" + error);
         }
 
         if (gArgs.GetBoolArg("-printtoconsole", false) && gArgs.GetBoolArg("-daemon", DEFAULT_DAEMON)) {
