@@ -60,7 +60,7 @@ Rectangle {
                 Column {
                     id: balColumn
                     Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
-                    
+
                     Text {
                         id: balanceValue
                         text: _walletModel.balance.toLocaleString(Qt.locale(), 'f', 2)
@@ -105,7 +105,7 @@ Rectangle {
                     model: _sendCoinsController.recipients
                     height: contentHeight
                     width: parent.width
-                    
+
                     delegate: Rectangle {
                         id: delegateRect
                         color: MMPTheme.bodyColor
@@ -261,7 +261,7 @@ Rectangle {
                                     anchors.fill: parent
                                     anchors.leftMargin: 20
                                     anchors.rightMargin: 20
-                                    
+
                                     Button {
                                         id: removeButton
                                         icon.source: MMPTheme.themeSelect("qrc:/icons/buttons/ic_btn_remove_light.svg","qrc:/icons/buttons/ic_btn_remove_dark.svg")
@@ -292,7 +292,7 @@ Rectangle {
             Layout.margins: 10
             radius: 4
             border.color: MMPTheme.borderColor
-            
+
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 20
