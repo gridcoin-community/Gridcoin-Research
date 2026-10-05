@@ -12,12 +12,17 @@ names later changes will add.
   `gridcoinqmlplugin`.
 - The tests are `test_gridcoin-qml`, built into `<build>/qmltest/`. It is registered with
   CTest as `gridcoin_qml_tests`.
-- No executable uses the module yet. Without the option the module is not built; the default
+- With the option the build also produces `gridcoinresearch-qml` in `<build>/bin/`: the GUI
+  with the QML front end (section 8). Without the option the module is not built; the default
   build still changes in the core-message routing, the detach step and the detach guard's reap
   of the global thread pool.
-- On Debian and Ubuntu the module needs `qt6-declarative-dev` to build and
-  `qml6-module-qtquick` at run time. `qml6-module-qtqml-models` is needed by QML that
-  imports `QtQml` (the module's tests import only `QtQuick`).
+- On Debian and Ubuntu the module needs `qt6-declarative-dev` to build. At run time the module
+  needs `qml6-module-qtquick`; the carried tree also needs `qml6-module-qtquick-controls`,
+  `-layouts`, `-templates`, `-window`, `-shapes`, `qml6-module-qt-labs-platform`,
+  `qml6-module-qtqml-models` and `qml6-module-qtqml-workerscript`. Five carried files import
+  `QtQml`, among them the root `WindowManager.qml` that `gridcoinresearch-qml` loads, the theme
+  and the clock, so the executable and `test_gridcoin-qml` (which loads them) need
+  `qml6-module-qtqml-models`. No package provides `QtQuick.Effects` before Qt 6.5 (section 8).
 
 ## 2. Names available now
 
@@ -67,6 +72,12 @@ that arrive later.)
 
 The splash reads progress from the core's two formats, `<loaded>/<highest> Blocks Loaded
 (<n>%)` and `<depth>/<check depth> Blocks Verified`, both from `CTxDB::LoadBlockIndex`.
+
+### `Fonts` (singleton)
+
+| Name | Kind | Meaning |
+|---|---|---|
+| `uiFamily` | property, constant | The UI font family: the platform's general system font family on macOS and iOS, "Inter" elsewhere. |
 
 ### The core bridge
 
@@ -196,3 +207,26 @@ shutdown) is still recorded. Until a later change adds the root's message dialog
 an init error that ends start-up until a later change adds its dialog, the log and stderr
 are the only record. The Widgets front end still holds the raising thread until its dialog
 closes.
+
+## 8. The carried tree
+
+- Source: `src/qt/qml`, carried from the `qml-reset` branch of `ZiggySchulz/Gridcoin-Research`
+  at `e66826761` (his six-commit rework of the `qml` branch at `3ca8d949f`, with the same
+  tree), with his commits replayed under his authorship.
+- Modules: `Gridcoin.App` (target `gridcoinqmlapp`), `MMPTheme` (target `gridcoinqmltheme`)
+  and `CurrentTime` (target `gridcoinqmltime`). The `qml_assets` resource holds the icons at
+  `qrc:/icons/...` and the fonts under `:/fonts/`. The tab menu's icons are under
+  `qrc:/icons/tabmenu/`, because the Widgets resources already serve a file at `:/icons/menu`.
+- The root is `qrc:/qt/qml/Gridcoin/App/WindowManager.qml`, which `gridcoinresearch-qml`
+  loads.
+- Fonts: `Fonts.uiFamily` is the system font family on macOS and iOS and Inter elsewhere, and
+  `LoadQmlFonts` registers the bundled fonts. `MMPTheme` takes its font family from it.
+- The carried screens still bind the context properties of the branch they came from.
+  `test/lint/lint-qml-module.sh` holds the list of files that may; a file is removed from it
+  when it binds to `Gridcoin.Qml` names, and the list is to be empty before the QML front end
+  becomes the default.
+- Qt versions: the expected-failure list in `src/qt/quick/test/carriedqmlexpected.h` records
+  the Qt version below which each listed file does not load: 6.5 for `MultiEffect` and 6.9 for
+  `RectangularShadow`. `gridcoinresearch-qml` exits at start with an error below Qt 6.9,
+  because its root is one of those files.
+- The translation scan skips the carried tree for now.
