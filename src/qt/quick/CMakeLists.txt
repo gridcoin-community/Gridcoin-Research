@@ -32,6 +32,34 @@ target_link_libraries(gridcoinqml PUBLIC
     ${QT}::Quick
 )
 
+# The QML front end's executable: the GUI composition root (gridcoinguimain)
+# with QmlFrontEnd and the carried QML modules. Built only with ENABLE_QML.
+add_executable(gridcoinresearch-qml qml_main.cpp)
+target_link_libraries(gridcoinresearch-qml PRIVATE
+    ${RUNTIME_LIBS}
+    gridcoinguimain
+    gridcoinqml
+    gridcoinqmlplugin
+    gridcoinqmlapp
+    gridcoinqmlappplugin
+    gridcoinqmltheme
+    gridcoinqmlthemeplugin
+    gridcoinqmltime
+    gridcoinqmltimeplugin
+    ${QT}::Qml
+    ${QT}::Quick
+    ${QT}::Widgets
+    CURL::libcurl
+    gridcoin_util
+    gridcoinqt
+)
+if(ENABLE_MULTIPROCESS)
+    target_link_libraries(gridcoinresearch-qml PRIVATE gridcoin_ipc)
+endif()
+set_target_properties(gridcoinresearch-qml PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
 if(ENABLE_TESTS)
     add_subdirectory(test)
 endif()
