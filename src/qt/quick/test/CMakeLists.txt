@@ -8,6 +8,8 @@ add_executable(test_gridcoin-qml
     bridgetests.h
     callrunnertests.cpp
     callrunnertests.h
+    fonttests.cpp
+    fonttests.h
     moduletests.cpp
     moduletests.h
     quittests.cpp
@@ -26,6 +28,7 @@ ${RUNTIME_LIBS}
     gridcoinqml
     gridcoinqmlplugin
     gridcoinqmlfixtureplugin
+    gridcoinqmlapp
     ${QT}::Test
     ${QT}::Quick
     ${QT}::Qml

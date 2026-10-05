@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <qt/guifrontend.h>
+#include <qt/quick/qmlfonts.h>
 #include <qt/quick/qmlfrontend.h>
 
 #include <QLibraryInfo>
@@ -22,9 +23,14 @@ namespace {
 const QString QML_ROOT_URL = QStringLiteral("qrc:/qt/qml/Gridcoin/App/WindowManager.qml");
 
 //! GuiMain calls this after the application object exists and its resources
-//! are registered, and before the front end loads its root.
+//! are registered, and before the front end loads its root. It registers the
+//! QML front end's fonts first: QFontDatabase needs the application object,
+//! which does not exist yet when main() starts.
 std::unique_ptr<GuiFrontEnd> MakeQmlFrontEnd()
 {
+    // The root's theme names its font family by Fonts.uiFamily; the fonts it
+    // can name are registered here, before the root loads.
+    LoadQmlFonts();
     QmlFrontEnd::Callbacks callbacks{
         IsDaemonDisconnectMessage,
         [](const std::string&) {
