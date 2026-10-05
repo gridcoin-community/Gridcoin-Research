@@ -200,6 +200,9 @@ BASE_SCRIPTS = [
     # (#3192 follow-up).
     'wallet_splitunspent.py',
     'interface_cli.py',
+    # interface_cli_settings.py: the RPC client reads the node's read-write settings
+    # (a changesettings rpcconnect is honoured) but never rewrites the file.
+    'interface_cli_settings.py',
     'mempool_accept.py',
     'rpc_net.py',
     'p2p_disconnect_nodes_churn.py',
