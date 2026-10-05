@@ -187,8 +187,6 @@ static void SetupUIArgs(ArgsManager& argsman)
                    "<groups> address groups (<groups> is clamped to <n>; default groups: 3) "
                    "for windowed-model testing",
                    ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
-    argsman.AddArg("-showorphans", "Include stale (orphaned) coinstake transactions in the transaction list",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-autotrustidentity",
                    "In -multiprocess mode, silently re-bind when the daemon's wallet identity changes "
                    "for this data directory instead of prompting -- for instances where the wallet is "
@@ -727,8 +725,8 @@ int main(int argc, char *argv[])
 #endif
 
     // Before anything can create a file -- see the same call in
-    // gridcoinresearchd.cpp. The GUI reaches InitLogging() and the settings file
-    // by a different route but creates the same artifacts.
+    // gridcoinresearchd.cpp. The GUI reaches InitLogging() and, in the monolithic
+    // build, the settings file by a different route but creates the same artifacts.
     util::SetOwnerOnlyUmask();
 
     // Reinit default timer to ensure it is zeroed out at the start of main.
@@ -1003,7 +1001,11 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    if (!gArgs.InitSettings(error)) {
+    // In -multiprocess mode the core owns gridcoinsettings.json: it reads and writes the file and announces every
+    // change, and the GUI reaches each setting through interfaces::Node. So the GUI does not open the file: a copy
+    // read here would go stale, and writing it back would race the core's own writes and could revert a change
+    // the core had just made. The monolithic GUI is the node, so it initializes the settings as the daemon does.
+    if (!gArgs.GetBoolArg("-multiprocess", false) && !gArgs.InitSettings(error)) {
         ThreadSafeMessageBox(strprintf("Error initializing settings.\n"),
                 "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME,

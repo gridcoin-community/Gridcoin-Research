@@ -113,6 +113,13 @@ UINotificationBridge g_ui_notification_bridge;
  */
 static const char* GRIDCOIN_PID_FILENAME = "gridcoinresearchd.pid";
 
+//! The options SetupUIArgs registers for the GUI process. The node registers them as hidden arguments only so that
+//! one config file or command line can serve both programs without the node warning about, or rejecting, an option
+//! it does not use. They are never node settings, and ChangeSettings refuses to store them.
+static const std::vector<std::string> GUI_ONLY_ARGS{
+    "-autotrustidentity", "-choosedatadir", "-devsyntheticcoins", "-guilogfile", "-lang", "-min", "-nobuildwarn",
+    "-resetguisettings", "-splash", "-style", "-suppressnetworkgraph"};
+
 static fs::path GetPidFile(const ArgsManager& args)
 {
     return AbsPathForConfigVal(fs::path(args.GetArg("-pid", GRIDCOIN_PID_FILENAME)));
@@ -641,11 +648,9 @@ void SetupServerArgs()
     const auto testnetChainParams = CreateChainParams(CBaseChainParams::TESTNET);
 
     // Hidden Options
-    std::vector<std::string> hidden_args = {
-        "-dbcrashratio", "-forcecompactdb", "-fastindex",
-        // GUI args. These will be overwritten by SetupUIArgs for the GUI
-        "-choosedatadir", "-lang=<lang>", "-min", "-resetguisettings",
-        "-splash", "-style", "-suppressnetworkgraph", "-showorphans"};
+    std::vector<std::string> hidden_args = {"-dbcrashratio", "-forcecompactdb", "-fastindex"};
+    // The GUI's own options; SetupUIArgs registers them properly for the GUI.
+    hidden_args.insert(hidden_args.end(), GUI_ONLY_ARGS.begin(), GUI_ONLY_ARGS.end());
 
     // Listed Options
     // General
@@ -756,6 +761,8 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-staking", "Allow wallet to stake if conditions to stake are met (default: 1)",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-showorphans", "Include stale (orphaned) coinstake transactions in the transaction list",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-minersleep=<n>", "Milliseconds the staking loop sleeps between rounds (default: 8000)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
     argsman.AddArg("-sidestake=<address,percent>", "Sidestake destination and allocation entry. There can be as many "
@@ -1353,6 +1360,13 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
         std::optional<unsigned int> flags = gArgs.GetArgFlags('-' + name);
         if (!flags) {
             error_out = "Invalid setting: " + name;
+            return false;
+        }
+
+        // A GUI option stored in the node's settings would be a second, node-side copy that the -multiprocess GUI
+        // never reads. An empty value is still accepted, so an entry stored by an older build can be erased.
+        if (!value.empty() && std::find(GUI_ONLY_ARGS.begin(), GUI_ONLY_ARGS.end(), '-' + name) != GUI_ONLY_ARGS.end()) {
+            error_out = "Not a node setting (it belongs to the GUI): " + name;
             return false;
         }
 

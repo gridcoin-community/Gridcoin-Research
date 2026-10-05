@@ -783,14 +783,9 @@ void BitcoinGUI::createToolBars()
     //12-21-2015 Prevent Lock from falling off the page
     frameBlocksLayout->addStretch();
 
-    if (gArgs.GetBoolArg("-staking", true))
-    {
-        labelStakingIcon->setToolTip(tr("Not staking: Miner is not initialized."));
-    }
-    else
-    {
-        labelStakingIcon->setToolTip(tr("Not staking: Disabled by configuration."));
-    }
+    // Placeholder until setClientModel() pushes the node's miner status, which also reports a node that
+    // does not stake ("Disabled by configuration").
+    labelStakingIcon->setToolTip(tr("Not staking: Miner is not initialized."));
 
     statusBar()->addPermanentWidget(frameBlocks);
 

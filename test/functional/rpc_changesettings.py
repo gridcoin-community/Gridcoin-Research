@@ -22,10 +22,13 @@ effect without a restart.
   - node0, a side-stake allocation changed a second time: the side-stake
     reload reads the new value, not the one the first change forced into the
     running args.
+  - node0, a GUI option (lang, suppressnetworkgraph): refused as not a node
+    setting and not stored, while an empty value (an erase) is accepted and a
+    node setting the GUI reads (showorphans) is still stored.
 """
 
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_equal
+from test_framework.util import assert_equal, assert_raises_rpc_error
 
 
 def side_staking_enabled(node):
@@ -92,6 +95,17 @@ class ChangeSettingsEraseTest(GridcoinTestFramework):
         # that this call triggers must read the "20" it stores.
         node0.changesettings("sidestakeallocations=20")
         assert_equal(local_allocation_pct(node0, address), 20)
+
+        self.log.info("A GUI option is refused and not stored")
+        for setting in ("lang=de", "suppressnetworkgraph=true"):
+            assert_raises_rpc_error(-8, "Not a node setting", node0.changesettings, setting)
+            assert setting.split("=")[0] not in stored_settings(node0)
+        # An erase is let through, so an entry an older build stored can still be removed.
+        node0.changesettings("lang=")
+
+        node0.changesettings("showorphans=1")
+        assert "showorphans" in stored_settings(node0)
+        node0.changesettings("showorphans=")
 
 
 if __name__ == "__main__":

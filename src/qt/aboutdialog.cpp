@@ -51,14 +51,17 @@ void AboutDialog::setModel(ClientModel *model)
         // through the client model's node interface (ClientModel::isMainNet ->
         // interfaces::Node), never by calling chainparams (OnMainnet()) from GUI
         // code; done here rather than in the constructor because the model is
-        // only available once set. -disableupdatecheck is a config read.
+        // only available once set. -disableupdatecheck is read through the node
+        // too: it is a node setting, and in -multiprocess mode the GUI has no
+        // copy of the node's settings.
         //
         // isMainNet() rather than !isTestNet(): the check is served only on
         // mainnet, and !isTestNet() is true on regtest, which would leave the
         // button live and reporting a network error caused by policy.
-        if (model->isMainNet() && !gArgs.GetBoolArg("-disableupdatecheck", false)) {
+        const bool update_check_disabled = model->node().getSettingBool("disableupdatecheck", false);
+        if (model->isMainNet() && !update_check_disabled) {
             connect(ui->versionInfoButton, &QAbstractButton::pressed, this, [this]() { handlePressVersionInfoButton(); });
-        } else if (gArgs.GetBoolArg("-disableupdatecheck", false)) {
+        } else if (update_check_disabled) {
             ui->versionInfoButton->setDisabled(true);
             ui->versionInfoButton->setToolTip(tr("Version information and update check has been disabled "
                                                  "by config or startup parameter."));
