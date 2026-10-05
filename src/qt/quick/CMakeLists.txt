@@ -16,6 +16,8 @@ qt_add_qml_module(gridcoinqml
         qmlcallrunner.h
         qmlengine.cpp
         qmlengine.h
+        qmlfonts.cpp
+        qmlfonts.h
         qmlfrontend.cpp
         qmlfrontend.h
         qmlprovider.cpp
