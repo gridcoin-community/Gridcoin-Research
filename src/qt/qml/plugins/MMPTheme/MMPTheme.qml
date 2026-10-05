@@ -34,7 +34,7 @@ QtObject {
     readonly property color ternaryBodyColor: isLightTheme ? cFrostWhite : "#161b24"
     readonly property color bodySeparatorColor: isLightTheme ? cLilyWhite : cBlack
     readonly property color headerColor: isLightTheme ? cWhite : cSpaceBlack
-    
+
     //Theme enumeration
     readonly property int lightTheme: 0
     readonly property int darkTheme: 1
