@@ -27,6 +27,7 @@ export LC_ALL=C
 #   ./contrib/devtools/update-translations.sh --no-transifex  # steps 1-2 only (no network)
 #   ./contrib/devtools/update-translations.sh extract       # step 1 only
 #   ./contrib/devtools/update-translations.sh lupdate       # step 2 only
+#   ./contrib/devtools/update-translations.sh scan-list     # print the paths lupdate scans
 #   ./contrib/devtools/update-translations.sh tx-pull       # steps 3-6 only
 #   ./contrib/devtools/update-translations.sh tx-push       # step 7 only
 
@@ -126,25 +127,51 @@ do_extract() {
 # ---------------------------------------------------------------------------
 # Step 2/5: lupdate — regenerate .ts files from source
 # ---------------------------------------------------------------------------
+# The paths lupdate scans, one per line: every directory under src/ except the
+# excluded ones, with src/qt expanded one level so that src/qt/qml, the
+# carried QML front end, is skipped (its strings are not catalogued in
+# bitcoin_*.ts yet), then the .cpp and .h files directly in src/.
+lupdate_scan_list() {
+    local src_dir="${REPO_ROOT}/src"
+    local dir dname entry
+    for dir in "${src_dir}"/*/; do
+        dname="$(basename "${dir}")"
+        if [[ "${dname}" =~ ^(${EXCLUDED_DIRS})$ ]]; then
+            continue
+        fi
+        if [ "${dname}" = "qt" ]; then
+            for entry in "${dir}"*; do
+                if [ "$(basename "${entry}")" = "qml" ]; then
+                    continue
+                fi
+                if [ -d "${entry}" ]; then
+                    echo "${entry}/"
+                else
+                    # Only files lupdate would pick up from a directory scan:
+                    # an explicit file of another type is parsed as C++.
+                    case "${entry##*.}" in
+                        java|jui|ui|c|c++|cc|cpp|cxx|ch|h|h++|hh|hpp|hxx|js|mjs|qs|qrc) echo "${entry}" ;;
+                    esac
+                fi
+            done
+        else
+            echo "${dir}"
+        fi
+    done
+    for entry in "${src_dir}"/*.cpp "${src_dir}"/*.h; do
+        echo "${entry}"
+    done
+}
+
 do_lupdate() {
     local lupdate_bin
     lupdate_bin=$(find_qt_tool lupdate) || err "lupdate not found. Please install qt6-l10n-tools."
 
     echo "==> Running ${lupdate_bin} to update .ts files..."
 
-    local src_dir="${REPO_ROOT}/src"
-
-    # Build the list of source directories, excluding vendored dirs.
+    # The scanned paths, as lupdate_scan_list prints them.
     local -a scan_dirs=()
-    for dir in "${src_dir}"/*/; do
-        local dname
-        dname="$(basename "${dir}")"
-        if ! [[ "${dname}" =~ ^(${EXCLUDED_DIRS})$ ]]; then
-            scan_dirs+=("${dir}")
-        fi
-    done
-    # Include top-level .cpp/.h files directly in src/.
-    scan_dirs+=("${src_dir}"/*.cpp "${src_dir}"/*.h)
+    mapfile -t scan_dirs < <(lupdate_scan_list)
 
     ${lupdate_bin} \
         -locations relative \
@@ -330,6 +357,12 @@ main() {
         tx-push)
             do_tx_push
             ;;
+        scan-list)
+            # Only the paths: no closing message, so the output can be
+            # passed to lupdate as arguments.
+            lupdate_scan_list
+            return 0
+            ;;
         --no-transifex)
             # Local-only: extract + lupdate (no network access needed)
             do_extract
@@ -349,7 +382,7 @@ main() {
             do_cleanup
             ;;
         *)
-            echo "Usage: $0 [all|--no-transifex|extract|lupdate|tx-pull|tx-push]" >&2
+            echo "Usage: $0 [all|--no-transifex|extract|lupdate|tx-pull|tx-push|scan-list]" >&2
             echo "" >&2
             echo "Modes:" >&2
             echo "  all            Full pipeline (default)" >&2
@@ -358,6 +391,7 @@ main() {
             echo "  lupdate        Run lupdate only" >&2
             echo "  tx-pull        Pull from Transifex + post-process + lupdate + build update" >&2
             echo "  tx-push        Push source to Transifex only" >&2
+            echo "  scan-list      Print the paths lupdate scans" >&2
             exit 1
             ;;
     esac
