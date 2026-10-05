@@ -201,7 +201,7 @@ Etiam convallis lectus magna, quis scelerisque augue dapibus sit amet. Lorem ips
                                 id: soloImage
                                 anchors.centerIn: parent
                                 sourceSize: Qt.size(80, 80)
-                                source: soloRadioButton.checked ? "qrc:/icons/onboarding/iс_solo_active.svg" : "qrc:/icons/onboarding/iс_solo_inactive.svg"
+                                source: soloRadioButton.checked ? "qrc:/icons/onboarding/ic_solo_active.svg" : "qrc:/icons/onboarding/ic_solo_inactive.svg"
                             }
                         }
                     }
@@ -242,7 +242,7 @@ Etiam convallis lectus magna, quis scelerisque augue dapibus sit amet. Lorem ips
                                 id: poolImage
                                 anchors.centerIn: parent
                                 sourceSize: Qt.size(80, 80)
-                                source: poolRadioButton.checked ? "qrc:/icons/onboarding/iс_pool_active.svg" : "qrc:/icons/onboarding/iс_pool_inactive.svg"
+                                source: poolRadioButton.checked ? "qrc:/icons/onboarding/ic_pool_active.svg" : "qrc:/icons/onboarding/ic_pool_inactive.svg"
                             }
                         }
                     }
