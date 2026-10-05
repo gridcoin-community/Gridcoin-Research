@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls
+import QtQuick.Shapes
 import MMPTheme 1.0
 import QtQml
 
@@ -41,16 +42,21 @@ Window {
         anchors.fill: parent
         border.color: "transparent"
         radius: 4
-        LinearGradient {
+        Shape {
             id: backgroundGradient
             anchors.fill: parent
-            source: background
-            cached: true
-            start: Qt.point(0, 0)
-            end: Qt.point(width, height)
-            gradient: Gradient {
-                GradientStop { position: 0.1; color: "#c76dd7" }
-                GradientStop { position: 1.0; color: "#3324ae" }
+            ShapePath {
+                strokeColor: "transparent"
+                fillGradient: LinearGradient {
+                    x1: 0; y1: 0
+                    x2: background.width; y2: background.height
+                    GradientStop { position: 0.1; color: "#c76dd7" }
+                    GradientStop { position: 1.0; color: "#3324ae" }
+                }
+                PathLine { x: background.width; y: 0 }
+                PathLine { x: background.width; y: background.height }
+                PathLine { x: 0; y: background.height }
+                PathLine { x: 0; y: 0 }
             }
         }
         StackView {
