@@ -9,7 +9,7 @@ Dialog {
     width: 300
     height: 140
     anchors.centerIn: parent
-    
+
     onOpened: {
         passwordField.forceActiveFocus()
     }

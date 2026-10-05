@@ -25,7 +25,7 @@ Rectangle {
             color: MMPTheme.headerColor
             Layout.fillWidth: true
             Layout.preferredHeight: 70
-            
+
             Rectangle {
                 id: bottomBorder
                 height: 1
@@ -64,7 +64,7 @@ Rectangle {
                     Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
                     Layout.rowSpan: 2
                     columns: 3
-                    
+
                     Text {
                         id: magValue
                         text: _researcherModel.magnitude
@@ -164,7 +164,7 @@ Rectangle {
                             font.pixelSize: 10
                             font.weight: Font.Light
                             Layout.alignment: Qt.AlignVCenter
-                            
+
                             TextEdit{
                                 id: cpidCopier
                                 text: cpidText.text
@@ -172,7 +172,7 @@ Rectangle {
                             }
                         }
                     }
-                    
+
                     ToolTip {
                         x: parent.width/2-width/2
                         y: 20
@@ -256,7 +256,7 @@ Rectangle {
                         Layout.fillWidth: true
                         columns: 2
                         rowSpacing: 4
-                        
+
                         Text {
                             id: availableLabel
                             color: MMPTheme.textColor
@@ -269,7 +269,7 @@ Rectangle {
                             horizontalAlignment: Text.AlignRight
                             Layout.fillWidth: true
                         }
-                        
+
                         Text {
                             id: stakeLabel
                             color: MMPTheme.textColor
@@ -449,7 +449,7 @@ Rectangle {
                         id: reseacherTitle
                         text: qsTr("Researcher")
                         Layout.fillWidth: true
-                        
+
                         HelpHover{
                             id: researcherHelp
                             popupWidth: 300
@@ -474,7 +474,7 @@ Rectangle {
                         Layout.fillWidth: true
                         columns: 2
                         rowSpacing: 4
-                        
+
                         Text {
                             id: statusLabel
                             color: MMPTheme.textColor
@@ -541,7 +541,7 @@ Rectangle {
                         text: qsTr("Current Polls")
                         Layout.fillWidth: true
                     }
-                    
+
                     Text {
                         id: pollsInfo
                         color: MMPTheme.textColor
@@ -606,7 +606,7 @@ Rectangle {
                             visible: recentTransactionList.count === 0
                             anchors.centerIn: parent
                             spacing: 5
-                            
+
                             Image {
                                 source: "qrc:/icons/generic/ic_no_result.svg"
                                 Layout.alignment: Qt.AlignHCenter
