@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick 2.15
 import QtQml 2.15
+import Gridcoin.Qml
 
 QtObject {
     readonly property color cBlack: "#000000"
@@ -42,7 +43,7 @@ QtObject {
     property int theme: lightTheme
 
     readonly property font baseFont: Qt.font({
-        family: "SF Pro Text",
+        family: Fonts.uiFamily,
         pixelSize: 12
     })
 
