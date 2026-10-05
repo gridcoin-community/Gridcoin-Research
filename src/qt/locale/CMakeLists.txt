@@ -68,7 +68,11 @@ set_source_files_properties(${TS_FILES} PROPERTIES
 )
 
 if(LUPDATE)
-    qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
+    # lupdate's default extensions (Qt 6.4's default list) without qml: the
+    # carried QML front end (src/qt/qml) is not catalogued in bitcoin_*.ts
+    # yet, as in contrib/devtools/update-translations.sh.
+    qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES}
+        OPTIONS -extensions java,jui,ui,c,c++,cc,cpp,cxx,ch,h,h++,hh,hpp,hxx,js,qs,qrc)
 else()
     qt_add_translation(QM_FILES ${TS_FILES})
 endif()
