@@ -4,6 +4,7 @@
 
 #include "bridgetests.h"
 #include "callrunnertests.h"
+#include "carriedqmltests.h"
 #include "fonttests.h"
 #include "moduletests.h"
 #include "qmltestutil.h"
@@ -44,6 +45,9 @@ int main(int argc, char* argv[])
 
     QmlFontTests test5;
     if (QTest::qExec(&test5) != 0) fInvalid = true;
+
+    QmlCarriedQmlTests test6;
+    if (QTest::qExec(&test6) != 0) fInvalid = true;
 
     // The test application swallows what its notify() catches; nothing a test
     // did not expect may be left.
