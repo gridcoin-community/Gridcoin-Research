@@ -7,6 +7,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QtQml/qqmlregistration.h>
 
 //! The UI font family of the QML front end. On Apple platforms it is
@@ -15,8 +16,14 @@
 //! application bundles.
 QString ChooseUiFontFamily(bool apple_platform, const QString& system_family);
 
+//! The files LoadQmlFonts() registers, sorted: every file under the :/fonts/
+//! resource directory except the font licence texts (file names starting
+//! "ofl-", in any case).
+QStringList QmlFontPaths();
+
 //! Registers every file under the :/fonts/ resource directory with
-//! QFontDatabase and returns how many it registered; a file it cannot register
+//! QFontDatabase, except the font licence texts (file names starting "ofl-",
+//! in any case), and returns how many it registered; a file it cannot register
 //! is logged. Call it once the application object exists and before the QML
 //! root loads.
 int LoadQmlFonts();

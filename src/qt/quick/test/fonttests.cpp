@@ -6,7 +6,11 @@
 
 #include <qt/quick/qmlfonts.h>
 
+#include <QDir>
+#include <QDirIterator>
+#include <QFileInfo>
 #include <QFontDatabase>
+#include <QLatin1String>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QRegularExpression>
@@ -52,5 +56,56 @@ void QmlFontTests::uiFamilyOnThisPlatform()
     const bool has_light = styles.contains(QStringLiteral("Light"));
     const bool has_semibold = !styles.filter(QRegularExpression(QStringLiteral("^Semi ?Bold$"))).isEmpty();
     QVERIFY2(has_semibold && has_light, qPrintable(styles.join(QStringLiteral(", "))));
+    // Regular, Medium and Bold come from the Widgets resource, whose font
+    // files under :/fonts have no extension.
+    for (const char* style : {"Regular", "Medium", "Bold"}) {
+        QVERIFY2(styles.contains(QLatin1String(style)), qPrintable(styles.join(QStringLiteral(", "))));
+    }
 #endif
+}
+
+void QmlFontTests::loadsFontsNotLicenceTexts()
+{
+    Q_INIT_RESOURCE(bitcoin);
+
+    const QStringList paths = QmlFontPaths();
+    const QStringList expected{
+        QStringLiteral(":/fonts/inter-regular"),
+        QStringLiteral(":/fonts/inter-medium"),
+        QStringLiteral(":/fonts/inter-bold"),
+        QStringLiteral(":/fonts/inconsolata-regular"),
+        QStringLiteral(":/fonts/Inter-Light.otf"),
+        QStringLiteral(":/fonts/Inter-SemiBold.otf"),
+        QStringLiteral(":/fonts/Montserrat-Black.ttf"),
+        QStringLiteral(":/fonts/Montserrat-BlackItalic.ttf"),
+        QStringLiteral(":/fonts/Montserrat-Bold.ttf"),
+        QStringLiteral(":/fonts/Montserrat-BoldItalic.ttf"),
+        QStringLiteral(":/fonts/Montserrat-ExtraBold.ttf"),
+        QStringLiteral(":/fonts/Montserrat-ExtraBoldItalic.ttf"),
+        QStringLiteral(":/fonts/Montserrat-ExtraLight.ttf"),
+        QStringLiteral(":/fonts/Montserrat-ExtraLightItalic.ttf"),
+        QStringLiteral(":/fonts/Montserrat-Italic.ttf"),
+        QStringLiteral(":/fonts/Montserrat-Light.ttf"),
+        QStringLiteral(":/fonts/Montserrat-LightItalic.ttf"),
+        QStringLiteral(":/fonts/Montserrat-Medium.ttf"),
+        QStringLiteral(":/fonts/Montserrat-MediumItalic.ttf"),
+        QStringLiteral(":/fonts/Montserrat-Regular.ttf"),
+        QStringLiteral(":/fonts/Montserrat-SemiBold.ttf"),
+        QStringLiteral(":/fonts/Montserrat-SemiBoldItalic.ttf"),
+        QStringLiteral(":/fonts/Montserrat-Thin.ttf"),
+        QStringLiteral(":/fonts/Montserrat-ThinItalic.ttf"),
+    };
+    for (const QString& font : expected) {
+        QVERIFY2(paths.contains(font), qPrintable(QStringLiteral("not loaded: %1").arg(font)));
+    }
+    for (const QString& path : paths) {
+        QVERIFY2(!QFileInfo(path).fileName().startsWith(QStringLiteral("ofl-"), Qt::CaseInsensitive),
+                 qPrintable(QStringLiteral("licence text offered as a font: %1").arg(path)));
+    }
+
+    QStringList all;
+    QDirIterator it(QStringLiteral(":/fonts"), QDir::Files);
+    while (it.hasNext()) all.append(it.next());
+    QVERIFY2(all.contains(QStringLiteral(":/fonts/OFL-Inter.txt")), "OFL-Inter.txt is not a resource");
+    QVERIFY2(all.contains(QStringLiteral(":/fonts/OFL-Montserrat.txt")), "OFL-Montserrat.txt is not a resource");
 }
