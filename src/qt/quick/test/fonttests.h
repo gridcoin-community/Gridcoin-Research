@@ -15,6 +15,7 @@ class QmlFontTests : public QObject
 private Q_SLOTS:
     void uiFamilyChoice();
     void uiFamilyOnThisPlatform();
+    void loadsFontsNotLicenceTexts();
 };
 
 #endif // BITCOIN_QT_QUICK_TEST_FONTTESTS_H

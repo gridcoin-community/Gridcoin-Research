@@ -8,6 +8,7 @@
 
 #include <QDir>
 #include <QDirIterator>
+#include <QFileInfo>
 #include <QFont>
 #include <QFontDatabase>
 #include <QtGlobal>
@@ -25,12 +26,25 @@ QString ChooseUiFontFamily(bool apple_platform, const QString& system_family)
     return apple_platform ? system_family : QStringLiteral("Inter");
 }
 
-int LoadQmlFonts()
+QStringList QmlFontPaths()
 {
-    int registered = 0;
+    QStringList paths;
     QDirIterator it(QStringLiteral(":/fonts"), QDir::Files);
     while (it.hasNext()) {
         const QString path = it.next();
+        // The font licence texts sit beside the fonts. The Widgets fonts under
+        // :/fonts have no file extension, so they are told apart by name.
+        if (QFileInfo(path).fileName().startsWith(QStringLiteral("ofl-"), Qt::CaseInsensitive)) continue;
+        paths.append(path);
+    }
+    paths.sort();
+    return paths;
+}
+
+int LoadQmlFonts()
+{
+    int registered = 0;
+    for (const QString& path : QmlFontPaths()) {
         if (QFontDatabase::addApplicationFont(path) < 0) {
             GUILogPrintf("QML: font not registered: %s", path.toStdString());
         } else {

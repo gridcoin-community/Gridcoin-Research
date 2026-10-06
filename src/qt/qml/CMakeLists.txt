@@ -97,13 +97,15 @@ qt_add_qml_module(gridcoinqmlapp
 # The icons the screens name by path under icons/, and the fonts they name by
 # family, served from assets/ at the resource root (the fonts under :/fonts/,
 # where the front end registers its fonts from). The licence texts beside the
-# fonts are not resources.
+# fonts are resources too, so the binary carries them; nothing displays them
+# yet.
 file(GLOB_RECURSE GRIDCOIN_QML_ASSETS
     RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
     CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons/*"
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/*.ttf"
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/*.otf"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/*.txt"
 )
 list(SORT GRIDCOIN_QML_ASSETS)
 qt_add_resources(gridcoinqmlapp "qml_assets"
