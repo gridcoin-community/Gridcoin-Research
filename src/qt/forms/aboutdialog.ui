@@ -178,6 +178,16 @@ This product includes software developed by the OpenSSL Project for use in the O
         </widget>
        </item>
        <item>
+        <widget class="QPushButton" name="thirdPartyLicensesButton">
+         <property name="text">
+          <string>Third-Party Licenses</string>
+         </property>
+         <property name="toolTip">
+          <string>Show the licenses of the fonts bundled with this wallet</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="horizontalSpacer_2">
          <property name="orientation">
           <enum>Qt::Horizontal</enum>
