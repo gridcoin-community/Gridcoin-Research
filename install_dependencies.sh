@@ -465,6 +465,16 @@ install_deps() {
                     qml6-module-qt-labs-platform
                 append_qt qml6-module-qtqml qml6-module-qtqml-models qml6-module-qtqml-workerscript \
                     qml6-module-qttest
+                # Qt reads SVG images only through its svg image-format plugin
+                # (imageformats/libqsvg.so). Where the archive ships Qt's svg
+                # plugins as a package of their own (qt6-svg-plugins: Debian
+                # trixie and later, Ubuntu 25.10 and later), apt only recommends
+                # it, so name it; where it ships no such package (Ubuntu 24.04),
+                # libqt6svg6 carries the plugin. madison, not show: show also
+                # succeeds for a name apt knows only as virtual.
+                if [[ -n "$(apt-cache madison qt6-svg-plugins 2>/dev/null)" ]]; then
+                    append_qt qt6-svg-plugins
+                fi
                 ;;
             fedora|rhel)
                 append_qt qt6-qtdeclarative-devel
