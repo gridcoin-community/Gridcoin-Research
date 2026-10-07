@@ -187,6 +187,8 @@
         <file alias="inter-bold">res/fonts/Inter-Bold.otf</file>
         <file alias="inter-medium">res/fonts/Inter-Medium.otf</file>
         <file alias="inter-regular">res/fonts/Inter-Regular.otf</file>
+        <file alias="ofl-inconsolata">res/fonts/OFL-Inconsolata.txt</file>
+        <file alias="ofl-inter">res/fonts/OFL-Inter.txt</file>
     </qresource>
     <qresource prefix="/movies"/>
     <qresource prefix="/stylesheets">
