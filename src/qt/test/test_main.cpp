@@ -2,6 +2,7 @@
 #include <QTest>
 #include <QObject>
 
+#include "aboutdialogtests.h"
 #include "autostarttests.h"
 #include "bitcoinunitstests.h"
 #include "coinselectionmodeltests.h"
@@ -81,6 +82,10 @@ int main(int argc, char *argv[])
 
     GUIUtilTests test10;
     if (QTest::qExec(&test10) != 0)
+        fInvalid = true;
+
+    AboutDialogTests test11;
+    if (QTest::qExec(&test11) != 0)
         fInvalid = true;
 
     return fInvalid;

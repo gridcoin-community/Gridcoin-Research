@@ -6,6 +6,11 @@
 #include "interfaces/node.h"
 #include "util.h"
 
+#include <QDialogButtonBox>
+#include <QFile>
+#include <QFontDatabase>
+#include <QPlainTextEdit>
+#include <QVBoxLayout>
 #include <QtConcurrent>
 
 AboutDialog::AboutDialog(QWidget *parent) :
@@ -35,6 +40,58 @@ AboutDialog::AboutDialog(QWidget *parent) :
 
     connect(&m_version_check_watcher, &QFutureWatcher<AboutVersionInfo>::finished,
             this, &AboutDialog::versionCheckFinished);
+
+    // Needs no model: the texts are embedded resources.
+    connect(ui->thirdPartyLicensesButton, &QAbstractButton::clicked,
+            this, &AboutDialog::showThirdPartyLicenses);
+}
+
+QString AboutDialog::thirdPartyLicensesText()
+{
+    struct Entry {
+        QString heading;
+        const char* resource;
+    };
+    const Entry entries[] = {
+        {tr("Inter (user interface font)"), ":/fonts/ofl-inter"},
+        {tr("Inconsolata (debug console font)"), ":/fonts/ofl-inconsolata"},
+    };
+
+    QString text;
+    for (const Entry& entry : entries) {
+        if (!text.isEmpty()) text += QStringLiteral("\n\n");
+        text += entry.heading + QStringLiteral("\n") + QString(entry.heading.size(), QChar('=')) + QStringLiteral("\n\n");
+
+        QFile file(QString::fromLatin1(entry.resource));
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            text += QString::fromUtf8(file.readAll()).trimmed();
+        } else {
+            text += tr("License text not available in this build.");
+        }
+    }
+    return text;
+}
+
+void AboutDialog::showThirdPartyLicenses()
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Third-Party Licenses"));
+
+    auto* text = new QPlainTextEdit(&dialog);
+    text->setReadOnly(true);
+    text->setPlainText(thirdPartyLicensesText());
+    text->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    text->setObjectName(QStringLiteral("thirdPartyLicensesText"));
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->addWidget(text);
+    layout->addWidget(buttons);
+
+    dialog.resize(GRC::ScaleSize(&dialog, 640, 520));
+    dialog.exec();
 }
 
 void AboutDialog::setModel(ClientModel *model)
