@@ -354,6 +354,7 @@ void WalletTxStore::rebuildCaches()
     m_fields_cache.assign(m_records.size(), TxFilterFields{});
     m_keys_cache.assign(m_records.size(), SortKey{});
     m_volatile.clear();
+    m_refresh_force.clear();
     for (std::size_t i = 0; i < m_records.size(); ++i) {
         recomputeCacheAt(i);
         if (isVolatile(m_records[i], m_block_known.count(m_records[i].hash) > 0)) {
@@ -588,6 +589,7 @@ bool WalletTxStore::removeLocked(const uint256& hash)
     m_keys_cache.erase(m_keys_cache.begin() + minPos, m_keys_cache.begin() + maxPos + 1);
     m_by_hash.erase(hash);
     m_volatile.erase(hash);   // no longer present -> not in the per-tip refresh set
+    m_refresh_force.erase(hash);
     m_block_known.erase(hash);   // ...and no stale entry left behind (see m_block_known)
     shiftIndex(maxPos + 1, -static_cast<std::ptrdiff_t>(count));
 
@@ -935,6 +937,7 @@ void WalletTxStore::applyChainTipRefresh()
         if (range.first == range.second) {
             m_volatile.erase(hash);
             m_block_known.erase(hash);
+            m_refresh_force.erase(hash);
             continue;
         }
         auto wit = m_wallet->mapWallet.find(hash);
@@ -943,6 +946,7 @@ void WalletTxStore::applyChainTipRefresh()
             // removal event will clean up the rows.
             m_volatile.erase(hash);
             m_block_known.erase(hash);
+            m_refresh_force.erase(hash);
             continue;
         }
         const CWalletTx& wtx = wit->second;
@@ -986,6 +990,30 @@ void WalletTxStore::applyChainTipRefresh()
         // record would stay invisible until a prime() rebuilt the volatile set.
         // One unrefreshable transaction must not freeze status refresh for the rest
         // of the wallet (#3257).
+        //
+        // Height-only refreshes emit no delta (#3059). A record whose fresh status is
+        // exactly GRC::ProjectTxStatus of its previous one moved only in depth / maturity,
+        // which the GUI derives from the pushed tip height; its sort and filter keys
+        // (status enum and sortKey only, wallet_tx_filter.h) are unchanged, so the
+        // cursor would re-find the same slot and emit a plain Change. Skipping it saves
+        // ~110 events per block for a wallet paid in every block, and on macOS with an
+        // accessibility client one full History-table rebuild per event.
+        //
+        // The gate relies on: each record's producer status equals the projection of
+        // the last status emitted for it, or an event carrying it is queued, or its hash
+        // is in m_refresh_force. A throw anywhere in this block can break the first two
+        // (updateStatus writes in place and reads the disk LAST, so the record can hold
+        // a status that was never sent; or some views emitted and others did not), so
+        // both handlers mark the hash and its next refresh goes ungated.
+        //
+        // A throw can also land after a cursor has moved a row (applyStatusUpdate reslots it
+        // first) but before its Insert/Remove reached the queue. A forced resend cannot repair
+        // that: the cursor already holds the new slot, so the next pass would emit only a
+        // Change and the consumer's row count would stay wrong. That is why a cursor update in
+        // flight is tracked, and a throw caught during one rebuilds every cursor and resets
+        // every view instead, as a failed splice does in insertTransaction.
+        const bool force = m_refresh_force.count(hash) != 0;
+        bool cursor_in_flight = false;
         try {
             for (std::size_t p : positions) {
                 // Status transition + per-view delta count. Together these split the
@@ -995,23 +1023,45 @@ void WalletTxStore::applyChainTipRefresh()
                 //   status flips and a delta fires  -> the loss is downstream (queue,
                 //                                      drain pump or the Qt consumer)
                 // VERBOSE, so it costs nothing unless a user is chasing this (#3257).
-                const int before = static_cast<int>(m_records[p].status.status);
+                const TransactionStatus before_status = m_records[p].status;
                 m_records[p].updateStatus(wtx);
-                const int after = static_cast<int>(m_records[p].status.status);
+                if (m_refresh_fault_hook) m_refresh_fault_hook(RefreshStage::AfterUpdateStatus, p, -1);
                 recomputeCacheAt(p);
-                for (auto& [viewId, cursor] : m_cursors) {
-                    const std::vector<CursorDelta> deltas = cursor.applyStatusUpdate(p);
+                if (m_refresh_fault_hook) m_refresh_fault_hook(RefreshStage::AfterRecompute, p, -1);
+                const TransactionStatus& after_status = m_records[p].status;
+                const int before = static_cast<int>(before_status.status);
+                const int after = static_cast<int>(after_status.status);
+                if (!force && GRC::TxStatusEquals(GRC::ProjectTxStatus(before_status, after_status.cur_num_blocks),
+                                                after_status)) {
                     LogPrint(BCLog::LogFlags::VERBOSE,
                              "applyChainTipRefresh: %s part %d record %u status %d->%d "
-                             "view %d emitted %u deltas",
+                             "height-only (height %d->%d), no delta",
+                             hash.GetHex(), m_records[p].idx,
+                             static_cast<unsigned int>(p), before, after,
+                             before_status.cur_num_blocks, after_status.cur_num_blocks);
+                    continue;
+                }
+                for (auto& [viewId, cursor] : m_cursors) {
+                    if (m_refresh_fault_hook) m_refresh_fault_hook(RefreshStage::BeforeViewEmit, p, viewId);
+                    cursor_in_flight = true;
+                    const std::vector<CursorDelta> deltas = cursor.applyStatusUpdate(p);
+                    if (m_refresh_fault_hook) m_refresh_fault_hook(RefreshStage::AfterCursorUpdate, p, viewId);
+                    LogPrint(BCLog::LogFlags::VERBOSE,
+                             "applyChainTipRefresh: %s part %d record %u status %d->%d "
+                             "view %d emitted %u deltas%s",
                              hash.GetHex(), m_records[p].idx,
                              static_cast<unsigned int>(p), before, after, viewId,
-                             static_cast<unsigned int>(deltas.size()));
+                             static_cast<unsigned int>(deltas.size()),
+                             force ? " (forced after an earlier failure)" : "");
                     emitCursorDeltas(viewId, cursor.epoch(), deltas);
+                    cursor_in_flight = false;
                 }
             }
+            m_refresh_force.erase(hash);   // a clean pass re-arms the gate for this hash
             updateVolatileForHash(hash);   // drops the hash once every part is terminal
         } catch (const std::exception& e) {
+            markRefreshForce(hash);
+            if (cursor_in_flight) resetCursorsAfterFailedRefresh(hash);
             // Default log level, not VERBOSE: this is the line that names the
             // offending transaction, and it must be present in a user's ordinary
             // debug.log without them having to reproduce under -debug=verbose.
@@ -1020,8 +1070,52 @@ void WalletTxStore::applyChainTipRefresh()
                       __func__, hash.GetHex(), e.what(),
                       static_cast<unsigned int>(m_volatile.size()));
         } catch (...) {
+            markRefreshForce(hash);
+            if (cursor_in_flight) resetCursorsAfterFailedRefresh(hash);
             LogPrintf("ERROR: %s: refreshing hash %s threw a non-standard exception "
                       "- skipping it this tip", __func__, hash.GetHex());
+        }
+    }
+}
+
+void WalletTxStore::markRefreshForce(const uint256& hash) noexcept
+{
+    // Called from applyChainTipRefresh's exception handlers. Must not throw: an
+    // exception escaping a handler would skip every remaining volatile hash and unwind
+    // into the SetBestChain notification path. The only failure is std::bad_alloc from
+    // the insert; the hash then goes unmarked and its next refresh may be gated --
+    // log it, since that is the one path that can still strand a view.
+    try {
+        m_refresh_force.insert(hash);
+    } catch (...) {
+        try {
+            LogPrintf("ERROR: %s: could not mark %s for a forced refresh", __func__, hash.GetHex());
+        } catch (...) {
+        }
+    }
+}
+
+void WalletTxStore::resetCursorsAfterFailedRefresh(const uint256& hash) noexcept
+{
+    // A refresh threw while a cursor update was in flight: some cursor may hold a row in a
+    // slot whose Insert/Remove never reached the queue. Rebuild every cursor from the record
+    // table (whose caches are current: recomputeCacheAt ran before any cursor was driven) and
+    // push a Reset to every view, so each consumer re-reads instead of trusting a replica
+    // that no longer matches -- what insertTransaction does after a failed splice. Must not
+    // throw out of the handler that calls it.
+    try {
+        LogPrintf("ERROR: %s: refreshing hash %s threw during a cursor update; rebuilding the "
+                  "cursors and resetting every view", __func__, hash.GetHex());
+        for (auto& [viewId, cursor] : m_cursors) {
+            cursor.rebuild(m_records.size());
+            m_view_seqno[viewId] = m_queue.push(GRC::RowsResetPayload{
+                viewId, cursor.epoch(), static_cast<int>(cursor.servedCount())});
+        }
+    } catch (...) {
+        try {
+            LogPrintf("ERROR: %s: could not reset the views after a failed refresh of %s",
+                      __func__, hash.GetHex());
+        } catch (...) {
         }
     }
 }
@@ -1084,6 +1178,10 @@ void WalletTxStore::updateVolatileForHash(const uint256& hash)
         m_volatile.insert(hash);
     } else {
         m_volatile.erase(hash);
+        // No longer refreshed, so a pending forced refresh is moot. Safe: a hash leaves the
+        // volatile set here only after a clean refresh (the throw path skips this call) or
+        // after a worker upsert that itself emitted the record to every view.
+        m_refresh_force.erase(hash);
     }
 
     // The flag exists only to carry a record through the one tip between its block

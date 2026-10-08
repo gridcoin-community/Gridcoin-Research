@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <map>
 #include <string>
 #include <thread>
@@ -137,7 +138,30 @@ public:
     //! cs_main/cs_wallet (which would deadlock prime's park protocol);
     //! cs_main also mutually excludes this from prime.
     //!
+    //! A refreshed record whose fresh status is just the height projection of its
+    //! previous one (GRC::ProjectTxStatus) emits NO delta: the GUI derives depth and
+    //! maturity progress from the pushed tip height (#3059). Only a real change -- a
+    //! status flip, countsForBalance, sortKey -- reaches the cursors. A hash whose
+    //! refresh threw bypasses that gate on its next refresh (m_refresh_force).
+    //!
     void applyChainTipRefresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //! Points inside applyChainTipRefresh where a test can inject a throw.
+    enum class RefreshStage {
+        AfterUpdateStatus, //!< updateStatus returned; the record holds the fresh status
+        AfterRecompute,    //!< the sort/filter caches were recomputed
+        BeforeViewEmit,    //!< about to drive one view's cursor (view id passed)
+        AfterCursorUpdate, //!< that cursor moved the row; its deltas are not queued yet
+    };
+    using RefreshFaultHook = std::function<void(RefreshStage stage, std::size_t record, int view)>;
+
+    //! Test seam: called at each RefreshStage (under cs_store); may throw to simulate a
+    //! failure there. Unset in production.
+    void SetRefreshFaultHookForTests(RefreshFaultHook hook) LOCKS_EXCLUDED(cs_store)
+    {
+        LOCK(cs_store);
+        m_refresh_fault_hook = std::move(hook);
+    }
 
     //!
     //! \brief Qt thread: register a per-view cursor (server-side filter+sort).
@@ -352,6 +376,14 @@ private:
     //! "simplify" either to match the other without reading it.
     static bool isVolatile(const TransactionRecord& r, bool block_known);
 
+    //! Mark `hash` so its next applyChainTipRefresh bypasses the height-only gate.
+    //! noexcept: called from that function's exception handlers.
+    void markRefreshForce(const uint256& hash) noexcept EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! Rebuild every cursor and push a Reset to every view, after a refresh threw while a
+    //! cursor update was in flight. noexcept: called from applyChainTipRefresh's handlers.
+    void resetCursorsAfterFailedRefresh(const uint256& hash) noexcept EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
     //! Re-evaluate whether `hash` belongs in m_volatile from its records' current
     //! status, inserting or erasing it. Caller holds cs_store.
     void updateVolatileForHash(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
@@ -383,6 +415,16 @@ private:
     //! ...). applyChainTipRefresh() re-runs updateStatus only over this bounded set
     //! each block, so the per-block cost is O(volatile) rather than O(N) (PR4-fix A).
     std::unordered_set<uint256, TxHashHasher> m_volatile GUARDED_BY(cs_store);
+
+    //! Hashes whose last refresh threw. applyChainTipRefresh bypasses its height-only
+    //! gate for these on the next tip, so every view is re-sent the fresh status
+    //! whatever point the throw came from (inside updateStatus, in the cache recompute,
+    //! or between two views' emissions) -- what the ungated loop always did. Cleared
+    //! for a hash after a clean pass, and wherever m_volatile drops or clears it.
+    std::unordered_set<uint256, TxHashHasher> m_refresh_force GUARDED_BY(cs_store);
+
+    //! Test seam (SetRefreshFaultHookForTests). Unset in production.
+    RefreshFaultHook m_refresh_fault_hook GUARDED_BY(cs_store);
 
     //! Transactions whose confirming block the PRODUCER saw in mapBlockIndex while
     //! the record still read depth -1 -- i.e. the block is being connected but

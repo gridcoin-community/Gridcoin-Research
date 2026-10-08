@@ -32,7 +32,10 @@
 #include "key_io.h"
 #include "primitives/transaction.h"
 #include "rpc/blockchain.h"
+#include "test/state_guard.h"
 #include "test/test_gridcoin.h"
+#include "tinyformat.h"
+#include "validation.h"
 #include "wallet/wallet.h"
 
 #include <interfaces/wallet_tx_filter.h>
@@ -44,6 +47,11 @@
 #include <boost/test/unit_test.hpp>
 
 #include <chrono>
+#include <map>
+#include <set>
+#include <string>
+#include <utility>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -269,6 +277,212 @@ uint256 injectPoisonCoinstake(const CTxDestination& mine, const uint256& mature_
     BOOST_REQUIRE(poison.IsCoinStake());
     InjectConfirmedTx(poison, tip_block);
     return poison.GetHash();
+}
+
+//! A mock main chain a test can extend (or shorten) one block at a time, moving pindexBest
+//! AND nBestHeight together as SetBestChain does. updateStatus reads both: depth from
+//! pindexBest, cur_num_blocks and finality from nBestHeight, so moving only one would make
+//! every refresh look like a non-height change. The StateGuard member puts the tip globals,
+//! nCoinbaseMaturity and the block index back when the case ends.
+struct AdvancingChain
+{
+    grc_test::StateGuard guard;   // declared first: destroyed last, after the unlinking below
+    std::vector<CBlockIndex*> blocks;
+    std::vector<uint256> hashes;
+
+    //! \param coinbase_maturity  nCoinbaseMaturity for the case; a coinstake matures at
+    //!                           depth coinbase_maturity + 10 (CMerkleTx::GetBlocksToMaturity).
+    explicit AdvancingChain(int coinbase_maturity)
+    {
+        LOCK(cs_main);
+        nCoinbaseMaturity = coinbase_maturity;
+        append(nCoinbaseMaturity + 50);
+    }
+
+    ~AdvancingChain()
+    {
+        LOCK(cs_main);
+        for (CBlockIndex* b : blocks) {
+            b->pnext = nullptr;
+            b->pprev = nullptr;
+        }
+    }
+
+    uint256 tipHash() const { return hashes.back(); }
+
+    void extend()
+    {
+        LOCK(cs_main);
+        append(blocks.back()->nHeight + 1);
+    }
+
+    //! Disconnect the tip (a one-block reorg back), as a DisconnectBlock + SetBestChain would.
+    void disconnectTip()
+    {
+        LOCK(cs_main);
+        CBlockIndex* old = blocks.back();
+        blocks.pop_back();
+        hashes.pop_back();
+        old->pprev = nullptr;
+        blocks.back()->pnext = nullptr;
+        pindexBest = blocks.back();
+        nBestHeight = pindexBest->nHeight;
+    }
+
+private:
+    void append(int height) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        const uint256 hash = InsecureRand256();
+        CBlockIndex* b = GRC::MockBlockIndex::InsertBlockIndex(hash);
+        b->nHeight = height;
+        if (!blocks.empty()) {
+            b->pprev = blocks.back();
+            blocks.back()->pnext = b;
+        }
+        blocks.push_back(b);
+        hashes.push_back(hash);
+        pindexBest = b;
+        nBestHeight = height;
+    }
+};
+
+//! A destination this wallet does NOT own, so a coinstake's side stake to it adds no record.
+CTxDestination ForeignDest()
+{
+    CKey key;
+    key.MakeNewKey(false);
+    return CTxDestination(key.GetPubKey().GetID());
+}
+
+//! What one drain carried, per view.
+struct ViewTally
+{
+    int inserts = 0;
+    int changes = 0;
+    std::vector<TransactionRecord> last;   //!< every record the view was sent, in order
+};
+
+std::map<int, ViewTally> Tally(WalletEventQueue& q)
+{
+    std::map<int, ViewTally> out;
+    for (const GRC::WalletEvent& ev : q.drain()) {
+        if (const auto* ins = std::get_if<GRC::RowsInsertedPayload>(&ev.payload)) {
+            ViewTally& t = out[ins->viewId];
+            ++t.inserts;
+            t.last.insert(t.last.end(), ins->records.begin(), ins->records.end());
+        } else if (const auto* chg = std::get_if<GRC::RowsChangedPayload>(&ev.payload)) {
+            ViewTally& t = out[chg->viewId];
+            ++t.changes;
+            t.last.insert(t.last.end(), chg->records.begin(), chg->records.end());
+        }
+    }
+    return out;
+}
+
+//! Drive the real per-tip refresh, as onBlocksChanged does, and let the worker settle.
+void RefreshTip(WalletTxStore& store, WalletEventQueue& q)
+{
+    {
+        LOCK(cs_main);
+        store.applyChainTipRefresh();
+    }
+    settle(q);
+}
+
+int TipHeight() { return WITH_LOCK(cs_main, return nBestHeight); }
+
+//! The truth: a fresh updateStatus of every part of `hash`, as of now, keyed by part idx.
+std::map<int, TransactionStatus> FreshStatuses(const uint256& hash)
+{
+    std::map<int, TransactionStatus> out;
+    for (const TransactionRecord& rec : producerRecordsFor(hash)) out[rec.idx] = rec.status;
+    return out;
+}
+
+//! The last snapshot each (view, part) was sent.
+using SentMap = std::map<std::pair<int, int>, TransactionStatus>;
+
+//! Only the two production cursors (registerProductionViews) are tracked: the intake also
+//! pushes a legacy VIEW_FULL insert stream, which no windowed view consumes and which the
+//! per-tip refresh never drives.
+void Absorb(SentMap& sent, const std::map<int, ViewTally>& tally)
+{
+    for (const auto& [view, t] : tally) {
+        if (view != GRC::VIEW_DETAILED && view != GRC::VIEW_OVERVIEW) continue;
+        for (const TransactionRecord& rec : t.last) sent[{view, rec.idx}] = rec.status;
+    }
+}
+
+//! Equality over what the GUI RENDERS for a status. updateStatus leaves members its branch
+//! does not assign at their previous values (a record that has turned Confirmed keeps its last
+//! Immature matures_in), so a store record and a freshly built one can differ in a field that
+//! is never displayed for that status; those are excluded.
+bool DisplayEquals(const TransactionStatus& a, const TransactionStatus& b)
+{
+    if (a.status != b.status || a.depth != b.depth || a.countsForBalance != b.countsForBalance
+        || a.sortKey != b.sortKey) {
+        return false;
+    }
+    if (a.status == TransactionStatus::Immature && a.matures_in != b.matures_in) return false;
+    if ((a.status == TransactionStatus::OpenUntilBlock || a.status == TransactionStatus::OpenUntilDate)
+        && a.open_for != b.open_for) {
+        return false;
+    }
+    return true;
+}
+
+//! What the GUI would show for each (view, part) -- the projection of what it was sent to the
+//! current tip -- must equal a fresh updateStatus. Returns the number of mismatches.
+int CheckProjection(const SentMap& sent, const std::map<int, TransactionStatus>& truth,
+                    const std::string& where)
+{
+    int bad = 0;
+    for (const auto& [key, status] : sent) {
+        const auto it = truth.find(key.second);
+        BOOST_REQUIRE(it != truth.end());
+        if (!DisplayEquals(GRC::ProjectTxStatus(status, TipHeight()), it->second)) {
+            ++bad;
+            BOOST_ERROR(where << ": view " << key.first << " part " << key.second
+                        << " shows status " << static_cast<int>(status.status) << " depth "
+                        << GRC::ProjectTxStatus(status, TipHeight()).depth << "; truth is status "
+                        << static_cast<int>(it->second.status) << " depth " << it->second.depth);
+        }
+    }
+    return bad;
+}
+
+//! A transaction paying `mine` from an input this wallet does not own: an ordinary receive.
+CTransaction MakeReceive(const CTxDestination& mine, int64_t value)
+{
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(InsecureRand256(), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = value;
+    mtx.vout[0].scriptPubKey = P2PKH(mine);
+    return CTransaction(mtx);
+}
+
+//! Set up a store holding one freshly confirmed coinstake (depth 1, Immature) and drain the
+//! insert. A staker's coinstake has one part for the stake return and one per side stake sent
+//! elsewhere (decomposeTransaction), so `parts_out` receives the part count. Returns the
+//! snapshot each (view, part) was sent.
+SentMap InsertFreshCoinstake(WalletTxStore& store, WalletEventQueue& q, const CTransaction& cs,
+                             std::size_t& parts_out)
+{
+    const std::vector<TransactionRecord> recs = producerRecordsFor(cs.GetHash());
+    BOOST_REQUIRE(!recs.empty());
+    for (const TransactionRecord& rec : recs) {
+        BOOST_REQUIRE_EQUAL(static_cast<int>(rec.status.status), static_cast<int>(TransactionStatus::Immature));
+        BOOST_REQUIRE_EQUAL(rec.status.depth, 1);
+    }
+    parts_out = recs.size();
+    store.enqueueInsert(recs, /*block_known=*/true);
+    settle(q);
+    SentMap sent;
+    Absorb(sent, Tally(q));
+    BOOST_REQUIRE_EQUAL(sent.size(), 2 * recs.size());   // both views, every part
+    return sent;
 }
 
 } // namespace
@@ -516,6 +730,377 @@ BOOST_AUTO_TEST_CASE(primeThatThrowsMidRescanStillReleasesTheIntakeWorker)
                         "every later transaction would be invisible");
 
     EraseWalletTx(good_hash);
+}
+
+// ---- Height-only refreshes emit nothing (#3059) -------------------------------------
+//
+// The per-tip refresh re-snapshots every volatile record but sends a Change only when the
+// fresh status is not the height projection of the previous one. The GUI derives depth and
+// maturity progress from the pushed tip height. These drive the REAL applyChainTipRefresh
+// over a mock chain advanced one block at a time.
+
+//! A coinstake through maturity: silent on every height-only tip, exactly one Change at the
+//! Immature -> Confirmed flip, and at EVERY tip the projection of the last snapshot each
+//! view was sent equals a fresh updateStatus -- what the GUI shows is the truth.
+BOOST_AUTO_TEST_CASE(heightOnlyRefreshesEmitNothingUntilTheMaturityFlip)
+{
+    AdvancingChain chain(/*coinbase_maturity=*/3);
+    const int maturity_depth = nCoinbaseMaturity + 10;
+    OwnedKey mine;
+    const CTxDestination foreign_dest = ForeignDest();
+    chain.extend();   // the confirming block, now the tip
+    const CTransaction cs = MakeCoinstake(mine.dest, 50 * COIN, foreign_dest, 1 * COIN);
+    InjectConfirmedTx(cs, chain.tipHash());
+
+    WalletEventQueue q;
+    WalletTxStore store(pwalletMain, q);
+    registerProductionViews(store);
+    store.start();
+    std::size_t parts = 0;
+    SentMap sent = InsertFreshCoinstake(store, q, cs, parts);
+
+    int flip_tips = 0;
+    for (int depth = 2; depth <= maturity_depth + 3; ++depth) {
+        chain.extend();
+        RefreshTip(store, q);
+        std::map<int, ViewTally> t = Tally(q);
+        const std::map<int, TransactionStatus> truth = FreshStatuses(cs.GetHash());
+        BOOST_REQUIRE_EQUAL(truth.begin()->second.depth, depth);
+
+        const int detailed = t[GRC::VIEW_DETAILED].changes + t[GRC::VIEW_DETAILED].inserts;
+        const int overview = t[GRC::VIEW_OVERVIEW].changes + t[GRC::VIEW_OVERVIEW].inserts;
+        if (depth < maturity_depth) {
+            BOOST_CHECK_MESSAGE(detailed == 0 && overview == 0,
+                                "height-only tip at depth " << depth << " emitted " << detailed
+                                << " detailed / " << overview << " overview deltas");
+        } else if (depth == maturity_depth) {
+            for (const auto& [idx, st] : truth) {
+                BOOST_CHECK_EQUAL(static_cast<int>(st.status), static_cast<int>(TransactionStatus::Confirmed));
+            }
+            BOOST_CHECK_EQUAL(t[GRC::VIEW_DETAILED].changes, static_cast<int>(parts));
+            BOOST_CHECK_GE(overview, 1);
+            ++flip_tips;
+        } else {
+            // Confirmed is terminal: the hash has left the volatile set; nothing more is sent.
+            BOOST_CHECK_EQUAL(detailed + overview, 0);
+        }
+
+        Absorb(sent, t);
+        CheckProjection(sent, truth, strprintf("depth %d", depth));
+    }
+    BOOST_CHECK_EQUAL(flip_tips, 1);
+
+    EraseWalletTx(cs.GetHash());
+}
+
+//! An ordinary received transaction: a Change exactly where something other than height
+//! moved -- depth 3, where IsTrusted() turns true for a tx not from this wallet and the
+//! amount stops being bracketed (countsForBalance), and depth 10, Confirming -> Confirmed.
+BOOST_AUTO_TEST_CASE(receivedTxEmitsOnlyAtTheTrustAndConfirmationFlips)
+{
+    AdvancingChain chain(/*coinbase_maturity=*/3);
+    OwnedKey mine;
+    chain.extend();
+    const CTransaction rx = MakeReceive(mine.dest, 7 * COIN);
+    InjectConfirmedTx(rx, chain.tipHash());
+
+    WalletEventQueue q;
+    WalletTxStore store(pwalletMain, q);
+    registerProductionViews(store);
+    store.start();
+
+    const std::vector<TransactionRecord> recs = producerRecordsFor(rx.GetHash());
+    BOOST_REQUIRE_EQUAL(recs.size(), 1u);
+    BOOST_REQUIRE_EQUAL(static_cast<int>(recs[0].status.status), static_cast<int>(TransactionStatus::Confirming));
+    BOOST_REQUIRE(!recs[0].status.countsForBalance);
+    store.enqueueInsert(recs, /*block_known=*/true);
+    settle(q);
+    Tally(q);
+
+    std::vector<int> change_depths;
+    for (int depth = 2; depth <= TransactionRecord::RecommendedNumConfirmations + 3; ++depth) {
+        chain.extend();
+        RefreshTip(store, q);
+        std::map<int, ViewTally> t = Tally(q);
+        if (t[GRC::VIEW_DETAILED].changes > 0) change_depths.push_back(depth);
+    }
+    const std::vector<int> want{3, TransactionRecord::RecommendedNumConfirmations};
+    BOOST_CHECK_EQUAL_COLLECTIONS(change_depths.begin(), change_depths.end(), want.begin(), want.end());
+
+    EraseWalletTx(rx.GetHash());
+}
+
+//! A tip that moves back is never a height projection: every volatile record is re-sent.
+BOOST_AUTO_TEST_CASE(aTipThatMovesBackIsAlwaysSent)
+{
+    AdvancingChain chain(/*coinbase_maturity=*/3);
+    OwnedKey mine;
+    const CTxDestination foreign_dest = ForeignDest();
+    chain.extend();
+    const CTransaction cs = MakeCoinstake(mine.dest, 50 * COIN, foreign_dest, 1 * COIN);
+    InjectConfirmedTx(cs, chain.tipHash());
+
+    WalletEventQueue q;
+    WalletTxStore store(pwalletMain, q);
+    registerProductionViews(store);
+    store.start();
+    std::size_t parts = 0;
+    SentMap sent = InsertFreshCoinstake(store, q, cs, parts);
+
+    for (int i = 0; i < 4; ++i) {
+        chain.extend();
+        RefreshTip(store, q);
+        BOOST_CHECK_EQUAL(Tally(q)[GRC::VIEW_DETAILED].changes, 0);
+    }
+    chain.disconnectTip();
+    RefreshTip(store, q);
+    std::map<int, ViewTally> t = Tally(q);
+    BOOST_CHECK_EQUAL(t[GRC::VIEW_DETAILED].changes, static_cast<int>(parts));
+    Absorb(sent, t);
+    CheckProjection(sent, FreshStatuses(cs.GetHash()), "after the tip moved back");
+
+    EraseWalletTx(cs.GetHash());
+}
+
+//! A refresh that throws must not let the gate strand a view. updateStatus writes in place
+//! and reads the disk last, so a throw can leave a status in the store that was never sent;
+//! a throw after it (cache recompute, or between two views' emissions) leaves the views
+//! disagreeing. Either way the next tip must re-send the fresh status to EVERY view -- the
+//! per-hash force marker -- and the tip after that must be quiet again.
+BOOST_AUTO_TEST_CASE(aRefreshThatThrowsIsResentToEveryViewOnTheNextTip)
+{
+    using Stage = WalletTxStore::RefreshStage;
+    for (const Stage stage : {Stage::AfterUpdateStatus, Stage::AfterRecompute, Stage::BeforeViewEmit}) {
+        AdvancingChain chain(/*coinbase_maturity=*/3);
+        const int maturity_depth = nCoinbaseMaturity + 10;
+        OwnedKey mine;
+        const CTxDestination foreign_dest = ForeignDest();
+        chain.extend();
+        const CTransaction cs = MakeCoinstake(mine.dest, 50 * COIN, foreign_dest, 1 * COIN);
+        InjectConfirmedTx(cs, chain.tipHash());
+
+        WalletEventQueue q;
+        WalletTxStore store(pwalletMain, q);
+        registerProductionViews(store);
+        store.start();
+        std::size_t parts = 0;
+        SentMap sent = InsertFreshCoinstake(store, q, cs, parts);
+
+        // Height-only tips up to the one before the flip.
+        for (int depth = 2; depth < maturity_depth; ++depth) {
+            chain.extend();
+            RefreshTip(store, q);
+            Tally(q);
+        }
+
+        // The flip tip: inject one throw at `stage`. For BeforeViewEmit, throw on the SECOND
+        // view, so the first view has already been sent the flip -- the views now disagree.
+        int view_calls = 0;
+        bool thrown = false;
+        store.SetRefreshFaultHookForTests([&](Stage s, std::size_t, int) {
+            if (thrown || s != stage) return;
+            if (s == Stage::BeforeViewEmit && ++view_calls < 2) return;
+            thrown = true;
+            throw std::runtime_error("injected refresh failure");
+        });
+        chain.extend();
+        RefreshTip(store, q);
+        store.SetRefreshFaultHookForTests(nullptr);
+        BOOST_REQUIRE_MESSAGE(thrown, "stage " << static_cast<int>(stage) << " was never reached");
+        Absorb(sent, Tally(q));
+
+        // The next tip: every (view, part) must end up holding the flipped status.
+        chain.extend();
+        RefreshTip(store, q);
+        Absorb(sent, Tally(q));
+        const std::map<int, TransactionStatus> truth = FreshStatuses(cs.GetHash());
+        for (const auto& [idx, st] : truth) {
+            BOOST_REQUIRE_EQUAL(static_cast<int>(st.status), static_cast<int>(TransactionStatus::Confirmed));
+        }
+        CheckProjection(sent, truth, strprintf("stage %d, tip after the throw", static_cast<int>(stage)));
+
+        // And the tip after that is quiet: the marker was cleared and the record is terminal.
+        chain.extend();
+        RefreshTip(store, q);
+        std::map<int, ViewTally> after = Tally(q);
+        BOOST_CHECK_EQUAL(after[GRC::VIEW_DETAILED].changes + after[GRC::VIEW_OVERVIEW].changes, 0);
+
+        EraseWalletTx(cs.GetHash());
+    }
+}
+
+//! A transaction this wallet SENT is trusted from depth 1 (its own confirmation satisfies
+//! AreDependenciesConfirmed), so countsForBalance never flips: the only Change is at depth 10.
+BOOST_AUTO_TEST_CASE(sentTxEmitsOnlyAtTheConfirmationFlip)
+{
+    AdvancingChain chain(/*coinbase_maturity=*/3);
+    OwnedKey mine;
+    const CTxDestination elsewhere = ForeignDest();
+
+    // Fund `mine` in the chain's first (deep) block, then spend that output elsewhere.
+    CMutableTransaction fund_mtx;
+    fund_mtx.vin.resize(1);
+    fund_mtx.vin[0].prevout = COutPoint(InsecureRand256(), 0);
+    fund_mtx.vout.resize(1);
+    fund_mtx.vout[0].nValue = 20 * COIN;
+    fund_mtx.vout[0].scriptPubKey = P2PKH(mine.dest);
+    const CTransaction fund(fund_mtx);
+    InjectConfirmedTx(fund, chain.hashes.front());
+
+    chain.extend();
+    CMutableTransaction send_mtx;
+    send_mtx.vin.resize(1);
+    send_mtx.vin[0].prevout = COutPoint(fund.GetHash(), 0);
+    send_mtx.vout.resize(1);
+    send_mtx.vout[0].nValue = 19 * COIN;
+    send_mtx.vout[0].scriptPubKey = P2PKH(elsewhere);
+    const CTransaction send(send_mtx);
+    InjectConfirmedTx(send, chain.tipHash());
+
+    WalletEventQueue q;
+    WalletTxStore store(pwalletMain, q);
+    registerProductionViews(store);
+    store.start();
+
+    const std::vector<TransactionRecord> recs = producerRecordsFor(send.GetHash());
+    BOOST_REQUIRE_EQUAL(recs.size(), 1u);
+    BOOST_REQUIRE_EQUAL(static_cast<int>(recs[0].status.status), static_cast<int>(TransactionStatus::Confirming));
+    BOOST_REQUIRE(recs[0].status.countsForBalance);
+    store.enqueueInsert(recs, /*block_known=*/true);
+    settle(q);
+    Tally(q);
+
+    std::vector<int> change_depths;
+    for (int depth = 2; depth <= TransactionRecord::RecommendedNumConfirmations + 3; ++depth) {
+        chain.extend();
+        RefreshTip(store, q);
+        if (Tally(q)[GRC::VIEW_DETAILED].changes > 0) change_depths.push_back(depth);
+    }
+    const std::vector<int> want{TransactionRecord::RecommendedNumConfirmations};
+    BOOST_CHECK_EQUAL_COLLECTIONS(change_depths.begin(), change_depths.end(), want.begin(), want.end());
+
+    EraseWalletTx(send.GetHash());
+    EraseWalletTx(fund.GetHash());
+}
+
+//! The force marker lasts exactly one clean pass. A throw at a HEIGHT-ONLY tip (no flip, so
+//! nothing would be sent anyway) must make the next tip re-send every part to every view even
+//! though that tip is height-only too, and the tip after that must be gated again. Without
+//! the clear, a hash that ever threw would lose the gate for good.
+BOOST_AUTO_TEST_CASE(aForcedRefreshIsSentOnceThenTheGateReturns)
+{
+    using Stage = WalletTxStore::RefreshStage;
+    AdvancingChain chain(/*coinbase_maturity=*/3);
+    OwnedKey mine;
+    const CTxDestination foreign_dest = ForeignDest();
+    chain.extend();
+    const CTransaction cs = MakeCoinstake(mine.dest, 50 * COIN, foreign_dest, 1 * COIN);
+    InjectConfirmedTx(cs, chain.tipHash());
+
+    WalletEventQueue q;
+    WalletTxStore store(pwalletMain, q);
+    registerProductionViews(store);
+    store.start();
+    std::size_t parts = 0;
+    SentMap sent = InsertFreshCoinstake(store, q, cs, parts);
+
+    for (int depth = 2; depth <= 4; ++depth) {
+        chain.extend();
+        RefreshTip(store, q);
+        Absorb(sent, Tally(q));
+    }
+
+    // Depth 5, height-only: throw after the cache recompute of the first part.
+    bool thrown = false;
+    store.SetRefreshFaultHookForTests([&](Stage s, std::size_t, int) {
+        if (thrown || s != Stage::AfterRecompute) return;
+        thrown = true;
+        throw std::runtime_error("injected refresh failure");
+    });
+    chain.extend();
+    RefreshTip(store, q);
+    store.SetRefreshFaultHookForTests(nullptr);
+    BOOST_REQUIRE(thrown);
+    std::map<int, ViewTally> at_throw = Tally(q);
+    BOOST_CHECK_EQUAL(at_throw[GRC::VIEW_DETAILED].changes + at_throw[GRC::VIEW_OVERVIEW].changes, 0);
+    Absorb(sent, at_throw);
+
+    // Depth 6, height-only, but forced: every part re-sent to the detailed view.
+    chain.extend();
+    RefreshTip(store, q);
+    std::map<int, ViewTally> forced = Tally(q);
+    BOOST_CHECK_EQUAL(forced[GRC::VIEW_DETAILED].changes, static_cast<int>(parts));
+    BOOST_CHECK_GE(forced[GRC::VIEW_OVERVIEW].changes + forced[GRC::VIEW_OVERVIEW].inserts, 1);
+    Absorb(sent, forced);
+    CheckProjection(sent, FreshStatuses(cs.GetHash()), "forced tip");
+
+    // Depth 7: the marker was cleared by that clean pass; height-only is gated again.
+    chain.extend();
+    RefreshTip(store, q);
+    std::map<int, ViewTally> after = Tally(q);
+    BOOST_CHECK_EQUAL(after[GRC::VIEW_DETAILED].changes + after[GRC::VIEW_OVERVIEW].changes, 0);
+    Absorb(sent, after);
+    CheckProjection(sent, FreshStatuses(cs.GetHash()), "tip after the forced one");
+
+    EraseWalletTx(cs.GetHash());
+}
+
+//! A throw AFTER a cursor moved a row but before its delta was queued cannot be repaired by a
+//! forced resend: the cursor already holds the new slot and would emit only a Change. Here the
+//! row is flipping INTO the views (NotAccepted -> Immature: the cursor emits an Insert), and the
+//! refresh throws right after the first view's cursor moved it. Every view must be reset, and
+//! hold the rows, so no consumer is left with a wrong row count.
+BOOST_AUTO_TEST_CASE(aThrowAfterACursorMovedARowResetsEveryView)
+{
+    using Stage = WalletTxStore::RefreshStage;
+    PendingTipChain chain;
+    OwnedKey mine;
+    const CTransaction cs = MakeCoinstake(mine.dest, 50 * COIN, ForeignDest(), 1 * COIN);
+    InjectConfirmedTx(cs, chain.hash_fresh);
+
+    WalletEventQueue q;
+    WalletTxStore store(pwalletMain, q);
+    registerProductionViews(store);
+    store.start();
+
+    const std::vector<TransactionRecord> recs = producerRecordsFor(cs.GetHash());
+    BOOST_REQUIRE(!recs.empty());
+    BOOST_REQUIRE_EQUAL(static_cast<int>(recs[0].status.status), static_cast<int>(TransactionStatus::NotAccepted));
+    store.enqueueInsert(recs, /*block_known=*/true);
+    settle(q);
+    q.drain();
+    BOOST_REQUIRE_EQUAL(viewRowCount(store, GRC::VIEW_DETAILED), 0u);   // masked while NotAccepted
+
+    chain.connect();
+    bool thrown = false;
+    store.SetRefreshFaultHookForTests([&](Stage s, std::size_t, int) {
+        if (thrown || s != Stage::AfterCursorUpdate) return;
+        thrown = true;
+        throw std::runtime_error("injected refresh failure");
+    });
+    RefreshTip(store, q);
+    store.SetRefreshFaultHookForTests(nullptr);
+    BOOST_REQUIRE(thrown);
+
+    std::set<int> reset_views;
+    for (const GRC::WalletEvent& ev : q.drain()) {
+        if (const auto* r = std::get_if<GRC::RowsResetPayload>(&ev.payload)) reset_views.insert(r->viewId);
+    }
+    BOOST_CHECK_MESSAGE(reset_views.count(GRC::VIEW_DETAILED) == 1, "the detailed view was not reset");
+    BOOST_CHECK_MESSAGE(reset_views.count(GRC::VIEW_OVERVIEW) == 1, "the overview was not reset");
+    // The throw hit the first part, so only it flipped in this tip; the parts after it were not
+    // refreshed and stay masked. A consumer re-reading after the reset gets exactly that.
+    BOOST_CHECK_EQUAL(viewRowCount(store, GRC::VIEW_DETAILED), 1u);
+
+    // The next refresh is forced (the hash is marked): the remaining parts flip in with their
+    // own Inserts, and every view ends up holding every part.
+    RefreshTip(store, q);
+    std::map<int, ViewTally> next = Tally(q);
+    BOOST_CHECK_EQUAL(next[GRC::VIEW_DETAILED].inserts, static_cast<int>(recs.size()) - 1);
+    BOOST_CHECK_EQUAL(viewRowCount(store, GRC::VIEW_DETAILED), recs.size());
+    BOOST_CHECK_EQUAL(viewRowCount(store, GRC::VIEW_OVERVIEW), recs.size());
+
+    EraseWalletTx(cs.GetHash());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
