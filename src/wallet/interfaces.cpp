@@ -68,12 +68,12 @@ public:
 
     bool tryGetBalances(WalletBalances& balances) override
     {
-        // The Get*Balance() calls iterate the wallet's full mapWallet and
-        // become very expensive on large wallets, so refresh-path callers
-        // must be able to bow out cleanly when the core is holding the locks
-        // (e.g. during a wallet rescan) instead of stalling the GUI thread.
-        // The locks are held across all four scans so the snapshot is
-        // coherent (the individual getters re-lock recursively).
+        // The balance scan iterates the wallet's full mapWallet and becomes
+        // expensive on large wallets, so refresh-path callers must be able to
+        // bow out cleanly when the core is holding the locks (e.g. during a
+        // wallet rescan) instead of stalling the GUI thread. GetBalances()
+        // re-locks recursively. The TRY_LOCK only covers contention: once the
+        // locks are taken the scan runs to the end, which is why it is one pass.
         TRY_LOCK(cs_main, lockMain);
         if (!lockMain) {
             return false;
@@ -83,10 +83,11 @@ public:
             return false;
         }
 
-        balances.balance = m_wallet->GetBalance();
-        balances.stake = m_wallet->GetStake();
-        balances.unconfirmed_balance = m_wallet->GetUnconfirmedBalance();
-        balances.immature_balance = m_wallet->GetImmatureBalance();
+        const CWallet::Balances totals = m_wallet->GetBalances();
+        balances.balance = totals.balance;
+        balances.stake = totals.stake;
+        balances.unconfirmed_balance = totals.unconfirmed;
+        balances.immature_balance = totals.immature;
 
         return true;
     }

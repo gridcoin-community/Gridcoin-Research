@@ -600,6 +600,25 @@ public:
     int64_t GetUnconfirmedBalance() const;
     int64_t GetImmatureBalance() const;
     int64_t GetStake() const;
+
+    //! The four balances above, as those four functions return them.
+    struct Balances
+    {
+        int64_t balance{0};
+        int64_t stake{0};
+        int64_t unconfirmed{0};
+        int64_t immature{0};
+    };
+
+    //!
+    //! \brief All four balances in one pass over the wallet, with one depth
+    //! lookup per transaction (more only for a transaction of ours less than
+    //! three blocks deep, whose dependencies IsTrusted() walks). Equal to
+    //! calling GetBalance(), GetStake(), GetUnconfirmedBalance() and
+    //! GetImmatureBalance() under one hold of the locks, at a fraction of the
+    //! cost on a large wallet.
+    //!
+    Balances GetBalances() const;
     int64_t GetNewMint() const;
     bool FundTransaction(CTransaction& tx, int64_t& nFeeRet, int& nChangePosInOut,
                          std::string& strFailReason, const CCoinControl* coinControl);
@@ -1055,6 +1074,8 @@ public:
     int GetDepthInMainChain() const { CBlockIndex *pindexRet; return GetDepthInMainChain(pindexRet); }
     bool IsInMainChain() const { CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
     int GetBlocksToMaturity() const;
+    //! GetBlocksToMaturity() for a depth the caller has already looked up.
+    int GetBlocksToMaturity(int depth) const;
     bool AcceptToMemoryPool();
 };
 
@@ -1389,8 +1410,15 @@ public:
 
     int64_t GetAvailableCredit(bool fUseCache=true) const
     {
+        return GetAvailableCredit(GetBlocksToMaturity(), fUseCache);
+    }
+
+    //! GetAvailableCredit() for a GetBlocksToMaturity() the caller has already
+    //! computed.
+    int64_t GetAvailableCredit(int blocks_to_maturity, bool fUseCache) const
+    {
         // Must wait until coinbase is safely deep enough in the chain before valuing it
-        if ((IsCoinBase() || IsCoinStake()) && GetBlocksToMaturity() > 0)
+        if ((IsCoinBase() || IsCoinStake()) && blocks_to_maturity > 0)
             return 0;
 
         if (fUseCache && fAvailableCreditCached)
@@ -1483,11 +1511,18 @@ public:
 
     bool IsTrusted() const
     {
-		int nMinConfirmsRequiredToSendGRC = 3;
         // Quick answer in most cases
         if (!IsFinalTx(*this))
             return false;
-        int nDepth = GetDepthInMainChain();
+        return IsTrusted(GetDepthInMainChain());
+    }
+
+    //! IsTrusted() for a GetDepthInMainChain() the caller has already looked up.
+    bool IsTrusted(int nDepth) const
+    {
+        int nMinConfirmsRequiredToSendGRC = 3;
+        if (!IsFinalTx(*this))
+            return false;
         if (nDepth >= nMinConfirmsRequiredToSendGRC)
             return true;
         if (nDepth < 0)
