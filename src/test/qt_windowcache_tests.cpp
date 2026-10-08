@@ -23,7 +23,10 @@
 #include <boost/test/unit_test.hpp>
 
 #include <cstdint>
+#include <memory>
+#include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace GRC;
@@ -540,6 +543,399 @@ BOOST_AUTO_TEST_CASE(consumer_routing_scenario)
     check_slice(c, 0, {0, 1, 2, 3, 4});
     // A content fetch from the OLD epoch is now rejected.
     BOOST_CHECK(!c.fillContent(s, 20, seq(20, 6), /*epoch*/1, 14));
+}
+
+// ---- CoalescingSink (#3059) ----------------------------------------------------------
+//
+// One dataChanged per drained batch instead of one per Change event. On macOS with an
+// accessibility client each model notification rebuilds one accessibility element per
+// table row, so per-event emission cost gigabytes during a catch-up.
+
+namespace {
+//! A sink whose row count the coalescer reads at endBatch.
+struct CoalesceFixture {
+    RecSink target;
+    int rows = 100;
+    CoalescingSink sink{target, [this] { return rows; }};
+};
+
+//! The only dataChanged ops, as (first, count) pairs.
+std::vector<std::pair<int, int>> changes(const RecSink& s)
+{
+    std::vector<std::pair<int, int>> out;
+    for (const auto& op : s.ops) {
+        if (op.kind == "dataChanged") out.emplace_back(op.first, op.count);
+    }
+    return out;
+}
+} // namespace
+
+BOOST_AUTO_TEST_CASE(coalescer_is_a_pass_through_outside_a_batch)
+{
+    CoalesceFixture f;
+    f.sink.dataChanged(3, 2);
+    f.sink.dataChanged(10, 1);
+    f.sink.dataChanged(4, 0);    // ignored: nothing to refresh
+    f.sink.dataChanged(4, -1);   // ignored
+    const auto c = changes(f.target);
+    BOOST_REQUIRE_EQUAL(c.size(), 2u);
+    BOOST_CHECK(c[0] == std::make_pair(3, 2));
+    BOOST_CHECK(c[1] == std::make_pair(10, 1));
+}
+
+BOOST_AUTO_TEST_CASE(coalescer_emits_one_union_per_batch)
+{
+    CoalesceFixture f;
+    f.sink.beginBatch();
+    f.sink.dataChanged(20, 1);
+    f.sink.dataChanged(5, 2);
+    f.sink.dataChanged(30, 3);
+    f.sink.dataChanged(7, 0);    // a zero-length change must not create a phantom endpoint
+    BOOST_CHECK(changes(f.target).empty());   // nothing until the batch closes
+    BOOST_CHECK(f.sink.endBatch() == CoalescingSink::EndResult::Emitted);
+    const auto c = changes(f.target);
+    BOOST_REQUIRE_EQUAL(c.size(), 1u);
+    BOOST_CHECK(c[0] == std::make_pair(5, 28));   // [5, 32]
+    // A batch with nothing pending emits nothing.
+    f.sink.beginBatch();
+    BOOST_CHECK(f.sink.endBatch() == CoalescingSink::EndResult::None);
+    BOOST_CHECK_EQUAL(changes(f.target).size(), 1u);
+}
+
+BOOST_AUTO_TEST_CASE(coalescer_translates_the_range_through_inserts)
+{
+    struct Case { int pos, count, lo, hi; };
+    // Pending [10, 14]; each case is one insert, then the emitted range.
+    for (const Case& k : {Case{0, 3, 13, 17},     // above: shifts
+                          Case{10, 2, 12, 16},    // at lo: the whole range shifts
+                          Case{12, 2, 10, 16},    // inside: extends over the new rows
+                          Case{14, 1, 10, 15},    // at hi: extends
+                          Case{15, 4, 10, 14},    // at hi + 1: below, unchanged
+                          Case{40, 4, 10, 14}}) { // well below: unchanged
+        CoalesceFixture f;
+        f.sink.beginBatch();
+        f.sink.dataChanged(10, 5);
+        f.sink.beginInsert(k.pos, k.count);
+        f.sink.endInsert();
+        f.rows = 200;
+        BOOST_CHECK(f.sink.endBatch() == CoalescingSink::EndResult::Emitted);
+        const auto c = changes(f.target);
+        BOOST_REQUIRE_EQUAL(c.size(), 1u);
+        BOOST_CHECK_MESSAGE(c[0] == std::make_pair(k.lo, k.hi - k.lo + 1),
+                            "insert at " << k.pos << " x" << k.count << ": got [" << c[0].first
+                            << ", " << (c[0].first + c[0].second - 1) << "], want [" << k.lo
+                            << ", " << k.hi << "]");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(coalescer_translates_the_range_through_removes)
+{
+    struct Case { int pos, count; bool dropped; int lo, hi; };
+    // Pending [10, 14]; each case is one remove, then the emitted range (or none).
+    for (const Case& k : {Case{0, 3, false, 7, 11},     // entirely above: shifts up
+                          Case{9, 1, false, 9, 13},     // ends at lo - 1: shifts up
+                          Case{8, 4, false, 8, 10},     // straddles lo
+                          Case{11, 2, false, 10, 12},   // inside
+                          Case{13, 5, false, 10, 12},   // straddles hi
+                          Case{15, 3, false, 10, 14},   // starts at hi + 1: unchanged
+                          Case{10, 5, true, 0, 0},      // exactly the range: dropped
+                          Case{5, 20, true, 0, 0}}) {   // covers more: dropped
+        CoalesceFixture f;
+        f.sink.beginBatch();
+        f.sink.dataChanged(10, 5);
+        f.sink.beginRemove(k.pos, k.count);
+        f.sink.endRemove();
+        const CoalescingSink::EndResult r = f.sink.endBatch();
+        const auto c = changes(f.target);
+        if (k.dropped) {
+            BOOST_CHECK(r == CoalescingSink::EndResult::None);
+            BOOST_CHECK_MESSAGE(c.empty(), "remove at " << k.pos << " x" << k.count << " should drop the range");
+        } else {
+            BOOST_CHECK(r == CoalescingSink::EndResult::Emitted);
+            BOOST_REQUIRE_EQUAL(c.size(), 1u);
+            BOOST_CHECK_MESSAGE(c[0] == std::make_pair(k.lo, k.hi - k.lo + 1),
+                                "remove at " << k.pos << " x" << k.count << ": got [" << c[0].first
+                                << ", " << (c[0].first + c[0].second - 1) << "], want [" << k.lo
+                                << ", " << k.hi << "]");
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(coalescer_reset_drops_earlier_changes_and_later_ones_still_coalesce)
+{
+    CoalesceFixture f;
+    f.sink.beginBatch();
+    f.sink.dataChanged(10, 5);
+    f.sink.beginReset();
+    f.sink.endReset();
+    f.sink.dataChanged(3, 1);
+    f.sink.dataChanged(6, 1);
+    BOOST_CHECK(f.sink.endBatch() == CoalescingSink::EndResult::Emitted);
+    const auto c = changes(f.target);
+    BOOST_REQUIRE_EQUAL(c.size(), 1u);
+    BOOST_CHECK(c[0] == std::make_pair(3, 4));
+}
+
+BOOST_AUTO_TEST_CASE(coalescer_forwards_every_bracket_before_the_single_change)
+{
+    CoalesceFixture f;
+    f.sink.beginBatch();
+    f.sink.dataChanged(10, 1);
+    f.sink.beginInsert(0, 1);
+    f.sink.endInsert();
+    f.sink.dataChanged(2, 1);
+    f.sink.beginRemove(50, 2);
+    f.sink.endRemove();
+    f.sink.endBatch();
+    const std::vector<std::string> want{"beginInsert", "endInsert", "beginRemove", "endRemove", "dataChanged"};
+    BOOST_REQUIRE_EQUAL(f.target.ops.size(), want.size());
+    for (std::size_t i = 0; i < want.size(); ++i) BOOST_CHECK_EQUAL(f.target.ops[i].kind, want[i]);
+    BOOST_CHECK(changes(f.target)[0] == std::make_pair(2, 10));   // [2, 11]: 10 shifted to 11
+}
+
+BOOST_AUTO_TEST_CASE(coalescer_nested_batches_emit_once_at_the_outermost_close)
+{
+    CoalesceFixture f;
+    f.sink.beginBatch();
+    f.sink.dataChanged(1, 1);
+    f.sink.beginBatch();
+    f.sink.dataChanged(8, 1);
+    BOOST_CHECK(f.sink.endBatch() == CoalescingSink::EndResult::None);
+    BOOST_CHECK(changes(f.target).empty());
+    BOOST_CHECK(f.sink.endBatch() == CoalescingSink::EndResult::Emitted);
+    BOOST_REQUIRE_EQUAL(changes(f.target).size(), 1u);
+    BOOST_CHECK(changes(f.target)[0] == std::make_pair(1, 8));
+}
+
+BOOST_AUTO_TEST_CASE(coalescer_abandon_emits_nothing_and_leaves_the_sink_usable)
+{
+    CoalesceFixture f;
+    f.sink.beginBatch();
+    f.sink.dataChanged(4, 2);
+    f.sink.abandonBatch();
+    BOOST_CHECK(!f.sink.inBatch());
+    BOOST_CHECK(changes(f.target).empty());
+    f.sink.dataChanged(9, 1);   // pass-through again
+    BOOST_REQUIRE_EQUAL(changes(f.target).size(), 1u);
+    BOOST_CHECK(changes(f.target)[0] == std::make_pair(9, 1));
+}
+
+BOOST_AUTO_TEST_CASE(coalescer_falls_back_to_the_whole_table_on_an_out_of_range_result)
+{
+    // An out-of-range result can only come from a translation bug; clamping would keep the
+    // range valid but could miss the changed rows, so the whole table is refreshed instead.
+    CoalesceFixture f;
+    f.rows = 12;
+    f.sink.beginBatch();
+    f.sink.dataChanged(10, 5);   // [10, 14] but the table now has 12 rows
+    BOOST_CHECK(f.sink.endBatch() == CoalescingSink::EndResult::Fallback);
+    const auto c = changes(f.target);
+    BOOST_REQUIRE_EQUAL(c.size(), 1u);
+    BOOST_CHECK(c[0] == std::make_pair(0, 12));
+    // An empty table: nothing to refresh, still reported.
+    CoalesceFixture g;
+    g.rows = 0;
+    g.sink.beginBatch();
+    g.sink.dataChanged(0, 1);
+    BOOST_CHECK(g.sink.endBatch() == CoalescingSink::EndResult::Fallback);
+    BOOST_CHECK(changes(g.target).empty());
+}
+
+namespace {
+//! What a view would SHOW per row: re-queried when Qt would re-query it (rows inserted,
+//! a reset, dataChanged); otherwise the row keeps what it last showed, shifting with
+//! inserts and removes. -1 is a placeholder (an uncached row).
+struct ViewMirror : public WindowCacheSink {
+    const WindowCache<Rec>* cache = nullptr;
+    std::vector<int> shown;
+    int insert_first = 0, insert_count = 0;
+    int emissions = 0;
+
+    int truth(int row) const { const Rec* r = cache->at(row); return r ? r->id : -1; }
+    void requery(int first, int count)
+    {
+        for (int i = first; i < first + count && i < static_cast<int>(shown.size()); ++i) {
+            if (i >= 0) shown[static_cast<std::size_t>(i)] = truth(i);
+        }
+    }
+    void beginReset() override {}
+    void endReset() override { shown.assign(static_cast<std::size_t>(cache->total()), -1); requery(0, cache->total()); }
+    void beginInsert(int f, int c) override
+    {
+        shown.insert(shown.begin() + f, static_cast<std::size_t>(c), -2);
+        insert_first = f;
+        insert_count = c;
+    }
+    void endInsert() override { requery(insert_first, insert_count); }
+    void beginRemove(int f, int c) override { shown.erase(shown.begin() + f, shown.begin() + f + c); }
+    void endRemove() override {}
+    void dataChanged(int f, int c) override { ++emissions; requery(f, c); }
+    bool staleAt(int i) const { return shown[static_cast<std::size_t>(i)] != truth(i); }
+};
+
+struct World {
+    WindowCache<Rec> cache;
+    ViewMirror view;
+    std::unique_ptr<CoalescingSink> coalescer;
+    WindowCacheSink& sink() { return coalescer ? static_cast<WindowCacheSink&>(*coalescer) : view; }
+};
+} // namespace
+
+//! The main safeguard against an in-range translation bug no endBatch check can see:
+//! random batches of insert / remove / change / reset / fill drive the REAL WindowCache in
+//! two identical worlds, one notifying directly and one through the coalescer. After every
+//! batch every row stale in the coalesced view must also be stale in the direct one (the two
+//! caches are identical, so rows correspond), the coalescer must have emitted at most once,
+//! and it must never have needed the full-table fallback. Compared row by row against the
+//! direct path, not an absolute oracle: a fill that moves the cached slice leaves the rows it
+//! evicted showing stale content on BOTH paths today. A count comparison would let a missed
+//! row hide behind a row the union happened to cover.
+BOOST_AUTO_TEST_CASE(coalescer_is_never_worse_than_direct_notification)
+{
+    std::mt19937 rng(0x3059);
+    auto pick = [&](int lo, int hi) { return std::uniform_int_distribution<int>(lo, hi)(rng); };
+    int next_id = 1;
+    auto fresh = [&](int n) { std::vector<Rec> v; for (int i = 0; i < n; ++i) v.push_back(Rec{next_id++}); return v; };
+
+    int batches = 0, fallbacks = 0, multi = 0, worse = 0;
+    for (int run = 0; run < 400; ++run) {
+        World direct, coal;
+        coal.coalescer = std::make_unique<CoalescingSink>(coal.view, [&coal] { return coal.cache.total(); });
+        const int total0 = pick(0, 25);
+        const int first0 = total0 ? pick(0, total0 - 1) : 0;
+        const int size0 = total0 ? pick(0, std::min(12, total0 - first0)) : 0;
+        const std::vector<Rec> rows0 = fresh(size0);
+        for (World* w : {&direct, &coal}) {
+            w->cache.seedInitial(rows0, first0, total0, /*epoch=*/1, /*high_water=*/0);
+            w->view.cache = &w->cache;
+            w->view.endReset();
+        }
+        uint64_t seqno = 0, epoch = 1;
+        for (int b = 0; b < 25; ++b) {
+            coal.coalescer->beginBatch();
+            const int before = coal.view.emissions;
+            const int nops = pick(1, 8);
+            for (int o = 0; o < nops; ++o) {
+                const int total = direct.cache.total();
+                const int kind = pick(0, 99);
+                if (kind < 25) {                                   // insert
+                    const int pos = pick(0, total), n = pick(1, 3);
+                    const std::vector<Rec> r = fresh(n);
+                    ++seqno;
+                    for (World* w : {&direct, &coal}) w->cache.applyInsert(w->sink(), seqno, pos, r);
+                } else if (kind < 45 && total > 0) {               // remove
+                    const int pos = pick(0, total - 1), n = pick(1, std::min(3, total - pos));
+                    ++seqno;
+                    for (World* w : {&direct, &coal}) w->cache.applyRemove(w->sink(), seqno, pos, n);
+                } else if (kind < 85 && total > 0) {               // change
+                    const int pos = pick(0, total - 1), n = pick(1, std::min(4, total - pos));
+                    const std::vector<Rec> r = fresh(n);
+                    ++seqno;
+                    for (World* w : {&direct, &coal}) w->cache.applyChange(w->sink(), seqno, pos, n, r);
+                } else if (kind < 90) {                            // reset (a resort / refilter)
+                    const int nt = pick(0, 25);
+                    const int cf = nt ? pick(0, nt - 1) : 0;
+                    const std::vector<Rec> r = fresh(nt ? pick(0, std::min(12, nt - cf)) : 0);
+                    ++seqno;
+                    ++epoch;
+                    for (World* w : {&direct, &coal}) w->cache.applyReset(w->sink(), seqno, r, cf, nt, epoch, seqno);
+                } else if (total > 0) {                            // a content fill inside the batch
+                    const int first = pick(0, total - 1);
+                    const std::vector<Rec> r = fresh(pick(0, std::min(12, total - first)));
+                    for (World* w : {&direct, &coal}) {
+                        w->cache.fillContent(w->sink(), first, r, epoch, w->cache.structuralSeqno());
+                    }
+                }
+            }
+            const CoalescingSink::EndResult end = coal.coalescer->endBatch();
+            ++batches;
+            fallbacks += end == CoalescingSink::EndResult::Fallback;
+            multi += (coal.view.emissions - before) > 1;
+            BOOST_REQUIRE_EQUAL(coal.view.shown.size(), static_cast<std::size_t>(coal.cache.total()));
+            BOOST_REQUIRE_EQUAL(direct.view.shown.size(), static_cast<std::size_t>(direct.cache.total()));
+            for (int i = 0; i < coal.cache.total(); ++i) {
+                if (coal.view.staleAt(i) && !direct.view.staleAt(i)) {
+                    ++worse;
+                    BOOST_ERROR("run " << run << " batch " << b << ": row " << i
+                                << " is stale in the coalesced view but current in the direct one");
+                    break;
+                }
+            }
+        }
+    }
+    BOOST_CHECK_EQUAL(fallbacks, 0);
+    BOOST_CHECK_EQUAL(multi, 0);
+    BOOST_CHECK_EQUAL(worse, 0);
+    BOOST_TEST_MESSAGE("coalescer differential: " << batches << " batches");
+}
+
+//! GRC::CloseBatch: what DetailedTxModel::applyEventBatch calls to close a drained batch. A batch
+//! that carried a tip also refreshes the cached slice -- progress derived at render time
+//! changed for every cached row -- in FINAL coordinates, unioned into the one emission.
+BOOST_AUTO_TEST_CASE(close_batch_refreshes_the_slice_once_when_the_batch_carried_a_tip)
+{
+    auto setup = [](WindowCache<Rec>& c, RecSink& t) {
+        c.seedInitial(seq(105, 10), /*cache_first=*/5, /*total=*/30, /*epoch=*/1, /*high_water=*/0);
+        t.cache = &c;
+    };
+
+    // A change at row 7, then an insert above the slice: the slice moves to [6, 15] and the
+    // change to row 8. With a tip, one dataChanged spans [6, 15].
+    {
+        WindowCache<Rec> c;
+        RecSink t;
+        setup(c, t);
+        CoalescingSink sink(t, [&c] { return c.total(); });
+        sink.beginBatch();
+        BOOST_CHECK(c.applyChange(sink, 1, 7, 1, recs({900})) == APPLIED);
+        BOOST_CHECK(c.applyInsert(sink, 2, 0, recs({901})) == APPLIED);
+        BOOST_CHECK(CloseBatch(sink, c, /*saw_tip=*/true) == CoalescingSink::EndResult::Emitted);
+        const auto ch = changes(t);
+        BOOST_REQUIRE_EQUAL(ch.size(), 1u);
+        BOOST_CHECK(ch[0] == std::make_pair(6, 10));
+        BOOST_CHECK_EQUAL(t.ops.back().kind, "dataChanged");   // after every bracket
+    }
+    // The same batch without a tip: only the changed row, shifted.
+    {
+        WindowCache<Rec> c;
+        RecSink t;
+        setup(c, t);
+        CoalescingSink sink(t, [&c] { return c.total(); });
+        sink.beginBatch();
+        c.applyChange(sink, 1, 7, 1, recs({900}));
+        c.applyInsert(sink, 2, 0, recs({901}));
+        BOOST_CHECK(CloseBatch(sink, c, /*saw_tip=*/false) == CoalescingSink::EndResult::Emitted);
+        const auto ch = changes(t);
+        BOOST_REQUIRE_EQUAL(ch.size(), 1u);
+        BOOST_CHECK(ch[0] == std::make_pair(8, 1));
+    }
+    // A tip after a reset in the same batch refreshes the REBUILT slice.
+    {
+        WindowCache<Rec> c;
+        RecSink t;
+        setup(c, t);
+        CoalescingSink sink(t, [&c] { return c.total(); });
+        sink.beginBatch();
+        c.applyChange(sink, 1, 7, 1, recs({900}));
+        BOOST_CHECK(c.applyReset(sink, 2, seq(500, 4), /*cache_first=*/2, /*total=*/12, /*epoch=*/2, 2) == APPLIED);
+        BOOST_CHECK(CloseBatch(sink, c, /*saw_tip=*/true) == CoalescingSink::EndResult::Emitted);
+        const auto ch = changes(t);
+        BOOST_REQUIRE_EQUAL(ch.size(), 1u);
+        BOOST_CHECK(ch[0] == std::make_pair(2, 4));
+    }
+    // A tip with nothing cached and nothing changed emits nothing; so does a quiet batch.
+    {
+        WindowCache<Rec> c;
+        RecSink t;
+        c.seedInitial({}, 0, /*total=*/30, 1, 0);
+        t.cache = &c;
+        CoalescingSink sink(t, [&c] { return c.total(); });
+        sink.beginBatch();
+        BOOST_CHECK(CloseBatch(sink, c, /*saw_tip=*/true) == CoalescingSink::EndResult::None);
+        sink.beginBatch();
+        BOOST_CHECK(CloseBatch(sink, c, /*saw_tip=*/false) == CoalescingSink::EndResult::None);
+        BOOST_CHECK(changes(t).empty());
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -49,6 +49,7 @@ DetailedTxModel::DetailedTxModel(WalletModel* walletModel, QObject* parent)
     , m_walletModel(walletModel)
     , m_ttm(walletModel->getTransactionTableModel())
     , m_sink(this)
+    , m_coalesce(m_sink, [this] { return m_cache.total(); })
 {
     // Register the server-side view: the full history sorted by Date DESC, the
     // TransactionView's default ordering. The default FilterSpec is the
@@ -306,7 +307,7 @@ void DetailedTxModel::fetchWindow(int first, int count)
     for (int attempt = 0; attempt < kMaxFetchRetries && !adopted; ++attempt) {
         m_walletModel->drainEventQueue();
         GRC::RowsResult r = store.getRows(GRC::VIEW_DETAILED, first, count);
-        adopted = m_cache.fillContent(m_sink, first, std::move(r.records),
+        adopted = m_cache.fillContent(m_coalesce, first, std::move(r.records),
                                       r.epoch, r.high_water);
     }
     if (adopted) {
@@ -352,11 +353,27 @@ void DetailedTxModel::noteRejected(const char* what, int first, int count,
 void DetailedTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& events)
 {
     interfaces::WalletTxSource& store = m_walletModel->txSource();
+
+    // One dataChanged for the whole batch (#3059): every content notification below goes
+    // through m_coalesce, which holds it until endBatch. On the exception path the scope
+    // abandons the batch instead, so nothing is emitted during unwinding.
+    m_coalesce.beginBatch();
+    struct BatchScope {
+        GRC::CoalescingSink& sink;
+        bool closed = false;
+        ~BatchScope() { if (!closed) sink.abandonBatch(); }
+    } scope{m_coalesce};
+
+    // Per-batch tallies for the VERBOSE line at the end (the #3059 measurements).
+    int n_tips = 0, n_resets = 0, n_inserts = 0, n_removes = 0, n_changes = 0;
+
     for (const GRC::WalletEvent& ev : events) {
         const uint64_t seqno = ev.seqno;
         std::visit([&](auto&& payload) {
             using P = std::decay_t<decltype(payload)>;
-            if constexpr (std::is_same_v<P, GRC::RowsResetPayload>) {
+            if constexpr (std::is_same_v<P, GRC::ChainTipChangedPayload>) {
+                ++n_tips;
+            } else if constexpr (std::is_same_v<P, GRC::RowsResetPayload>) {
                 if (payload.viewId != GRC::VIEW_DETAILED) return;
                 if (seqno <= m_cache.structuralSeqno()) return;   // already reflected
                 // Bounded refetch (NOT count=-1): the cache rebuilds its window; the
@@ -365,9 +382,10 @@ void DetailedTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                 // max(high_water, seqno) — capturing any off-window insert/remove that
                 // raced this Reset (PR4-fix B, via RowsResult atomicity).
                 GRC::RowsResult r = store.getRows(GRC::VIEW_DETAILED, 0, kInitialWindow);
-                if (m_cache.applyReset(m_sink, seqno, std::move(r.records), 0,
+                if (m_cache.applyReset(m_coalesce, seqno, std::move(r.records), 0,
                                        r.total_accepted, r.epoch, r.high_water)
                         == GRC::ApplyResult::Applied) {
+                    ++n_resets;
                     // The pre-Reset viewport range is meaningless against the rebuilt
                     // (possibly resized) table; reset it to the top — where a model
                     // reset scrolls the view — so the re-armed fetch targets a valid
@@ -385,12 +403,16 @@ void DetailedTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                 // payload carries the inserted records; the cache gates on seqno,
                 // forwards begin/endInsertRows (before/after growing total) and either
                 // splices into the slice or shifts the cache base.
-                noteRejected("insert", payload.position, static_cast<int>(payload.records.size()),
-                             m_cache.applyInsert(m_sink, seqno, payload.position, payload.records));
+                const GRC::ApplyResult res =
+                    m_cache.applyInsert(m_coalesce, seqno, payload.position, payload.records);
+                if (res == GRC::ApplyResult::Applied) ++n_inserts;
+                noteRejected("insert", payload.position, static_cast<int>(payload.records.size()), res);
             } else if constexpr (std::is_same_v<P, GRC::RowsRemovedPayload>) {
                 if (payload.viewId != GRC::VIEW_DETAILED) return;
-                noteRejected("remove", payload.position, payload.count,
-                             m_cache.applyRemove(m_sink, seqno, payload.position, payload.count));
+                const GRC::ApplyResult res =
+                    m_cache.applyRemove(m_coalesce, seqno, payload.position, payload.count);
+                if (res == GRC::ApplyResult::Applied) ++n_removes;
+                noteRejected("remove", payload.position, payload.count, res);
             } else if constexpr (std::is_same_v<P, GRC::RowsChangedPayload>) {
                 if (payload.viewId != GRC::VIEW_DETAILED) return;
                 if (seqno <= m_cache.structuralSeqno()) return;
@@ -400,11 +422,40 @@ void DetailedTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                 // costs a synchronous IPC round trip per change under multiprocess
                 // (see GRC::RowsChangedPayload).
                 const std::vector<TransactionRecord>& fresh = payload.records;
-                noteRejected("change", payload.first, payload.count,
-                             m_cache.applyChange(m_sink, seqno, payload.first, payload.count, fresh));
+                const GRC::ApplyResult res =
+                    m_cache.applyChange(m_coalesce, seqno, payload.first, payload.count, fresh);
+                if (res == GRC::ApplyResult::Applied) ++n_changes;
+                noteRejected("change", payload.first, payload.count, res);
             }
-            // RowCountChanged / ChainTipChanged / VIEW_FULL / VIEW_OVERVIEW are not
-            // consumed here (the detailed view's cap stays unlimited).
+            // RowCountChanged / VIEW_FULL / VIEW_OVERVIEW are not consumed here (the
+            // detailed view's cap stays unlimited).
         }, ev.payload);
     }
+
+    // Close the batch, refreshing the cached slice once if it carried a new tip: depth and
+    // maturity progress are derived from the tip height at render time, so a tip changes what
+    // the cached rows display even when no row was re-sent (GRC::CloseBatch). This is a model
+    // notification rather than a bare repaint on purpose: Qt's Linux AT-SPI bridge turns it
+    // into VisibleDataChanged for screen readers.
+    scope.closed = true;
+    const GRC::CoalescingSink::EndResult end = GRC::CloseBatch(m_coalesce, m_cache, n_tips > 0);
+    if (end == GRC::CoalescingSink::EndResult::Fallback) {
+        // Unreachable unless the coalescer's range translation, or the cached slice the tip
+        // refresh reads, is wrong. The full-table refresh keeps the view correct, and this
+        // line is the evidence: the range the batch closed with against the row count.
+        const std::pair<int, int> range = m_coalesce.lastRange();
+        GUILogPrintf("WARNING: DetailedTxModel: coalesced range [%d, %d] out of bounds for %d rows - "
+                     "refreshed the whole table", range.first, range.second, m_cache.total());
+    }
+    const char* emitted = "no dataChanged";
+    if (end == GRC::CoalescingSink::EndResult::Emitted) {
+        emitted = "1 dataChanged";
+    } else if (end == GRC::CoalescingSink::EndResult::Fallback && m_cache.total() > 0) {
+        emitted = "1 full-table dataChanged";
+    }
+    GUILogPrint(GUILogCategory::VERBOSE,
+                "DetailedTxModel::applyEventBatch: %u events: %d tips; applied %d resets, "
+                "%d inserts, %d removes, %d changes -> %s",
+                static_cast<unsigned int>(events.size()), n_tips, n_resets, n_inserts,
+                n_removes, n_changes, emitted);
 }

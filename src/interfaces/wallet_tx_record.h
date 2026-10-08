@@ -6,6 +6,7 @@
 #include "wallet/generated_type.h"
 #include "wallet/ismine.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <type_traits>
@@ -186,5 +187,102 @@ static_assert(std::is_same_v<decltype(TransactionRecord::time), int64_t>
                   && std::is_same_v<decltype(TransactionRecord::debit), int64_t>
                   && std::is_same_v<decltype(TransactionRecord::credit), int64_t>,
               "TransactionRecord amounts/time are fixed-width value types");
+
+namespace GRC {
+//!
+//! \brief The status a snapshot implies at tip height \p height, assuming nothing but
+//! height has changed since it was taken.
+//!
+//! The producer (WalletTxStore::applyChainTipRefresh) and the GUI's formatters share this
+//! one projection. The producer sends a status Change only when a fresh status differs from
+//! the projection of the previous one; the GUI projects the snapshot it holds to the pushed
+//! tip height. Between status flips the two agree by construction (#3059).
+//!
+//! Per block, with no flip, TransactionRecord::updateStatus moves cur_num_blocks, depth (+1
+//! while in the main chain) and matures_in (-1 while Immature or MaturesWarning; depth +
+//! matures_in is constant). This projects all three except matures_in for MaturesWarning:
+//! that status renders neither field, and leaving it unprojected keeps such a row ungated
+//! (it is re-sent every block) -- conservative, and unreachable for coinstakes today, since
+//! GetRequestCount() is -1 for any block not committed by this wallet. Everything else -- the
+//! status enum, countsForBalance, sortKey (the containing block's height), generated_type --
+//! changes only through an event. open_for is deliberately not projected: a non-final
+//! transaction is non-standard, never in the mempool, and so never refreshed; projecting it
+//! would count down to a false value.
+//!
+//! Identity when the snapshot has no height (cur_num_blocks < 0) or \p height is below it.
+//! The second case covers a tip that moved back (a reorg; only a fresh updateStatus is valid)
+//! AND a snapshot fetched by the GUI that is newer than the GUI's cached tip height (a scroll
+//! fetch can land between drains). In both the snapshot as-is is the best answer.
+//!
+inline TransactionStatus ProjectTxStatus(const TransactionStatus& status, int height)
+{
+    TransactionStatus out = status;
+    if (status.cur_num_blocks < 0 || height < status.cur_num_blocks) {
+        return out;
+    }
+    const int delta = height - status.cur_num_blocks;
+    out.cur_num_blocks = height;
+    // depth <= 0 is not height-driven: 0 is the mempool, < 0 is conflicted or not in the
+    // main chain.
+    if (status.depth > 0) {
+        out.depth += delta;
+    }
+    if (status.status == TransactionStatus::Immature) {
+        out.matures_in -= delta;
+    }
+    return out;
+}
+
+//! Field-by-field equality over every member of TransactionStatus.
+inline bool TxStatusEquals(const TransactionStatus& a, const TransactionStatus& b)
+{
+    return a.countsForBalance == b.countsForBalance
+        && a.sortKey == b.sortKey
+        && a.matures_in == b.matures_in
+        && a.status == b.status
+        && a.generated_type == b.generated_type
+        && a.depth == b.depth
+        && a.open_for == b.open_for
+        && a.cur_num_blocks == b.cur_num_blocks;
+}
+
+//!
+//! \brief The status to DISPLAY for a snapshot at the GUI's cached tip height.
+//!
+//! ProjectTxStatus with the height step bounded by the snapshot's category, so every displayed
+//! field stays consistent with the status enum until the flip event arrives. A flip can trail
+//! the tip height briefly: the GUI caches the newest tip of a drained batch before applying
+//! the batch's events, a batch cap can split a tip from its Changes, and an intake upsert
+//! computed at an older height can land after the refresh. Without the bound a Confirming row
+//! would read "Confirming (10 of 10)" and an Immature row would run past maturity.
+//!
+//!  - Confirming: depth stops at RecommendedNumConfirmations - 1.
+//!  - Immature:   at least one block left; depth + matures_in stays constant.
+//!  - Confirmed:  unbounded (terminal).
+//!  - anything else: the snapshot as-is.
+//!
+inline TransactionStatus DisplayTxStatus(const TransactionStatus& status, int height)
+{
+    if (status.cur_num_blocks < 0 || height < status.cur_num_blocks) {
+        return status;
+    }
+    int step = height - status.cur_num_blocks;
+    switch (status.status) {
+    case TransactionStatus::Confirming: {
+        const int64_t room = TransactionRecord::RecommendedNumConfirmations - 1 - status.depth;
+        step = static_cast<int>(std::max<int64_t>(0, std::min<int64_t>(step, room)));
+        break;
+    }
+    case TransactionStatus::Immature:
+        step = std::max(0, std::min(step, status.matures_in - 1));
+        break;
+    case TransactionStatus::Confirmed:
+        break;
+    default:
+        return status;
+    }
+    return ProjectTxStatus(status, status.cur_num_blocks + step);
+}
+} // namespace GRC
 
 #endif // GRIDCOIN_INTERFACES_WALLET_TX_RECORD_H

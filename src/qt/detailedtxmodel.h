@@ -171,6 +171,10 @@ private:
     TransactionTableModel* m_ttm;                 //!< formatter source (formatRole/headerData)
     GRC::WindowCache<TransactionRecord> m_cache;  //!< viewport slice + virtual rowCount
     CacheSink m_sink;                             //!< structural-callback adapter
+    //! Every WindowCache call goes through this, not m_sink: inside applyEventBatch it
+    //! folds all content notifications into one dataChanged per batch (#3059); outside a
+    //! batch it passes straight through. Declared after m_cache and m_sink, which it uses.
+    GRC::CoalescingSink m_coalesce;
 
     QTimer* m_fetchTimer = nullptr;               //!< single-shot scroll-fetch debounce
     int m_pending_first = 0;                      //!< last-reported visible range
