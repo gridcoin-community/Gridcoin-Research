@@ -1541,6 +1541,9 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // detachModels() on the normal path below it has nothing left to
                 // run; if a hook throws inside that call, it resumes the detach at
                 // the next hook. On any other throw path it is the only teardown.
+                // After that detach its destructor also reaps the global
+                // QThreadPool, so a pooled job started before the event loop
+                // finishes while the models and sources above are still alive.
                 FrontEndDetachGuard frontend_detach_guard{frontend};
                 frontend.attachModels(models);
 

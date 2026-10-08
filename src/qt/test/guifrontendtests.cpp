@@ -13,6 +13,7 @@
 #include <QMetaObject>
 #include <QString>
 #include <QThread>
+#include <QThreadPool>
 
 #include <atomic>
 #include <chrono>
@@ -458,6 +459,64 @@ void GUIFrontEndTests::queuedModalMessageIsLogged()
     QVERIFY2(err.find("ncap") == std::string::npos, "a non-modal message was written to stderr");
     QVERIFY2(log_count == 1, "a modal message was not written to the GUI log");
     QVERIFY2(log_ncap == 0, "a non-modal message was written to the GUI log");
+}
+
+void GUIFrontEndTests::detachGuardReapsGlobalPool()
+{
+    QVERIFY2(QThreadPool::globalInstance()->waitForDone(5000), "global pool busy before the test");
+
+    bool done_after_normal = false;
+    bool done_after_throw = false;
+    for (const bool throwing : {false, true}) {
+        FakeGuiFrontEnd fake;
+        std::atomic<bool> done{false};
+        std::atomic<bool> release{false};
+        // Spins until released, so the pool is busy while the guard runs.
+        QThreadPool::globalInstance()->start([&done, &release] {
+            for (int i = 0; i < 30000 && !release; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            done = true;
+        });
+        std::thread helper([&release] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            release = true;
+        });
+        try {
+            FrontEndDetachGuard guard{fake};
+            if (throwing) throw std::runtime_error("unwind");
+        } catch (const std::runtime_error&) {
+        }
+        (throwing ? done_after_throw : done_after_normal) = done.load();
+        helper.join();
+        QThreadPool::globalInstance()->waitForDone();
+    }
+
+    QVERIFY2(done_after_normal, "the guard returned with a global-pool job still running");
+    QVERIFY2(done_after_throw, "the guard returned with a global-pool job still running (throwing exit)");
+}
+
+void GUIFrontEndTests::detachGuardReapsJobStartedByHook()
+{
+    QVERIFY2(QThreadPool::globalInstance()->waitForDone(5000), "global pool busy before the test");
+
+    std::atomic<bool> done{false};
+    FakeGuiFrontEnd fake;
+    fake.on_hide_main = [&done] {
+        QThreadPool::globalInstance()->start([&done] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            done = true;
+        });
+    };
+    try {
+        FrontEndDetachGuard guard{fake};
+        throw std::runtime_error("unwind");
+    } catch (const std::runtime_error&) {
+    }
+    const bool done_after_throw = done.load();
+    QThreadPool::globalInstance()->waitForDone();
+
+    QVERIFY2(done_after_throw, "the guard returned before a job its detach started had finished");
 }
 
 #include "guifrontendtests.moc"
