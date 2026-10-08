@@ -230,12 +230,9 @@ static void ThreadSafeMessageBox(const std::string& message, const std::string& 
     if(guiref)
     {
         bool modal = (style & CClientUIInterface::MODAL);
-        // in case of modal message, use blocking connection to wait for user to click OK
-        QMetaObject::invokeMethod(guiref, "error",
-                                   modal ? GUIUtil::blockingGUIThreadConnection() : Qt::QueuedConnection,
-                                   Q_ARG(QString, QString::fromStdString(caption)),
-                                   Q_ARG(QString, QString::fromStdString(message)),
-                                   Q_ARG(bool, modal));
+        // The front end decides whether a modal message may hold this thread
+        // until the user answers; see DeliverCoreMessage.
+        DeliverCoreMessage(guiref, g_frontend, caption, message, modal);
     }
     else
     {
