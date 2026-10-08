@@ -87,13 +87,23 @@ QString TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) cons
 {
     QString status;
 
-    switch(wtx->status.status)
+    // Depth and maturity progress are derived from the pushed tip height, not read from
+    // the snapshot: the producer no longer re-sends a record when only those moved (#3059;
+    // GRC::DisplayTxStatus). The height is WalletModel::getChainHeight(), the height PUSHED
+    // to the GUI in the wallet event stream (ChainTipChangedPayload) and cached on the GUI
+    // thread -- never a read of the cs_main-guarded core nBestHeight, since the render path
+    // must not take a core lock (process-separation invariant). Before the first tip event
+    // the cached height is 0, and an unset snapshot has cur_num_blocks -1; in both cases
+    // the snapshot is shown as-is.
+    const TransactionStatus shown = GRC::DisplayTxStatus(wtx->status, walletModel->getChainHeight());
+
+    switch(shown.status)
     {
     case TransactionStatus::OpenUntilBlock:
-        status = tr("Open for %n more block(s)","",wtx->status.open_for);
+        status = tr("Open for %n more block(s)","",shown.open_for);
         break;
     case TransactionStatus::OpenUntilDate:
-        status = tr("Open until %1").arg(GUIUtil::dateTimeStr(wtx->status.open_for));
+        status = tr("Open until %1").arg(GUIUtil::dateTimeStr(shown.open_for));
         break;
     case TransactionStatus::Offline:
         status = tr("Offline");
@@ -102,37 +112,18 @@ QString TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) cons
         status = tr("Unconfirmed");
         break;
     case TransactionStatus::Confirming:
-        status = tr("Confirming (%1 of %2 recommended confirmations)<br>").arg(wtx->status.depth).arg(TransactionRecord::RecommendedNumConfirmations);
+        status = tr("Confirming (%1 of %2 recommended confirmations)<br>").arg(shown.depth).arg(TransactionRecord::RecommendedNumConfirmations);
         break;
     case TransactionStatus::Confirmed:
-    {
-        // Derive the displayed count from the current chain height rather than the
-        // cached snapshot. status.depth was captured when the tip was
-        // status.cur_num_blocks, but a Confirmed tx is no longer in the per-tip
-        // refresh set (PR4-fix A only re-snapshots volatile rows), so the raw
-        // snapshot would freeze at the recommended-confirmations threshold. Adding
-        // how far the tip has advanced since the snapshot keeps the tooltip live with
-        // no per-row refresh — O(1) on read, the windowed model's whole point
-        // preserved. The tip height comes from WalletModel::getChainHeight(), the
-        // height PUSHED to the GUI via the wallet event stream (ChainTipChangedPayload)
-        // and cached on the GUI thread — NOT a read of the cs_main-guarded core
-        // nBestHeight: the render path must never take a core lock (process-separation
-        // invariant). Guards: the cached height is 0 until the first chain-tip event
-        // drains, and cur_num_blocks is -1 when unset — in both the delta is skipped
-        // and the snapshot stands. confirmations is int64_t to match status.depth.
-        int64_t confirmations = wtx->status.depth;
-        const int chain_height = walletModel->getChainHeight();
-        if (wtx->status.cur_num_blocks >= 0 && chain_height >= wtx->status.cur_num_blocks) {
-            confirmations += chain_height - wtx->status.cur_num_blocks;
-        }
-        status = tr("Confirmed (%1 confirmations)").arg(confirmations);
+        // A Confirmed tx is not in the per-tip refresh set at all (PR4-fix A), so without
+        // the derivation its count would freeze at the threshold.
+        status = tr("Confirmed (%1 confirmations)").arg(shown.depth);
         break;
-    }
     case TransactionStatus::Conflicted:
         status = tr("Conflicted");
         break;
     case TransactionStatus::Immature:
-        status = tr("Immature (%1 confirmations, will be available after %2)<br>").arg(wtx->status.depth).arg(wtx->status.depth + wtx->status.matures_in);
+        status = tr("Immature (%1 confirmations, will be available after %2)<br>").arg(shown.depth).arg(shown.depth + shown.matures_in);
         break;
     case TransactionStatus::MaturesWarning:
         status = tr("This block was not received by any other nodes<br> and will probably not be accepted!");
@@ -342,7 +333,10 @@ QString TransactionTableModel::formatTxAmount(const TransactionRecord *wtx, bool
 
 QVariant TransactionTableModel::txStatusDecoration(const TransactionRecord *wtx) const
 {
-    switch(wtx->status.status)
+    // Derived progress, as in formatTxStatus (#3059).
+    const TransactionStatus shown = GRC::DisplayTxStatus(wtx->status, walletModel->getChainHeight());
+
+    switch(shown.status)
     {
     case TransactionStatus::OpenUntilBlock:
     case TransactionStatus::OpenUntilDate:
@@ -352,7 +346,7 @@ QVariant TransactionTableModel::txStatusDecoration(const TransactionRecord *wtx)
     case TransactionStatus::Unconfirmed:
         return QIcon(":/icons/transaction_0");
     case TransactionStatus::Confirming:
-        switch(wtx->status.depth)
+        switch(shown.depth)
         {
         case 1: return QIcon(":/icons/transaction_1");
         case 2: return QIcon(":/icons/transaction_2");
@@ -365,8 +359,8 @@ QVariant TransactionTableModel::txStatusDecoration(const TransactionRecord *wtx)
     case TransactionStatus::Conflicted:
         return QIcon(":/icons/transaction_conflicted");
     case TransactionStatus::Immature: {
-        int total = wtx->status.depth + wtx->status.matures_in;
-        int part = (wtx->status.depth * 4 / total) + 1;
+        int total = shown.depth + shown.matures_in;
+        int part = (shown.depth * 4 / total) + 1;
         return QIcon(QString(":/icons/transaction_%1").arg(part));
         }
     case TransactionStatus::MaturesWarning:
