@@ -7,6 +7,7 @@
 
 #include <qt/guiipcinfo.h>
 
+#include <QObject>
 #include <QString>
 #include <QWidget>
 
@@ -36,6 +37,24 @@ struct ModelBundle
     VotingModel& voting;
     interfaces::PSGTPoolContext* psgt;
 };
+
+//! What DeliverCoreMessage did with one core message.
+enum class CoreMessageDelivery {
+    Queued,          //!< Not modal: delivered queued, as before.
+    Blocking,        //!< Modal, front end does not queue modal messages: blocking connection, as before.
+    QueuedAndLogged, //!< Modal, queuing front end: delivered queued and written to the GUI log and stderr.
+};
+
+class GuiFrontEnd;
+
+//! Delivers one core message to `target`'s error(QString,QString,bool) slot.
+//! With no front end, or one that does not queue modal messages, it uses the
+//! blocking connection for a modal message and a queued one otherwise, as
+//! ThreadSafeMessageBox always did. For a front end that queues modal messages
+//! it posts every message queued, from any thread, and returns at once; a modal
+//! one is also written to the GUI log and to stderr. The result says which of
+//! these happened.
+CoreMessageDelivery DeliverCoreMessage(QObject* target, GuiFrontEnd* frontend, const std::string& caption, const std::string& message, bool modal);
 
 //! The seam between the GUI composition root (GuiMain / StartGridcoinQt in
 //! bitcoin.cpp: Init selection, IPC connect, OptionsModel, readiness, the model
@@ -82,9 +101,16 @@ public:
     //! minimize-on-close (#2995).
     virtual void requestQuit() = 0;
 
+    //! True for a front end whose core-message target cannot block inside its
+    //! error slot; DeliverCoreMessage then never makes the raising thread wait.
+    //! Default false (the Widgets front end keeps it).
+    virtual bool queuesModalCoreMessages() const;
+
     //! Detach every model from the front end, in the order StartGridcoinQt's
     //! teardown has always used: hide the main window, then client, wallet, MRC,
     //! researcher, voting and PSGT.
+    //! Before the first hook starts, it calls onDetachStarting(); that step runs
+    //! once, on the call that starts the first hook.
     //! Each call runs, in that order, the hooks not yet started. The progress
     //! index moves past a hook before the hook runs, so a hook that throws is
     //! never re-entered and its exception propagates to the caller. After such a
@@ -114,6 +140,11 @@ protected:
     //! Tears down the PSGT page's table model, which holds a reference to the
     //! PSGT pool context, before the context is destroyed.
     virtual void detachPSGT() = 0;
+
+    //! Called by detachModels() before its first hook, once. A front end closes
+    //! its asynchronous work here so nothing new starts during the detach; must
+    //! not throw. Default does nothing.
+    virtual void onDetachStarting() noexcept;
 
 private:
     //! The next detach hook to start, as an index into detachModels()'s
