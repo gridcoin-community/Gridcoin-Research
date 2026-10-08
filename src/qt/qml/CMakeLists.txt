@@ -61,6 +61,7 @@ qt_add_qml_module(gridcoinqmlapp
         Circle.qml
         ClickableLink.qml
         ColorizableImage.qml
+        CoreMessageWindow.qml
         DebugConsoleWindow.qml
         EditAddressDialog.qml
         FavoritesView.qml
