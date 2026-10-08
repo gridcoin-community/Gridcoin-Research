@@ -539,6 +539,11 @@ if(APPLE)
     )
 endif()
 
+# The QML front end's C++ module (opt-in, ENABLE_QML).
+if(ENABLE_QML)
+    add_subdirectory(quick)
+endif()
+
 # Tests
 # =====
 
