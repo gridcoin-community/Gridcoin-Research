@@ -9,6 +9,7 @@
 
 #include <QMetaObject>
 #include <QString>
+#include <QThreadPool>
 
 #include <exception>
 #include <iostream>
@@ -107,4 +108,9 @@ FrontEndDetachGuard::~FrontEndDetachGuard()
             GUILogPrintf("WARNING: front-end detach failed");
         }
     }
+
+    // Then wait for every job on the global pool, including one a detach hook
+    // started, while the models and sources declared before this guard are
+    // still alive.
+    QThreadPool::globalInstance()->waitForDone();
 }
