@@ -14,6 +14,14 @@ Item {
     property AboutWindow aboutWindow: null
     property var splashWindow: null
 
+    // Core messages wait here in arrival order; one is shown at a time.
+    property var coreMessages: []
+    // The message on screen, or null.
+    property var currentMessage: null
+    // The window of the current message, or of the last dismissed one until
+    // showNextCoreMessage() destroys it.
+    property var coreMessageWindow: null
+
     // The splash may already be active when the root loads: the front end
     // creates it before it loads the root.
     Component.onCompleted: {
@@ -42,6 +50,13 @@ Item {
         }
         function onHideToTrayRequested() {
             if (mainWindow) mainWindow.hide()
+        }
+        function onCoreMessage(caption, message, modal) {
+            // The front end wrote a modal message to the log when it was
+            // posted; a non-modal one is logged here, so each is logged once.
+            if (!modal) console.warn("core message: " + caption + ": " + message)
+            coreMessages = coreMessages.concat([{ caption: caption, message: message, modal: modal }])
+            Qt.callLater(showNextCoreMessage)
         }
     }
 
@@ -118,6 +133,11 @@ Item {
         }
         mainWindow.raise()
         mainWindow.requestActivate()
+        // A core message shown before the main window stays above it.
+        if (coreMessageWindow !== null && coreMessageWindow.visible) {
+            coreMessageWindow.raise()
+            coreMessageWindow.requestActivate()
+        }
     }
 
     function showMainWindowMinimized() {
@@ -130,6 +150,42 @@ Item {
             var component = Qt.createComponent("MainWindow.qml")
             mainWindow = component.createObject(root, { objectName: "mainWindow" })
         }
+    }
+
+    // Runs only through Qt.callLater, so a window is created only after the
+    // previous one's close has finished.
+    function showNextCoreMessage() {
+        // The current message was dismissed: destroy its window.
+        if (currentMessage === null && coreMessageWindow !== null) {
+            coreMessageWindow.hide()
+            coreMessageWindow.destroy()
+            coreMessageWindow = null
+        }
+        // After a quit no queued message is shown; each is already in the log.
+        if (Shell.quitRequested) {
+            coreMessages = []
+            return
+        }
+        if (currentMessage !== null || coreMessages.length === 0) return
+        currentMessage = coreMessages[0]
+        coreMessages = coreMessages.slice(1)
+        var component = Qt.createComponent("CoreMessageWindow.qml")
+        // The modality is an initial property: Qt registers a modal window
+        // only when it is shown.
+        coreMessageWindow = component.createObject(root, {
+            caption: currentMessage.caption,
+            text: currentMessage.message,
+            modalMessage: currentMessage.modal
+        })
+        coreMessageWindow.dismissed.connect(coreMessageDismissed)
+        coreMessageWindow.show()
+        coreMessageWindow.raise()
+        coreMessageWindow.requestActivate()
+    }
+
+    function coreMessageDismissed() {
+        currentMessage = null
+        Qt.callLater(showNextCoreMessage)
     }
 
     function showOnboardingWindow() {
