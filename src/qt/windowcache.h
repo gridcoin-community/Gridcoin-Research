@@ -5,7 +5,9 @@
 #ifndef GRIDCOIN_QT_WINDOWCACHE_H
 #define GRIDCOIN_QT_WINDOWCACHE_H
 
+#include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <utility>
 #include <vector>
 
@@ -78,6 +80,153 @@ struct WindowCacheSink {
     //! `count` rows starting at absolute `first` should be re-queried (a Change
     //! delta refreshed them in place, or a content fetch made them available).
     virtual void dataChanged(int first, int count) = 0;
+};
+
+//!
+//! \brief A WindowCacheSink decorator that turns all of a batch's dataChanged calls into one.
+//!
+//! On macOS, with an accessibility client attached, every model notification on a table
+//! view (dataChanged, rows inserted/removed, reset) makes Qt's Cocoa bridge rebuild one
+//! accessibility element per table ROW, freed only when the run loop's autorelease pool
+//! pops (qcocoaaccessibilityelement.mm, updateTableModel). One dataChanged per Change event
+//! in a drained batch therefore cost K x rows elements per batch: gigabytes on a large
+//! wallet during a catch-up (#3059). This sink makes it one per batch.
+//!
+//! While a batch is open, dataChanged(first, count) widens ONE pending inclusive range
+//! [lo, hi]. Every structural call translates that range into the coordinates the model
+//! will have once the bracket closes, then forwards unchanged; endBatch emits the range
+//! once, in final coordinates. Outside a batch the sink is a pure pass-through, so a content
+//! fill from the scroll path still notifies immediately.
+//!
+//! Translation runs in begin* (before forwarding). WindowCache calls begin* before it
+//! mutates and emits dataChanged only outside brackets, so this is equivalent to
+//! translating in end*, and it stays correct if a slot connected to rows-inserted ever
+//! triggered a fill from inside end*.
+//!
+//! Qt-thread-only, like the model it serves.
+//!
+class CoalescingSink : public WindowCacheSink
+{
+public:
+    enum class EndResult {
+        None,     //!< nothing was pending (or the batch is still open, nested)
+        Emitted,  //!< one dataChanged over the pending range
+        Fallback, //!< the range came out invalid; one dataChanged over the whole table
+    };
+
+    //! \param target    the sink that drives the host model.
+    //! \param row_count the host cache's current virtual row count (WindowCache::total()),
+    //!                  read only in endBatch, after every bracket of the batch has closed.
+    CoalescingSink(WindowCacheSink& target, std::function<int()> row_count)
+        : m_target(target), m_row_count(std::move(row_count))
+    {
+    }
+
+    void beginBatch() { ++m_depth; }
+
+    //! Close the batch normally. At the outermost close, emit the pending range once.
+    //! The pending state is cleared BEFORE forwarding, so a slot that throws cannot leave
+    //! a stale range to be emitted again. An out-of-range result means a translation bug;
+    //! clamping would keep the range valid but could miss the changed rows (a silent stale
+    //! row), so the whole table is refreshed instead -- the same single rebuild on macOS.
+    EndResult endBatch()
+    {
+        if (m_depth > 0) --m_depth;
+        if (m_depth > 0 || !m_pending) return EndResult::None;
+        const int lo = m_lo, hi = m_hi;
+        m_pending = false;
+        m_last_lo = lo;
+        m_last_hi = hi;
+        const int total = m_row_count();
+        if (lo >= 0 && lo <= hi && hi < total) {
+            m_target.dataChanged(lo, hi - lo + 1);
+            return EndResult::Emitted;
+        }
+        if (total > 0) m_target.dataChanged(0, total);
+        return EndResult::Fallback;
+    }
+
+    //! Close the batch on the exception path: drop the pending range and emit nothing
+    //! (no signal is emitted during stack unwinding).
+    void abandonBatch()
+    {
+        if (m_depth > 0) --m_depth;
+        if (m_depth == 0) m_pending = false;
+    }
+
+    bool inBatch() const { return m_depth > 0; }
+
+    //! The inclusive range the last batch closed with (before any fallback), for logging.
+    std::pair<int, int> lastRange() const { return {m_last_lo, m_last_hi}; }
+
+    void dataChanged(int first, int count) override
+    {
+        if (count <= 0) return;
+        if (m_depth == 0) {
+            m_target.dataChanged(first, count);
+            return;
+        }
+        const int last = first + count - 1;
+        if (!m_pending) {
+            m_lo = first;
+            m_hi = last;
+            m_pending = true;
+        } else {
+            m_lo = std::min(m_lo, first);
+            m_hi = std::max(m_hi, last);
+        }
+    }
+
+    void beginInsert(int first, int count) override
+    {
+        if (m_pending && count > 0) {
+            if (first <= m_lo) {            // at or above the range: it shifts down
+                m_lo += count;
+                m_hi += count;
+            } else if (first <= m_hi) {     // inside: it also covers the new rows
+                m_hi += count;
+            }                               // below: unchanged
+        }
+        m_target.beginInsert(first, count);
+    }
+    void endInsert() override { m_target.endInsert(); }
+
+    void beginRemove(int first, int count) override
+    {
+        if (m_pending && count > 0) {
+            const int r0 = first, r1 = first + count - 1;
+            if (r1 < m_lo) {                // entirely above: shift up
+                m_lo -= count;
+                m_hi -= count;
+            } else if (r0 <= m_hi) {        // overlaps: clip
+                const int before = std::max(0, std::min(r1, m_lo - 1) - r0 + 1);
+                const int inside = std::min(r1, m_hi) - std::max(r0, m_lo) + 1;
+                m_lo -= before;
+                m_hi -= before + inside;
+                if (m_hi < m_lo) m_pending = false;   // the whole range was removed
+            }                               // entirely below: unchanged
+        }
+        m_target.beginRemove(first, count);
+    }
+    void endRemove() override { m_target.endRemove(); }
+
+    //! A reset makes the view re-query every row, so a range pending before it is moot.
+    void beginReset() override
+    {
+        m_pending = false;
+        m_target.beginReset();
+    }
+    void endReset() override { m_target.endReset(); }
+
+private:
+    WindowCacheSink& m_target;
+    std::function<int()> m_row_count;
+    int m_depth = 0;
+    bool m_pending = false;
+    int m_lo = 0;
+    int m_hi = 0;
+    int m_last_lo = 0;
+    int m_last_hi = 0;
 };
 
 //!
@@ -309,6 +458,27 @@ private:
     uint64_t m_structural_seqno = 0;  //!< high-water of applied structural deltas
     uint64_t m_epoch = 0;             //!< cursor sort/filter generation the cache matches
 };
+
+//!
+//! \brief Close a drained batch on \p sink, first refreshing \p cache's cached slice if the
+//! batch carried a new chain tip.
+//!
+//! Confirmation and maturity progress are derived from the tip height at render time
+//! (GRC::DisplayTxStatus), and the producer no longer re-sends a record when only those moved,
+//! so a new tip changes what every cached row DISPLAYS without any row event. The slice is
+//! added after every structural event of the batch, so it is already in final coordinates and
+//! inside the table by WindowCache's own invariants, and it covers a slice a reset rebuilt
+//! earlier in the batch; the sink unions it with the batch's other changes, so the batch still
+//! emits at most one dataChanged. An empty slice adds nothing.
+//!
+template <class Record>
+CoalescingSink::EndResult CloseBatch(CoalescingSink& sink, const WindowCache<Record>& cache, bool saw_tip)
+{
+    if (saw_tip && cache.cacheSize() > 0) {
+        sink.dataChanged(cache.cacheFirst(), cache.cacheSize());
+    }
+    return sink.endBatch();
+}
 
 } // namespace GRC
 
