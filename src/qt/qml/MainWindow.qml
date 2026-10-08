@@ -6,6 +6,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 import MMPTheme 1.0
+import Gridcoin.Qml
 ApplicationWindow {
     id: window
     height: minimumHeight
@@ -15,20 +16,18 @@ ApplicationWindow {
     title: qsTr("Gridcoin Wallet")
     opacity: 1
 
+    // Shell.requestClose() hides the window to the tray (and refuses the
+    // close) or quits the application.
+    onClosing: (close) => {
+        close.accepted = Shell.requestClose()
+    }
+
     Behavior on opacity {
         NumberAnimation { duration: 1000 }
     }
 
     UnlockDialog {
         id: unlockDialog
-    }
-
-    Connections {
-        target: _walletModel
-        function onRequireUnlock() {
-            console.debug("MainWindow Require unlock")
-            unlockDialog.open()
-        }
     }
 
     TabMenu{
