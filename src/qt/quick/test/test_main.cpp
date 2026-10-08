@@ -9,6 +9,7 @@
 #include "moduletests.h"
 #include "qmltestutil.h"
 #include "quittests.h"
+#include "rootwiringtests.h"
 
 #include <QTest>
 #include <QtGlobal>
@@ -36,24 +37,28 @@ int main(int argc, char* argv[])
 
     bool fInvalid = false;
 
-    // First: it is the only class that runs the application's event loop.
+    // First: these two are the only classes that run the application's event
+    // loop.
     QmlQuitTests test1;
     if (QTest::qExec(&test1) != 0) fInvalid = true;
 
-    QmlModuleTests test2;
+    QmlRootWiringTests test2;
     if (QTest::qExec(&test2) != 0) fInvalid = true;
 
-    QmlCallRunnerTests test3;
+    QmlModuleTests test3;
     if (QTest::qExec(&test3) != 0) fInvalid = true;
 
-    QmlBridgeTests test4;
+    QmlCallRunnerTests test4;
     if (QTest::qExec(&test4) != 0) fInvalid = true;
 
-    QmlFontTests test5;
+    QmlBridgeTests test5;
     if (QTest::qExec(&test5) != 0) fInvalid = true;
 
-    QmlCarriedQmlTests test6;
+    QmlFontTests test6;
     if (QTest::qExec(&test6) != 0) fInvalid = true;
+
+    QmlCarriedQmlTests test7;
+    if (QTest::qExec(&test7) != 0) fInvalid = true;
 
     // The test application swallows what its notify() catches; nothing a test
     // did not expect may be left.

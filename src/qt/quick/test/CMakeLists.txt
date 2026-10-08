@@ -17,6 +17,8 @@ add_executable(test_gridcoin-qml
     moduletests.h
     quittests.cpp
     quittests.h
+    rootwiringtests.cpp
+    rootwiringtests.h
 )
 
 # Outside bin/: bin/ holds the modules' on-disk qmldir files, which would

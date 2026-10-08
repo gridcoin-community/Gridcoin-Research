@@ -17,7 +17,13 @@
 # src/qt/qml, the carried QML front end, holds QML only, so the module's checks
 # cannot be sidestepped there. Its files still bind the context properties of
 # the branch they came from; only the files listed below may, and a change
-# that binds a file to Gridcoin.Qml removes it from the list.
+# that binds a file to Gridcoin.Qml removes it from the list. A listed file
+# that binds none of them fails too, so the list never outgrows the tree.
+#
+# The root, src/qt/qml/WindowManager.qml, restores its main window only from
+# the tray: it binds no Qt.application state. It changes a window's state only
+# through the QWindow methods, never by assigning visible or visibility: Qt 6.7
+# and later defer that assignment for a window whose parent is the root Item.
 #
 # Neither tree may name Apple's SF Pro fonts: the QML front end takes its font
 # family from Fonts.uiFamily (the platform's system font on Apple platforms,
@@ -62,15 +68,11 @@ LEGACY_PATTERN='_(initModel|clientModel|walletModel|researcherModel|mrcModel|vot
 LEGACY_ALLOWED=(
     src/qt/qml/AboutWindow.qml
     src/qt/qml/EditAddressDialog.qml
-    src/qt/qml/MainWindow.qml
     src/qt/qml/OverviewView.qml
     src/qt/qml/ReceiveView.qml
     src/qt/qml/SendView.qml
-    src/qt/qml/SplashScreen.qml
     src/qt/qml/StatusFooter.qml
-    src/qt/qml/TabMenu.qml
     src/qt/qml/UnlockDialog.qml
-    src/qt/qml/WindowManager.qml
 )
 OUTPUT=$(git grep -l -E "${LEGACY_PATTERN}" -- src/qt/qml)
 RC=$? # 0: a match, 1: no match, anything else: git grep failed
@@ -93,6 +95,34 @@ while IFS= read -r FILE; do
         EXIT_CODE=1
     fi
 done <<< "${OUTPUT}"
+for ALLOWED in "${LEGACY_ALLOWED[@]}"; do
+    if ! grep -q -x -F -- "${ALLOWED}" <<< "${OUTPUT}"; then
+        echo "${ALLOWED} is listed but binds no legacy name; remove it from LEGACY_ALLOWED."
+        EXIT_CODE=1
+    fi
+done
+
+OUTPUT=$(git grep -n 'Qt\.application' -- src/qt/qml/WindowManager.qml)
+RC=$? # 0: a match, 1: no match, anything else: git grep failed
+if [ ${RC} -eq 0 ]; then
+    echo "WindowManager.qml binds Qt.application; the root restores its main window from the tray only:"
+    echo "${OUTPUT}"
+    EXIT_CODE=1
+elif [ ${RC} -ne 1 ]; then
+    echo "lint-qml-module: git grep failed (exit ${RC})."
+    exit 1
+fi
+
+OUTPUT=$(git grep -n -E '\.(visible|visibility)[[:space:]]*=([^=]|$)' -- src/qt/qml/WindowManager.qml)
+RC=$? # 0: a match, 1: no match, anything else: git grep failed
+if [ ${RC} -eq 0 ]; then
+    echo "WindowManager.qml assigns visible or visibility on a window; Qt 6.7+ defers that assignment for a window parented to the root Item (doc/qml-module-api.md section 8), so call show(), showNormal(), showMinimized(), showMaximized(), setVisible() or hide() instead:"
+    echo "${OUTPUT}"
+    EXIT_CODE=1
+elif [ ${RC} -ne 1 ]; then
+    echo "lint-qml-module: git grep failed (exit ${RC})."
+    exit 1
+fi
 
 OUTPUT=$(git grep -n -i -E 'SF[ -]Pro' -- src/qt/qml src/qt/quick)
 RC=$? # 0: a match, 1: no match, anything else: git grep failed

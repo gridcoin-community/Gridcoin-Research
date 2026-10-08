@@ -191,6 +191,20 @@ public:
     void requestQuit() override { ++quits; }
 };
 
+//! A counting front end that also quits as QmlFrontEnd does: the shell records
+//! the quit, and the event loop, when one runs, returns.
+class ForwardingQuitFrontEnd : public CountingQuitFrontEnd
+{
+public:
+    using CountingQuitFrontEnd::CountingQuitFrontEnd;
+
+    void requestQuit() override
+    {
+        ++quits;
+        QmlFrontEnd::requestQuit();
+    }
+};
+
 } // namespace qml_test
 
 #endif // BITCOIN_QT_QUICK_TEST_QMLTESTUTIL_H

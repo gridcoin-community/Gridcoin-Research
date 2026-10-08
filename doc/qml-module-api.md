@@ -207,10 +207,34 @@ is logged.
 
 Each modal message is also written to the GUI log and to stderr when it is posted, so a
 message whose dialog closes before it is read (for example one followed at once by a
-shutdown) is still recorded. Until a later change adds the root's message dialog, and for
-an init error that ends start-up until a later change adds its dialog, the log and stderr
-are the only record. The Widgets front end still holds the raising thread until its dialog
-closes.
+shutdown) is still recorded. The root shows core messages as described below. For an init
+error that ends start-up, the log and stderr remain the only reliable record until a later
+change adds its dialog, because start-up returns before the event loop runs. The Widgets
+front end still holds the raising thread until its dialog closes.
+
+The root, `WindowManager.qml`, shows each core message in a window of its own, a
+`CoreMessageWindow`, created when the message is shown and destroyed once it is dismissed:
+
+- Messages wait in one queue, in arrival order, modal or not. One is shown at a time: the
+  root's `currentMessage` holds the message on screen, and a message that arrives while it
+  is open is shown after the user closes it. Nothing waits on the queue: it decides only
+  what the user sees, and when.
+- The next message is shown from a `Qt.callLater` call, never inside the closing window's
+  close handler, so its window is created only after the previous window's close has
+  finished. `Qt.callLater` runs a close and the arrivals of one turn of the event loop as
+  one call, which shows at most one message.
+- A modal message's window is application-modal and a non-modal message's window is not;
+  each window takes its modality before it is shown.
+- Once a quit is requested, the queued messages are cleared and not shown; each is already
+  in the GUI log.
+- Who logs what: the front end writes each modal message to the GUI log and stderr when it
+  is posted, and the root writes each non-modal message to the GUI log when it is delivered,
+  so every message the root receives reaches the GUI log once, whether or not a window shows
+  it. A non-modal message posted after the event loop has returned, before teardown clears
+  the main window, is never delivered and is not logged, as before.
+- Under `QApplication`, `QCoreApplication::quit()` and a quit the platform posts close only
+  top-level widgets: no quit closes a QML window, so the root's close handler sees only the
+  closes of its own windows.
 
 ## 8. The carried tree
 
@@ -225,10 +249,20 @@ closes.
   loads.
 - Fonts: `Fonts.uiFamily` is the system font family on macOS and iOS and Inter elsewhere, and
   `LoadQmlFonts` registers the bundled fonts. `MMPTheme` takes its font family from it.
-- The carried screens still bind the context properties of the branch they came from.
-  `test/lint/lint-qml-module.sh` holds the list of files that may; a file is removed from it
-  when it binds to `Gridcoin.Qml` names, and the list is to be empty before the QML front end
-  becomes the default.
+- The root and its shell (`WindowManager.qml`, `SplashScreen.qml`, `MainWindow.qml` and
+  `TabMenu.qml`) bind `Gridcoin.Qml`. The other carried screens still bind the context
+  properties of the branch they came from. `test/lint/lint-qml-module.sh` holds the list of
+  files that may (`AboutWindow.qml`, `EditAddressDialog.qml`, `OverviewView.qml`,
+  `ReceiveView.qml`, `SendView.qml`, `StatusFooter.qml` and `UnlockDialog.qml`); a file is
+  removed from it when it binds to `Gridcoin.Qml` names, a listed file that binds none fails
+  the lint, and the list is to be empty before the QML front end becomes the default.
+- Window state: Qt 6.7 and later defer a QML assignment to `visible` or `visibility` on a
+  window whose QObject parent is the root `Item`, which is in no window itself; a declared
+  `visible: true` and such an initial property are deferred alike. So the root drives its
+  windows only through the `QWindow` methods: `show()`, `showNormal()`, `showMinimized()`,
+  `showMaximized()`, `setVisible()` and `hide()`. `test/lint/lint-qml-module.sh` enforces
+  this for `WindowManager.qml`; a later change that writes a window's state from another
+  file follows the same rule.
 - Qt versions: the expected-failure list in `src/qt/quick/test/carriedqmlexpected.h` records
   the Qt version below which each listed file does not load: 6.5 for `MultiEffect` and 6.9 for
   `RectangularShadow`. `gridcoinresearch-qml` exits at start with an error below Qt 6.9,

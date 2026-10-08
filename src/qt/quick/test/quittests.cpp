@@ -19,8 +19,8 @@
 //!
 //! \file quittests.cpp
 //! \brief A secondary window closing while the main window is hidden must not
-//! quit the application. This is the only class that runs the application's
-//! event loop.
+//! quit the application. This class and QmlRootWiringTests are the only ones
+//! that run the application's event loop.
 //!
 
 void QmlQuitTests::secondaryWindowCloseDoesNotQuit()
