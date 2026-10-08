@@ -5,9 +5,11 @@ import QtQuick
 import QtQuick.Window
 import QtQuick.Controls.Basic as Basic
 import MMPTheme 1.0
+import Gridcoin.Qml
 
 Window {
     id: splashScreen
+    objectName: "splashScreen"
     width: 400
     height: 200
     flags: Qt.SplashScreen | Qt.FramelessWindowHint
@@ -15,8 +17,10 @@ Window {
     color: "transparent"
 
     Connections {
-        target: _initModel
-        function onDoneLoading() { splashScreen.close() }
+        target: Splash
+        function onFinishedChanged() {
+            if (Splash.finished) splashScreen.close()
+        }
     }
 
     Rectangle {
@@ -33,7 +37,8 @@ Window {
 
     Basic.ProgressBar {
         id: blockProgressBar
-        value: _initModel.total === 0 ? 0 : _initModel.loaded / _initModel.total
+        objectName: "splashProgress"
+        value: Splash.total === 0 ? 0 : Splash.loaded / Splash.total
         anchors {
             left: parent.left
             right: parent.right
@@ -101,7 +106,7 @@ Window {
     }
     Text {
         id: blocksLoadedText
-        text: _initModel.message
+        text: Splash.message
         color: MMPTheme.themeSelect(MMPTheme.cOxfordBlue, "#6a7994")
         font.pixelSize: 10
         anchors {
