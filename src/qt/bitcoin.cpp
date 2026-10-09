@@ -9,6 +9,7 @@
 
 #include "bitcoingui.h"
 #include "guiipcinfo.h"
+#include <qt/guifrontend.h>
 #include "chainparams.h"
 #include "chainparamsbase.h"
 #include "clientmodel.h"
@@ -39,6 +40,7 @@
 #endif
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
+#include "guieventloop.h"
 #include "txdb.h"
 #include "util.h"
 #include "util/dir_permissions.h"
@@ -53,8 +55,8 @@
 #include "decoration.h"
 
 #include <atomic>
-// Not inside the WIN32 guard below: the teardown join uses QThreadPool on every
-// platform, and nothing else on this file's include path pulls it in.
+// Not inside the WIN32 guard below: the explicit teardown join uses QThreadPool
+// on every platform, so this file includes it directly.
 #include <QThreadPool>
 #ifndef WIN32
 #include <QSocketNotifier>
@@ -107,8 +109,10 @@ Q_IMPORT_PLUGIN(QSvgIconPlugin);
 extern bool fQtActive;
 
 // Need a global reference for the notifications to find the GUI
-static BitcoinGUI *guiref;
-static SplashScreen *splashref;
+static QObject* guiref;
+static QObject* splashref;
+//! The live front end, registered by GuiMain() for its whole run.
+static GuiFrontEnd* g_frontend = nullptr;
 
 static void RegisterMetaTypes()
 {
@@ -122,10 +126,10 @@ static void RegisterMetaTypes()
 
 int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel,
                     interfaces::Node& gui_node, interfaces::Init* interface_init,
-                    const GuiIpcInfo& ipc_info);
+                    const GuiIpcInfo& ipc_info, GuiFrontEnd& frontend);
 
-//! Early, deliberately LIMITED local settings read — run in main() BEFORE the Qt
-//! translator is installed and BEFORE the Intro data-directory dialog.
+//! Early, deliberately LIMITED local settings read — run in GuiMain() BEFORE the
+//! Qt translator is installed and BEFORE the Intro data-directory dialog.
 //!
 //! Exactly two GUI-client-scoped preferences must be in gArgs this early:
 //!   -lang    : the Qt translator (installed right after) reads it; it is a
@@ -278,14 +282,24 @@ static void UpdateMessageBox(const std::string& version, const int& update_versi
     }
 }
 
+void RequestGuiQuit()
+{
+    if (g_frontend) {
+        g_frontend->requestQuit();
+    } else {
+        // Only for a post that arrives before GuiMain() registers the front end.
+        BitcoinGUI::requestQuit();
+    }
+}
+
 static void QueueShutdown()
 {
-    // Route a core-initiated shutdown through BitcoinGUI::requestQuit() so the
+    // Route a core-initiated shutdown through RequestGuiQuit() -> requestQuit() so the
     // explicit-shutdown flag is set and minimize-on-close doesn't veto the quit
     // on Qt6 (see BitcoinGUI::closeEvent / issue #2995). The functor overload is
     // compile-time checked, unlike a string-named invokeMethod.
     QMetaObject::invokeMethod(QCoreApplication::instance(),
-                              [] { BitcoinGUI::requestQuit(); },
+                              [] { RequestGuiQuit(); },
                               Qt::QueuedConnection);
 }
 
@@ -335,7 +349,7 @@ static std::atomic<bool> g_daemon_connection_lost{false};
 //! so every place that has to distinguish "the daemon went away" from "a real
 //! bug" -- GridcoinApplication::notify() and the try/catch around the whole GUI
 //! lifetime in StartGridcoinQt() -- tests the same substrings and cannot drift.
-static bool IsDaemonDisconnectMessage(const std::string& msg)
+bool IsDaemonDisconnectMessage(const std::string& msg)
 {
     return msg.find("interrupted by disconnect") != std::string::npos
         || msg.find("called after disconnect") != std::string::npos;
@@ -345,7 +359,7 @@ static bool IsDaemonDisconnectMessage(const std::string& msg)
 //! connection is lost -- the same path a core-initiated shutdown takes
 //! (QueueShutdown / requestQuit). Deliberately NO modal dialog: a modal would
 //! hang an unattended or remote GUI. Safe if the QCoreApplication is already gone.
-static void QuitOnDaemonConnectionLost(const char* reason)
+void QuitOnDaemonConnectionLost(const char* reason)
 {
     // The LOG line is one-shot -- a tearing-down connection fails many proxy calls
     // in quick succession and one line is enough -- but the POST is not. The
@@ -359,7 +373,7 @@ static void QuitOnDaemonConnectionLost(const char* reason)
         GUILogPrintf("IPC: %s; closing the GUI", reason);
     }
     if (QCoreApplication* qapp = QCoreApplication::instance()) {
-        QMetaObject::invokeMethod(qapp, [] { BitcoinGUI::requestQuit(); }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(qapp, [] { RequestGuiQuit(); }, Qt::QueuedConnection);
     }
 }
 
@@ -648,7 +662,7 @@ static void InstallGuiTerminationHandler(QCoreApplication& app)
         char buf;
         while (::read(g_signal_pipe[0], &buf, 1) > 0) { /* drain */ }
         GUILogPrintf("IPC: received a termination signal; closing the GUI");
-        BitcoinGUI::requestQuit();
+        RequestGuiQuit();
     });
     struct sigaction sa = {};
     sa.sa_handler = GuiTerminationSignalHandler;
@@ -716,8 +730,7 @@ static void JoinGuiArchiveThread()
     }
 }
 
-#ifndef BITCOIN_QT_TEST
-int main(int argc, char *argv[])
+int GuiMain(int argc, char* argv[], GuiFrontEndFactory make_frontend)
 {
 #ifdef WIN32
     util::WinCmdLineArgs winArgs;
@@ -729,7 +742,7 @@ int main(int argc, char *argv[])
     // build, the settings file by a different route but creates the same artifacts.
     util::SetOwnerOnlyUmask();
 
-    // Reinit default timer to ensure it is zeroed out at the start of main.
+    // Reinit default timer to ensure it is zeroed out at the start of GuiMain().
     g_timer.InitTimer("default", false);
 
     SetupEnvironment();
@@ -782,6 +795,13 @@ int main(int argc, char *argv[])
 
     RegisterMetaTypes();
     GridcoinApplication app(argc, argv);
+    std::unique_ptr<GuiFrontEnd> frontend = make_frontend();
+    g_frontend = frontend.get();
+    // Declared after frontend, so it is destroyed first: g_frontend is cleared
+    // before the front end dies, on every return.
+    struct FrontEndRegistration {
+        ~FrontEndRegistration() { g_frontend = nullptr; }
+    } frontend_registration;
 
 #if defined(WIN32) && defined(QT_GUI)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -1174,8 +1194,8 @@ int main(int argc, char *argv[])
     // Its QSettings-backed GUI-local preferences are read exactly as before. The
     // makeX / migrateCoreSettings calls are IPC round-trips in the split build; if
     // the daemon drops here (after a successful connect) libmultiprocess throws, and
-    // main() has no enclosing try (unlike StartGridcoinQt, which the models used to
-    // live inside), so wrap them and exit gracefully rather than std::terminate.
+    // GuiMain() has no enclosing try (unlike StartGridcoinQt, which the models used
+    // to live inside), so wrap them and exit gracefully rather than std::terminate.
     // optionsModel is heap-allocated only so it can be declared before the try and
     // outlive it for the StartGridcoinQt call below.
     std::unique_ptr<interfaces::SideStakeManager> sidestake_manager;
@@ -1217,7 +1237,7 @@ int main(int argc, char *argv[])
     }
 
     /** Start Qt as normal before it was moved into this function **/
-    StartGridcoinQt(argc, argv, app, *optionsModel, *gui_node, interface_init, ipc_info);
+    StartGridcoinQt(argc, argv, app, *optionsModel, *gui_node, interface_init, ipc_info, *frontend);
 
     // We received a request to remove blockchain data so client user can start to sync from 0
     if (fResetBlockchainRequest)
@@ -1246,7 +1266,7 @@ int main(int argc, char *argv[])
 
 int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel,
                     interfaces::Node& gui_node, interfaces::Init* interface_init,
-                    const GuiIpcInfo& ipc_info)
+                    const GuiIpcInfo& ipc_info, GuiFrontEnd& frontend)
 {
     // Set global boolean to indicate intended presence of GUI to core.
     fQtActive = true;
@@ -1263,9 +1283,10 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
     // Core-initiated shutdown (RPC stop / SIGTERM / low-disk abort) -> quit the
     // GUI, via the node interface's QueueShutdown bridge. gui_node is deliberately
-    // the LOCAL node (main()'s local_init), NOT the remote one: in the split build
-    // the GUI quits on the socket disconnect (#3227), and delivering the daemon's
-    // shutdown over IPC would be the descoped core->GUI "shutdown-imminent" push.
+    // the LOCAL node (GuiMain()'s local_init), NOT the remote one: in the split
+    // build the GUI quits on the socket disconnect (#3227), and delivering the
+    // daemon's shutdown over IPC would be the descoped core->GUI
+    // "shutdown-imminent" push.
     // So in the monolith this fires on real core shutdown; in the split build it is
     // dormant (the local node's QueueShutdown never fires) and the disconnect hook
     // drives the quit. The returned Handler is kept only to keep the subscription
@@ -1279,11 +1300,15 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     // block-loading progress stays on top under Xwayland, where the
     // Qt::SplashScreen window type is dropped behind the other windows -- see
     // qt/splashscreen.h.
-    SplashScreen splash;
+    // The splash lives for this whole function. splashref is cleared before the
+    // splash is destroyed, so the static never dangles.
+    struct SplashScope {
+        GuiFrontEnd& fe;
+        ~SplashScope() { splashref = nullptr; fe.destroySplash(); }
+    } splash_scope{frontend};
     if (gArgs.GetBoolArg("-splash", true) && !gArgs.GetBoolArg("-min"))
     {
-        splash.show();
-        splashref = &splash;
+        splashref = frontend.createSplash();
     }
 
     app.processEvents();
@@ -1292,8 +1317,14 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
     try
     {
-        BitcoinGUI window;
-        guiref = &window;
+        guiref = frontend.construct();
+        // The main window dies at the end of this try block, including on
+        // unwind. guiref is cleared before the window is destroyed, so the
+        // static never dangles.
+        struct MainWindowScope {
+            GuiFrontEnd& fe;
+            ~MainWindowScope() { guiref = nullptr; fe.destroyMain(); }
+        } main_window_scope{frontend};
 
         GUILogPrintf("Starting Gridcoin");
 
@@ -1307,7 +1338,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
         if (multiprocess)
         {
-            // The connect + GUI-side identity binding already ran in main() (so
+            // The connect + GUI-side identity binding already ran in GuiMain() (so
             // OptionsModel could be built from the remote node's Init, which is
             // `interface_init` here). What remains needs the main window / event
             // loop: surface the mixed-build banner (empty commit strings = nothing
@@ -1315,12 +1346,12 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             // timer.
             if (ipc_info.git_commit_mismatch)
             {
-                window.showBuildMismatchWarning(ipc_info.gui_version, ipc_info.node_version);
+                frontend.showBuildMismatchWarning(ipc_info.gui_version, ipc_info.node_version);
             }
             // Populate the About dialog's multiprocess connection section.
-            window.setIpcConnectionInfo(ipc_info);
+            frontend.setIpcConnectionInfo(ipc_info);
 
-            // The multiprocess GUI logs to its own file (set up in main() before
+            // The multiprocess GUI logs to its own file (set up in GuiMain() before
             // this function) but, unlike the node, runs no core scheduler to rotate
             // it. Drive the same daily-archive check the node schedules in
             // GRC::ScheduleBackgroundJobs: every 5 minutes archive(false) is a cheap
@@ -1373,7 +1404,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         else
         {
             // Monolithic build: run core init in this process. interface_init (the
-            // local Init created in main()) is already set; just start the init
+            // local Init created in GuiMain()) is already set; just start the init
             // thread. The readiness wait below polls interface_init->isCoreReady().
             if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
             {
@@ -1395,7 +1426,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             }
 
             if (splashref)
-                splash.finish();
+                frontend.finishSplash();
 
             if (!ShutdownRequested()) {
                 // Put this in a block, so that the Model objects are cleaned up
@@ -1495,48 +1526,37 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 VotingModel votingModel(*voting_manager, *researcher_context, clientModel, optionsModel, walletModel);
 
                 // Thread the PSGT pool interface to the page + dialog before
-                // setWalletModel() below builds the page's table model.
-                window.setPSGTPoolContext(psgt_pool_context.get());
-                window.setResearcherModel(&researcherModel);
-                window.setClientModel(&clientModel);
-                window.setWalletModel(&walletModel);
-                window.setMRCModel(&mrcModel);
-                window.setVotingModel(&votingModel);
+                // setWalletModel() builds the page's table model (attachModels
+                // keeps that order).
+                const ModelBundle models{clientModel, walletModel, mrcModel, researcherModel, votingModel,
+                                         psgt_pool_context.get()};
 
-                // Exception-safe teardown of the tx-table view models (Phase
-                // 1c-ii-c). `window` is declared in an OUTER scope than
-                // walletModel / wallet_tx_source, so on an exception thrown below
-                // (window.show / ipcInit / app.exec) the stack unwind frees the
-                // model and source FIRST, then destroys `window` — and
-                // ~OverviewTxModel / ~DetailedTxModel would call
-                // txSource().unregisterView() against an already-freed source
-                // (UAF). This guard is declared AFTER the model and source, so
-                // its destructor runs BEFORE theirs on every exit path (normal or
-                // exception): it detaches the wallet from the window — destroying
-                // the view models while the source is still alive — so their
-                // unregisterView() always reaches a live source. The explicit
-                // setWalletModel(nullptr) on the normal path below makes this a
-                // no-op there; on the throw path it is the only teardown.
-                struct WalletModelDetachGuard {
-                    BitcoinGUI& window;
-                    ~WalletModelDetachGuard() { window.setWalletModel(nullptr); }
-                } wallet_model_detach_guard{window};
+                // Exception-safe teardown of the view models (Phase 1c-ii-c).
+                // The main window lives in an OUTER scope than the models and
+                // their sources, so on an exception thrown below (attachModels /
+                // showMain / ipcInit / app.exec) the unwind would free the models
+                // and sources FIRST and then destroy the window, whose view models
+                // would unregister from an already-freed source (UAF). This guard
+                // is declared AFTER the models and sources, so its destructor
+                // runs BEFORE theirs on every exit path and detaches every model
+                // while the sources are still alive. It is armed BEFORE
+                // attachModels(), so it also covers a throw part-way through the
+                // attach; the detach hooks tolerate a window whose models were
+                // never or only partly attached. After the explicit
+                // detachModels() on the normal path below it has nothing left to
+                // run; if a hook throws inside that call, it resumes the detach at
+                // the next hook. On any other throw path it is the only teardown.
+                FrontEndDetachGuard frontend_detach_guard{frontend};
+                frontend.attachModels(models);
 
                 // If -min option passed, start window minimized.
-                if(gArgs.GetBoolArg("-min"))
-                {
-                    window.showMinimized();
-                }
-                else
-                {
-                    window.show();
-                }
+                frontend.showMain(gArgs.GetBoolArg("-min"));
 
                 // Place this here as guiref has to be defined if we don't want to lose URIs
                 ipcInit(argc, argv, ThreadSafeHandleURI);
 
 #if defined(WIN32) && defined(QT_GUI)
-                WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)window.winId());
+                WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)frontend.nativeWindowId());
 #endif
 
                 GUILogPrintf("GUI loaded.");
@@ -1552,68 +1572,65 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // WM_CLOSE via WinShutdownMonitor; the monolith uses the core's.)
                 if (multiprocess) InstallGuiTerminationHandler(app);
 #endif
-                app.exec();
+                // The event loop and the teardown after it run inside
+                // RunGuiEventLoop, which reaps the global QThreadPool before it
+                // returns or lets an exception out. Pooled jobs started from the
+                // event loop use objects declared above: the About dialog's
+                // version check uses `node`, and PollTableModel's refresh uses
+                // votingModel and, through it, voting_manager. On a throw, the
+                // unwind destroys these locals before any catch clause runs, so
+                // a join in the catch would come too late.
+                RunGuiEventLoop([&] {
+                    app.exec();
 
-                // Give SIGTERM/SIGINT their teeth back immediately. The notifier
-                // that consumed the self-pipe only runs inside the event loop, so
-                // from here on the installed handler would silently absorb both
-                // signals for the whole of teardown -- see RemoveGuiTerminationHandler.
-                RemoveGuiTerminationHandler();
+                    // Give SIGTERM/SIGINT their teeth back immediately. The notifier
+                    // that consumed the self-pipe only runs inside the event loop, so
+                    // from here on the installed handler would silently absorb both
+                    // signals for the whole of teardown -- see RemoveGuiTerminationHandler.
+                    RemoveGuiTerminationHandler();
 
-                // Stop the GUI-process-local URI-listener thread now that the
-                // event loop has returned (it no longer reads the core shutdown
-                // state; see qtipcserver ipcShutdown()).
-                ipcShutdown();
+                    // Stop the GUI-process-local URI-listener thread now that the
+                    // event loop has returned (it no longer reads the core shutdown
+                    // state; see qtipcserver ipcShutdown()).
+                    ipcShutdown();
 
-                window.hide();
-                window.setClientModel(nullptr);
-                // Normal-path detach of the tx-table view models, in order with
-                // the other models. Destroys OverviewTxModel / DetailedTxModel
-                // (via BitcoinGUI -> {transactionView->setModel,
-                // overviewPage->setWalletModel}(nullptr)) while walletModel and
-                // wallet_tx_source below are still alive, so their
-                // unregisterView() reaches a live source. wallet_model_detach_guard
-                // above enforces the same on the exception path; this explicit
-                // call then becomes an idempotent no-op for the guard.
-                window.setWalletModel(nullptr);
-                // Clear the MRC model BEFORE mrcModel (a stack object in this
-                // block) is destroyed: BitcoinGUI and OverviewPage each keep a raw
-                // copy, and OverviewPage::onMRCRequestClicked only checks its copy
-                // for null -- so without this detach the pointer stays non-null and
-                // points at freed memory for the rest of the window's life.
-                window.setMRCModel(nullptr);
-                window.setResearcherModel(nullptr);
-                // Clear the voting model BEFORE the enclosing block exits and
-                // destroys the stack-allocated VotingModel: this propagates to
-                // PollTableModel::setModel(nullptr) which drains any in-flight
-                // QtConcurrent refresh worker still dereferencing the model.
-                window.setVotingModel(nullptr);
-                // Clear the PSGT pool interface from the page + dialog BEFORE the
-                // enclosing block destroys psgt_pool_context: the page's table
-                // model holds a reference to it, so it must be torn down first.
-                window.setPSGTPoolContext(nullptr);
-                guiref = nullptr;
+                    // Normal-path detach, in the established order: hide, then
+                    // client, wallet, MRC, researcher, voting and PSGT, while every
+                    // model and source in this block is still alive (the GuiFrontEnd
+                    // detach hooks say why each must precede its model's
+                    // destruction). frontend_detach_guard above enforces the same on
+                    // the exception path. After this call the guard has nothing left
+                    // to run; if a hook throws here, the guard resumes at the next
+                    // hook as the exception unwinds.
+                    frontend.detachModels();
+                    guiref = nullptr;
+                });
 
                 // Drain any still-running pooled worker BEFORE the interfaces built
                 // from this connection are destroyed. The About dialog's version
                 // check runs on the global QThreadPool and dereferences
                 // interfaces::Node; it is deliberately NOT joined when that dialog
                 // closes (that would freeze the GUI thread for the libcurl timeout on
-                // an ordinary close -- see ~AboutDialog), so this is the point where
-                // it has to be reaped.
+                // an ordinary close -- see ~AboutDialog), so it has to be reaped
+                // before this block closes.
                 //
                 // MUST be inside this block: `node` and the other interfaces are
                 // declared here and destroyed at the closing brace below, so joining
                 // after it would join AFTER the worker's Node is already gone --
                 // which is the exact use-after-free this is here to prevent.
+                // RunGuiEventLoop above returns only after it has reaped the pool, so on
+                // this normal path the call finds the pool idle. A throw from the event
+                // loop or the teardown never reaches this line; RunGuiEventLoop reaps on
+                // that path too.
                 QThreadPool::globalInstance()->waitForDone();
             }
             // Shut down the core and its threads (but don't exit Bitcoin-Qt
             // here). Only in the monolithic build: there the core runs in this
             // process. In the multiprocess build the core lives in the daemon
             // and manages its own lifetime; the GUI merely drops its connection
-            // when main() unwinds after this returns (node_connection now lives in
-            // main(), so it and the interfaces built from it outlive this call).
+            // when GuiMain() unwinds after this returns (node_connection now lives
+            // in GuiMain(), so it and the interfaces built from it outlive this
+            // call).
             if (!multiprocess)
             {
                 GUILogPrintf("Main calling Shutdown...");
@@ -1624,7 +1641,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     }
     catch (std::exception& e)
     {
-        // Everything between `BitcoinGUI window;` above and app.exec() -- and the
+        // Everything between the front end's `construct()` above and app.exec() -- and the
         // whole teardown block after exec() returns -- runs OUTSIDE
         // GridcoinApplication::notify(), so a node that vanishes there lands here
         // instead of on the silent-quit route. Apply the same test notify() does:
@@ -1677,5 +1694,3 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
     return EXIT_SUCCESS;
 }
-
-#endif // BITCOIN_QT_TEST

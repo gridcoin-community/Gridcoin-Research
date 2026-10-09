@@ -50,6 +50,8 @@ add_library(gridcoinqt STATIC
     editaddressdialog.cpp
     editsidestakedialog.cpp
     favoritespage.cpp
+    guifrontend.cpp
+    guifrontend.h
     guilog.cpp
     guiutil.cpp
     intro.cpp
@@ -119,6 +121,8 @@ add_library(gridcoinqt STATIC
     voting/votingmodel.cpp
     voting/votingpage.cpp
     walletmodel.cpp
+    widgetsfrontend.cpp
+    widgetsfrontend.h
     winshutdownmonitor.cpp
 
     bitcoin.qrc
@@ -235,9 +239,24 @@ if(WIN32)
     )
 endif()
 
+# The GUI composition root (GuiMain in bitcoin.cpp), built as an OBJECT library
+# and linked into the executable below, whose main() is in main.cpp. bitcoin.cpp
+# has no Q_OBJECT and includes no .moc, so it needs no AUTOMOC.
+add_library(gridcoinguimain OBJECT bitcoin.cpp)
+target_link_libraries(gridcoinguimain PUBLIC
+    ${QT}::Widgets
+    CURL::libcurl
+    gridcoin_util
+    gridcoinqt
+)
+if(ENABLE_MULTIPROCESS)
+    target_link_libraries(gridcoinguimain PUBLIC gridcoin_ipc)
+endif()
+
 # Define the executable
 # Note: We add ${GRIDCOIN_RC} to the sources so the icon is compiled into the binary
-add_executable(gridcoinresearch bitcoin.cpp ${GRIDCOIN_RC})
+add_executable(gridcoinresearch main.cpp ${GRIDCOIN_RC})
+target_link_libraries(gridcoinresearch PRIVATE gridcoinguimain)
 
 # macOS Bundle Resources
 set(MACOSX_BUNDLE_RESOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/icons/gridcoin.icns")
