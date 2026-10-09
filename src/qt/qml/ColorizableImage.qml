@@ -2,7 +2,7 @@
     Provides an image which can be given different colours programmatically with tintColor
 */
 import QtQuick
-import QtQuick.Effects
+import Qt5Compat.GraphicalEffects
 Item {
     id: root
     property alias tintColor: img.overlayColor
@@ -17,10 +17,15 @@ Item {
         anchors.fill: parent
         fillMode: Image.PreserveAspectFit
         sourceSize: Qt.size(width,height)
-        layer.enabled: true
-        layer.effect: MultiEffect {
-            colorizationColor: img.overlayColor
-            colorization: img.colorization
+        // No layer at colorization 0, so an untinted image goes through no
+        // effect.
+        layer.enabled: img.colorization > 0
+        // ColorOverlay paints the tint over the image at the image's alpha;
+        // colorization scales the tint's own alpha.
+        layer.effect: ColorOverlay {
+            objectName: "tintOverlay"
+            color: Qt.rgba(img.overlayColor.r, img.overlayColor.g, img.overlayColor.b,
+                           img.overlayColor.a * img.colorization)
         }
     }
 

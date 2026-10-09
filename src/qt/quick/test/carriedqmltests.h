@@ -17,6 +17,7 @@ private Q_SLOTS:
     void rootCompileMatchesCarriedFilesLoad();
     void themeUsesUiFamily();
     void iconResourcesDoNotCollide();
+    void colorizableImageDrivesColorOverlay();
 };
 
 #endif // BITCOIN_QT_QUICK_TEST_CARRIEDQMLTESTS_H
