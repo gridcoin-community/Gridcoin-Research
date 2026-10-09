@@ -25,7 +25,8 @@
 //!    must never depend on the IPC channel (the GUI has to be able to log a
 //!    failed/absent connection), log lines are never shipped over the wire.
 //!
-//! Only qt/guilog.cpp includes the core logging header; every other Qt
+//! Only qt/guilog.cpp, and the GUIFrontEndTests test that captures the GUI log
+//! through the core logger, include the core logging header; every other Qt
 //! translation unit uses these macros and stays off the core logger.
 
 //! GUI log categories, mirroring the BCLog categories the Qt layer uses. Kept

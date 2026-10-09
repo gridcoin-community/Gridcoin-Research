@@ -10,6 +10,8 @@ add_executable(test_gridcoin-qt
     autostarttests.cpp
     optionsmodeltests.cpp
     guiutiltests.cpp
+    guieventlooptests.cpp
+    guifrontendtests.cpp
 )
 
 set_target_properties(test_gridcoin-qt PROPERTIES

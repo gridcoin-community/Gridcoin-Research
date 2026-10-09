@@ -1,0 +1,103 @@
+name: CMake QML Module
+
+# Builds the QML front end's C++ module (src/qt/quick, behind ENABLE_QML, off by
+# default) against Ubuntu 24.04's system Qt 6 and runs test_gridcoin-qt and
+# test_gridcoin-qml. No other workflow sets ENABLE_QML, so this is the only job
+# that compiles the module or runs its tests. The configuration is the
+# Compatibility workflow's Linux Native job plus -DENABLE_QML=ON.
+
+on:
+  # Trigger on any push/PR to any branch (matches production/compatibility workflows)
+  push:
+    branches:
+      - '**'
+    tags:
+      - "v*"
+      - "5.*"
+  pull_request:
+    branches:
+      - '**'
+  # Manual trigger for debugging
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: RelWithDebInfo
+  # Match the `path: ~/.ccache` declared by the actions/cache steps below.
+  # ccache 4.x defaults to ~/.cache/ccache, so without this override the
+  # build writes to a directory the cache action never sees and no caching
+  # actually happens.
+  CCACHE_DIR: /home/runner/.ccache
+
+jobs:
+  qml-linux:
+    name: QML module (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Dependencies
+        run: |
+          source ./install_dependencies.sh
+          # Native target, Qt 6, GUI, no multiprocess, QML packages.
+          install_deps native true true false true
+
+      - name: Setup Concurrency
+        run: |
+          if [ -z "$CMAKE_BUILD_PARALLEL_LEVEL" ]; then
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "CTEST_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "Concurrency: Auto-detected $(nproc) cores."
+          else
+            echo "Concurrency: Limit set externally to $CMAKE_BUILD_PARALLEL_LEVEL."
+          fi
+
+      # The ccache is saved only on a push to development (the Save Ccache step
+      # at the end), so branch and pull request runs restore development's entry
+      # and add none to the shared cache.
+      - name: Restore Ccache
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.ccache
+          key: ccache-qml-native-${{ github.sha }}
+          restore-keys: ccache-qml-native-
+
+      - name: Configure CMake
+        run: |
+          cmake -B build_qml \
+            -DENABLE_GUI=ON \
+            -DENABLE_QRENCODE=ON \
+            -DUSE_DBUS=ON \
+            -DENABLE_UPNP=ON \
+            -DENABLE_PIE=ON \
+            -DENABLE_DOCS=OFF \
+            -DENABLE_TESTS=ON \
+            -DUSE_QT6=ON \
+            -DENABLE_QML=ON \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build build_qml
+
+      # The QML import path variables are cleared so that the module has to
+      # resolve through the test binary's own import path. Both binaries default
+      # to the offscreen platform when it is unset; it is set explicitly here.
+      # Each test step is bounded so a hang fails here instead of holding the
+      # runner to the six-hour job default (cmake_production.yml's Test step
+      # does the same).
+      - name: Test (test_gridcoin-qt)
+        timeout-minutes: 10
+        run: env -u QML_IMPORT_PATH -u QML2_IMPORT_PATH QT_QPA_PLATFORM=offscreen ./build_qml/src/qt/test/test_gridcoin-qt
+
+      - name: Test (test_gridcoin-qml)
+        timeout-minutes: 10
+        working-directory: build_qml/qmltest
+        run: env -u QML_IMPORT_PATH -u QML2_IMPORT_PATH QT_QPA_PLATFORM=offscreen ./test_gridcoin-qml
+
+      - name: Save Ccache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.ccache
+          key: ccache-qml-native-${{ github.sha }}

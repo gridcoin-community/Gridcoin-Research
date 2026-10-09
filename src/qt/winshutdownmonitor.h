@@ -19,7 +19,7 @@ class WinShutdownMonitor : public QAbstractNativeEventFilter
 {
 public:
     //! \p node is used to request shutdown on WM_QUERYENDSESSION; it is
-    //! process-lifetime (main()'s gui_node), so holding a reference is safe.
+    //! process-lifetime (GuiMain()'s gui_node), so holding a reference is safe.
     explicit WinShutdownMonitor(interfaces::Node& node) : m_node(node) {}
 
     /** Implements QAbstractNativeEventFilter interface for processing Windows messages */
