@@ -16,6 +16,8 @@ private Q_SLOTS:
     void moduleResolves();
     void singletonsOutliveEngine();
     void singletonIsProviderInstance();
+    void effectsProbeMatchesTheModule();
+    void effectsProbeReportsErrors();
 };
 
 #endif // BITCOIN_QT_QUICK_TEST_MODULETESTS_H

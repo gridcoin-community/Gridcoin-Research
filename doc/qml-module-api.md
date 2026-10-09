@@ -28,6 +28,9 @@ names later changes will add.
 - `install_dependencies.sh` with `ENABLE_QML=true` installs the Qt5Compat GraphicalEffects
   module only on Debian, Ubuntu and Linux Mint. On every other system a QML build installs
   it, with Qt Shader Tools, by hand.
+- `gridcoinresearch-qml` compiles its QML root at start, before it opens its log or connects
+  to a daemon, and exits with a message naming what failed when the root does not compile;
+  when the Qt5Compat effects module is the cause, the message says so.
 
 ## 2. Names available now
 
@@ -152,7 +155,7 @@ there.
 | `_sendCoinsController` | `clearRecipients()` | planned send adapter | |
 | `_sendCoinsController` | `sendCoins()` | planned send adapter | The result arrives through `finished(id, result)`. |
 | `_sendCoinsController` | `coinsSentOrFailed(QString)` | planned send adapter | The result arrives through `finished(id, result)`. |
-| `_nativeDialog` | `information()` | none | QML shows its own dialogs and answers through the request, signal and answer shape; the module never shows a blocking dialog. |
+| `_nativeDialog` | `information()` | none | QML shows its own dialogs and answers through the request, signal and answer shape; once the front end exists the module never shows a blocking dialog (section 5). |
 | `_nativeDialog` | `warning()` | none | As above. |
 | `_nativeDialog` | `question()` | none | As above. |
 
@@ -174,7 +177,9 @@ Every prompt follows one shape. QML calls a `Q_INVOKABLE` request that returns a
 a request id. The module emits a signal saying what it needs. QML answers through a second
 `Q_INVOKABLE`. The module then emits `finished(id, result)`, or a failure signal that keeps
 the request open. There is no nested event loop and no blocking connection anywhere in the
-module; `test/lint/lint-qml-module.sh` checks it.
+module but one: `gridcoinresearch-qml`'s start-up error box in `qml_main.cpp`, shown from
+the factory before `GuiMain` opens its log, connects to a daemon or starts the core, as
+`GuiMain`'s own start-up error boxes are. `test/lint/lint-qml-module.sh` checks the rest.
 
 ## 6. Lanes
 

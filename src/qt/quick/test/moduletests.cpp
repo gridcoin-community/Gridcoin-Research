@@ -150,3 +150,59 @@ void QmlModuleTests::singletonIsProviderInstance()
     QCOMPARE(marker, provider_marker);
     QVERIFY(same_instance);
 }
+
+void QmlModuleTests::effectsProbeMatchesTheModule()
+{
+    // The oracle is this test's own source, not the module's: it creates a
+    // ColorOverlay and a DropShadow directly.
+    bool can_create = false;
+    QString oracle_errors;
+    {
+        QQmlEngine engine;
+        AddQmlImportPaths(engine);
+        QQmlComponent component(&engine);
+        component.setData("import QtQuick\nimport Qt5Compat.GraphicalEffects\n"
+                          "Item {\n"
+                          "    Rectangle { id: oracleSource; width: 2; height: 2 }\n"
+                          "    ColorOverlay { source: oracleSource; color: \"blue\" }\n"
+                          "    DropShadow { source: oracleSource }\n"
+                          "}\n",
+                          QUrl(QStringLiteral("qrc:/qmltest/effectsoracle.qml")));
+        if (component.isReady()) {
+            std::unique_ptr<QObject> object(component.create());
+            can_create = object != nullptr;
+        }
+        oracle_errors = component.errorString().trimmed();
+    }
+
+    const QStringList probe = ProbeQmlEffects();
+    QVERIFY2(probe.isEmpty() == can_create,
+             qPrintable(QStringLiteral("the effects probe and a direct ColorOverlay/DropShadow creation disagree: "
+                                       "direct creation %1, probe %2: %3; direct errors: %4")
+                            .arg(can_create ? QStringLiteral("succeeded") : QStringLiteral("failed"),
+                                 probe.isEmpty() ? QStringLiteral("passed") : QStringLiteral("failed"),
+                                 probe.join(QLatin1Char(' ')), oracle_errors)));
+    if (!can_create) {
+        bool named = false;
+        for (const QString& error : probe) {
+            if (error.contains(QLatin1String("Qt5Compat.GraphicalEffects")) ||
+                error.contains(QLatin1String("ColorOverlay")) || error.contains(QLatin1String("DropShadow"))) {
+                named = true;
+            }
+        }
+        QVERIFY2(named, qPrintable(QStringLiteral("the probe's error names neither the module nor an effect type: ") +
+                                   probe.join(QLatin1Char(' '))));
+    }
+}
+
+void QmlModuleTests::effectsProbeReportsErrors()
+{
+    const QStringList errors = ProbeQmlComponent("import QtQuick\nimport Gridcoin.NoSuchModule\nItem {}\n");
+    bool named = false;
+    for (const QString& error : errors) {
+        if (error.contains(QLatin1String("Gridcoin.NoSuchModule"))) named = true;
+    }
+    QVERIFY2(!errors.isEmpty() && named,
+             qPrintable(QStringLiteral("the probe reported nothing for a module that does not exist: ") +
+                        errors.join(QLatin1Char(' '))));
+}

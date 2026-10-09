@@ -6,8 +6,9 @@
 #
 # Checks on the QML front end's two trees.
 #
-# src/qt/quick, the C++ module, must never block the GUI thread: every prompt
-# is a request, then a signal, then an answer, and long calls run on
+# src/qt/quick, the C++ module, must never block the GUI thread, except
+# qml_main.cpp's start-up error box, shown before any event loop runs: every
+# prompt is a request, then a signal, then an answer, and long calls run on
 # QmlCallRunner's lanes. The first check fails on the constructs that block or
 # spin a nested event loop: QEventLoop, an exec() call, a blocking queued
 # connection (including GUIUtil's helper that returns one) and

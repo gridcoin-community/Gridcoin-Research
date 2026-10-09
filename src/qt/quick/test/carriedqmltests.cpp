@@ -7,6 +7,8 @@
 #include "carriedqmlexpected.h"
 #include "qmltestutil.h"
 
+#include <qt/quick/qmlengine.h>
+
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
@@ -147,6 +149,37 @@ void QmlCarriedQmlTests::carriedFilesLoad()
     qInfo().noquote() << QStringLiteral("carried QML: Qt %1, %2 files, %3 expected failures")
                              .arg(QLibraryInfo::version().toString()).arg(files.size()).arg(expected_failures);
     QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+}
+
+void QmlCarriedQmlTests::rootCompileMatchesCarriedFilesLoad()
+{
+    const QUrl root(QStringLiteral("qrc:/qt/qml/Gridcoin/App/WindowManager.qml"));
+
+    // The oracle is carriedFilesLoad's verdict for the root on this Qt.
+    bool oracle_ready = false;
+    QString oracle_errors;
+    {
+        QStringList warnings;
+        QQmlEngine engine;
+        ConfigureEngine(engine, warnings);
+        QQmlComponent component(&engine, root, QQmlComponent::PreferSynchronous);
+        if (component.status() == QQmlComponent::Loading) {
+            qml_test::PumpUntil([&component] { return component.status() != QQmlComponent::Loading; },
+                                std::chrono::seconds(10));
+        }
+        oracle_ready = component.status() == QQmlComponent::Ready;
+        oracle_errors = component.errorString().trimmed();
+    }
+
+    const QStringList errors = CompileQmlRoot(root);
+    QVERIFY2(errors.isEmpty() == oracle_ready,
+             qPrintable(QStringLiteral("the start-up root compile and carriedFilesLoad disagree about "
+                                       "WindowManager.qml: carriedFilesLoad %1, root compile %2: %3; "
+                                       "carriedFilesLoad errors: %4")
+                            .arg(oracle_ready ? QStringLiteral("ready") : QStringLiteral("not ready"),
+                                 errors.isEmpty() ? QStringLiteral("ready") : QStringLiteral("not ready"),
+                                 errors.join(QLatin1Char(' ')), oracle_errors)));
+    if (!oracle_ready) QVERIFY(!errors.isEmpty());
 }
 
 void QmlCarriedQmlTests::themeUsesUiFamily()

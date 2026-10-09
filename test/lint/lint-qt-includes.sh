@@ -13,7 +13,8 @@
 #   failure -- there is NO allowlist to grow.
 #
 # The composition root (below) is the ONE documented exemption: the GUI-process
-# entry points that legitimately wire core start-up/shutdown and the updater.
+# entry points that legitimately wire core start-up/shutdown and the updater,
+# and gridcoinresearch-qml's main(), which reads the parsed command line.
 # They are excluded from the scan, not allowlisted, so no per-header bookkeeping
 # survives here.
 #
@@ -39,14 +40,16 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 # forbidden per the surface-area policy above.
 FORBIDDEN_RE='^[[:space:]]*#[[:space:]]*include[[:space:]]*["<](main\.h|validation\.h|init\.h|net\.h|net_processing\.h|miner\.h|txdb\.h|txdb-leveldb\.h|txmempool\.h|banman\.h|alert\.h|keystore\.h|key\.h|chain\.h|psgt\.h|node/[^">]+|util/system\.h|wallet/[^">]+|gridcoin/[^">]+|rpc/[^">]+|policy/[^">]+|script/[^">]+)[">]'
 
-# The composition root: the three GUI-process entry points (app main / model
-# wiring, the main window, the standalone updater). They own the process wiring
-# -- choosing MakeGridcoinInit()/the IPC Init proxy and driving start-up,
-# shutdown and the updater -- so they legitimately see core headers and are the
-# ONE documented exemption. Excluded from the scan below. This is NOT an
-# allowlist: it is a fixed set of files, not file:header pairs, and it does not
-# grow as the GUI evolves.
-COMPOSITION_ROOT_RE='^src/qt/(bitcoin|bitcoingui|upgradeqt)\.cpp$'
+# The composition root: the four GUI-process entry points (app main / model
+# wiring, the main window, the standalone updater, and gridcoinresearch-qml's
+# main()). The first three own the process wiring -- choosing
+# MakeGridcoinInit()/the IPC Init proxy and driving start-up, shutdown and the
+# updater; qml_main.cpp reads the parsed command line in the front end's
+# factory, before the front end exists. These files legitimately see core
+# headers and are the ONE documented exemption. Excluded from the scan below.
+# This is NOT an allowlist: it is a fixed set of files, not file:header pairs,
+# and it grows only when the GUI gains a process entry point.
+COMPOSITION_ROOT_RE='^src/qt/(bitcoin|bitcoingui|upgradeqt|quick/qml_main)\.cpp$'
 
 # git wildmatch '*' crosses '/' in ls-files pathspecs, so these two patterns
 # also cover the researcher/, voting/ and test/ subdirectories. The composition
