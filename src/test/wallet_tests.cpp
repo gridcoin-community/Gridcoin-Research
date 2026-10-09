@@ -1645,6 +1645,169 @@ BOOST_AUTO_TEST_CASE(queue_relay_queues_an_active_transaction)
     RemoveFromRelayMemory(wtx.GetHash());
 }
 
+// GetBalances() is the four balance getters folded into one pass with one depth
+// lookup per transaction. The getters stay the reference: this checks that the
+// fold agrees with them, and with hand-computed totals, over a wallet holding a
+// transaction for every branch of their conditions. Each transaction carries a
+// distinct power-of-two amount, so a wrong total names the transaction that
+// was miscounted.
+BOOST_AUTO_TEST_CASE(get_balances_matches_the_four_getters)
+{
+    grc_test::StateGuard guard;
+
+    // Generated outputs mature at depth nCoinbaseMaturity + 10 = 20. The guard
+    // restores the maturity and the tip globals, and erases the mock indexes.
+    nCoinbaseMaturity = 10;
+    const int tip_height = 30;
+
+    std::vector<CBlockIndex*> chain;
+    {
+        LOCK(cs_main);
+        CBlockIndex* prev = nullptr;
+        for (int height = 0; height <= tip_height; ++height) {
+            CBlockIndex* pindex = GRC::MockBlockIndex::InsertBlockIndex(GetRandHash());
+            pindex->nHeight = height;
+            pindex->nVersion = 12;
+            pindex->pprev = prev;
+            if (prev) prev->pnext = pindex;
+            chain.push_back(pindex);
+            prev = pindex;
+        }
+        pindexBest = chain.back();
+        nBestHeight = tip_height;
+    }
+
+    // The block a transaction confirmed in, for a depth of `depth` at the tip.
+    const auto block_at_depth = [&](int depth) { return chain[tip_height - depth + 1]->GetBlockHash(); };
+
+    CWallet wallet;
+    CKey ours;
+    ours.MakeNewKey(true);
+    CKey theirs;
+    theirs.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(ours));
+    }
+    const CScript to_us = CScript() << ours.GetPubKey() << OP_CHECKSIG;
+    const CScript to_them = CScript() << theirs.GetPubKey() << OP_CHECKSIG;
+
+    const auto make_tx = [&](CAmount value, const CScript& script) {
+        CMutableTransaction mtx;
+        mtx.vin.resize(1);
+        mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = value;
+        mtx.vout[0].scriptPubKey = script;
+        return mtx;
+    };
+    const auto make_coinstake = [&](CAmount value) {
+        CMutableTransaction mtx = make_tx(value, to_us);
+        mtx.vout.insert(mtx.vout.begin(), CTxOut());
+        mtx.vout[0].SetEmpty();
+        return mtx;
+    };
+    const auto make_coinbase = [&](CAmount value) {
+        CMutableTransaction mtx = make_tx(value, to_us);
+        mtx.vin[0].prevout.SetNull();
+        return mtx;
+    };
+    const auto add = [&](const CMutableTransaction& mtx, const TxState& state, bool from_me = false,
+                         std::vector<unsigned int> spent = {}) {
+        CWalletTx wtx(&wallet, CTransaction(mtx));
+        wtx.SetTxState(state);
+        wtx.fFromMe = from_me;
+        for (const unsigned int n : spent) wtx.MarkSpent(n);
+        LOCK(wallet.cs_wallet);
+        const uint256 hash = wtx.GetHash();
+        wallet.mapWallet[hash] = wtx;
+        return hash;
+    };
+
+    // Ordinary transactions.
+    add(make_tx(1 * COIN, to_us), TxStateConfirmed(block_at_depth(15), 0));       // confirmed: balance
+    add(make_tx(2 * COIN, to_us), TxStateConfirmed(block_at_depth(5), 0));        // trusted, not confirmed: unconfirmed
+    add(make_tx(4 * COIN, to_us), TxStateConfirmed(block_at_depth(1), 0));        // untrusted: unconfirmed
+    add(make_tx(8 * COIN, to_us), TxStateConfirmed(block_at_depth(5), 0), true);  // from me, trusted: balance
+
+    // A parent with one output spent by an unconfirmed child of ours in the
+    // pool, which is trusted through AreDependenciesConfirmed(): the child's
+    // change and the parent's unspent output are balance.
+    CMutableTransaction parent_mtx = make_tx(32 * COIN, to_us);
+    parent_mtx.vout.emplace_back(64 * COIN, to_us);
+    const uint256 parent_hash = add(parent_mtx, TxStateConfirmed(block_at_depth(15), 0), false, {0});
+    CMutableTransaction child_mtx = make_tx(16 * COIN, to_us);
+    child_mtx.vin[0].prevout = COutPoint(parent_hash, 0);
+    const CTransaction child_tx(child_mtx);
+    {
+        CWalletTx child(&wallet, child_tx);
+        child.SetTxState(TxStateInMempool{});
+        child.fFromMe = true;
+        CMerkleTx parent_merkle{CTransaction(parent_mtx)};
+        parent_merkle.hashBlock = block_at_depth(15);
+        parent_merkle.nIndex = 0;
+        child.vtxPrev.push_back(parent_merkle);
+        LOCK(wallet.cs_wallet);
+        wallet.mapWallet[child.GetHash()] = child;
+    }
+    {
+        LOCK(cs_main);
+        mempool.addUnchecked(child_tx.GetHash(), CTxMemPoolEntry(
+            child_tx, /*fee=*/0, /*time=*/0, /*height=*/0,
+            ::GetSerializeSize(child_tx, SER_NETWORK, PROTOCOL_VERSION)));
+    }
+
+    // Generated transactions.
+    add(make_coinstake(128 * COIN), TxStateConfirmed(block_at_depth(5), 1));       // immature: stake
+    add(make_coinstake(256 * COIN), TxStateConfirmed(block_at_depth(25), 1));      // mature: balance
+    add(make_coinbase(512 * COIN), TxStateConfirmed(block_at_depth(5), 0));        // immature: immature
+    add(make_coinstake(1024 * COIN), TxStateConfirmed(GetRandHash(), 1));          // orphaned: nothing
+
+    // Non-final: unconfirmed whatever its depth.
+    CMutableTransaction non_final = make_tx(2048 * COIN, to_us);
+    non_final.nLockTime = tip_height + 1000;
+    non_final.vin[0].nSequence = 0;
+    add(non_final, TxStateInactive{});
+
+    // Nothing of ours left, the cases the pass skips before the depth lookup.
+    add(make_tx(4096 * COIN, to_us), TxStateConfirmed(block_at_depth(15), 0), false, {0});  // spent
+    add(make_tx(8192 * COIN, to_them), TxStateConfirmed(block_at_depth(15), 0), true);      // a send
+
+    // A mature coinstake spent counts nowhere; an immature one spent still
+    // counts as stake, which GetCredit() takes whether spent or not.
+    add(make_coinstake(16384 * COIN), TxStateConfirmed(block_at_depth(25), 1), false, {1});
+    add(make_coinstake(32768 * COIN), TxStateConfirmed(block_at_depth(3), 1), false, {1});
+
+    // In the pool but not ours to trust: nowhere.
+    {
+        const CMutableTransaction mtx = make_tx(65536 * COIN, to_us);
+        add(mtx, TxStateInMempool{});
+        const CTransaction tx(mtx);
+        LOCK(cs_main);
+        mempool.addUnchecked(tx.GetHash(), CTxMemPoolEntry(
+            tx, /*fee=*/0, /*time=*/0, /*height=*/0, ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION)));
+    }
+
+    const CWallet::Balances totals = wallet.GetBalances();
+
+    BOOST_CHECK_EQUAL(totals.balance, wallet.GetBalance());
+    BOOST_CHECK_EQUAL(totals.stake, wallet.GetStake());
+    BOOST_CHECK_EQUAL(totals.unconfirmed, wallet.GetUnconfirmedBalance());
+    BOOST_CHECK_EQUAL(totals.immature, wallet.GetImmatureBalance());
+
+    BOOST_CHECK_EQUAL(totals.balance, (1 + 8 + 16 + 64 + 256) * COIN);
+    BOOST_CHECK_EQUAL(totals.stake, (128 + 32768) * COIN);
+    BOOST_CHECK_EQUAL(totals.unconfirmed, (2 + 4 + 2048) * COIN);
+    BOOST_CHECK_EQUAL(totals.immature, 512 * COIN);
+
+    {
+        LOCK2(cs_main, wallet.cs_wallet);
+        for (const auto& entry : wallet.mapWallet) {
+            mempool.remove(entry.second, /*fRecursive=*/false);
+        }
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(wallet_integration_tests)

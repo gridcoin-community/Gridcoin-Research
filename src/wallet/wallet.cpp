@@ -3371,6 +3371,56 @@ int64_t CWallet::GetImmatureBalance() const
     return nTotal;
 }
 
+CWallet::Balances CWallet::GetBalances() const
+{
+    // GetBalance(), GetStake(), GetUnconfirmedBalance() and GetImmatureBalance()
+    // each walk the whole of mapWallet, and look the depth up again inside
+    // IsTrusted(), IsConfirmed(), IsInMainChain() and GetBlocksToMaturity():
+    // three or four lookups for an ordinary transaction and five to seven for a
+    // coinstake, over four walks. This is one walk and one lookup, the same approach
+    // AvailableCoinsForStaking() takes. (A transaction of ours less than three
+    // blocks deep still pays for the dependency walk in IsTrusted(), which looks
+    // the depth up again for itself and each parent it reaches; there are
+    // normally only a few such transactions.) The conditions below are those four
+    // functions' conditions with the depth substituted, and must be kept in step
+    // with them; the wallet tests compare the two on every kind of transaction.
+    Balances totals;
+
+    LOCK2(cs_main, cs_wallet);
+    for (const auto& entry : mapWallet)
+    {
+        const CWalletTx& wtx = entry.second;
+
+        // An ordinary transaction counts only through its available credit (the
+        // stake and immature totals take generated transactions only), so one
+        // with none -- every output of ours spent, which is most of an old
+        // wallet, or none of them ours, as in a send -- adds nothing and need
+        // not pay for the depth lookup.
+        if (!wtx.IsCoinBase() && !wtx.IsCoinStake() && wtx.GetAvailableCredit() == 0) continue;
+
+        const int depth = wtx.GetDepthInMainChain();
+        const int blocks_to_maturity = wtx.GetBlocksToMaturity(depth);
+        const bool in_main_chain = depth > 0; // IsInMainChain()
+        const bool confirmed = depth >= 10;   // IsConfirmed()
+
+        if (wtx.IsTrusted(depth) && (confirmed || wtx.fFromMe)) {
+            totals.balance += wtx.GetAvailableCredit(blocks_to_maturity, true);
+        }
+
+        if (!IsFinalTx(wtx) || (!confirmed && !wtx.fFromMe && in_main_chain)) {
+            totals.unconfirmed += wtx.GetAvailableCredit(blocks_to_maturity, true);
+        }
+
+        // Nonzero only for a coinbase or coinstake, so these two are exclusive.
+        if (blocks_to_maturity > 0 && in_main_chain) {
+            if (wtx.IsCoinStake()) totals.stake += GetCredit(wtx);
+            if (wtx.IsCoinBase()) totals.immature += GetCredit(wtx);
+        }
+    }
+
+    return totals;
+}
+
 // populate vCoins with vector of spendable COutputs
 void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool fIncludeStakedCoins) const
 {
@@ -5937,6 +5987,15 @@ int CMerkleTx::GetDepthInMainChain(CBlockIndex* &pindexRet) const EXCLUSIVE_LOCK
 
 int CMerkleTx::GetBlocksToMaturity() const
 {
+    // The same early outs as below, so an ordinary transaction never pays for
+    // the depth lookup.
+    if (!(IsCoinBase() || IsCoinStake()) || Params().IsMockableChain())
+        return 0;
+    return GetBlocksToMaturity(GetDepthInMainChain());
+}
+
+int CMerkleTx::GetBlocksToMaturity(int depth) const
+{
     if (!(IsCoinBase() || IsCoinStake()))
         return 0;
     // Under -regtest, treat coinbase/coinstake outputs as immediately mature so
@@ -5945,7 +6004,7 @@ int CMerkleTx::GetBlocksToMaturity() const
     // PoS block (no spendable UTXO to stake against).
     if (Params().IsMockableChain())
         return 0;
-    return max(0, (nCoinbaseMaturity+10) - GetDepthInMainChain());
+    return max(0, (nCoinbaseMaturity+10) - depth);
 }
 
 
