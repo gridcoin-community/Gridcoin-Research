@@ -65,14 +65,24 @@ std::atomic<bool> g_researcher_dirty(true);
 //! \param email The email address to update the directive to. If empty, set
 //! the configuration to non-cruncher mode.
 //!
+//! On a successful write, it also clears any value forced for the keys it wrote.
+//!
 //! \return \c false if an error occurs during the update.
 //!
 bool UpdateRWSettingsForMode(const ResearcherMode mode, const std::string& email)
 {
     std::vector<std::pair<std::string, util::SettingsValue>> settings;
 
-    // Ensure old (legacy) investor key is removed.
-    settings.push_back(std::make_pair("investor", util::SettingsValue(UniValue::VNULL)));
+    // Store the legacy investor key as "0" rather than erasing it. Email()
+    // and ConfiguredForNoncruncherMode() still read -investor, and the
+    // read-write settings outrank the config file, so a "0" here keeps a
+    // legacy investor=1 in the config file from overriding the mode chosen
+    // here, in this session and after a restart. Erased, the config-file value
+    // would apply again. A value given on the command line still outranks it.
+    // Every mode change now leaves this key in the settings file, so the
+    // deprecated -investor registration cannot be removed until this line
+    // erases the key again.
+    settings.push_back(std::make_pair("investor", "0"));
 
     if (mode == ResearcherMode::NONCRUNCHER) {
         settings.push_back(std::make_pair("email", util::SettingsValue(UniValue::VNULL)));
@@ -82,7 +92,27 @@ bool UpdateRWSettingsForMode(const ResearcherMode mode, const std::string& email
         settings.push_back(std::make_pair("noncruncher", "0"));
     }
 
-    return ::updateRwSettings(settings);
+    if (!::updateRwSettings(settings)) {
+        return false;
+    }
+
+    // The write succeeded, so the read-write settings now hold the chosen
+    // mode. A changesettings of any of these keys forced its value into the
+    // running args, and a forced value outranks the read-write settings. Left
+    // in place, a forced legacy investor flag keeps Email() and
+    // ConfiguredForNoncruncherMode() in non-cruncher mode for the rest of the
+    // session, whatever mode was chosen. Clear them, so the running args read
+    // what a restart would read. ChangeMode() forces email and noncruncher
+    // again as soon as this returns. On a failed write nothing is cleared:
+    // ChangeMode() returns before it forces or reloads anything, and every
+    // forced value stays as it was. A value given on the command line is not a
+    // forced value, so it still outranks the settings file, as it does after a
+    // restart.
+    for (const auto& setting : settings) {
+        gArgs.ClearForcedArg("-" + setting.first);
+    }
+
+    return true;
 }
 
 //!
@@ -473,27 +503,31 @@ bool DetectSplitCpid(const MiningProjectMap& projects)
 //!
 void StoreResearcher(Researcher context)
 {
+    // Work out the text first; the lock guards only the string.
     // TODO: this belongs in presentation layer code:
-    {
-        LOCK(cs_msMiningErrors);
+    std::optional<std::string> status_text;
 
-        switch (context.Status()) {
-            case ResearcherStatus::ACTIVE:
-                msMiningErrors = _("Eligible for Research Rewards");
-                break;
-            case ResearcherStatus::POOL:
-                msMiningErrors = _("Staking Only - Pool Detected");
-                break;
-            case ResearcherStatus::NO_PROJECTS:
-                msMiningErrors = _("Staking Only - No Eligible Research Projects");
-                break;
-            case ResearcherStatus::NO_BEACON:
-                msMiningErrors = _("Staking Only - No active beacon");
-                break;
-            case ResearcherStatus::NONCRUNCHER:
-                msMiningErrors = _("Staking Only - Non-cruncher Mode");
-                break;
-        }
+    switch (context.Status()) {
+        case ResearcherStatus::ACTIVE:
+            status_text = _("Eligible for Research Rewards");
+            break;
+        case ResearcherStatus::POOL:
+            status_text = _("Staking Only - Pool Detected");
+            break;
+        case ResearcherStatus::NO_PROJECTS:
+            status_text = _("Staking Only - No Eligible Research Projects");
+            break;
+        case ResearcherStatus::NO_BEACON:
+            status_text = _("Staking Only - No active beacon");
+            break;
+        case ResearcherStatus::NONCRUNCHER:
+            status_text = _("Staking Only - Non-cruncher Mode");
+            break;
+    }
+
+    if (status_text) {
+        LOCK(cs_msMiningErrors);
+        msMiningErrors = std::move(*status_text);
     }
 
     std::atomic_store(

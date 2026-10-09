@@ -4,6 +4,7 @@
 
 #include "gridcoin/protocol.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/boinc.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/pool.h"
 #include "gridcoin/project.h"
@@ -15,6 +16,7 @@
 
 #include "test/state_guard.h"
 #include <iostream>
+#include <optional>
 #include <vector>
 
 extern leveldb::DB *txdb;
@@ -816,6 +818,242 @@ BOOST_AUTO_TEST_CASE(the_auto_refresh_reload_honors_noncruncher_mode)
     // -forcecpid and log a benign "invalid CPID" error).
     gArgs.ForceSetArg("forcecpid", "");
     gArgs.ForceSetArg("noncruncher", "0");
+}
+
+//!
+//! \brief Setup shared by the mode-change cases. Researcher::ChangeMode()
+//! writes the read-write settings file, forces -email and -noncruncher, and
+//! reloads the researcher context, which probes for BOINC. The fixture gives it
+//! a data directory to write to and an empty BOINC directory to probe, so the
+//! reload never reads the host's BOINC install. It restores every settings map,
+//! the config-file layer included, when the case ends, even when an assertion
+//! aborts the case, and then reloads the researcher context from the restored
+//! settings. It does not restore the settings file on disk; every successful
+//! write rewrites that file from the in-memory settings.
+//!
+struct ResearcherModeChangeFixture
+{
+    const std::string m_email{"researcher@example.com"};
+    std::optional<grc_test::StateGuard> m_state;
+    fs::path m_datadir;
+    fs::path m_boinc_dir;
+
+    ResearcherModeChangeFixture()
+    {
+        m_state.emplace();
+
+        // TestingSetup points -datadir at a temp path but never creates it.
+        m_datadir = gArgs.GetArg("-datadir", "");
+        BOOST_REQUIRE(!m_datadir.empty());
+        fs::create_directories(m_datadir);
+        gArgs.ClearPathCache();
+
+        m_boinc_dir = m_datadir / "boinc";
+        fs::create_directories(m_boinc_dir);
+        // An empty client_state.xml: the reload logs that BOINC is attached to no
+        // projects and loads nothing. Without the file it would also raise the
+        // message box for an unreadable BOINC directory.
+        { fsbridge::ofstream create_empty(m_boinc_dir / "client_state.xml"); }
+
+        // Start from the values this suite's cases leave behind, whatever ran before.
+        gArgs.ForceSetArg("-boincdatadir", m_boinc_dir.string());
+        gArgs.ForceSetArg("-email", "");
+        gArgs.ForceSetArg("-noncruncher", "0");
+    }
+
+    ~ResearcherModeChangeFixture()
+    {
+        // Restore the settings first, so the reload below reads them.
+        m_state.reset();
+        GRC::ResetBoincDataDirCache();
+        GRC::Researcher::Reload(GRC::MiningProjectMap());
+
+        BOOST_CHECK(!gArgs.GetBoolArg("-investor", false));
+        BOOST_CHECK(GRC::Researcher::Get()->Id() == GRC::MiningId::ForNoncruncher());
+    }
+
+    static std::string Forced(const std::string& key)
+    {
+        std::string value{"<absent>"};
+        gArgs.LockSettings([&](util::Settings& settings) {
+            const auto it = settings.forced_settings.find(key);
+            if (it != settings.forced_settings.end()) {
+                value = it->second.isStr() ? it->second.get_str() : it->second.write();
+            }
+        });
+        return value;
+    }
+
+    static std::string Rw(const std::string& key)
+    {
+        const util::SettingsValue v = getRwSetting(key);
+        if (v.isNull()) return "<absent>";
+        return v.isStr() ? v.get_str() : v.write();
+    }
+
+    static void SetConfigFileValue(const std::string& key, const std::string& value)
+    {
+        // What ReadConfigStream() stores for key=value in the default section of the config file.
+        gArgs.LockSettings([&](util::Settings& s) { s.ro_config[""][key] = {util::SettingsValue{value}}; });
+    }
+};
+
+BOOST_FIXTURE_TEST_CASE(a_mode_change_clears_a_forced_legacy_investor_flag, ResearcherModeChangeFixture)
+{
+    // What changesettings investor=1 leaves behind: the value stored in the
+    // read-write settings and forced into the running args.
+    BOOST_REQUIRE(updateRwSetting("investor", util::SettingsValue{"1"}));
+    grc_test::ForcedArgGuard forced_investor("investor", "1");
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_REQUIRE(GRC::Researcher::Email().empty());
+
+    // Email() is empty under the forced flag, so the early return is skipped.
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::SOLO, m_email));
+
+    BOOST_CHECK_EQUAL(Forced("investor"), "<absent>");
+    BOOST_CHECK_EQUAL(Forced("email"), m_email);
+    BOOST_CHECK_EQUAL(Forced("noncruncher"), "0");
+    BOOST_CHECK_EQUAL(Rw("email"), m_email);
+    BOOST_CHECK_EQUAL(Rw("noncruncher"), "0");
+
+    // What the user of the researcher wizard sees.
+    BOOST_CHECK_EQUAL(GRC::Researcher::Email(), m_email);
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+
+    // Fixture sanity checks: the forced BOINC directory and the empty
+    // client_state.xml are what the reload read.
+    BOOST_CHECK(GRC::GetBoincDataDir() == m_boinc_dir);
+    BOOST_CHECK(GRC::Researcher::Get()->Projects().empty());
+}
+
+BOOST_FIXTURE_TEST_CASE(a_failed_mode_change_keeps_a_forced_legacy_investor_flag, ResearcherModeChangeFixture)
+{
+    // What changesettings investor=1 leaves behind: the value stored in the
+    // read-write settings and forced into the running args.
+    BOOST_REQUIRE(updateRwSetting("investor", util::SettingsValue{"1"}));
+    grc_test::ForcedArgGuard forced_investor("investor", "1");
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_REQUIRE(GRC::Researcher::Email().empty());
+    BOOST_REQUIRE_EQUAL(Rw("email"), "<absent>");
+
+    BOOST_REQUIRE(!fs::exists(m_datadir / "missing_subdir"));
+    {
+        // No directory of that name exists under the data directory, so the
+        // settings write cannot open its temporary file and fails without throwing.
+        grc_test::ForcedArgGuard broken_settings_path("settings", "missing_subdir/gridcoinsettings.json");
+
+        BOOST_CHECK(!GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::SOLO, m_email));
+        BOOST_CHECK_EQUAL(Forced("investor"), "1");
+        BOOST_CHECK_EQUAL(Forced("email"), "");
+        BOOST_CHECK_EQUAL(Forced("noncruncher"), "0");
+        BOOST_CHECK(GRC::Researcher::Email().empty());
+        BOOST_CHECK(GRC::Researcher::ConfiguredForNoncruncherMode());
+
+        // The failed write restored the read-write settings, so the new email
+        // is not in memory either.
+        BOOST_CHECK_EQUAL(Rw("email"), "<absent>");
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(a_solo_mode_change_outranks_a_config_file_investor_flag, ResearcherModeChangeFixture)
+{
+    SetConfigFileValue("investor", "1");
+    BOOST_REQUIRE_EQUAL(Rw("investor"), "<absent>");
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_REQUIRE(GRC::Researcher::Email().empty());
+
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::SOLO, m_email));
+
+    BOOST_CHECK_EQUAL(Rw("investor"), "0");
+    BOOST_CHECK_EQUAL(GRC::Researcher::Email(), m_email);
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+
+    // Fixture sanity checks: the forced BOINC directory and the empty
+    // client_state.xml are what the reload read.
+    BOOST_CHECK(GRC::GetBoincDataDir() == m_boinc_dir);
+    BOOST_CHECK(GRC::Researcher::Get()->Projects().empty());
+
+    // Model a restart started the same way: forced values do not survive one,
+    // and the read-write settings come from the file. The ClearForcedArg calls
+    // carry the model; ReadSettingsFile() only round-trips the file just written.
+    gArgs.ClearForcedArg("-investor");
+    gArgs.ClearForcedArg("-email");
+    gArgs.ClearForcedArg("-noncruncher");
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_CHECK_EQUAL(Rw("investor"), "0");
+    BOOST_CHECK_EQUAL(GRC::Researcher::Email(), m_email);
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+}
+
+BOOST_FIXTURE_TEST_CASE(a_pool_mode_change_outranks_a_config_file_investor_flag, ResearcherModeChangeFixture)
+{
+    SetConfigFileValue("investor", "1");
+    BOOST_REQUIRE_EQUAL(Rw("investor"), "<absent>");
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_REQUIRE(GRC::Researcher::Email().empty());
+    // POOL writes neither key; the restart half below reads the baseline.
+    BOOST_REQUIRE_EQUAL(Rw("email"), "<absent>");
+    BOOST_REQUIRE_EQUAL(Rw("noncruncher"), "<absent>");
+
+    // POOL has no early return.
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::POOL, std::string()));
+
+    BOOST_CHECK_EQUAL(Rw("investor"), "0");
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_CHECK(GRC::Researcher::Email().empty());
+
+    // Model a restart started the same way: forced values do not survive one,
+    // and the read-write settings come from the file. The ClearForcedArg calls
+    // carry the model; ReadSettingsFile() only round-trips the file just written.
+    gArgs.ClearForcedArg("-investor");
+    gArgs.ClearForcedArg("-email");
+    gArgs.ClearForcedArg("-noncruncher");
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_CHECK_EQUAL(Rw("investor"), "0");
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+}
+
+BOOST_FIXTURE_TEST_CASE(a_mode_change_keeps_a_changesettings_override_of_a_config_file_investor_flag, ResearcherModeChangeFixture)
+{
+    // Guards the in-session override that already works against a change that
+    // clears the forced value without also storing "0".
+    SetConfigFileValue("investor", "1");
+    // What changesettings investor=0 leaves behind: the value stored in the
+    // read-write settings and forced into the running args.
+    BOOST_REQUIRE(updateRwSetting("investor", util::SettingsValue{"0"}));
+    grc_test::ForcedArgGuard forced_investor("investor", "0");
+    BOOST_REQUIRE(!GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_REQUIRE(GRC::Researcher::Email().empty());
+
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::SOLO, m_email));
+
+    BOOST_CHECK_EQUAL(GRC::Researcher::Email(), m_email);
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+}
+
+BOOST_FIXTURE_TEST_CASE(a_failed_mode_change_leaves_a_config_investor_flag_in_force, ResearcherModeChangeFixture)
+{
+    // A failed settings write restores the read-write settings, including the
+    // investor "0" a mode change now writes, so a config-file investor=1 stays
+    // in force and no investor value is left forced.
+    SetConfigFileValue("investor", "1");
+    BOOST_REQUIRE_EQUAL(Rw("investor"), "<absent>");
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+
+    BOOST_REQUIRE(!fs::exists(m_datadir / "missing_subdir"));
+    {
+        // No directory of that name exists under the data directory, so the
+        // settings write cannot open its temporary file and fails without throwing.
+        grc_test::ForcedArgGuard broken_settings_path("settings", "missing_subdir/gridcoinsettings.json");
+
+        BOOST_CHECK(!GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::SOLO, m_email));
+        BOOST_CHECK_EQUAL(Rw("investor"), "<absent>");
+        BOOST_CHECK(GRC::Researcher::ConfiguredForNoncruncherMode());
+
+        BOOST_CHECK_EQUAL(Forced("investor"), "<absent>");
+    }
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_access_to_a_global_researcher_singleton)
