@@ -232,6 +232,46 @@ BOOST_AUTO_TEST_CASE(store_remove_erases_by_identity_and_shifts)
     BOOST_CHECK_EQUAL(d[0].first, 0);  // 300 was the first served row
 }
 
+// A removed record the view does not show still renumbers the records after it.
+// The default spec hides orphans, so a reorg that drops an orphaned record from
+// the middle of the table removes a row no view holds. The survivors' absolute
+// indices must still shift down; otherwise each later entry names the record
+// `count` places further on and the last ones point past the end of the table,
+// which is the heap-use-after-free ASan caught in a 2,048-block reorg.
+BOOST_AUTO_TEST_CASE(store_remove_of_a_hidden_record_still_shifts_the_view)
+{
+    Table t;
+    Rec a = active(300); a.addr = "a";
+    Rec x = active(200); x.addr = "x"; x.status = 6;   // inactive: hidden by the default spec
+    Rec b = active(100); b.addr = "b";
+    t.rows = {a, x, b};
+    Cursor c(1, FilterSpec{}, TXCOL_DATE, TXSORT_DESC, t.fields(), t.keys());
+    c.rebuild(t.rows.size());
+    BOOST_REQUIRE_EQUAL(c.viewIndex().size(), 2u);   // a(0), b(2); x hidden
+
+    t.rows.erase(t.rows.begin() + 1);
+    const auto d = c.applyStoreRemove(1, 1);
+    BOOST_CHECK(d.empty());   // the consumer never had x
+
+    // Every entry in range and naming the record it named before. REQUIRE: a
+    // stale entry would make the comparisons below read past the table.
+    BOOST_REQUIRE_EQUAL(c.viewIndex().size(), 2u);
+    for (const std::size_t absidx : c.viewIndex()) {
+        BOOST_REQUIRE_LT(absidx, t.rows.size());
+    }
+    BOOST_CHECK_EQUAL(t.rows[c.viewIndex()[0]].addr, "a");
+    BOOST_CHECK_EQUAL(t.rows[c.viewIndex()[1]].addr, "b");
+
+    // The next status update on b repositions it by identity and binary search,
+    // the path that read the freed key. It must find b in place.
+    const auto u = c.applyStatusUpdate(1);
+    BOOST_REQUIRE_EQUAL(c.viewIndex().size(), 2u);
+    BOOST_CHECK_EQUAL(c.viewIndex()[0], 0u);
+    BOOST_CHECK_EQUAL(c.viewIndex()[1], 1u);
+    BOOST_CHECK_EQUAL(countType(u, CursorDelta::Change), 1);
+    BOOST_CHECK_EQUAL(countType(u, CursorDelta::Insert), 0);
+}
+
 // ---- status update: membership flip in / out --------------------------------
 
 BOOST_AUTO_TEST_CASE(status_update_flip_out_then_in)
