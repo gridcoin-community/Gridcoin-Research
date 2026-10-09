@@ -86,7 +86,7 @@ public:
     void showBuildMismatchWarning(const QString& gui_commit, const QString& node_commit);
 
     //! Provide the IPC connection facts for the About dialog's multiprocess
-    //! section (populated in main() from the connect handshake; inert in the
+    //! section (populated in GuiMain() from the connect handshake; inert in the
     //! monolith build, where ipc_info.active is false).
     void setIpcConnectionInfo(const GuiIpcInfo& info);
 

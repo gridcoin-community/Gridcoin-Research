@@ -125,16 +125,16 @@ SideStakeTableModel::SideStakeTableModel(interfaces::SideStakeManager& sidestake
 
     subscribeToCoreSignals();
 
-    // Deliberately do NOT refresh() here. This model is constructed early in
-    // main() (via OptionsModel), before SelectParams(gArgs.GetChainName()) and
-    // before the sidestake registry is loaded during node init. Because entries()
-    // returns value rows with the address already encoded (EncodeDestination uses
-    // the active chain params), an initial refresh under the provisional MAIN
-    // params could cache mainnet-prefixed strings on testnet/regtest. The model
-    // is empty until its first refresh, which happens when OptionsDialog binds it
-    // (OptionsDialog::setModel -> refresh()) — well after final chain selection
-    // and registry load. The registry is empty at construction anyway, so nothing
-    // is lost by deferring.
+    // Deliberately do NOT refresh() here. The model is empty until it is first
+    // refreshed. OptionsDialog, the only code that fetches it from OptionsModel,
+    // refreshes it when it binds it (OptionsDialog::setModel -> refresh()); a
+    // MandatorySideStakeChanged or RwSettingsUpdated core signal can refresh it
+    // earlier. In the monolith this model is constructed in GuiMain() (via
+    // OptionsModel) before core init has loaded the sidestake registry, so a
+    // refresh here would read an empty registry. Under -multiprocess the daemon
+    // accepts the GUI only after its init has finished, so the registry is
+    // already loaded there; deferring costs nothing, because the dialog
+    // refreshes the model before showing it.
 }
 
 SideStakeTableModel::~SideStakeTableModel()
