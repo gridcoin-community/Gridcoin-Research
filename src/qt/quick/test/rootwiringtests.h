@@ -18,6 +18,7 @@ private Q_SLOTS:
     void showMainFollowsShell();
     void coreMessages();
     void closeQuitsOrHidesToTray();
+    void quitBeforeTheLoopStillQuits();
 };
 
 #endif // BITCOIN_QT_QUICK_TEST_ROOTWIRINGTESTS_H

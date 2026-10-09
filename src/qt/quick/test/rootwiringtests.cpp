@@ -620,3 +620,46 @@ void QmlRootWiringTests::closeQuitsOrHidesToTray()
         QVERIFY2(!main->isVisible(), "the tray restored the main window after a quit was requested");
     }
 }
+
+void QmlRootWiringTests::quitBeforeTheLoopStillQuits()
+{
+    if (QLibraryInfo::version() < RootFloor()) QSKIP("the carried root reaches a Qt 6.9 type");
+    const bool old_quit = qApp->quitOnLastWindowClosed();
+    qApp->setQuitOnLastWindowClosed(false);
+    qml_test::ScopeExit restore_quit([old_quit] { qApp->setQuitOnLastWindowClosed(old_quit); });
+
+    std::atomic<int> disconnects{0};
+    qml_test::ForwardingQuitFrontEnd fe(ROOT_URL, qml_test::CountingCallbacks(disconnects));
+    fe.createSplash();
+    Construct(fe);
+    QVERIFY2(fe.rootObject(), "the root did not load");
+
+    QString error;
+    const bool enabled_before = Evaluate(fe, QStringLiteral("trayQuit.enabled"), error).toBool();
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QVERIFY2(!enabled_before, "the tray's Quit was enabled before the main window was shown");
+
+    // A quit handled before the event loop runs, as StartGridcoinQt's readiness wait
+    // handles a queued quit request: outside the loop it only records the quit.
+    fe.requestQuit();
+    fe.showMain(false);
+    QVERIFY2(RootWindow(fe, "mainWindow") == nullptr, "the main window was created after a quit was requested");
+    const bool enabled_after = Evaluate(fe, QStringLiteral("trayQuit.enabled"), error).toBool();
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QVERIFY2(enabled_after, "the tray's Quit was not enabled once the main window was requested");
+
+    // Nothing processes events before the loop starts, as in StartGridcoinQt.
+    QTimer bound;
+    bound.setSingleShot(true);
+    bound.setInterval(2000);
+    QObject::connect(&bound, &QTimer::timeout, &bound, [] { QCoreApplication::exit(2); });
+    bound.start();
+    int rc = -1;
+    {
+        qml_test::Watchdog dog("quitBeforeTheLoopStillQuits");
+        rc = qApp->exec();
+    }
+    bound.stop();
+    QCOMPARE(rc, 0);
+    QCOMPARE(fe.quits, 1);
+}
