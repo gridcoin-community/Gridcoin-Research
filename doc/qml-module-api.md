@@ -19,10 +19,15 @@ names later changes will add.
 - On Debian and Ubuntu the module needs `qt6-declarative-dev` to build. At run time the module
   needs `qml6-module-qtquick`; the carried tree also needs `qml6-module-qtquick-controls`,
   `-layouts`, `-templates`, `-window`, `-shapes`, `qml6-module-qt-labs-platform`,
-  `qml6-module-qtqml-models` and `qml6-module-qtqml-workerscript`. Five carried files import
+  `qml6-module-qtqml-models`, `qml6-module-qtqml-workerscript`,
+  `qml6-module-qt5compat-graphicaleffects` and `libqt6shadertools6`. Five carried files import
   `QtQml`, among them the root `WindowManager.qml` that `gridcoinresearch-qml` loads, the theme
   and the clock, so the executable and `test_gridcoin-qml` (which loads them) need
-  `qml6-module-qtqml-models`. No package provides `QtQuick.Effects` before Qt 6.5 (section 8).
+  `qml6-module-qtqml-models`. Three carried files import `Qt5Compat.GraphicalEffects`
+  (section 8), whose types do not load without Qt Shader Tools.
+- `install_dependencies.sh` with `ENABLE_QML=true` installs the Qt5Compat GraphicalEffects
+  module only on Debian, Ubuntu and Linux Mint. On every other system a QML build installs
+  it, with Qt Shader Tools, by hand.
 
 ## 2. Names available now
 

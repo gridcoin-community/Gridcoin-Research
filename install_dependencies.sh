@@ -453,8 +453,12 @@ install_deps() {
     # The packages join PKGS_QT, which on Linux is installed only for a Qt 6
     # GUI build, the only build that can set ENABLE_QML. The apt install below
     # runs with --no-install-recommends and qt6-declarative-dev does not depend
-    # on the QML runtime modules, so each module is listed. macOS needs nothing
-    # more: its Qt 6 subset above already includes qtdeclarative.
+    # on the QML runtime modules, so each module is listed. The carried QML's
+    # effects also need the Qt5Compat GraphicalEffects module, whose types do
+    # not load without Qt Shader Tools. Debian, Ubuntu and Linux Mint get both
+    # below; on every other system, macOS included, a QML build installs them
+    # by hand, because one wrong package name would fail that system's whole
+    # install and no CI job runs those branches.
     if [[ "$ENABLE_QML" == "true" ]]; then
         echo "QML front end requested: adding the Qt Quick packages."
         case $OS in
@@ -465,6 +469,7 @@ install_deps() {
                     qml6-module-qt-labs-platform
                 append_qt qml6-module-qtqml qml6-module-qtqml-models qml6-module-qtqml-workerscript \
                     qml6-module-qttest
+                append_qt qml6-module-qt5compat-graphicaleffects libqt6shadertools6
                 # Qt reads SVG images only through its svg image-format plugin
                 # (imageformats/libqsvg.so). Where the archive ships Qt's svg
                 # plugins as a package of their own (qt6-svg-plugins: Debian
