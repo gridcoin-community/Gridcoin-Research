@@ -131,8 +131,8 @@ void OptionsModel::Init()
     // the multiprocess build, before the node connection this model's m_node is
     // sourced from even exists (this model is now constructed *after* that connect).
     // So that pre-Intro SoftSet moved to EarlyReadGuiLangAndDatadir() in
-    // bitcoin.cpp main(), which runs well ahead of this constructor. This model
-    // keeps only the `language` member read for its own use.
+    // GuiMain() in bitcoin.cpp, which runs well ahead of this constructor. This
+    // model keeps only the `language` member read for its own use.
     language = settings.value("language", "").toString();
 
     m_sidestake_model = new SideStakeTableModel(m_sidestake_manager, this);
