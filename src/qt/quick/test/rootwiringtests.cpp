@@ -17,7 +17,6 @@
 #include <QDebug>
 #include <QEvent>
 #include <QGuiApplication>
-#include <QLibraryInfo>
 #include <QMetaObject>
 #include <QPointer>
 #include <QQmlEngine>
@@ -29,7 +28,6 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVariant>
-#include <QVersionNumber>
 #include <QWindow>
 #include <QtGlobal>
 
@@ -54,13 +52,6 @@ using namespace std::chrono_literals;
 
 //! The carried root, as gridcoinresearch-qml loads it.
 const QUrl ROOT_URL{QStringLiteral("qrc:/qt/qml/Gridcoin/App/WindowManager.qml")};
-
-//! Below this Qt version the root reaches RectangularShadow (Qt 6.9), so the
-//! tests that load it skip there.
-QVersionNumber RootFloor()
-{
-    return QVersionNumber(6, 9);
-}
 
 //! Every message text Qt's message handler receives while CollectMessage is
 //! installed; the previous handler still gets each message.
@@ -381,7 +372,6 @@ void FifoAcrossModality()
 
 void QmlRootWiringTests::rootBindsNoLegacyNames()
 {
-    if (QLibraryInfo::version() < RootFloor()) QSKIP("the carried root reaches a Qt 6.9 type");
     const bool old_quit = qApp->quitOnLastWindowClosed();
     qApp->setQuitOnLastWindowClosed(false);
     qml_test::ScopeExit restore_quit([old_quit] { qApp->setQuitOnLastWindowClosed(old_quit); });
@@ -420,7 +410,6 @@ void QmlRootWiringTests::rootBindsNoLegacyNames()
 
 void QmlRootWiringTests::splashFollowsSplashState()
 {
-    if (QLibraryInfo::version() < RootFloor()) QSKIP("the carried root reaches a Qt 6.9 type");
     const bool old_quit = qApp->quitOnLastWindowClosed();
     qApp->setQuitOnLastWindowClosed(false);
     qml_test::ScopeExit restore_quit([old_quit] { qApp->setQuitOnLastWindowClosed(old_quit); });
@@ -450,7 +439,6 @@ void QmlRootWiringTests::splashFollowsSplashState()
 
 void QmlRootWiringTests::showMainFollowsShell()
 {
-    if (QLibraryInfo::version() < RootFloor()) QSKIP("the carried root reaches a Qt 6.9 type");
     const bool old_quit = qApp->quitOnLastWindowClosed();
     qApp->setQuitOnLastWindowClosed(false);
     qml_test::ScopeExit restore_quit([old_quit] { qApp->setQuitOnLastWindowClosed(old_quit); });
@@ -510,7 +498,6 @@ void QmlRootWiringTests::showMainFollowsShell()
 
 void QmlRootWiringTests::coreMessages()
 {
-    if (QLibraryInfo::version() < RootFloor()) QSKIP("the carried root reaches a Qt 6.9 type");
     const bool old_quit = qApp->quitOnLastWindowClosed();
     qApp->setQuitOnLastWindowClosed(false);
     qml_test::ScopeExit restore_quit([old_quit] { qApp->setQuitOnLastWindowClosed(old_quit); });
@@ -538,7 +525,6 @@ void QmlRootWiringTests::coreMessages()
 
 void QmlRootWiringTests::closeQuitsOrHidesToTray()
 {
-    if (QLibraryInfo::version() < RootFloor()) QSKIP("the carried root reaches a Qt 6.9 type");
     const bool old_quit = qApp->quitOnLastWindowClosed();
     qApp->setQuitOnLastWindowClosed(false);
     qml_test::ScopeExit restore_quit([old_quit] { qApp->setQuitOnLastWindowClosed(old_quit); });
@@ -623,7 +609,6 @@ void QmlRootWiringTests::closeQuitsOrHidesToTray()
 
 void QmlRootWiringTests::quitBeforeTheLoopStillQuits()
 {
-    if (QLibraryInfo::version() < RootFloor()) QSKIP("the carried root reaches a Qt 6.9 type");
     const bool old_quit = qApp->quitOnLastWindowClosed();
     qApp->setQuitOnLastWindowClosed(false);
     qml_test::ScopeExit restore_quit([old_quit] { qApp->setQuitOnLastWindowClosed(old_quit); });

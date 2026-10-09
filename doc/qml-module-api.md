@@ -273,7 +273,12 @@ The root, `WindowManager.qml`, shows each core message in a window of its own, a
   `showMaximized()`, `setVisible()` and `hide()`. `test/lint/lint-qml-module.sh` enforces
   this for `WindowManager.qml`; a later change that writes a window's state from another
   file follows the same rule.
-- Qt versions: every carried file loads on Qt 6.4 or later with the Qt5Compat
-  GraphicalEffects module (section 1). `gridcoinresearch-qml` itself still exits at start
-  with an error below Qt 6.9.
+- Qt versions: the carried tree loads on Qt 6.4 or later with the Qt5Compat
+  GraphicalEffects module (section 1). Without it `gridcoinresearch-qml` stops at start with
+  a message naming the module (section 1). A root that compiles but cannot be created ends
+  with a fatal-error message, and the GUI log (debug.log, or debug_gui.log under
+  `-multiprocess`) holds the QML errors. Three files import the module: `ColorizableImage.qml`
+  tints the tab menu's icons with its `ColorOverlay`, and `InfoPopup.qml` and
+  `MMPControls/GroupBox.qml` draw their shadows with `DropShadow`. Under Qt Quick's software
+  adaptation the tinted icons and the shadows draw nothing.
 - The translation scan skips the carried tree for now.
