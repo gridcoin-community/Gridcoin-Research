@@ -21,14 +21,6 @@ struct CarriedQmlExpectedFailure {
 };
 
 inline constexpr CarriedQmlExpectedFailure CARRIED_QML_EXPECTED_FAILURES[] = {
-    {"Gridcoin/App/HelpHover.qml", 6, 9, "HelpHover -> InfoPopup -> RectangularShadow"},
-    {"Gridcoin/App/InfoPopup.qml", 6, 9, "InfoPopup -> RectangularShadow"},
-    {"Gridcoin/App/MainWindow.qml", 6, 9, "MainWindow -> StatusFooter -> HelpHover -> InfoPopup -> RectangularShadow"},
-    {"Gridcoin/App/OverviewView.qml", 6, 9, "OverviewView -> HelpHover -> InfoPopup -> RectangularShadow"},
-    {"Gridcoin/App/SettingsView.qml", 6, 9, "SettingsView -> HelpHover -> InfoPopup -> RectangularShadow"},
-    {"Gridcoin/App/StatusFooter.qml", 6, 9, "StatusFooter -> HelpHover -> InfoPopup -> RectangularShadow"},
-    {"Gridcoin/App/WindowManager.qml", 6, 9,
-     "WindowManager -> (property) MainWindow -> StatusFooter -> HelpHover -> InfoPopup -> RectangularShadow"},
     {"MMPTheme/MMPControls/GroupBox.qml", 6, 9, "GroupBox -> RectangularShadow"},
 };
 
