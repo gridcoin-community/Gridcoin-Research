@@ -4,7 +4,6 @@
 
 #include "carriedqmltests.h"
 
-#include "carriedqmlexpected.h"
 #include "qmltestutil.h"
 
 #include <qt/quick/qmlengine.h>
@@ -27,7 +26,6 @@
 #include <QStringList>
 #include <QTest>
 #include <QUrl>
-#include <QVersionNumber>
 #include <QtGlobal>
 
 #include <chrono>
@@ -45,14 +43,6 @@ void ConfigureEngine(QQmlEngine& engine, QStringList& warnings)
     QObject::connect(&engine, &QQmlEngine::warnings, &engine, [&warnings](const QList<QQmlError>& list) {
         for (const QQmlError& error : list) warnings << error.toString();
     });
-}
-
-const CarriedQmlExpectedFailure* FindExpectedFailure(const QString& file)
-{
-    for (const CarriedQmlExpectedFailure& entry : CARRIED_QML_EXPECTED_FAILURES) {
-        if (file == QLatin1String(entry.file)) return &entry;
-    }
-    return nullptr;
 }
 
 //! Creates an inline object that reads a singleton on a fresh engine; a
@@ -126,7 +116,6 @@ void QmlCarriedQmlTests::carriedFilesLoad()
                    "QtObject { property bool resolved: CurrentTime.currentTime !== undefined }",
                    problems);
 
-    int expected_failures = 0;
     QStringList warnings;
     QQmlEngine engine;
     ConfigureEngine(engine, warnings);
@@ -140,17 +129,8 @@ void QmlCarriedQmlTests::carriedFilesLoad()
                                 std::chrono::seconds(10));
         }
         const bool loaded = component.status() == QQmlComponent::Ready;
-        const CarriedQmlExpectedFailure* entry = FindExpectedFailure(rel);
-        const bool expected = entry && QLibraryInfo::version() < QVersionNumber(entry->major, entry->minor);
-        if (!loaded && !expected) {
+        if (!loaded) {
             problems << QStringLiteral("unexpected failure: %1: %2").arg(rel, component.errorString().trimmed());
-        } else if (loaded && expected) {
-            problems << QStringLiteral("listed file passes: %1").arg(rel);
-        }
-        if (expected) {
-            ++expected_failures;
-            qInfo().noquote() << QStringLiteral("expected below %1.%2: %3 (%4)")
-                                     .arg(entry->major).arg(entry->minor).arg(rel, QLatin1String(entry->closure));
         }
     }
 
@@ -166,14 +146,8 @@ void QmlCarriedQmlTests::carriedFilesLoad()
         }
     }
 
-    for (const CarriedQmlExpectedFailure& entry : CARRIED_QML_EXPECTED_FAILURES) {
-        if (!files.contains(QLatin1String(entry.file))) {
-            problems << QStringLiteral("list names a missing file: %1").arg(QLatin1String(entry.file));
-        }
-    }
-
-    qInfo().noquote() << QStringLiteral("carried QML: Qt %1, %2 files, %3 expected failures")
-                             .arg(QLibraryInfo::version().toString()).arg(files.size()).arg(expected_failures);
+    qInfo().noquote() << QStringLiteral("carried QML: Qt %1, %2 files")
+                             .arg(QLibraryInfo::version().toString()).arg(files.size());
     QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
 }
 

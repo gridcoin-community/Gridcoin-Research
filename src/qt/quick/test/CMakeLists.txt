@@ -8,7 +8,6 @@ add_executable(test_gridcoin-qml
     bridgetests.h
     callrunnertests.cpp
     callrunnertests.h
-    carriedqmlexpected.h
     carriedqmltests.cpp
     carriedqmltests.h
     fonttests.cpp

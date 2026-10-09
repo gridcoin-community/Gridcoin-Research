@@ -273,8 +273,7 @@ The root, `WindowManager.qml`, shows each core message in a window of its own, a
   `showMaximized()`, `setVisible()` and `hide()`. `test/lint/lint-qml-module.sh` enforces
   this for `WindowManager.qml`; a later change that writes a window's state from another
   file follows the same rule.
-- Qt versions: the expected-failure list in `src/qt/quick/test/carriedqmlexpected.h` records
-  the Qt version below which each listed file does not load: 6.5 for `MultiEffect` and 6.9 for
-  `RectangularShadow`. `gridcoinresearch-qml` exits at start with an error below Qt 6.9,
-  because its root is one of those files.
+- Qt versions: every carried file loads on Qt 6.4 or later with the Qt5Compat
+  GraphicalEffects module (section 1). `gridcoinresearch-qml` itself still exits at start
+  with an error below Qt 6.9.
 - The translation scan skips the carried tree for now.
