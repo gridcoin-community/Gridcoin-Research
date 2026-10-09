@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
 #include <set>
 #include <string>
 #include <thread>
@@ -602,6 +603,119 @@ BOOST_AUTO_TEST_CASE(coinstakeNotAcceptedIsMaskedThenFlipsIntoBothViews)
                       kSeedRows + 2 * kBlocks);
     // The newest stake is resolvable by identity, i.e. it really is in the view.
     BOOST_CHECK(store.rowForKey(GRC::VIEW_DETAILED, hashOf(kStakeHashBase + kBlocks - 1), 0) >= 0);
+}
+
+// A reorg removes a coinstake that no view shows (NotAccepted is masked by both
+// production specs) from the middle of the history. Both cursors must still
+// renumber the rows after it: before the fix they kept their old absolute
+// indices, the newest rows pointed past the end of the store's vectors, and the
+// next status update read a destroyed sort key (ASan heap-use-after-free on the
+// store worker during a 2,048-block reorganize).
+BOOST_AUTO_TEST_CASE(removingAMaskedRecordKeepsLaterRowsInPlace)
+{
+    WalletEventQueue q;
+    WalletTxStore store(nullptr, q);
+    store.start();
+
+    registerProductionViews(store);
+    q.drain();   // the two registration Resets
+
+    Replica detail(GRC::VIEW_DETAILED);
+    Replica overview(GRC::VIEW_OVERVIEW);
+
+    // Every step waits for the event that proves the worker applied it, and
+    // requires it. settle() alone is no barrier: it can return before the
+    // worker starts, and the views look the same before and after these steps,
+    // so a test that only settled could pass without exercising the removal.
+    // Each intake item runs under cs_store, as does getRows, so once a step's
+    // event has been seen the store reflects the whole step. Everything drained
+    // is kept, in order, for the replicas.
+    std::vector<GRC::WalletEvent> events;
+    const auto drain_until = [&](const std::function<bool(const GRC::WalletEvent&)>& done) {
+        for (int i = 0; i < 4000; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            bool seen = false;
+            for (GRC::WalletEvent& ev : q.drain()) {
+                seen = seen || done(ev);
+                events.push_back(std::move(ev));
+            }
+            if (seen) return true;
+        }
+        return false;
+    };
+    const auto carries = [](int view, const uint256& hash, auto payload_tag) {
+        return [view, hash](const GRC::WalletEvent& ev) {
+            const auto* p = std::get_if<decltype(payload_tag)>(&ev.payload);
+            if (!p || p->viewId != view) return false;
+            for (const TransactionRecord& r : p->records) {
+                if (r.hash == hash) return true;
+            }
+            return false;
+        };
+    };
+
+    for (int i = 0; i < kSeedRows; ++i) {
+        store.enqueueInsert(makePayment(hashOf(i), kBaseTime + i, kBaseHeight + i));
+    }
+    BOOST_REQUIRE(drain_until(carries(GRC::VIEW_DETAILED, hashOf(kSeedRows - 1), GRC::RowsInsertedPayload{})));
+    BOOST_REQUIRE_EQUAL(store.getRows(GRC::VIEW_DETAILED, 0, -1).total_accepted, kSeedRows);
+
+    // A two-part coinstake in the middle of the history by time, masked in both views.
+    const uint256 stake = hashOf(kStakeHashBase);
+    store.enqueueInsert(makeCoinstake(stake, kBaseTime + kSeedRows / 2, kBaseHeight + kSeedRows / 2,
+                                      TransactionStatus::NotAccepted));
+    BOOST_REQUIRE(drain_until(carries(GRC::VIEW_FULL, stake, GRC::RowsInsertedPayload{})));
+    BOOST_REQUIRE_EQUAL(store.getRows(GRC::VIEW_DETAILED, 0, -1).total_accepted, kSeedRows);
+
+    // The reorg drops it; then the newest and the oldest payments get a status
+    // update, which drives Cursor::applyStatusUpdate. Before the fix the stale
+    // entries sort to the tail of the Status-sorted Overview, so the oldest row's
+    // binary search is the one that compares against them: that is the freed
+    // status key the ASan report read.
+    store.enqueueRemove(stake);
+    BOOST_REQUIRE_MESSAGE(drain_until([](const GRC::WalletEvent& ev) {
+                              const auto* p = std::get_if<GRC::RowsRemovedPayload>(&ev.payload);
+                              return p && p->viewId == GRC::VIEW_FULL && p->count == 2;
+                          }),
+                          "the store never removed the masked coinstake");
+
+    // The barrier for a status update is the detailed view reporting the row,
+    // as a change in place or, if the cursor moved it, as a re-insert. A wrong
+    // move is what the stale index produces, and it should fail on the rows
+    // served below, not here.
+    const auto reports = [&](const uint256& hash) {
+        return [&carries, hash](const GRC::WalletEvent& ev) {
+            return carries(GRC::VIEW_DETAILED, hash, GRC::RowsChangedPayload{})(ev)
+                || carries(GRC::VIEW_DETAILED, hash, GRC::RowsInsertedPayload{})(ev);
+        };
+    };
+    const int newest = kSeedRows - 1;
+    store.enqueueUpsert(makePayment(hashOf(newest), kBaseTime + newest, kBaseHeight + newest));
+    BOOST_REQUIRE_MESSAGE(drain_until(reports(hashOf(newest))),
+                          "the detailed view never reported the newest row after its status update");
+    store.enqueueUpsert(makePayment(hashOf(0), kBaseTime, kBaseHeight));
+    BOOST_REQUIRE_MESSAGE(drain_until(reports(hashOf(0))),
+                          "the detailed view never reported the oldest row after its status update");
+
+    // Collect anything the last item pushed after its Detailed change.
+    settle(q);
+    for (GRC::WalletEvent& ev : q.drain()) events.push_back(std::move(ev));
+    applyBatch(events, store, detail, overview);
+
+    // The coinstake never reached either view.
+    BOOST_CHECK(!std::any_of(events.begin(), events.end(), carries(GRC::VIEW_DETAILED, stake, GRC::RowsInsertedPayload{})));
+    BOOST_CHECK(!std::any_of(events.begin(), events.end(), carries(GRC::VIEW_OVERVIEW, stake, GRC::RowsInsertedPayload{})));
+
+    // Every seed is served exactly once, in Date DESC order, and the replicas
+    // built from the deltas agree with the store.
+    const std::vector<RowKey> served = keysOf(store.getRows(GRC::VIEW_DETAILED, 0, -1).records);
+    BOOST_REQUIRE_EQUAL(served.size(), static_cast<std::size_t>(kSeedRows));
+    for (int i = 0; i < kSeedRows; ++i) {
+        BOOST_CHECK_MESSAGE(served[i] == RowKey(hashOf(newest - i), 0),
+                            "detail row " << i << " is " << describe(served[i]));
+    }
+    checkReplicaMatchesStore(store, detail);
+    checkReplicaMatchesStore(store, overview);
 }
 
 BOOST_AUTO_TEST_CASE(multiPartInsertDeltaPayloadsMatchServedSlots)

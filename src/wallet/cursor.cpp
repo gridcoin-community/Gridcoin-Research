@@ -162,17 +162,22 @@ std::vector<CursorDelta> Cursor::applyStoreRemove(std::size_t P, std::size_t cou
         const std::size_t pos = findSlot(v);
         if (pos != NPOS) positions.push_back(pos);
     }
-    if (positions.empty()) {
-        return out;   // none of the removed records was in this view
-    }
     std::sort(positions.begin(), positions.end());
     for (std::size_t i = positions.size(); i-- > 0;) {
         m_view_index.erase(m_view_index.begin() + positions[i]);   // high to low
     }
 
-    // (b) the table shrank by `count` at P → later survivors shift -count.
+    // (b) the table shrank by `count` at P → later survivors shift -count. This
+    // holds whether or not any removed record was in this view: a hidden orphan
+    // or a filtered-out row still leaves the table, and skipping the shift for it
+    // left every later entry naming the record `count` places on, the last ones
+    // past the end of the store's vectors (a use-after-free on the next
+    // comparison).
     for (auto& e : m_view_index) {
         if (e >= P + count) e -= count;
+    }
+    if (positions.empty()) {
+        return out;   // none of the removed records was in this view: no deltas
     }
 
     // (c) served-window translation. One Remove per erased row that WAS visible,
