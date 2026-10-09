@@ -42,8 +42,13 @@ public:
 //! calls, not one-way sends, so the emitting CORE thread blocks until the handler
 //! returns -- and it is usually blocked while holding a core lock (cs_main plus an
 //! open CTxDB batch for BeaconChanged/MRCChanged, cs_main+cs_wallet for
-//! NotifyTransactionChanged, cs_Scraper for the scraper events). Two consequences
-//! follow, and the handlers only avoid both by being pure hand-offs:
+//! NotifyTransactionChanged, cs_main+PollRegistry::cs_poll_registry for
+//! NewPollReceived/NewVoteReceived (plus an open CTxDB batch when a block
+//! connects or disconnects), MinerStatus::m_cs for MinerStatusChanged -- with
+//! cs_main as well when it comes from CreateCoinStake, but not from the stake
+//! miner loop's ClearLastSearch() -- and cs_Scraper for the scraper events).
+//! Two consequences follow, and the handlers only avoid both by being pure
+//! hand-offs:
 //!
 //!  * A handler that BLOCKS holds the node's lock for as long as it blocks. A
 //!    paged-out or SIGSTOP'd GUI would stall every RPC, the P2P paths and
