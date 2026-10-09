@@ -66,6 +66,7 @@ add_executable(test_gridcoin
     gridcoin/seen_stakes_tests.cpp
     gridcoin/sidestake_tests.cpp
     gridcoin/superblock_tests.cpp
+    gridcoin/voting_notify_tests.cpp
     interfaces_tests.cpp
     key_tests.cpp
     limitedmap_tests.cpp
