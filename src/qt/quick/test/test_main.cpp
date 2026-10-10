@@ -10,6 +10,7 @@
 #include "qmltestutil.h"
 #include "quittests.h"
 #include "rootwiringtests.h"
+#include "statusadaptertests.h"
 
 #include <QTest>
 #include <QtGlobal>
@@ -59,6 +60,9 @@ int main(int argc, char* argv[])
 
     QmlCarriedQmlTests test7;
     if (QTest::qExec(&test7) != 0) fInvalid = true;
+
+    QmlStatusAdapterTests test8;
+    if (QTest::qExec(&test8) != 0) fInvalid = true;
 
     // The test application swallows what its notify() catches; nothing a test
     // did not expect may be left.
