@@ -16,6 +16,18 @@ class QmlStatusAdapterTests : public QObject
 
 private Q_SLOTS:
     void harnessBuildsModels();
+    void syncRuleTruthTable();
+    void blocksText();
+    void statusReadsOffGuiThreadAndCoalesce();
+    void connectionAndStakingStates();
+    void scraperSnapshotPooled();
+    void statusReadSetsConnections();
+    void syncProgressAndToolTip();
+    void notStakingArm();
+    void scraperStates();
+    void scraperReadsCoalesce();
+    void scraperStartsWaiting();
+    void stakingToolTipFollowsMask();
 };
 
 #endif // BITCOIN_QT_QUICK_TEST_STATUSADAPTERTESTS_H

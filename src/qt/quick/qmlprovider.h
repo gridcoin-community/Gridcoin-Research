@@ -7,6 +7,7 @@
 
 #include <memory>
 
+class ClientStatus;
 class GuiFrontEnd;
 class ShellAdapter;
 class SplashAdapter;
@@ -33,12 +34,14 @@ public:
 
     ShellAdapter& shell();
     SplashAdapter& splash();
+    ClientStatus& clientStatus();
     int marker() const;
 
 private:
     int m_marker;
     std::unique_ptr<ShellAdapter> m_shell;
     std::unique_ptr<SplashAdapter> m_splash;
+    std::unique_ptr<ClientStatus> m_client_status;
 };
 
 #endif // BITCOIN_QT_QUICK_QMLPROVIDER_H

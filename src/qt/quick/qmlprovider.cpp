@@ -4,6 +4,7 @@
 
 #include <qt/quick/qmlprovider.h>
 
+#include <qt/quick/clientstatus.h>
 #include <qt/quick/shelladapter.h>
 #include <qt/quick/splashadapter.h>
 
@@ -21,6 +22,9 @@ QmlProvider::QmlProvider(GuiFrontEnd& frontend)
       m_shell(std::make_unique<ShellAdapter>(frontend, m_marker)),
       m_splash(std::make_unique<SplashAdapter>(m_marker))
 {
+    // The status adapters are built here, in the body, so one can take
+    // another that is declared after it.
+    m_client_status = std::make_unique<ClientStatus>(m_marker);
 }
 
 QmlProvider::~QmlProvider()
@@ -46,6 +50,11 @@ ShellAdapter& QmlProvider::shell()
 SplashAdapter& QmlProvider::splash()
 {
     return *m_splash;
+}
+
+ClientStatus& QmlProvider::clientStatus()
+{
+    return *m_client_status;
 }
 
 int QmlProvider::marker() const
