@@ -21,6 +21,7 @@ private Q_SLOTS:
     void statusReadsOffGuiThreadAndCoalesce();
     void connectionAndStakingStates();
     void scraperSnapshotPooled();
+    void clipboardStrips();
     void statusReadSetsConnections();
     void syncProgressAndToolTip();
     void notStakingArm();

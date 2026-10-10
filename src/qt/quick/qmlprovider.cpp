@@ -5,6 +5,7 @@
 #include <qt/quick/qmlprovider.h>
 
 #include <qt/quick/clientstatus.h>
+#include <qt/quick/clipboard.h>
 #include <qt/quick/shelladapter.h>
 #include <qt/quick/splashadapter.h>
 
@@ -23,7 +24,8 @@ QmlProvider::QmlProvider(GuiFrontEnd& frontend)
       m_splash(std::make_unique<SplashAdapter>(m_marker))
 {
     // The status adapters are built here, in the body, so one can take
-    // another that is declared after it.
+    // another that is declared after it: the clipboard comes first.
+    m_clipboard = std::make_unique<Clipboard>(m_marker);
     m_client_status = std::make_unique<ClientStatus>(m_marker);
 }
 
@@ -55,6 +57,11 @@ SplashAdapter& QmlProvider::splash()
 ClientStatus& QmlProvider::clientStatus()
 {
     return *m_client_status;
+}
+
+Clipboard& QmlProvider::clipboard()
+{
+    return *m_clipboard;
 }
 
 int QmlProvider::marker() const

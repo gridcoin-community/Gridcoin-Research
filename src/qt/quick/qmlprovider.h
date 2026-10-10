@@ -8,6 +8,7 @@
 #include <memory>
 
 class ClientStatus;
+class Clipboard;
 class GuiFrontEnd;
 class ShellAdapter;
 class SplashAdapter;
@@ -35,6 +36,7 @@ public:
     ShellAdapter& shell();
     SplashAdapter& splash();
     ClientStatus& clientStatus();
+    Clipboard& clipboard();
     int marker() const;
 
 private:
@@ -42,6 +44,7 @@ private:
     std::unique_ptr<ShellAdapter> m_shell;
     std::unique_ptr<SplashAdapter> m_splash;
     std::unique_ptr<ClientStatus> m_client_status;
+    std::unique_ptr<Clipboard> m_clipboard;
 };
 
 #endif // BITCOIN_QT_QUICK_QMLPROVIDER_H

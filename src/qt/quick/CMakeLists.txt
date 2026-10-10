@@ -28,6 +28,8 @@ qt_add_qml_module(gridcoinqml
         splashadapter.h
         clientstatus.cpp
         clientstatus.h
+        clipboard.cpp
+        clipboard.h
 )
 target_include_directories(gridcoinqml PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(gridcoinqml PUBLIC

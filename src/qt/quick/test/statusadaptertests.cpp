@@ -11,10 +11,12 @@
 #include <interfaces/node.h>
 #include <qt/guiutil.h>
 #include <qt/quick/clientstatus.h>
+#include <qt/quick/clipboard.h>
 #include <qt/quick/qmlcallrunner.h>
 #include <qt/quick/qmlfrontend.h>
 #include <util.h>
 
+#include <QChar>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QSettings>
@@ -360,6 +362,13 @@ void QmlStatusAdapterTests::scraperSnapshotPooled()
     QVERIFY2(SerialProbe(runner), "a held scraper snapshot delayed the serial lane");
     latch.open = true;
     QVERIFY(qml_test::PumpUntil([&] { return harness.node.m_scraper_calls > before; }, 2s));
+}
+
+void QmlStatusAdapterTests::clipboardStrips()
+{
+    Clipboard clipboard(1);
+    clipboard.setText(QStringLiteral("1") + QChar(0x2009) + QStringLiteral("234,5"));
+    QCOMPARE(clipboard.text(), QStringLiteral("1234,5"));
 }
 
 void QmlStatusAdapterTests::statusReadSetsConnections()
