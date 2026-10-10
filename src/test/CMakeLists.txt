@@ -159,6 +159,7 @@ add_executable(test_gridcoin
     gridcoin/connectinputs_tests.cpp
     rpc_allowlist_tests.cpp
     script_tests.cpp
+    scrypt_tests.cpp
     serialize_tests.cpp
     sigopcount_tests.cpp
     sync_tests.cpp
@@ -169,6 +170,7 @@ add_executable(test_gridcoin
     txmempool_tests.cpp
     uint256_tests.cpp
     util_tests.cpp
+    util_threadnames_tests.cpp
     wallet_tests.cpp
 )
 
