@@ -6,10 +6,34 @@ import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
 import MMPTheme 1.0
+import Gridcoin.Qml
 
 Rectangle {
     id: main
+    objectName: "overviewView"
     color: MMPTheme.backgroundColor
+
+    // Asks the main window to show another view, by its path in the tab menu.
+    signal navigateRequested(string path)
+
+    // A right-click on an amount offers to copy it; the item is disabled while
+    // the amounts are masked.
+    component CopyAmountArea: MouseArea {
+        id: copyAmountArea
+        property int field: WalletSummary.Balance
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        onClicked: copyAmountMenu.popup()
+        Menu {
+            id: copyAmountMenu
+            MenuItem {
+                objectName: "copyAmountItem"
+                text: qsTranslate("OverviewPage", "Copy amount")
+                enabled: !WalletSummary.maskValues
+                onTriggered: WalletSummary.copyAmount(copyAmountArea.field)
+            }
+        }
+    }
 
     readonly property int panelSpacing: 10
     readonly property int panelRadius: 4
@@ -67,7 +91,8 @@ Rectangle {
 
                     Text {
                         id: magValue
-                        text: _researcherModel.magnitude
+                        visible: ResearcherSummary.showMagnitude
+                        text: ResearcherSummary.magnitudeText
                         color: MMPTheme.highlightColor
                         font.pixelSize: 18
                         font.weight: Font.Medium
@@ -77,6 +102,7 @@ Rectangle {
 
                     Rectangle {
                         id: separator
+                        visible: ResearcherSummary.showMagnitude
                         color: MMPTheme.separatorColor
                         Layout.preferredWidth: 1
                         Layout.preferredHeight: headerStats.implicitHeight - 10
@@ -86,7 +112,7 @@ Rectangle {
 
                     Text {
                         id: balanceValue
-                        text: _walletModel.balance.toLocaleString(Qt.locale(), 'f', 2)
+                        text: WalletSummary.balanceRoundedText
                         color: MMPTheme.highlightColor
                         font.pixelSize: 18
                         font.weight: Font.Medium
@@ -96,6 +122,7 @@ Rectangle {
 
                     Text {
                         id: magLabel
+                        visible: ResearcherSummary.showMagnitude
                         text: qsTr("Magnitude")
                         color: MMPTheme.textColor
                         horizontalAlignment: Text.AlignHCenter
@@ -140,15 +167,7 @@ Rectangle {
                             implicitHeight: cpidTitleText.implicitHeight + 4
                             Text {
                                 id: cpidTitleText
-                                text: {
-                                    if (_researcherModel.researcherMode == 0) {
-                                        return qsTr("Non-cruncher");
-                                    } else if (_researcherModel.researcherMode == 1) {
-                                        return qsTr("Pool");
-                                    } else {
-                                        return qsTr("CPID");
-                                    }
-                                }
+                                text: ResearcherSummary.modeText
                                 color: MMPTheme.textColor
                                 font.weight: Font.Light
                                 anchors.centerIn: parent
@@ -157,9 +176,9 @@ Rectangle {
 
                         Text {
                             id: cpidText
-                            visible: _researcherModel.researcherMode == 2
+                            visible: ResearcherSummary.mode === ResearcherSummary.Solo
                             color: MMPTheme.textColor
-                            text: _researcherModel.cpid
+                            text: ResearcherSummary.cpid
                             clip: true
                             font.pixelSize: 10
                             font.weight: Font.Light
@@ -230,6 +249,19 @@ Rectangle {
                         text: qsTr("Wallet")
                         Layout.fillWidth: true
 
+                        Text {
+                            id: walletOutOfSync
+                            objectName: "walletOutOfSync"
+                            visible: !ClientStatus.inSync
+                            text: qsTranslate("OverviewPage", "Out of Sync")
+                            color: MMPTheme.cCarminePink
+                            anchors {
+                                right: walletHelp.left
+                                rightMargin: 10
+                                verticalCenter: parent.verticalCenter
+                            }
+                        }
+
                         HelpHover{
                             id: walletHelp
                             popupWidth: 300
@@ -264,10 +296,12 @@ Rectangle {
                         }
                         Text {
                             id: availableValue
-                            text: _walletModel.balance.toLocaleString(Qt.locale(), 'f', 2) + qsTr(" GRC")
+                            objectName: "availableValue"
+                            text: WalletSummary.balanceText
                             color: MMPTheme.lightTextColor
                             horizontalAlignment: Text.AlignRight
                             Layout.fillWidth: true
+                            CopyAmountArea { field: WalletSummary.Balance }
                         }
 
                         Text {
@@ -277,10 +311,11 @@ Rectangle {
                         }
                         Text {
                             id: stakeValue
-                            text: _walletModel.stake.toLocaleString(Qt.locale(), 'f', 2) + qsTr(" GRC")
+                            text: WalletSummary.stakeText
                             color: MMPTheme.lightTextColor
                             horizontalAlignment: Text.AlignRight
                             Layout.fillWidth: true
+                            CopyAmountArea { field: WalletSummary.Stake }
                         }
 
                         Text {
@@ -290,10 +325,29 @@ Rectangle {
                         }
                         Text {
                             id: unconfirmedValue
-                            text: _walletModel.unconfirmedBalance.toLocaleString(Qt.locale(), 'f', 2) + qsTr(" GRC")
+                            text: WalletSummary.unconfirmedBalanceText
                             color: MMPTheme.lightTextColor
                             horizontalAlignment: Text.AlignRight
                             Layout.fillWidth: true
+                            CopyAmountArea { field: WalletSummary.Unconfirmed }
+                        }
+
+                        Text {
+                            id: immatureLabel
+                            objectName: "immatureLabel"
+                            visible: WalletSummary.immatureVisible
+                            color: MMPTheme.textColor
+                            text: qsTranslate("OverviewPage", "Immature:")
+                        }
+                        Text {
+                            id: immatureValue
+                            objectName: "immatureValue"
+                            visible: WalletSummary.immatureVisible
+                            text: WalletSummary.immatureBalanceText
+                            color: MMPTheme.lightTextColor
+                            horizontalAlignment: Text.AlignRight
+                            Layout.fillWidth: true
+                            CopyAmountArea { field: WalletSummary.Immature }
                         }
 
                         Text {
@@ -304,12 +358,13 @@ Rectangle {
                         }
                         Text {
                             id: totalValue
-                            property real total: _walletModel.balance + _walletModel.stake + _walletModel.unconfirmedBalance
-                            text: total.toLocaleString(Qt.locale(), 'f', 2) + qsTr(" GRC")
+                            objectName: "totalValue"
+                            text: WalletSummary.totalText
                             color: MMPTheme.lightTextColor
                             font.weight: Font.DemiBold
                             horizontalAlignment: Text.AlignRight
                             Layout.fillWidth: true
+                            CopyAmountArea { field: WalletSummary.Total }
                         }
                     }
                 }
@@ -372,14 +427,8 @@ Rectangle {
                         }
                         Text {
                             id: blockValue
-                            text: {
-                                if  (_clientModel.numBlocks < _clientModel.numBlocksPeers) {
-                                    var percent = Math.floor((_clientModel.numBlocks / _clientModel.numBlocksPeers) * 100)
-                                    return qsTr("%1 of %2 (%3%)").arg(_clientModel.numBlocks).arg(_clientModel.numBlocksPeers).arg(percent)
-                                } else {
-                                    return _clientModel.numBlocks
-                                }
-                            }
+                            objectName: "blocksValue"
+                            text: ClientStatus.blocksText
                             color: MMPTheme.lightTextColor
                             horizontalAlignment: Text.AlignRight
                             Layout.fillWidth: true
@@ -392,7 +441,7 @@ Rectangle {
                         }
                         Text {
                             id: difficultyValue
-                            text: _clientModel.difficulty.toLocaleString(Qt.locale(), 'f', 3)
+                            text: ClientStatus.difficulty.toLocaleString(Qt.locale(), 'f', 3)
                             color: MMPTheme.lightTextColor
                             horizontalAlignment: Text.AlignRight
                             Layout.fillWidth: true
@@ -405,7 +454,7 @@ Rectangle {
                         }
                         Text {
                             id: netWeightValue
-                            text: _clientModel.networkWeight.toLocaleString(Qt.locale(), 'f', 0)
+                            text: ClientStatus.networkWeight.toLocaleString(Qt.locale(), 'f', 0)
                             color: MMPTheme.lightTextColor
                             horizontalAlignment: Text.AlignRight
                             Layout.fillWidth: true
@@ -418,7 +467,7 @@ Rectangle {
                         }
                         Text {
                             id: coinWeightValue
-                            text: _clientModel.coinWeight.toLocaleString(Qt.locale(), 'f', 0)
+                            text: ClientStatus.coinWeightText
                             color: MMPTheme.lightTextColor
                             horizontalAlignment: Text.AlignRight
                             Layout.fillWidth: true
@@ -483,8 +532,8 @@ Rectangle {
                         }
                         Text {
                             id: statusValue
-                            text: _researcherModel.status
-                            color: _clientModel.inSync ? MMPTheme.highlightColor : MMPTheme.cCarminePink
+                            text: ResearcherSummary.statusText
+                            color: ClientStatus.inSync ? MMPTheme.highlightColor : MMPTheme.cCarminePink
                             horizontalAlignment: Text.AlignRight
                             Layout.fillWidth: true
                         }
@@ -496,7 +545,7 @@ Rectangle {
                         }
                         Text {
                             id: magnitudeValue
-                            text: _researcherModel.magnitude
+                            text: ResearcherSummary.magnitudeText
                             color: MMPTheme.lightTextColor
                             horizontalAlignment: Text.AlignRight
                             Layout.fillWidth: true
@@ -506,10 +555,23 @@ Rectangle {
                             id: pendingLabel
                             color: MMPTheme.textColor
                             text: qsTr("Pending Rewards:")
+
+                            Image {
+                                id: nearLimitIcon
+                                objectName: "nearLimitIcon"
+                                visible: ResearcherSummary.accrualNearLimit
+                                source: "qrc:/icons/generic/ic_alert.svg"
+                                sourceSize: Qt.size(14, 14)
+                                anchors {
+                                    left: parent.right
+                                    leftMargin: 4
+                                    verticalCenter: parent.verticalCenter
+                                }
+                            }
                         }
                         Text {
                             id: estRRValue
-                            text: _researcherModel.accrual
+                            text: ResearcherSummary.accrualText
                             color: MMPTheme.lightTextColor
                             horizontalAlignment: Text.AlignRight
                             Layout.fillWidth: true
@@ -544,10 +606,19 @@ Rectangle {
 
                     Text {
                         id: pollsInfo
+                        objectName: "pollsInfo"
                         color: MMPTheme.textColor
-                        text: _votingModel.currentPollTitle
+                        textFormat: Text.PlainText
+                        text: VotingSummary.currentPollTitle
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
+
+                        MouseArea {
+                            objectName: "pollTitleArea"
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: main.navigateRequested("PollView.qml")
+                        }
                     }
                 }
             }
@@ -581,6 +652,18 @@ Rectangle {
                         id: recentTransactionsTitle
                         text: qsTr("Recent Transactions")
                         Layout.fillWidth: true
+
+                        Text {
+                            id: transactionsOutOfSync
+                            objectName: "transactionsOutOfSync"
+                            visible: !ClientStatus.inSync
+                            text: qsTranslate("OverviewPage", "Out of Sync")
+                            color: MMPTheme.cCarminePink
+                            anchors {
+                                right: parent.right
+                                verticalCenter: parent.verticalCenter
+                            }
+                        }
                     }
 
                     Item {
@@ -589,21 +672,27 @@ Rectangle {
 
                         ListView {
                             id: recentTransactionList
+                            objectName: "recentTransactionList"
                             anchors.fill: parent
                             clip: true
                             interactive: false
-                            model: _walletModel.transactionTableModel
+                            visible: !RecentTransactions.masked
+                            model: RecentTransactions
                             delegate: RecentTransactionItem {
-                                amount: model.amount
+                                amountText: model.amountText
+                                negative: model.negative
                                 icon: model.iconSource
                                 account: model.address
                                 transactionDate: model.date
                             }
+                            // RecentTransactionItem rows are 42 pixels high.
+                            onHeightChanged: RecentTransactions.setVisibleRows(Math.floor(height / 42))
                         }
 
                         ColumnLayout {
                             id: nothingYet
-                            visible: recentTransactionList.count === 0
+                            objectName: "nothingYet"
+                            visible: RecentTransactions.masked || recentTransactionList.count === 0
                             anchors.centerIn: parent
                             spacing: 5
 
@@ -613,7 +702,7 @@ Rectangle {
                                 sourceSize: Qt.size(50, 50)
                             }
                             Text {
-                                text: qsTr("Nothing here yet...")
+                                text: RecentTransactions.masked ? qsTranslate("NoResult", "Privacy Enabled...") : qsTr("Nothing here yet...")
                                 color: MMPTheme.lightTextColor
                                 horizontalAlignment: Text.AlignHCenter
                                 Layout.alignment: Qt.AlignHCenter

@@ -74,7 +74,6 @@ LEGACY_PATTERN='_(initModel|clientModel|walletModel|researcherModel|mrcModel|vot
 LEGACY_ALLOWED=(
     src/qt/qml/AboutWindow.qml
     src/qt/qml/EditAddressDialog.qml
-    src/qt/qml/OverviewView.qml
     src/qt/qml/ReceiveView.qml
     src/qt/qml/SendView.qml
     src/qt/qml/StatusFooter.qml

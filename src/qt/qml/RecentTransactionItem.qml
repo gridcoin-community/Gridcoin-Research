@@ -8,7 +8,8 @@ import MMPTheme 1.0
 
 Item {
     id: main
-    property real amount
+    property string amountText
+    property bool negative
     property date transactionDate
     property alias account: addressLabel.text
     property alias icon: transactionIcon.source
@@ -44,9 +45,9 @@ Item {
 
             Text {
                 id: amountLabel
-                text: (amount >= 0 ? Qt.locale().positiveSign : "") + amount.toLocaleString(Qt.locale(), 'g', 8)
+                text: (negative ? "" : Qt.locale().positiveSign) + amountText
                 clip: true
-                color: amount >= 0 ? MMPTheme.cDullLime : MMPTheme.cCarminePink
+                color: negative ? MMPTheme.cCarminePink : MMPTheme.cDullLime
                 anchors {
                     left: parent.left
                     right: dateLabel.left
@@ -68,7 +69,9 @@ Item {
         }
         Text {
             id: addressLabel
+            objectName: "addressLabel"
             width: parent.width
+            textFormat: Text.PlainText
             text: account
             font.pixelSize: 11
             color: MMPTheme.lightTextColor
