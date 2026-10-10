@@ -58,6 +58,7 @@ qt_add_qml_module(gridcoinqmlapp
     PLUGIN_TARGET gridcoinqmlappplugin
     QML_FILES
         AboutWindow.qml
+        BuildMismatchBanner.qml
         Circle.qml
         ClickableLink.qml
         ColorizableImage.qml
@@ -92,6 +93,7 @@ qt_add_qml_module(gridcoinqmlapp
         TableFooter.qml
         TableHeader.qml
         UnlockDialog.qml
+        VersionInfoWindow.qml
         WindowManager.qml
 )
 
