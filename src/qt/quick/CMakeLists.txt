@@ -34,6 +34,8 @@ qt_add_qml_module(gridcoinqml
         researchersummary.h
         recenttransactions.cpp
         recenttransactions.h
+        votingsummary.cpp
+        votingsummary.h
         clipboard.cpp
         clipboard.h
 )

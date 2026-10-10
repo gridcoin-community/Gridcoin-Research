@@ -14,6 +14,7 @@ class RecentTransactions;
 class ResearcherSummary;
 class ShellAdapter;
 class SplashAdapter;
+class VotingSummary;
 class WalletSummary;
 
 //! The process-wide provider of the module's singletons. It owns them, so they
@@ -42,6 +43,7 @@ public:
     WalletSummary& walletSummary();
     ResearcherSummary& researcherSummary();
     RecentTransactions& recentTransactions();
+    VotingSummary& votingSummary();
     Clipboard& clipboard();
     int marker() const;
 
@@ -53,6 +55,7 @@ private:
     std::unique_ptr<WalletSummary> m_wallet_summary;
     std::unique_ptr<ResearcherSummary> m_researcher_summary;
     std::unique_ptr<RecentTransactions> m_recent_transactions;
+    std::unique_ptr<VotingSummary> m_voting_summary;
     std::unique_ptr<Clipboard> m_clipboard;
 };
 

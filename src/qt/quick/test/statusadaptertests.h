@@ -28,6 +28,7 @@ private Q_SLOTS:
     void maskEveryAmount();
     void recentTransactionsRoles();
     void researcherModeAndLimit();
+    void pollTitleRefresh();
     void clipboardStrips();
     void statusReadSetsConnections();
     void syncProgressAndToolTip();
@@ -38,6 +39,7 @@ private Q_SLOTS:
     void lockStatesAndToolTips();
     void beaconToolTipEscapes();
     void unitChangeEmitsDataChanged();
+    void pollTitleReadsCoalesce();
     void scraperStartsWaiting();
     void stakingToolTipFollowsMask();
 };

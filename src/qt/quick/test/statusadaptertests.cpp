@@ -21,6 +21,7 @@
 #include <qt/quick/qmlfrontend.h>
 #include <qt/quick/recenttransactions.h>
 #include <qt/quick/researchersummary.h>
+#include <qt/quick/votingsummary.h>
 #include <qt/quick/walletsummary.h>
 #include <qt/walletmodel.h>
 #include <util.h>
@@ -892,6 +893,33 @@ void QmlStatusAdapterTests::researcherModeAndLimit()
     QVERIFY(!researcher.beaconVisible());
 }
 
+void QmlStatusAdapterTests::pollTitleRefresh()
+{
+    qml_test::ModelHarness harness;
+    harness.voting_manager.setCurrentPollTitle("first");
+    QmlCallRunner runner(TestPolicy());
+    VotingSummary voting(1, 50ms);
+    qml_test::ScopeExit detach([&] {
+        runner.drain();
+        voting.detach();
+    });
+    voting.attach(harness.voting, runner);
+    QVERIFY(qml_test::PumpUntil([&] { return voting.currentPollTitle() == QStringLiteral("first"); }, 2s));
+
+    // The timer refreshes it with no newPollReceived.
+    harness.voting_manager.setCurrentPollTitle("second");
+    QVERIFY2(qml_test::PumpUntil([&] { return voting.currentPollTitle() == QStringLiteral("second"); }, 2s),
+             "the refresh timer did not read the new title");
+
+    // The model's cut and '_' mapping, by construction.
+    const std::string long_title = std::string(60, 'a') + "_" + std::string(39, 'b');
+    harness.voting_manager.setCurrentPollTitle(long_title);
+    const QString expected = harness.voting.getCurrentPollTitle();
+    QCOMPARE(expected.size(), qsizetype(80));
+    QVERIFY2(qml_test::PumpUntil([&] { return voting.currentPollTitle() == expected; }, 2s),
+             qPrintable(voting.currentPollTitle()));
+}
+
 void QmlStatusAdapterTests::clipboardStrips()
 {
     Clipboard clipboard(1);
@@ -1329,6 +1357,34 @@ void QmlStatusAdapterTests::unitChangeEmitsDataChanged()
     const QString thin(QChar(0x2009));
     QCOMPARE(recent.data(recent.index(0, 0), RecentTransactions::AmountTextRole).toString(),
              QStringLiteral("1") + thin + QStringLiteral("000.00 mGRC"));
+}
+
+void QmlStatusAdapterTests::pollTitleReadsCoalesce()
+{
+    qml_test::ModelHarness harness;
+    harness.voting_manager.setCurrentPollTitle("first");
+    QmlCallRunner runner(TestPolicy());
+    // The default refresh interval: no timer read falls inside the test.
+    VotingSummary voting(1);
+    qml_test::ScopeExit detach([&] {
+        runner.drain();
+        voting.detach();
+    });
+    voting.attach(harness.voting, runner);
+    // The attach read has been delivered, so no title read is in flight.
+    QVERIFY(qml_test::PumpUntil([&] { return voting.currentPollTitle() == QStringLiteral("first"); }, 2s));
+    harness.voting_manager.setCurrentPollTitle("second");
+    const int before = harness.voting_manager.m_current_poll_title_calls;
+
+    // Three signals with no event-loop pass between them: the first posts a
+    // read, and its delivery re-posts once.
+    emit harness.voting.newPollReceived();
+    emit harness.voting.newPollReceived();
+    emit harness.voting.newPollReceived();
+    QVERIFY(qml_test::PumpUntil([&] { return harness.voting_manager.m_current_poll_title_calls - before >= 2; }, 2s));
+    QVERIFY(SettleSerial(runner));
+    QCOMPARE(harness.voting_manager.m_current_poll_title_calls - before, 2);
+    QCOMPARE(voting.currentPollTitle(), QStringLiteral("second"));
 }
 
 void QmlStatusAdapterTests::scraperStartsWaiting()

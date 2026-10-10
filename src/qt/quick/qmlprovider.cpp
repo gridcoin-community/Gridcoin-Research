@@ -10,6 +10,7 @@
 #include <qt/quick/researchersummary.h>
 #include <qt/quick/shelladapter.h>
 #include <qt/quick/splashadapter.h>
+#include <qt/quick/votingsummary.h>
 #include <qt/quick/walletsummary.h>
 
 #include <atomic>
@@ -33,6 +34,7 @@ QmlProvider::QmlProvider(GuiFrontEnd& frontend)
     m_wallet_summary = std::make_unique<WalletSummary>(m_marker, *m_clipboard);
     m_researcher_summary = std::make_unique<ResearcherSummary>(m_marker);
     m_recent_transactions = std::make_unique<RecentTransactions>(m_marker);
+    m_voting_summary = std::make_unique<VotingSummary>(m_marker);
 }
 
 QmlProvider::~QmlProvider()
@@ -78,6 +80,11 @@ ResearcherSummary& QmlProvider::researcherSummary()
 RecentTransactions& QmlProvider::recentTransactions()
 {
     return *m_recent_transactions;
+}
+
+VotingSummary& QmlProvider::votingSummary()
+{
+    return *m_voting_summary;
 }
 
 Clipboard& QmlProvider::clipboard()
