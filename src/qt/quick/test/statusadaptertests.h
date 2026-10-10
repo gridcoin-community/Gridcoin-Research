@@ -25,6 +25,8 @@ private Q_SLOTS:
     void hydrateOnAttachAndSignalWins();
     void totalIncludesImmatureAndCopy();
     void encryptionStatusKnownAndDedup();
+    void maskEveryAmount();
+    void recentTransactionsRoles();
     void researcherModeAndLimit();
     void clipboardStrips();
     void statusReadSetsConnections();
@@ -35,6 +37,7 @@ private Q_SLOTS:
     void roundedBalanceText();
     void lockStatesAndToolTips();
     void beaconToolTipEscapes();
+    void unitChangeEmitsDataChanged();
     void scraperStartsWaiting();
     void stakingToolTipFollowsMask();
 };

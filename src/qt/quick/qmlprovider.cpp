@@ -6,6 +6,7 @@
 
 #include <qt/quick/clientstatus.h>
 #include <qt/quick/clipboard.h>
+#include <qt/quick/recenttransactions.h>
 #include <qt/quick/researchersummary.h>
 #include <qt/quick/shelladapter.h>
 #include <qt/quick/splashadapter.h>
@@ -31,6 +32,7 @@ QmlProvider::QmlProvider(GuiFrontEnd& frontend)
     m_client_status = std::make_unique<ClientStatus>(m_marker);
     m_wallet_summary = std::make_unique<WalletSummary>(m_marker, *m_clipboard);
     m_researcher_summary = std::make_unique<ResearcherSummary>(m_marker);
+    m_recent_transactions = std::make_unique<RecentTransactions>(m_marker);
 }
 
 QmlProvider::~QmlProvider()
@@ -71,6 +73,11 @@ WalletSummary& QmlProvider::walletSummary()
 ResearcherSummary& QmlProvider::researcherSummary()
 {
     return *m_researcher_summary;
+}
+
+RecentTransactions& QmlProvider::recentTransactions()
+{
+    return *m_recent_transactions;
 }
 
 Clipboard& QmlProvider::clipboard()

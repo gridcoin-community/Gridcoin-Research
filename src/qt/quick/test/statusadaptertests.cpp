@@ -10,6 +10,8 @@
 
 #include <amount.h>
 #include <interfaces/node.h>
+#include <interfaces/wallet_tx_channel.h>
+#include <interfaces/wallet_tx_record.h>
 #include <qt/bitcoinunits.h>
 #include <qt/guiutil.h>
 #include <qt/optionsmodel.h>
@@ -17,6 +19,7 @@
 #include <qt/quick/clipboard.h>
 #include <qt/quick/qmlcallrunner.h>
 #include <qt/quick/qmlfrontend.h>
+#include <qt/quick/recenttransactions.h>
 #include <qt/quick/researchersummary.h>
 #include <qt/quick/walletsummary.h>
 #include <qt/walletmodel.h>
@@ -25,9 +28,14 @@
 #include <QChar>
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QFile>
+#include <QMetaObject>
+#include <QMetaProperty>
+#include <QModelIndex>
 #include <QSettings>
 #include <QSignalSpy>
 #include <QString>
+#include <QStringList>
 #include <QTemporaryDir>
 #include <QThreadPool>
 #include <QTranslator>
@@ -41,6 +49,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace {
 
@@ -617,6 +626,216 @@ void QmlStatusAdapterTests::encryptionStatusKnownAndDedup()
     }
 }
 
+void QmlStatusAdapterTests::maskEveryAmount()
+{
+    qml_test::ModelHarness harness;
+    qml_test::ScopeExit reap(ReapPool);
+    interfaces::ResearcherSnapshot snapshot;
+    snapshot.has_eligible_projects = true;
+    snapshot.cpid = "0123456789abcdef0123456789abcdef";
+    snapshot.magnitude_text = "12.5";
+    snapshot.accrual = 1000;
+    harness.researcher_context.m_snapshot = snapshot;
+    harness.researcher.refresh();
+    // A second model over the same context, masked through its own setter:
+    // what the Widgets overview would show.
+    ResearcherModel widgets(harness.researcher_context);
+
+    QmlCallRunner runner(TestPolicy());
+    Clipboard clipboard(1);
+    WalletSummary summary(1, clipboard);
+    ClientStatus status(1);
+    RecentTransactions recent(1);
+    ResearcherSummary researcher(1);
+    qml_test::ScopeExit detach([&] {
+        runner.drain();
+        summary.detach();
+        status.detach();
+        recent.detach();
+        researcher.detach();
+    });
+    summary.attach(harness.wallet_model, &harness.options, runner);
+    status.attach(harness.client, runner);
+    recent.attach(harness.wallet_model, &harness.options, runner);
+    researcher.attach(harness.researcher, &harness.options);
+    QVERIFY(SettleSerial(runner));
+
+    bool near_limit = false;
+    const int unit = BitcoinUnits::BTC;
+    summary.setMaskValues(true);
+    QVERIFY(harness.options.getMaskValues());
+
+    // Every WalletSummary text is the mask.
+    const QMetaObject* meta = summary.metaObject();
+    int texts = 0;
+    for (int i = meta->propertyOffset(); i < meta->propertyCount(); ++i) {
+        const QString name = QString::fromLatin1(meta->property(i).name());
+        if (!name.endsWith(QStringLiteral("Text"))) continue;
+        ++texts;
+        const QString expected = name == QStringLiteral("balanceRoundedText")
+                                     ? BitcoinUnits::formatOverviewRounded(0, true)
+                                     : BitcoinUnits::formatWithPrivacy(unit, 0, true);
+        QCOMPARE(meta->property(i).read(&summary).toString(), expected);
+    }
+    QCOMPARE(texts, 6);
+    QCOMPARE(status.coinWeightText(), QStringLiteral("#.##"));
+    QVERIFY(recent.masked());
+    widgets.setMaskCpidMagnitudeAccrual(true);
+    QCOMPARE(researcher.cpid(), widgets.formatCpid());
+    QCOMPARE(researcher.magnitudeText(), widgets.formatMagnitude());
+    QCOMPARE(researcher.accrualText(), widgets.formatAccrual(unit, near_limit));
+    QVERIFY(!summary.copyAmount(WalletSummary::Balance));
+
+    // The researcher values follow each toggle.
+    summary.setMaskValues(false);
+    widgets.setMaskCpidMagnitudeAccrual(false);
+    QCOMPARE(researcher.cpid(), widgets.formatCpid());
+    QCOMPARE(researcher.magnitudeText(), widgets.formatMagnitude());
+    QCOMPARE(researcher.accrualText(), widgets.formatAccrual(unit, near_limit));
+    QVERIFY(researcher.cpid() != QString(32, QLatin1Char('#')));
+    summary.setMaskValues(true);
+    widgets.setMaskCpidMagnitudeAccrual(true);
+    QCOMPARE(researcher.cpid(), widgets.formatCpid());
+    QCOMPARE(researcher.magnitudeText(), widgets.formatMagnitude());
+    QCOMPARE(researcher.accrualText(), widgets.formatAccrual(unit, near_limit));
+
+    // Out of sync shows "..." whether masked or not.
+    snapshot.out_of_sync = true;
+    harness.researcher_context.m_snapshot = snapshot;
+    harness.researcher.refresh();
+    widgets.refresh();
+    for (const bool masked : {true, false}) {
+        summary.setMaskValues(masked);
+        widgets.setMaskCpidMagnitudeAccrual(masked);
+        QCOMPARE(researcher.magnitudeText(), widgets.formatMagnitude());
+        QCOMPARE(researcher.accrualText(), widgets.formatAccrual(unit, near_limit));
+        QCOMPARE(researcher.magnitudeText(), QStringLiteral("..."));
+    }
+}
+
+void QmlStatusAdapterTests::recentTransactionsRoles()
+{
+    qml_test::ModelHarness harness;
+
+    // One row per transaction type, and one generated row per mined type.
+    struct Expected {
+        int type;
+        int mined;
+        QString icon;
+    };
+    const std::vector<Expected> expected{
+        {TransactionRecord::Other, 0, QStringLiteral("qrc:/icons/events/ic_event_green_red.svg")},
+        {TransactionRecord::SendToAddress, 0, QStringLiteral("qrc:/icons/events/ic_event_red.svg")},
+        {TransactionRecord::SendToOther, 0, QStringLiteral("qrc:/icons/events/ic_event_red.svg")},
+        {TransactionRecord::RecvWithAddress, 0, QStringLiteral("qrc:/icons/events/ic_event_green.svg")},
+        {TransactionRecord::RecvFromOther, 0, QStringLiteral("qrc:/icons/events/ic_event_green.svg")},
+        {TransactionRecord::SendToSelf, 0, QStringLiteral("qrc:/icons/events/ic_event_green_red.svg")},
+        {TransactionRecord::BeaconAdvertisement, 0, QStringLiteral("qrc:/icons/events/ic_event_beacon.svg")},
+        {TransactionRecord::Poll, 0, QStringLiteral("qrc:/icons/events/ic_event_voting.svg")},
+        {TransactionRecord::Vote, 0, QStringLiteral("qrc:/icons/events/ic_event_voting.svg")},
+        {TransactionRecord::Message, 0, QStringLiteral("qrc:/icons/events/ic_event_message.svg")},
+        {TransactionRecord::MRC, 0, QStringLiteral("qrc:/icons/events/ic_event_mrc.svg")},
+        {TransactionRecord::Generated, GRC::MinedType::UNKNOWN, QStringLiteral("qrc:/icons/generic/ic_help.svg")},
+        {TransactionRecord::Generated, GRC::MinedType::POS, QStringLiteral("qrc:/icons/events/ic_event_yellow.svg")},
+        {TransactionRecord::Generated, GRC::MinedType::POR, QStringLiteral("qrc:/icons/events/ic_event_purple.svg")},
+        {TransactionRecord::Generated, GRC::MinedType::ORPHANED, QStringLiteral("qrc:/icons/generic/ic_alert.svg")},
+        {TransactionRecord::Generated, GRC::MinedType::POS_SIDE_STAKE_RCV,
+         QStringLiteral("qrc:/icons/events/ic_event_yellow_green.svg")},
+        {TransactionRecord::Generated, GRC::MinedType::POR_SIDE_STAKE_RCV,
+         QStringLiteral("qrc:/icons/events/ic_event_purple_green.svg")},
+        {TransactionRecord::Generated, GRC::MinedType::POS_SIDE_STAKE_SEND,
+         QStringLiteral("qrc:/icons/events/ic_event_yellow_red.svg")},
+        {TransactionRecord::Generated, GRC::MinedType::POR_SIDE_STAKE_SEND,
+         QStringLiteral("qrc:/icons/events/ic_event_purple_red.svg")},
+        {TransactionRecord::Generated, GRC::MinedType::SUPERBLOCK, QStringLiteral("qrc:/icons/events/superblock.svg")},
+        {TransactionRecord::Generated, GRC::MinedType::MRC_RCV,
+         QStringLiteral("qrc:/icons/events/ic_event_purple_green.svg")},
+        {TransactionRecord::Generated, GRC::MinedType::MRC_SEND,
+         QStringLiteral("qrc:/icons/events/ic_event_purple_red.svg")},
+    };
+    std::vector<TransactionRecord> rows;
+    for (size_t i = 0; i < expected.size(); ++i) {
+        TransactionRecord record;
+        record.type = static_cast<TransactionRecord::Type>(expected[i].type);
+        record.status.generated_type = static_cast<GRC::MinedType>(expected[i].mined);
+        record.address = (QStringLiteral("address") + QString::number(i)).toStdString();
+        record.time = 1700000000 + static_cast<int64_t>(i);
+        // Odd rows are spends.
+        if (i % 2) {
+            record.debit = -static_cast<int64_t>(i + 1) * COIN;
+        } else {
+            record.credit = static_cast<int64_t>(i + 1) * COIN;
+        }
+        rows.push_back(record);
+    }
+    harness.tx_source.setRows(GRC::VIEW_OVERVIEW, rows);
+
+    QmlCallRunner runner(TestPolicy());
+    RecentTransactions recent(1);
+    qml_test::ScopeExit detach([&] {
+        runner.drain();
+        recent.detach();
+    });
+    qt_test::FakeLatch latch;
+    qml_test::ScopeExit unlatch([&] {
+        latch.open = true;
+        harness.tx_source.m_set_view_limit_latch = nullptr;
+    });
+    recent.attach(harness.wallet_model, &harness.options, runner);
+    QCOMPARE(recent.rowCount(), static_cast<int>(expected.size()));
+
+    // Exactly the seven names.
+    QStringList names;
+    for (const QByteArray& name : recent.roleNames()) names << QString::fromLatin1(name);
+    names.sort();
+    QCOMPARE(names, (QStringList{QStringLiteral("address"), QStringLiteral("amount"), QStringLiteral("amountText"),
+                                 QStringLiteral("confirmed"), QStringLiteral("date"), QStringLiteral("iconSource"),
+                                 QStringLiteral("negative")}));
+
+    for (int row = 0; row < recent.rowCount(); ++row) {
+        const QModelIndex index = recent.index(row, 0);
+        const QString icon = recent.data(index, RecentTransactions::IconSourceRole).toString();
+        QCOMPARE(icon, expected[row].icon);
+        // The resource path: ":" and what follows "qrc:".
+        QVERIFY2(QFile::exists(QStringLiteral(":") + icon.mid(4)), qPrintable(icon));
+        const qint64 amount = rows[row].credit + rows[row].debit;
+        QCOMPARE(recent.data(index, RecentTransactions::AmountRole).toLongLong(), amount);
+        QCOMPARE(recent.data(index, RecentTransactions::NegativeRole).toBool(), amount < 0);
+        QCOMPARE(recent.data(index, RecentTransactions::AmountTextRole).toString(),
+                 BitcoinUnits::format(BitcoinUnits::BTC, amount) + QStringLiteral(" GRC"));
+        QCOMPARE(recent.data(index, RecentTransactions::AddressRole).toString(),
+                 QString::fromStdString(rows[row].address));
+        // Every served role, read: none looks up an address-book label.
+        for (const int role : recent.roleNames().keys()) (void)recent.data(index, role);
+    }
+    QCOMPARE(harness.wallet().m_address_label_calls.load(), 0);
+
+    // The stairstep from the attach limit 21, on the serial lane.
+    const std::thread::id gui_thread = std::this_thread::get_id();
+    harness.tx_source.clearRecords();
+    recent.setVisibleRows(8);
+    QVERIFY(SettleSerial(runner));
+    QCOMPARE(harness.tx_source.setViewLimitCalls(), 0);
+    recent.setVisibleRows(30);
+    QVERIFY(SettleSerial(runner));
+    QCOMPARE(harness.tx_source.viewLimits(), std::vector<int>{90});
+    QCOMPARE(harness.tx_source.viewLimitViews(), std::vector<int>{GRC::VIEW_OVERVIEW});
+    QVERIFY(harness.tx_source.setViewLimitThread() != gui_thread);
+    recent.setVisibleRows(2);
+    QVERIFY(SettleSerial(runner));
+    QCOMPARE(harness.tx_source.viewLimits(), (std::vector<int>{90, 6}));
+
+    // Coalesced: one in flight, and one re-post with the latest limit.
+    harness.tx_source.clearRecords();
+    harness.tx_source.m_set_view_limit_latch = &latch;
+    recent.setVisibleRows(30);
+    recent.setVisibleRows(2);
+    recent.setVisibleRows(40);
+    latch.open = true;
+    QVERIFY(SettleSerial(runner));
+    QCOMPARE(harness.tx_source.viewLimits(), (std::vector<int>{90, 120}));
+}
+
 void QmlStatusAdapterTests::researcherModeAndLimit()
 {
     qml_test::ModelHarness harness;
@@ -1076,6 +1295,40 @@ void QmlStatusAdapterTests::beaconToolTipEscapes()
     none.beacon_status = interfaces::BeaconStatus::NO_BEACON;
     set(none);
     QCOMPARE(researcher.beaconToolTip(), QStringLiteral("&lt;x&gt;No active beacon."));
+}
+
+void QmlStatusAdapterTests::unitChangeEmitsDataChanged()
+{
+    qml_test::ModelHarness harness;
+    std::vector<TransactionRecord> rows(2);
+    rows[0].address = "first";
+    rows[0].credit = COIN;
+    rows[1].address = "second";
+    rows[1].credit = 2 * COIN;
+    harness.tx_source.setRows(GRC::VIEW_OVERVIEW, rows);
+
+    QmlCallRunner runner(TestPolicy());
+    RecentTransactions recent(1);
+    qml_test::ScopeExit detach([&] {
+        runner.drain();
+        recent.detach();
+    });
+    recent.attach(harness.wallet_model, &harness.options, runner);
+    QCOMPARE(recent.rowCount(), 2);
+    QCOMPARE(recent.data(recent.index(0, 0), RecentTransactions::AmountTextRole).toString(),
+             QStringLiteral("1.00 GRC"));
+
+    // A unit change re-reads the amount text of every row: one dataChanged
+    // over all the rows, for that role alone.
+    QSignalSpy changed(&recent, &QAbstractItemModel::dataChanged);
+    harness.options.setData(harness.options.index(OptionsModel::DisplayUnit), BitcoinUnits::mBTC, Qt::EditRole);
+    QCOMPARE(changed.count(), 1);
+    QCOMPARE(changed.at(0).at(0).toModelIndex(), recent.index(0, 0));
+    QCOMPARE(changed.at(0).at(1).toModelIndex(), recent.index(1, 0));
+    QCOMPARE(changed.at(0).at(2).value<QList<int>>(), QList<int>{RecentTransactions::AmountTextRole});
+    const QString thin(QChar(0x2009));
+    QCOMPARE(recent.data(recent.index(0, 0), RecentTransactions::AmountTextRole).toString(),
+             QStringLiteral("1") + thin + QStringLiteral("000.00 mGRC"));
 }
 
 void QmlStatusAdapterTests::scraperStartsWaiting()

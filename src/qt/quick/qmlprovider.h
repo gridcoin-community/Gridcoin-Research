@@ -10,6 +10,7 @@
 class ClientStatus;
 class Clipboard;
 class GuiFrontEnd;
+class RecentTransactions;
 class ResearcherSummary;
 class ShellAdapter;
 class SplashAdapter;
@@ -40,6 +41,7 @@ public:
     ClientStatus& clientStatus();
     WalletSummary& walletSummary();
     ResearcherSummary& researcherSummary();
+    RecentTransactions& recentTransactions();
     Clipboard& clipboard();
     int marker() const;
 
@@ -50,6 +52,7 @@ private:
     std::unique_ptr<ClientStatus> m_client_status;
     std::unique_ptr<WalletSummary> m_wallet_summary;
     std::unique_ptr<ResearcherSummary> m_researcher_summary;
+    std::unique_ptr<RecentTransactions> m_recent_transactions;
     std::unique_ptr<Clipboard> m_clipboard;
 };
 
