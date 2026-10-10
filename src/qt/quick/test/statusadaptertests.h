@@ -16,6 +16,7 @@ class QmlStatusAdapterTests : public QObject
 
 private Q_SLOTS:
     void harnessBuildsModels();
+    void unitsFormatting();
     void syncRuleTruthTable();
     void blocksText();
     void statusReadsOffGuiThreadAndCoalesce();
@@ -24,6 +25,7 @@ private Q_SLOTS:
     void hydrateOnAttachAndSignalWins();
     void totalIncludesImmatureAndCopy();
     void encryptionStatusKnownAndDedup();
+    void researcherModeAndLimit();
     void clipboardStrips();
     void statusReadSetsConnections();
     void syncProgressAndToolTip();
@@ -32,6 +34,7 @@ private Q_SLOTS:
     void scraperReadsCoalesce();
     void roundedBalanceText();
     void lockStatesAndToolTips();
+    void beaconToolTipEscapes();
     void scraperStartsWaiting();
     void stakingToolTipFollowsMask();
 };

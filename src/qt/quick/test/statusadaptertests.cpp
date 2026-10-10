@@ -10,11 +10,14 @@
 
 #include <amount.h>
 #include <interfaces/node.h>
+#include <qt/bitcoinunits.h>
 #include <qt/guiutil.h>
+#include <qt/optionsmodel.h>
 #include <qt/quick/clientstatus.h>
 #include <qt/quick/clipboard.h>
 #include <qt/quick/qmlcallrunner.h>
 #include <qt/quick/qmlfrontend.h>
+#include <qt/quick/researchersummary.h>
 #include <qt/quick/walletsummary.h>
 #include <qt/walletmodel.h>
 #include <util.h>
@@ -27,6 +30,7 @@
 #include <QString>
 #include <QTemporaryDir>
 #include <QThreadPool>
+#include <QTranslator>
 #include <QUrl>
 
 #include <atomic>
@@ -144,6 +148,47 @@ void QmlStatusAdapterTests::harnessBuildsModels()
         }
         QCOMPARE(QString::fromStdString(gArgs.GetArg("-datadir", "")), own.path());
     }
+}
+
+void QmlStatusAdapterTests::unitsFormatting()
+{
+    qml_test::ModelHarness harness;
+    harness.researcher_context.m_snapshot.accrual = 123456789;
+    harness.researcher.refresh();
+    QmlCallRunner runner(TestPolicy());
+    Clipboard clipboard(1);
+    WalletSummary summary(1, clipboard);
+    ResearcherSummary researcher(1);
+    qml_test::ScopeExit detach([&] {
+        runner.drain();
+        summary.detach();
+        researcher.detach();
+    });
+    summary.attach(harness.wallet_model, &harness.options, runner);
+    researcher.attach(harness.researcher, &harness.options);
+    QVERIFY(SettleSerial(runner));
+
+    const QString thin(QChar(0x2009));
+    const auto set_unit = [&](int unit) {
+        harness.options.setData(harness.options.index(OptionsModel::DisplayUnit), unit, Qt::EditRole);
+    };
+
+    // 2^53 + 1 halfords: exact only in integer arithmetic.
+    emit harness.wallet_model.balanceChanged(9007199254740993, 0, 0, 0);
+    QCOMPARE(summary.balanceText(),
+             QStringLiteral("90") + thin + QStringLiteral("071") + thin + QStringLiteral("992.54740993 GRC"));
+
+    emit harness.wallet_model.balanceChanged(123456789, 0, 0, 0);
+    QCOMPARE(summary.balanceText(), QStringLiteral("1.23456789 GRC"));
+    set_unit(BitcoinUnits::mBTC);
+    QCOMPARE(summary.balanceText(), QStringLiteral("1") + thin + QStringLiteral("234.56789 mGRC"));
+    set_unit(BitcoinUnits::uBTC);
+    QCOMPARE(summary.balanceText(), QStringLiteral("1") + thin + QStringLiteral("234") + thin +
+                                        QStringLiteral("567.89 ") + QChar(0x03BC) + QStringLiteral("GRC"));
+
+    // The accrual follows the options model's unit too.
+    set_unit(BitcoinUnits::mBTC);
+    QVERIFY2(researcher.accrualText().endsWith(QStringLiteral("mGRC")), qPrintable(researcher.accrualText()));
 }
 
 void QmlStatusAdapterTests::syncRuleTruthTable()
@@ -572,6 +617,62 @@ void QmlStatusAdapterTests::encryptionStatusKnownAndDedup()
     }
 }
 
+void QmlStatusAdapterTests::researcherModeAndLimit()
+{
+    qml_test::ModelHarness harness;
+    ResearcherSummary researcher(1);
+    qml_test::ScopeExit detach([&] { researcher.detach(); });
+    researcher.attach(harness.researcher, &harness.options);
+
+    const auto set = [&](const interfaces::ResearcherSnapshot& snapshot) {
+        harness.researcher_context.m_snapshot = snapshot;
+        harness.researcher.refresh();
+    };
+
+    interfaces::ResearcherSnapshot solo;
+    solo.has_eligible_projects = true;
+    set(solo);
+    QCOMPARE(researcher.mode(), ResearcherSummary::Solo);
+    QCOMPARE(researcher.modeText(), QStringLiteral("CPID"));
+    QVERIFY(researcher.showMagnitude());
+
+    // An active beacon: the tooltip is rich text, so its lines break with
+    // <br>.
+    interfaces::ResearcherSnapshot active = solo;
+    active.beacon_present = true;
+    active.has_active_beacon = true;
+    set(active);
+    QVERIFY2(researcher.beaconToolTip().contains(QStringLiteral("<br>")) && !researcher.beaconToolTip().contains(QLatin1Char('\n')), qPrintable(researcher.beaconToolTip()));
+
+    // Pool projects without the detected pool mode: the mode follows the
+    // projects.
+    interfaces::ResearcherSnapshot pool;
+    pool.has_pool_projects = true;
+    pool.detected_pool_mode = false;
+    set(pool);
+    QCOMPARE(researcher.mode(), ResearcherSummary::Pool);
+    QCOMPARE(researcher.modeText(), QStringLiteral("Pool"));
+    QVERIFY(!researcher.showMagnitude());
+
+    set(interfaces::ResearcherSnapshot{});
+    QCOMPARE(researcher.mode(), ResearcherSummary::StakingOnly);
+    QCOMPARE(researcher.modeText(), QStringLiteral("Staking Only"));
+
+    interfaces::ResearcherSnapshot near_limit;
+    near_limit.accrual_near_limit = 100;
+    near_limit.accrual = 150;
+    set(near_limit);
+    QVERIFY(researcher.accrualNearLimit());
+    near_limit.accrual = 50;
+    set(near_limit);
+    QVERIFY(!researcher.accrualNearLimit());
+
+    interfaces::ResearcherSnapshot noncruncher;
+    noncruncher.configured_for_noncruncher_mode = true;
+    set(noncruncher);
+    QVERIFY(!researcher.beaconVisible());
+}
+
 void QmlStatusAdapterTests::clipboardStrips()
 {
     Clipboard clipboard(1);
@@ -875,6 +976,106 @@ void QmlStatusAdapterTests::lockStatesAndToolTips()
     emit harness.wallet_model.encryptionStatusChanged(WalletModel::Unencrypted);
     QCOMPARE(summary.encryptionStatus(), WalletSummary::Unencrypted);
     QCOMPARE(summary.encryptionToolTip(), unencrypted);
+}
+
+namespace {
+
+//! A translator that puts "<x>" before every string of ResearcherModel's and
+//! QObject's contexts, so a test can tell whether a translated string was
+//! escaped before it reached rich text.
+class MarkupTranslator : public QTranslator
+{
+public:
+    QString translate(const char* context, const char* source_text, const char* disambiguation = nullptr,
+                      int n = -1) const override
+    {
+        Q_UNUSED(disambiguation);
+        Q_UNUSED(n);
+        const QLatin1String name(context);
+        if (name != QLatin1String("ResearcherModel") && name != QLatin1String("QObject")) return QString();
+        return QStringLiteral("<x>") + QString::fromUtf8(source_text);
+    }
+
+    bool isEmpty() const override { return false; }
+};
+
+} // namespace
+
+void QmlStatusAdapterTests::beaconToolTipEscapes()
+{
+    // The beacon status and the three durations are translated strings, so a
+    // translation is the only way markup can reach them. The translator is
+    // installed before the harness and removed after it.
+    MarkupTranslator translator;
+    QVERIFY(QCoreApplication::installTranslator(&translator));
+    qml_test::ScopeExit remove_translator([&translator] { QCoreApplication::removeTranslator(&translator); });
+
+    qml_test::ModelHarness harness;
+    ResearcherSummary researcher(1);
+    qml_test::ScopeExit detach([&] { researcher.detach(); });
+    researcher.attach(harness.researcher, &harness.options);
+
+    const auto set = [&](const interfaces::ResearcherSnapshot& snapshot) {
+        harness.researcher_context.m_snapshot = snapshot;
+        harness.researcher.refresh();
+    };
+    // The tooltip's own line breaks are its only markup.
+    const auto no_raw_markup = [](const QString& tip) {
+        return !QString(tip).remove(QStringLiteral("<br>")).contains(QLatin1Char('<'));
+    };
+
+    // An active beacon: the CPID, the age, the time to expiration and the
+    // status.
+    interfaces::ResearcherSnapshot active;
+    active.has_eligible_projects = true;
+    active.cpid = "<b>c</b>&";
+    active.beacon_present = true;
+    active.has_active_beacon = true;
+    active.beacon_status = interfaces::BeaconStatus::ACTIVE;
+    active.beacon_timestamp = Now() - 100000;
+    active.beacon_age = 100000;
+    active.time_to_beacon_expiration = 500000;
+    set(active);
+    QString tip = researcher.beaconToolTip();
+    QVERIFY2(tip.contains(QStringLiteral("CPID: &lt;b&gt;c&lt;/b&gt;&amp;")), qPrintable(tip));
+    QVERIFY2(tip.contains(QStringLiteral("Beacon age: &lt;x&gt;")), qPrintable(tip));
+    QVERIFY2(tip.contains(QStringLiteral("Expires: &lt;x&gt;")), qPrintable(tip));
+    QVERIFY2(tip.contains(QStringLiteral("&lt;x&gt;Beacon is active.")), qPrintable(tip));
+    QVERIFY2(no_raw_markup(tip), qPrintable(tip));
+
+    // A pending beacon: the time left to activate.
+    interfaces::ResearcherSnapshot pending = active;
+    pending.has_active_beacon = false;
+    pending.has_pending_beacon = true;
+    pending.pending_beacon_present = true;
+    pending.time_to_pending_beacon_expiration = 18060;
+    pending.beacon_status = interfaces::BeaconStatus::PENDING;
+    set(pending);
+    tip = researcher.beaconToolTip();
+    QVERIFY2(tip.contains(QStringLiteral("CPID: &lt;b&gt;c&lt;/b&gt;&amp;")), qPrintable(tip));
+    QVERIFY2(tip.contains(QStringLiteral("Time left to activate: &lt;x&gt;")), qPrintable(tip));
+    QVERIFY2(tip.contains(QStringLiteral("&lt;x&gt;Pending beacon is awaiting network confirmation.")),
+             qPrintable(tip));
+    QVERIFY2(no_raw_markup(tip), qPrintable(tip));
+
+    // An expired beacon: the age again, in its own form.
+    interfaces::ResearcherSnapshot expired = active;
+    expired.has_active_beacon = false;
+    expired.beacon_expired = true;
+    expired.beacon_status = interfaces::BeaconStatus::NO_BEACON;
+    set(expired);
+    tip = researcher.beaconToolTip();
+    QVERIFY2(tip.contains(QStringLiteral("Beacon age: &lt;x&gt;")), qPrintable(tip));
+    QVERIFY2(tip.contains(QStringLiteral("Current beacon expired!")), qPrintable(tip));
+    QVERIFY2(tip.contains(QStringLiteral("&lt;x&gt;No active beacon.")), qPrintable(tip));
+    QVERIFY2(no_raw_markup(tip), qPrintable(tip));
+
+    // No beacon: the status alone.
+    interfaces::ResearcherSnapshot none;
+    none.cpid = "<b>c</b>&";
+    none.beacon_status = interfaces::BeaconStatus::NO_BEACON;
+    set(none);
+    QCOMPARE(researcher.beaconToolTip(), QStringLiteral("&lt;x&gt;No active beacon."));
 }
 
 void QmlStatusAdapterTests::scraperStartsWaiting()
