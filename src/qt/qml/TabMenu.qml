@@ -10,6 +10,18 @@ Rectangle {
     id: backgroundRect
     property int buttonHeight: 50
     signal menuButtonClicked(identification: string)
+
+    // Selects the entry whose path is `path` and switches to its view, as a
+    // click on that entry does.
+    function select(path) {
+        for (var i = 0; i < menuModel.count; ++i) {
+            if (menuModel.get(i).path === path) {
+                menuList.currentIndex = i
+                backgroundRect.menuButtonClicked(path)
+                return
+            }
+        }
+    }
     color:  MMPTheme.themeSelect(MMPTheme.cViolentViolet, MMPTheme.cSpaceBlack)
 
     Shortcut {
@@ -119,6 +131,7 @@ Rectangle {
 
         ListView {
             id: menuList
+            objectName: "menuList"
             height: Math.min(buttonHeight*count, parent.height-separator.height-lockButton.height)
             implicitHeight: contentItem.height
             implicitWidth: parent.width
