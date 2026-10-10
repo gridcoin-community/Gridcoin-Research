@@ -15,6 +15,7 @@
 #include <qt/bitcoinunits.h>
 #include <qt/guiutil.h>
 #include <qt/optionsmodel.h>
+#include <qt/quick/aboutinfo.h>
 #include <qt/quick/clientstatus.h>
 #include <qt/quick/clipboard.h>
 #include <qt/quick/qmlcallrunner.h>
@@ -918,6 +919,208 @@ void QmlStatusAdapterTests::pollTitleRefresh()
     QCOMPARE(expected.size(), qsizetype(80));
     QVERIFY2(qml_test::PumpUntil([&] { return voting.currentPollTitle() == expected; }, 2s),
              qPrintable(voting.currentPollTitle()));
+}
+
+void QmlStatusAdapterTests::updateCheckLaneAndGates()
+{
+    const QString config_reason = QStringLiteral(
+        "Version information and update check has been disabled by config or startup parameter.");
+    const QString no_response = QStringLiteral("No response from GitHub - check network connectivity.");
+    const std::thread::id gui_thread = std::this_thread::get_id();
+
+    // Mainnet: the check runs on the pooled lane, once at a time.
+    {
+        qml_test::ModelHarness harness;
+        qml_test::ScopeExit reap(ReapPool);
+        harness.node.m_mainnet = true;
+        harness.node.setClientVersion("v1.0");
+        QmlCallRunner runner(TestPolicy());
+        AboutInfo about(1);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            about.detach();
+        });
+        qml_test::Latch latch;
+        qml_test::ScopeExit unlatch([&] {
+            latch.open = true;
+            ReapPool();
+            harness.node.m_update_check_latch = nullptr;
+        });
+        about.attach(harness.client, runner);
+        QVERIFY(qml_test::PumpUntil([&] { return about.updateCheckAvailable(); }, 2s));
+
+        QSignalSpy finished(&about, &AboutInfo::updateCheckFinished);
+        harness.node.m_update_check_latch = &latch;
+        const quint64 id = about.checkForUpdate();
+        QVERIFY(id != 0);
+        QVERIFY(about.updateCheckRunning());
+        QCOMPARE(about.pendingRequestId(), id);
+        QVERIFY2(SerialProbe(runner), "a held update check delayed the serial lane");
+        QCOMPARE(about.checkForUpdate(), quint64{0});
+        latch.open = true;
+        QVERIFY(qml_test::PumpUntil([&] { return finished.count() == 1; }, 2s));
+        ReapPool();
+        QCOMPARE(harness.node.m_update_check_calls.load(), 1);
+        QVERIFY(harness.node.updateCheckThread() != gui_thread);
+        QCOMPARE(finished.at(0).at(0).toULongLong(), id);
+        QCOMPARE(finished.at(0).at(1).toString(), no_response);
+        QVERIFY(!about.updateCheckRunning());
+        QCOMPARE(about.pendingRequestId(), quint64{0});
+    }
+
+    // Not mainnet: unavailable, and no check runs.
+    {
+        qml_test::ModelHarness harness;
+        qml_test::ScopeExit reap(ReapPool);
+        harness.node.setClientVersion("v1.0");
+        QmlCallRunner runner(TestPolicy());
+        AboutInfo about(1);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            about.detach();
+        });
+        about.attach(harness.client, runner);
+        QVERIFY(qml_test::PumpUntil([&] { return !about.fullVersion().isEmpty(); }, 2s));
+        QVERIFY(!about.updateCheckAvailable());
+        QCOMPARE(about.checkForUpdate(), quint64{0});
+        QCOMPARE(about.updateCheckDisabledReason(), QStringLiteral("Version information is only available on mainnet."));
+        ReapPool();
+        QCOMPARE(harness.node.m_update_check_calls.load(), 0);
+    }
+
+    // The node's setting, set before attach.
+    {
+        qml_test::ModelHarness harness;
+        qml_test::ScopeExit reap(ReapPool);
+        harness.node.m_mainnet = true;
+        harness.node.setClientVersion("v1.0");
+        harness.node.m_settings["disableupdatecheck"] = "1";
+        QmlCallRunner runner(TestPolicy());
+        AboutInfo about(1);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            about.detach();
+        });
+        about.attach(harness.client, runner);
+        QVERIFY(qml_test::PumpUntil([&] { return !about.fullVersion().isEmpty(); }, 2s));
+        QVERIFY(!about.updateCheckAvailable());
+        QCOMPARE(about.updateCheckDisabledReason(), config_reason);
+    }
+
+    // The node's setting, flipped at run time: an empty result reads as the
+    // configuration reason.
+    {
+        qml_test::ModelHarness harness;
+        qml_test::ScopeExit reap(ReapPool);
+        harness.node.m_mainnet = true;
+        harness.node.setClientVersion("v1.0");
+        QmlCallRunner runner(TestPolicy());
+        AboutInfo about(1);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            about.detach();
+        });
+        about.attach(harness.client, runner);
+        QVERIFY(qml_test::PumpUntil([&] { return about.updateCheckAvailable(); }, 2s));
+        harness.node.m_settings["disableupdatecheck"] = "1";
+        QSignalSpy finished(&about, &AboutInfo::updateCheckFinished);
+        QVERIFY(about.checkForUpdate() != 0);
+        QVERIFY(qml_test::PumpUntil([&] { return finished.count() == 1; }, 2s));
+        QCOMPARE(finished.at(0).at(1).toString(), config_reason);
+    }
+
+    // This process's flag alone.
+    {
+        gArgs.ForceSetArg("-disableupdatecheck", "1");
+        qml_test::ScopeExit clear_arg([] { gArgs.ClearForcedArg("-disableupdatecheck"); });
+        qml_test::ModelHarness harness;
+        qml_test::ScopeExit reap(ReapPool);
+        harness.node.m_mainnet = true;
+        harness.node.setClientVersion("v1.0");
+        QmlCallRunner runner(TestPolicy());
+        AboutInfo about(1);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            about.detach();
+        });
+        about.attach(harness.client, runner);
+        QVERIFY(qml_test::PumpUntil([&] { return !about.fullVersion().isEmpty(); }, 2s));
+        QVERIFY(!about.updateCheckAvailable());
+        QCOMPARE(about.updateCheckDisabledReason(), config_reason);
+        QCOMPARE(about.checkForUpdate(), quint64{0});
+        ReapPool();
+        QCOMPARE(harness.node.m_update_check_calls.load(), 0);
+    }
+
+    // (f) Each About open re-reads the node's setting.
+    {
+        qml_test::ModelHarness harness;
+        qml_test::ScopeExit reap(ReapPool);
+        harness.node.m_mainnet = true;
+        harness.node.setClientVersion("v1.0");
+        harness.node.m_settings["disableupdatecheck"] = "1";
+        QmlCallRunner runner(TestPolicy());
+        AboutInfo about(1);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            about.detach();
+        });
+        about.attach(harness.client, runner);
+        QVERIFY(qml_test::PumpUntil(
+            [&] { return !about.updateCheckAvailable() && !about.fullVersion().isEmpty(); }, 2s));
+        harness.node.m_settings["disableupdatecheck"] = "0";
+        about.refreshUpdateCheck();
+        QVERIFY2(qml_test::PumpUntil([&] { return about.updateCheckAvailable(); }, 2s),
+                 "refreshUpdateCheck did not re-read the node's setting");
+    }
+
+    // (g) ... and this process's flag.
+    {
+        gArgs.ForceSetArg("-disableupdatecheck", "1");
+        qml_test::ScopeExit clear_arg([] { gArgs.ClearForcedArg("-disableupdatecheck"); });
+        qml_test::ModelHarness harness;
+        qml_test::ScopeExit reap(ReapPool);
+        harness.node.m_mainnet = true;
+        harness.node.setClientVersion("v1.0");
+        QmlCallRunner runner(TestPolicy());
+        AboutInfo about(1);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            about.detach();
+        });
+        about.attach(harness.client, runner);
+        QVERIFY(qml_test::PumpUntil([&] { return !about.fullVersion().isEmpty(); }, 2s));
+        QVERIFY(!about.updateCheckAvailable());
+        QCOMPARE(about.updateCheckDisabledReason(), config_reason);
+        gArgs.ClearForcedArg("-disableupdatecheck");
+        about.refreshUpdateCheck();
+        QVERIFY2(qml_test::PumpUntil([&] { return about.updateCheckAvailable(); }, 2s),
+                 "refreshUpdateCheck did not re-read this process's flag");
+    }
+
+    // (h) The node read is coalesced: three refreshes, two reads.
+    {
+        qml_test::ModelHarness harness;
+        qml_test::ScopeExit reap(ReapPool);
+        harness.node.m_mainnet = true;
+        harness.node.setClientVersion("v1.0");
+        QmlCallRunner runner(TestPolicy());
+        AboutInfo about(1);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            about.detach();
+        });
+        about.attach(harness.client, runner);
+        QVERIFY(qml_test::PumpUntil([&] { return !about.fullVersion().isEmpty(); }, 2s));
+        QVERIFY(SerialProbe(runner));
+        const int before = harness.node.m_disable_update_check_reads;
+        about.refreshUpdateCheck();
+        about.refreshUpdateCheck();
+        about.refreshUpdateCheck();
+        QVERIFY(qml_test::PumpUntil([&] { return harness.node.m_disable_update_check_reads - before >= 2; }, 2s));
+        QVERIFY(SerialProbe(runner));
+        QCOMPARE(harness.node.m_disable_update_check_reads - before, 2);
+    }
 }
 
 void QmlStatusAdapterTests::clipboardStrips()

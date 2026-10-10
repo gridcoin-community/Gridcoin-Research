@@ -7,6 +7,7 @@
 
 #include <memory>
 
+class AboutInfo;
 class ClientStatus;
 class Clipboard;
 class GuiFrontEnd;
@@ -44,6 +45,7 @@ public:
     ResearcherSummary& researcherSummary();
     RecentTransactions& recentTransactions();
     VotingSummary& votingSummary();
+    AboutInfo& aboutInfo();
     Clipboard& clipboard();
     int marker() const;
 
@@ -56,6 +58,7 @@ private:
     std::unique_ptr<ResearcherSummary> m_researcher_summary;
     std::unique_ptr<RecentTransactions> m_recent_transactions;
     std::unique_ptr<VotingSummary> m_voting_summary;
+    std::unique_ptr<AboutInfo> m_about_info;
     std::unique_ptr<Clipboard> m_clipboard;
 };
 

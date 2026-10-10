@@ -29,6 +29,7 @@ private Q_SLOTS:
     void recentTransactionsRoles();
     void researcherModeAndLimit();
     void pollTitleRefresh();
+    void updateCheckLaneAndGates();
     void clipboardStrips();
     void statusReadSetsConnections();
     void syncProgressAndToolTip();

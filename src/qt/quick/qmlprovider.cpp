@@ -4,6 +4,7 @@
 
 #include <qt/quick/qmlprovider.h>
 
+#include <qt/quick/aboutinfo.h>
 #include <qt/quick/clientstatus.h>
 #include <qt/quick/clipboard.h>
 #include <qt/quick/recenttransactions.h>
@@ -35,6 +36,7 @@ QmlProvider::QmlProvider(GuiFrontEnd& frontend)
     m_researcher_summary = std::make_unique<ResearcherSummary>(m_marker);
     m_recent_transactions = std::make_unique<RecentTransactions>(m_marker);
     m_voting_summary = std::make_unique<VotingSummary>(m_marker);
+    m_about_info = std::make_unique<AboutInfo>(m_marker);
 }
 
 QmlProvider::~QmlProvider()
@@ -85,6 +87,11 @@ RecentTransactions& QmlProvider::recentTransactions()
 VotingSummary& QmlProvider::votingSummary()
 {
     return *m_voting_summary;
+}
+
+AboutInfo& QmlProvider::aboutInfo()
+{
+    return *m_about_info;
 }
 
 Clipboard& QmlProvider::clipboard()
