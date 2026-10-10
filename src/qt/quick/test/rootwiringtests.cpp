@@ -394,11 +394,21 @@ void QmlRootWiringTests::rootBindsNoLegacyNames()
         MessageWindow(fe)->close();
         QVERIFY2(qml_test::PumpUntil([&] { return MessageWindow(fe) == nullptr; }, 2s),
                  "the dismissed message's window was not cleared");
+        // showAboutWindow is the About window's only creator, so the call
+        // loads the window's file.
+        QMetaObject::invokeMethod(fe.rootObject(), "showAboutWindow");
+        QVERIFY2(qml_test::PumpUntil([&] { QQuickWindow* about = RootWindow(fe, "aboutWindow"); return about && about->isVisible(); }, 2s), "the About window was not shown");
     }
 
+    // No models are attached, so no version window and no recent-list
+    // delegate is created: those two files are listed, but only the others
+    // are evaluated here.
     const QStringList files{QStringLiteral("SplashScreen.qml"), QStringLiteral("WindowManager.qml"),
                             QStringLiteral("MainWindow.qml"), QStringLiteral("TabMenu.qml"),
-                            QStringLiteral("CoreMessageWindow.qml")};
+                            QStringLiteral("CoreMessageWindow.qml"), QStringLiteral("OverviewView.qml"),
+                            QStringLiteral("StatusFooter.qml"), QStringLiteral("RecentTransactionItem.qml"),
+                            QStringLiteral("AboutWindow.qml"), QStringLiteral("BuildMismatchBanner.qml"),
+                            QStringLiteral("VersionInfoWindow.qml")};
     QStringList problems;
     for (const QString& message : std::as_const(g_messages)) {
         for (const QString& file : files) {

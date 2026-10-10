@@ -28,7 +28,9 @@ namespace interfaces {
 //! lifecycle property: the source's ctor/dtor is the attach/detach).
 //!
 //! Threading: the up-channel methods (registerView/getRows/...) are called on
-//! the GUI thread; events are produced on core threads under core locks and
+//! the GUI thread (except setViewLimit, which the QML module calls from its
+//! serial thread; the store serializes setViewLimit and getRows under
+//! cs_store); events are produced on core threads under core locks and
 //! pulled by the GUI's periodic drainEvents(). The seqno/viewId/epoch keys on
 //! the event and result value types make the drain/fetch race-free (see
 //! GRC::RowsResult). Only value types cross this boundary.
