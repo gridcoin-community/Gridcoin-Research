@@ -12,6 +12,7 @@ class Clipboard;
 class GuiFrontEnd;
 class ShellAdapter;
 class SplashAdapter;
+class WalletSummary;
 
 //! The process-wide provider of the module's singletons. It owns them, so they
 //! outlive any engine; the singletons' create() functions hand QML the
@@ -36,6 +37,7 @@ public:
     ShellAdapter& shell();
     SplashAdapter& splash();
     ClientStatus& clientStatus();
+    WalletSummary& walletSummary();
     Clipboard& clipboard();
     int marker() const;
 
@@ -44,6 +46,7 @@ private:
     std::unique_ptr<ShellAdapter> m_shell;
     std::unique_ptr<SplashAdapter> m_splash;
     std::unique_ptr<ClientStatus> m_client_status;
+    std::unique_ptr<WalletSummary> m_wallet_summary;
     std::unique_ptr<Clipboard> m_clipboard;
 };
 

@@ -21,12 +21,17 @@ private Q_SLOTS:
     void statusReadsOffGuiThreadAndCoalesce();
     void connectionAndStakingStates();
     void scraperSnapshotPooled();
+    void hydrateOnAttachAndSignalWins();
+    void totalIncludesImmatureAndCopy();
+    void encryptionStatusKnownAndDedup();
     void clipboardStrips();
     void statusReadSetsConnections();
     void syncProgressAndToolTip();
     void notStakingArm();
     void scraperStates();
     void scraperReadsCoalesce();
+    void roundedBalanceText();
+    void lockStatesAndToolTips();
     void scraperStartsWaiting();
     void stakingToolTipFollowsMask();
 };

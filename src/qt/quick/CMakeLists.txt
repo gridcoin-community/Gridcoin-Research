@@ -28,6 +28,8 @@ qt_add_qml_module(gridcoinqml
         splashadapter.h
         clientstatus.cpp
         clientstatus.h
+        walletsummary.cpp
+        walletsummary.h
         clipboard.cpp
         clipboard.h
 )

@@ -8,18 +8,22 @@
 #include "modelharness.h"
 #include "qmltestutil.h"
 
+#include <amount.h>
 #include <interfaces/node.h>
 #include <qt/guiutil.h>
 #include <qt/quick/clientstatus.h>
 #include <qt/quick/clipboard.h>
 #include <qt/quick/qmlcallrunner.h>
 #include <qt/quick/qmlfrontend.h>
+#include <qt/quick/walletsummary.h>
+#include <qt/walletmodel.h>
 #include <util.h>
 
 #include <QChar>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QSettings>
+#include <QSignalSpy>
 #include <QString>
 #include <QTemporaryDir>
 #include <QThreadPool>
@@ -364,6 +368,210 @@ void QmlStatusAdapterTests::scraperSnapshotPooled()
     QVERIFY(qml_test::PumpUntil([&] { return harness.node.m_scraper_calls > before; }, 2s));
 }
 
+void QmlStatusAdapterTests::hydrateOnAttachAndSignalWins()
+{
+    // (a) The miner state, with its estimated frequency, and the scraper state
+    // on attach to a running node, with no signal emitted.
+    {
+        qml_test::ModelHarness harness;
+        qml_test::ScopeExit reap(ReapPool);
+        harness.staking.m_staking = true;
+        harness.staking.m_coin_weight = 42;
+        harness.staking.m_network_weight = 400;
+        harness.staking.m_etts = 86400;
+        interfaces::ScraperConvergenceSnapshot snapshot;
+        snapshot.time = 1700000000;
+        snapshot.current_event_type = static_cast<int>(scrapereventtypes::Convergence);
+        snapshot.current_event_status = CT_NEW;
+        harness.node.setScraperSnapshot(snapshot);
+
+        QmlCallRunner runner(TestPolicy());
+        ClientStatus status(1);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            status.detach();
+        });
+        status.attach(harness.client, runner);
+        QVERIFY(SettleSerial(runner));
+        QVERIFY2(qml_test::PumpUntil([&] { return status.scraperState() == ClientStatus::Converged; }, 2s),
+                 "the scraper snapshot's current event did not set the state");
+        QCOMPARE(status.stakingState(), ClientStatus::Staking);
+        QCOMPARE(status.coinWeight(), 42.0);
+        // ClientModel::getNetWeight: the network weight / 80.
+        QCOMPARE(status.networkWeight(), 5.0);
+        QVERIFY2(status.stakingToolTip().contains(QStringLiteral("1.01 times per day")),
+                 qPrintable(status.stakingToolTip()));
+    }
+
+    // (b) A balanceChanged received while the balance read is in flight wins.
+    {
+        qml_test::ModelHarness harness;
+        harness.wallet().m_balance = 5 * COIN;
+        QmlCallRunner runner(TestPolicy());
+        Clipboard clipboard(1);
+        WalletSummary summary(1, clipboard);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            summary.detach();
+        });
+        qt_test::FakeLatch latch;
+        qml_test::ScopeExit unlatch([&] {
+            latch.open = true;
+            harness.wallet().m_balance_latch = nullptr;
+        });
+        harness.wallet().m_balance_latch = &latch;
+        summary.attach(harness.wallet_model, &harness.options, runner);
+        emit harness.wallet_model.balanceChanged(7 * COIN, 0, 0, 0);
+        latch.open = true;
+        QVERIFY(SettleSerial(runner));
+        QCOMPARE(summary.balance(), qint64{700000000});
+    }
+
+    // (c) A snapshot that bows out falls back to the four getters.
+    {
+        qml_test::ModelHarness harness;
+        harness.wallet().m_balance = 5 * COIN;
+        harness.wallet().m_balances_bow_out = true;
+        QmlCallRunner runner(TestPolicy());
+        Clipboard clipboard(1);
+        WalletSummary summary(1, clipboard);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            summary.detach();
+        });
+        summary.attach(harness.wallet_model, &harness.options, runner);
+        QVERIFY(SettleSerial(runner));
+        QCOMPARE(summary.balance(), qint64{500000000});
+    }
+}
+
+void QmlStatusAdapterTests::totalIncludesImmatureAndCopy()
+{
+    qml_test::ModelHarness harness;
+    QmlCallRunner runner(TestPolicy());
+    Clipboard clipboard(1);
+    WalletSummary summary(1, clipboard);
+    qml_test::ScopeExit detach([&] {
+        runner.drain();
+        summary.detach();
+    });
+    summary.attach(harness.wallet_model, &harness.options, runner);
+    QVERIFY(SettleSerial(runner));
+
+    emit harness.wallet_model.balanceChanged(1 * COIN, 2 * COIN, 3 * COIN, 4 * COIN);
+    QCOMPARE(summary.totalText(), QStringLiteral("10.00 GRC"));
+    QVERIFY(summary.immatureVisible());
+
+    emit harness.wallet_model.balanceChanged(1234 * COIN, 0, 0, 0);
+    QVERIFY(summary.copyAmount(WalletSummary::Balance));
+    // The offscreen clipboard round-trips text (clipboardStrips).
+    QCOMPARE(clipboard.text(), QStringLiteral("1234.00"));
+}
+
+void QmlStatusAdapterTests::encryptionStatusKnownAndDedup()
+{
+    {
+        qml_test::ModelHarness harness;
+        harness.wallet().m_lock_state.crypted = true;
+        harness.wallet().m_lock_state.locked = true;
+        QmlCallRunner runner(TestPolicy());
+        Clipboard clipboard(1);
+        WalletSummary summary(1, clipboard);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            summary.detach();
+        });
+        qt_test::FakeLatch latch;
+        qml_test::ScopeExit unlatch([&] {
+            latch.open = true;
+            harness.wallet().m_lock_state_latch = nullptr;
+        });
+        QSignalSpy status_spy(&summary, &WalletSummary::encryptionStatusChanged);
+
+        // (1) Not known while the lock-state read is held.
+        harness.wallet().m_lock_state_latch = &latch;
+        summary.attach(harness.wallet_model, &harness.options, runner);
+        qml_test::PumpFor(50ms);
+        QVERIFY(!summary.encryptionStatusKnown());
+        QCOMPARE(status_spy.count(), 0);
+
+        // (2) Known once it is delivered.
+        latch.open = true;
+        QVERIFY(SettleSerial(runner));
+        QVERIFY(summary.encryptionStatusKnown());
+        QCOMPARE(summary.encryptionStatus(), WalletSummary::Locked);
+
+        // (3) The model repeats its signal with the current value: no NOTIFY.
+        QSignalSpy repeat_spy(&summary, &WalletSummary::encryptionStatusChanged);
+        emit harness.wallet_model.encryptionStatusChanged(WalletModel::Locked);
+        emit harness.wallet_model.encryptionStatusChanged(WalletModel::Locked);
+        QCOMPARE(repeat_spy.count(), 0);
+        emit harness.wallet_model.encryptionStatusChanged(WalletModel::Unlocked);
+        QCOMPARE(repeat_spy.count(), 1);
+    }
+
+    // (4) A balanceChanged during the seed reads blocks only the balances.
+    {
+        qml_test::ModelHarness harness;
+        harness.wallet().m_balance = 5 * COIN;
+        QmlCallRunner runner(TestPolicy());
+        Clipboard clipboard(1);
+        WalletSummary summary(1, clipboard);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            summary.detach();
+        });
+        qt_test::FakeLatch latch;
+        qml_test::ScopeExit unlatch([&] {
+            latch.open = true;
+            harness.wallet().m_lock_state_latch = nullptr;
+            harness.wallet().m_balance_latch = nullptr;
+        });
+        harness.wallet().m_lock_state_latch = &latch;
+        harness.wallet().m_balance_latch = &latch;
+        summary.attach(harness.wallet_model, &harness.options, runner);
+        emit harness.wallet_model.balanceChanged(7 * COIN, 0, 0, 0);
+        latch.open = true;
+        QVERIFY(SettleSerial(runner));
+        QCOMPARE(summary.balance(), qint64{700000000});
+        QVERIFY(summary.encryptionStatusKnown());
+        QCOMPARE(summary.encryptionStatus(), WalletSummary::Unencrypted);
+    }
+
+    // (5) An encryptionStatusChanged during the lock-state read blocks only
+    // the lock state.
+    {
+        qml_test::ModelHarness harness;
+        harness.wallet().m_lock_state.crypted = true;
+        harness.wallet().m_lock_state.locked = true;
+        harness.wallet().m_balance = 5 * COIN;
+        QmlCallRunner runner(TestPolicy());
+        Clipboard clipboard(1);
+        WalletSummary summary(1, clipboard);
+        qml_test::ScopeExit detach([&] {
+            runner.drain();
+            summary.detach();
+        });
+        qt_test::FakeLatch latch;
+        qml_test::ScopeExit unlatch([&] {
+            latch.open = true;
+            harness.wallet().m_lock_state_latch = nullptr;
+        });
+        harness.wallet().m_lock_state_latch = &latch;
+        summary.attach(harness.wallet_model, &harness.options, runner);
+        QSignalSpy status_spy(&summary, &WalletSummary::encryptionStatusChanged);
+        emit harness.wallet_model.encryptionStatusChanged(WalletModel::Unlocked);
+        QVERIFY(summary.encryptionStatusKnown());
+        QCOMPARE(summary.encryptionStatus(), WalletSummary::Unlocked);
+        latch.open = true;
+        // The probe queues behind both seed reads.
+        QVERIFY(SerialProbe(runner));
+        QCOMPARE(summary.encryptionStatus(), WalletSummary::Unlocked);
+        QCOMPARE(status_spy.count(), 1);
+        QCOMPARE(summary.balance(), qint64{500000000});
+    }
+}
+
 void QmlStatusAdapterTests::clipboardStrips()
 {
     Clipboard clipboard(1);
@@ -598,6 +806,75 @@ void QmlStatusAdapterTests::scraperReadsCoalesce()
              qPrintable(status.scraperToolTip()));
     ReapPool();
     QCOMPARE(harness.node.m_scraper_calls - before, 2);
+}
+
+void QmlStatusAdapterTests::roundedBalanceText()
+{
+    qml_test::ModelHarness harness;
+    QmlCallRunner runner(TestPolicy());
+    Clipboard clipboard(1);
+    WalletSummary summary(1, clipboard);
+    qml_test::ScopeExit detach([&] {
+        runner.drain();
+        summary.detach();
+    });
+    summary.attach(harness.wallet_model, &harness.options, runner);
+    QVERIFY(SettleSerial(runner));
+
+    // The available balance alone, cut to its leading digits as
+    // BitcoinUnits::formatOverviewRounded cuts it. The other three amounts are
+    // not zero, so the total or the stake would read differently.
+    const QString thin(QChar(0x2009));
+    emit harness.wallet_model.balanceChanged(123456789012, 1 * COIN, 2 * COIN, 3 * COIN);
+    QCOMPARE(summary.balanceRoundedText(), QStringLiteral("1") + thin + QStringLiteral("234.5678"));
+
+    // The mask state follows the options model.
+    QVERIFY(!summary.maskValues());
+    summary.setMaskValues(true);
+    QVERIFY(summary.maskValues());
+}
+
+void QmlStatusAdapterTests::lockStatesAndToolTips()
+{
+    qml_test::ModelHarness harness;
+    harness.wallet().m_lock_state.crypted = true;
+    harness.wallet().m_lock_state.unlocked_for_staking_only = true;
+    QmlCallRunner runner(TestPolicy());
+    Clipboard clipboard(1);
+    WalletSummary summary(1, clipboard);
+    qml_test::ScopeExit detach([&] {
+        runner.drain();
+        summary.detach();
+    });
+    summary.attach(harness.wallet_model, &harness.options, runner);
+    QVERIFY(SettleSerial(runner));
+
+    // BitcoinGUI::setEncryptionStatus's texts; the two unlocked ones end with
+    // a space there too.
+    const QString staking_only =
+        QStringLiteral("Wallet is <b>encrypted</b> and currently <b>unlocked for staking only</b> ");
+    const QString locked = QStringLiteral("Wallet is <b>encrypted</b> and currently <b>locked</b>");
+    const QString unlocked = QStringLiteral("Wallet is <b>encrypted</b> and currently <b>unlocked</b> ");
+    const QString unencrypted = QStringLiteral("Wallet is <b>not encrypted</b>!");
+
+    // (a) The seed read's lock state.
+    QVERIFY(summary.encryptionStatusKnown());
+    QCOMPARE(summary.encryptionStatus(), WalletSummary::UnlockedForStakingOnly);
+    QCOMPARE(summary.encryptionToolTip(), staking_only);
+
+    // (b) The model's signal, for each of its four values.
+    emit harness.wallet_model.encryptionStatusChanged(WalletModel::Locked);
+    QCOMPARE(summary.encryptionStatus(), WalletSummary::Locked);
+    QCOMPARE(summary.encryptionToolTip(), locked);
+    emit harness.wallet_model.encryptionStatusChanged(WalletModel::UnlockedForStakingOnly);
+    QCOMPARE(summary.encryptionStatus(), WalletSummary::UnlockedForStakingOnly);
+    QCOMPARE(summary.encryptionToolTip(), staking_only);
+    emit harness.wallet_model.encryptionStatusChanged(WalletModel::Unlocked);
+    QCOMPARE(summary.encryptionStatus(), WalletSummary::Unlocked);
+    QCOMPARE(summary.encryptionToolTip(), unlocked);
+    emit harness.wallet_model.encryptionStatusChanged(WalletModel::Unencrypted);
+    QCOMPARE(summary.encryptionStatus(), WalletSummary::Unencrypted);
+    QCOMPARE(summary.encryptionToolTip(), unencrypted);
 }
 
 void QmlStatusAdapterTests::scraperStartsWaiting()

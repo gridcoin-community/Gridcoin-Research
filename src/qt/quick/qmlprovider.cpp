@@ -8,6 +8,7 @@
 #include <qt/quick/clipboard.h>
 #include <qt/quick/shelladapter.h>
 #include <qt/quick/splashadapter.h>
+#include <qt/quick/walletsummary.h>
 
 #include <atomic>
 
@@ -27,6 +28,7 @@ QmlProvider::QmlProvider(GuiFrontEnd& frontend)
     // another that is declared after it: the clipboard comes first.
     m_clipboard = std::make_unique<Clipboard>(m_marker);
     m_client_status = std::make_unique<ClientStatus>(m_marker);
+    m_wallet_summary = std::make_unique<WalletSummary>(m_marker, *m_clipboard);
 }
 
 QmlProvider::~QmlProvider()
@@ -57,6 +59,11 @@ SplashAdapter& QmlProvider::splash()
 ClientStatus& QmlProvider::clientStatus()
 {
     return *m_client_status;
+}
+
+WalletSummary& QmlProvider::walletSummary()
+{
+    return *m_wallet_summary;
 }
 
 Clipboard& QmlProvider::clipboard()
