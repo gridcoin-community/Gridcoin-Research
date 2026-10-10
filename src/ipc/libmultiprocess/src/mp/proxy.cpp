@@ -28,6 +28,10 @@
 #include <kj/memory.h>
 #include <kj/string.h>
 #include <cstdint>
+#if defined(__MINGW32__)
+#include <pthread.h>
+#include <system_error>
+#endif
 #ifdef WIN32
 #include <system_error>
 // The Windows wakeup writer below needs SOCKET / send / SOCKET_ERROR /
@@ -59,7 +63,56 @@
 
 namespace mp {
 
+#if defined(__MINGW32__)
+// GRIDCOIN: see the declaration in proxy-io.h. The pthread key, not a thread_local,
+// holds each thread's context, so nothing here touches emulated TLS.
+namespace {
+void DestroyThreadContext(void* context);
+
+pthread_key_t ThreadContextKey()
+{
+    // If key creation fails the exception leaves the static uninitialized, and the
+    // next call tries again.
+    static const pthread_key_t key = [] {
+        pthread_key_t k;
+        const int rc = pthread_key_create(&k, DestroyThreadContext);
+        if (rc != 0) throw std::system_error(rc, std::generic_category(), "pthread_key_create (ThreadContext)");
+        return k;
+    }();
+    return key;
+}
+
+void DestroyThreadContext(void* context)
+{
+    // POSIX clears the key before calling its destructor. Point it back at the
+    // context while it is destroyed: ~ThreadContext destroys ProxyClient<Thread>
+    // objects whose teardown can log through LongThreadName(), which reads
+    // g_thread_context, and it must find this same context (whose thread_name is
+    // destroyed last) rather than create a new one. Then clear it for good.
+    // Nothing here may throw. If re-setting the key fails, the context is still
+    // destroyed; teardown code that reads g_thread_context then gets a fresh
+    // context, destroyed by a later destructor pass or, at worst, leaked.
+    (void)pthread_setspecific(ThreadContextKey(), context);
+    delete static_cast<ThreadContext*>(context);
+    (void)pthread_setspecific(ThreadContextKey(), nullptr);
+}
+} // namespace
+
+ThreadContext& GetThreadContext()
+{
+    const pthread_key_t key = ThreadContextKey();
+    auto* context = static_cast<ThreadContext*>(pthread_getspecific(key));
+    if (!context) {
+        auto owned = std::make_unique<ThreadContext>();
+        const int rc = pthread_setspecific(key, owned.get());
+        if (rc != 0) throw std::system_error(rc, std::generic_category(), "pthread_setspecific (ThreadContext)");
+        context = owned.release();
+    }
+    return *context;
+}
+#else
 thread_local ThreadContext g_thread_context; // NOLINT(bitcoin-nontrivial-threadlocal)
+#endif
 
 Stream MakeStream(EventLoop&loop, SocketId socket)
 {

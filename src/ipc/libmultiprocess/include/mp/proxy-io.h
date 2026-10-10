@@ -1104,10 +1104,24 @@ void ListenConnectionsFactory(EventLoop& loop, SocketId fd,
     });
 }
 
+#if defined(__MINGW32__)
+// GRIDCOIN: not thread_local under MinGW. MinGW GCC implements thread_local with
+// emulated TLS, which frees a thread's storage when the pthread exits; the C
+// runtime runs thread_local destructors after that, from the thread-exit TLS
+// callback. ~ThreadContext therefore ran on freed memory (a heap use-after-free in
+// the -multiprocess GUI, caught under page heap at every shutdown). The context
+// lives on the heap instead, owned by a pthread key whose destructor runs during
+// pthread exit, before the storage goes. g_thread_context names the calling
+// thread's context, as before, so the code using it is unchanged. The expansion is
+// unqualified so that both g_thread_context and mp::g_thread_context still work.
+ThreadContext& GetThreadContext();
+#define g_thread_context GetThreadContext()
+#else
 extern thread_local ThreadContext g_thread_context; // NOLINT(bitcoin-nontrivial-threadlocal)
 // Silence nonstandard bitcoin tidy error "Variable with non-trivial destructor
 // cannot be thread_local" which should not be a problem on modern platforms, and
 // could lead to a small memory leak at worst on older ones.
+#endif
 
 } // namespace mp
 
