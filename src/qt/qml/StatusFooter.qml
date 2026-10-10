@@ -3,6 +3,7 @@
 */
 import QtQuick
 import MMPTheme 1.0
+import Gridcoin.Qml
 Rectangle {
     id: footer
     gradient: Gradient {
@@ -23,11 +24,12 @@ Rectangle {
 
     Rectangle {
         id: testNetRect
+        objectName: "testNetMarker"
         color: MMPTheme.cCarminePink
         width: visible ? testNetText.implicitWidth + 10 : 0
         height: testNetText.implicitHeight + 5
         radius: 4
-        visible: _clientModel.isTestNet
+        visible: ClientStatus.isTestNet
         anchors {
             left: parent.left
             verticalCenter: parent.verticalCenter
@@ -48,7 +50,9 @@ Rectangle {
 
     Text {
         id: clientMessage
-        text: _clientModel.statusBarWarnings
+        objectName: "footerMessage"
+        textFormat: Text.PlainText
+        text: ClientStatus.statusBarWarnings
         color: MMPTheme.themeSelect("#54575d","#b7b7b7")
         font.pixelSize: 10
         clip: true
@@ -72,33 +76,83 @@ Rectangle {
 
         HelpHover {
             id: lockIcon
-            imageSource: MMPTheme.themeSelect("qrc:/icons/statusbar/ic_unlocked_staking_light.svg","qrc:/icons/statusbar/ic_unlocked_staking_dark.svg")
+            objectName: "lockIcon"
+            // No image until the wallet's lock state has been read.
+            imageSource: {
+                if (!WalletSummary.encryptionStatusKnown) return ""
+                switch (WalletSummary.encryptionStatus) {
+                case WalletSummary.Locked:
+                    return MMPTheme.themeSelect("qrc:/icons/statusbar/ic_locked_light.svg","qrc:/icons/statusbar/ic_locked_dark.svg")
+                case WalletSummary.UnlockedForStakingOnly:
+                    return MMPTheme.themeSelect("qrc:/icons/statusbar/ic_unlocked_staking_light.svg","qrc:/icons/statusbar/ic_unlocked_staking_dark.svg")
+                case WalletSummary.Unencrypted:
+                    // Unlike Widgets, an unencrypted wallet does not share an unlocked one's open lock.
+                    return "qrc:/icons/generic/ic_alert.svg"
+                default:
+                    return "qrc:/icons/statusbar/ic_unlocked.svg"
+                }
+            }
             iconSize: iconsRow.iconSize
-            text: "The wallet is unlocked for staking"
+            text: WalletSummary.encryptionStatusKnown ? WalletSummary.encryptionToolTip : qsTr("The wallet's lock state is not known yet.")
         }
         HelpHover {
             id: connectionStrengthIcon
-            imageSource: MMPTheme.themeSelect("qrc:/icons/statusbar/ic_connection_normal_light.svg","qrc:/icons/statusbar/ic_connection_normal_dark.svg")
+            objectName: "connectionIcon"
+            readonly property var levelNames: ["na", "poor", "average", "normal", "good"]
+            imageSource: MMPTheme.themeSelect("qrc:/icons/statusbar/ic_connection_" + levelNames[ClientStatus.connectionLevel] + "_light.svg",
+                                              "qrc:/icons/statusbar/ic_connection_" + levelNames[ClientStatus.connectionLevel] + "_dark.svg")
             iconSize: iconsRow.iconSize
-            text: "Connection is strong"
+            text: ClientStatus.connectionToolTip
         }
         HelpHover {
             id: stakingIcon
-            imageSource: MMPTheme.themeSelect("qrc:/icons/statusbar/ic_staking_yes_light.svg","qrc:/icons/statusbar/ic_staking_yes_dark.svg")
+            objectName: "stakingIcon"
+            imageSource: ClientStatus.stakingState === ClientStatus.Staking
+                         ? MMPTheme.themeSelect("qrc:/icons/statusbar/ic_staking_yes_light.svg","qrc:/icons/statusbar/ic_staking_yes_dark.svg")
+                         : ClientStatus.stakingState === ClientStatus.UnableToStake
+                         ? MMPTheme.themeSelect("qrc:/icons/statusbar/ic_staking_problem_light.svg","qrc:/icons/statusbar/ic_staking_problem_dark.svg")
+                         : MMPTheme.themeSelect("qrc:/icons/statusbar/ic_staking_no_light.svg","qrc:/icons/statusbar/ic_staking_no_dark.svg")
             iconSize: iconsRow.iconSize
-            text: "Currently staking"
+            text: ClientStatus.stakingToolTip
         }
         HelpHover {
             id: networkIcon
-            imageSource: "qrc:/icons/statusbar/ic_syncing_uptodate.svg"
+            objectName: "syncIcon"
+            imageSource: {
+                if (ClientStatus.syncState === ClientStatus.UpToDate) return "qrc:/icons/statusbar/ic_syncing_uptodate.svg"
+                var name = ClientStatus.syncState === ClientStatus.NoConnections ? "stuck"
+                         : ClientStatus.syncProgress === 0 ? "unsynced" : String(ClientStatus.syncProgress)
+                return MMPTheme.themeSelect("qrc:/icons/statusbar/ic_syncing_" + name + "_light.svg",
+                                            "qrc:/icons/statusbar/ic_syncing_" + name + "_dark.svg")
+            }
             iconSize: iconsRow.iconSize
-            text: "Network is connected"
+            text: ClientStatus.syncToolTip
         }
         HelpHover {
             id: beaconIcon
-            imageSource: MMPTheme.themeSelect("qrc:/icons/statusbar/ic_beacon_online_light.svg","qrc:/icons/statusbar/ic_beacon_online_dark.svg")
+            objectName: "beaconIcon"
+            visible: ResearcherSummary.beaconVisible
+            imageSource: ResearcherSummary.beaconActive
+                         ? MMPTheme.themeSelect("qrc:/icons/statusbar/ic_beacon_online_light.svg","qrc:/icons/statusbar/ic_beacon_online_dark.svg")
+                         : MMPTheme.themeSelect("qrc:/icons/statusbar/ic_beacon_offline_light.svg","qrc:/icons/statusbar/ic_beacon_offline_dark.svg")
             iconSize: iconsRow.iconSize
-            text: "Beacon is lit"
+            text: ResearcherSummary.beaconToolTip
+        }
+        HelpHover {
+            id: scraperIcon
+            objectName: "scraperIcon"
+            imageSource: {
+                var name = "waiting"
+                switch (ClientStatus.scraperState) {
+                case ClientStatus.Inactive: name = "inactive"; break
+                case ClientStatus.Converged: name = "ok"; break
+                case ClientStatus.NoConvergence: name = "no_convergence"; break
+                }
+                return MMPTheme.themeSelect("qrc:/icons/statusbar/ic_scraper_" + name + "_light.svg",
+                                            "qrc:/icons/statusbar/ic_scraper_" + name + "_dark.svg")
+            }
+            iconSize: iconsRow.iconSize
+            text: ClientStatus.scraperToolTip
         }
     }
 }
