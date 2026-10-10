@@ -115,12 +115,13 @@ void QmlStatusAdapterTests::harnessBuildsModels()
         // (3) The harness builds the five models, and their settings and
         // datadir stay under its own roots.
         qml_test::ModelHarness harness;
+        qml_test::ScopeExit reap(ReapPool);
         std::atomic<int> disconnects{0};
         qml_test::CountingQuitFrontEnd fe(ROOT_URL, qml_test::CountingCallbacks(disconnects));
         qml_test::ScopeExit detach([&fe] { fe.detachModels(); });
         fe.attachModels(harness.bundle());
 
-        harness.options.setMaskValues(true);
+        fe.provider().walletSummary().setMaskValues(true);
         QVERIFY(harness.options.getMaskValues());
         const QString settings_file = QSettings().fileName();
         QVERIFY2(settings_file.startsWith(harness.isolation.settingsRoot()), qPrintable(settings_file));
@@ -1121,6 +1122,104 @@ void QmlStatusAdapterTests::updateCheckLaneAndGates()
         QVERIFY(SerialProbe(runner));
         QCOMPARE(harness.node.m_disable_update_check_reads - before, 2);
     }
+}
+
+void QmlStatusAdapterTests::detachOrder()
+{
+    {
+        qml_test::ModelHarness harness;
+        qml_test::ScopeExit reap(ReapPool);
+        std::atomic<int> disconnects{0};
+        qml_test::CountingQuitFrontEnd fe(ROOT_URL, qml_test::CountingCallbacks(disconnects));
+        qml_test::ScopeExit detach([&fe] { fe.detachModels(); });
+        fe.attachModels(harness.bundle());
+        QVERIFY(SettleSerial(fe.callRunner()));
+        const int level = fe.provider().clientStatus().connectionLevel();
+
+        // detachWallet destroys the OverviewTxModel, which unregisters the
+        // view while the transaction source is alive.
+        fe.detachModels();
+        QCOMPARE(harness.tx_source.unregisteredViews(), std::vector<int>{GRC::VIEW_OVERVIEW});
+
+        // A detached adapter no longer follows its model.
+        emit harness.client.numConnectionsChanged(3);
+        QCOMPARE(fe.provider().clientStatus().connectionLevel(), level);
+    }
+
+    // A detach() with no attach() before it returns cleanly.
+    {
+        Clipboard clipboard(1);
+        ClientStatus status(1);
+        WalletSummary summary(1, clipboard);
+        ResearcherSummary researcher(1);
+        RecentTransactions recent(1);
+        VotingSummary voting(1);
+        AboutInfo about(1);
+        status.detach();
+        summary.detach();
+        researcher.detach();
+        recent.detach();
+        voting.detach();
+        about.detach();
+    }
+
+    // Every invokable is safe on a front end that never attached.
+    {
+        const bool old_quit = qApp->quitOnLastWindowClosed();
+        qApp->setQuitOnLastWindowClosed(false);
+        qml_test::ScopeExit restore_quit([old_quit] { qApp->setQuitOnLastWindowClosed(old_quit); });
+        std::atomic<int> disconnects{0};
+        qml_test::CountingQuitFrontEnd fe(ROOT_URL, qml_test::CountingCallbacks(disconnects));
+        fe.construct();
+        QVERIFY2(fe.rootObject(), "the root did not load");
+        fe.showMain(false);
+        qml_test::PumpFor(100ms);
+
+        QmlProvider& provider = fe.provider();
+        provider.recentTransactions().setVisibleRows(30);
+        QCOMPARE(provider.aboutInfo().checkForUpdate(), quint64{0});
+        QVERIFY(!provider.walletSummary().copyAmount(WalletSummary::Balance));
+        provider.walletSummary().setMaskValues(true);
+        provider.aboutInfo().refreshUpdateCheck();
+        qml_test::PumpFor(50ms);
+        QVERIFY(qml_test::g_rethrown.empty());
+    }
+}
+
+void QmlStatusAdapterTests::attachModelsAttachesAll()
+{
+    qml_test::ModelHarness harness;
+    qml_test::ScopeExit reap(ReapPool);
+    harness.node.setClientVersion("v1.0");
+    harness.node.m_node_count = 3;
+    harness.wallet().m_balance = 5 * COIN;
+    harness.researcher_context.m_snapshot.has_eligible_projects = true;
+    // The model caches its snapshot when it is built.
+    harness.researcher.refresh();
+    harness.voting_manager.setCurrentPollTitle("Community poll");
+    std::vector<TransactionRecord> rows(2);
+    rows[0].address = "first";
+    rows[1].address = "second";
+    harness.tx_source.setRows(GRC::VIEW_OVERVIEW, rows);
+
+    std::atomic<int> disconnects{0};
+    qml_test::CountingQuitFrontEnd fe(ROOT_URL, qml_test::CountingCallbacks(disconnects));
+    qml_test::ScopeExit detach([&fe] { fe.detachModels(); });
+    fe.attachModels(harness.bundle());
+
+    // Each value differs from its adapter's unattached default.
+    QmlProvider& provider = fe.provider();
+    QVERIFY2(qml_test::PumpUntil([&] { return provider.clientStatus().numConnections() == 3; }, 2s), "ClientStatus");
+    QVERIFY2(qml_test::PumpUntil([&] { return provider.walletSummary().balance() == 5 * COIN; }, 2s), "WalletSummary");
+    QVERIFY2(qml_test::PumpUntil([&] { return provider.researcherSummary().mode() == ResearcherSummary::Solo; }, 2s),
+             "ResearcherSummary");
+    QVERIFY2(qml_test::PumpUntil(
+                 [&] { return provider.votingSummary().currentPollTitle() == QStringLiteral("Community poll"); }, 2s),
+             "VotingSummary");
+    QVERIFY2(qml_test::PumpUntil([&] { return provider.aboutInfo().fullVersion() == QStringLiteral("v1.0"); }, 2s),
+             "AboutInfo");
+    QVERIFY2(qml_test::PumpUntil([&] { return provider.recentTransactions().rowCount() == 2; }, 2s),
+             "RecentTransactions");
 }
 
 void QmlStatusAdapterTests::clipboardStrips()

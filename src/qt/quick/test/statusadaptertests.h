@@ -30,6 +30,8 @@ private Q_SLOTS:
     void researcherModeAndLimit();
     void pollTitleRefresh();
     void updateCheckLaneAndGates();
+    void detachOrder();
+    void attachModelsAttachesAll();
     void clipboardStrips();
     void statusReadSetsConnections();
     void syncProgressAndToolTip();

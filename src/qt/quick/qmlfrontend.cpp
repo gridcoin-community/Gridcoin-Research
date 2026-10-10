@@ -7,9 +7,15 @@
 #include <qt/clientmodel.h>
 #include <qt/guilog.h>
 #include <qt/optionsmodel.h>
+#include <qt/quick/aboutinfo.h>
+#include <qt/quick/clientstatus.h>
 #include <qt/quick/qmlengine.h>
+#include <qt/quick/recenttransactions.h>
+#include <qt/quick/researchersummary.h>
 #include <qt/quick/shelladapter.h>
 #include <qt/quick/splashadapter.h>
+#include <qt/quick/votingsummary.h>
+#include <qt/quick/walletsummary.h>
 
 #include <QCoreApplication>
 #include <QGuiApplication>
@@ -166,6 +172,13 @@ void QmlFrontEnd::attachModels(const ModelBundle& models)
 
     OptionsModel* options = models.client.getOptionsModel();
     shell().setMinimizeOnClose(options && options->getMinimizeOnClose());
+
+    m_provider->clientStatus().attach(models.client, *m_runner);
+    m_provider->walletSummary().attach(models.wallet, models.client.getOptionsModel(), *m_runner);
+    m_provider->researcherSummary().attach(models.researcher, models.client.getOptionsModel());
+    m_provider->recentTransactions().attach(models.wallet, models.client.getOptionsModel(), *m_runner);
+    m_provider->votingSummary().attach(models.voting, *m_runner);
+    m_provider->aboutInfo().attach(models.client, *m_runner);
 }
 
 void QmlFrontEnd::showMain(bool minimized)
@@ -234,11 +247,15 @@ void QmlFrontEnd::detachClient()
 {
     m_client = nullptr;
     shell().setMinimizeOnClose(false);
+    m_provider->clientStatus().detach();
+    m_provider->aboutInfo().detach();
 }
 
 void QmlFrontEnd::detachWallet()
 {
     m_wallet = nullptr;
+    m_provider->walletSummary().detach();
+    m_provider->recentTransactions().detach();
 }
 
 void QmlFrontEnd::detachMRC()
@@ -249,11 +266,13 @@ void QmlFrontEnd::detachMRC()
 void QmlFrontEnd::detachResearcher()
 {
     m_researcher = nullptr;
+    m_provider->researcherSummary().detach();
 }
 
 void QmlFrontEnd::detachVoting()
 {
     m_voting = nullptr;
+    m_provider->votingSummary().detach();
 }
 
 void QmlFrontEnd::detachPSGT()
