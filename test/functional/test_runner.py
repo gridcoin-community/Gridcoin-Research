@@ -127,8 +127,10 @@ BASE_SCRIPTS = [
     #   - p2p_version_handshake.py: version/verack + ping/pong against a node
     #   - p2p_block_tx_relay.py: relay a node-produced tx and block over P2P
     # Phase 4A adds the investor-mode starter suite (no beacon/CPID required):
-    #   - wallet_basic.py: raw-tx + sendtoaddress spend, balance, confirmations
-    #   - wallet_backup.py: backupwallet + dumpprivkey/importprivkey round-trip
+    #   - wallet_basic.py: premine via listunspent, staked balance, raw spend of a
+    #     coinstake output (no sendtoaddress; confirmation not asserted)
+    #   - wallet_backup.py: dumpprivkey returns a key + invalid-address error
+    #     (backupwallet and importprivkey are not exercised)
     #   - mempool_accept.py: sendrawtransaction accept + double-spend rejection
     #   - rpc_net.py: two-node peer state, disconnectnode, disconnect_nodes
     #   - p2p_disconnect_nodes_churn.py: disconnect_nodes with a peer arriving mid-wait
