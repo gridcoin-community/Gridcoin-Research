@@ -132,7 +132,17 @@ public:
 
 private:
     const CTransaction m_tx;         //!< Transaction that contains a vote.
-    const Contract& m_contract;      //!< The vote contract.
+
+    //!
+    //! \brief The vote contract.
+    //!
+    //! Held by value. For a version 1 transaction, GetContracts() returns a
+    //! cache parsed from hashBoinc that moving the transaction does not carry,
+    //! so a reference into the caller's transaction would dangle once that
+    //! transaction is gone.
+    //!
+    const Contract m_contract;
+
     const ContractPayload m_payload; //!< Contains the body of the vote.
 }; // VoteCandidate
 
