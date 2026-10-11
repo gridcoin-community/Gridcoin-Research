@@ -288,6 +288,10 @@ BASE_SCRIPTS = [
     # framework gave it, not the host's, and a -boincdatadir on the command
     # line still decides the directory.
     'feature_own_boinc_dir.py',
+    # feature_vote_balance_weight.py: from v15 a vote whose own transaction
+    # spends a claimed coin keeps that coin's weight in the change it returns,
+    # and a re-vote replaces the earlier vote and takes the coin's weight.
+    'feature_vote_balance_weight.py',
     # feature_blockindex_verification.py: LoadBlockIndex's startup
     # verification pass over a block whose payload was corrupted without
     # disturbing its header, the one corruption class that arms its

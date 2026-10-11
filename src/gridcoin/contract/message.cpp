@@ -156,6 +156,7 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
     CCoinControl coin_control_out;
     CAmount applied_fee_out = 0; // Unused, but the builder can return before seeding it
     bool admin = false;
+    bool vote = false;
     bool contract_change_to_input_address = gArgs.GetBoolArg("-contractchangetoinputaddress", false);
     CTxDestination out_address {CNoDestination()};
 
@@ -180,6 +181,7 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
 
     for (const auto& contract : wtx_out.vContracts) {
         admin |= contract.RequiresMasterKey();
+        vote |= contract.m_type == ContractType::VOTE;
     }
 
     // Configure inputs/outputs for the address associated with the master key.
@@ -198,12 +200,17 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
     CScript scriptPubKey;
     scriptPubKey << OP_RETURN;
 
+    // A vote returns its change to the address of the coin that pays its burn fee,
+    // whatever the setting. That coin is in the vote's own balance claim, and from
+    // v15 the tally follows a claimed coin through a vote transaction into its
+    // outputs at the same address, as it follows a coin into its coinstake (see
+    // VoteResolver::ResolveAmount).
     return pwalletMain->CreateTransaction(
         { std::make_pair(std::move(scriptPubKey), burn_fee) },
         wtx_out,
         reserve_key,
         applied_fee_out,
-        &coin_control_out, contract_change_to_input_address,
+        &coin_control_out, contract_change_to_input_address || vote,
         renewal_access);
 }
 

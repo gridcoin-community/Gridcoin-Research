@@ -1175,7 +1175,8 @@ void SetupServerArgs()
                                                      DEFAULT_MAX_SIG_CACHE_SIZE, MAX_SIG_CACHE_ENTRIES),
                    ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::WALLET);
     argsman.AddArg("-contractchangetoinputaddress", "Change from a contract transaction is returned to an input address "
-                                                    "rather than creating a new change address (default: 0)",
+                                                    "rather than creating a new change address (default: 0). A vote "
+                                                    "always returns its change to an input address.",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
                    OptionsCategory::WALLET);
 
