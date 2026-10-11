@@ -20,6 +20,7 @@
 #include <thread>
 #include <typeinfo>
 #include <univalue.h>
+#include <util/rwsettings.h>
 
 #ifdef WIN32
 #ifdef _MSC_VER
@@ -1216,21 +1217,13 @@ UniValue ArgsManager::OutputArgs() const
 }
 
 namespace {
-//! One read-write setting change for CommitRwSettings.
-struct RwSettingChange {
-    std::string name;            // setting name without the leading dash
-    util::SettingsValue value;   // null erases
-    bool apply_to_running_args{false};
-};
-
-//! Store the given read-write settings (a null value erases a key) and write the
-//! settings file, as one step under one hold of the settings lock. A change with
-//! apply_to_running_args also sets (or, for a null value, drops) the setting's
-//! forced value in the same step. If the write fails or throws, every key is put
-//! back as it was before the call, forced entries included. The
+//! Store the given read-write settings (a null value erases a key), change each
+//! key's forced value as its update says, and write the settings file, as one
+//! step under one hold of the settings lock. If the write fails or throws, every
+//! key is put back as it was before the call, forced entries included. The
 //! RwSettingsUpdated signal is emitted once, after the outcome and outside the
 //! lock, so a listener reads the final state; a throw is rethrown after it.
-bool CommitRwSettings(const std::vector<RwSettingChange>& changes)
+bool CommitRwSettings(const std::vector<RwSettingUpdate>& changes)
 {
     bool written = false;
     std::exception_ptr write_error;
@@ -1251,7 +1244,7 @@ bool CommitRwSettings(const std::vector<RwSettingChange>& changes)
             prev.name = change.name;
             const auto rw_it = settings.rw_settings.find(change.name);
             if (rw_it != settings.rw_settings.end()) prev.rw = rw_it->second;
-            if (change.apply_to_running_args) {
+            if (change.forced != RwSettingUpdate::Forced::KEEP) {
                 prev.forced_touched = true;
                 const auto forced_it = settings.forced_settings.find(change.name);
                 if (forced_it != settings.forced_settings.end()) prev.forced = forced_it->second;
@@ -1260,10 +1253,15 @@ bool CommitRwSettings(const std::vector<RwSettingChange>& changes)
 
             if (change.value.isNull()) {
                 settings.rw_settings.erase(change.name);
-                if (change.apply_to_running_args) settings.forced_settings.erase(change.name);
             } else {
                 settings.rw_settings[change.name] = change.value;
-                if (change.apply_to_running_args) settings.forced_settings[change.name] = change.value;
+            }
+
+            if (change.forced == RwSettingUpdate::Forced::CLEAR
+                || (change.forced == RwSettingUpdate::Forced::SET && change.forced_value.isNull())) {
+                settings.forced_settings.erase(change.name);
+            } else if (change.forced == RwSettingUpdate::Forced::SET) {
+                settings.forced_settings[change.name] = change.forced_value;
             }
         }
         try {
@@ -1314,17 +1312,26 @@ util::SettingsValue getRwSetting(const std::string& name)
 
 bool updateRwSetting(const std::string& name, const util::SettingsValue& value, bool apply_to_running_args)
 {
-    return CommitRwSettings({{name, value, apply_to_running_args}});
+    // Applied to the running args, the forced value follows the read-write
+    // value: set to it, or dropped when it is null.
+    return CommitRwSettings({{name, value,
+                              apply_to_running_args ? RwSettingUpdate::Forced::SET : RwSettingUpdate::Forced::KEEP,
+                              value}});
 }
 
 bool updateRwSettings(const std::vector<std::pair<std::string, util::SettingsValue>>& settings_in)
 {
-    std::vector<RwSettingChange> changes;
+    std::vector<RwSettingUpdate> changes;
     changes.reserve(settings_in.size());
     for (const auto& [name, value] : settings_in) {
-        changes.push_back({name, value, /*apply_to_running_args=*/false});
+        changes.push_back({name, value, RwSettingUpdate::Forced::KEEP, {}});
     }
     return CommitRwSettings(changes);
+}
+
+bool updateRwSettingsAndForcedArgs(const std::vector<RwSettingUpdate>& updates)
+{
+    return CommitRwSettings(updates);
 }
 
 bool RenameOver(fs::path src, fs::path dest)

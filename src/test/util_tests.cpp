@@ -16,6 +16,7 @@
 #include <wallet/wallet.h>
 #include <util.h>
 //#include <util/system.h>
+#include <util/rwsettings.h>
 #include <util/settings.h>
 #include <util/string.h>
 
@@ -1891,6 +1892,27 @@ std::string RwValue(const std::string& name)
     const util::SettingsValue value = getRwSetting(name);
     return value.isNull() ? std::string("<null>") : value.get_str();
 }
+
+//! A forced (running) setting as text, "<null>" when it is absent.
+std::string ForcedValue(const std::string& name)
+{
+    std::string text{"<null>"};
+    gArgs.LockSettings([&](const util::Settings& settings) {
+        const auto it = settings.forced_settings.find(name);
+        if (it != settings.forced_settings.end()) text = it->second.get_str();
+    });
+    return text;
+}
+
+//! The read-write and forced values of the given settings, as one string.
+std::string BothLayers(const std::vector<std::string>& names)
+{
+    std::string text;
+    for (const std::string& name : names) {
+        text += name + "=" + RwValue(name) + "/" + ForcedValue(name) + " ";
+    }
+    return text;
+}
 } // namespace
 
 // A failed settings-file write must leave the read-write settings as they were,
@@ -1954,6 +1976,75 @@ BOOST_AUTO_TEST_CASE(updaterwsetting_failed_write_leaves_memory_unchanged)
     conn.disconnect();
     BOOST_REQUIRE(updateRwSettings({{probe, util::SettingsValue{}}, {absent, util::SettingsValue{}}}));
     BOOST_CHECK(getRwSetting(probe).isNull());
+}
+
+// updateRwSettingsAndForcedArgs() changes the read-write value and the forced
+// value of every key in one step: each key's forced value as its update says,
+// with one RwSettingsUpdated emission after it, in which a listener reads the
+// final state of both. A failed write restores both, the forced values included.
+BOOST_AUTO_TEST_CASE(updaterwsettingsandforcedargs_changes_both_layers_in_one_step)
+{
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    using Forced = RwSettingUpdate::Forced;
+    const std::vector<std::string> keys{"rwf_set_probe", "rwf_clear_probe", "rwf_keep_probe", "rwf_null_probe"};
+
+    const auto seed = [&] {
+        BOOST_REQUIRE(updateRwSettings({{keys[0], util::SettingsValue{"rw0"}},
+                                        {keys[1], util::SettingsValue{}},
+                                        {keys[2], util::SettingsValue{"rw2"}},
+                                        {keys[3], util::SettingsValue{}}}));
+        gArgs.ForceSetArg("-" + keys[0], "forced0");
+        gArgs.ForceSetArg("-" + keys[1], "forced1");
+        gArgs.ForceSetArg("-" + keys[2], "forced2");
+        gArgs.ForceSetArg("-" + keys[3], "forced3");
+    };
+    const std::vector<RwSettingUpdate> updates{
+        {keys[0], "new0", Forced::SET, "newforced0"},
+        {keys[1], "new1", Forced::CLEAR, {}},
+        {keys[2], "new2", Forced::KEEP, {}},
+        {keys[3], "new3", Forced::SET, {}}, // a null forced value drops it
+    };
+
+    std::vector<std::string> seen;
+    boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect([&] {
+        seen.push_back(BothLayers(keys));
+    })};
+
+    seed();
+    const std::string seeded = BothLayers(keys);
+    BOOST_CHECK_EQUAL(seeded, "rwf_set_probe=rw0/forced0 rwf_clear_probe=<null>/forced1 "
+                              "rwf_keep_probe=rw2/forced2 rwf_null_probe=<null>/forced3 ");
+
+    seen.clear();
+    BOOST_REQUIRE(updateRwSettingsAndForcedArgs(updates));
+    const std::string updated = BothLayers(keys);
+    BOOST_CHECK_EQUAL(updated, "rwf_set_probe=new0/newforced0 rwf_clear_probe=new1/<null> "
+                               "rwf_keep_probe=new2/forced2 rwf_null_probe=new3/<null> ");
+    BOOST_REQUIRE_EQUAL(seen.size(), 1u);
+    BOOST_CHECK_EQUAL(seen.back(), updated);
+
+    // A failed write restores both layers of every key, and the one emission reads that.
+    seed();
+    seen.clear();
+    {
+        SettingsWriteBlocker block;
+        BOOST_CHECK(!updateRwSettingsAndForcedArgs(updates));
+    }
+    BOOST_CHECK_EQUAL(BothLayers(keys), seeded);
+    BOOST_REQUIRE_EQUAL(seen.size(), 1u);
+    BOOST_CHECK_EQUAL(seen.back(), seeded);
+
+    conn.disconnect();
+    BOOST_REQUIRE(updateRwSettingsAndForcedArgs({{keys[0], {}, Forced::CLEAR, {}},
+                                                 {keys[1], {}, Forced::CLEAR, {}},
+                                                 {keys[2], {}, Forced::CLEAR, {}},
+                                                 {keys[3], {}, Forced::CLEAR, {}}}));
+    BOOST_CHECK_EQUAL(BothLayers(keys), "rwf_set_probe=<null>/<null> rwf_clear_probe=<null>/<null> "
+                                        "rwf_keep_probe=<null>/<null> rwf_null_probe=<null>/<null> ");
 }
 
 // A throwing settings-file write must leave the read-write settings as they

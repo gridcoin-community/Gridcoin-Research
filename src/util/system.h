@@ -432,6 +432,8 @@ bool updateRwSetting(const std::string& name, const util::SettingsValue& value, 
 //! restored, and the signal is emitted once.
 bool updateRwSettings(const std::vector<std::pair<std::string, util::SettingsValue>>& settings_in);
 
+//! Updating read-write settings together with their forced values: util/rwsettings.h.
+
 const fs::path &GetDataDir(bool fNetSpecific = true);
 
 bool CheckDataDirOption();
