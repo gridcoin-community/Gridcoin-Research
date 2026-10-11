@@ -376,8 +376,8 @@ PollReference::PollReference()
     , m_ptitle(nullptr)
     , m_timestamp(0)
     , m_duration_days(0)
+    , m_pindex(nullptr)
     , m_votes({})
-    , m_magnitude_weight_factor(Fraction())
     , m_expiration_warn_notified(false)
 {
 }
@@ -396,13 +396,12 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
             auto payload = contract.PullPayloadAs<PollPayload>();
             // The time for the poll is the time of the containing transaction.
             payload.m_poll.m_timestamp = tx.nTime;
-            m_timestamp = tx.nTime;
 
-            // This is a critical initialization, because the magnitude weight factor is only stored
-            // in memory and is not serialized.
-            payload.m_poll.m_magnitude_weight_factor = payload.m_poll.ResolveMagnitudeWeightFactor(GetStartingBlockIndexPtr());
-            m_magnitude_weight_factor = payload.m_poll.m_magnitude_weight_factor;
-            m_weight_type = payload.m_poll.m_weight_type.Value();
+            // Neither the timestamp nor the magnitude weight factor is serialized. Resolve the factor
+            // from the block AddPoll recorded, rather than looking the poll's block up again: that
+            // lookup read the chain index without cs_main, and took cs_main inside callers holding
+            // only cs_poll_registry. Nothing is written back to this reference, which callers share.
+            payload.m_poll.m_magnitude_weight_factor = GetMagnitudeWeightFactor();
 
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: reference.m_timestamp = %" PRId64 " , poll.m_timestamp = %" PRId64 " , "
                      "poll.m_magnitude_weight_factor = %s",
@@ -481,20 +480,11 @@ int64_t PollReference::Expiration() const
     return m_timestamp + (int64_t) (m_duration_days * 86400);
 }
 
-CBlockIndex* PollReference::GetStartingBlockIndexPtr() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+CBlockIndex* PollReference::GetStartingBlockIndexPtr() const
 {
-    uint256 block_hash;
-    CTransaction tx;
-
-    GetTransaction(m_txid, tx, block_hash);
-
-    auto iter = mapBlockIndex.find(block_hash);
-
-    if (iter == mapBlockIndex.end()) {
-        return nullptr;
-    }
-
-    return iter->second;
+    // The context exposes block indexes as const; the entries themselves are not,
+    // and callers walk the chain from here (as in Tally's m_start_pindex).
+    return const_cast<CBlockIndex*>(m_pindex);
 }
 
 CBlockIndex* PollReference::GetEndingBlockIndexPtr(CBlockIndex* pindex_start) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -541,7 +531,7 @@ std::optional<int> PollReference::GetEndingHeight() const EXCLUSIVE_LOCKS_REQUIR
 
 Fraction PollReference::GetMagnitudeWeightFactor() const
 {
-    return m_magnitude_weight_factor;
+    return Poll::ResolveMagnitudeWeightFactor(m_pindex, m_timestamp);
 }
 
 std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption& result,
@@ -647,6 +637,11 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
     arith_uint256 scaled_pool_magnitude = 0;
     arith_uint256 scaled_network_magnitude = 0;
 
+    // The factor the votes were weighed with: the one TryReadFromDisk put in the
+    // result's poll. Resolving it again here could pick up a protocol entry
+    // connected during the tally, and the vote percentage would mix two factors.
+    const Fraction magnitude_weight_factor = result->m_poll.m_magnitude_weight_factor;
+
     // Lambda for active_vote_weight tally.
     const auto tally_active_vote_weight = [&](
             const arith_uint256 net_weight,
@@ -656,12 +651,12 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
     {
         // Unlike the complementary calculation in EnableMagnitudeWeight for vote weights, this calculation is not
         // subject to overflow because it uses 256 bit integers. In the end it the RESULT is cast to a 64 bit integer, but
-        // by then all of the multiplication and division are done. m_magnitude_weight_factor as a fraction something that is
+        // by then all of the multiplication and division are done. magnitude_weight_factor as a fraction something that is
         // not expected to stray any farther than the interval [1/10, 1/1], where the current default value of 100 / 567 is
         // in that interval. So we should never have an overflow problem here.
         active_vote_weight_tally += net_weight + money_supply * (scaled_network_magnitude - scaled_pool_magnitude)
-                                                              * arith_uint256(m_magnitude_weight_factor.GetNumerator())
-                                                              / arith_uint256(m_magnitude_weight_factor.GetDenominator())
+                                                              * arith_uint256(magnitude_weight_factor.GetNumerator())
+                                                              / arith_uint256(magnitude_weight_factor.GetDenominator())
                                                               / scaled_network_magnitude;
 
         ++blocks;
@@ -760,7 +755,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
                      money_supply.getdouble() / (double) COIN,
                      scaled_pool_magnitude.getdouble() / 100.0,
                      scaled_network_magnitude.getdouble() / 100.0,
-                     m_magnitude_weight_factor.ToString(),
+                     magnitude_weight_factor.ToString(),
                      pindex->nHeight,
                      blocks,
                      active_vote_weight_tally.getdouble() / (double) COIN,
@@ -779,7 +774,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
                      money_supply.getdouble() / (double) COIN,
                      scaled_pool_magnitude.getdouble() / 100.0,
                      scaled_network_magnitude.getdouble() / 100.0,
-                     m_magnitude_weight_factor.ToString(),
+                     magnitude_weight_factor.ToString(),
                      pindex->nHeight,
                      blocks,
                      active_vote_weight_tally.getdouble() / (double) COIN,
@@ -977,7 +972,18 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
     CBlockIndex* pindex_poll = nullptr;
 
     if (GetTransaction(txid, tx, block_hash) && !block_hash.IsNull()) {
-        pindex_poll = mapBlockIndex[block_hash];
+        const auto iter = mapBlockIndex.find(block_hash);
+
+        if (iter != mapBlockIndex.end() && iter->second->IsInMainChain()) {
+            pindex_poll = iter->second;
+        }
+    }
+
+    // Only a poll in a main-chain block is loaded. One still in the mempool has no
+    // block, and AddPoll refuses it: registered now, it would stay pinned to no
+    // block after it confirms.
+    if (pindex_poll == nullptr) {
+        return nullptr;
     }
 
     for (const auto& contract : tx.GetContracts()) {
@@ -1161,6 +1167,23 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
 {
     const auto payload = ctx->SharePayloadAs<PollPayload>();
 
+    // Reverting a master-key REMOVE reaches Add with the REMOVE's own transaction,
+    // which registers nothing. The removed poll comes back with the startup replay.
+    if (ctx->m_action == ContractAction::REMOVE) {
+        LogPrint(BCLog::LogFlags::VOTE, "%s: not registering a poll from reverted REMOVE %s.",
+                 __func__, ctx.m_tx.GetHash().ToString());
+        return;
+    }
+
+    // A poll is registered from the block that contains it. Without one, the poll
+    // would stay pinned to no block, because the add from its block would find the
+    // txid already present below.
+    if (ctx.m_pindex == nullptr) {
+        LogPrint(BCLog::LogFlags::VOTE, "%s: poll %s has no block; not registered.",
+                 __func__, ctx.m_tx.GetHash().ToString());
+        return;
+    }
+
     // In a contract replay inserts may overlap what was already inserted. Check to see if poll already exists, and
     // if so skip this add.
     if (m_polls_by_txid.find(ctx.m_tx.GetHash()) != m_polls_by_txid.end()) {
@@ -1184,13 +1207,12 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         poll_ref.m_weight_type = payload->m_poll.m_weight_type.Value();
         poll_ref.m_timestamp = ctx.m_tx.nTime;
         poll_ref.m_duration_days = payload->m_poll.m_duration_days;
+        poll_ref.m_pindex = ctx.m_pindex;
 
         m_latest_poll = &poll_ref;
 
         auto result_pair = m_polls_by_txid.emplace(ctx.m_tx.GetHash(), &poll_ref);
         poll_ref.m_txid = result_pair.first->first;
-
-        poll_ref.m_magnitude_weight_factor = payload->m_poll.ResolveMagnitudeWeightFactor(ctx.m_pindex);
 
         poll_ref.Notify(PollReference::PollNotificationType::POLL_ADD);
 

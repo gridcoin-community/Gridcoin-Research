@@ -22,7 +22,8 @@
 using namespace GRC;
 
 namespace {
-const PollReference* TryPollByTitleOrId(const std::string& title_or_id) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
+const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     PollRegistry& registry = GetPollRegistry();
 
@@ -31,7 +32,7 @@ const PollReference* TryPollByTitleOrId(const std::string& title_or_id) EXCLUSIV
 
         // This will return a ref to the poll in the registry if found, or, try and load it and return the ref if
         // the load is successful.
-        if (const PollReference* ref = WITH_LOCK(cs_main, return registry.TryByTxidWithAddHistoricalPollAndVotes(txid))) {
+        if (const PollReference* ref = registry.TryByTxidWithAddHistoricalPollAndVotes(txid)) {
             return ref;
         }
     }
@@ -762,7 +763,14 @@ UniValue getpollresults(const UniValue& params)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wthread-safety-analysis"
 #endif
-   if (const PollReference* ref = WITH_LOCK(GRC::PollRegistry::cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
+   const PollReference* ref = nullptr;
+   {
+       // cs_main before cs_poll_registry, the order block connection takes them: a
+       // txid argument may load a historical poll, which needs cs_main.
+       LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+       ref = TryPollByTitleOrId(title_or_id);
+   }
+   if (ref) {
         return PollResultToJson(*ref);
     }
 #if defined(__clang__)
@@ -970,7 +978,14 @@ UniValue votedetails(const UniValue& params)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wthread-safety-analysis"
 #endif
-   if (const PollReference* ref = WITH_LOCK(GRC::PollRegistry::cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
+   const PollReference* ref = nullptr;
+   {
+       // cs_main before cs_poll_registry, the order block connection takes them: a
+       // txid argument may load a historical poll, which needs cs_main.
+       LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+       ref = TryPollByTitleOrId(title_or_id);
+   }
+   if (ref) {
         return VoteDetailsToJson(*ref);
     }
 #if defined(__clang__)

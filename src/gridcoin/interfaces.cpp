@@ -810,15 +810,16 @@ public:
     {
         const uint256 txid = uint256S(poll_txid);
 
-        // Look up and read the poll under both locks it needs, then copy out the
-        // poll and its txid and release before building/broadcasting the vote:
-        //   - cs_poll_registry: TryByTxid reads the registry map, and
-        //     TryReadFromDisk mutates the PollReference (m_timestamp,
-        //     m_magnitude_weight_factor).
-        //   - cs_main: TryReadFromDisk's ResolveMagnitudeWeightFactor walks the
-        //     chain index (GetStartingBlockIndexPtr).
+        // Look up and read the poll under both locks, in the order block connection
+        // takes them, then copy out the poll and its txid and release before
+        // building/broadcasting the vote:
+        //   - cs_poll_registry: TryByTxid reads the registry map, and the reference
+        //     it returns lives only as long as the registry keeps it.
+        //   - cs_main: reading the poll deserializes its contract, which reads
+        //     nBestHeight. (The RPC and tally readers make that read without it;
+        //     it is a single int, and this caller already held cs_main.)
         // SendVoteContract takes cs_main + cs_wallet itself, so the build/broadcast
-        // must run OUTSIDE these locks (and cs_main is no longer held across it).
+        // must run OUTSIDE these locks.
         GRC::PollOption poll;
         uint256 poll_reference_txid;
         {

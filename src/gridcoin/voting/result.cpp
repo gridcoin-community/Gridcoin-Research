@@ -1327,10 +1327,10 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref, const CBloc
 
         counter.CountVotes(result, vote_txids);
 
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: poll_ref.Time() = %" PRId64 " poll.GetMagnitudeWeightFactor() = %s",
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: poll_ref.Time() = %" PRId64 " poll.m_magnitude_weight_factor = %s",
                  __func__,
                  poll_ref.Time(),
-                 poll_ref.GetMagnitudeWeightFactor().ToString());
+                 result.m_poll.m_magnitude_weight_factor.ToString());
 
         if (auto active_vote_weight = poll_ref.GetActiveVoteWeight(result, pindex_tip)) {
             result.m_active_vote_weight = active_vote_weight;
