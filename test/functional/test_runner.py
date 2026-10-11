@@ -206,6 +206,9 @@ BASE_SCRIPTS = [
     'rpc_rawtransaction.py',
     'rpc_psgt.py',
     'rpc_psgtpool.py',
+    # rpc_votewithclaim.py: the regtest-only RPC that builds a vote claim from an
+    # explicit output list, for the tally's tests.
+    'rpc_votewithclaim.py',
     'rpc_htlc.py',
     'rpc_txoutproof.py',
     'rpc_blockchain.py',

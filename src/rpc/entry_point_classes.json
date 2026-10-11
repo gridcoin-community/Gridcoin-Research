@@ -1928,6 +1928,10 @@
       "class": "read_only",
       "effect": "read_only"
     },
+    "votewithclaim": {
+      "class": "elevate",
+      "effect": "keys"
+    },
     "walletcreatefundedpsgt": {
       "class": "elevate",
       "effect": "keys"

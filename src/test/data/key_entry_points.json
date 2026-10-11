@@ -54,7 +54,8 @@
     {"name": "sendscraperfilemanifest", "args": [], "reaches": "GetKey", "needs": ["scraper"], "probe": "IsScraperAuthorizedToBroadcastManifests", "note": "Refused before the authorisation is asked for. The probe asks for it as the RPC does, without the scraper thread's staking access."},
     {"name": "addpoll", "args": ["survey", "Key entry points", "7", "Question", "Yes;No", "2", "2", "https://gridcoin.us"], "reaches": "GetKey", "needs": ["in_sync"], "stops_before_key": "The wallet has no funds for the poll's balance claim; it stops before the claim is signed.", "expected_stop": -1},
     {"name": "vote", "args": ["Key entry points", "Yes"], "reaches": "GetKey", "needs": ["in_sync"], "stops_before_key": "There is no poll to vote in; it stops at the poll lookup.", "expected_stop": -1},
-    {"name": "votebyid", "args": ["$hash", "0"], "reaches": "GetKey", "needs": ["in_sync"], "stops_before_key": "There is no poll to vote in; it stops at the poll lookup.", "expected_stop": -1}
+    {"name": "votebyid", "args": ["$hash", "0"], "reaches": "GetKey", "needs": ["in_sync"], "stops_before_key": "There is no poll to vote in; it stops at the poll lookup.", "expected_stop": -1},
+    {"name": "votewithclaim", "args": ["$hash", "[0]", "[]"], "reaches": "GetKey", "stops_before_key": "Regtest only. There is no poll to vote in; it stops at the poll lookup.", "expected_stop": -1}
   ],
   "rpc_pool_draw": [
     {"name": "getnewaddress", "args": [], "reaches": "AddKeyPubKey", "needs": ["empty_pool"]},

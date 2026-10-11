@@ -393,6 +393,61 @@ public:
     }
 
     //!
+    //! \brief Generate a balance claim from an explicit list of the wallet's
+    //! outputs.
+    //!
+    //! \throws VotingError If an output is not the wallet's, has no P2PK/P2PKH
+    //! destination, pays an address the wallet holds no key for, or its address
+    //! claim cannot be built: such an output is refused, never dropped.
+    //!
+    void BuildClaimFromOutpoints(BalanceClaim& claim, const std::vector<COutPoint>& outpoints) const
+    {
+        LOCK(m_wallet.cs_wallet);
+
+        std::map<CKeyID, AddressOutputs> by_address;
+
+        for (const auto& outpoint : outpoints) {
+            const auto iter = m_wallet.mapWallet.find(outpoint.hash);
+
+            if (iter == m_wallet.mapWallet.end() || outpoint.n >= iter->second.vout.size()) {
+                throw VotingError(strprintf("%s is not a wallet output.", outpoint.ToString()));
+            }
+
+            const CTxOut& output = iter->second.vout[outpoint.n];
+            CTxDestination dest;
+
+            if (!ExtractDestination(output.scriptPubKey, dest) || !std::get_if<CKeyID>(&dest)) {
+                throw VotingError(strprintf("%s has no single address.", outpoint.ToString()));
+            }
+
+            const CKeyID key_id = *std::get_if<CKeyID>(&dest);
+
+            if (!m_wallet.HaveKey(key_id)) {
+                throw VotingError(strprintf("%s: the wallet holds no key for its address.", outpoint.ToString()));
+            }
+
+            AddressOutputs& address = by_address.emplace(key_id, key_id).first->second;
+            address.m_outpoints.push_back(outpoint);
+            address.m_amounts.push_back(output.nValue);
+            address.m_total_amount += output.nValue;
+        }
+
+        const AddressClaimBuilder builder(m_wallet);
+
+        for (auto& address_pair : by_address) {
+            auto claim_option = builder.TryBuildClaim(std::move(address_pair.second));
+
+            if (!claim_option) {
+                throw VotingError("Could not build an address claim for an output. See debug.log.");
+            }
+
+            claim.m_address_claims.emplace_back(std::move(*claim_option));
+        }
+
+        std::sort(claim.m_address_claims.begin(), claim.m_address_claims.end());
+    }
+
+    //!
     //! \brief Sign each of the address claims with their respective private
     //! keys.
     //!
@@ -923,6 +978,17 @@ public:
         if (poll.IncludesMagnitudeWeight()) {
             m_magnitude_builder.BuildClaim(claim.m_magnitude_claim);
         }
+    }
+
+    //!
+    //! \brief Generate a voting weight claim from an explicit output list.
+    //!
+    //! \param vote      Vote contract to generate the claim for.
+    //! \param outpoints Outputs the balance claim lists.
+    //!
+    void BuildClaimFromOutpoints(Vote& vote, const std::vector<COutPoint>& outpoints) const
+    {
+        m_balance_builder.BuildClaimFromOutpoints(vote.m_claim.m_balance_claim, outpoints);
     }
 
     //!
@@ -1551,8 +1617,24 @@ VoteBuilder& VoteBuilder::operator=(VoteBuilder&& builder)
 {
     m_poll = builder.m_poll;
     m_vote = std::move(builder.m_vote);
+    m_claim_outpoints = std::move(builder.m_claim_outpoints);
+    m_fee_outpoint = std::move(builder.m_fee_outpoint);
 
     return *this;
+}
+
+VoteBuilder VoteBuilder::SetClaimOutpoints(std::vector<COutPoint> outpoints)
+{
+    m_claim_outpoints = std::move(outpoints);
+
+    return std::move(*this);
+}
+
+VoteBuilder VoteBuilder::SetFeeOutpoint(const COutPoint& outpoint)
+{
+    m_fee_outpoint = outpoint;
+
+    return std::move(*this);
 }
 
 VoteBuilder VoteBuilder::ForPoll(const Poll& poll, const uint256 poll_txid)
@@ -1666,7 +1748,11 @@ CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
     CWalletTx tx;
 
     const VoteClaimBuilder claim_builder(*pwallet, Researcher::Get());
-    claim_builder.BuildClaim(*m_vote, *m_poll);
+    if (m_claim_outpoints) {
+        claim_builder.BuildClaimFromOutpoints(*m_vote, *m_claim_outpoints);
+    } else {
+        claim_builder.BuildClaim(*m_vote, *m_poll);
+    }
 
     {
         CMutableTransaction mtx(tx);
@@ -1675,7 +1761,7 @@ CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
         static_cast<CTransaction&>(tx) = CTransaction(std::move(mtx));
     }
 
-    SelectFinalInputs<Vote>(*pwallet, tx);
+    SelectFinalInputs<Vote>(*pwallet, tx, m_fee_outpoint);
     Vote& vote = tx.vContracts.back().SharePayload().As<Vote>();
 
     if (!claim_builder.SignClaim(vote, tx)) {

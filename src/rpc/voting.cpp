@@ -966,6 +966,111 @@ UniValue votebyid(const UniValue& params)
     return SubmitVote(*poll, std::move(builder));
 }
 
+static const RPCHelpMan votewithclaim_help{
+    "votewithclaim",
+    "Regtest only. Cast a vote whose balance claim lists exactly the given outputs, for\n"
+    "testing the tally. It builds a balance claim only, with no magnitude claim, even on a\n"
+    "poll weighted by magnitude.",
+    {
+        {"poll_id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "ID (transaction hash) of the poll to vote for."},
+        {"choice_ids", RPCArg::Type::ARR, RPCArg::Optional::NO, "Numeric IDs of the choices to vote for (0 to 255).",
+            {
+                {"choice_id", RPCArg::Type::NUM, RPCArg::Optional::OMITTED, ""},
+            }},
+        {"outpoints", RPCArg::Type::ARR, RPCArg::Optional::NO, "Wallet outputs to claim.",
+            {
+                {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id"},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number"},
+                    }},
+            }},
+        {"fee_outpoint", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "\"<txid>:<vout>\" to pay the fee from."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Vote submission detail; see source (SubmitVote)."}}},
+    RPCExamples{
+        HelpExampleCli("votewithclaim", "\"<poll_txid>\" \"[0]\" \"[{\\\"txid\\\":\\\"<txid>\\\",\\\"vout\\\":0}]\"")},
+};
+const RPCHelpMan& votewithclaim_helpman() { return votewithclaim_help; }
+
+UniValue votewithclaim(const UniValue& params)
+{
+    if (!Params().IsMockableChain()) {
+        throw JSONRPCError(RPC_METHOD_NOT_FOUND, "votewithclaim is available on regtest only");
+    }
+
+    EnsureWalletIsUnlocked();
+
+    const uint256 poll_id = uint256S(params[0].get_str());
+    PollOption poll;
+
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+
+        if (const PollReference* ref = GetPollRegistry().TryByTxid(poll_id)) {
+            poll = ref->TryReadFromDisk();
+        } else {
+            throw JSONRPCError(RPC_MISC_ERROR, "No poll exists for that ID");
+        }
+    }
+
+    if (!poll) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk");
+    }
+
+    std::vector<COutPoint> outpoints;
+
+    for (const UniValue& entry : params[2].get_array().getValues()) {
+        const uint256 txid = ParseHashO(entry, "txid");
+        const int vout = find_value(entry.get_obj(), "vout").get_int();
+
+        if (vout < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "vout must be non-negative");
+        }
+
+        outpoints.emplace_back(txid, vout);
+    }
+
+    std::optional<COutPoint> fee_outpoint;
+
+    if (params.size() > 3 && !params[3].isNull()) {
+        const std::string& fee = params[3].get_str();
+        const auto colon = fee.find(':');
+        uint32_t vout = 0;
+
+        if (colon == std::string::npos || !ParseUInt32(fee.substr(colon + 1), &vout)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "fee_outpoint must be \"<txid>:<vout>\"");
+        }
+
+        fee_outpoint = COutPoint(ParseHashV(UniValue(fee.substr(0, colon)), "fee_outpoint txid"), vout);
+    }
+
+    try {
+        VoteBuilder builder = VoteBuilder::ForPoll(*poll, poll_id);
+
+        for (const UniValue& choice : params[1].get_array().getValues()) {
+            const int choice_id = choice.get_int();
+
+            if (choice_id < 0 || choice_id > std::numeric_limits<uint8_t>::max()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("choice id %d is out of range", choice_id));
+            }
+
+            builder = builder.AddResponse(static_cast<uint8_t>(choice_id));
+        }
+
+        builder = builder.SetClaimOutpoints(std::move(outpoints));
+
+        if (fee_outpoint) {
+            builder = builder.SetFeeOutpoint(*fee_outpoint);
+        }
+
+        return SubmitVote(*poll, std::move(builder));
+    } catch (const VotingError& e) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, e.what());
+    }
+}
+
 static const RPCHelpMan votedetails_help{
     "votedetails",
     "Display the vote details for the specified poll.\n"

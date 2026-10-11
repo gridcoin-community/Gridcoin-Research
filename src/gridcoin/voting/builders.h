@@ -360,6 +360,17 @@ public:
     //!
     VoteBuilder AddResponse(const std::string& label);
 
+    //! \brief List exactly these outputs in the vote's balance claim instead of
+    //! choosing the wallet's coins. For the regtest-only votewithclaim RPC.
+    //! Builds a balance claim only: no magnitude claim, even on a magnitude-weighted poll.
+    //! \throws VotingError (from BuildContractTx) if an output is not the wallet's,
+    //! has no P2PK/P2PKH destination, pays an address the wallet holds no key for,
+    //! or its address claim cannot be built.
+    VoteBuilder SetClaimOutpoints(std::vector<COutPoint> outpoints);
+
+    //! \brief Pay the vote's fee from exactly this output.
+    VoteBuilder SetFeeOutpoint(const COutPoint& outpoint);
+
     //!
     //! \brief Generate a vote contract transaction with the constructed vote.
     //!
@@ -375,6 +386,8 @@ public:
 private:
     const Poll* m_poll;           //!< The poll to create a vote contract for.
     std::unique_ptr<Vote> m_vote; //!< The vote under construction.
+    std::optional<std::vector<COutPoint>> m_claim_outpoints; //!< Explicit claim outputs (regtest RPC only).
+    std::optional<COutPoint> m_fee_outpoint;                 //!< Explicit fee input, if set.
 
     //!
     //! \brief Initialize a vote builder for the specified poll.
