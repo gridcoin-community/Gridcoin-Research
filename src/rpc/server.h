@@ -368,6 +368,7 @@ extern UniValue getconnectioncount(const UniValue& params);
 extern UniValue getdifficulty(const UniValue& params);
 extern UniValue getinfo(const UniValue& params); // To Be Deprecated --> getblockchaininfo getnetworkinfo getwalletinfo
 extern UniValue getnettotals(const UniValue& params);
+extern UniValue getclockstats(const UniValue& params);
 extern UniValue getnetworkinfo(const UniValue& params);
 extern UniValue getpeerinfo(const UniValue& params);
 extern UniValue getrawmempool(const UniValue& params);
@@ -497,6 +498,7 @@ extern const RPCHelpMan& getlaststake_helpman();
 extern const RPCHelpMan& getmpart_helpman();
 extern const RPCHelpMan& getmrcinfo_helpman();
 extern const RPCHelpMan& getnettotals_helpman();
+extern const RPCHelpMan& getclockstats_helpman();
 extern const RPCHelpMan& getnetworkinfo_helpman();
 extern const RPCHelpMan& getnewaddress_helpman();
 extern const RPCHelpMan& getnewpubkey_helpman();

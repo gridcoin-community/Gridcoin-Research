@@ -304,6 +304,11 @@ string GetWarnings(string strFor)
         nPriority = 1000;
         strStatusBar = strMiscWarning;
     }
+    else if (const std::string clock_warning = GetCurrentClockWarning(); !clock_warning.empty())
+    {
+        nPriority = 1000;
+        strStatusBar = clock_warning;
+    }
 
     // Alerts
     {

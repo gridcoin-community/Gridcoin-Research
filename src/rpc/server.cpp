@@ -629,6 +629,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getblockhash",            &getblockhash,            cat_network, &getblockhash_helpman, heritage_pure_upstream, "bd157738fbdb" },
     { "getburnreport",           &getburnreport,           cat_network, &getburnreport_helpman, heritage_pure_gridcoin, "" },
     { "getcheckpoint",           &getcheckpoint,           cat_network, &getcheckpoint_helpman, heritage_pure_gridcoin, "" },
+    { "getclockstats",           &getclockstats,           cat_network, &getclockstats_helpman, heritage_pure_gridcoin, "" },
     { "getconnectioncount",      &getconnectioncount,      cat_network, &getconnectioncount_helpman, heritage_pure_upstream, "e169db2f48c0" },
     { "getdifficulty",           &getdifficulty,           cat_network, &getdifficulty_helpman, heritage_mixed, "400047400aac" },
     { "getinfo",                 &getinfo,                 cat_network, &getinfo_helpman, heritage_removed_upstream, "1e5e3bf87281" },

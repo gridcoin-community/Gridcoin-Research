@@ -35,7 +35,8 @@ information from StakeMiner.
   their raw total. It covers the UTXOs the last search evaluated, and a search
   stops at the first kernel found.
 * `stakeweight.legacy`; GRC real;
-  Total raw value of the UTXOs that can stake now.
+  The value of the UTXOs that can stake now, counting each in whole stake
+  weight units of 0.0125 GRC.
 * `staking`; bool; Indication that the stake miner is doing it's job.
 * `mining-error`; test; Reason why stake miner is not doing it's job.
 * `mining-message`; text;

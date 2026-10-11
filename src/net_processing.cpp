@@ -1322,6 +1322,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
             pfrom->nTrust++;
         }
+        else if (state.GetRejectReason() == REJECT_TIME_TOO_NEW && pfrom->mapAskFor.size() <= 50000)
+        {
+            // From v15 a block 48-128 s ahead of this node's clock is rejected without penalty. Nothing else would
+            // ask for it again until a child block arrives, so ask the sender once this node's clock is within the
+            // future bound of the block's time. mapAskFor is keyed by the earliest send time in microseconds.
+            pfrom->mapAskFor.insert(std::make_pair((block.GetBlockTime() - GRC::V15_FUTURE_TIME_BOUND) * 1000000, inv));
+        }
         int nDoS = 0;
         if (state.IsInvalid(nDoS) && nDoS > 0)
         {

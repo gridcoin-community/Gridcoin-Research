@@ -226,6 +226,9 @@ BASE_SCRIPTS = [
     # can collide, reconnect, and assert the shorter node reorganizes. It was
     # in EXTENDED_SCRIPTS while it raced two stakers on the shared premine.
     'feature_reorg.py',
+    # feature_v15_spacing.py: crosses v15 on regtest and checks both retarget rules, kernel easing,
+    # the miner's stamp guard and the penalty-free future band.
+    'feature_v15_spacing.py',
     # feature_reorg_conflicted.py: a wallet transaction conflicted by a block
     # stops being conflicted when that block is disconnected, provided whatever
     # took its outpoint went with the block; also the refused, descendant and

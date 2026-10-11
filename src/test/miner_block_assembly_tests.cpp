@@ -2388,7 +2388,7 @@ BOOST_AUTO_TEST_CASE(stake_candidates_carry_their_confirming_block_time)
     BOOST_CHECK_GE(block_times.size(), 2U);
 }
 
-BOOST_AUTO_TEST_CASE(stake_weight_is_the_value_of_the_stake_candidates)
+BOOST_AUTO_TEST_CASE(stake_weight_is_the_staking_value_of_the_stake_candidates)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -2401,14 +2401,39 @@ BOOST_AUTO_TEST_CASE(stake_weight_is_the_value_of_the_stake_candidates)
     // Every candidate is a confirmed main-chain output, so its transaction is indexed. GetStakeWeight relies on this
     // instead of reading the index for each candidate.
     CTxDB txdb("r");
-    uint64_t value = 0;
+    uint64_t staking_value = 0;
+    size_t with_remainder = 0;
     for (const StakeCandidate& candidate : candidates) {
         CTxIndex txindex;
         BOOST_CHECK(txdb.ReadTxIndex(candidate.tx->GetHash(), txindex));
-        value += candidate.tx->vout[candidate.n].nValue;
+
+        // A coin stakes with whole weight units only.
+        const CAmount value = candidate.tx->vout[candidate.n].nValue;
+        const CAmount staking = GRC::CalculateStakeValueV8(GRC::CalculateStakeWeightV8(value));
+        staking_value += staking;
+        if (staking != value) ++with_remainder;
+    }
+    BOOST_TEST_MESSAGE(with_remainder << " of " << candidates.size() << " candidates have a sub-unit remainder");
+
+    BOOST_CHECK_EQUAL(GRC::GetStakeWeight(*pwalletMain), staking_value);
+}
+
+BOOST_AUTO_TEST_CASE(staking_value_counts_whole_weight_units_only)
+{
+    // Values with remainders below a weight unit (1250000 Halfords), which do not stake.
+    CMutableTransaction mtx;
+    for (const CAmount value : {CAmount{123456789}, CAmount{1249999}, CAmount{2500000}, 10 * COIN + 1}) {
+        mtx.vout.emplace_back(value, grc_test::PremineScript());
+    }
+    const CWalletTx wtx(pwalletMain, CTransaction(mtx));
+
+    std::vector<StakeCandidate> candidates;
+    for (unsigned int n = 0; n < wtx.vout.size(); ++n) {
+        candidates.push_back({&wtx, n, 0});
     }
 
-    BOOST_CHECK_EQUAL(GRC::GetStakeWeight(*pwalletMain), value);
+    // 98 + 0 + 2 + 800 whole units.
+    BOOST_CHECK_EQUAL(GRC::GetStakingValue(candidates), (98 + 0 + 2 + 800) * GRC::STAKE_WEIGHT_UNIT_V8);
 }
 
 namespace {

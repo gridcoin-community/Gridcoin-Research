@@ -7,6 +7,7 @@
 #define GRIDCOIN_STAKING_KERNEL_H
 
 #include "amount.h"
+#include "arith_uint256.h"
 #include "chain.h"  // cs_main (required for clang's EXCLUSIVE_LOCKS_REQUIRED analyzer), CBlock, CBlockHeader, uint256
 
 class CTransaction;
@@ -114,6 +115,14 @@ bool CheckProofOfStakeV8(
 
 bool FindStakeModifierRev(uint64_t& StakeModifier, CBlockIndex* pindexPrev, int &nHeight) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+//! The base kernel target, before the UTXO weight, for a block stamped \p block_time on \p pindexPrev. From v15 the
+//! nBits target is eased by the block's elapsed time since its parent; nBits itself is never eased.
+arith_uint256 GetKernelTarget(unsigned int nBits, int64_t block_time, const CBlockIndex* pindexPrev);
+
+//! The stamp a staker uses for a block on \p pindexPrev at adjusted time \p adjusted_now. From v15 it is
+//! max(parent - 48, MaskStakeTime(adjusted_now)); below v15 it is adjusted_now (unchanged).
+int64_t GetStakeTime(const CBlockIndex* pindexPrev, int64_t adjusted_now);
+
 // Kernel for V8
 uint256 CalculateStakeHashV8(
     const CBlockHeader& CoinBlock,
@@ -134,6 +143,10 @@ uint256 CalculateStakeHashV8(
 
 //! Halfords per unit of V8 stake weight. A UTXO's weight is its value in whole units.
 constexpr CAmount STAKE_WEIGHT_UNIT_V8 = 1250000;
+
+//! V8 stake weight units per GRC.
+constexpr int64_t STAKE_WEIGHT_UNITS_PER_COIN = COIN / STAKE_WEIGHT_UNIT_V8;
+static_assert(COIN % STAKE_WEIGHT_UNIT_V8 == 0, "a GRC must be a whole number of stake weight units");
 
 int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN);
 int64_t CalculateStakeWeightV8(const CAmount& nValueIn);
