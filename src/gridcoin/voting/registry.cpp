@@ -1272,23 +1272,36 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
 
     int64_t poll_time = payload->m_poll.m_timestamp;
 
-    PollReference* poll_ref = TryBy(ToLower(payload->m_poll.m_title));
+    PollReference* poll_ref = nullptr;
+
+    if (ctx->m_action == ContractAction::REMOVE) {
+        // A master-key REMOVE names the poll by title.
+        poll_ref = TryBy(ToLower(payload->m_poll.m_title));
+    } else {
+        // The poll's own ADD, reverted: a revert removes only the poll its own
+        // contract added, which it finds by its transaction.
+        const auto iter = m_polls_by_txid.find(ctx.m_tx.GetHash());
+
+        if (iter != m_polls_by_txid.end()) {
+            poll_ref = iter->second;
+        }
+    }
 
     if (!poll_ref) {
-        LogPrint(BCLog::LogFlags::VOTE, "%s: poll \"%s\" not found in registry.",
-                 __func__, payload->m_poll.m_title);
+        LogPrint(BCLog::LogFlags::VOTE, "%s: poll \"%s\" (%s) not found in registry.",
+                 __func__, payload->m_poll.m_title, ctx.m_tx.GetHash().ToString());
         return;
     }
 
-    if (poll_ref) {
-        // Note this reference will effectively disappear once this function exits, but this is ok, because there will
-        // be no need to further reference it after this point for purposes of notification.
-        poll_ref->Notify(PollReference::PollNotificationType::POLL_DELETE);
-    }
+    // Note this reference will effectively disappear once this function exits, but this is ok, because there will
+    // be no need to further reference it after this point for purposes of notification.
+    poll_ref->Notify(PollReference::PollNotificationType::POLL_DELETE);
 
-    m_polls.erase(ToLower(payload->m_poll.m_title));
+    // Erase both of the poll's entries.
+    const std::string title_key = *poll_ref->m_ptitle;
 
-    m_polls_by_txid.erase(ctx.m_tx.GetHash());
+    m_polls_by_txid.erase(poll_ref->Txid());
+    m_polls.erase(title_key);
     m_latest_poll = nullptr;
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Deleted poll %s to the registry, m_polls.size() = %u.",
