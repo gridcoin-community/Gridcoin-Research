@@ -112,6 +112,9 @@
        </item>
        <item>
         <widget class="QCheckBox" name="returnChangeToInputAddressForContracts">
+         <property name="toolTip">
+          <string>Votes always return their change to an input address, whatever this setting says.</string>
+         </property>
          <property name="text">
           <string>Return change to an input address for contract transactions</string>
          </property>

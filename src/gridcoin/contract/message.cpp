@@ -151,7 +151,8 @@ bool SelectMasterInputOutput(CCoinControl& coin_control) EXCLUSIVE_LOCKS_REQUIRE
 //! \return \c true if coin selection succeeded.
 //!
 bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn_fee,
-                      const StakingKeyAccess* renewal_access) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+                      const StakingKeyAccess* renewal_access)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
 {
     CCoinControl coin_control_out;
     CAmount applied_fee_out = 0; // Unused, but the builder can return before seeding it
@@ -200,17 +201,42 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
     CScript scriptPubKey;
     scriptPubKey << OP_RETURN;
 
-    // A vote returns its change to the address of the coin that pays its burn fee,
-    // whatever the setting. That coin is in the vote's own balance claim, and from
-    // v15 the tally follows a claimed coin through a vote transaction into its
-    // outputs at the same address, as it follows a coin into its coinstake (see
-    // VoteResolver::ResolveAmount).
+    // A vote returns its change to the address of its largest input: the coin that
+    // pays its burn fee, usually one in the vote's own balance claim. From v15 the tally follows a claimed coin through a vote
+    // transaction into its outputs at the same address (VoteResolver::ResolveAmount).
+    // Only an input with a single-key destination (P2PK or P2PKH) is considered;
+    // multisig and P2SH inputs are skipped. If no input has one, the change goes to
+    // a new key, whatever -contractchangetoinputaddress says.
+    if (vote) {
+        // SendContractTx, the only caller, holds this.
+        AssertLockHeld(pwalletMain->cs_wallet);
+
+        CAmount largest = -1;
+
+        for (const auto& txin : wtx_out.vin) {
+            const auto iter = pwalletMain->mapWallet.find(txin.prevout.hash);
+
+            if (iter == pwalletMain->mapWallet.end() || txin.prevout.n >= iter->second.vout.size()) {
+                continue;
+            }
+
+            const CTxOut& prev = iter->second.vout[txin.prevout.n];
+            CTxDestination dest;
+
+            if (prev.nValue > largest && ExtractDestination(prev.scriptPubKey, dest)
+                && std::get_if<CKeyID>(&dest)) {
+                coin_control_out.destChange = dest;
+                largest = prev.nValue;
+            }
+        }
+    }
+
     return pwalletMain->CreateTransaction(
         { std::make_pair(std::move(scriptPubKey), burn_fee) },
         wtx_out,
         reserve_key,
         applied_fee_out,
-        &coin_control_out, contract_change_to_input_address || vote,
+        &coin_control_out, contract_change_to_input_address && !vote,
         renewal_access);
 }
 

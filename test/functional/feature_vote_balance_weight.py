@@ -5,8 +5,9 @@
 """Balance weight of a vote whose own transaction spends a claimed coin.
 
 A vote transaction pays its burn fee from the voter's largest coin, which is also
-in the vote's balance claim. Every vote returns its change to an input address
-(not gated). From v15, for polls that start at or after the v15 height:
+in the vote's balance claim. Every vote returns its change to the address of its
+largest single-key input (not gated). From v15, for polls that start at or after
+the v15 height:
 
   - the tally follows the claimed coin into that return output, as it already
     follows a coin into its coinstake;
@@ -16,11 +17,16 @@ in the vote's balance claim. Every vote returns its change to an input address
 
 node0 holds the regtest premine and creates the polls; node2 stakes the blocks
 that confirm everyone's transactions, so node0's coins stay put long enough to
-back a poll claim. node1 starts with exactly one coin. Weights are
-compared against node1's unspent outputs, which after each confirmed vote are
-exactly the coins its latest vote holds. The wallet claims only coins with at least
-CLAIM_DEPTH confirmations (CWalletTx::IsConfirmed), so every coin is buried that
-deep before a vote claims it.
+back a poll claim. node3 votes with two coins of different values on a poll
+of its own. node4 runs with -contractchangetoinputaddress=1 and votes on a
+poll of its own: its vote still returns change to its largest single-key
+input's address, a vote whose only input is a multisig (P2SH) output sends
+change to a new key, and a poll it creates, a contract other than a vote,
+returns change to an input address. node1 starts with exactly one coin.
+Weights are compared against node1's unspent outputs, which after each
+confirmed vote are exactly the coins its latest vote holds. The wallet claims
+only coins with at least CLAIM_DEPTH confirmations (CWalletTx::IsConfirmed), so
+every coin is buried that deep before a vote claims it.
 """
 
 from decimal import Decimal
@@ -36,6 +42,9 @@ SPACING = 96
 V15_HEIGHT = 30
 POLL_DAYS = 7
 CLAIM_DEPTH = 10
+# A poll's claim needs 100000 GRC at one address (POLL_REQUIRED_BALANCE); the
+# rest pays the poll's burn fee.
+POLL_FUNDING = Decimal("100100")
 # node1's single coin, which node1 also stakes. Regtest stays at the minimum
 # difficulty, where a coin's chance of finding a kernel on a slot grows with its
 # weight (80 per GRC); 5000 GRC finds one on only about two slots in five and the
@@ -52,11 +61,12 @@ RESPONSE_SINGLE_CHOICE = 2
 
 class VoteBalanceWeightTest(GridcoinTestFramework):
     def set_test_params(self):
-        self.num_nodes = 3
+        self.num_nodes = 5
         self.chain = "regtest"
         self.setup_clean_chain = True
         common = ["-staking=0", f"-blockv15height={V15_HEIGHT}", "-debug=vote"]
-        self.extra_args = [common[:], common[:], common[:]]
+        self.extra_args = [common[:] for _ in range(self.num_nodes)]
+        self.extra_args[4].append("-contractchangetoinputaddress=1")
 
     def setup_network(self):
         self.add_nodes(self.num_nodes, self.extra_args)
@@ -66,6 +76,8 @@ class VoteBalanceWeightTest(GridcoinTestFramework):
     def connect_all(self):
         self.connect_nodes(0, 1)
         self.connect_nodes(0, 2)
+        self.connect_nodes(0, 3)
+        self.connect_nodes(0, 4)
 
     def stake(self, node=None):
         """Stake one block SPACING seconds on (node2 unless told) and sync all nodes.
@@ -108,7 +120,7 @@ class VoteBalanceWeightTest(GridcoinTestFramework):
         shared key, in a block node2 stakes. The premine outputs are the ones with
         more confirmations than the chain height (see feature_reorg_conflicted.py).
         """
-        node0, node1, node2 = self.nodes
+        node0, node1, node2 = self.nodes[:3]
         premine = [u for u in node0.listunspent(0) if u["confirmations"] > node0.getblockcount()]
         assert_equal(len(premine), 10)
         spent = premine[:9]
@@ -148,8 +160,66 @@ class VoteBalanceWeightTest(GridcoinTestFramework):
     def results(self, poll_id):
         return self.nodes[1].getpollresults(poll_id)
 
+    @staticmethod
+    def address_of_input(node, txin):
+        prev = node.getrawtransaction(txin["txid"], 1)
+        return prev["vout"][txin["vout"]]["scriptPubKey"]["addresses"][0]
+
+    @staticmethod
+    def change_of(tx):
+        """The one output of a contract transaction that pays an address."""
+        change = [o for o in tx["vout"] if o["scriptPubKey"].get("addresses")]
+        assert_equal(len(change), 1)
+        return change[0]["scriptPubKey"]["addresses"][0]
+
+    def scenario_change_to_input_address_setting(self):
+        """node4 runs with -contractchangetoinputaddress=1. A vote still returns its
+        change to its largest single-key input's address; a vote whose only input
+        is a multisig (P2SH) output sends its change to a new key; and a poll,
+        which the setting does cover, returns its change to an input address."""
+        node0, voter = self.nodes[0], self.nodes[4]
+        poll = self.add_poll("poll d")
+
+        self.log.info("  a vote paying its fee from two inputs: change to the larger one's address")
+        addr_small, addr_large = voter.getnewaddress(), voter.getnewaddress()
+        node0.sendtoaddress(addr_small, Decimal("0.5"))
+        node0.sendtoaddress(addr_large, Decimal("1.01"))
+        self.confirm()
+        self.bury()
+        txid = voter.votebyid(poll, 0)["vote_txid"]
+        self.confirm()
+        tx = voter.getrawtransaction(txid, 1)
+        assert_equal(len(tx["vin"]), 2)
+        assert_equal(self.change_of(tx), addr_large)
+
+        self.log.info("  a vote whose only input is a multisig output: change to a new key")
+        keys = [voter.validateaddress(voter.getnewaddress())["pubkey"] for _ in range(2)]
+        p2sh = voter.addmultisigaddress(2, keys)
+        node0.sendtoaddress(p2sh, Decimal("5"))
+        self.confirm()
+        self.bury()
+        known = {u["address"] for u in voter.listunspent(0)} | {addr_small, addr_large}
+        txid = voter.votebyid(poll, 1)["vote_txid"]
+        self.confirm()
+        tx = voter.getrawtransaction(txid, 1)
+        assert_equal([self.address_of_input(voter, i) for i in tx["vin"]], [p2sh])
+        change = self.change_of(tx)
+        assert change not in known, change
+        info = voter.validateaddress(change)
+        assert info["ismine"] and not info["isscript"], info
+
+        self.log.info("  a poll: change to an input address")
+        node0.sendtoaddress(voter.getnewaddress(), POLL_FUNDING)
+        self.confirm()
+        self.bury()
+        poll_id = voter.addpoll("survey", "node4's poll", POLL_DAYS, "Which?", "A;B",
+                                WEIGHT_BALANCE, RESPONSE_SINGLE_CHOICE, "https://gridcoin.us")["id"]
+        self.confirm()
+        tx = voter.getrawtransaction(poll_id, 1)
+        assert self.change_of(tx) in {self.address_of_input(voter, i) for i in tx["vin"]}, tx
+
     def run_test(self):
-        node0, node1, _ = self.nodes
+        node0, node1 = self.nodes[:2]
 
         self.take_premine_off_shared_key()
         self.bury()
@@ -165,6 +235,28 @@ class VoteBalanceWeightTest(GridcoinTestFramework):
         poll_a = self.add_poll("poll a")
         poll_b = self.add_poll("poll b")
         assert V15_HEIGHT <= self.results(poll_a)["starting_block_height"]
+
+        self.log.info("a vote paying its fee from two inputs returns change to the largest input's address")
+        # Node0's newest change is still too young to fund a poll.
+        self.bury()
+        poll_c = self.add_poll("poll c")
+        voter = self.nodes[3]
+        addr_small, addr_large = voter.getnewaddress(), voter.getnewaddress()
+        # The smaller coin arrives first; the change goes to the larger coin's
+        # address.
+        node0.sendtoaddress(addr_small, Decimal("0.5"))
+        node0.sendtoaddress(addr_large, Decimal("1.01"))
+        self.confirm()
+        self.bury()
+        assert_equal(sorted(u["amount"] for u in voter.listunspent(0)), [Decimal("0.5"), Decimal("1.01")])
+        txid = voter.votebyid(poll_c, 0)["vote_txid"]
+        self.confirm()
+        tx = voter.getrawtransaction(txid, 1)
+        assert_equal(len(tx["vin"]), 2)
+        change = [o for o in tx["vout"] if o["scriptPubKey"].get("addresses")]
+        assert_equal(len(change), 1)
+        assert_equal(change[0]["scriptPubKey"]["addresses"], [addr_large])
+        self.bury()
 
         self.log.info("the vote returns its change to the address of the coin it spends")
         tx = self.vote(poll_a, 0)
@@ -207,6 +299,9 @@ class VoteBalanceWeightTest(GridcoinTestFramework):
         assert_equal(result["responses"][1]["weight"], held)
         assert_equal((result["invalid_votes"], result["superseded_votes"]), (0, 1))
         assert_equal(self.results(poll_a)["total_weight"], held)
+
+        self.log.info("with -contractchangetoinputaddress=1")
+        self.scenario_change_to_input_address_setting()
 
 
 if __name__ == "__main__":
