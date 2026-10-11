@@ -5,6 +5,7 @@
 #include "chain.h"
 #include "chainparams.h"
 #include "consensus/merkle.h"
+#include "dbwrapper.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/protocol.h"
@@ -13,6 +14,7 @@
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
 #include "index/disktxpos.h"
+#include "index/txindex.h"
 #include "node/blockstorage.h"
 #include "primitives/block.h"
 #include "primitives/transaction.h"
@@ -51,7 +53,8 @@ struct PollTx
 //! transaction's own time gives each test poll its own txid.
 PollTx MakePollTx(const std::string& title, const int64_t tx_time,
                   const GRC::ContractAction action = GRC::ContractAction::ADD,
-                  const GRC::PollWeightType weight_type = GRC::PollWeightType::BALANCE)
+                  const GRC::PollWeightType weight_type = GRC::PollWeightType::BALANCE,
+                  const uint32_t payload_version = 2)
 {
     GRC::Poll poll(
         GRC::PollType::SURVEY,
@@ -68,7 +71,7 @@ PollTx MakePollTx(const std::string& title, const int64_t tx_time,
     GRC::Contract contract = GRC::MakeContract<GRC::PollPayload>(
         uint32_t {2},
         action,
-        uint32_t {2},
+        payload_version,
         std::move(poll),
         GRC::PollEligibilityClaim());
 
@@ -438,6 +441,30 @@ GRC::Claim SuperblockClaim()
 
     return claim;
 }
+
+//! Index a transaction in the transaction index for the scope, so ReadDiskTx
+//! finds it in the block LinkTip wrote.
+class TxIndexScope
+{
+public:
+    TxIndexScope(const CTransaction& tx, const CDiskTxPos& pos) : m_tx(tx)
+    {
+        CTxDB txdb;
+        BOOST_REQUIRE(txdb.UpdateTxIndex(m_tx.GetHash(), CTxIndex(pos, m_tx.vout.size())));
+    }
+
+    ~TxIndexScope()
+    {
+        CTxDB txdb;
+        txdb.EraseTxIndex(m_tx);
+    }
+
+    TxIndexScope(const TxIndexScope&) = delete;
+    TxIndexScope& operator=(const TxIndexScope&) = delete;
+
+private:
+    const CTransaction m_tx;
+};
 } // anonymous namespace
 
 BOOST_AUTO_TEST_SUITE(poll_registry_chain_tests, *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
@@ -483,6 +510,42 @@ BOOST_AUTO_TEST_CASE(active_vote_weight_uses_the_factor_in_the_result)
     // No pool is in the superblock, so for one block the active vote weight is
     // the network weight plus the money supply times the factor.
     BOOST_CHECK_EQUAL(*with_magnitude - *without_magnitude, tip->nMoneySupply);
+}
+
+//!
+//! A v3 poll whose active vote weight is zero is recorded as not validated.
+//! MeetsMinimumVotePercentAVW fails a zero active vote weight; the tally must
+//! record that answer rather than leave the poll's validation unset.
+//!
+BOOST_AUTO_TEST_CASE(a_zero_active_vote_weight_does_not_validate_a_poll)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    const PollTx poll = MakePollTx("Title", GetAdjustedTime(), GRC::ContractAction::ADD,
+                                   GRC::PollWeightType::BALANCE, /*payload_version=*/3);
+
+    // A target this easy puts the network weight, and so the active vote
+    // weight of a poll weighed by balance alone, at zero.
+    const LinkedTip tip = LinkTip(GRC::Claim(), {poll.tx}, 0x207fffff);
+    BOOST_REQUIRE_EQUAL(tip.m_tx_positions.size(), 1U);
+    const TxIndexScope indexed(poll.tx, tip.m_tx_positions[0]);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    registry.Add({poll.contract, poll.tx, tip.m_pindex});
+
+    const GRC::PollReference* ref = registry.TryByTxid(poll.tx.GetHash());
+    BOOST_REQUIRE(ref != nullptr);
+    BOOST_REQUIRE_EQUAL(ref->GetPollPayloadVersion(), 3U);
+
+    const GRC::PollResultOption result = GRC::PollResult::BuildFor(*ref, tip.m_pindex);
+    BOOST_REQUIRE(result);
+    BOOST_REQUIRE(result->m_active_vote_weight == CAmount {0});
+
+    BOOST_CHECK(!result->m_vote_percent_avw);
+    BOOST_REQUIRE(result->m_poll_results_validated);
+    BOOST_CHECK(!*result->m_poll_results_validated);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

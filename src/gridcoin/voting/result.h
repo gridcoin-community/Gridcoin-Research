@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_VOTING_RESULT_H
 #define GRIDCOIN_VOTING_RESULT_H
 
+#include "amount.h"
 #include "wallet/ismine.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
@@ -157,10 +158,31 @@ public:
     //!
     //! \brief Add a resolved vote to the poll result.
     //!
+    //! A vote that would carry any reported weight past what a CAmount holds is
+    //! counted as invalid instead.
+    //!
     //! \param detail Vote context resolved from a vote contract.
     //!
     void TallyVote(VoteDetail detail);
 }; // PollResult
+
+//!
+//! \brief Determine whether a poll's vote weight reaches its minimum percentage
+//! of the active vote weight.
+//!
+//! Equivalent to floor(100 * total_weight / active_vote_weight) >= min_vote_percent,
+//! computed without the division in 256-bit arithmetic.
+//!
+//! \param total_weight       Total weight of the votes, in units of 1/100000000 GRC.
+//! \param active_vote_weight Active vote weight of the poll, in the same units.
+//! \param min_vote_percent   Minimum whole percentage required.
+//!
+//! \return \c false when the active vote weight is not positive.
+//!
+bool MeetsMinimumVotePercentAVW(
+    const PollResult::Weight total_weight,
+    const CAmount active_vote_weight,
+    const uint32_t min_vote_percent);
 }
 
 #endif // GRIDCOIN_VOTING_RESULT_H

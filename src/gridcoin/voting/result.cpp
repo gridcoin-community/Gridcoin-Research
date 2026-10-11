@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "arith_uint256.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/pool.h"
@@ -14,11 +15,13 @@
 #include "gridcoin/researcher.h"
 #include "logging.h"
 #include "txdb.h"
+#include "util/overflow.h"
 #include "util/reverse_iterator.h"
 #include "wallet/wallet.h"
 #include "init.h"
 #include "node/blockstorage.h"
 
+#include <limits>
 #include <optional>
 #include <queue>
 #include <unordered_set>
@@ -324,7 +327,7 @@ private:
         CAmount amount = 0;
 
         for (const auto& address_claim : claim.m_address_claims) {
-            amount += Resolve(address_claim, message);
+            amount = AddClaimedAmount(amount, Resolve(address_claim, message));
         }
 
         return amount;
@@ -352,7 +355,7 @@ private:
         CAmount amount = 0;
 
         for (const auto& txo : claim.m_outpoints) {
-            amount += Resolve(txo, address);
+            amount = AddClaimedAmount(amount, Resolve(txo, address));
         }
 
         return amount;
@@ -582,7 +585,7 @@ private:
                     continue;
                 }
 
-                amount += tx.vout[i].nValue;
+                amount = AddClaimedAmount(amount, tx.vout[i].nValue);
                 next_txos.emplace_back(i, tx.vout[i].nValue);
             }
 
@@ -612,6 +615,24 @@ private:
         }
 
         return amount;
+    }
+
+    //!
+    //! \brief Add to a claimed amount, rejecting the vote if the sum does not fit
+    //! in a CAmount.
+    //!
+    //! \throws InvalidVoteError If the sum does not fit in a CAmount.
+    //!
+    static CAmount AddClaimedAmount(const CAmount amount, const CAmount addend)
+    {
+        const std::optional<CAmount> sum = CheckedAdd(amount, addend);
+
+        if (!sum) {
+            LogPrint(LogFlags::VOTE, "%s: claimed amount overflows", __func__);
+            throw InvalidVoteError();
+        }
+
+        return *sum;
     }
 
     //!
@@ -919,6 +940,8 @@ private:
     std::vector<VoteDetail> m_votes;
     std::vector<Cpid> m_pools_voted;
     Weight m_magnitude_factor {0}; //!< Zero unless EnableMagnitudeWeight sets it.
+    Weight m_counted_weight {0};     //!< Total weight of the votes accepted so far.
+    Weight m_counted_own_amount {0}; //!< Total balance of the wallet's own votes accepted so far.
     VoteResolver m_resolver;
     LegacyVoteCounterContext m_legacy;
 
@@ -1043,6 +1066,7 @@ private:
         }
 
         CalculateWeight(detail, m_magnitude_factor);
+        AcceptIntoTotals(detail);
 
         // Record if a pool votes. Membership check is O(1) via the cached
         // m_pool_cpids_at_start set. See VoteCounter ctor for the
@@ -1088,9 +1112,51 @@ private:
         detail.m_magnitude = Magnitude::RoundFrom(vote.m_magnitude);
 
         CalculateWeight(detail, m_legacy.GetMagnitudeFactor());
+        AcceptIntoTotals(detail);
 
         m_votes.emplace_back(std::move(detail));
         m_legacy.RememberKey(vote.m_key);
+    }
+
+    //!
+    //! \brief Accept a vote's weight into the poll's running totals, or reject the
+    //! vote.
+    //!
+    //! PollResult::TallyVote refuses a vote that would carry a reported total past
+    //! what a CAmount holds. The counter applies the same check as it accepts each
+    //! vote.
+    //!
+    //! \throws InvalidVoteError If the vote would carry a total past the limit.
+    //!
+    void AcceptIntoTotals(const VoteDetail& detail)
+    {
+        constexpr Weight max_weight = std::numeric_limits<CAmount>::max();
+
+        Weight vote_weight = 0;
+
+        for (const auto& response_pair : detail.m_responses) {
+            if (response_pair.second > max_weight - vote_weight) {
+                LogPrint(LogFlags::VOTE, "%s: vote weight overflows", __func__);
+                throw InvalidVoteError();
+            }
+
+            vote_weight += response_pair.second;
+        }
+
+        const bool own = detail.m_ismine != ISMINE_NO;
+
+        if (vote_weight > max_weight - m_counted_weight
+            || (own && detail.m_amount > max_weight - m_counted_own_amount))
+        {
+            LogPrint(LogFlags::VOTE, "%s: poll total overflows", __func__);
+            throw InvalidVoteError();
+        }
+
+        m_counted_weight += vote_weight;
+
+        if (own) {
+            m_counted_own_amount += detail.m_amount;
+        }
     }
 
     //!
@@ -1119,11 +1185,24 @@ private:
                 break;
 
             case PollWeightType::BALANCE_AND_MAGNITUDE: {
-                const Weight mag_weight = magnitude_factor
-                    * detail.m_magnitude.Scaled()
-                    / Magnitude::SCALE_FACTOR;
+                // Checked: a product or sum that does not fit in a Weight makes
+                // the vote invalid.
+                const Weight scaled_magnitude = detail.m_magnitude.Scaled();
 
-                response_weight = (mag_weight + detail.m_amount) / response_count;
+                if (scaled_magnitude != 0 && magnitude_factor > std::numeric_limits<Weight>::max() / scaled_magnitude) {
+                    LogPrint(LogFlags::VOTE, "%s: magnitude weight overflows", __func__);
+                    throw InvalidVoteError();
+                }
+
+                const Weight mag_weight = magnitude_factor * scaled_magnitude / Magnitude::SCALE_FACTOR;
+                const std::optional<Weight> weight = CheckedAdd(mag_weight, detail.m_amount);
+
+                if (!weight) {
+                    LogPrint(LogFlags::VOTE, "%s: vote weight overflows", __func__);
+                    throw InvalidVoteError();
+                }
+
+                response_weight = *weight / response_count;
                 break;
             }
 
@@ -1214,6 +1293,21 @@ CAmount ResolveMoneySupplyForPoll(const Poll& poll, const CBlockIndex* pindex_ti
 // -----------------------------------------------------------------------------
 // Global Functions
 // -----------------------------------------------------------------------------
+
+bool GRC::MeetsMinimumVotePercentAVW(
+    const PollResult::Weight total_weight,
+    const CAmount active_vote_weight,
+    const uint32_t min_vote_percent)
+{
+    if (active_vote_weight <= 0) {
+        return false;
+    }
+
+    // For a whole min_vote_percent and a positive active vote weight,
+    // floor(100 * W / A) >= min  <=>  100 * W >= min * A.
+    return arith_uint256(total_weight) * 100
+        >= arith_uint256(min_vote_percent) * arith_uint256(static_cast<uint64_t>(active_vote_weight));
+}
 
 ClaimMessage GRC::PackVoteMessage(const Vote& vote, const CTransaction& tx)
 {
@@ -1335,19 +1429,22 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref, const CBloc
         if (auto active_vote_weight = poll_ref.GetActiveVoteWeight(result, pindex_tip)) {
             result.m_active_vote_weight = active_vote_weight;
 
-            result.m_vote_percent_avw = (double) result.m_total_weight / (double) *result.m_active_vote_weight * 100.0;
-
-            // For purposes of validation, integer arithmetic is used.
-            uint32_t vote_percent_avw_for_validation = (uint32_t)((int64_t) result.m_total_weight * (int64_t) 100
-                                                                  / (int64_t) *result.m_active_vote_weight);
+            // A percentage of a zero active vote weight has no meaning, so none is computed.
+            if (*result.m_active_vote_weight > 0) {
+                result.m_vote_percent_avw = (double) result.m_total_weight / (double) *result.m_active_vote_weight * 100.0;
+            }
 
             // For v1 and v2 polls, there is only one type, SURVEY, that was used on the blockchain for all polls, so this
-            // can only be done for v3+.
+            // can only be done for v3+. Validation uses integer arithmetic: see MeetsMinimumVotePercentAVW, which
+            // fails a poll whose active vote weight is zero.
             if (poll_ref.GetPollPayloadVersion() > 2) {
-                uint32_t min_vote_percent_avw_for_validation
+                const uint32_t min_vote_percent_avw_for_validation
                         = Poll::POLL_TYPE_RULES[(int) poll_ref.GetPollType()].m_min_vote_percent_AVW;
 
-                result.m_poll_results_validated = (vote_percent_avw_for_validation >= min_vote_percent_avw_for_validation);
+                result.m_poll_results_validated = MeetsMinimumVotePercentAVW(
+                    result.m_total_weight,
+                    *result.m_active_vote_weight,
+                    min_vote_percent_avw_for_validation);
             }
         }
 
@@ -1376,6 +1473,29 @@ const std::string& PollResult::WinnerLabel() const
 void PollResult::TallyVote(VoteDetail detail)
 {
     if (detail.m_responses.empty()) {
+        return;
+    }
+
+    // Every weight is reported through ValueFromAmount, so no total may exceed
+    // what a CAmount holds. A vote that would carry a total past it is counted as
+    // invalid. VoteCounter applies the same check; this one guards other callers.
+    constexpr Weight max_weight = std::numeric_limits<CAmount>::max();
+
+    Weight vote_weight = 0;
+
+    for (const auto& response_pair : detail.m_responses) {
+        if (response_pair.second > max_weight - vote_weight) {
+            ++m_invalid_votes;
+            return;
+        }
+
+        vote_weight += response_pair.second;
+    }
+
+    if (vote_weight > max_weight - m_total_weight
+        || (detail.m_ismine != ISMINE_NO && detail.m_amount > max_weight - m_self_vote_detail.m_amount))
+    {
+        ++m_invalid_votes;
         return;
     }
 
