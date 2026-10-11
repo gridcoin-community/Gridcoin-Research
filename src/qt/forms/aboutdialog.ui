@@ -172,8 +172,24 @@ This product includes software developed by the OpenSSL Project for use in the O
        </item>
        <item>
         <widget class="QPushButton" name="versionInfoButton">
+         <property name="autoDefault">
+          <bool>false</bool>
+         </property>
          <property name="text">
           <string>Version Information</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="thirdPartyLicensesButton">
+         <property name="autoDefault">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>Third-Party Licenses</string>
+         </property>
+         <property name="toolTip">
+          <string>Show the licenses of the fonts bundled with this wallet</string>
          </property>
         </widget>
        </item>

@@ -1,5 +1,6 @@
 add_executable(test_gridcoin-qt
     test_main.cpp
+    aboutdialogtests.cpp
     bitcoinunitstests.cpp
     uritests.cpp
     sidestakemodeltests.cpp
