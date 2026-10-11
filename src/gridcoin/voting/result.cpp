@@ -918,7 +918,7 @@ private:
     std::unordered_set<Cpid> m_pool_cpids_at_start; //!< Cached pool CPIDs as of m_poll_start_height.
     std::vector<VoteDetail> m_votes;
     std::vector<Cpid> m_pools_voted;
-    Weight m_magnitude_factor;
+    Weight m_magnitude_factor {0}; //!< Zero unless EnableMagnitudeWeight sets it.
     VoteResolver m_resolver;
     LegacyVoteCounterContext m_legacy;
 
