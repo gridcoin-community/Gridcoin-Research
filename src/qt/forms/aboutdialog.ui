@@ -172,6 +172,9 @@ This product includes software developed by the OpenSSL Project for use in the O
        </item>
        <item>
         <widget class="QPushButton" name="versionInfoButton">
+         <property name="autoDefault">
+          <bool>false</bool>
+         </property>
          <property name="text">
           <string>Version Information</string>
          </property>
@@ -179,6 +182,9 @@ This product includes software developed by the OpenSSL Project for use in the O
        </item>
        <item>
         <widget class="QPushButton" name="thirdPartyLicensesButton">
+         <property name="autoDefault">
+          <bool>false</bool>
+         </property>
          <property name="text">
           <string>Third-Party Licenses</string>
          </property>

@@ -40,3 +40,17 @@ void AboutDialogTests::aboutDialogOffersTheThirdPartyLicensesButton()
     QVERIFY(button);
     QVERIFY(button->isEnabled());
 }
+
+//! Enter in the About dialog presses OK. In a QDialog an auto-default push button
+//! becomes the default while it has focus, and Version Information takes the focus
+//! when the dialog opens, so with auto-default on, Enter started the version check
+//! instead of closing the dialog. Neither side button may be auto-default.
+void AboutDialogTests::enterPressesOkNotASideButton()
+{
+    AboutDialog dialog;
+    for (const char* name : {"versionInfoButton", "thirdPartyLicensesButton"}) {
+        auto* button = dialog.findChild<QPushButton*>(QString::fromLatin1(name));
+        QVERIFY2(button, name);
+        QVERIFY2(!button->autoDefault(), name);
+    }
+}

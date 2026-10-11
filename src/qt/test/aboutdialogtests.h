@@ -17,6 +17,7 @@ private slots:
 
     void thirdPartyLicensesCarryBothFontLicenses();
     void aboutDialogOffersTheThirdPartyLicensesButton();
+    void enterPressesOkNotASideButton();
 };
 
 #endif // BITCOIN_QT_TEST_ABOUTDIALOGTESTS_H
