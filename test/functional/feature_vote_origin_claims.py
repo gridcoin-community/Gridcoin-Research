@@ -19,7 +19,8 @@ The voters:
   - node1 starts with a single coin: immediate re-votes (on a poll mined in the
     block at exactly V15_HEIGHT), votes on two polls in one sitting, a vote in
     the block after its coin stakes, a plain send of its coin to its own
-    address, and finally a poll that started before v15;
+    address, votes cast before its last vote confirms, and finally a poll that
+    started before v15;
   - node3 holds 30 small coins and one large one;
   - node4 holds one large coin and a few small ones, and chains votes deeper
     than the trace limit;
@@ -28,7 +29,9 @@ The voters:
     several young outputs trace to one origin;
   - node7 holds 1.01 and 0.5 GRC at one address, so its first vote spends both;
   - node8 holds 1.012 GRC at a single-key address and 1.015 GRC at a multisig
-    address of its own keys, so its first vote spends both.
+    address of its own keys, so its first vote spends both;
+  - node9 holds only a multisig output of its own keys that it has just
+    received.
 
 node3 also votes again before a block confirms its first vote, on one poll and
 then on two: the second claim names the first vote's mature input through that
@@ -41,6 +44,7 @@ confirmed and buried.
 
 from decimal import Decimal
 
+from test_framework.authproxy import JSONRPCException
 from test_framework.test_framework import GridcoinTestFramework
 from test_framework.util import assert_equal, assert_greater_than, assert_raises_rpc_error
 
@@ -82,7 +86,7 @@ RESPONSE_SINGLE_CHOICE = 2
 
 class VoteOriginClaimsTest(GridcoinTestFramework):
     def set_test_params(self):
-        self.num_nodes = 9
+        self.num_nodes = 10
         self.chain = "regtest"
         self.setup_clean_chain = True
         common = ["-staking=0", f"-blockv15height={V15_HEIGHT}", "-debug=vote"]
@@ -99,7 +103,7 @@ class VoteOriginClaimsTest(GridcoinTestFramework):
         # every link older than two hours on its clock (CConnman inactivity check).
         for i in (1, 2, 3, 4, 5):
             self.connect_nodes(0, i)
-        for i in (6, 7, 8):
+        for i in (6, 7, 8, 9):
             self.connect_nodes(2, i)
 
     def stake(self, node=None):
@@ -415,7 +419,7 @@ class VoteOriginClaimsTest(GridcoinTestFramework):
         confirmations."""
         self.cast(voter, early_poll, 0)
         self.confirm()
-        assert_raises_rpc_error(None, "No eligible outputs greater than 1 GRC",
+        assert_raises_rpc_error(None, f"need {CLAIM_DEPTH - 1} more confirmation",
                                 voter.votebyid, early_poll, 1)
 
     def scenario_plain_send_to_self(self, voter):
@@ -427,9 +431,47 @@ class VoteOriginClaimsTest(GridcoinTestFramework):
         assert_equal(len(coin), 1)
         self.send_raw(voter, coin, {coin[0]["address"]: coin[0]["amount"] - FEE})
         self.confirm()
-        assert_raises_rpc_error(None, "No eligible outputs greater than 1 GRC",
+        assert_raises_rpc_error(None, f"need {CLAIM_DEPTH - 1} more confirmation",
                                 voter.votebyid, poll, 0)
         self.bury()
+
+    def scenario_vote_before_the_change_confirms(self, voter, legacy_poll):
+        """A single-coin wallet votes again before its last vote confirms, so its
+        only coin is that vote's unconfirmed change. On a v15 poll the change is
+        claimed by its origin at once, and both polls carry the whole coin; on a
+        poll that started before v15 the change needs CLAIM_DEPTH confirmations."""
+        poll_a, poll_b = self.add_poll("before the change confirms a"), self.add_poll("before the change confirms b")
+        coin = self.outpoints(voter.listunspent(0))
+        assert_equal(len(coin), 1)
+        self.cast(voter, poll_a, 0)
+        assert_equal(self.claimed(voter, self.cast(voter, poll_b, 0)), coin)
+        self.confirm()
+        self.bury()
+        held = sum(u["amount"] for u in voter.listunspent(0))
+        assert_equal(self.results(poll_a)["total_weight"], held)
+        assert_equal(self.results(poll_b)["total_weight"], held)
+
+        self.cast(voter, legacy_poll, 0)
+        assert_raises_rpc_error(None, f"need {CLAIM_DEPTH} more confirmation",
+                                voter.votebyid, legacy_poll, 1)
+        self.confirm()
+        self.bury()
+
+    def scenario_young_multisig_output_only(self, voter, poll):
+        """A wallet whose only coin is a multisig output of its own keys, one
+        block deep, has no single-key coin to wait for: the refusal names no
+        number of confirmations."""
+        p2sh = self.own_multisig_address(voter)
+        self.nodes[0].sendtoaddress(p2sh, MULTISIG_FUNDING)
+        self.confirm()
+        unspent = voter.listunspent(0)
+        assert_equal([(u["address"], u["confirmations"]) for u in unspent], [(p2sh, 1)])
+        try:
+            voter.votebyid(poll, 0)
+        except JSONRPCException as e:
+            assert_equal(e.error["message"], "No eligible outputs greater than 1 GRC.")
+        else:
+            raise AssertionError("a vote with no single-key coin was not refused")
 
     def scenario_trace_limit(self, voter, large):
         """Two votes per block for eight blocks chain one lineage sixteen votes deep
@@ -488,7 +530,15 @@ class VoteOriginClaimsTest(GridcoinTestFramework):
         confirmation message; the wallet claims only mature coins."""
         self.cast(voter, legacy_poll, 0)
         self.confirm()
-        assert_raises_rpc_error(None, "No eligible outputs greater than 1 GRC",
+        assert_raises_rpc_error(None, f"need {CLAIM_DEPTH - 1} more confirmation",
+                                voter.votebyid, legacy_poll, 1)
+
+        # With two young coins the wait is the deeper coin's.
+        self.nodes[0].sendtoaddress(voter.getnewaddress(), SMALL)
+        self.confirm()
+        depths = sorted(u["confirmations"] for u in voter.listunspent(0))
+        assert_equal(depths, [1, 2])
+        assert_raises_rpc_error(None, f"need {CLAIM_DEPTH - 2} more confirmation",
                                 voter.votebyid, legacy_poll, 1)
 
     def run_test(self):
@@ -548,6 +598,12 @@ class VoteOriginClaimsTest(GridcoinTestFramework):
 
         self.log.info("re-votes deeper than the trace limit (%d)", MAX_TRACE_DEPTH)
         self.scenario_trace_limit(self.nodes[4], large)
+
+        self.log.info("a vote cast before the last vote confirms")
+        self.scenario_vote_before_the_change_confirms(node1, legacy_poll)
+
+        self.log.info("a young multisig output alone gives no wait")
+        self.scenario_young_multisig_output_only(self.nodes[9], boundary_poll)
 
         self.log.info("a poll that started before v15 keeps the confirmation rule")
         self.scenario_before_v15_wallet_messages(node1, legacy_poll)

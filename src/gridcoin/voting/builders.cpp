@@ -99,6 +99,12 @@ using OutputAddresses = std::vector<AddressOutputs>;
 constexpr int MAX_TRACE_DEPTH = 16;
 
 //!
+//! \brief Confirmations an output needs before a voting claim names it. Mirrors
+//! CWalletTx::IsConfirmed (depth >= 10), which the claim filters apply.
+//!
+constexpr int CLAIM_MIN_DEPTH = 10;
+
+//!
 //! \brief Selects outputs for building voting claims.
 //!
 class CoinPicker
@@ -127,17 +133,26 @@ public:
     //! the total amount of the outputs in each address grouping.
     //!
     //! \throws VotingError If the wallet contains no unspent outputs eligible
-    //! for a claim.
+    //! for a claim. When it holds young single-key outputs of at least 1 GRC
+    //! that it can sign for and could not claim, counting its own trusted
+    //! outputs with no confirmation yet (an incoming payment from another
+    //! wallet that has not confirmed is not counted), the message says how many
+    //! more confirmations the first of them to mature needs.
     //!
-    OutputAddresses PickCoins(const bool trace_origins) const
+    OutputAddresses PickCoins(const bool trace_origins) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
+        // The outputs AvailableCoins returns point into the wallet's
+        // transactions, so the wallet stays locked while they are read.
+        LOCK(m_wallet.cs_wallet);
+
         std::vector<COutput> outputs;
         m_wallet.AvailableCoins(outputs, true, nullptr, true);
 
         // AvailableCoins skips outputs with no confirmation when it includes
-        // staked coins. A vote on a poll that starts at or after v15 also
-        // traces the wallet's own trusted ones, such as a previous vote's
-        // change, to their origins (TraceOrigins).
+        // staked coins. The wallet's own trusted ones, such as a previous vote's
+        // change, are young outputs too: a vote on a poll that starts at or
+        // after v15 traces them to their origins (TraceOrigins), and one that is
+        // not claimed counts toward the wait the refusal below reports.
         if (trace_origins) {
             const std::vector<COutput> unconfirmed = UnconfirmedOutputs();
             outputs.insert(outputs.end(), unconfirmed.begin(), unconfirmed.end());
@@ -154,7 +169,8 @@ public:
             __func__,
             outputs.size());
 
-        OutputAddressMap by_address = FilterOutputs(outputs, trace_origins);
+        int young_depth = -1;
+        OutputAddressMap by_address = FilterOutputs(outputs, trace_origins, young_depth);
 
         LogPrint(LogFlags::VOTE,
             "%s: filtered tx output set contains %" PRIszu " addresses",
@@ -162,6 +178,18 @@ public:
             by_address.size());
 
         if (by_address.empty()) {
+            // A vote on an earlier poll looks the wallet's own trusted outputs
+            // with no confirmation yet up only here, for the wait they need.
+            if (young_depth < 0 && !trace_origins && !UnconfirmedOutputs().empty()) {
+                young_depth = 0;
+            }
+
+            if (young_depth >= 0) {
+                throw VotingError(strprintf(
+                    _("No eligible outputs greater than 1 GRC yet: the wallet's coins need %d more confirmation(s)."),
+                    std::max(1, CLAIM_MIN_DEPTH - young_depth)));
+            }
+
             throw VotingError(_("No eligible outputs greater than 1 GRC."));
         }
 
@@ -240,7 +268,7 @@ private:
     //! incoming payment from another wallet is not trusted until it confirms, so
     //! it is not among them.
     //!
-    std::vector<COutput> UnconfirmedOutputs() const
+    std::vector<COutput> UnconfirmedOutputs() const EXCLUSIVE_LOCKS_REQUIRED(cs_main, m_wallet.cs_wallet)
     {
         std::vector<COutput> outputs;
         const CCoinControl spendable; // Only outputs the wallet can sign for.
@@ -267,10 +295,16 @@ private:
     //! \param outputs       The set of outputs to filter. Sorted in descending
     //! order by amount.
     //! \param trace_origins Whether to claim young outputs by their origins.
+    //! \param young_depth   Set to the greatest depth among the young single-key
+    //! outputs of at least 1 GRC that the wallet can sign for and that it skipped
+    //! (0 for one with no confirmation yet); left as it is if none.
     //!
     //! \return Filtered outputs grouped by address.
     //!
-    OutputAddressMap FilterOutputs(const std::vector<COutput>& outputs, const bool trace_origins) const
+    OutputAddressMap FilterOutputs(
+        const std::vector<COutput>& outputs,
+        const bool trace_origins,
+        int& young_depth) const EXCLUSIVE_LOCKS_REQUIRED(cs_main, m_wallet.cs_wallet)
     {
         OutputAddressMap by_address;
         PubkeyDestinationFilter pubkey_filter(m_wallet, by_address);
@@ -319,6 +353,11 @@ private:
                 }
 
                 if (origins.empty()) {
+                    // It becomes claimable when it has CLAIM_MIN_DEPTH confirmations.
+                    if (own_key) {
+                        young_depth = std::max(young_depth, txo.nDepth);
+                    }
+
                     LogPrint(LogFlags::VOTE, "  skipped unconfirmed output for %s",
                         EncodeDestination(dest));
                 } else {
@@ -370,7 +409,7 @@ private:
     std::vector<std::pair<COutPoint, CAmount>> TraceOrigins(
         const CWalletTx& wtx,
         const unsigned int n,
-        const int depth = 0) const
+        const int depth = 0) const EXCLUSIVE_LOCKS_REQUIRED(cs_main, m_wallet.cs_wallet)
     {
         std::vector<std::pair<COutPoint, CAmount>> origins;
 
@@ -387,8 +426,6 @@ private:
         if (!ExtractDestination(wtx.vout[n].scriptPubKey, dest) || !std::get_if<CKeyID>(&dest)) {
             return origins;
         }
-
-        LOCK(m_wallet.cs_wallet);
 
         for (const auto& txin : wtx.vin) {
             const auto iter = m_wallet.mapWallet.find(txin.prevout.hash);
@@ -420,20 +457,6 @@ private:
         }
 
         return origins;
-    }
-
-    //!
-    //! \brief Determine whether a transaction contains a vote contract.
-    //!
-    static bool CarriesVote(const CTransaction& tx)
-    {
-        for (const auto& contract : tx.GetContracts()) {
-            if (contract.m_type == ContractType::VOTE) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     //!
@@ -582,7 +605,7 @@ public:
     //! \param trace_origins Whether to claim the wallet's young recirculated
     //! outputs by their origins (CoinPicker::TraceOrigins).
     //!
-    void BuildClaim(BalanceClaim& claim, const bool trace_origins) const
+    void BuildClaim(BalanceClaim& claim, const bool trace_origins) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const AddressClaimBuilder builder(m_wallet);
         OutputAddresses outputs_by_address = CoinPicker(m_wallet).PickCoins(trace_origins);
