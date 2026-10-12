@@ -12,6 +12,7 @@
 #include "gridcoin/voting/fwd.h"
 #include "gridcoin/voting/poll.h"
 
+#include <optional>
 #include <vector>
 
 class CBlockIndex;
@@ -183,6 +184,19 @@ bool MeetsMinimumVotePercentAVW(
     const PollResult::Weight total_weight,
     const CAmount active_vote_weight,
     const uint32_t min_vote_percent);
+
+//!
+//! \brief Convert the balance a legacy vote states, in GRC, to an amount in
+//! units of 1/100000000 GRC.
+//!
+//! \param amount Balance parsed from a legacy vote contract.
+//!
+//! \return Nothing when converting the balance would be undefined: it is not a
+//! number, or its truncated amount is negative or too large for a
+//! PollResult::Weight. Every other balance converts exactly as before; the
+//! tally's overflow checks handle the totals.
+//!
+std::optional<PollResult::Weight> LegacyVoteAmount(const double amount);
 }
 
 #endif // GRIDCOIN_VOTING_RESULT_H

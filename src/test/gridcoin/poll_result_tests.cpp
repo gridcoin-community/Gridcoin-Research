@@ -104,4 +104,31 @@ BOOST_AUTO_TEST_CASE(minimum_vote_percent_needs_a_positive_active_vote_weight)
     BOOST_CHECK(!GRC::MeetsMinimumVotePercentAVW(100, -1, 15));
 }
 
+BOOST_AUTO_TEST_CASE(legacy_vote_amount_converts_a_balance_that_fits_a_weight)
+{
+    BOOST_CHECK(GRC::LegacyVoteAmount(0) == Weight{0});
+    BOOST_CHECK(GRC::LegacyVoteAmount(1.5) == Weight{150'000'000});
+
+    // Truncation toward zero: a negative zero, or a fraction of a unit below
+    // zero, converts to 0.
+    BOOST_CHECK(GRC::LegacyVoteAmount(-0.0) == Weight{0});
+    BOOST_CHECK(GRC::LegacyVoteAmount(-0.5 / COIN) == Weight{0});
+
+    // A large balance that still fits a weight converts unchanged.
+    BOOST_CHECK(GRC::LegacyVoteAmount(100'000'000'000.0) == Weight{100'000'000'000} * COIN);
+}
+
+BOOST_AUTO_TEST_CASE(legacy_vote_amount_refuses_a_balance_no_weight_can_hold)
+{
+    BOOST_CHECK(!GRC::LegacyVoteAmount(-1));
+    BOOST_CHECK(!GRC::LegacyVoteAmount(-1.0 / COIN));
+    BOOST_CHECK(!GRC::LegacyVoteAmount(std::numeric_limits<double>::quiet_NaN()));
+    BOOST_CHECK(!GRC::LegacyVoteAmount(std::numeric_limits<double>::infinity()));
+    BOOST_CHECK(!GRC::LegacyVoteAmount(1e20));
+
+    // A 64-bit weight holds less than 2^64 base units, about 184467440737.1 GRC.
+    BOOST_CHECK(GRC::LegacyVoteAmount(184'467'440'737.0));
+    BOOST_CHECK(!GRC::LegacyVoteAmount(184'467'440'738.0));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

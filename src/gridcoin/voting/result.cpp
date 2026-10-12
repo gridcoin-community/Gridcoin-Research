@@ -1107,7 +1107,14 @@ private:
             throw InvalidVoteError();
         }
 
-        detail.m_amount = vote.m_amount * COIN;
+        const std::optional<PollResult::Weight> amount = LegacyVoteAmount(vote.m_amount);
+
+        if (!amount) {
+            LogPrint(LogFlags::VOTE, "%s: balance out of range", __func__);
+            throw InvalidVoteError();
+        }
+
+        detail.m_amount = *amount;
         detail.m_mining_id = vote.m_mining_id;
         detail.m_magnitude = Magnitude::RoundFrom(vote.m_magnitude);
 
@@ -1307,6 +1314,23 @@ bool GRC::MeetsMinimumVotePercentAVW(
     // floor(100 * W / A) >= min  <=>  100 * W >= min * A.
     return arith_uint256(total_weight) * 100
         >= arith_uint256(min_vote_percent) * arith_uint256(static_cast<uint64_t>(active_vote_weight));
+}
+
+std::optional<GRC::PollResult::Weight> GRC::LegacyVoteAmount(const double amount)
+{
+    static_assert(std::is_same<PollResult::Weight, uint64_t>::value, "the bound below is 2^64");
+
+    const double units = amount * COIN;
+
+    // Converting a double to an integer truncates it toward zero, and is undefined
+    // when the truncated value is outside the integer type: here, at or below -1,
+    // or at or above 2^64. 2^64 is exact as a double, and the comparisons are
+    // written so that a NaN fails them.
+    if (!(units > -1.0 && units < 18446744073709551616.0)) {
+        return std::nullopt;
+    }
+
+    return static_cast<PollResult::Weight>(units);
 }
 
 ClaimMessage GRC::PackVoteMessage(const Vote& vote, const CTransaction& tx)
