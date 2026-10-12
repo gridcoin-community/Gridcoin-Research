@@ -295,6 +295,12 @@ BASE_SCRIPTS = [
     # spends a claimed coin keeps that coin's weight in the change it returns,
     # and a re-vote replaces the earlier vote and takes the coin's weight.
     'feature_vote_balance_weight.py',
+    # feature_vote_origin_claims.py: for polls that start at or after v15 the
+    # wallet claims its own recirculated change by the mature input it came
+    # from, so immediate re-votes, votes on two polls and a vote after a stake
+    # carry the coin; the trace stops at its limit, multisig outputs are never
+    # claimed, and older polls keep the confirmation rule.
+    'feature_vote_origin_claims.py',
     # feature_blockindex_verification.py: LoadBlockIndex's startup
     # verification pass over a block whose payload was corrupted without
     # disturbing its header, the one corruption class that arms its

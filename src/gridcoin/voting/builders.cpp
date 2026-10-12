@@ -15,11 +15,13 @@
 #include "gridcoin/voting/registry.h"
 #include "node/blockstorage.h"
 #include "node/ui_interface.h"
+#include "validation.h"
 #include "wallet/coincontrol.h"
 #include "wallet/wallet.h"
 #include "consensus/consensus.h"
 #include <numeric>
 #include <optional>
+#include <set>
 #include <util/string.h>
 
 using namespace GRC;
@@ -70,9 +72,31 @@ public:
 
         m_total_amount += m_amounts.back();
     }
+
+    //!
+    //! \brief Add an output to the address grouping by its outpoint.
+    //!
+    //! \param outpoint The output associated with the address.
+    //! \param amount   An amount used only to order and trim the claim's outputs
+    //! (for an origin, the value of the young output it was traced from).
+    //!
+    void Add(const COutPoint& outpoint, const CAmount amount)
+    {
+        m_outpoints.push_back(outpoint);
+        m_amounts.push_back(amount);
+
+        m_total_amount += amount;
+    }
 }; // AddressOutputs
 
 using OutputAddresses = std::vector<AddressOutputs>;
+
+//!
+//! \brief How many of the wallet's own vote or coinstake transactions, at most,
+//! CoinPicker::TraceOrigins walks back through along each path to find a
+//! claimable origin.
+//!
+constexpr int MAX_TRACE_DEPTH = 16;
 
 //!
 //! \brief Selects outputs for building voting claims.
@@ -92,16 +116,32 @@ public:
     //!
     //! \brief Get a set of outputs to build voting claims with.
     //!
+    //! \param trace_origins Whether to claim a young output that one of the
+    //! wallet's own votes or coinstakes paid back to one of its input addresses
+    //! by the input it came from (TraceOrigins). Only for polls that start at
+    //! or after the v15 height. A young output may then also be one of the
+    //! wallet's own trusted outputs with no confirmation yet; the claim never
+    //! names such an output itself, only its origins.
+    //!
     //! \return Unspent outputs grouped by address in descending order by
     //! the total amount of the outputs in each address grouping.
     //!
     //! \throws VotingError If the wallet contains no unspent outputs eligible
     //! for a claim.
     //!
-    OutputAddresses PickCoins() const
+    OutputAddresses PickCoins(const bool trace_origins) const
     {
         std::vector<COutput> outputs;
         m_wallet.AvailableCoins(outputs, true, nullptr, true);
+
+        // AvailableCoins skips outputs with no confirmation when it includes
+        // staked coins. A vote on a poll that starts at or after v15 also
+        // traces the wallet's own trusted ones, such as a previous vote's
+        // change, to their origins (TraceOrigins).
+        if (trace_origins) {
+            const std::vector<COutput> unconfirmed = UnconfirmedOutputs();
+            outputs.insert(outputs.end(), unconfirmed.begin(), unconfirmed.end());
+        }
 
         const auto descending_by_amount = [](const COutput& a, const COutput& b) {
             return a.tx->vout[a.i].nValue > b.tx->vout[b.i].nValue;
@@ -114,7 +154,7 @@ public:
             __func__,
             outputs.size());
 
-        OutputAddressMap by_address = FilterOutputs(outputs);
+        OutputAddressMap by_address = FilterOutputs(outputs, trace_origins);
 
         LogPrint(LogFlags::VOTE,
             "%s: filtered tx output set contains %" PRIszu " addresses",
@@ -135,7 +175,8 @@ private:
 
     //!
     //! \brief Adds outputs for an address only when an address represents
-    //! a pay-to-public-key or pay-to-public-key-hash destination.
+    //! a pay-to-public-key or pay-to-public-key-hash destination that the
+    //! wallet holds the key for.
     //!
     class PubkeyDestinationFilter
     {
@@ -143,16 +184,27 @@ private:
         //!
         //! \brief Initialize a filter.
         //!
+        //! \param wallet     Holds the keys that sign the address claims.
         //! \param by_address A set of outputs grouped by address to add the
         //! filtered outputs to.
         //!
-        PubkeyDestinationFilter(OutputAddressMap& by_address)
-            : m_by_address(by_address)
+        PubkeyDestinationFilter(const CWallet& wallet, OutputAddressMap& by_address)
+            : m_wallet(wallet)
+            , m_by_address(by_address)
         {
         }
 
         void operator()(const CKeyID& keyId, const COutput& output) const
         {
+            // An address claim is signed with the address's key. AvailableCoins
+            // also returns outputs the wallet holds no key for: watch-only
+            // outputs, and the outputs an immature coinstake paid to others.
+            if (!m_wallet.HaveKey(keyId)) {
+                LogPrint(LogFlags::VOTE, "  skipped output for an address without a key: %s",
+                    EncodeDestination(keyId));
+                return;
+            }
+
             LogPrint(LogFlags::VOTE, "  added output for address: %s",
                 EncodeDestination(keyId));
 
@@ -176,21 +228,57 @@ private:
         }
 
     private:
+        const CWallet& m_wallet;        //!< Holds the keys for the address claims.
         OutputAddressMap& m_by_address; //!< Outputs grouped by address.
     }; // PubkeyDestinationFilter
 
     //!
+    //! \brief Get the wallet's own unspent, trusted outputs with no confirmation
+    //! yet, of at least 1 GRC, at a single-key address it can sign for.
+    //!
+    //! AvailableCoins skips these when it includes staked coins (PickCoins). An
+    //! incoming payment from another wallet is not trusted until it confirms, so
+    //! it is not among them.
+    //!
+    std::vector<COutput> UnconfirmedOutputs() const
+    {
+        std::vector<COutput> outputs;
+        const CCoinControl spendable; // Only outputs the wallet can sign for.
+        m_wallet.AvailableCoins(outputs, true, &spendable, false);
+
+        const auto ineligible = [](const COutput& txo) {
+            const CTxOut& output = txo.tx->vout[txo.i];
+            CTxDestination dest;
+
+            return txo.nDepth != 0
+                || output.nValue < COIN
+                || !ExtractDestination(output.scriptPubKey, dest)
+                || !std::get_if<CKeyID>(&dest);
+        };
+
+        outputs.erase(std::remove_if(outputs.begin(), outputs.end(), ineligible), outputs.end());
+
+        return outputs;
+    }
+
+    //!
     //! \brief Get a set of filtered outputs spent for public key addresses.
     //!
-    //! \param outputs The set of outputs to filter. Sorted in descending order
-    //! by amount.
+    //! \param outputs       The set of outputs to filter. Sorted in descending
+    //! order by amount.
+    //! \param trace_origins Whether to claim young outputs by their origins.
     //!
     //! \return Filtered outputs grouped by address.
     //!
-    static OutputAddressMap FilterOutputs(const std::vector<COutput>& outputs)
+    OutputAddressMap FilterOutputs(const std::vector<COutput>& outputs, const bool trace_origins) const
     {
         OutputAddressMap by_address;
-        PubkeyDestinationFilter pubkey_filter(by_address);
+        PubkeyDestinationFilter pubkey_filter(m_wallet, by_address);
+
+        // Every outpoint the claim lists. Several young outputs can trace to one
+        // origin, and an origin may also be a coin the claim lists directly; the
+        // claim names each coin once.
+        std::set<COutPoint> claimed;
 
         for (const auto& txo : outputs) {
             CTxDestination dest;
@@ -213,7 +301,37 @@ private:
             }
 
             if (!txo.tx->IsTrusted() || !txo.tx->IsConfirmed()) {
-                LogPrint(LogFlags::VOTE, "  skipped unconfirmed output for %s",
+                // AvailableCoins also returns every output of an immature
+                // coinstake, including any it paid to other addresses.
+                const CKeyID* const key_id = std::get_if<CKeyID>(&dest);
+                const bool own_key = key_id && m_wallet.HaveKey(*key_id);
+                std::vector<std::pair<COutPoint, CAmount>> origins;
+
+                if (trace_origins && own_key) {
+                    origins = TraceOrigins(*txo.tx, txo.i);
+                }
+
+                // Every origin pays the young output's own address (TraceOrigins).
+                for (const auto& origin : origins) {
+                    if (claimed.insert(origin.first).second) {
+                        by_address.emplace(*key_id, *key_id).first->second.Add(origin.first, origin.second);
+                    }
+                }
+
+                if (origins.empty()) {
+                    LogPrint(LogFlags::VOTE, "  skipped unconfirmed output for %s",
+                        EncodeDestination(dest));
+                } else {
+                    LogPrint(LogFlags::VOTE, "  claimed young output for %s by %" PRIszu " origin(s)",
+                        EncodeDestination(dest),
+                        origins.size());
+                }
+
+                continue;
+            }
+
+            if (!claimed.insert(COutPoint(txo.tx->GetHash(), txo.i)).second) {
+                LogPrint(LogFlags::VOTE, "  skipped output already claimed for %s",
                     EncodeDestination(dest));
                 continue;
             }
@@ -226,6 +344,96 @@ private:
         }
 
         return by_address;
+    }
+
+    //!
+    //! \brief Find the claimable origins of a young output that one of the wallet's
+    //! own votes or coinstakes paid back to one of its input addresses.
+    //!
+    //! For polls that start at or after v15, the tally follows a claimed coin
+    //! through a coinstake and through any vote transaction to their outputs at
+    //! the same address. Such an output can therefore be claimed as the input it
+    //! came from: the claim names a coin with the usual confirmations, and the
+    //! tally walks forward from it. An input that is itself a young output of
+    //! such a transaction is traced again, through at most MAX_TRACE_DEPTH
+    //! transactions along each path.
+    //!
+    //! \param wtx   The transaction that contains the young output.
+    //! \param n     The offset of the young output in \p wtx.
+    //! \param depth How many transactions the trace has already walked through.
+    //!
+    //! \return The origins with the young output's value, or nothing if the output
+    //! did not come from such a transaction or no step reaches a claimable coin;
+    //! the output is then skipped, as it was before. Every origin has at least
+    //! 1 GRC, the usual confirmations, and the young output's single-key address.
+    //!
+    std::vector<std::pair<COutPoint, CAmount>> TraceOrigins(
+        const CWalletTx& wtx,
+        const unsigned int n,
+        const int depth = 0) const
+    {
+        std::vector<std::pair<COutPoint, CAmount>> origins;
+
+        if (depth >= MAX_TRACE_DEPTH || n >= wtx.vout.size()) {
+            return origins;
+        }
+
+        if (!wtx.IsCoinStake() && !CarriesVote(wtx)) {
+            return origins;
+        }
+
+        CTxDestination dest;
+
+        if (!ExtractDestination(wtx.vout[n].scriptPubKey, dest) || !std::get_if<CKeyID>(&dest)) {
+            return origins;
+        }
+
+        LOCK(m_wallet.cs_wallet);
+
+        for (const auto& txin : wtx.vin) {
+            const auto iter = m_wallet.mapWallet.find(txin.prevout.hash);
+
+            if (iter == m_wallet.mapWallet.end() || txin.prevout.n >= iter->second.vout.size()) {
+                continue;
+            }
+
+            const CWalletTx& prev_tx = iter->second;
+            const CTxOut& prev = prev_tx.vout[txin.prevout.n];
+            CTxDestination prev_dest;
+
+            if (!ExtractDestination(prev.scriptPubKey, prev_dest) || prev_dest != dest) {
+                continue;
+            }
+
+            if (prev_tx.IsTrusted() && prev_tx.IsConfirmed()) {
+                // The tally rejects a claimed output under 1 GRC; never name one.
+                if (prev.nValue >= COIN) {
+                    origins.emplace_back(txin.prevout, wtx.vout[n].nValue);
+                }
+
+                continue;
+            }
+
+            for (const auto& origin : TraceOrigins(prev_tx, txin.prevout.n, depth + 1)) {
+                origins.emplace_back(origin.first, wtx.vout[n].nValue);
+            }
+        }
+
+        return origins;
+    }
+
+    //!
+    //! \brief Determine whether a transaction contains a vote contract.
+    //!
+    static bool CarriesVote(const CTransaction& tx)
+    {
+        for (const auto& contract : tx.GetContracts()) {
+            if (contract.m_type == ContractType::VOTE) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     //!
@@ -370,12 +578,14 @@ public:
     //!
     //! \brief Generate a balance claim.
     //!
-    //! \param claim The object to fill with the claim.
+    //! \param claim         The object to fill with the claim.
+    //! \param trace_origins Whether to claim the wallet's young recirculated
+    //! outputs by their origins (CoinPicker::TraceOrigins).
     //!
-    void BuildClaim(BalanceClaim& claim) const
+    void BuildClaim(BalanceClaim& claim, const bool trace_origins) const
     {
         const AddressClaimBuilder builder(m_wallet);
-        OutputAddresses outputs_by_address = CoinPicker(m_wallet).PickCoins();
+        OutputAddresses outputs_by_address = CoinPicker(m_wallet).PickCoins(trace_origins);
 
         TrimSmallestOutputs(outputs_by_address);
         claim.m_address_claims.reserve(outputs_by_address.size());
@@ -966,14 +1176,16 @@ public:
     //!
     //! \brief Generate a voting weight claim.
     //!
-    //! \param vote Vote contract to generate the claim for.
-    //! \param poll Determines how to generate a magnitude claim.
+    //! \param vote          Vote contract to generate the claim for.
+    //! \param poll          Determines how to generate a magnitude claim.
+    //! \param trace_origins Whether the balance claim may name the origins of
+    //! the wallet's young recirculated outputs (CoinPicker::TraceOrigins).
     //!
-    void BuildClaim(Vote& vote, const Poll& poll) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    void BuildClaim(Vote& vote, const Poll& poll, const bool trace_origins) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         VoteWeightClaim& claim = vote.m_claim;
 
-        m_balance_builder.BuildClaim(claim.m_balance_claim);
+        m_balance_builder.BuildClaim(claim.m_balance_claim, trace_origins);
 
         if (poll.IncludesMagnitudeWeight()) {
             m_magnitude_builder.BuildClaim(claim.m_magnitude_claim);
@@ -1160,6 +1372,32 @@ void SelectFinalInputs(CWallet& wallet, CWalletTx& tx,
     CMutableTransaction mtx(tx);
     mtx.vin = CMutableTransaction(mock_tx).vin;
     static_cast<CTransaction&>(tx) = CTransaction(std::move(mtx));
+}
+
+//!
+//! \brief Whether a poll was mined at or after the v15 height.
+//!
+//! Votes on such a poll may claim the wallet's recirculated change by its
+//! origin (CoinPicker::TraceOrigins). This is the tally's decision for the
+//! poll: the height of the block that contains the poll transaction.
+//!
+//! \param poll_txid Hash of the transaction that contains the poll.
+//!
+bool PollStartsAtOrAfterV15(const uint256& poll_txid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    CTransaction tx;
+    uint256 block_hash;
+
+    if (!GetTransaction(poll_txid, tx, block_hash) || block_hash.IsNull()) {
+        return false;
+    }
+
+    const auto iter = mapBlockIndex.find(block_hash);
+
+    return iter != mapBlockIndex.end()
+        && iter->second
+        && iter->second->IsInMainChain()
+        && IsV15Enabled(iter->second->nHeight);
 }
 } // Anonymous namespace
 
@@ -1751,7 +1989,7 @@ CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
     if (m_claim_outpoints) {
         claim_builder.BuildClaimFromOutpoints(*m_vote, *m_claim_outpoints);
     } else {
-        claim_builder.BuildClaim(*m_vote, *m_poll);
+        claim_builder.BuildClaim(*m_vote, *m_poll, PollStartsAtOrAfterV15(m_vote->m_poll_txid));
     }
 
     {
