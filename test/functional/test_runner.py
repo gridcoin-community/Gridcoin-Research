@@ -301,6 +301,13 @@ BASE_SCRIPTS = [
     # carry the coin; the trace stops at its limit, multisig outputs are never
     # claimed, and older polls keep the confirmation rule.
     'feature_vote_origin_claims.py',
+    # feature_vote_tally_oracle.py: seeded random voting, spending, staking,
+    # reorgs and restarts, with every poll's result compared to an independent
+    # Python tally. About 1-2 minutes per seed at the default steps. The second
+    # seed drives more re-votes than the default one. Longer local runs:
+    # --seed=N --steps=M.
+    'feature_vote_tally_oracle.py',
+    'feature_vote_tally_oracle.py --seed=5',
     # feature_blockindex_verification.py: LoadBlockIndex's startup
     # verification pass over a block whose payload was corrupted without
     # disturbing its header, the one corruption class that arms its
