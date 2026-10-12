@@ -513,6 +513,8 @@ fi
 # ==============================================================================
 TARGET1_DAEMON="build/bin/gridcoinresearchd"
 TARGET1_GUI="build/bin/gridcoinresearch"
+TARGET1_QML="build/bin/gridcoinresearch-qml"
+TARGET1_QML_TEST="build/qmltest/test_gridcoin-qml"
 
 if [[ "$TARGET" == "all" || "$TARGET" == "native" ]] && [[ "$(uname -s)" == "Linux" ]]; then
     echo "----------------------------------------------------------------"
@@ -521,6 +523,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "native" ]] && [[ "$(uname -s)" == "Lin
 
     ARTIFACTS=("$TARGET1_DAEMON")
     if [ "$WITH_GUI" == "true" ]; then ARTIFACTS+=("$TARGET1_GUI"); fi
+    if [ "$ENABLE_QML" == "true" ]; then ARTIFACTS+=("$TARGET1_QML" "$TARGET1_QML_TEST"); fi
 
     if should_skip_build "build" "${ARTIFACTS[@]}"; then
         echo ">>> Executable(s) found and version matches. Skipping build."
@@ -771,6 +774,8 @@ fi
 # ==============================================================================
 TARGET4_DAEMON="build_macos/bin/gridcoinresearchd"
 TARGET4_GUI="build_macos/bin/gridcoinresearch.app/Contents/MacOS/gridcoinresearch"
+TARGET4_QML="build_macos/bin/gridcoinresearch-qml"
+TARGET4_QML_TEST="build_macos/qmltest/test_gridcoin-qml"
 
 if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darwin" ]]; then
     echo "----------------------------------------------------------------"
@@ -779,6 +784,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darw
 
     ARTIFACTS=("$TARGET4_DAEMON")
     if [ "$WITH_GUI" == "true" ]; then ARTIFACTS+=("$TARGET4_GUI"); fi
+    if [ "$ENABLE_QML" == "true" ]; then ARTIFACTS+=("$TARGET4_QML" "$TARGET4_QML_TEST"); fi
 
     if should_skip_build "build_macos" "${ARTIFACTS[@]}"; then
         echo ">>> Executable(s) found and version matches. Skipping build."
