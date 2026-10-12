@@ -15,6 +15,7 @@ class QmlCarriedQmlTests : public QObject
 private Q_SLOTS:
     void carriedFilesLoad();
     void themeUsesUiFamily();
+    void clickableLinkCentresItsLabel();
     void iconResourcesDoNotCollide();
 };
 

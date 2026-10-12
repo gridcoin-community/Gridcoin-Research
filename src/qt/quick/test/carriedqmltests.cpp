@@ -167,6 +167,36 @@ void QmlCarriedQmlTests::themeUsesUiFamily()
     QCOMPARE(theme_family, ui_family);
 }
 
+void QmlCarriedQmlTests::clickableLinkCentresItsLabel()
+{
+    QStringList warnings;
+    QQmlEngine engine;
+    ConfigureEngine(engine, warnings);
+    QQmlComponent component(&engine);
+    // The link is taller than any label, so only a set vertical anchor can
+    // centre the label: without one the label stays at the top.
+    component.setData("import QtQuick\nimport Gridcoin.App\n"
+                      "ClickableLink {\n"
+                      "    height: 41\n"
+                      "    urlString: \"https://example.org\"\n"
+                      "    property Item label: {\n"
+                      "        for (var i = 0; i < children.length; ++i) {\n"
+                      "            if (children[i].text !== undefined) return children[i]\n"
+                      "        }\n"
+                      "        return null\n"
+                      "    }\n"
+                      "    property real labelCentre: label ? label.y + label.height / 2 : -1\n"
+                      "}",
+                      QUrl(QStringLiteral("qrc:/qmltest/clickablelink.qml")));
+    std::unique_ptr<QObject> object(component.create());
+    QVERIFY2(object, qPrintable(component.errorString() + warnings.join(QLatin1Char(' '))));
+    QVERIFY2(object->property("label").value<QObject*>(), "ClickableLink has no child with a text");
+    const double label_centre = object->property("labelCentre").toDouble();
+    const double link_centre = object->property("height").toDouble() / 2;
+    QVERIFY2(qAbs(label_centre - link_centre) <= 0.5,
+             qPrintable(QStringLiteral("label centre %1, link centre %2").arg(label_centre).arg(link_centre)));
+}
+
 void QmlCarriedQmlTests::iconResourcesDoNotCollide()
 {
     g_resource_messages.clear();

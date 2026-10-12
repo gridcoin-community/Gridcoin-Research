@@ -37,7 +37,7 @@ MouseArea {
         anchors {
             left: linkIcon.right
             leftMargin: 3
-            verticalCenter: parent.verticalCentre
+            verticalCenter: parent.verticalCenter
         }
     }
 }
