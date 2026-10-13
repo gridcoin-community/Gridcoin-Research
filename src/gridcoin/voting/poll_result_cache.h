@@ -68,8 +68,9 @@ struct PollResultItem
 //!     since it was tallied. New votes arrive in blocks (which move the tip), so
 //!     gating reuse on the tip already covers them — no separate vote signal.
 //!   - Closed poll: immutable while the tip only advances, so it is cached
-//!     indefinitely; a backward reorg (the tip dropping below the height the
-//!     poll was tallied at) could reach the poll window, so it forces a rebuild.
+//!     while the tip it was tallied against stays on the current chain; any
+//!     reorg that replaces that tip could reach the poll window, so it forces a
+//!     rebuild.
 class PollResultCache
 {
 public:
@@ -89,13 +90,18 @@ private:
     struct CacheEntry
     {
         PollResultItem item;      //!< The cached bundle (txid, version, result).
-        uint256 tallied_tip_hash; //!< Hash of the tip the result was tallied against.
+        //! Hash of the tip the result was tallied against; for a closed poll,
+        //! the latest tip it has since been checked against.
+        uint256 tallied_tip_hash;
         int tallied_tip_height;   //!< Height of that tip.
         bool finished;            //!< Whether the poll was closed when tallied.
     };
 
     //! \brief Whether \p entry may be served for the current pinned tip.
-    bool IsEntryValid(const CacheEntry& entry, const uint256& tip_hash, int tip_height) const;
+    bool IsEntryValid(const CacheEntry& entry,
+                      const CBlockIndex* pindex_tip,
+                      const uint256& tip_hash,
+                      int tip_height) const;
 
     //! \brief Serve \p ref from cache if valid, otherwise tally it against the
     //! pinned tip and cache the result. Returns std::nullopt if the poll could
@@ -125,11 +131,13 @@ private:
 //!     a stalled tip would stay "active" indefinitely (and the GUI would keep
 //!     offering voting on it).
 //!   - Closed poll (\p cached_finished): its votes and its fixed AVW end block are
-//!     immutable while the tip only advances, so it is reusable exactly while
-//!     \p current_tip_height >= \p tallied_tip_height. A backward reorg (the tip
-//!     dropping below the tally height) could reach the poll window, so it forces
-//!     a rebuild. This is conservative — it also rebuilds on shallow backward
-//!     reorgs that never touch the window — but backward reorgs are rare.
+//!     immutable while the tip only advances, so it is reusable exactly while the
+//!     tip it was tallied against is still on the current chain:
+//!     \p current_tip_height >= \p tallied_tip_height and
+//!     \p current_hash_at_tallied_height == \p tallied_tip_hash. Any reorg that
+//!     replaces that tip could reach the poll window, so it forces a rebuild.
+//!     This is conservative: it also rebuilds after reorgs that never touch the
+//!     window, but reorgs are rare.
 //!   - Active poll: PollReference::GetActiveVoteWeight ends the AVW range at the
 //!     tip, and that range grows every block, so the result changes on every tip
 //!     advance; it is reusable only while \p current_tip_hash equals the
@@ -142,12 +150,16 @@ private:
 //! \param tallied_tip_height   Height of that tip.
 //! \param current_tip_hash     Hash of the current pinned tip.
 //! \param current_tip_height   Height of the current pinned tip.
+//! \param current_hash_at_tallied_height Hash of the current chain's block at
+//!                             \p tallied_tip_height (null if it has none).
+//!                             Only a closed poll's check uses it.
 bool PollResultReusable(bool cached_finished,
                         bool now_finished,
                         const uint256& tallied_tip_hash,
                         int tallied_tip_height,
                         const uint256& current_tip_hash,
-                        int current_tip_height);
+                        int current_tip_height,
+                        const uint256& current_hash_at_tallied_height);
 
 //! \brief The process-wide poll result cache (a singleton like the registries).
 PollResultCache& GetPollResultCache();
