@@ -534,7 +534,7 @@ Fraction PollReference::GetMagnitudeWeightFactor() const
     return Poll::ResolveMagnitudeWeightFactor(m_pindex, m_timestamp);
 }
 
-std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption& result,
+std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& result,
                                                           const CBlockIndex* pindex_tip) const
 {
     // Instrument this so we can log real time performance.
@@ -612,12 +612,12 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: %u out of %u pool cpids voted.",
              __func__,
-             result->m_pools_voted.size(),
+             result.m_pools_voted.size(),
              mining_pools.size());
 
     for (const auto& pool : mining_pools) {
-        if (result && std::find(result->m_pools_voted.begin(), result->m_pools_voted.end(),
-                                pool.m_cpid) == result->m_pools_voted.end()) {
+        if (std::find(result.m_pools_voted.begin(), result.m_pools_voted.end(),
+                      pool.m_cpid) == result.m_pools_voted.end()) {
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: pool with cpid %s did not vote and will be removed from magnitude "
                                             "in the AVW calculation.",
                      __func__,
@@ -640,7 +640,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
     // The factor the votes were weighed with: the one TryReadFromDisk put in the
     // result's poll. Resolving it again here could pick up a protocol entry
     // connected during the tally, and the vote percentage would mix two factors.
-    const Fraction magnitude_weight_factor = result->m_poll.m_magnitude_weight_factor;
+    const Fraction magnitude_weight_factor = result.m_poll.m_magnitude_weight_factor;
 
     // Lambda for active_vote_weight tally.
     const auto tally_active_vote_weight = [&](

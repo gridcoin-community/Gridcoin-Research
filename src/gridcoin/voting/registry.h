@@ -188,7 +188,7 @@ public:
     //! tip rather than a live pindexBest that shifts each block.
     //! \return ActiveVoteWeight
     //!
-    std::optional<CAmount> GetActiveVoteWeight(const PollResultOption &result, const CBlockIndex* pindex_tip) const;
+    std::optional<CAmount> GetActiveVoteWeight(const PollResult& result, const CBlockIndex* pindex_tip) const;
 
     //!
     //! \brief Provides string equivalent of PollNotificationType
