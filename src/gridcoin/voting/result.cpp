@@ -50,6 +50,18 @@ public:
 };
 
 //!
+//! \brief Thrown for a vote that carries no weight because newer counted votes
+//! already hold everything it claims.
+//!
+class SupersededVoteError : public std::exception
+{
+public:
+    SupersededVoteError()
+    {
+    }
+};
+
+//!
 //! \brief Hashes \c COutPoint objects to key a lookup table.
 //!
 struct OutPointHasher
@@ -195,6 +207,7 @@ public:
 
         m_vote_txos.clear();
         m_vote_cpids.clear();
+        m_reached_counted = false;
 
         VoteDetail detail;
         detail.m_amount = Resolve(vote.m_claim.m_balance_claim, message);
@@ -228,6 +241,15 @@ public:
         m_vote_cpids.clear();
     }
 
+    //!
+    //! \brief Whether the last resolved vote reached an output or a CPID that a
+    //! counted vote already holds.
+    //!
+    bool ReachedCounted() const
+    {
+        return m_reached_counted;
+    }
+
 private:
     CTxDB& m_txdb;              //!< Used to resolve unspent amount claims.
     const Poll& m_poll;         //!< The poll to resolve voting weight for.
@@ -259,22 +281,35 @@ private:
     std::unordered_set<COutPoint, OutPointHasher> m_vote_txos;
     std::unordered_set<Cpid> m_vote_cpids;
 
+    //! Whether the vote being resolved reached something a counted vote holds.
+    bool m_reached_counted {false};
+
     //!
     //! \brief Whether a counted vote, or the vote being resolved, already
     //! reached the output.
     //!
-    bool Seen(const COutPoint& txo) const
+    bool Seen(const COutPoint& txo)
     {
-        return m_seen_txos.count(txo) != 0 || m_vote_txos.count(txo) != 0;
+        if (m_seen_txos.count(txo) != 0) {
+            m_reached_counted = true;
+            return true;
+        }
+
+        return m_vote_txos.count(txo) != 0;
     }
 
     //!
     //! \brief Whether a counted vote, or the vote being resolved, already
     //! has the CPID.
     //!
-    bool Seen(const Cpid& cpid) const
+    bool Seen(const Cpid& cpid)
     {
-        return m_seen_cpids.count(cpid) != 0 || m_vote_cpids.count(cpid) != 0;
+        if (m_seen_cpids.count(cpid) != 0) {
+            m_reached_counted = true;
+            return true;
+        }
+
+        return m_vote_cpids.count(cpid) != 0;
     }
 
     //!
@@ -967,6 +1002,12 @@ public:
         for (const auto& txid : reverse_iterate(vote_txids)) {
             try {
                 ProcessVoteCandidate(FetchVoteCandidate(txid));
+            } catch (const SupersededVoteError& e) {
+                LogPrint(LogFlags::VOTE, "INFO: %s: skipped superseded vote: %s",
+                    __func__,
+                    txid.ToString());
+
+                ++result.m_superseded_votes;
             } catch (const InvalidVoteError& e) {
                 LogPrint(LogFlags::VOTE, "INFO: %s: skipped invalid vote: %s",
                     __func__,
@@ -1111,6 +1152,11 @@ private:
         VoteDetail detail = m_resolver.Resolve(candidate);
 
         if (detail.Empty()) {
+            if (m_resolver.ReachedCounted()) {
+                LogPrint(LogFlags::VOTE, "%s: resolved superseded vote", __func__);
+                throw SupersededVoteError();
+            }
+
             LogPrint(LogFlags::VOTE, "%s: resolved empty vote", __func__);
             throw InvalidVoteError();
         }
@@ -1417,6 +1463,7 @@ PollResult::PollResult(Poll poll)
     : m_poll(std::move(poll))
     , m_total_weight(0)
     , m_invalid_votes(0)
+    , m_superseded_votes(0)
     , m_pools_voted({})
     , m_active_vote_weight()
     , m_vote_percent_avw()

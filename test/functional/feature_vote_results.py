@@ -106,7 +106,8 @@ class VoteResultsTest(GridcoinTestFramework):
     def check(self, poll_id, weight):
         result = self.nodes[0].getpollresults(poll_id)
         assert_equal(result["votes"], 2)
-        assert_equal(result["invalid_votes"], 1)
+        assert_equal(result["invalid_votes"], 0)
+        assert_equal(result["superseded_votes"], 1)
         assert_equal(result["total_weight"], weight)
         assert_equal([(r["choice"], r["weight"]) for r in result["responses"]], [("A", 0), ("B", weight)])
         return result

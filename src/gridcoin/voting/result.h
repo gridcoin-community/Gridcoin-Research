@@ -95,6 +95,7 @@ public:
     const Poll m_poll;                            //!< The poll associated with the result.
     Weight m_total_weight;                        //!< Aggregate weight of all the votes submitted.
     size_t m_invalid_votes;                       //!< Number of votes that failed validation.
+    size_t m_superseded_votes;                    //!< Number of votes newer counted votes replace.
     std::vector<Cpid> m_pools_voted;              //!< Cpids of pools that actually voted.
     std::optional<CAmount> m_active_vote_weight;  //!< Active vote weight of poll.
     std::optional<double> m_vote_percent_avw;     //!< Vote weight percent of AVW.
