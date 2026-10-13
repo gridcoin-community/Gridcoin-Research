@@ -364,6 +364,14 @@ public:
     }
 
     //!
+    //! \brief Determine whether the claim names each address key and each
+    //! output once.
+    //!
+    //! Block validation requires this from block version 15.
+    //!
+    bool EntriesDistinct() const;
+
+    //!
     //! \brief Get the burn fee amount required for the claim.
     //!
     //! \return Burn fee in units of 1/100000000 GRC.

@@ -1142,6 +1142,17 @@ bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXC
         return false;
     }
 
+    // From block version 15, a poll claim names each address key and each
+    // output once.
+    if (IsV15Enabled(ctx.m_pindex->nHeight) && !payload->m_claim.EntriesDistinct()) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected poll claim whose address keys or outputs are not distinct at height %d",
+            __func__,
+            ctx.m_pindex->nHeight);
+        return false;
+    }
+
     return Validate(ctx.m_contract, ctx.m_tx, DoS);
 }
 

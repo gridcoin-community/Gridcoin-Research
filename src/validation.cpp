@@ -18,6 +18,7 @@
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/chain_trust.h"
 #include "gridcoin/staking/reward.h"
+#include "gridcoin/voting/payloads.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/exceptions.h"
 #include "gridcoin/staking/kernel.h"
@@ -2220,6 +2221,14 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
             if (contract.m_type == GRC::ContractType::CLAIM) {
                 return state.DoS(100, error("%s: claim contract in a non-coinbase transaction", __func__),
                                  "claim-outside-coinbase");
+            }
+
+            // PollRegistry::BlockValidate requires this from the same height.
+            // (CheckContracts, which refuses a legacy contract, runs later.)
+            if (contract.m_type == GRC::ContractType::POLL && contract.m_version >= 2
+                && !contract.SharePayloadAs<GRC::PollPayload>()->m_claim.EntriesDistinct()) {
+                return state.DoS(25, error("%s: poll claim keys or outputs are not distinct", __func__),
+                                 "bad-poll-claim");
             }
         }
     }
