@@ -59,6 +59,38 @@ BOOST_AUTO_TEST_CASE(tally_adds_each_vote_to_its_responses)
     BOOST_CHECK_EQUAL(result.m_invalid_votes, 0);
 }
 
+//!
+//! The wallet holder's counted votes combine into one detail: their amounts and
+//! their weight for each choice add up, and the CPID and magnitude are those of
+//! the newest, which the counter tallies first.
+//!
+BOOST_AUTO_TEST_CASE(tally_combines_the_wallet_holders_votes)
+{
+    GRC::PollResult result = MakeResult();
+
+    GRC::PollResult::VoteDetail newest = MakeVote({{0, 300}});
+    newest.m_ismine = ISMINE_SPENDABLE;
+    newest.m_amount = 300;
+    newest.m_mining_id = GRC::Cpid::Parse("00010203040506070809101112131415");
+    newest.m_magnitude = GRC::Magnitude::RoundFrom(10);
+
+    GRC::PollResult::VoteDetail older = MakeVote({{0, 100}, {1, 100}});
+    older.m_ismine = ISMINE_SPENDABLE;
+    older.m_amount = 200;
+    older.m_mining_id = GRC::MiningId::ForNoncruncher();
+
+    result.TallyVote(newest);
+    result.TallyVote(older);
+
+    BOOST_REQUIRE(result.m_self_voted);
+    BOOST_CHECK_EQUAL(result.m_self_vote_detail.m_amount, 500);
+    BOOST_CHECK(result.m_self_vote_detail.m_mining_id == newest.m_mining_id);
+    BOOST_CHECK_EQUAL(result.m_self_vote_detail.m_magnitude.Scaled(), newest.m_magnitude.Scaled());
+    BOOST_REQUIRE_EQUAL(result.m_self_vote_detail.m_responses.size(), 2U);
+    BOOST_CHECK_EQUAL(result.m_self_vote_detail.m_responses[0].second, 400);
+    BOOST_CHECK_EQUAL(result.m_self_vote_detail.m_responses[1].second, 100);
+}
+
 BOOST_AUTO_TEST_CASE(tally_counts_a_vote_that_would_overflow_the_total_as_invalid)
 {
     GRC::PollResult result = MakeResult();

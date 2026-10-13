@@ -1631,12 +1631,16 @@ void PollResult::TallyVote(VoteDetail detail)
     }
 
     if (detail.m_ismine != ISMINE_NO) {
-        m_self_voted = true;
+        // The counter tallies votes newest first, so the CPID and magnitude are
+        // those of the wallet holder's newest counted vote.
+        if (!m_self_voted) {
+            m_self_vote_detail.m_mining_id = detail.m_mining_id;
+            m_self_vote_detail.m_magnitude = detail.m_magnitude;
+            m_self_vote_detail.m_ismine = detail.m_ismine;
+        }
 
+        m_self_voted = true;
         m_self_vote_detail.m_amount += detail.m_amount;
-        m_self_vote_detail.m_mining_id = detail.m_mining_id;
-        m_self_vote_detail.m_magnitude = detail.m_magnitude;
-        m_self_vote_detail.m_ismine = detail.m_ismine;
     }
 
     for (const auto& response_pair : detail.m_responses) {

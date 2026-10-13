@@ -102,7 +102,7 @@ public:
     std::optional<bool> m_poll_results_validated; //!< Whether the poll's AVW is >= the minimum AVW for the poll.
     bool m_finished;                              //!< Whether the poll finished as of this result.
     bool m_self_voted;                            //!< Whether the wallet holder voted.
-    VoteDetail m_self_vote_detail;                //!< The vote detail from the wallet holder's (last) vote
+    VoteDetail m_self_vote_detail;                //!< The wallet holder's counted votes, combined
 
     //!
     //! \brief The aggregated voting weight tallied for each poll choice.
