@@ -270,9 +270,10 @@ private:
             throw InvalidVoteError();
         }
 
+        // A beacon confirmed after the poll ends supplies no magnitude.
         if (m_poll.Expired(header.nTime)) {
             LogPrint(LogFlags::VOTE, "%s: beacon confirmed after poll", __func__);
-            throw InvalidVoteError();
+            return Magnitude::Zero();
         }
 
         if (!IsInMainChain(header)) {
@@ -406,9 +407,10 @@ private:
             throw InvalidVoteError();
         }
 
+        // An output confirmed after the poll ends supplies no weight.
         if (m_poll.Expired(header.nTime)) {
             LogPrint(LogFlags::VOTE, "%s: txo confirmed after poll", __func__);
-            throw InvalidVoteError();
+            return 0;
         }
 
         if (!IsInMainChain(header)) {
