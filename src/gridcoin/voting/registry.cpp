@@ -1000,55 +1000,63 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
     // the duration of the poll to populate the votes. We can't use the general GRC::ReplayContracts here
     // because it is too broad.
     if (ref != nullptr) {
-        // Get the last block that contains valid votes for the poll. (No need to scan past this point for
-        // a historical poll.)
-        CBlockIndex* pindex_end = ref->GetEndingBlockIndexPtr();
-
         CBlock block;
 
-        // pindex starts at the poll contract (from above) and ends at pindex_end, the last block that can contain
-        // a valid vote.
+        // Link the poll's votes by the rule AddVote applies as each block
+        // connects: a vote is linked only from the transaction after the poll's
+        // own, a version 2+ vote only if its block is not stamped after the
+        // poll ends, and a legacy vote by the poll's title in lower case. A
+        // block may carry an earlier time than its parent, so the walk runs to
+        // the tip. No block from version 11 on carries a legacy vote, so there
+        // a block stamped after the poll ends is passed over unread.
         for (CBlockIndex* pindex = pindex_poll; pindex; pindex = pindex->pnext) {
+            if (IsV11Enabled(pindex->nHeight) && ref->Expired(pindex->nTime)) continue;
+
             // If the block doesn't contain contract(s) or can't read, skip.
             if (!pindex->IsContract() || !ReadBlockFromDisk(block, pindex, Params().GetConsensus())) continue;
 
+            // In the poll's own block, the votes ahead of the poll are not its.
+            bool after_poll = pindex != pindex_poll;
+
             // Skip coinbase and coinstake transactions:
             for (unsigned int i = 2; i < block.vtx.size(); ++i) {
+                if (!after_poll) {
+                    after_poll = block.vtx[i].GetHash() == ref->Txid();
+                    continue;
+                }
+
                 for (auto contract : block.vtx[i].GetContracts()) {
 
-                    // Only process votes.
-                    if (contract.m_type != ContractType::VOTE) continue;
-
-                    // Below is similar to AddVote, but doesn't require expiry checking, because the block
-                    // scan range has already been limited to the poll's duration by the for loop, pindex_poll,
-                    // and pindex_end.
+                    // Only process votes, and only a contract that adds one, as
+                    // when a block connects (a REMOVE links no vote).
+                    if (contract.m_type != ContractType::VOTE || contract.m_action != ContractAction::ADD) continue;
 
                     // Post fern poll votes
                     if (contract.m_version >= 2) {
                         const auto vote = contract.SharePayloadAs<Vote>();
 
-                        // This is the critical part that separates this from the regular AddVote.
-                        if (vote->m_poll_txid == ref->Txid()) {
+                        if (vote->m_poll_txid == ref->Txid() && !ref->Expired(pindex->nTime)) {
                             ref->LinkVote(block.vtx[i].GetHash());
                         }
 
                         continue;
                     }
 
-                    // Legacy poll votes
+                    // Legacy poll votes: as when a block connects, a contract
+                    // that is not well-formed is passed over, and a vote is
+                    // matched to the poll by its title in lower case.
+                    if (!contract.WellFormed()) continue;
+
                     const ContractPayload vote = contract.m_body.AssumeLegacy();
                     const std::string title = ParseLegacyVoteTitle(vote->LegacyKeyString());
 
                     if (title.empty()) continue;
 
-                    if (title == ref->Title()) {
+                    if (title == ToLower(ref->Title())) {
                         ref->LinkVote(block.vtx[i].GetHash());
                     }
                 } // for contract
             } // for vtx
-
-            // Finished scan to load votes for this poll.
-            if (pindex == pindex_end) break;
         } // for pindex
     }
 

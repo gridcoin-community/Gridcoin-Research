@@ -13,6 +13,7 @@
 #include "gridcoin/voting/payloads.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
+#include "gridcoin/voting/vote.h"
 #include "index/disktxpos.h"
 #include "index/txindex.h"
 #include "node/blockstorage.h"
@@ -345,17 +346,17 @@ struct LinkedTip
 };
 
 //!
-//! \brief Write a proof-of-stake block on genesis to the block file and make it
+//! \brief Write a proof-of-stake block on \p prev to the block file and make it
 //! the tip, as connecting it would.
 //!
-//! The coinbase carries \p claim, and \p extra follows the coinstake. The tip is
-//! recent, so a poll it carries is still open. The caller's StateGuard puts the
-//! tip back and unlinks the index again.
+//! The block is stamped \p now, its coinbase carries \p claim, and \p extra
+//! follows the coinstake. The caller's StateGuard puts the tip back and unlinks
+//! the index again.
 //!
-LinkedTip LinkTip(GRC::Claim claim, const std::vector<CTransaction>& extra, const unsigned int bits)
+LinkedTip LinkBlock(CBlockIndex* prev, const int64_t now, GRC::Claim claim,
+                    const std::vector<CTransaction>& extra, const unsigned int bits)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    const int64_t now = GetAdjustedTime();
     const bool has_superblock = claim.ContainsSuperblock();
 
     CMutableTransaction coinbase;
@@ -378,7 +379,7 @@ LinkedTip LinkTip(GRC::Claim claim, const std::vector<CTransaction>& extra, cons
     coinstake.vout[1] = CTxOut(COIN, grc_test::PremineScript());
 
     CBlock block;
-    block.hashPrevBlock = pindexGenesisBlock->GetBlockHash();
+    block.hashPrevBlock = prev->GetBlockHash();
     block.nTime = now;
     block.nBits = bits;
     block.vtx.push_back(CTransaction(coinbase));
@@ -392,8 +393,8 @@ LinkedTip LinkTip(GRC::Claim claim, const std::vector<CTransaction>& extra, cons
 
     LinkedTip tip;
     tip.m_pindex = GRC::MockBlockIndex::InsertBlockIndex(block.GetHash(true));
-    tip.m_pindex->pprev = pindexGenesisBlock;
-    tip.m_pindex->nHeight = 1;
+    tip.m_pindex->pprev = prev;
+    tip.m_pindex->nHeight = prev->nHeight + 1;
     tip.m_pindex->nTime = now;
     tip.m_pindex->nBits = bits;
     tip.m_pindex->nFile = file;
@@ -402,6 +403,12 @@ LinkedTip LinkTip(GRC::Claim claim, const std::vector<CTransaction>& extra, cons
 
     if (has_superblock) {
         tip.m_pindex->MarkAsSuperblock();
+    }
+
+    for (const CTransaction& tx : extra) {
+        if (!tx.vContracts.empty()) {
+            tip.m_pindex->MarkAsContract();
+        }
     }
 
     // As ConnectBlock locates each transaction.
@@ -418,12 +425,34 @@ LinkedTip LinkTip(GRC::Claim claim, const std::vector<CTransaction>& extra, cons
         tx_pos += ::GetSerializeSize(block.vtx[i], SER_DISK, CLIENT_VERSION);
     }
 
-    pindexGenesisBlock->pnext = tip.m_pindex;
+    prev->pnext = tip.m_pindex;
     pindexBest = tip.m_pindex;
     hashBestChain = tip.m_pindex->GetBlockHash();
     nBestHeight = tip.m_pindex->nHeight;
 
     return tip;
+}
+
+//!
+//! \brief Write a block on genesis, stamped now, and make it the tip. A poll it
+//! carries is still open.
+//!
+LinkedTip LinkTip(GRC::Claim claim, const std::vector<CTransaction>& extra, const unsigned int bits)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    return LinkBlock(pindexGenesisBlock, GetAdjustedTime(), std::move(claim), extra, bits);
+}
+
+//! A version 2 vote for \p poll_txid. Linking a vote reads none of its claim.
+CTransaction MakeVoteTx(const uint256& poll_txid, const int64_t tx_time)
+{
+    CMutableTransaction mtx;
+    mtx.nTime = tx_time;
+    mtx.vContracts.push_back(GRC::MakeContract<GRC::Vote>(
+        uint32_t {2}, GRC::ContractAction::ADD,
+        GRC::Vote::CURRENT_VERSION, poll_txid, std::vector<uint8_t> {0}, GRC::VoteWeightClaim()));
+
+    return CTransaction(mtx);
 }
 
 //! A superblock claim with one CPID that no pool holds.
@@ -546,6 +575,46 @@ BOOST_AUTO_TEST_CASE(a_zero_active_vote_weight_does_not_validate_a_poll)
     BOOST_CHECK(!result->m_vote_percent_avw);
     BOOST_REQUIRE(result->m_poll_results_validated);
     BOOST_CHECK(!*result->m_poll_results_validated);
+}
+
+//!
+//! A poll loaded from the chain after a restart links its votes by the rule
+//! AddVote applies as each block connects: from the transaction after the poll's
+//! own, and by the time of the block that carries each vote.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_loaded_from_the_chain_links_votes_by_the_live_rule)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    const int64_t start = GetAdjustedTime() - 10 * 86400;
+    PollTx poll = MakePollTx("Title", start);
+
+    // GetTransaction reads a transaction through its first output, and a poll
+    // transaction on the chain always has one.
+    CMutableTransaction poll_mtx(poll.tx);
+    poll_mtx.vout.emplace_back(0, CScript() << OP_RETURN);
+    poll.tx = CTransaction(poll_mtx);
+    const CTransaction ahead_of_poll = MakeVoteTx(poll.tx.GetHash(), start - 60);
+    const CTransaction in_window = MakeVoteTx(poll.tx.GetHash(), start + 60);
+    const CTransaction after_end = MakeVoteTx(poll.tx.GetHash(), start + 6 * 86400);
+
+    const LinkedTip first = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {ahead_of_poll, poll.tx, in_window},
+                                      pindexGenesisBlock->nBits);
+    const LinkedTip second = LinkBlock(first.m_pindex, start + 8 * 86400, GRC::Claim(), {after_end},
+                                       pindexGenesisBlock->nBits);
+    BOOST_REQUIRE_EQUAL(first.m_tx_positions.size(), 3U);
+    BOOST_REQUIRE_EQUAL(second.m_tx_positions.size(), 1U);
+
+    const TxIndexScope poll_indexed(poll.tx, first.m_tx_positions[1]);
+
+    const GRC::PollReference* ref =
+        GRC::GetPollRegistry().TryByTxidWithAddHistoricalPollAndVotes(poll.tx.GetHash());
+    BOOST_REQUIRE(ref != nullptr);
+
+    BOOST_REQUIRE_EQUAL(ref->Votes().size(), 1U);
+    BOOST_CHECK(ref->Votes().front() == in_window.GetHash());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
