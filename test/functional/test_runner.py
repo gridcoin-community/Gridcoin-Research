@@ -192,6 +192,8 @@ BASE_SCRIPTS = [
     'rpc_netinfo.py',
     'rpc_getaddednodeinfo.py',
     'rpc_multisig.py',
+    # rpc_votebyid.py: votebyid refuses a choice id outside 0..255.
+    'rpc_votebyid.py',
     'wallet_basic.py',
     'wallet_backup.py',
     'wallet_keypool.py',

@@ -1,3 +1,4 @@
+#include <limits>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -330,6 +331,19 @@ UniValue VoteClaimToJson(const VoteWeightClaim& claim)
     json.pushKV("balance_claim", BalanceClaimToJson(claim.m_balance_claim));
 
     return json;
+}
+
+//! Read a poll choice id from an RPC parameter. A vote holds each choice as
+//! one byte, so an id outside 0..255 is a parameter error.
+uint8_t ChoiceIdFromParam(const UniValue& param)
+{
+    const int choice_id = param.get_int();
+
+    if (choice_id < 0 || choice_id > std::numeric_limits<uint8_t>::max()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("choice id %d is out of range", choice_id));
+    }
+
+    return static_cast<uint8_t>(choice_id);
 }
 
 UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
@@ -945,7 +959,7 @@ UniValue votebyid(const UniValue& params)
     VoteBuilder builder = VoteBuilder::ForPoll(*poll, poll_id);
 
     for (size_t i = 1; i < params.size(); ++i) {
-        builder = builder.AddResponse(params[i].get_int());
+        builder = builder.AddResponse(ChoiceIdFromParam(params[i]));
     }
 
     return SubmitVote(*poll, std::move(builder));

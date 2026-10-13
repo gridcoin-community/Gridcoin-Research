@@ -1589,13 +1589,13 @@ VoteBuilder VoteBuilder::AddResponse(const uint8_t offset)
     if (!m_poll->Choices().OffsetInRange(offset)) {
         throw VotingError(strprintf(
             _("\"%s\" is not a valid poll choice."),
-            ToString(offset)));
+            ToString(static_cast<int>(offset))));
     }
 
     if (m_vote->ResponseExists(offset)) {
         throw VotingError(strprintf(
             _("Duplicate response for poll choice: %s"),
-            ToString(offset)));
+            ToString(static_cast<int>(offset))));
     }
 
     // This is effectively handled by the previous conditions. We'll leave
