@@ -12,6 +12,7 @@
 #include "gridcoin/voting/result.h"
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/vote.h"
+#include "hash.h"
 #include "gridcoin/researcher.h"
 #include "logging.h"
 #include "txdb.h"
@@ -22,8 +23,10 @@
 #include "node/blockstorage.h"
 
 #include <limits>
+#include <map>
 #include <optional>
 #include <queue>
+#include <set>
 #include <unordered_set>
 
 using namespace GRC;
@@ -84,9 +87,11 @@ public:
     //!
     //! \param contract Contains a vote contract.
     //! \param tx       Transaction that contains the vote contract.
+    //! \param pos      Where the transaction is on disk.
     //!
-    VoteCandidate(const Contract& contract, CTransaction tx)
+    VoteCandidate(const Contract& contract, CTransaction tx, const CDiskTxPos& pos)
         : m_tx(std::move(tx))
+        , m_pos(pos)
         , m_contract(contract)
         , m_payload(m_contract.SharePayload())
     {
@@ -145,8 +150,17 @@ public:
         return PackVoteMessage(Vote(), m_tx);
     }
 
+    //!
+    //! \brief Get where the transaction that contains the vote is on disk.
+    //!
+    const CDiskTxPos& Position() const
+    {
+        return m_pos;
+    }
+
 private:
     const CTransaction m_tx;         //!< Transaction that contains a vote.
+    const CDiskTxPos m_pos;          //!< Where the transaction is on disk.
 
     //!
     //! \brief The vote contract.
@@ -170,12 +184,14 @@ public:
     //!
     //! \brief Initialize a vote resolver for the specified poll.
     //!
-    //! \param txdb Used to resolve balance claim amounts.
-    //! \param poll The poll to resolve voting weight for.
+    //! \param txdb          Used to resolve balance claim amounts.
+    //! \param poll          The poll to resolve voting weight for.
+    //! \param poll_finished Whether the tally's tip is past the poll's end.
     //!
-    VoteResolver(CTxDB& txdb, const Poll& poll)
+    VoteResolver(CTxDB& txdb, const Poll& poll, const bool poll_finished)
         : m_txdb(txdb)
         , m_poll(poll)
+        , m_poll_finished(poll_finished)
         , m_superblock(SuperblockPtr::Empty())
     {
     }
@@ -218,7 +234,7 @@ public:
 
             // The vote takes the claim's CPID only when the claim is credited to
             // this vote.
-            if (const std::optional<Magnitude> magnitude = Resolve(claim, message)) {
+            if (const std::optional<Magnitude> magnitude = Resolve(claim, message, candidate.Position())) {
                 detail.m_mining_id = claim.m_mining_id;
                 detail.m_magnitude = *magnitude;
             }
@@ -253,6 +269,7 @@ public:
 private:
     CTxDB& m_txdb;              //!< Used to resolve unspent amount claims.
     const Poll& m_poll;         //!< The poll to resolve voting weight for.
+    const bool m_poll_finished; //!< Whether the tally's tip is past the poll's end.
     SuperblockPtr m_superblock; //!< Used to determine magnitude weight.
 
     //!
@@ -283,6 +300,18 @@ private:
 
     //! Whether the vote being resolved reached something a counted vote holds.
     bool m_reached_counted {false};
+
+    //! The block of a beacon advertisement and the superblock that verified
+    //! it; each is nullptr where it was not found.
+    struct Verification
+    {
+        const CBlockIndex* m_advertisement = nullptr;
+        const CBlockIndex* m_superblock = nullptr;
+    };
+
+    //! The blocks of each beacon advertisement looked up in this tally, by
+    //! advertisement hash.
+    std::map<uint256, Verification> m_verifications;
 
     //!
     //! \brief Whether a counted vote, or the vote being resolved, already
@@ -315,14 +344,15 @@ private:
     //!
     //! \brief Resolve the claimed magnitude for a vote.
     //!
-    //! \param claim   The claim to resolve a CPID's magnitude for.
-    //! \param message Serialized context for vote signature verification.
+    //! \param claim    The claim to resolve a CPID's magnitude for.
+    //! \param message  Serialized context for vote signature verification.
+    //! \param vote_pos Where the transaction that contains the vote is on disk.
     //!
     //! \return Magnitude as of the latest superblock in the poll window; zero
     //! for a claim without a CPID; nothing when the claim's CPID is not credited
     //! to this vote.
     //!
-    std::optional<Magnitude> Resolve(const MagnitudeClaim& claim, const ClaimMessage& message)
+    std::optional<Magnitude> Resolve(const MagnitudeClaim& claim, const ClaimMessage& message, const CDiskTxPos& vote_pos)
     {
         const CpidOption cpid = claim.m_mining_id.TryCpid();
 
@@ -398,12 +428,357 @@ private:
                 throw InvalidVoteError();
             }
 
+            if (!BeaconKeyInForce(*cpid, claim.m_beacon_txid, payload->m_beacon.m_public_key, contract.m_version,
+                                  tx.nTime, vote_pos)) {
+                LogPrint(LogFlags::VOTE, "%s: beacon key not in force for the vote", __func__);
+                return std::nullopt;
+            }
+
             m_vote_cpids.emplace(*cpid);
 
             return m_superblock->m_cpids.MagnitudeOf(*cpid);
         }
 
         return std::nullopt;
+    }
+
+    //!
+    //! \brief Determine whether a key was the CPID's beacon key when the vote
+    //! was mined.
+    //!
+    //! The key in force is found by walking back from the CPID's current
+    //! beacon: the first key whose verifying superblock is at or before the
+    //! vote's block, provided the beacon had not expired by that block's time.
+    //! A renewal keeps the key of the beacon it renews. Where the walk steps
+    //! back past a key verified after the vote, the key of the advertisement
+    //! the claim names is in force if its verifying superblock is at or above
+    //! the block of that key's advertisement and at or before the vote's
+    //! block, and the named beacon had not expired by then. A version 1 beacon,
+    //! which the beacon registry does not hold, is in force for 14 days after
+    //! block version 11, as it was then.
+    //!
+    //! The CPID's beacon entries are read as they stand when the poll is
+    //! tallied. Once the tally's tip is past the poll's end, if the CPID has no
+    //! beacon, or the first key of its current beacon was verified after the
+    //! poll ended, the claim is judged by the entries of the beacon contract it
+    //! names.
+    //!
+    //! \param cpid             The CPID that the magnitude claim names.
+    //! \param beacon_txid      The beacon contract transaction the claim names.
+    //! \param key              The key in that beacon contract.
+    //! \param contract_version The version of that beacon contract.
+    //! \param beacon_time      The time of the transaction that carries it.
+    //! \param vote_pos         Where the transaction that contains the vote is.
+    //!
+    //! \throws InvalidVoteError If the vote's block, or the block of a beacon
+    //! advertisement it looks up, cannot be read.
+    //!
+    bool BeaconKeyInForce(
+        const Cpid& cpid,
+        const uint256& beacon_txid,
+        const CPubKey& key,
+        const uint32_t contract_version,
+        const int64_t beacon_time,
+        const CDiskTxPos& vote_pos)
+    {
+        const CBlockHeader header = ReadHeader(vote_pos);
+
+        LOCK(cs_main);
+
+        const auto iter = mapBlockIndex.find(header.GetHash());
+
+        if (iter == mapBlockIndex.end() || iter->second == nullptr) {
+            LogPrint(LogFlags::VOTE, "%s: vote block not indexed", __func__);
+            throw InvalidVoteError();
+        }
+
+        const int vote_height = iter->second->nHeight;
+        const int64_t vote_time = iter->second->nTime;
+
+        const Beacon_ptr current = GetBeaconRegistry().Try(cpid);
+        const CBlockIndex* first_verified = nullptr;
+
+        if (const std::optional<bool> in_force =
+                KeyInForce(current, key, vote_height, vote_time, &first_verified, &beacon_txid)) {
+            return *in_force;
+        }
+
+        if (m_poll_finished && (!current || (first_verified && m_poll.Expired(first_verified->nTime)))) {
+            if (const std::optional<bool> in_force = KeyInForce(NamedEntry(beacon_txid), key, vote_height, vote_time)) {
+                return *in_force;
+            }
+        }
+
+        return contract_version == 1
+            && g_v11_timestamp > 0
+            && vote_time - g_v11_timestamp <= 14 * 86400
+            && vote_time - beacon_time <= Beacon::MAX_AGE;
+    }
+
+    //!
+    //! \brief Determine whether a key was the one in force at the vote on a
+    //! chain of a CPID's beacon entries.
+    //!
+    //! \param entry          The newest entry of the chain.
+    //! \param key            The key in the beacon contract the claim names.
+    //! \param vote_height    The height of the vote's block.
+    //! \param vote_time      The time of the vote's block.
+    //! \param first_verified If given, set to the superblock that verified the
+    //! chain's first key when the walk reaches the start of the chain.
+    //! \param named_txid     If given, the beacon contract the claim names, for
+    //! a key the walk does not reach (see NamedKeyInForce).
+    //!
+    //! \return Nothing if no key on the chain was in force at the vote.
+    //!
+    std::optional<bool> KeyInForce(
+        Beacon_ptr entry,
+        const CPubKey& key,
+        const int vote_height,
+        const int64_t vote_time,
+        const CBlockIndex** first_verified = nullptr,
+        const uint256* named_txid = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        BeaconRegistry& beacons = GetBeaconRegistry();
+        std::set<uint256> visited;
+        const CBlockIndex* verified = nullptr;
+
+        // The newest entry of the key being examined that is stamped at or
+        // before the vote: the entry whose age decides expiry.
+        std::optional<int64_t> entry_time;
+
+        // Walk the entries newest first, one key at a time.
+        while (entry && visited.insert(entry->m_hash).second) {
+            if (entry->m_status == BeaconStatusForStorage::RENEWAL) {
+                if (!entry_time && entry->m_timestamp <= vote_time) {
+                    entry_time = entry->m_timestamp;
+                }
+            } else if (entry->m_status == BeaconStatusForStorage::ACTIVE) {
+                const Beacon_ptr pending = entry->m_previous_hash.IsNull()
+                    ? nullptr
+                    : beacons.FindHistorical(entry->m_previous_hash);
+
+                const bool from_superblock = pending && pending->m_status == BeaconStatusForStorage::PENDING;
+
+                verified = from_superblock ? VerifiedBy(*entry, *pending) : nullptr;
+
+                const bool in_force = from_superblock
+                    ? verified && verified->nHeight <= vote_height
+                    : entry->m_timestamp <= vote_time;
+
+                if (in_force) {
+                    const int64_t age = vote_time - entry_time.value_or(entry->m_timestamp);
+
+                    return entry->m_public_key == key && age <= Beacon::MAX_AGE;
+                }
+
+                // Verified after the vote: the key before it was in force then.
+                entry_time.reset();
+
+                if (from_superblock) {
+                    if (verified && named_txid) {
+                        if (const std::optional<bool> named =
+                                NamedKeyInForce(*named_txid, *pending, key, vote_height, vote_time)) {
+                            return named;
+                        }
+                    }
+
+                    entry = pending;
+                }
+            } else {
+                break;
+            }
+
+            if (entry->m_previous_hash.IsNull()) {
+                if (first_verified) {
+                    *first_verified = verified;
+                }
+
+                break;
+            }
+
+            entry = beacons.FindHistorical(entry->m_previous_hash);
+        }
+
+        return std::nullopt;
+    }
+
+    //!
+    //! \brief Determine whether the key of the advertisement a magnitude claim
+    //! names was in force at the vote, where the walk steps back past a key
+    //! verified after the vote.
+    //!
+    //! An advertisement links to the entry in force when its contract is
+    //! applied. In a superblock's own block that is after the superblock's
+    //! activations when the block is connected, and before them in a replay.
+    //! If the later key was verified after the vote, a key that a superblock at
+    //! or above the later advertisement's block, and at or before the vote's
+    //! block, verified is taken as in force at the vote, unless it had expired
+    //! by then.
+    //!
+    //! \param beacon_txid The beacon contract the claim names.
+    //! \param later       The entry of the later advertisement.
+    //! \param key         The key in the beacon contract the claim names.
+    //! \param vote_height The height of the vote's block.
+    //! \param vote_time   The time of the vote's block.
+    //!
+    //! \return Nothing if the claim names no key verified in that interval.
+    //!
+    std::optional<bool> NamedKeyInForce(
+        const uint256& beacon_txid,
+        const Beacon& later,
+        const CPubKey& key,
+        const int vote_height,
+        const int64_t vote_time) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        const Beacon_ptr named = GetBeaconRegistry().FindHistorical(beacon_txid);
+
+        if (!named || named->m_status != BeaconStatusForStorage::PENDING) {
+            return std::nullopt;
+        }
+
+        const CBlockIndex* superblock = VerificationOf(*named).m_superblock;
+        const CBlockIndex* later_block = VerificationOf(later).m_advertisement;
+
+        if (!superblock || !later_block || superblock->nHeight > vote_height
+            || superblock->nHeight < later_block->nHeight) {
+            return std::nullopt;
+        }
+
+        return named->m_public_key == key && vote_time - named->m_timestamp <= Beacon::MAX_AGE;
+    }
+
+    //!
+    //! \brief Get the entry of the beacon contract that a magnitude claim
+    //! names.
+    //!
+    //! For an advertisement, that is the entry made by the superblock that
+    //! verified it. There is none if no superblock did.
+    //!
+    Beacon_ptr NamedEntry(const uint256& beacon_txid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        BeaconRegistry& beacons = GetBeaconRegistry();
+        const Beacon_ptr named = beacons.FindHistorical(beacon_txid);
+
+        if (!named || named->m_status != BeaconStatusForStorage::PENDING) {
+            return named;
+        }
+
+        const CBlockIndex* superblock = VerificationOf(*named).m_superblock;
+
+        return superblock ? beacons.FindHistorical(Hash(superblock->GetBlockHash(), named->m_hash)) : nullptr;
+    }
+
+    //!
+    //! \brief Find the superblock that verified a beacon.
+    //!
+    //! \param active  The entry the superblock activated.
+    //! \param pending The advertisement's entry.
+    //!
+    //! \return nullptr if no superblock on the main chain made \p active from
+    //! \p pending.
+    //!
+    const CBlockIndex* VerifiedBy(const Beacon& active, const Beacon& pending) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        const CBlockIndex* superblock = VerificationOf(pending).m_superblock;
+
+        if (superblock && Hash(superblock->GetBlockHash(), pending.m_hash) == active.m_hash) {
+            return superblock;
+        }
+
+        return nullptr;
+    }
+
+    //!
+    //! \brief Find the block of a beacon advertisement and the superblock that
+    //! verified it.
+    //!
+    //! The entry a superblock activates carries the advertisement's time, not
+    //! the superblock's. Its hash is Hash(superblock block hash, advertisement
+    //! hash), so the superblock is found by scanning forward from the
+    //! advertisement's block. The scan ends at the first superblock that would
+    //! have swept the advertisement as expired. The blocks found are kept for
+    //! the rest of the tally.
+    //!
+    //! \return A null block where the advertisement, or a superblock that
+    //! verified it, is not found on the main chain.
+    //!
+    const Verification& VerificationOf(const Beacon& pending) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        auto iter = m_verifications.find(pending.m_hash);
+
+        if (iter == m_verifications.end()) {
+            iter = m_verifications.emplace(pending.m_hash, FindVerification(pending)).first;
+        }
+
+        return iter->second;
+    }
+
+    Verification FindVerification(const Beacon& pending) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        Verification found;
+        CTxIndex tx_index;
+
+        if (!m_txdb.ReadTxIndex(pending.m_hash, tx_index)) {
+            LogPrint(LogFlags::VOTE, "%s: failed to read beacon advertisement index", __func__);
+            return found;
+        }
+
+        const auto iter = mapBlockIndex.find(ReadHeader(tx_index.pos).GetHash());
+
+        if (iter == mapBlockIndex.end() || iter->second == nullptr || !iter->second->IsInMainChain()) {
+            return found;
+        }
+
+        found.m_advertisement = iter->second;
+
+        BeaconRegistry& beacons = GetBeaconRegistry();
+
+        for (const CBlockIndex* pindex = iter->second; pindex; pindex = pindex->pnext) {
+            if (!pindex->IsSuperblock()) {
+                continue;
+            }
+
+            // The superblock that sweeps the advertisement as expired stores an
+            // entry under the same form of hash, so the entry's status decides.
+            const Beacon_ptr entry = beacons.FindHistorical(Hash(pindex->GetBlockHash(), pending.m_hash));
+
+            if (entry && entry->m_status == BeaconStatusForStorage::ACTIVE) {
+                found.m_superblock = pindex;
+                return found;
+            }
+
+            if (pindex->nTime - pending.m_timestamp > PendingBeacon::RETENTION_AGE) {
+                break;
+            }
+        }
+
+        return found;
+    }
+
+    //!
+    //! \brief Read the header of the block that holds a transaction.
+    //!
+    //! \throws InvalidVoteError If the block cannot be read.
+    //!
+    static CBlockHeader ReadHeader(const CDiskTxPos& pos)
+    {
+        CAutoFile file(OpenBlockFile(pos), SER_DISK, CLIENT_VERSION);
+
+        if (file.IsNull()) {
+            error("%s: OpenBlockFile failed", __func__);
+            throw InvalidVoteError();
+        }
+
+        CBlockHeader header;
+
+        try {
+            file >> header;
+        } catch (...) {
+            error("%s: deserialize or I/O error for block header", __func__);
+            throw InvalidVoteError();
+        }
+
+        return header;
     }
 
     //!
@@ -916,13 +1291,14 @@ public:
     //! for the money supply that feeds its magnitude factor.
     //! \param current_superblock Pinned current superblock (as of pindex_tip),
     //! forwarded to the legacy vote counter for its magnitude factor.
+    //! \param poll_finished Whether the tally's tip is past the poll's end.
     //!
     VoteCounter(CTxDB& txdb, const Poll& poll, int poll_start_height,
-                const CBlockIndex* pindex_tip, SuperblockPtr current_superblock)
+                const CBlockIndex* pindex_tip, SuperblockPtr current_superblock, const bool poll_finished)
         : m_txdb(txdb)
         , m_poll(poll)
         , m_poll_start_height(poll_start_height)
-        , m_resolver(txdb, poll)
+        , m_resolver(txdb, poll, poll_finished)
         , m_legacy(poll, pindex_tip, std::move(current_superblock))
     {
         // Snapshot the pool CPID set at the poll's start height into an
@@ -1063,6 +1439,7 @@ private:
     VoteCandidate FetchVoteCandidate(const uint256 txid)
     {
         CTransaction tx;
+        CTxIndex tx_index;
 
         {
             // This lock is taken here to ensure that we wait on the leveldb batch write ("transaction commit") to finish
@@ -1072,7 +1449,7 @@ private:
             LOCK(cs_tx_val_commit_to_disk);
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk locked", __func__);
 
-            if (!m_txdb.ReadDiskTx(txid, tx)) {
+            if (!m_txdb.ReadDiskTx(txid, tx, tx_index)) {
                 LogPrintf("WARN: %s: failed to read vote tx.", __func__);
             }
 
@@ -1099,7 +1476,7 @@ private:
                 continue;
             }
 
-            return VoteCandidate(contract, std::move(tx));
+            return VoteCandidate(contract, std::move(tx), tx_index.pos);
         }
 
         LogPrint(LogFlags::VOTE, "%s: tx has no vote contract", __func__);
@@ -1521,7 +1898,10 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref, const CBloc
             current_superblock = Quorum::CurrentSuperblock();
         }
 
-        VoteCounter counter(txdb, result.m_poll, poll_start_height, pindex_tip, std::move(current_superblock));
+        // The poll counts as finished for the beacon key rule when the tip the
+        // tally runs on is past its end, so every node with this tip agrees.
+        VoteCounter counter(txdb, result.m_poll, poll_start_height, pindex_tip, std::move(current_superblock),
+                            result.m_poll.Expired(pindex_tip->nTime));
 
         if (result.m_poll.IncludesMagnitudeWeight()) {
             SuperblockPtr superblock;
