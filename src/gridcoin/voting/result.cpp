@@ -315,7 +315,8 @@ private:
 
     //!
     //! \brief Whether a counted vote, or the vote being resolved, already
-    //! reached the output.
+    //! reached an output the walk follows. The walk follows only outputs at the
+    //! claim's address.
     //!
     bool Seen(const COutPoint& txo)
     {
@@ -325,20 +326,6 @@ private:
         }
 
         return m_vote_txos.count(txo) != 0;
-    }
-
-    //!
-    //! \brief Whether a counted vote, or the vote being resolved, already
-    //! has the CPID.
-    //!
-    bool Seen(const Cpid& cpid)
-    {
-        if (m_seen_cpids.count(cpid) != 0) {
-            m_reached_counted = true;
-            return true;
-        }
-
-        return m_vote_cpids.count(cpid) != 0;
     }
 
     //!
@@ -360,9 +347,13 @@ private:
             return Magnitude::Zero();
         }
 
-        if (Seen(*cpid)) {
+        if (m_vote_cpids.count(*cpid) != 0) {
             return std::nullopt;
         }
+
+        // A counted vote has this CPID. The claim is still checked below, so
+        // only a vote whose claim holds is superseded by that vote.
+        const bool counted = m_seen_cpids.count(*cpid) != 0;
 
         CTxIndex tx_index;
 
@@ -431,6 +422,11 @@ private:
             if (!BeaconKeyInForce(*cpid, claim.m_beacon_txid, payload->m_beacon.m_public_key, contract.m_version,
                                   tx.nTime, vote_pos)) {
                 LogPrint(LogFlags::VOTE, "%s: beacon key not in force for the vote", __func__);
+                return std::nullopt;
+            }
+
+            if (counted) {
+                m_reached_counted = true;
                 return std::nullopt;
             }
 
@@ -841,10 +837,14 @@ private:
     //!
     CAmount Resolve(const COutPoint& txo, const CTxDestination& address)
     {
-        if (Seen(txo)) {
+        if (m_vote_txos.count(txo) != 0) {
             LogPrint(LogFlags::VOTE, "%s: duplicate txo", __func__);
             return 0;
         }
+
+        // A counted vote holds this output. The claim is still checked below,
+        // so only a vote that owns the output is superseded by that vote.
+        const bool counted = m_seen_txos.count(txo) != 0;
 
         CTxIndex tx_index;
 
@@ -921,6 +921,11 @@ private:
         if (txo.n >= tx_index.vSpent.size()) {
             error("%s: txo out of spent range", __func__);
             throw InvalidVoteError(); // should never happen
+        }
+
+        if (counted) {
+            m_reached_counted = true;
+            return 0;
         }
 
         m_vote_txos.emplace(txo);
@@ -1578,8 +1583,8 @@ private:
     void ProcessLegacyVote(const LegacyVote& vote) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
     {
         if (m_legacy.SeenKey(vote.m_key)) {
-            LogPrint(LogFlags::VOTE, "%s: skipped duplicate key", __func__);
-            throw InvalidVoteError();
+            LogPrint(LogFlags::VOTE, "%s: skipped superseded legacy vote", __func__);
+            throw SupersededVoteError();
         }
 
         VoteDetail detail;
