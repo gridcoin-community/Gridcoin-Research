@@ -198,8 +198,14 @@ public:
         detail.m_ismine = candidate.IsMine();
 
         if (m_poll.IncludesMagnitudeWeight()) {
-            detail.m_mining_id = vote.m_claim.m_magnitude_claim.m_mining_id;
-            detail.m_magnitude = Resolve(vote.m_claim.m_magnitude_claim, message);
+            const MagnitudeClaim& claim = vote.m_claim.m_magnitude_claim;
+
+            // The vote takes the claim's CPID only when the claim is credited to
+            // this vote.
+            if (const std::optional<Magnitude> magnitude = Resolve(claim, message)) {
+                detail.m_mining_id = claim.m_mining_id;
+                detail.m_magnitude = *magnitude;
+            }
         }
 
         g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
@@ -233,9 +239,11 @@ private:
     //! \param claim   The claim to resolve a CPID's magnitude for.
     //! \param message Serialized context for vote signature verification.
     //!
-    //! \return Magnitude as of the latest superblock in the poll window.
+    //! \return Magnitude as of the latest superblock in the poll window; zero
+    //! for a claim without a CPID; nothing when the claim's CPID is not credited
+    //! to this vote.
     //!
-    Magnitude Resolve(const MagnitudeClaim& claim, const ClaimMessage& message)
+    std::optional<Magnitude> Resolve(const MagnitudeClaim& claim, const ClaimMessage& message)
     {
         const CpidOption cpid = claim.m_mining_id.TryCpid();
 
@@ -244,7 +252,7 @@ private:
         }
 
         if (m_seen_cpids.find(*cpid) != m_seen_cpids.end()) {
-            return Magnitude::Zero();
+            return std::nullopt;
         }
 
         CTxIndex tx_index;
@@ -273,12 +281,12 @@ private:
         // A beacon confirmed after the poll ends supplies no magnitude.
         if (m_poll.Expired(header.nTime)) {
             LogPrint(LogFlags::VOTE, "%s: beacon confirmed after poll", __func__);
-            return Magnitude::Zero();
+            return std::nullopt;
         }
 
         if (!IsInMainChain(header)) {
             LogPrint(LogFlags::VOTE, "%s: beacon not in main chain", __func__);
-            return Magnitude::Zero();
+            return std::nullopt;
         }
 
         if (fseek(file.Get(), tx_index.pos.nTxPos, SEEK_SET) != 0) {
@@ -316,7 +324,7 @@ private:
             return m_superblock->m_cpids.MagnitudeOf(*cpid);
         }
 
-        return Magnitude::Zero();
+        return std::nullopt;
     }
 
     //!
