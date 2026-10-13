@@ -215,6 +215,10 @@ private:
     //! \brief Remembers the outputs claimed by a vote contract for balance
     //! claims to filter duplicate weight claims.
     //!
+    //! Each claimed output, and each output the walk follows, is recorded when
+    //! it is first reached, so it counts once per poll. Votes resolve newest
+    //! first, so the newest vote that reaches an output keeps its weight.
+    //!
     std::unordered_set<COutPoint, OutPointHasher> m_seen_txos;
 
     //!
@@ -455,8 +459,9 @@ private:
             throw InvalidVoteError(); // should never happen
         }
 
+        m_seen_txos.emplace(txo);
+
         if (tx_index.vSpent[txo.n].IsNull()) {
-            m_seen_txos.emplace(txo);
             return output.nValue; // txo is unspent
         }
 
@@ -606,10 +611,10 @@ private:
 
                 const CDiskTxPos& pos = tx_index.vSpent[next_pair.first];
 
+                m_seen_txos.emplace(tx_hash, next_pair.first);
+
                 if (!pos.IsNull()) {
                     txo_queue.emplace(pos, next_pair.second);
-                } else {
-                    m_seen_txos.emplace(tx_hash, next_pair.first);
                 }
             }
         }

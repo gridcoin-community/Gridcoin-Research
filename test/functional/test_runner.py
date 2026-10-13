@@ -214,6 +214,7 @@ BASE_SCRIPTS = [
     # string that reads as true.
     'rpc_changesettings.py',
     'feature_sidestake.py',
+    'feature_vote_results.py',
     'feature_generatesuperblock.py',
     # feature_reorg_resurrect.py: a wallet transaction whose block is
     # disconnected returns to the mempool and stays unconfirmed, not
