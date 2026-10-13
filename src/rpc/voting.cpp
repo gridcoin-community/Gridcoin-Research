@@ -130,7 +130,7 @@ UniValue PollResultToJson(const PollResult& result, const PollReference& poll_re
         }
     }
 
-    json.pushKV("votes", (uint64_t)poll_ref.Votes().size());
+    json.pushKV("votes", (uint64_t)result.m_vote_count);
     json.pushKV("invalid_votes", (uint64_t)result.m_invalid_votes);
     json.pushKV("superseded_votes", (uint64_t)result.m_superseded_votes);
     json.pushKV("total_weight", ValueFromAmount(result.m_total_weight));

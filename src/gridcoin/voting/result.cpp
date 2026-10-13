@@ -1379,6 +1379,7 @@ public:
         g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
 
         m_votes.reserve(vote_txids.size());
+        result.m_vote_count = vote_txids.size();
 
         for (const auto& txid : reverse_iterate(vote_txids)) {
             try {
@@ -1846,6 +1847,7 @@ PollResult::PollResult(Poll poll)
     , m_total_weight(0)
     , m_invalid_votes(0)
     , m_superseded_votes(0)
+    , m_vote_count(0)
     , m_pools_voted({})
     , m_active_vote_weight()
     , m_vote_percent_avw()
