@@ -324,13 +324,23 @@ ProtocolEntryOption ProtocolRegistry::TryLastBeforeTimestamp(const std::string& 
 
     // Walk the revision history chain for the protocol entries with the provided key to find an active historical entry
     // with a timestamp that is equal to or less than the provided timestamp, if it exists.
-    HistoricalProtocolEntryMap::iterator hist_protocol_entry_iter = m_protocol_db.find(iter->second->m_previous_hash);
+    uint256 previous_hash = iter->second->m_previous_hash;
+    HistoricalProtocolEntryMap::iterator hist_protocol_entry_iter = m_protocol_db.find(previous_hash);
 
     while (hist_protocol_entry_iter != m_protocol_db.end()
            && !hist_protocol_entry_iter->second->m_previous_hash.IsNull()
            && hist_protocol_entry_iter->second->m_timestamp > timestamp)
     {
-        hist_protocol_entry_iter = m_protocol_db.find(hist_protocol_entry_iter->second->m_previous_hash);
+        previous_hash = hist_protocol_entry_iter->second->m_previous_hash;
+        hist_protocol_entry_iter = m_protocol_db.find(previous_hash);
+    }
+
+    // A previous hash with no entry in the historical map ends the chain. The
+    // history should never be broken, so say so: callers take no entry to mean
+    // the default value.
+    if (hist_protocol_entry_iter == m_protocol_db.end()) {
+        error("%s: The history of protocol key %s has no entry %s.", __func__, key, previous_hash.GetHex());
+        return nullptr;
     }
 
     // Check whether the final hist_protocol_entry_iter timestamp is before or equal to the timestamp.
