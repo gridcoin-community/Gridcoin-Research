@@ -193,6 +193,9 @@ public:
         const Vote& vote = candidate.Vote();
         const ClaimMessage message = candidate.PackMessage();
 
+        m_vote_txos.clear();
+        m_vote_cpids.clear();
+
         VoteDetail detail;
         detail.m_amount = Resolve(vote.m_claim.m_balance_claim, message);
         detail.m_ismine = candidate.IsMine();
@@ -212,6 +215,19 @@ public:
         return detail;
     }
 
+    //!
+    //! \brief Record the outputs and the CPID that the last resolved vote
+    //! reached. Call it only when that vote is counted.
+    //!
+    void Commit()
+    {
+        m_seen_txos.insert(m_vote_txos.begin(), m_vote_txos.end());
+        m_seen_cpids.insert(m_vote_cpids.begin(), m_vote_cpids.end());
+
+        m_vote_txos.clear();
+        m_vote_cpids.clear();
+    }
+
 private:
     CTxDB& m_txdb;              //!< Used to resolve unspent amount claims.
     const Poll& m_poll;         //!< The poll to resolve voting weight for.
@@ -223,7 +239,8 @@ private:
     //!
     //! Each claimed output, and each output the walk follows, is recorded when
     //! it is first reached, so it counts once per poll. Votes resolve newest
-    //! first, so the newest vote that reaches an output keeps its weight.
+    //! first, so the newest counted vote that reaches an output keeps its
+    //! weight.
     //!
     std::unordered_set<COutPoint, OutPointHasher> m_seen_txos;
 
@@ -232,6 +249,33 @@ private:
     //! claims to filter duplicate weight claims.
     //!
     std::unordered_set<Cpid> m_seen_cpids;
+
+    //!
+    //! \brief The outputs and the CPID that the vote being resolved reaches.
+    //!
+    //! They join m_seen_txos and m_seen_cpids only when the vote is counted
+    //! (Commit).
+    //!
+    std::unordered_set<COutPoint, OutPointHasher> m_vote_txos;
+    std::unordered_set<Cpid> m_vote_cpids;
+
+    //!
+    //! \brief Whether a counted vote, or the vote being resolved, already
+    //! reached the output.
+    //!
+    bool Seen(const COutPoint& txo) const
+    {
+        return m_seen_txos.count(txo) != 0 || m_vote_txos.count(txo) != 0;
+    }
+
+    //!
+    //! \brief Whether a counted vote, or the vote being resolved, already
+    //! has the CPID.
+    //!
+    bool Seen(const Cpid& cpid) const
+    {
+        return m_seen_cpids.count(cpid) != 0 || m_vote_cpids.count(cpid) != 0;
+    }
 
     //!
     //! \brief Resolve the claimed magnitude for a vote.
@@ -251,7 +295,7 @@ private:
             return Magnitude::Zero();
         }
 
-        if (m_seen_cpids.find(*cpid) != m_seen_cpids.end()) {
+        if (Seen(*cpid)) {
             return std::nullopt;
         }
 
@@ -319,7 +363,7 @@ private:
                 throw InvalidVoteError();
             }
 
-            m_seen_cpids.emplace(*cpid);
+            m_vote_cpids.emplace(*cpid);
 
             return m_superblock->m_cpids.MagnitudeOf(*cpid);
         }
@@ -387,7 +431,7 @@ private:
     //!
     CAmount Resolve(const COutPoint& txo, const CTxDestination& address)
     {
-        if (m_seen_txos.find(txo) != m_seen_txos.end()) {
+        if (Seen(txo)) {
             LogPrint(LogFlags::VOTE, "%s: duplicate txo", __func__);
             return 0;
         }
@@ -469,7 +513,7 @@ private:
             throw InvalidVoteError(); // should never happen
         }
 
-        m_seen_txos.emplace(txo);
+        m_vote_txos.emplace(txo);
 
         if (tx_index.vSpent[txo.n].IsNull()) {
             return output.nValue; // txo is unspent
@@ -596,7 +640,7 @@ private:
                     continue;
                 }
 
-                if (m_seen_txos.find({ tx_hash, i }) != m_seen_txos.end()) {
+                if (Seen(COutPoint(tx_hash, i))) {
                     continue;
                 }
 
@@ -621,7 +665,7 @@ private:
 
                 const CDiskTxPos& pos = tx_index.vSpent[next_pair.first];
 
-                m_seen_txos.emplace(tx_hash, next_pair.first);
+                m_vote_txos.emplace(tx_hash, next_pair.first);
 
                 if (!pos.IsNull()) {
                     txo_queue.emplace(pos, next_pair.second);
@@ -1082,6 +1126,7 @@ private:
 
         CalculateWeight(detail, m_magnitude_factor);
         AcceptIntoTotals(detail);
+        m_resolver.Commit();
 
         // Record if a pool votes. Membership check is O(1) via the cached
         // m_pool_cpids_at_start set. See VoteCounter ctor for the
