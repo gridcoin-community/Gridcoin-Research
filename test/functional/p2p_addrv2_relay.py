@@ -21,6 +21,7 @@ from test_framework.util import assert_equal
 
 
 TORV3 = "pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion"
+CJDNS = "fc00:1:2:3:4:5:6:7"
 
 
 def address_ip(addr):
@@ -67,7 +68,8 @@ class AddrV2RelayTest(GridcoinTestFramework):
 
     def addresses(self, node, ipv4, port):
         addresses = []
-        for net, ip in ((CAddress.NET_IPV4, ipv4), (CAddress.NET_TORV3, TORV3)):
+        for net, ip in ((CAddress.NET_IPV4, ipv4), (CAddress.NET_TORV3, TORV3),
+                        (CAddress.NET_CJDNS, CJDNS)):
             addr = CAddress()
             addr.net = net
             addr.ip = ip
@@ -83,7 +85,7 @@ class AddrV2RelayTest(GridcoinTestFramework):
         source = self.add_p2p_connection_spaced(node, AddrPeer())
         source.wait_until(lambda: "sendaddrv2" in source.last_message)
 
-        self.log.info("sendaddrv2 before verack: relay IPv4 and Tor v3 as addrv2")
+        self.log.info("sendaddrv2 before verack: relay IPv4, Tor v3 and CJDNS as addrv2")
         with node.assert_debug_log(["signaled addrv2 support (sendaddrv2)"],
                                    unexpected_msgs=["sendaddrv2 received after verack"]):
             receiver = self.add_p2p_connection_spaced(
@@ -92,14 +94,15 @@ class AddrV2RelayTest(GridcoinTestFramework):
         addresses = self.addresses(node, "123.123.123.1", 32749)
         message = msg_addrv2()
         # Retain the oversized-address-list check from bitcoin#19954.
-        message.addrs = addresses * 501
+        message.addrs = addresses * 334
         with node.assert_debug_log(["message addrv2 size() = 1002"]):
             source.send_and_ping(message)
 
         message.addrs = addresses
         source.send_and_ping(message)
         receiver.wait_until(lambda: receiver.has_address(TORV3, 32749, v2=True)
-                            and receiver.has_address("123.123.123.1", 32749, v2=True))
+                            and receiver.has_address("123.123.123.1", 32749, v2=True)
+                            and receiver.has_address(CJDNS, 32749, v2=True))
         receiver.sync_with_ping()
         with p2p_lock:
             assert_equal(receiver.legacy_messages, [])
@@ -112,7 +115,21 @@ class AddrV2RelayTest(GridcoinTestFramework):
         node.p2ps.remove(receiver)
         self.wait_until(lambda: node.num_test_p2p_connections() == 1)
 
-        self.log.info("No sendaddrv2: relay gridaddr and omit Tor v3")
+        # GetAddr returns a 23% sample. Pad addrman while only source is connected.
+        for first in (10, 20):
+            padding = msg_addrv2()
+            for last in range(first, first + 10):
+                addr = CAddress()
+                addr.ip = "123.123.124.%d" % last
+                addr.time = node.mock_now()
+                addr.port = 32749
+                padding.addrs.append(addr)
+            source.send_and_ping(padding)
+        self.wait_until(lambda: any(a["address"] == CJDNS
+                                   for a in node.getnodeaddresses(1000)))
+        self.log.info("CJDNS stored in addrman with -cjdnsreachable absent")
+
+        self.log.info("No sendaddrv2: relay gridaddr and omit Tor v3/CJDNS")
         legacy = self.add_p2p_connection_spaced(
             node, AddrReceiver(support_addrv2=False))
         message.addrs = self.addresses(node, "123.123.123.2", 32750)
@@ -125,7 +142,8 @@ class AddrV2RelayTest(GridcoinTestFramework):
             relayed = [a for m in legacy.legacy_messages for a in m.addrs]
             assert_equal({(a.net, address_ip(a), a.port) for a in relayed},
                          {(CAddress.NET_IPV4, "123.123.123.2", 32750)})
-            assert all(a.net != CAddress.NET_TORV3 and not str(a.ip).endswith(".onion")
+            assert all(a.net not in (CAddress.NET_TORV3, CAddress.NET_CJDNS)
+                       and not str(a.ip).endswith(".onion")
                        for a in relayed)
         node.disconnect_p2ps()
 
@@ -137,7 +155,7 @@ class AddrV2RelayTest(GridcoinTestFramework):
             late.wait_for_disconnect()
         self.wait_until(lambda: node.num_test_p2p_connections() == 0)
         node.disconnect_p2ps()
-        self.log.info("addrv2, gridaddr filtering, and late negotiation checks passed")
+        self.log.info("addrv2 (including CJDNS with reachability off), gridaddr filtering, and late negotiation checks passed")
 
 
 if __name__ == "__main__":

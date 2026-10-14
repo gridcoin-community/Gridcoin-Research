@@ -422,6 +422,24 @@ BOOST_AUTO_TEST_CASE(caddrdb_19534_compatibility)
     BOOST_REQUIRE(db.Write(fresh));
     BOOST_CHECK(ReadLegacyFile(path) == upgraded);
 
+    // bitcoin#23077: CJDNS survives a checksummed peers.dat round trip.
+    CDataStream cjdns_stream(SER_NETWORK, PROTOCOL_VERSION | ADDRV2_FORMAT);
+    cjdns_stream.write(MakeByteSpan(ParseHex("0610fc000001000200030004000500060007")));
+    CNetAddr cjdns;
+    cjdns_stream >> cjdns;
+    BOOST_REQUIRE(cjdns.IsCJDNS());
+    CAddress cjdns_address(CService(cjdns, 32749), NODE_NETWORK, 1700000000);
+    BOOST_REQUIRE(fresh.Add(cjdns_address, CNetAddr(LookupNumeric("252.2.2.2", 0))));
+    BOOST_REQUIRE(db.Write(fresh));
+    AddrMan cjdns_restored{/*deterministic=*/true};
+    BOOST_REQUIRE(db.Read(cjdns_restored));
+    BOOST_REQUIRE_EQUAL(cjdns_restored.size(), 4U);
+    const AddrInfo* cjdns_info = cjdns_restored.Find(cjdns);
+    BOOST_REQUIRE(cjdns_info);
+    BOOST_CHECK(static_cast<const CAddress&>(*cjdns_info) == cjdns_address);
+    BOOST_CHECK(cjdns_info->IsCJDNS());
+    BOOST_CHECK_EQUAL(cjdns_info->ToString(), "[fc00:1:2:3:4:5:6:7]:32749");
+
     auto corrupt = fixture;
     corrupt.back() ^= 1;
     WriteLegacyFile(path, corrupt);

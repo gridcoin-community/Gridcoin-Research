@@ -7,6 +7,7 @@
 
 #include "clientversion.h"
 #include "netbase.h"
+#include "net.h"
 #include "protocol.h"
 #include "serialize.h"
 #include "span.h"
@@ -83,6 +84,63 @@ bool static TestSplitHost(string test, string host, int port)
     int portOut = -1;
     SplitHostPort(test, portOut, hostOut);
     return hostOut == host && port == portOut;
+}
+
+BOOST_AUTO_TEST_CASE(netbase_parsenetwork_cjdns)
+{
+    BOOST_CHECK_EQUAL(ParseNetwork("cjdns"), NET_CJDNS);
+    BOOST_CHECK_EQUAL(ParseNetwork("CJDNS"), NET_CJDNS);
+    BOOST_CHECK_EQUAL(ParseNetwork("tor"), NET_TOR);
+}
+
+BOOST_AUTO_TEST_CASE(netbase_cjdns_getgroup)
+{
+    // bitcoin#23077: skip the constant 0xfc byte, take 4 random bits after it.
+    CDataStream s(SER_NETWORK, PROTOCOL_VERSION | ADDRV2_FORMAT);
+    s.write(MakeByteSpan(ParseHex("0610fc000001000200030004000500060007")));
+    CNetAddr addr;
+    s >> addr;
+    BOOST_REQUIRE(addr.IsCJDNS());
+    BOOST_CHECK(addr.GetGroup() == std::vector<unsigned char>({(unsigned char)NET_CJDNS, 0xfc, 0x0f}));
+    BOOST_CHECK_EQUAL(addr.GetNetwork(), NET_CJDNS);
+    BOOST_CHECK(addr.IsRoutable());
+    CNetAddr copied;
+    copied.SetIP(addr);
+    BOOST_CHECK(copied == addr);
+    struct in6_addr raw;
+    BOOST_CHECK(addr.GetIn6Addr(&raw));
+    CService service(addr, 32749);
+    struct sockaddr_storage socket_addr;
+    socklen_t length = sizeof(socket_addr);
+    BOOST_REQUIRE(service.GetSockAddr(reinterpret_cast<struct sockaddr*>(&socket_addr), &length));
+    BOOST_CHECK_EQUAL(socket_addr.ss_family, AF_INET6);
+    BOOST_CHECK_EQUAL(service.ToStringIPPort(), "[fc00:1:2:3:4:5:6:7]:32749");
+    CDataStream v1(SER_NETWORK, PROTOCOL_VERSION);
+    v1 << addr;
+    BOOST_CHECK_EQUAL(HexStr(v1), std::string(32, '0'));
+    CDataStream v2(SER_NETWORK, PROTOCOL_VERSION | ADDRV2_FORMAT);
+    v2 << addr;
+    BOOST_CHECK_EQUAL(HexStr(v2), "0610fc000001000200030004000500060007");
+}
+
+BOOST_AUTO_TEST_CASE(netbase_cjdns_classification)
+{
+    const bool was_limited = IsLimited(NET_CJDNS);
+    const CService fc = LookupNumeric("fc00:1:2:3:4:5:6:7", 32749);
+    SetReachable(NET_CJDNS, false);
+    const CService disabled = MaybeFlipIPv6toCJDNS(fc);
+    BOOST_CHECK(disabled.IsIPv6());
+    BOOST_CHECK(!disabled.IsCJDNS());
+    BOOST_CHECK(!disabled.IsRoutable());
+    SetReachable(NET_CJDNS, true);
+    const CService enabled = MaybeFlipIPv6toCJDNS(fc);
+    BOOST_CHECK(enabled.IsCJDNS());
+    BOOST_CHECK(enabled.IsRoutable());
+    BOOST_CHECK_EQUAL(enabled.GetPort(), 32749);
+    BOOST_CHECK_EQUAL(enabled.GetReachabilityFrom(&enabled), 6); // REACH_PRIVATE
+    const CService other_ula = LookupNumeric("fd00::1", 32749);
+    BOOST_CHECK(MaybeFlipIPv6toCJDNS(other_ula).IsIPv6());
+    SetReachable(NET_CJDNS, !was_limited);
 }
 
 BOOST_AUTO_TEST_CASE(netbase_splithost)
@@ -577,15 +635,32 @@ BOOST_AUTO_TEST_CASE(cnetaddr_unserialize_v2)
     BOOST_CHECK(!addr.IsValid());
     BOOST_REQUIRE(s.empty());
 
-    // Gridcoin adaptation: CJDNS (6) is unsupported -> silently ignored, !IsValid().
+    // Valid CJDNS (bitcoin#19845 test vector, enabled by the bitcoin#23077 port).
     Feed(s, "06" "10" "fc000001000200030004000500060007");
     s >> addr;
-    BOOST_CHECK(!addr.IsValid());
+    BOOST_CHECK(addr.IsValid());
+    BOOST_CHECK(addr.IsCJDNS());
+    BOOST_CHECK(!addr.IsAddrV1Compatible());
+    BOOST_CHECK_EQUAL(addr.ToString(), "fc00:1:2:3:4:5:6:7");
     BOOST_REQUIRE(s.empty());
+
+    // A non-fc prefix must be invalid, not a routable CJDNS address.
+    Feed(s, "06" "10" "fd000001000200030004000500060007");
+    s >> addr;
+    BOOST_CHECK(!addr.IsValid());
+    BOOST_CHECK(!addr.IsCJDNS());
+    BOOST_REQUIRE(s.empty());
+
+    // Invalid CJDNS, wrong length.
+    Feed(s, "06" "01" "00");
+    BOOST_CHECK_EXCEPTION(s >> addr, std::ios_base::failure,
+                          HasReason("BIP155 CJDNS address with length 1 (should be 16)"));
+    BOOST_REQUIRE(!s.empty());
+    s.clear();
 
     // Unsupported/future IDs must consume exactly their payload, regardless
     // of a nonstandard length, and leave the following supported record readable.
-    for (uint8_t id : {uint8_t{5}, uint8_t{6}, uint8_t{0xAA}}) {
+    for (uint8_t id : {uint8_t{5}, uint8_t{0xAA}}) {
         for (size_t length : {size_t{0}, size_t{1}, size_t{16}, size_t{32}, size_t{512}}) {
             s << id;
             WriteCompactSize(s, length);
@@ -607,7 +682,7 @@ BOOST_AUTO_TEST_CASE(cnetaddr_unserialize_v2)
                               HasReason("Address too long: 513 > 512"));
         s.clear();
     }
-    Feed(s, "0610fc00"); // A truncated ignored CJDNS record must still fail.
+    Feed(s, "0510fc00"); // A truncated ignored I2P record must still fail.
     BOOST_CHECK_EXCEPTION(s >> addr, std::ios_base::failure, HasReason("end of data"));
     s.clear();
 
@@ -621,7 +696,7 @@ BOOST_AUTO_TEST_CASE(cnetaddr_unserialize_v2)
     BOOST_CHECK(reader.empty());
 
     CDataStream underlying(SER_NETWORK, PROTOCOL_VERSION);
-    Feed(underlying, "0601fc010401020304");
+    Feed(underlying, "0501fc010401020304"); // I2P remains unsupported.
     OverrideStream<CDataStream> overridden(&underlying, SER_NETWORK, PROTOCOL_VERSION | ADDRV2_FORMAT);
     overridden >> addr;
     BOOST_CHECK(!addr.IsValid());

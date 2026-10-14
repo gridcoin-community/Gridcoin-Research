@@ -218,7 +218,7 @@ class CAddress:
         elif self.net == self.NET_TORV2:
             raw = self.ONIONCAT_PREFIX + raw
         elif self.net != self.NET_IPV6:
-            raise ValueError("Tor v3 cannot be serialized in legacy addr/gridaddr")
+            raise ValueError("Tor v3/CJDNS cannot be serialized in legacy addr/gridaddr")
         r += raw
         r += struct.pack(">H", self.port)
         return r
@@ -227,7 +227,8 @@ class CAddress:
     NET_IPV6 = 2
     NET_TORV2 = 3
     NET_TORV3 = 4
-    ADDRV2_ADDRESS_LENGTH = {NET_IPV4: 4, NET_IPV6: 16, NET_TORV2: 10, NET_TORV3: 32}
+    NET_CJDNS = 6
+    ADDRV2_ADDRESS_LENGTH = {NET_IPV4: 4, NET_IPV6: 16, NET_TORV2: 10, NET_TORV3: 32, NET_CJDNS: 16}
     ONIONCAT_PREFIX = bytes.fromhex("fd87d87eeb43")
 
     @staticmethod
@@ -246,8 +247,11 @@ class CAddress:
     def _address_bytes(self):
         if self.net == self.NET_IPV4:
             return struct.pack(">I", self.ip if isinstance(self.ip, int) else _ip_to_int(self.ip))
-        if self.net == self.NET_IPV6:
-            return ipaddress.IPv6Address(self.ip).packed
+        if self.net in (self.NET_IPV6, self.NET_CJDNS):
+            raw = ipaddress.IPv6Address(self.ip).packed
+            if self.net == self.NET_CJDNS and raw[0] != 0xfc:
+                raise ValueError("CJDNS must be in fc00::/8")
+            return raw
         if self.net in (self.NET_TORV2, self.NET_TORV3):
             if not self.ip.endswith(".onion"):
                 raise ValueError("Expected an onion address")
@@ -264,7 +268,9 @@ class CAddress:
     def _set_address_bytes(self, raw):
         if self.net == self.NET_IPV4:
             self.ip = str(ipaddress.IPv4Address(raw))
-        elif self.net == self.NET_IPV6:
+        elif self.net in (self.NET_IPV6, self.NET_CJDNS):
+            if self.net == self.NET_CJDNS and raw[0] != 0xfc:
+                raise ValueError("CJDNS must be in fc00::/8")
             self.ip = str(ipaddress.IPv6Address(raw))
         elif self.net == self.NET_TORV2:
             self.ip = base64.b32encode(raw).decode("ascii").lower() + ".onion"
