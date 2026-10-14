@@ -31,12 +31,21 @@ The voters:
   - node8 holds 1.012 GRC at a single-key address and 1.015 GRC at a multisig
     address of its own keys, so its first vote spends both;
   - node9 holds only a multisig output of its own keys that it has just
-    received.
+    received;
+  - node10 holds three equal coins, so the change of a vote that spends one of
+    them is smaller than the others;
+  - node11 holds two equal coins at two addresses.
 
 node3 also votes again before a block confirms its first vote, on one poll and
 then on two: the second claim names the first vote's mature input through that
-vote's unconfirmed change. A poll mined one block before V15_HEIGHT keeps the
-earlier rules, so node1's re-vote there waits for the confirmations.
+vote's unconfirmed change. node10 re-votes before its first vote confirms, and
+on a second poll once its first vote has one confirmation: each re-vote pays its
+fee from the first vote's change, not from a larger coin, so it spends that
+vote's change and cannot confirm before it. node11 votes on a v15 poll, then on
+a poll that started before v15, then re-votes on the v15 poll: the re-vote pays
+from the change of the vote it replaces, not from the larger change of the vote
+on the older poll. A poll mined one block before V15_HEIGHT keeps the earlier
+rules, so node1's re-vote there waits for the confirmations.
 
 Weights are compared with each voter's unspent outputs once its votes are
 confirmed and buried.
@@ -76,6 +85,8 @@ TWO_INPUT_SMALL = Decimal("0.5")
 MIXED_SINGLE_KEY = Decimal("1.012")
 MIXED_MULTISIG = Decimal("1.015")
 FEE = Decimal("0.01")
+# node10's three coins.
+EQUAL = Decimal("1000")
 
 # addpoll arguments: the weight type is passed as PollWeightType - 1, so 1 is
 # BALANCE; response type 2 is SINGLE_CHOICE. SURVEY is the one poll type that
@@ -86,7 +97,7 @@ RESPONSE_SINGLE_CHOICE = 2
 
 class VoteOriginClaimsTest(GridcoinTestFramework):
     def set_test_params(self):
-        self.num_nodes = 10
+        self.num_nodes = 12
         self.chain = "regtest"
         self.setup_clean_chain = True
         common = ["-staking=0", f"-blockv15height={V15_HEIGHT}", "-debug=vote"]
@@ -101,9 +112,9 @@ class VoteOriginClaimsTest(GridcoinTestFramework):
     def connect_all(self):
         # Two hubs, so no node holds more than six links: past six, a node drops
         # every link older than two hours on its clock (CConnman inactivity check).
-        for i in (1, 2, 3, 4, 5):
+        for i in (1, 2, 3, 4, 5, 11):
             self.connect_nodes(0, i)
-        for i in (6, 7, 8, 9):
+        for i in (6, 7, 8, 9, 10):
             self.connect_nodes(2, i)
 
     def stake(self, node=None):
@@ -207,9 +218,9 @@ class VoteOriginClaimsTest(GridcoinTestFramework):
         """Fund the voters from node0; return node5's multisig outpoint, node4's
         large coin and node8's multisig outpoint."""
         node0 = self.nodes[0]
-        single, fragmented, deep, multisig, splitter, sub_coin, mixed = (
-            self.nodes[i] for i in (1, 3, 4, 5, 6, 7, 8))
-        for voter in (single, fragmented, deep, multisig, splitter, sub_coin, mixed):
+        single, fragmented, deep, multisig, splitter, sub_coin, mixed, equal, two_equal = (
+            self.nodes[i] for i in (1, 3, 4, 5, 6, 7, 8, 10, 11))
+        for voter in (single, fragmented, deep, multisig, splitter, sub_coin, mixed, equal, two_equal):
             assert_equal(voter.listunspent(0), [])
 
         p2sh = self.own_multisig_address(multisig)
@@ -227,6 +238,8 @@ class VoteOriginClaimsTest(GridcoinTestFramework):
         outputs[sub_coin_address] = TWO_INPUT_LARGE
         outputs[mixed.getnewaddress()] = MIXED_SINGLE_KEY
         outputs[mixed_p2sh] = MIXED_MULTISIG
+        outputs.update({equal.getnewaddress(): EQUAL for _ in range(3)})
+        outputs.update({two_equal.getnewaddress(): EQUAL for _ in range(2)})
         txid = node0.sendmany("", outputs)
         # sendmany pays each address once; the second coin at node7's address
         # comes in its own transaction.
@@ -325,6 +338,61 @@ class VoteOriginClaimsTest(GridcoinTestFramework):
         assert_equal(result["responses"][1]["weight"], held)
         assert_equal(result["responses"][0]["weight"], 0)
         assert_equal(result["total_weight"], held)
+        assert_equal((result["invalid_votes"], result["superseded_votes"]), (0, 1))
+
+    def scenario_equal_coins_revote(self, voter, title, blocks_between):
+        """Equal coins: the wallet votes, then re-votes after `blocks_between`
+        blocks. The first vote spends one coin and returns its change, which is
+        smaller than the coins left. The re-vote pays its fee from that change, so
+        it cannot confirm before the first vote, and once both confirm the new
+        answer carries the whole holding."""
+        poll = self.add_poll(title)
+        first = self.cast(voter, poll, 0)
+        change = [(first, o["n"]) for o in voter.getrawtransaction(first, 1)["vout"]
+                  if o["scriptPubKey"].get("addresses")]
+        assert_equal(len(change), 1)
+        for _ in range(blocks_between):
+            self.confirm()
+        second = self.cast(voter, poll, 1)
+        assert_equal([(i["txid"], i["vout"]) for i in voter.getrawtransaction(second, 1)["vin"]], change)
+        self.confirm()
+        self.bury()
+        held = sum(u["amount"] for u in voter.listunspent(0))
+        result = self.results(poll)
+        assert_equal(result["total_weight"], held)
+        assert_equal(result["responses"][1]["weight"], held)
+        assert_equal((result["invalid_votes"], result["superseded_votes"]), (0, 1))
+
+    def scenario_revote_after_a_vote_on_an_older_poll(self, voter, older_poll):
+        """Two equal coins: the wallet votes on a v15 poll, then on a poll that
+        started before v15, then re-votes on the v15 poll, all before the first
+        vote confirms. The vote on the older poll names no young output, so it
+        pays its fee from the other coin and leaves the larger change. The
+        re-vote still pays its fee from the change of the vote it replaces, so
+        it cannot confirm before that vote, and once all confirm the new answer
+        carries the whole holding."""
+        poll = self.add_poll("re-vote after a vote on an older poll")
+        first = self.cast(voter, poll, 0)
+        other = self.cast(voter, older_poll, 0)
+
+        def change_of(txid):
+            change = [(txid, o["n"], o["value"]) for o in voter.getrawtransaction(txid, 1)["vout"]
+                      if o["scriptPubKey"].get("addresses")]
+            assert_equal(len(change), 1)
+            return change[0]
+
+        first_change, other_change = change_of(first), change_of(other)
+        # The vote on the older poll left the larger change.
+        assert_greater_than(other_change[2], first_change[2])
+        second = self.cast(voter, poll, 1)
+        assert_equal([(i["txid"], i["vout"]) for i in voter.getrawtransaction(second, 1)["vin"]],
+                     [first_change[:2]])
+        self.confirm()
+        self.bury()
+        held = sum(u["amount"] for u in voter.listunspent(0))
+        result = self.results(poll)
+        assert_equal(result["total_weight"], held)
+        assert_equal(result["responses"][1]["weight"], held)
         assert_equal((result["invalid_votes"], result["superseded_votes"]), (0, 1))
 
     def scenario_two_polls_before_the_block(self, voter):
@@ -580,6 +648,14 @@ class VoteOriginClaimsTest(GridcoinTestFramework):
         self.scenario_revote_before_the_block(self.nodes[3])
         self.log.info("a wallet with many coins votes on two polls before its first vote confirms")
         self.scenario_two_polls_before_the_block(self.nodes[3])
+        self.log.info("a wallet with equal coins re-votes before its first vote confirms")
+        assert_equal([u["amount"] for u in self.nodes[10].listunspent(0)], [EQUAL] * 3)
+        self.scenario_equal_coins_revote(self.nodes[10], "equal coins", 0)
+        self.log.info("a wallet with equal coins re-votes once its first vote has one confirmation")
+        self.scenario_equal_coins_revote(self.nodes[10], "equal coins, one confirmation", 1)
+        self.log.info("a re-vote after a vote on a poll that started before v15")
+        assert_equal([u["amount"] for u in self.nodes[11].listunspent(0)], [EQUAL] * 2)
+        self.scenario_revote_after_a_vote_on_an_older_poll(self.nodes[11], legacy_poll)
 
         self.log.info("a multisig output is never claimed")
         self.scenario_multisig_output(self.nodes[5], multisig)

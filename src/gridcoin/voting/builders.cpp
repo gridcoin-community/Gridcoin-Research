@@ -29,6 +29,21 @@ using LogFlags = BCLog::LogFlags;
 
 namespace {
 //!
+//! \brief Determine whether a transaction carries a vote on a poll.
+//!
+bool VotesOn(const CTransaction& tx, const uint256& poll_txid)
+{
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type == ContractType::VOTE && contract.m_version >= 2
+            && contract.SharePayloadAs<Vote>()->m_poll_txid == poll_txid) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+//!
 //! \brief A set of outputs associated with an address for a voting claim.
 //!
 //! This intermediate container holds context about the unspent outputs for
@@ -128,6 +143,10 @@ public:
     //! or after the v15 height. A young output may then also be one of the
     //! wallet's own trusted outputs with no confirmation yet; the claim never
     //! names such an output itself, only its origins.
+    //! \param poll_txid The poll the claim is for.
+    //! \param pending_vote_output Set to the young output of one of the wallet's
+    //! own votes that is claimed by its origins: the largest one that comes from
+    //! a vote on \p poll_txid, else the largest one; left as it is if none.
     //!
     //! \return Unspent outputs grouped by address in descending order by
     //! the total amount of the outputs in each address grouping.
@@ -139,7 +158,10 @@ public:
     //! wallet that has not confirmed is not counted), the message says how many
     //! more confirmations the first of them to mature needs.
     //!
-    OutputAddresses PickCoins(const bool trace_origins) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    OutputAddresses PickCoins(
+        const bool trace_origins,
+        const uint256& poll_txid,
+        std::optional<COutPoint>& pending_vote_output) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // The outputs AvailableCoins returns point into the wallet's
         // transactions, so the wallet stays locked while they are read.
@@ -170,7 +192,7 @@ public:
             outputs.size());
 
         int young_depth = -1;
-        OutputAddressMap by_address = FilterOutputs(outputs, trace_origins, young_depth);
+        OutputAddressMap by_address = FilterOutputs(outputs, trace_origins, poll_txid, young_depth, pending_vote_output);
 
         LogPrint(LogFlags::VOTE,
             "%s: filtered tx output set contains %" PRIszu " addresses",
@@ -298,14 +320,26 @@ private:
     //! \param young_depth   Set to the greatest depth among the young single-key
     //! outputs of at least 1 GRC that the wallet can sign for and that it skipped
     //! (0 for one with no confirmation yet); left as it is if none.
+    //! \param poll_txid     The poll the claim is for.
+    //! \param pending_vote_output Set to the young output of one of the wallet's
+    //! own votes that is claimed by its origins: the largest one that comes from
+    //! a vote on \p poll_txid, else the largest one; left as it is if none.
     //!
     //! \return Filtered outputs grouped by address.
     //!
     OutputAddressMap FilterOutputs(
         const std::vector<COutput>& outputs,
         const bool trace_origins,
-        int& young_depth) const EXCLUSIVE_LOCKS_REQUIRED(cs_main, m_wallet.cs_wallet)
+        const uint256& poll_txid,
+        int& young_depth,
+        std::optional<COutPoint>& pending_vote_output) const EXCLUSIVE_LOCKS_REQUIRED(cs_main, m_wallet.cs_wallet)
     {
+        // The young output of the wallet's own votes that a re-vote's fee
+        // should come from: one that comes from a vote on this poll, so the
+        // re-vote spends that vote's change, else any.
+        std::optional<COutPoint> pending_same_poll;
+        std::optional<COutPoint> pending_any;
+
         OutputAddressMap by_address;
         PubkeyDestinationFilter pubkey_filter(m_wallet, by_address);
 
@@ -340,9 +374,10 @@ private:
                 const CKeyID* const key_id = std::get_if<CKeyID>(&dest);
                 const bool own_key = key_id && m_wallet.HaveKey(*key_id);
                 std::vector<std::pair<COutPoint, CAmount>> origins;
+                bool from_poll_vote = false;
 
                 if (trace_origins && own_key) {
-                    origins = TraceOrigins(*txo.tx, txo.i);
+                    origins = TraceOrigins(*txo.tx, txo.i, poll_txid, from_poll_vote);
                 }
 
                 // Every origin pays the young output's own address (TraceOrigins).
@@ -364,6 +399,19 @@ private:
                     LogPrint(LogFlags::VOTE, "  claimed young output for %s by %" PRIszu " origin(s)",
                         EncodeDestination(dest),
                         origins.size());
+
+                    // The outputs are sorted by amount, so the first is the largest.
+                    if (CarriesVote(*txo.tx)) {
+                        const COutPoint outpoint(txo.tx->GetHash(), txo.i);
+
+                        if (from_poll_vote && !pending_same_poll) {
+                            pending_same_poll = outpoint;
+                        }
+
+                        if (!pending_any) {
+                            pending_any = outpoint;
+                        }
+                    }
                 }
 
                 continue;
@@ -380,6 +428,10 @@ private:
             //
             auto filter = std::bind(pubkey_filter, std::placeholders::_1, txo);
             std::visit(filter, dest);
+        }
+
+        if (!pending_vote_output) {
+            pending_vote_output = pending_same_poll ? pending_same_poll : pending_any;
         }
 
         return by_address;
@@ -399,6 +451,9 @@ private:
     //!
     //! \param wtx   The transaction that contains the young output.
     //! \param n     The offset of the young output in \p wtx.
+    //! \param poll_txid The poll the claim is for.
+    //! \param from_poll_vote Set if a transaction the trace walks through
+    //! carries a vote on \p poll_txid; left as it is otherwise.
     //! \param depth How many transactions the trace has already walked through.
     //!
     //! \return The origins with the young output's value, or nothing if the output
@@ -409,6 +464,8 @@ private:
     std::vector<std::pair<COutPoint, CAmount>> TraceOrigins(
         const CWalletTx& wtx,
         const unsigned int n,
+        const uint256& poll_txid,
+        bool& from_poll_vote,
         const int depth = 0) const EXCLUSIVE_LOCKS_REQUIRED(cs_main, m_wallet.cs_wallet)
     {
         std::vector<std::pair<COutPoint, CAmount>> origins;
@@ -419,6 +476,10 @@ private:
 
         if (!wtx.IsCoinStake() && !CarriesVote(wtx)) {
             return origins;
+        }
+
+        if (VotesOn(wtx, poll_txid)) {
+            from_poll_vote = true;
         }
 
         CTxDestination dest;
@@ -451,7 +512,7 @@ private:
                 continue;
             }
 
-            for (const auto& origin : TraceOrigins(prev_tx, txin.prevout.n, depth + 1)) {
+            for (const auto& origin : TraceOrigins(prev_tx, txin.prevout.n, poll_txid, from_poll_vote, depth + 1)) {
                 origins.emplace_back(origin.first, wtx.vout[n].nValue);
             }
         }
@@ -604,11 +665,20 @@ public:
     //! \param claim         The object to fill with the claim.
     //! \param trace_origins Whether to claim the wallet's young recirculated
     //! outputs by their origins (CoinPicker::TraceOrigins).
+    //! \param poll_txid     The poll the claim is for.
+    //! \param pending_vote_output Set to the young output of one of the
+    //! wallet's own votes that the picker claimed by its origins, preferring one
+    //! that comes from a vote on \p poll_txid (CoinPicker::PickCoins); left as
+    //! it is if none.
     //!
-    void BuildClaim(BalanceClaim& claim, const bool trace_origins) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    void BuildClaim(
+        BalanceClaim& claim,
+        const bool trace_origins,
+        const uint256& poll_txid,
+        std::optional<COutPoint>& pending_vote_output) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const AddressClaimBuilder builder(m_wallet);
-        OutputAddresses outputs_by_address = CoinPicker(m_wallet).PickCoins(trace_origins);
+        OutputAddresses outputs_by_address = CoinPicker(m_wallet).PickCoins(trace_origins, poll_txid, pending_vote_output);
 
         TrimSmallestOutputs(outputs_by_address);
         claim.m_address_claims.reserve(outputs_by_address.size());
@@ -1203,12 +1273,20 @@ public:
     //! \param poll          Determines how to generate a magnitude claim.
     //! \param trace_origins Whether the balance claim may name the origins of
     //! the wallet's young recirculated outputs (CoinPicker::TraceOrigins).
+    //! \param pending_vote_output Set to the young output of one of the
+    //! wallet's own votes that the coin picker claimed by its origins,
+    //! preferring one that comes from a vote on this poll
+    //! (CoinPicker::PickCoins); left as it is if none.
     //!
-    void BuildClaim(Vote& vote, const Poll& poll, const bool trace_origins) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    void BuildClaim(
+        Vote& vote,
+        const Poll& poll,
+        const bool trace_origins,
+        std::optional<COutPoint>& pending_vote_output) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         VoteWeightClaim& claim = vote.m_claim;
 
-        m_balance_builder.BuildClaim(claim.m_balance_claim, trace_origins);
+        m_balance_builder.BuildClaim(claim.m_balance_claim, trace_origins, vote.m_poll_txid, pending_vote_output);
 
         if (poll.IncludesMagnitudeWeight()) {
             m_magnitude_builder.BuildClaim(claim.m_magnitude_claim);
@@ -1290,6 +1368,9 @@ private:
 //! \param explicit_outpoint If set, the user has pinned an exact UTXO
 //! (coin-control). Use only that outpoint; fail if it cannot cover the
 //! requirement.
+//! \param pending_vote_output If set, a young output of one of the wallet's own
+//! votes that a vote's claim names by its origins. When no outpoint is pinned
+//! and it alone covers the requirement, it is the only selection.
 //! \return A CCoinControl with the selected outpoints pinned. If no
 //! selection covers \p needed the returned CCoinControl contains a partial
 //! selection; the downstream CreateTransaction call reports the
@@ -1298,7 +1379,8 @@ private:
 inline CCoinControl PickLargestFirstFeeInputs(
     CWallet& wallet,
     const CAmount& needed,
-    const std::optional<COutPoint>& explicit_outpoint)
+    const std::optional<COutPoint>& explicit_outpoint,
+    const std::optional<COutPoint>& pending_vote_output)
 {
     CCoinControl coin_control;
 
@@ -1312,6 +1394,10 @@ inline CCoinControl PickLargestFirstFeeInputs(
         return coin_control;
     }
 
+    // The outputs AvailableCoins returns point into the wallet's transactions,
+    // so the wallet stays locked while they are read.
+    LOCK2(cs_main, wallet.cs_wallet);
+
     // Default: accumulate largest-first until covered. Pass a CCoinControl
     // with fAllowWatchOnly=false (the default) to AvailableCoins so the
     // candidate set excludes watch-only outputs -- selecting a large
@@ -1320,6 +1406,21 @@ inline CCoinControl PickLargestFirstFeeInputs(
     std::vector<COutput> available;
     CCoinControl filter;
     wallet.AvailableCoins(available, true, &filter, false);
+
+    // When a vote's claim names the origins of an earlier vote's young change
+    // and that change covers the requirement, the vote pays its fee from it.
+    // The new vote is then the earlier vote's child and cannot confirm before
+    // it. The tally gives a coin's weight to the newest vote that reaches it.
+    if (pending_vote_output) {
+        for (const auto& utxo : available) {
+            if (COutPoint(utxo.tx->GetHash(), utxo.i) == *pending_vote_output
+                && utxo.tx->vout[utxo.i].nValue >= needed)
+            {
+                coin_control.Select(*pending_vote_output);
+                return coin_control;
+            }
+        }
+    }
 
     std::sort(available.begin(), available.end(),
         [](const COutput& a, const COutput& b) {
@@ -1342,7 +1443,8 @@ inline CCoinControl PickLargestFirstFeeInputs(
 
 template <typename PayloadType>
 void SelectFinalInputs(CWallet& wallet, CWalletTx& tx,
-                       const std::optional<COutPoint>& explicit_fee_outpoint = std::nullopt)
+                       const std::optional<COutPoint>& explicit_fee_outpoint = std::nullopt,
+                       const std::optional<COutPoint>& pending_vote_output = std::nullopt)
 {
     CWalletTx mock_tx = tx;
 
@@ -1362,7 +1464,8 @@ void SelectFinalInputs(CWallet& wallet, CWalletTx& tx,
     CAmount out_applied_fee = 0;
 
     // Pre-select fee-paying inputs largest-first (or honor the user's
-    // explicit outpoint). This avoids CreateTransaction's default
+    // explicit outpoint, or pay from an earlier vote's young change, as
+    // PickLargestFirstFeeInputs describes). This avoids CreateTransaction's default
     // SelectSmallestCoins() path for contract txs, which on a dust-heavy
     // wallet selects hundreds of small UTXOs and blows past the 100 KB
     // standard tx size limit.
@@ -1374,7 +1477,7 @@ void SelectFinalInputs(CWallet& wallet, CWalletTx& tx,
     // existing Insufficient-funds path.
     const CAmount needed = burn_fee + COIN;
     CCoinControl coin_control = PickLargestFirstFeeInputs(
-        wallet, needed, explicit_fee_outpoint);
+        wallet, needed, explicit_fee_outpoint, pending_vote_output);
 
     if (!wallet.CreateTransaction(
         CScript() << OP_RETURN,
@@ -2009,10 +2112,11 @@ CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
     CWalletTx tx;
 
     const VoteClaimBuilder claim_builder(*pwallet, Researcher::Get());
+    std::optional<COutPoint> pending_vote_output;
     if (m_claim_outpoints) {
         claim_builder.BuildClaimFromOutpoints(*m_vote, *m_claim_outpoints);
     } else {
-        claim_builder.BuildClaim(*m_vote, *m_poll, PollStartsAtOrAfterV15(m_vote->m_poll_txid));
+        claim_builder.BuildClaim(*m_vote, *m_poll, PollStartsAtOrAfterV15(m_vote->m_poll_txid), pending_vote_output);
     }
 
     {
@@ -2022,7 +2126,7 @@ CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
         static_cast<CTransaction&>(tx) = CTransaction(std::move(mtx));
     }
 
-    SelectFinalInputs<Vote>(*pwallet, tx, m_fee_outpoint);
+    SelectFinalInputs<Vote>(*pwallet, tx, m_fee_outpoint, pending_vote_output);
     Vote& vote = tx.vContracts.back().SharePayload().As<Vote>();
 
     if (!claim_builder.SignClaim(vote, tx)) {
