@@ -6,6 +6,7 @@
 #include "util.h"
 
 #include "netbase.h"
+#include "protocol.h"
 #include "serialize.h"
 #include "span.h"
 #include "streams.h"
@@ -658,5 +659,114 @@ BOOST_AUTO_TEST_CASE(cservice_v1_bytes_unchanged)
     BOOST_CHECK_EQUAL(StreamHex(s), "00000000000000000000ffff010203047fed");
 }
 
+
+BOOST_AUTO_TEST_CASE(cnetaddr_addrv1_compatible)
+{
+    CNetAddr addr;
+
+    BOOST_CHECK(ResolveIP("12.34.56.78").IsAddrV1Compatible());
+    BOOST_CHECK(ResolveIP("1122:3344:5566:7788:9900:aabb:ccdd:eeff").IsAddrV1Compatible());
+
+    BOOST_REQUIRE(addr.SetSpecial("6hzph5hv6337r6p2.onion"));
+    BOOST_CHECK(addr.IsAddrV1Compatible());
+
+    BOOST_REQUIRE(addr.SetSpecial("pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion"));
+    BOOST_CHECK(!addr.IsAddrV1Compatible());
+
+    BOOST_REQUIRE(addr.SetInternal("esffpvrt3wpeaygy"));
+    BOOST_CHECK(addr.IsAddrV1Compatible());
+
+    // Tor v3 GetKey()/GetAddrBytes() must be the 32 raw bytes, not 16 zero bytes,
+    // so that distinct v3 peers don't collide in setAddrKnown/addrman.
+    CNetAddr v3a, v3b;
+    BOOST_REQUIRE(v3a.SetSpecial("pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion"));
+    {
+        CDataStream s(SER_NETWORK, PROTOCOL_VERSION | ADDRV2_FORMAT);
+        Feed(s, "04" "20" "1111111111111111111111111111111111111111111111111111111111111111");
+        s >> v3b;
+    }
+    BOOST_REQUIRE(v3b.IsTor() && !v3b.IsAddrV1Compatible());
+    BOOST_CHECK_EQUAL(v3a.GetAddrBytes().size(), 32U);
+    BOOST_CHECK(CService(v3a, 32749).GetKey() != CService(v3b, 32749).GetKey());
+}
+
+// CNetAddr (un)ser is tested above; here only edge cases for port, service flags and time.
+static const std::vector<CAddress> fixture_addresses({
+    CAddress(CService(CNetAddr(in6addr_loopback), 0 /* port */),
+             NODE_NONE,
+             0x4966bc61U /* Fri Jan  9 02:54:25 UTC 2009 */),
+    CAddress(CService(CNetAddr(in6addr_loopback), 0x00f1 /* port */),
+             NODE_NETWORK,
+             0x83766279U /* Tue Nov 22 11:22:33 UTC 2039 */),
+    CAddress(CService(CNetAddr(in6addr_loopback), 0xf1f2 /* port */),
+             static_cast<ServiceFlags>(0x448), // upstream used NODE_WITNESS|NODE_COMPACT_FILTERS|NODE_NETWORK_LIMITED
+             0xffffffffU /* Sun Feb  7 06:28:15 UTC 2106 */)
+});
+
+static constexpr const char* stream_addrv1_hex =
+    "03"
+    "61bc6649" "0000000000000000" "00000000000000000000000000000001" "0000"
+    "79627683" "0100000000000000" "00000000000000000000000000000001" "00f1"
+    "ffffffff" "4804000000000000" "00000000000000000000000000000001" "f1f2";
+
+static constexpr const char* stream_addrv2_hex =
+    "03"
+    "61bc6649" "00"     "02" "10" "00000000000000000000000000000001" "0000"
+    "79627683" "01"     "02" "10" "00000000000000000000000000000001" "00f1"
+    "ffffffff" "fd4804" "02" "10" "00000000000000000000000000000001" "f1f2";
+
+BOOST_AUTO_TEST_CASE(caddress_serialize_v1)
+{
+    CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+    s << fixture_addresses;
+    BOOST_CHECK_EQUAL(StreamHex(s), stream_addrv1_hex);
+}
+
+BOOST_AUTO_TEST_CASE(caddress_unserialize_v1)
+{
+    CDataStream s(ParseHex(stream_addrv1_hex), SER_NETWORK, PROTOCOL_VERSION);
+    std::vector<CAddress> addresses_unserialized;
+    s >> addresses_unserialized;
+    BOOST_REQUIRE_EQUAL(addresses_unserialized.size(), fixture_addresses.size());
+    for (size_t i = 0; i < fixture_addresses.size(); ++i) {
+        BOOST_CHECK(fixture_addresses[i] == addresses_unserialized[i]);
+        BOOST_CHECK_EQUAL(addresses_unserialized[i].nServices, fixture_addresses[i].nServices);
+        BOOST_CHECK_EQUAL(addresses_unserialized[i].nTime, fixture_addresses[i].nTime);
+    }
+    BOOST_CHECK(s.empty());
+}
+
+BOOST_AUTO_TEST_CASE(caddress_serialize_v2)
+{
+    CDataStream s(SER_NETWORK, PROTOCOL_VERSION | ADDRV2_FORMAT);
+    s << fixture_addresses;
+    BOOST_CHECK_EQUAL(StreamHex(s), stream_addrv2_hex);
+
+    // Service flags use the full uint64_t domain, not the vector-size cap.
+    CAddress large_services = fixture_addresses[0];
+    large_services.nServices = static_cast<ServiceFlags>(UINT64_MAX);
+    CDataStream flags(SER_NETWORK, PROTOCOL_VERSION | ADDRV2_FORMAT);
+    flags << large_services;
+    CAddress decoded;
+    flags >> decoded;
+    BOOST_CHECK_EQUAL(static_cast<uint64_t>(decoded.nServices), UINT64_MAX);
+    BOOST_CHECK_EQUAL(decoded.nTime, large_services.nTime);
+    BOOST_CHECK(decoded == large_services);
+    BOOST_CHECK(flags.empty());
+}
+
+BOOST_AUTO_TEST_CASE(caddress_unserialize_v2)
+{
+    CDataStream s(ParseHex(stream_addrv2_hex), SER_NETWORK, PROTOCOL_VERSION | ADDRV2_FORMAT);
+    std::vector<CAddress> addresses_unserialized;
+    s >> addresses_unserialized;
+    BOOST_REQUIRE_EQUAL(addresses_unserialized.size(), fixture_addresses.size());
+    for (size_t i = 0; i < fixture_addresses.size(); ++i) {
+        BOOST_CHECK(fixture_addresses[i] == addresses_unserialized[i]);
+        BOOST_CHECK_EQUAL(addresses_unserialized[i].nServices, fixture_addresses[i].nServices);
+        BOOST_CHECK_EQUAL(addresses_unserialized[i].nTime, fixture_addresses[i].nTime);
+    }
+    BOOST_CHECK(s.empty());
+}
 
 BOOST_AUTO_TEST_SUITE_END()
