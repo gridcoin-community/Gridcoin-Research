@@ -208,9 +208,27 @@ void AdvertiseLocal(CNode *pnode)
 
 
 
-// learn a new local address
-bool AddLocal(const CService& addr, int nScore)
+/**
+ * If an IPv6 address belongs to the address range used by the CJDNS network and
+ * the CJDNS network is reachable (-cjdnsreachable config is set), then change
+ * the type from NET_IPV6 to NET_CJDNS.
+ * @param[in] service Address to potentially convert.
+ * @return a copy of `service` either unmodified or changed to CJDNS.
+ */
+CService MaybeFlipIPv6toCJDNS(const CService& service)
 {
+    CService ret{service};
+    if (ret.m_net == NET_IPV6 && ret.m_addr[0] == 0xfc && !IsLimited(NET_CJDNS)) {
+        ret.m_net = NET_CJDNS;
+    }
+    return ret;
+}
+
+// learn a new local address
+bool AddLocal(const CService& addr_, int nScore)
+{
+    CService addr{MaybeFlipIPv6toCJDNS(addr_)};
+
     if (!addr.IsRoutable())
         return false;
 
@@ -375,7 +393,7 @@ std::shared_ptr<CNode> CConnman::ConnectNode(CAddress addrConnect, const char *p
 
     // Connect
     SOCKET hSocket;
-    if (pszDest ? ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort()) : ConnectSocket(addrConnect, hSocket))
+    if (pszDest ? ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort(), GetConnectTimeout(), MaybeFlipIPv6toCJDNS) : ConnectSocket(addrConnect, hSocket))
     {
         g_connman->GetAddrMan().Attempt(addrConnect);
         /// debug print
@@ -903,9 +921,13 @@ void CConnman::ThreadSocketHandler2()
 
             int max_connections = std::min<int>(gArgs.GetArg("-maxconnections", 125), 950);
 
-            if (hSocket != INVALID_SOCKET)
-                if (!addr.SetSockAddr((const struct sockaddr*)&sockaddr))
+            if (hSocket != INVALID_SOCKET) {
+                if (!addr.SetSockAddr((const struct sockaddr*)&sockaddr)) {
                     LogPrintf("Warning: Unknown socket family");
+                } else {
+                    addr = CAddress{MaybeFlipIPv6toCJDNS(addr), NODE_NONE};
+                }
+            }
 
             std::set<CNetAddr> setActiveInbound;
             {
@@ -1834,8 +1856,9 @@ void CConnman::ThreadMessageHandler2()
 
 
 
-bool BindListenPort(const CService &addrBind, string& strError)
+bool BindListenPort(const CService &addrBind_, string& strError)
 {
+    const CService addrBind{MaybeFlipIPv6toCJDNS(addrBind_)};
     strError = "";
     int nOne = 1;
 

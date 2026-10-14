@@ -38,7 +38,8 @@ CNetAddr::BIP155Network CNetAddr::GetBIP155Network() const
         default:
             assert(false); // LINT-OK-ASSERT: NET_TOR m_addr is only ever set to the TORv2 or TORv3 size
         }
-    case NET_CJDNS:      // Gridcoin never sets m_net to NET_CJDNS
+    case NET_CJDNS:
+        return BIP155Network::CJDNS;
     case NET_INTERNAL:   // should have been handled before calling this function
     case NET_UNROUTABLE: // m_net is never and should not be set to NET_UNROUTABLE
     case NET_MAX:        // m_net is never and should not be set to NET_MAX
@@ -84,10 +85,17 @@ bool CNetAddr::SetNetFromBIP155Network(uint8_t possible_bip155_net, size_t addre
             strprintf("BIP155 TORv3 address with length %u (should be %u)", address_size,
                       ADDR_TORV3_SIZE));
     case BIP155Network::I2P:
-    case BIP155Network::CJDNS:
-        // Gridcoin adaptation: no I2P/CJDNS support. Treat like an unknown id
+        // Gridcoin adaptation: no I2P support (yet). Treat like an unknown id
         // (silently skip) instead of upstream's size-check/accept.
         return false;
+    case BIP155Network::CJDNS:
+        if (address_size == ADDR_CJDNS_SIZE) {
+            m_net = NET_CJDNS;
+            return true;
+        }
+        throw std::ios_base::failure(
+            strprintf("BIP155 CJDNS address with length %u (should be %u)", address_size,
+                      ADDR_CJDNS_SIZE));
     }
 
     // Don't throw on addresses with unknown network ids (maybe from the future).
@@ -120,6 +128,8 @@ void CNetAddr::SetIP(const CNetAddr& ipIn)
         assert(ipIn.m_addr.size() == ADDR_INTERNAL_SIZE); // LINT-OK-ASSERT: m_addr size always matches m_net, enforced by every setter
         break;
     case NET_CJDNS:
+        assert(ipIn.m_addr.size() == ADDR_CJDNS_SIZE);
+        break;
     case NET_UNROUTABLE:
     case NET_MAX:
         assert(false); // LINT-OK-ASSERT: m_net is never set to CJDNS/UNROUTABLE/MAX
@@ -329,7 +339,8 @@ bool CNetAddr::IsTor() const { return m_net == NET_TOR; }
 
 /**
  * Check whether this object represents a CJDNS address.
- * Always false in Gridcoin today (nothing sets NET_CJDNS).
+ * Set from BIP155 addrv2 (network id 6) or by MaybeFlipIPv6toCJDNS() for
+ * fc00::/8 addresses when -cjdnsreachable is set.
  */
 bool CNetAddr::IsCJDNS() const { return m_net == NET_CJDNS; }
 
@@ -524,7 +535,7 @@ bool CNetAddr::GetInAddr(struct in_addr* pipv4Addr) const
 
 bool CNetAddr::GetIn6Addr(struct in6_addr* pipv6Addr) const
 {
-    if (!IsIPv6()) {
+    if (!IsIPv6() && !IsCJDNS()) {
         return false;
     }
     assert(sizeof(*pipv6Addr) == m_addr.size()); // LINT-OK-ASSERT: IsIPv6() implies a 16-byte m_addr
@@ -586,6 +597,16 @@ std::vector<unsigned char> CNetAddr::GetGroup() const
         nClass = NET_TOR;
         nStartByte = 0;
         nBits = 4;
+    }
+    else if (IsCJDNS())
+    {
+        // Treat in the same way as Tor because the address is "random" bytes
+        // (derived from a public key). However in CJDNS the first byte is a
+        // constant 0xfc, so the random bytes come after it. Thus skip the
+        // constant 8 bits at the start.
+        nClass = NET_CJDNS;
+        nStartByte = 0;
+        nBits = 12;
     }
     // for he.net, use /36 groups
     else if (IsIPv6() && HasPrefix(m_addr, std::array<uint8_t, 4>{0x20, 0x01, 0x04, 0x70}))
@@ -676,6 +697,11 @@ int CNetAddr::GetReachabilityFrom(const CNetAddr *paddrPartner) const
         default:         return REACH_DEFAULT;
         case NET_IPV4:   return REACH_IPV4; // Tor users can connect to IPv4 as well
         case NET_TOR:    return REACH_PRIVATE;
+        }
+    case NET_CJDNS:
+        switch(ourNet) {
+        default:         return REACH_DEFAULT;
+        case NET_CJDNS:  return REACH_PRIVATE;
         }
     case NET_TEREDO:
         switch(ourNet) {
@@ -777,7 +803,7 @@ bool CService::GetSockAddr(struct sockaddr* paddr, socklen_t *addrlen) const
         paddrin->sin_port = htons(port);
         return true;
     }
-    if (IsIPv6()) {
+    if (IsIPv6() || IsCJDNS()) {
         if (*addrlen < (socklen_t)sizeof(struct sockaddr_in6))
             return false;
         *addrlen = sizeof(struct sockaddr_in6);

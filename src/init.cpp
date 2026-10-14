@@ -906,9 +906,12 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-seednode=<ip>", "Connect to a node to retrieve peer addresses, and disconnect",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-cjdnsreachable", "If set then this host is configured for CJDNS (connecting to fc00::/8 "
+                                      "addresses would lead us to the CJDNS network) (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-externalip=<ip>", "Specify your own public address",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
-    argsman.AddArg("-onlynet=<net>", "Make outgoing connections only through network <net> (IPv4, IPv6 or Tor). "
+    argsman.AddArg("-onlynet=<net>", "Make outgoing connections only through network <net> (IPv4, IPv6, Tor or CJDNS). "
                                      "Incoming connections are not affected by this option. This option can be specified "
                                      "multiple times to allow multiple networks.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
@@ -2018,6 +2021,14 @@ bool AppInit2(ThreadHandlerPtr threads)
         }
     }
 
+    if (!gArgs.GetBoolArg("-cjdnsreachable", false)) {
+        SetReachable(NET_CJDNS, false);
+    }
+    // Now IsReachable(NET_CJDNS) is true if:
+    // 1. -cjdnsreachable is given and
+    // 2.1. -onlynet is not given or
+    // 2.2. -onlynet=cjdns is given
+
     // Mirrors Bitcoin Core master's -proxy/-onion handling, with Gridcoin's
     // -tor taking the place of -onion. -proxy also covers Tor onion services
     // unless -tor overrides or disables it, and NET_TOR is only reachable
@@ -2034,6 +2045,8 @@ bool AppInit2(ThreadHandlerPtr threads)
             SetProxy(NET_IPV4, addrProxy);
         if (!IsLimited(NET_IPV6))
             SetProxy(NET_IPV6, addrProxy);
+        if (!IsLimited(NET_CJDNS))
+            SetProxy(NET_CJDNS, addrProxy);
         SetNameProxy(addrProxy);
         addrOnion = addrProxy;
     }
@@ -2091,7 +2104,8 @@ bool AppInit2(ThreadHandlerPtr threads)
         } else {
             struct in_addr inaddr_any;
             inaddr_any.s_addr = INADDR_ANY;
-            if (!IsLimited(NET_IPV6))
+            // CJDNS uses IPv6 sockets even when IPv6 outgoing connections are disabled.
+            if (!IsLimited(NET_IPV6) || !IsLimited(NET_CJDNS))
                 fBound |= Bind(CService(in6addr_any, GetListenPort()), false);
             if (!IsLimited(NET_IPV4))
                 fBound |= Bind(CService(inaddr_any, GetListenPort()), !fBound);

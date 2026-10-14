@@ -42,6 +42,7 @@ enum Network ParseNetwork(std::string net) {
     if (net == "ipv4") return NET_IPV4;
     if (net == "ipv6") return NET_IPV6;
     if (net == "tor")  return NET_TOR;
+    if (net == "cjdns") return NET_CJDNS;
     return NET_UNROUTABLE;
 }
 
@@ -563,7 +564,7 @@ bool ConnectSocket(const CService &addrDest, SOCKET& hSocketRet, int nTimeout)
     return true;
 }
 
-bool ConnectSocketByName(CService &addr, SOCKET& hSocketRet, const char *pszDest, int portDefault, int nTimeout)
+bool ConnectSocketByName(CService &addr, SOCKET& hSocketRet, const char *pszDest, int portDefault, int nTimeout, CService (*transform)(const CService&))
 {
     string strDest;
     int port = portDefault;
@@ -576,6 +577,8 @@ bool ConnectSocketByName(CService &addr, SOCKET& hSocketRet, const char *pszDest
 
     CService addrResolved;
     if (Lookup(strDest.c_str(), addrResolved, port, fNameLookup && !HaveNameProxy())) {
+        // Apply the caller's network classification before choosing its proxy/socket.
+        if (transform) addrResolved = transform(addrResolved);
         if (addrResolved.IsValid()) {
             addr = addrResolved;
             return ConnectSocket(addr, hSocketRet, nTimeout);

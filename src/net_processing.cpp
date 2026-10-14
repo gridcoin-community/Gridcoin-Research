@@ -920,18 +920,21 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 addr.nTime = nNow - 5 * 24 * 60 * 60;
             pfrom->AddAddressKnown(addr);
             bool fReachable = IsReachable(addr);
+            // bitcoin#23077: CJDNS gossip/storage is useful even when this host
+            // cannot dial CJDNS. The reachability option only controls dialing.
+            const bool fRelayable = fReachable || addr.IsCJDNS();
 
             if (addr.nTime > nSince && !pfrom->fGetAddr && vAddr.size() <= 10 && addr.IsRoutable())
             {
                 // Relay to a deterministic, limited subset of nodes (issue #2558
                 // PR 9c: the selection + relay logic moved into CConnman, which
                 // keeps it under m_nodes_mutex so the chosen CNode* stay valid).
-                if (g_connman) g_connman->RelayAddress(addr, fReachable);
+                if (g_connman) g_connman->RelayAddress(addr, fRelayable);
             }
             // Do not store addresses outside our network.
             // (peers.dat is BIP155-capable since the addrman V3 format, so
             // Tor v3 addresses are stored too.)
-            if (fReachable)
+            if (fRelayable)
                 vAddrOk.push_back(addr);
         }
         g_connman->GetAddrMan().Add(vAddrOk, pfrom->addr, 2 * 60 * 60);
