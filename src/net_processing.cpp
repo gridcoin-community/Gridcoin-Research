@@ -764,6 +764,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (!pfrom->fInbound && gArgs.GetBoolArg("-synctime", true))
             AddTimeData(pfrom->GetId(), pfrom->addr, nOffsetSample);
 
+        // Signal ADDRv2 support (BIP155). Sent between VERSION and VERACK
+        // (bitcoin#20564). Not gated on protocol version: BIP155 is
+        // version-agnostic, and pre-BIP155 Gridcoin nodes silently ignore
+        // unknown commands (see the final else in ProcessMessage).
+        pfrom->PushMessage(NetMsgType::SENDADDRV2);
+
         // Change version
         pfrom->PushMessage(NetMsgType::VERACK);
         {
@@ -846,16 +852,37 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     {
         LOCK(pfrom->cs_vRecvMsg);
         pfrom->SetRecvVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
+        pfrom->m_verack_received = true;
     }
-    else if (strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::ADDR)
+    else if (strCommand == NetMsgType::SENDADDRV2)
     {
+        if (pfrom->m_verack_received) {
+            // Disconnect peers that send SENDADDRV2 message after VERACK; this
+            // must be negotiated between VERSION and VERACK (bitcoin#20564).
+            LogPrint(BCLog::LogFlags::NET, "sendaddrv2 received after verack from %s, disconnecting", pfrom->addr.ToString());
+            pfrom->fDisconnect = true;
+            return true;
+        }
+        LogPrint(BCLog::LogFlags::NET, "peer %s signaled addrv2 support (sendaddrv2)", pfrom->addr.ToString());
+        pfrom->m_wants_addrv2 = true;
+    }
+    else if (strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::ADDR || strCommand == NetMsgType::ADDRV2)
+    {
+        int stream_version = vRecv.GetVersion();
+        if (strCommand == NetMsgType::ADDRV2) {
+            // Add ADDRV2_FORMAT to the version so that the CNetAddr and CAddress
+            // unserialize methods know that an address in v2 format is coming.
+            stream_version |= ADDRV2_FORMAT;
+        }
+
+        OverrideStream<CDataStream> s(&vRecv, vRecv.GetType(), stream_version);
         vector<CAddress> vAddr;
-        vRecv >> vAddr;
+        s >> vAddr;
 
         if (vAddr.size() > 1000)
         {
             pfrom->Misbehaving(10);
-            return error("message addr size() = %" PRIszu "", vAddr.size());
+            return error("message %s size() = %" PRIszu "", strCommand, vAddr.size());
         }
 
         // Don't store the node address unless they have block height > 50%
@@ -881,8 +908,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 // keeps it under m_nodes_mutex so the chosen CNode* stay valid).
                 if (g_connman) g_connman->RelayAddress(addr, fReachable);
             }
-            // Do not store addresses outside our network
-            if (fReachable)
+            // Do not store addresses outside our network.
+            // Gridcoin: peers.dat (addrman) is still written in the V1 (16-byte)
+            // format, which cannot hold Tor v3; such an address would be saved
+            // as all-zeros. Keep them out of addrman until addrman learns the
+            // BIP155 format (upstream Format::V3_BIP155, see NOTES.md). They are
+            // still relayed above to peers that want addrv2.
+            if (fReachable && addr.IsAddrV1Compatible())
                 vAddrOk.push_back(addr);
         }
         g_connman->GetAddrMan().Add(vAddrOk, pfrom->addr, 2 * 60 * 60);
@@ -1497,7 +1529,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
     // Update the last seen time for this node's address
     if (pfrom->fNetworkNode)
-        if (strCommand == NetMsgType::ARIES || strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::INV || strCommand == NetMsgType::GETDATA || strCommand == NetMsgType::PING || strCommand == NetMsgType::VERSION || strCommand == NetMsgType::ADDR)
+        if (strCommand == NetMsgType::ARIES || strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::INV || strCommand == NetMsgType::GETDATA || strCommand == NetMsgType::PING || strCommand == NetMsgType::VERSION || strCommand == NetMsgType::ADDR || strCommand == NetMsgType::ADDRV2)
             AddressCurrentlyConnected(pfrom->addr);
 
     return true;
@@ -1727,6 +1759,17 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
     {
         vector<CAddress> vAddr;
         vAddr.reserve(pto->vAddrToSend.size());
+
+        const char* msg_type;
+        int make_flags;
+        if (pto->m_wants_addrv2) {
+            msg_type = NetMsgType::ADDRV2;
+            make_flags = ADDRV2_FORMAT;
+        } else {
+            msg_type = NetMsgType::GRIDADDR;
+            make_flags = 0;
+        }
+
         for (auto const& addr : pto->vAddrToSend)
         {
             // returns true if wasn't already contained in the set
@@ -1736,14 +1779,16 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
                 // receiver rejects addr messages larger than 1000
                 if (vAddr.size() >= 1000)
                 {
-                    pto->PushMessage(NetMsgType::GRIDADDR, vAddr);
+                    pto->PushMessageWithFlags(make_flags, msg_type, vAddr);
                     vAddr.clear();
                 }
             }
         }
         pto->vAddrToSend.clear();
-        if (!vAddr.empty())
-            pto->PushMessage(NetMsgType::GRIDADDR, vAddr);
+        if (!vAddr.empty()) {
+            LogPrint(BCLog::LogFlags::NET, "sending %s (%u addresses) to %s", msg_type, vAddr.size(), pto->addr.ToString());
+            pto->PushMessageWithFlags(make_flags, msg_type, vAddr);
+        }
     }
 
 
