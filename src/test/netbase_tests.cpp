@@ -174,6 +174,7 @@ BOOST_AUTO_TEST_CASE(subnet_test)
     BOOST_CHECK(!ResolveSubNet("1.2.3.0/-1").IsValid());
     BOOST_CHECK(ResolveSubNet("1.2.3.0/32").IsValid());
     BOOST_CHECK(!ResolveSubNet("1.2.3.0/33").IsValid());
+    BOOST_CHECK(!ResolveSubNet("1.2.3.0/300").IsValid());
     BOOST_CHECK(ResolveSubNet("1:2:3:4:5:6:7:8/0").IsValid());
     BOOST_CHECK(ResolveSubNet("1:2:3:4:5:6:7:8/33").IsValid());
     BOOST_CHECK(!ResolveSubNet("1:2:3:4:5:6:7:8/-1").IsValid());
@@ -205,6 +206,11 @@ BOOST_AUTO_TEST_CASE(subnet_test)
     BOOST_CHECK(CSubNet(ResolveIP("1:2:3:4:5:6:7:8")).Match(ResolveIP("1:2:3:4:5:6:7:8")));
     BOOST_CHECK(!CSubNet(ResolveIP("1:2:3:4:5:6:7:8")).Match(ResolveIP("1:2:3:4:5:6:7:9")));
     BOOST_CHECK(CSubNet(ResolveIP("1:2:3:4:5:6:7:8")).ToString() == "1:2:3:4:5:6:7:8/128");
+    // IPv4 address with IPv6 netmask or the other way around.
+    BOOST_CHECK(!CSubNet(ResolveIP("1.1.1.1"), ResolveIP("ffff::")).IsValid());
+    BOOST_CHECK(!CSubNet(ResolveIP("::1"), ResolveIP("255.0.0.0")).IsValid());
+    // Can't subnet TOR (or any other non-IPv4 and non-IPv6 network).
+    BOOST_CHECK(!CSubNet(ResolveIP("5wyqrzbvrdsumnok.onion"), ResolveIP("255.0.0.0")).IsValid());
 
     subnet = ResolveSubNet("1.2.3.4/255.255.255.255");
     BOOST_CHECK_EQUAL(subnet.ToString(), "1.2.3.4/32");
@@ -280,9 +286,10 @@ BOOST_AUTO_TEST_CASE(subnet_test)
     subnet = ResolveSubNet("1:2:3:4:5:6:7:8/0000:0000:0000:0000:0000:0000:0000:0000");
     BOOST_CHECK_EQUAL(subnet.ToString(), "::/0");
     subnet = ResolveSubNet("1.2.3.4/255.255.232.0");
-    BOOST_CHECK_EQUAL(subnet.ToString(), "1.2.0.0/255.255.232.0");
+    BOOST_CHECK(!subnet.IsValid());
+    BOOST_CHECK(!ResolveSubNet("1.2.3.4/255.0.255.255").IsValid());
     subnet = ResolveSubNet("1:2:3:4:5:6:7:8/ffff:ffff:ffff:fffe:ffff:ffff:ffff:ff0f");
-    BOOST_CHECK_EQUAL(subnet.ToString(), "1:2:3:4:5:6:7:8/ffff:ffff:ffff:fffe:ffff:ffff:ffff:ff0f");
+    BOOST_CHECK(!subnet.IsValid());
 }
 
 BOOST_AUTO_TEST_CASE(netbase_getgroup)
@@ -303,6 +310,27 @@ BOOST_AUTO_TEST_CASE(netbase_getgroup)
     // baz.net sha256 hash: 12929400eb4607c4ac075f087167e75286b179c693eb059a01774b864e8fe505
     std::vector<unsigned char> internal_group = {NET_INTERNAL, 0x12, 0x92, 0x94, 0x00, 0xeb, 0x46, 0x07, 0xc4, 0xac, 0x07};
     BOOST_CHECK(CreateInternal("baz.net").GetGroup() == internal_group);
+}
+
+
+BOOST_AUTO_TEST_CASE(subnet_cidr_uint8_bounds)
+{
+    uint8_t value = 42;
+    BOOST_CHECK(ParseUInt8("0", &value));
+    BOOST_CHECK_EQUAL(value, 0);
+    BOOST_CHECK(ParseUInt8("255", &value));
+    BOOST_CHECK_EQUAL(value, 255);
+    for (const std::string& invalid : {"", "-1", "256", "300", "65536", "4294967295", " 1", "1 ", "1x"}) {
+        value = 42;
+        BOOST_CHECK(!ParseUInt8(invalid, &value));
+        BOOST_CHECK_EQUAL(value, 42);
+    }
+    BOOST_CHECK(!ParseUInt8(std::string("1\0x", 3), &value));
+    BOOST_CHECK(ParseUInt8("128", nullptr));
+    for (const char* suffix : {"-1", "256", "300", "65536", "4294967295"}) {
+        BOOST_CHECK(!ResolveSubNet((std::string("1.2.3.4/") + suffix).c_str()).IsValid());
+        BOOST_CHECK(!ResolveSubNet((std::string("2001:470::1/") + suffix).c_str()).IsValid());
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -11,6 +11,11 @@
 
 #include "compat.h"
 #include "serialize.h"
+#include "prevector.h"
+
+#include <algorithm>
+#include <array>
+#include <iterator>
 
 #include <stdint.h>
 #include <string>
@@ -28,7 +33,42 @@ enum Network
     NET_MAX,
 };
 
-/** IP address (IPv6, or IPv4 using mapped IPv6 range (::FFFF:0:0/96)) */
+/// Prefix of an IPv6 address when it contains an embedded IPv4 address.
+/// Used when (un)serializing addresses in ADDRv1 format (pre-BIP155).
+static const std::array<uint8_t, 12> IPV4_IN_IPV6_PREFIX{
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF
+};
+
+/// Prefix of an IPv6 address when it contains an embedded TORv2 address.
+/// Used when (un)serializing addresses in ADDRv1 format (pre-BIP155).
+/// Such dummy IPv6 addresses are guaranteed to not be publicly routable as they
+/// fall under RFC4193's fc00::/7 subnet allocated to unique-local addresses.
+static const std::array<uint8_t, 6> TORV2_IN_IPV6_PREFIX{
+    0xFD, 0x87, 0xD8, 0x7E, 0xEB, 0x43
+};
+
+/// Prefix of an IPv6 address when it contains an embedded "internal" address.
+/// Used when (un)serializing addresses in ADDRv1 format (pre-BIP155).
+/// The prefix comes from 0xFD + SHA256("bitcoin")[0:5].
+/// Such dummy IPv6 addresses are guaranteed to not be publicly routable as they
+/// fall under RFC4193's fc00::/7 subnet allocated to unique-local addresses.
+static const std::array<uint8_t, 6> INTERNAL_IN_IPV6_PREFIX{
+    0xFD, 0x6B, 0x88, 0xC0, 0x87, 0x24 // 0xFD + sha256("bitcoin")[0:5].
+};
+
+/// Size of IPv4 address (in bytes).
+static constexpr size_t ADDR_IPV4_SIZE = 4;
+
+/// Size of IPv6 address (in bytes).
+static constexpr size_t ADDR_IPV6_SIZE = 16;
+
+/// Size of TORv2 address (in bytes).
+static constexpr size_t ADDR_TORV2_SIZE = 10;
+
+/// Size of "internal" (NET_INTERNAL) address (in bytes).
+static constexpr size_t ADDR_INTERNAL_SIZE = 10;
+
+/** Network address with network-specific, flexible-size storage. */
 class CNetAddr
 {
     protected:
@@ -37,8 +77,9 @@ class CNetAddr
          */
         Network m_net{NET_IPV6};
 
-        unsigned char ip[16]; // in network byte order
-        uint32_t scopeId; // for scoped/link-local ipv6 addresses
+        // Raw network address in network byte order, without legacy IPv6 prefixes.
+        prevector<ADDR_IPV6_SIZE, uint8_t> m_addr{ADDR_IPV6_SIZE, 0x0};
+        uint32_t scopeId{0}; // for scoped/link-local ipv6 addresses
 
     public:
         CNetAddr();
@@ -54,11 +95,6 @@ class CNetAddr
          */
         void SetLegacyIPv6(const uint8_t ipv6[16]);
 
-        /**
-        * Set raw IPv4 or IPv6 address (in network byte order)
-        * @note Only NET_IPV4 and NET_IPV6 are allowed for network.
-        */
-        void SetRaw(Network network, const uint8_t *data);
         /**
         * Transform an arbitrary string into a non-routable ipv6 address.
         * Useful for mapping resolved addresses back to their source.
@@ -89,7 +125,7 @@ class CNetAddr
         enum Network GetNetwork() const;
         std::string ToString() const;
         std::string ToStringIP() const;
-        unsigned int GetByte(int n) const;
+        std::vector<unsigned char> GetAddrBytes() const;
         uint64_t GetHash() const;
         bool GetInAddr(struct in_addr* pipv4Addr) const;
         std::vector<unsigned char> GetGroup() const;
@@ -108,7 +144,7 @@ class CNetAddr
         template <typename Stream>
         void Serialize(Stream& s) const
         {
-            s << ip;
+            SerializeV1Stream(s);
         }
 
         /**
@@ -117,14 +153,93 @@ class CNetAddr
         template <typename Stream>
         void Unserialize(Stream& s)
         {
-            unsigned char ip_temp[sizeof(ip)];
-            s >> ip_temp;
-            // Use SetLegacyIPv6() so that m_net is set correctly. For example
-            // ::FFFF:0102:0304 should be set as m_net=NET_IPV4 (1.2.3.4).
-            SetLegacyIPv6(ip_temp);
+            UnserializeV1Stream(s);
         }
 
         friend class CSubNet;
+
+    private:
+        /**
+         * Size of CNetAddr when serialized as ADDRv1 (pre-BIP155) (in bytes).
+         */
+        static constexpr size_t V1_SERIALIZATION_SIZE = ADDR_IPV6_SIZE;
+
+        /**
+         * Serialize in pre-ADDRv2/BIP155 format to an array.
+         * Some addresses (e.g. TORv3) cannot be serialized in pre-BIP155 format.
+         */
+        void SerializeV1Array(uint8_t (&arr)[V1_SERIALIZATION_SIZE]) const
+        {
+            size_t prefix_size;
+
+            switch (m_net) {
+            case NET_IPV6:
+                assert(m_addr.size() == sizeof(arr));
+                memcpy(arr, m_addr.data(), m_addr.size());
+                return;
+            case NET_IPV4:
+                prefix_size = IPV4_IN_IPV6_PREFIX.size();
+                assert(prefix_size + m_addr.size() == sizeof(arr));
+                memcpy(arr, IPV4_IN_IPV6_PREFIX.data(), prefix_size);
+                memcpy(arr + prefix_size, m_addr.data(), m_addr.size());
+                return;
+            case NET_TOR:
+                prefix_size = TORV2_IN_IPV6_PREFIX.size();
+                assert(prefix_size + m_addr.size() == sizeof(arr));
+                memcpy(arr, TORV2_IN_IPV6_PREFIX.data(), prefix_size);
+                memcpy(arr + prefix_size, m_addr.data(), m_addr.size());
+                return;
+            case NET_INTERNAL:
+                prefix_size = INTERNAL_IN_IPV6_PREFIX.size();
+                assert(prefix_size + m_addr.size() == sizeof(arr));
+                memcpy(arr, INTERNAL_IN_IPV6_PREFIX.data(), prefix_size);
+                memcpy(arr + prefix_size, m_addr.data(), m_addr.size());
+                return;
+            case NET_CJDNS: // Reserved; CNetAddr does not construct this network yet.
+            case NET_UNROUTABLE:
+            case NET_MAX:
+                assert(false);
+            } // no default case, so the compiler can warn about missing cases
+
+            assert(false);
+        }
+
+        /**
+         * Serialize in pre-ADDRv2/BIP155 format to a stream.
+         * Some addresses (e.g. TORv3) cannot be serialized in pre-BIP155 format.
+         */
+        template <typename Stream>
+        void SerializeV1Stream(Stream& s) const
+        {
+            uint8_t serialized[V1_SERIALIZATION_SIZE];
+
+            SerializeV1Array(serialized);
+
+            s << serialized;
+        }
+
+        /**
+         * Unserialize from a pre-ADDRv2/BIP155 format from an array.
+         */
+        void UnserializeV1Array(uint8_t (&arr)[V1_SERIALIZATION_SIZE])
+        {
+            // Use SetLegacyIPv6() so that m_net is set correctly. For example
+            // ::FFFF:0102:0304 should be set as m_net=NET_IPV4 (1.2.3.4).
+            SetLegacyIPv6(arr);
+        }
+
+        /**
+         * Unserialize from a pre-ADDRv2/BIP155 format from a stream.
+         */
+        template <typename Stream>
+        void UnserializeV1Stream(Stream& s)
+        {
+            uint8_t serialized[V1_SERIALIZATION_SIZE];
+
+            s >> serialized;
+
+            UnserializeV1Array(serialized);
+        }
 };
 
 class CSubNet
@@ -132,18 +247,19 @@ class CSubNet
     protected:
         /// Network (base) address
         CNetAddr network;
-        /// Netmask, in network byte order
+        /// Raw-address mask in network byte order. Remaining bytes retain the
+        /// legacy prefix mask so disk serialization is lossless.
         uint8_t netmask[16];
         /// Is this value valid? (only used to signal parse errors)
         bool valid;
 
     public:
         CSubNet();
-        CSubNet(const CNetAddr &addr, int32_t mask);
-        CSubNet(const CNetAddr &addr, const CNetAddr &mask);
+        CSubNet(const CNetAddr& addr, uint8_t mask);
+        CSubNet(const CNetAddr& addr, const CNetAddr& mask);
 
         //constructor for single ip subnet (<ipv4>/32 or <ipv6>/128)
-        explicit CSubNet(const CNetAddr &addr);
+        explicit CSubNet(const CNetAddr& addr);
 
         bool Match(const CNetAddr &addr) const;
 
@@ -160,8 +276,32 @@ class CSubNet
         inline void SerializationOp(Stream& s, Operation ser_action)
         {
             READWRITE(network);
-            READWRITE(netmask);
+            if (ser_action.ForRead()) {
+                // Legacy masks include the IPv6 embedding prefix; raw addresses do not.
+                READWRITE(netmask);
+                std::rotate(std::begin(netmask),
+                            std::begin(netmask) + GetLegacyMaskOffset(), std::end(netmask));
+            } else {
+                uint8_t legacy_netmask[sizeof(netmask)];
+                GetLegacyNetmask(legacy_netmask);
+                READWRITE(legacy_netmask);
+            }
             READWRITE(valid);
+        }
+
+    private:
+        size_t GetLegacyMaskOffset() const
+        {
+            if (network.IsIPv4()) return IPV4_IN_IPV6_PREFIX.size();
+            if (network.IsTor()) return TORV2_IN_IPV6_PREFIX.size();
+            if (network.IsInternal()) return INTERNAL_IN_IPV6_PREFIX.size();
+            return 0;
+        }
+
+        void GetLegacyNetmask(uint8_t (&mask)[ADDR_IPV6_SIZE]) const
+        {
+            std::copy(std::begin(netmask), std::end(netmask), std::begin(mask));
+            std::rotate(std::begin(mask), std::end(mask) - GetLegacyMaskOffset(), std::end(mask));
         }
 };
 
