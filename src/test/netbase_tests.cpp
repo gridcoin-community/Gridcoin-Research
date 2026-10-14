@@ -5,6 +5,7 @@
 #include <vector>
 #include "util.h"
 
+#include "clientversion.h"
 #include "netbase.h"
 #include "protocol.h"
 #include "serialize.h"
@@ -767,6 +768,64 @@ BOOST_AUTO_TEST_CASE(caddress_unserialize_v2)
         BOOST_CHECK_EQUAL(addresses_unserialized[i].nTime, fixture_addresses[i].nTime);
     }
     BOOST_CHECK(s.empty());
+}
+
+// bitcoin#20516: well-defined CAddress disk serialization.
+BOOST_AUTO_TEST_CASE(caddress_disk_v1_format)
+{
+    const CAddress addr(CService(CNetAddr(in6addr_loopback), 0x00f1), NODE_NETWORK, 0x83766279U);
+
+    // Written without ADDRV2_FORMAT: fixed DISK_VERSION_INIT (5000000 = 0x004c4b40), then V1 body.
+    CDataStream s(SER_DISK, CLIENT_VERSION);
+    s << addr;
+    BOOST_CHECK_EQUAL(StreamHex(s),
+        "404b4c00" "79627683" "0100000000000000" "00000000000000000000000000000001" "00f1");
+    CAddress back;
+    s >> back;
+    BOOST_CHECK(back == addr);
+
+    // Old Gridcoin files stored the real CLIENT_VERSION (> 2^19, e.g. 5.4.2.0 = 5040200 =
+    // 0x004ce848) in this field. It must still read as V1, with or without ADDRV2_FORMAT.
+    for (int ver : {CLIENT_VERSION, CLIENT_VERSION | ADDRV2_FORMAT}) {
+        CDataStream old(SER_DISK, ver);
+        Feed(old, "48e84c00" "79627683" "0100000000000000" "00000000000000000000000000000001" "00f1");
+        CAddress a;
+        old >> a;
+        BOOST_CHECK(a == addr);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(caddress_disk_v2_format)
+{
+    CNetAddr v3;
+    BOOST_REQUIRE(v3.SetSpecial("pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion"));
+    const CAddress addr(CService(v3, 32749), NODE_NETWORK, 0x61bc6649U);
+
+    CDataStream s(SER_DISK, CLIENT_VERSION | ADDRV2_FORMAT);
+    s << addr;
+    // DISK_VERSION_INIT | DISK_VERSION_ADDRV2 = 0x204c4b40, CompactSize services, BIP155 Tor v3.
+    BOOST_CHECK_EQUAL(StreamHex(s).substr(0, 8 + 8 + 2 + 4), "404b4c20" "4966bc61" "01" "0420");
+    const std::string bytes = s.str();
+
+    CAddress back;
+    s >> back;
+    BOOST_CHECK(back == addr);
+    BOOST_CHECK(back.IsTor() && !back.IsAddrV1Compatible());
+
+    // A V2-flagged record must not be read by a stream that doesn't permit ADDRV2.
+    CDataStream no_v2(SER_DISK, CLIENT_VERSION);
+    no_v2.write(MakeByteSpan(bytes));
+    CAddress tmp;
+    BOOST_CHECK_THROW(no_v2 >> tmp, std::ios_base::failure);
+}
+
+BOOST_AUTO_TEST_CASE(caddress_disk_unknown_format)
+{
+    // Bits above ADDRV2 (here 1<<30) are reserved; reject instead of guessing.
+    CDataStream s(SER_DISK, CLIENT_VERSION | ADDRV2_FORMAT);
+    Feed(s, "404b4c40" "79627683" "0100000000000000" "00000000000000000000000000000001" "00f1");
+    CAddress a;
+    BOOST_CHECK_THROW(s >> a, std::ios_base::failure);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
