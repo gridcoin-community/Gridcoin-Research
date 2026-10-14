@@ -929,12 +929,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 if (g_connman) g_connman->RelayAddress(addr, fReachable);
             }
             // Do not store addresses outside our network.
-            // Gridcoin: peers.dat (addrman) is still written in the V1 (16-byte)
-            // format, which cannot hold Tor v3; such an address would be saved
-            // as all-zeros. Keep them out of addrman until addrman learns the
-            // BIP155 format (upstream Format::V3_BIP155, see NOTES.md). They are
-            // still relayed above to peers that want addrv2.
-            if (fReachable && addr.IsAddrV1Compatible())
+            // (peers.dat is BIP155-capable since the addrman V3 format, so
+            // Tor v3 addresses are stored too.)
+            if (fReachable)
                 vAddrOk.push_back(addr);
         }
         g_connman->GetAddrMan().Add(vAddrOk, pfrom->addr, 2 * 60 * 60);
