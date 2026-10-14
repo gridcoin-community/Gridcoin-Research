@@ -27,6 +27,7 @@
 #include <optional>
 #include <queue>
 #include <set>
+#include <tuple>
 #include <unordered_set>
 
 using namespace GRC;
@@ -310,6 +311,107 @@ private:
     //! The vote transactions the walk has passed outputs through for the vote
     //! being resolved.
     std::set<uint256> m_vote_walked;
+
+    //!
+    //! \brief What the walk needs of a transaction that spends an output it
+    //! follows. It is read from disk once per tally.
+    //!
+    struct Spender
+    {
+        int64_t m_block_time = 0;  //!< Time of the block that contains it.
+        bool m_coinstake = false;  //!< Whether it is a coinstake.
+        bool m_carries_vote = false; //!< Whether it carries a vote contract.
+        uint256 m_hash;            //!< Its hash.
+
+        //! The destination and amount of each output, kept only for a
+        //! transaction the walk can follow (a coinstake, or under the v15 rules
+        //! a vote transaction). A destination that cannot be extracted is
+        //! CNoDestination.
+        std::vector<std::pair<CTxDestination, CAmount>> m_outputs;
+
+        //! Where each output is spent, read when first needed.
+        std::optional<std::vector<CDiskTxPos>> m_spent;
+    };
+
+    //! The spending transactions read in this tally, by position on disk.
+    std::map<std::tuple<unsigned int, unsigned int, unsigned int>, Spender> m_spenders;
+
+    //!
+    //! \brief Get the spending transaction at \p pos, reading it from disk the
+    //! first time. The transaction itself is read only when its block is not
+    //! past the poll's end, as the walk ignores it otherwise.
+    //!
+    //! \throws InvalidVoteError If it cannot be read.
+    //!
+    Spender& ReadSpender(const CDiskTxPos& pos)
+    {
+        const auto inserted = m_spenders.try_emplace(std::make_tuple(pos.nFile, pos.nBlockPos, pos.nTxPos));
+        Spender& spender = inserted.first->second;
+
+        if (!inserted.second) {
+            return spender;
+        }
+
+        CAutoFile file(OpenBlockFile(pos), SER_DISK, CLIENT_VERSION);
+
+        if (file.IsNull()) {
+            m_spenders.erase(inserted.first);
+            error("%s: OpenBlockFile failed", __func__);
+            throw InvalidVoteError();
+        }
+
+        CBlockHeader header;
+
+        try {
+            file >> header;
+        } catch (...) {
+            m_spenders.erase(inserted.first);
+            error("%s: deserialize or I/O error for block header", __func__);
+            throw InvalidVoteError();
+        }
+
+        spender.m_block_time = header.nTime;
+
+        if (m_poll.Expired(spender.m_block_time)) {
+            return spender;
+        }
+
+        CTransaction tx;
+
+        if (fseek(file.Get(), pos.nTxPos, SEEK_SET) != 0) {
+            m_spenders.erase(inserted.first);
+            error("%s: tx fseek failed", __func__);
+            throw InvalidVoteError();
+        }
+
+        try {
+            file >> tx;
+        } catch (...) {
+            m_spenders.erase(inserted.first);
+            error("%s: deserialize or I/O error for tx", __func__);
+            throw InvalidVoteError();
+        }
+
+        spender.m_coinstake = tx.IsCoinStake();
+        spender.m_carries_vote = CarriesVote(tx);
+        spender.m_hash = tx.GetHash();
+
+        if (spender.m_coinstake || (m_v15_rules && spender.m_carries_vote)) {
+            spender.m_outputs.reserve(tx.vout.size());
+
+            for (const CTxOut& output : tx.vout) {
+                CTxDestination dest;
+
+                if (!ExtractDestination(output.scriptPubKey, dest)) {
+                    dest = CNoDestination();
+                }
+
+                spender.m_outputs.emplace_back(std::move(dest), output.nValue);
+            }
+        }
+
+        return spender;
+    }
 
     //! Whether the vote being resolved reached something a counted vote holds.
     bool m_reached_counted {false};
@@ -1009,42 +1111,14 @@ private:
         std::queue<TxoFrame> txo_queue;
         txo_queue.emplace(disk_pos, amount);
 
-        CBlockHeader header;
-        CTransaction tx;
-        CTxIndex tx_index;
-
         while (!txo_queue.empty()) {
             const TxoFrame frame = txo_queue.front();
             txo_queue.pop();
 
-            CAutoFile file(OpenBlockFile(frame.m_pos), SER_DISK, CLIENT_VERSION);
+            Spender& spender = ReadSpender(frame.m_pos);
 
-            if (file.IsNull()) {
-                error("%s: OpenBlockFile failed", __func__);
-                throw InvalidVoteError();
-            }
-
-            try {
-                file >> header;
-            } catch (...) {
-                error("%s: deserialize or I/O error for block header", __func__);
-                throw InvalidVoteError();
-            }
-
-            if (m_poll.Expired(header.nTime)) {
+            if (m_poll.Expired(spender.m_block_time)) {
                 continue; // Txo spent after the poll finished is irrelevant
-            }
-
-            if (fseek(file.Get(), frame.m_pos.nTxPos, SEEK_SET) != 0) {
-                error("%s: tx fseek failed", __func__);
-                throw InvalidVoteError();
-            }
-
-            try {
-                file >> tx;
-            } catch (...) {
-                error("%s: deserialize or I/O error for tx", __func__);
-                throw InvalidVoteError();
             }
 
             // If we get here, the transaction spends the output referenced
@@ -1068,13 +1142,13 @@ private:
             //
             amount -= frame.m_amount;
 
-            const bool vote_tx = !tx.IsCoinStake() && m_v15_rules && CarriesVote(tx);
+            const bool vote_tx = !spender.m_coinstake && m_v15_rules && spender.m_carries_vote;
 
-            if (!tx.IsCoinStake() && !vote_tx) {
+            if (!spender.m_coinstake && !vote_tx) {
                 continue; // This tx spends the txo but did not stake it
             }
 
-            const uint256 tx_hash = tx.GetHash();
+            const uint256& tx_hash = spender.m_hash;
 
             if (vote_tx && m_vote_walked.count(tx_hash) == 0) {
                 if (m_vote_walked.size() >= MAX_WALKED_VOTE_TXS) {
@@ -1088,14 +1162,8 @@ private:
             std::vector<std::pair<uint32_t, CAmount>> next_txos;
 
             // Find outputs for the same address:
-            for (uint32_t i = 0; i < tx.vout.size(); ++i) {
-                CTxDestination dest;
-
-                if (!ExtractDestination(tx.vout[i].scriptPubKey, dest)) {
-                    continue;
-                }
-
-                if (dest != address) {
+            for (uint32_t i = 0; i < spender.m_outputs.size(); ++i) {
+                if (spender.m_outputs[i].first != address) {
                     continue;
                 }
 
@@ -1103,26 +1171,32 @@ private:
                     continue;
                 }
 
-                amount = AddClaimedAmount(amount, tx.vout[i].nValue);
-                next_txos.emplace_back(i, tx.vout[i].nValue);
+                amount = AddClaimedAmount(amount, spender.m_outputs[i].second);
+                next_txos.emplace_back(i, spender.m_outputs[i].second);
             }
 
             if (next_txos.empty()) {
                 continue; // Tx stakes the entire txo to different addresses
             }
 
-            if (!m_txdb.ReadTxIndex(tx_hash, tx_index)) {
-                error("%s: failed to read next tx index", __func__);
-                throw InvalidVoteError();
+            if (!spender.m_spent) {
+                CTxIndex tx_index;
+
+                if (!m_txdb.ReadTxIndex(tx_hash, tx_index)) {
+                    error("%s: failed to read next tx index", __func__);
+                    throw InvalidVoteError();
+                }
+
+                spender.m_spent = std::move(tx_index.vSpent);
             }
 
             for (auto& next_pair : next_txos) {
-                if (next_pair.first >= tx_index.vSpent.size()) {
+                if (next_pair.first >= spender.m_spent->size()) {
                     error("%s: txo out of spent range", __func__);
                     throw InvalidVoteError(); // should never happen
                 }
 
-                const CDiskTxPos& pos = tx_index.vSpent[next_pair.first];
+                const CDiskTxPos& pos = (*spender.m_spent)[next_pair.first];
 
                 m_vote_txos.emplace(tx_hash, next_pair.first);
 
