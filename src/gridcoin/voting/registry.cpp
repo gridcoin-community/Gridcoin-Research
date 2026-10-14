@@ -339,6 +339,30 @@ PollRegistry& GRC::GetPollRegistry()
     return g_poll_registry;
 }
 
+std::optional<SuperblockPtr> GRC::LastWellFormedSuperblock(const CBlockIndex* pindex)
+{
+    for (; pindex; pindex = pindex->pprev) {
+        // Apparently the superblock flags in pindex are broken for superblocks earlier than 1034768 on mainnet and
+        // earlier than 196562 on testnet.
+        // TODO: Repair the index flags loaded in LevelDB. (This will require a special correction routine at startup.)
+        if (!((OnTestnet() && pindex->nHeight < 196562) || (!OnTestnet() && pindex->nHeight < 1034768)
+              || pindex->IsSuperblock())) {
+            continue;
+        }
+
+        const ClaimOption claim = GetClaimByIndex(pindex);
+
+        if (claim && claim->ContainsSuperblock() && claim->m_superblock->WellFormed()) {
+            SuperblockPtr superblock = claim->m_superblock;
+            superblock.Rebind(pindex);
+
+            return superblock;
+        }
+    }
+
+    return std::nullopt;
+}
+
 std::string GRC::GetCurrentPollTitle()
 {
     LOCK(PollRegistry::cs_poll_registry);
@@ -662,49 +686,29 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
         ++blocks;
     };
 
-    // Rewind from pindex_start to find last superblock before start of the poll to pick up first pool magnitudes
-    bool superblock_well_formed = false;
+    // The last well formed superblock at or before the start of the poll gives the first pool magnitudes.
+    const std::optional<SuperblockPtr> start_superblock = LastWellFormedSuperblock(pindex_start);
 
-    for (CBlockIndex* pindex = pindex_start; pindex; pindex = pindex->pprev)
-    {
-        // Apparently the superblock flags in pindex are broken for superblocks earlier than 1034768 on mainnet and
-        // earlier than 196562 on testnet.
-        // TODO: Repair the index flags loaded in LevelDB. (This will require a special correction routine at startup.)
-        if ((OnTestnet() && pindex->nHeight < 196562) || (!OnTestnet() && pindex->nHeight < 1034768) || pindex->IsSuperblock()) {
-
-            const GRC::ClaimOption claim = GetClaimByIndex(pindex);
-
-            // Add up the magnitudes of the pools in the last superblock before the start of the poll.
-            if (claim && claim->ContainsSuperblock()) {
-                const GRC::Superblock& superblock = *claim->m_superblock;
-
-                superblock_well_formed = superblock.WellFormed();
-
-                for (const auto& pool : pools_not_voting) {
-                    scaled_pool_magnitude += superblock.m_cpids.MagnitudeOf(pool.m_cpid).Scaled();
-                }
-
-                scaled_network_magnitude = superblock.m_cpids.TotalScaledMagnitude();
-            }
-
-            // Stop after processing the first superblock found that is well formed rewinding from the poll start.
-            if (superblock_well_formed) {
-                LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: last superblock before poll start: block height = %i, "
-                                                "pool_magnitude = %f, network_magnitude = %f",
-                         __func__,
-                         pindex->nHeight,
-                         scaled_pool_magnitude.getdouble() / 100.0,
-                         scaled_network_magnitude.getdouble() / 100.0
-                         );
-                break;
-            }
+    if (start_superblock) {
+        for (const auto& pool : pools_not_voting) {
+            scaled_pool_magnitude += (*start_superblock)->m_cpids.MagnitudeOf(pool.m_cpid).Scaled();
         }
+
+        scaled_network_magnitude = (*start_superblock)->m_cpids.TotalScaledMagnitude();
+
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: last superblock before poll start: block height = %i, "
+                                        "pool_magnitude = %f, network_magnitude = %f",
+                 __func__,
+                 start_superblock->m_height,
+                 scaled_pool_magnitude.getdouble() / 100.0,
+                 scaled_network_magnitude.getdouble() / 100.0
+                 );
     }
 
-    // If we are past the search and find phase for the last preceding superblock above and no well formed superblock
-    // was found, or the network magnitude was 0, then AVW cannot be accurately calculated for this poll, so return
-    // std::nullopt. This really will only happen to polls REALLY early in the chain.
-    if (!superblock_well_formed || scaled_network_magnitude == 0) {
+    // If no well formed superblock was found at or before the start of the poll, or the network magnitude was 0, then
+    // AVW cannot be accurately calculated for this poll, so return std::nullopt. This really will only happen to polls
+    // REALLY early in the chain.
+    if (!start_superblock || scaled_network_magnitude == 0) {
         LogPrintf("WARNING: %s: No valid superblock found prior to start of poll txid %s, title \"%s\", so no active vote "
                   "weight can be calculated.",
                  __func__,

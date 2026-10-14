@@ -455,12 +455,12 @@ CTransaction MakeVoteTx(const uint256& poll_txid, const int64_t tx_time)
     return CTransaction(mtx);
 }
 
-//! A superblock claim with one CPID that no pool holds.
-GRC::Claim SuperblockClaim()
+//! A superblock claim with one CPID that no pool holds, of \p magnitude.
+GRC::Claim SuperblockClaim(const double magnitude = 100)
 {
     GRC::Superblock superblock(GRC::Superblock::CURRENT_VERSION);
     superblock.m_cpids.Add(GRC::Cpid::Parse("00010203040506070809101112131415"),
-                           GRC::Magnitude::RoundFrom(100));
+                           GRC::Magnitude::RoundFrom(magnitude));
     superblock.m_projects.Add("regtest", GRC::Superblock::ProjectStats(1, 1, 1));
     BOOST_REQUIRE(superblock.WellFormed());
 
@@ -615,6 +615,75 @@ BOOST_AUTO_TEST_CASE(a_poll_loaded_from_the_chain_links_votes_by_the_live_rule)
 
     BOOST_REQUIRE_EQUAL(ref->Votes().size(), 1U);
     BOOST_CHECK(ref->Votes().front() == in_window.GetHash());
+}
+
+//!
+//! A legacy poll weighs the magnitude a legacy vote states with the money supply
+//! of the poll's last block and the total magnitude of the last superblock at or
+//! before it. The result stays as it was when the poll ended, whatever the money
+//! supply and the superblocks after it.
+//!
+BOOST_AUTO_TEST_CASE(a_legacy_poll_weighs_magnitude_as_of_its_end)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    const int64_t start = GetAdjustedTime() - 20 * 86400;
+    const auto legacy_tx = [](const int64_t time, const std::string& contract) {
+        CMutableTransaction mtx;
+        mtx.nVersion = 1;
+        mtx.nTime = time;
+        mtx.vout.emplace_back(0, CScript() << OP_RETURN);
+        mtx.hashBoinc = contract;
+        return CTransaction(mtx);
+    };
+    const CTransaction poll_tx = legacy_tx(start,
+        "<MT>poll</MT><MK>Legacy poll</MK><MA>A</MA><MV><TITLE>Legacy poll</TITLE><DAYS>7</DAYS>"
+        "<QUESTION>Question?</QUESTION><ANSWERS>Yes;No</ANSWERS><SHARETYPE>"
+        + ToString(static_cast<uint32_t>(GRC::PollWeightType::BALANCE_AND_MAGNITUDE))
+        + "</SHARETYPE><URL>https://gridcoin.us</URL></MV>");
+    const CTransaction vote_tx = legacy_tx(start + 60,
+        "<MT>vote</MT><MK>Legacy poll;voter</MK><MA>A</MA><MV><CPID>00010203040506070809101112131415</CPID>"
+        "<BALANCE>100</BALANCE><MAGNITUDE>50</MAGNITUDE><ANSWER>Yes</ANSWER></MV>");
+
+    // A superblock before the poll, one in it, the poll's last block, and a
+    // superblock after it with a larger money supply.
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const LinkedTip before = LinkBlock(pindexGenesisBlock, start - 86400, SuperblockClaim(100), {}, bits);
+    const LinkedTip polled = LinkBlock(before.m_pindex, start + 60, GRC::Claim(), {poll_tx, vote_tx}, bits);
+    const LinkedTip within = LinkBlock(polled.m_pindex, start + 2 * 86400, SuperblockClaim(300), {}, bits);
+    const LinkedTip last = LinkBlock(within.m_pindex, start + 6 * 86400, GRC::Claim(), {}, bits);
+    const LinkedTip after = LinkBlock(last.m_pindex, start + 9 * 86400, SuperblockClaim(900), {}, bits);
+    before.m_pindex->nMoneySupply = 400000 * COIN;
+    polled.m_pindex->nMoneySupply = 410000 * COIN;
+    within.m_pindex->nMoneySupply = 420000 * COIN;
+    last.m_pindex->nMoneySupply = 430000 * COIN;
+    after.m_pindex->nMoneySupply = 900000 * COIN;
+    BOOST_REQUIRE_EQUAL(polled.m_tx_positions.size(), 2U);
+
+    const TxIndexScope poll_indexed(poll_tx, polled.m_tx_positions[0]);
+    const TxIndexScope vote_indexed(vote_tx, polled.m_tx_positions[1]);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    registry.Add({poll_tx.GetContracts()[0], poll_tx, polled.m_pindex});
+    registry.Add({vote_tx.GetContracts()[0], vote_tx, polled.m_pindex});
+
+    const GRC::PollReference* ref = registry.TryByTxid(poll_tx.GetHash());
+    BOOST_REQUIRE(ref != nullptr);
+    BOOST_REQUIRE_EQUAL(ref->Votes().size(), 1U);
+
+    const GRC::PollResultOption result = GRC::PollResult::BuildFor(*ref, after.m_pindex);
+    BOOST_REQUIRE(result);
+    BOOST_REQUIRE_EQUAL(result->m_votes.size(), 1U);
+
+    // The legacy factor: money supply / (total magnitude + 0.01) / 5.67.
+    const GRC::PollResult::Weight factor = static_cast<GRC::PollResult::Weight>(
+        last.m_pindex->nMoneySupply / (300 + 0.01) / 5.67);
+    const GRC::PollResult::Weight expected =
+        factor * GRC::Magnitude::RoundFrom(50).Scaled() / GRC::Magnitude::SCALE_FACTOR + 100 * COIN;
+
+    BOOST_CHECK_EQUAL(result->m_total_weight, expected);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

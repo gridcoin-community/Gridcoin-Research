@@ -31,6 +31,7 @@ public:
 
 class Contract;
 class PollRegistry;
+class SuperblockPtr;
 
 //!
 //! \brief Stores an in-memory reference to a poll contract and its votes.
@@ -597,6 +598,19 @@ private:
 //! \return Current global poll registry instance.
 //!
 PollRegistry& GetPollRegistry();
+
+//!
+//! \brief Find the last well-formed superblock at or before a block.
+//!
+//! The superblock flags in the block index are not set for superblocks before
+//! height 1034768 on mainnet or 196562 on testnet, so below those heights the
+//! claim of every block is read.
+//!
+//! \param pindex The block to search back from.
+//!
+//! \return The superblock, bound to its block, or nothing if none is found.
+//!
+std::optional<SuperblockPtr> LastWellFormedSuperblock(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 }
 
 #endif // GRIDCOIN_VOTING_REGISTRY_H
