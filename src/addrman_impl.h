@@ -201,14 +201,40 @@ public:
      * We don't use ADD_SERIALIZE_METHODS since the serialization and deserialization code has
      * very little in common.
      */
+    //! Serialization versions (bitcoin#19954/#20516).
+    enum Format : uint8_t {
+        V0_HISTORICAL = 0,    //!< historic format, before commit e6b343d88
+        V1_DETERMINISTIC = 1, //!< for pre-asmap files (all stock Gridcoin peers.dat)
+        V2_ASMAP = 2,         //!< upstream asmap format; never written by Gridcoin (no asmap), read like V1
+        V3_BIP155 = 3,        //!< same as V2_ASMAP plus addresses are in BIP155 format
+    };
+
+    //! The maximum format this software knows it can unserialize. Also, we always serialize
+    //! in this format.
+    static constexpr Format FILE_FORMAT = Format::V3_BIP155;
+
+    //! The initial value of a field that is incremented every time an incompatible format
+    //! change is made (such that old software versions would not be able to parse and
+    //! understand the new file format). This is 32 because we overtook the "key size"
+    //! field which was 32 historically.
+    static constexpr uint8_t INCOMPATIBILITY_BASE = 32;
+
     template<typename Stream>
-    void Serialize(Stream &s) const
+    void Serialize(Stream &s_) const
     {
         LOCK(cs);
 
-        unsigned char nVersion = 1;
-        s << nVersion;
-        s << ((unsigned char)32);
+        // bitcoin#19954 (addrman part) + #20516: write format V3_BIP155. The
+        // whole body is written through an OverrideStream with ADDRV2_FORMAT,
+        // so every CAddress/CNetAddr inside uses its BIP155 disk encoding and
+        // Tor v3 addresses survive a restart.
+        OverrideStream<Stream> s(&s_, s_.GetType(), s_.GetVersion() | ADDRV2_FORMAT);
+
+        s << static_cast<uint8_t>(FILE_FORMAT);
+        // Older readers check this byte == 32 ("key size") and reject anything
+        // else. Writing INCOMPATIBILITY_BASE + lowest_compatible therefore makes
+        // a stock (pre-V3) Gridcoin fail cleanly instead of misparsing V2 data.
+        s << static_cast<uint8_t>(INCOMPATIBILITY_BASE + FILE_FORMAT);
         s << nKey;
         s << nNew;
         s << nTried;
@@ -252,24 +278,48 @@ public:
     }
 
     template<typename Stream>
-    void Unserialize(Stream& s)
+    void Unserialize(Stream& s_)
     {
         LOCK(cs);
 
         Clear();
 
-        unsigned char nVersion;
-        s >> nVersion;
-        unsigned char nKeySize;
-        s >> nKeySize;
-        if (nKeySize != 32) throw std::ios_base::failure("Incorrect keysize in addrman deserialization");
+        Format format;
+        s_ >> Using<CustomUintFormatter<1>>(format);
+
+        int stream_version = s_.GetVersion();
+        if (format >= Format::V3_BIP155) {
+            // Add ADDRV2_FORMAT to the version so that the CNetAddr and CAddress
+            // unserialize methods know that an address in addrv2 format is coming.
+            stream_version |= ADDRV2_FORMAT;
+        }
+
+        OverrideStream<Stream> s(&s_, s_.GetType(), stream_version);
+
+        uint8_t compat;
+        s >> compat;
+        if (compat < INCOMPATIBILITY_BASE) {
+            throw std::ios_base::failure(strprintf(
+                "Corrupted addrman database: The compat value (%u) "
+                "is lower than the expected minimum value %u.",
+                compat, INCOMPATIBILITY_BASE));
+        }
+        const uint8_t lowest_compatible = compat - INCOMPATIBILITY_BASE;
+        if (lowest_compatible > FILE_FORMAT) {
+            throw std::ios_base::failure(strprintf(
+                "Unsupported format of addrman database: %u. It is compatible with formats >=%u, "
+                "but the maximum supported by this version of Gridcoin is %u.",
+                uint8_t{format}, uint8_t{lowest_compatible}, uint8_t{FILE_FORMAT}));
+        }
+        // Gridcoin: V0/V1 files always wrote compat byte 32 (= base + 0).
+
         s >> nKey;
         s >> nNew;
         s >> nTried;
 
         int nUBuckets = 0;
         s >> nUBuckets;
-        if (nVersion != 0) {
+        if (format >= Format::V1_DETERMINISTIC) {
             nUBuckets ^= (1 << 30);
         }
 
@@ -280,7 +330,7 @@ public:
             mapAddr[info] = n;
             info.nRandomPos = vRandom.size();
             vRandom.push_back(n);
-            if (nVersion != 1 || nUBuckets != ADDRMAN_NEW_BUCKET_COUNT) {
+            if (format < Format::V1_DETERMINISTIC || nUBuckets != ADDRMAN_NEW_BUCKET_COUNT) {
                 // In case the new table data cannot be used (nVersion unknown, or bucket count wrong),
                 // immediately try to give them a reference based on their primary source address.
                 int nUBucket = info.GetNewBucket(nKey);
@@ -324,7 +374,7 @@ public:
                 if (nIndex >= 0 && nIndex < nNew) {
                     AddrInfo &info = mapInfo[nIndex];
                     int nUBucketPos = info.GetBucketPosition(nKey, true, bucket);
-                    if (nVersion == 1 && nUBuckets == ADDRMAN_NEW_BUCKET_COUNT && vvNew[bucket][nUBucketPos] == -1 && info.nRefCount < ADDRMAN_NEW_BUCKETS_PER_ADDRESS) {
+                    if (format >= Format::V1_DETERMINISTIC && nUBuckets == ADDRMAN_NEW_BUCKET_COUNT && vvNew[bucket][nUBucketPos] == -1 && info.nRefCount < ADDRMAN_NEW_BUCKETS_PER_ADDRESS) {
                         info.nRefCount++;
                         vvNew[bucket][nUBucketPos] = nIndex;
                     }

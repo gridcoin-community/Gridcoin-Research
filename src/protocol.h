@@ -12,6 +12,7 @@
 
 #include "netbase.h"
 #include "serialize.h"
+#include "streams.h"
 #include "uint256.h"
 #include "version.h"
 
@@ -65,6 +66,24 @@ class CAddress : public CService
 {
     static constexpr uint32_t TIME_INIT{100000000};
 
+    /** bitcoin#20516: the first field of the CAddress disk serialization used to be
+     *  the CLIENT_VERSION, optionally OR'ed with ADDRV2_FORMAT. It is now:
+     *  - low bits (DISK_VERSION_IGNORE_MASK): a fixed DISK_VERSION_INIT, ignored on read;
+     *  - high bits: real format info. Only 0 or DISK_VERSION_ADDRV2 are valid.
+     *
+     *  Gridcoin adaptation: upstream's mask is 19 bits (Bitcoin CLIENT_VERSION < 2^19),
+     *  but Gridcoin's CLIENT_VERSION is 1000000*MAJOR+... (5.x => ~5,0xx,xxx > 2^22),
+     *  and existing peers.dat files store that value here. The mask therefore covers
+     *  every bit below ADDRV2_FORMAT (bits 0..28) so old files still read as V1. */
+    static constexpr uint32_t DISK_VERSION_INIT{5000000};
+    static constexpr uint32_t DISK_VERSION_IGNORE_MASK{0x1FFFFFFF};
+    /** Must be exactly 1<<29 (= ADDRV2_FORMAT) for compatibility with what
+     *  the 19954 network code and upstream use. */
+    static constexpr uint32_t DISK_VERSION_ADDRV2{1 << 29};
+    static_assert((DISK_VERSION_INIT & ~DISK_VERSION_IGNORE_MASK) == 0, "DISK_VERSION_INIT must be covered by DISK_VERSION_IGNORE_MASK");
+    static_assert((DISK_VERSION_ADDRV2 & DISK_VERSION_IGNORE_MASK) == 0, "DISK_VERSION_ADDRV2 must not be covered by DISK_VERSION_IGNORE_MASK");
+    static_assert(DISK_VERSION_ADDRV2 == ADDRV2_FORMAT, "DISK_VERSION_ADDRV2 must equal ADDRV2_FORMAT");
+
     public:
         CAddress() : CService{} {};
         explicit CAddress(CService ipIn, ServiceFlags nServicesIn=NODE_NETWORK): CService{ipIn}, nServices{nServicesIn} {};
@@ -72,17 +91,37 @@ class CAddress : public CService
 
         SERIALIZE_METHODS(CAddress, obj)
         {
-            SER_READ(obj, obj.nTime = TIME_INIT);
-            int nVersion = s.GetVersion();
+            bool use_v2;
+            bool store_time;
             if (s.GetType() & SER_DISK) {
-                READWRITE(nVersion);
+                // bitcoin#20516: in the disk format the encoding (v1 or v2) is
+                // determined by a flag stored in the serialization itself.
+                // ADDRV2_FORMAT in the stream version only permits/selects v2.
+                uint32_t stored_format_version = DISK_VERSION_INIT;
+                if (s.GetVersion() & ADDRV2_FORMAT) stored_format_version |= DISK_VERSION_ADDRV2;
+                READWRITE(stored_format_version);
+                stored_format_version &= ~DISK_VERSION_IGNORE_MASK; // ignore low bits
+                if (stored_format_version == 0) {
+                    use_v2 = false;
+                } else if (stored_format_version == DISK_VERSION_ADDRV2 && (s.GetVersion() & ADDRV2_FORMAT)) {
+                    // Only support v2 deserialization if ADDRV2_FORMAT is set.
+                    use_v2 = true;
+                } else {
+                    throw std::ios_base::failure("Unsupported CAddress disk format version");
+                }
+                store_time = true;
+            } else {
+                // Network format: encoding chosen by ADDRV2_FORMAT in the stream
+                // version, nothing is embedded. Gridcoin keeps its historical
+                // nTime rule (omitted below INIT_PROTO_VERSION and for SER_GETHASH).
+                use_v2 = s.GetVersion() & ADDRV2_FORMAT;
+                store_time = (s.GetVersion() >= INIT_PROTO_VERSION && !(s.GetType() & SER_GETHASH));
             }
-            if ((s.GetType() & SER_DISK) ||
-                (nVersion >= INIT_PROTO_VERSION && !(s.GetType() & SER_GETHASH))) {
-                READWRITE(obj.nTime);
-            }
-            if (nVersion & ADDRV2_FORMAT) {
-                // BIP155: services are a CompactSize in addrv2.
+
+            SER_READ(obj, obj.nTime = TIME_INIT);
+            if (store_time) READWRITE(obj.nTime);
+            // nServices is serialized as CompactSize in V2; as uint64_t in V1.
+            if (use_v2) {
                 uint64_t services_tmp;
                 SER_WRITE(obj, services_tmp = obj.nServices);
                 READWRITE(Using<CompactSizeFormatter<false>>(services_tmp));
@@ -90,7 +129,16 @@ class CAddress : public CService
             } else {
                 READWRITE(Using<CustomUintFormatter<8>>(obj.nServices));
             }
-            READWRITEAS(CService, obj);
+            // Invoke V1/V2 serializer for the CService parent object.
+            OverrideStream<Stream> os(&s, s.GetType(), use_v2 ? ADDRV2_FORMAT : 0);
+            SerReadWriteMany(os, ser_action, ReadWriteAsHelper<CService>(obj));
+        }
+
+        friend bool operator==(const CAddress& a, const CAddress& b)
+        {
+            return a.nTime == b.nTime &&
+                   a.nServices == b.nServices &&
+                   static_cast<const CService&>(a) == static_cast<const CService&>(b);
         }
 
         void print() const;

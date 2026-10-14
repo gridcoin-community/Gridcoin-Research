@@ -395,12 +395,32 @@ BOOST_AUTO_TEST_CASE(caddrdb_19534_compatibility)
         BOOST_CHECK_EQUAL(info->nTime, 1700000000);
     }
     BOOST_REQUIRE(db.Write(restored));
-    BOOST_CHECK(ReadLegacyFile(path) == fixture);
+    const auto upgraded = ReadLegacyFile(path);
+    BOOST_REQUIRE(upgraded.size() > 6U);
+    BOOST_CHECK_EQUAL(upgraded[4], 3U);
+    BOOST_CHECK_EQUAL(upgraded[5], 35U);
+    BOOST_CHECK(upgraded != fixture);
+    AddrMan reread{/*deterministic=*/true};
+    BOOST_REQUIRE(db.Read(reread)); // Verifies the upgraded file checksum.
+    BOOST_REQUIRE_EQUAL(reread.size(), restored.size());
+    for (const char* name : {"250.7.1.1", "2001:470:abcd::1", "5wyqrzbvrdsumnok.onion"}) {
+        CService service;
+        BOOST_REQUIRE(Lookup(name, service, 32749, false));
+        const AddrInfo* before = restored.Find(service);
+        const AddrInfo* after = reread.Find(service);
+        BOOST_REQUIRE(before && after);
+        BOOST_CHECK(static_cast<const CAddress&>(*before) == static_cast<const CAddress&>(*after));
+        CDataStream before_info(SER_DISK, CLIENT_VERSION | ADDRV2_FORMAT);
+        CDataStream after_info(SER_DISK, CLIENT_VERSION | ADDRV2_FORMAT);
+        before_info << *before;
+        after_info << *after;
+        BOOST_CHECK_EQUAL(HexStr(after_info), HexStr(before_info));
+    }
 
     AddrMan fresh{/*deterministic=*/true};
     PopulateLegacyPeers(fresh);
     BOOST_REQUIRE(db.Write(fresh));
-    BOOST_CHECK(ReadLegacyFile(path) == fixture);
+    BOOST_CHECK(ReadLegacyFile(path) == upgraded);
 
     auto corrupt = fixture;
     corrupt.back() ^= 1;
