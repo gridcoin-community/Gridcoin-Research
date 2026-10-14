@@ -2266,6 +2266,13 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
                 return state.DoS(25, error("%s: poll claim keys or outputs are not distinct", __func__),
                                  "bad-poll-claim");
             }
+
+            // BeaconRegistry::BlockValidate requires this from the same height.
+            if (contract.m_type == GRC::ContractType::BEACON
+                && !GRC::GetBeaconRegistry().RemoveCarriesCurrentKey(contract)) {
+                return state.DoS(25, error("%s: beacon removal without the current beacon's key", __func__),
+                                 "bad-beacon-remove");
+            }
         }
     }
 

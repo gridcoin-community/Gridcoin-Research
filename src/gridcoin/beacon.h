@@ -798,6 +798,18 @@ public:
     bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
+    //! \brief Determine whether a beacon removal carries the key of the CPID's
+    //! current beacon. From v15, block validation and the mempool require this
+    //! of a beacon removal.
+    //!
+    //! \param contract The beacon contract to check.
+    //!
+    //! \return \c false only if the contract is a beacon removal for a CPID that
+    //! has a current beacon, and does not carry that beacon's key.
+    //!
+    bool RemoveCarriesCurrentKey(const Contract& contract) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
     //! \brief Register a beacon from contract data.
     //!
     //! \param ctx References the beacon contract and associated context.

@@ -1273,7 +1273,29 @@ bool BeaconRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
         }
     }
 
+    // From v15, removing a beacon takes the key of the CPID's current beacon.
+    if (IsV15Enabled(ctx.m_pindex->nHeight) && !RemoveCarriesCurrentKey(ctx.m_contract)) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected beacon removal without the current beacon's key at height %d",
+            __func__,
+            ctx.m_pindex->nHeight);
+        return false;
+    }
+
     return Validate(ctx.m_contract, ctx.m_tx, DoS);
+}
+
+bool BeaconRegistry::RemoveCarriesCurrentKey(const Contract& contract) const
+{
+    if (contract.m_action != ContractAction::REMOVE || contract.m_version < 2) {
+        return true;
+    }
+
+    const auto payload = contract.SharePayloadAs<BeaconPayload>();
+    const BeaconOption current_beacon = Try(payload->m_cpid);
+
+    return !current_beacon || current_beacon->m_public_key == payload->m_beacon.m_public_key;
 }
 
 void BeaconRegistry::ActivatePending(
