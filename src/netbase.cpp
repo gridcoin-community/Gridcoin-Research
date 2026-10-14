@@ -176,14 +176,18 @@ bool LookupSubNet(const char* pszName, CSubNet& ret)
         if (slash != strSubnet.npos)
         {
             std::string strNetmask = strSubnet.substr(slash + 1);
-            int32_t n;
-            // IPv4 addresses start at offset 12, and first 12 bytes must match, so just offset n
-            if (ParseInt32(strNetmask, &n)) { // If valid number, assume /24 syntax
+            uint8_t n;
+            if (ParseUInt8(strNetmask, &n)) { // If valid number, assume /24 syntax
                 ret = CSubNet(network, n);
                 return ret.IsValid();
             }
-            else // If not a valid number, try full netmask syntax
+            else // If not a valid CIDR count, require an explicit address mask.
             {
+                // Do not reinterpret overflowing decimal CIDR counts as
+                // integer-form IPv4 addresses (e.g. 4294967295 == 255.255.255.255).
+                if (strNetmask.find_first_of(".:") == std::string::npos) {
+                    return false;
+                }
                 // Never allow lookup for netmask
                 if (LookupHost(strNetmask.c_str(), vIP, 1, false)) {
                     ret = CSubNet(network, vIP[0]);
