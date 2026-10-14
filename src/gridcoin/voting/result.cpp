@@ -187,11 +187,14 @@ public:
     //! \param txdb          Used to resolve balance claim amounts.
     //! \param poll          The poll to resolve voting weight for.
     //! \param poll_finished Whether the tally's tip is past the poll's end.
+    //! \param v15_rules     Whether the poll started at or after the v15 height,
+    //! which selects how a spent claimed output is resolved (ResolveAmount).
     //!
-    VoteResolver(CTxDB& txdb, const Poll& poll, const bool poll_finished)
+    VoteResolver(CTxDB& txdb, const Poll& poll, const bool poll_finished, const bool v15_rules)
         : m_txdb(txdb)
         , m_poll(poll)
         , m_poll_finished(poll_finished)
+        , m_v15_rules(v15_rules)
         , m_superblock(SuperblockPtr::Empty())
     {
     }
@@ -223,6 +226,7 @@ public:
 
         m_vote_txos.clear();
         m_vote_cpids.clear();
+        m_vote_walked.clear();
         m_reached_counted = false;
 
         VoteDetail detail;
@@ -270,6 +274,7 @@ private:
     CTxDB& m_txdb;              //!< Used to resolve unspent amount claims.
     const Poll& m_poll;         //!< The poll to resolve voting weight for.
     const bool m_poll_finished; //!< Whether the tally's tip is past the poll's end.
+    const bool m_v15_rules;     //!< The poll started at or after the v15 height.
     SuperblockPtr m_superblock; //!< Used to determine magnitude weight.
 
     //!
@@ -297,6 +302,14 @@ private:
     //!
     std::unordered_set<COutPoint, OutPointHasher> m_vote_txos;
     std::unordered_set<Cpid> m_vote_cpids;
+
+    //! The most vote transactions the walk passes a claimed output through for
+    //! one vote, under the v15 rules.
+    static constexpr size_t MAX_WALKED_VOTE_TXS = 512;
+
+    //! The vote transactions the walk has passed outputs through for the vote
+    //! being resolved.
+    std::set<uint256> m_vote_walked;
 
     //! Whether the vote being resolved reached something a counted vote holds.
     bool m_reached_counted {false};
@@ -957,7 +970,9 @@ private:
     //! the value of the outputs in the latest staking transaction during
     //! the poll window as long as the transaction outputs the subsidy to
     //! the same address. Outputs spent or side-staked to another address
-    //! will invalidate the claim for that amount.
+    //! will invalidate the claim for that amount. For polls that start at or
+    //! after the v15 height, a vote transaction passes an output through to
+    //! its outputs at the same address in the same way.
     //!
     //! \param address  Must match the address of the resolved output.
     //! \param disk_pos Location of the transaction that contains the output.
@@ -1042,13 +1057,32 @@ private:
             // address (side-staking) because the vote is signed by the key
             // for the original address.
             //
+            // From v15 a vote transaction passes the output through the same
+            // way. A vote pays its burn fee from one of the voter's coins,
+            // which its own claim usually includes, and returns the rest to
+            // that coin's address. Any poll's vote counts, so voting
+            // on one poll does not take the coin's weight from another. One
+            // vote's walk passes through at most MAX_WALKED_VOTE_TXS vote
+            // transactions; past that, a vote transaction spends the output
+            // like any other.
+            //
             amount -= frame.m_amount;
 
-            if (!tx.IsCoinStake()) {
+            const bool vote_tx = !tx.IsCoinStake() && m_v15_rules && CarriesVote(tx);
+
+            if (!tx.IsCoinStake() && !vote_tx) {
                 continue; // This tx spends the txo but did not stake it
             }
 
             const uint256 tx_hash = tx.GetHash();
+
+            if (vote_tx && m_vote_walked.count(tx_hash) == 0) {
+                if (m_vote_walked.size() >= MAX_WALKED_VOTE_TXS) {
+                    continue;
+                }
+
+                m_vote_walked.insert(tx_hash);
+            }
 
             // Intermediate mapping of output offsets to amounts:
             std::vector<std::pair<uint32_t, CAmount>> next_txos;
@@ -1292,6 +1326,8 @@ public:
     //! \param poll_start_height Block height of the poll's starting block,
     //! used to anchor consensus-critical PoolRegistry queries (AVW) so
     //! every node tallying the same poll uses an identical registry view.
+    //! \param v15_rules Whether the poll started at or after the v15 height;
+    //! forwarded to the vote resolver.
     //! \param legacy_money_supply Money supply of the poll's last block,
     //! forwarded to the legacy vote counter for its magnitude factor, or 0
     //! for a poll that does not use the factor.
@@ -1300,12 +1336,12 @@ public:
     //! forwarded to the legacy vote counter for its magnitude factor.
     //! \param poll_finished Whether the tally's tip is past the poll's end.
     //!
-    VoteCounter(CTxDB& txdb, const Poll& poll, int poll_start_height,
+    VoteCounter(CTxDB& txdb, const Poll& poll, int poll_start_height, const bool v15_rules,
                 const CAmount legacy_money_supply, SuperblockPtr legacy_superblock, const bool poll_finished)
         : m_txdb(txdb)
         , m_poll(poll)
         , m_poll_start_height(poll_start_height)
-        , m_resolver(txdb, poll, poll_finished)
+        , m_resolver(txdb, poll, poll_finished, v15_rules)
         , m_legacy(poll, legacy_money_supply, std::move(legacy_superblock))
     {
         // Snapshot the pool CPID set at the poll's start height into an
@@ -1902,13 +1938,20 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref, const CBloc
         // voting/registry.cpp. The degenerate fallback uses the pinned tip's
         // height (nHeight is immutable per block index and the object is never
         // freed, so it needs no lock) instead of the live nBestHeight.
+        //
+        // The v15 tally rules apply to polls that start at or after the v15
+        // height; an earlier poll is tallied exactly as before. A poll with no
+        // known starting height keeps the earlier rules.
         int poll_start_height;
+        bool v15_rules;
         const CBlockIndex* pindex_end = nullptr;
         CAmount legacy_money_supply = 0;
         SuperblockPtr legacy_superblock;
         {
             LOCK(cs_main);
-            poll_start_height = poll_ref.GetStartingHeight().value_or(pindex_tip->nHeight);
+            const std::optional<int> start_height = poll_ref.GetStartingHeight();
+            poll_start_height = start_height.value_or(pindex_tip->nHeight);
+            v15_rules = start_height && IsV15Enabled(*start_height);
 
             // The last block in the poll window gives the money supply for the
             // magnitude weight of a poll weighed by magnitude. A legacy poll
@@ -1935,8 +1978,8 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref, const CBloc
 
         // The poll counts as finished for the beacon key rule when the tip the
         // tally runs on is past its end, so every node with this tip agrees.
-        VoteCounter counter(txdb, result.m_poll, poll_start_height, legacy_money_supply, std::move(legacy_superblock),
-                            result.m_poll.Expired(pindex_tip->nTime));
+        VoteCounter counter(txdb, result.m_poll, poll_start_height, v15_rules, legacy_money_supply,
+                            std::move(legacy_superblock), result.m_poll.Expired(pindex_tip->nTime));
 
         if (result.m_poll.IncludesMagnitudeWeight()) {
             SuperblockPtr superblock;

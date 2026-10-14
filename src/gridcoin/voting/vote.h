@@ -295,6 +295,16 @@ public:
         // No binary serialization format exists for legacy votes.
     }
 }; // LegacyVote
+
+//!
+//! \brief Determine whether a transaction contains a vote contract, for any
+//! poll.
+//!
+//! \param tx The transaction to check.
+//!
+//! \return \c true if one of the transaction's contracts is a vote.
+//!
+bool CarriesVote(const CTransaction& tx);
 }
 
 #endif // GRIDCOIN_VOTING_VOTE_H

@@ -90,3 +90,18 @@ LegacyVote::ParseResponses(const std::map<std::string, uint8_t>& choice_map) con
 
     return responses;
 }
+
+// -----------------------------------------------------------------------------
+// Functions
+// -----------------------------------------------------------------------------
+
+bool GRC::CarriesVote(const CTransaction& tx)
+{
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type == ContractType::VOTE) {
+            return true;
+        }
+    }
+
+    return false;
+}
