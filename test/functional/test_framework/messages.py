@@ -32,7 +32,9 @@ and adapted to Gridcoin's proof-of-stake wire format. Differences from upstream
   serializes at INIT_PROTO_VERSION and Gridcoin gates CAddress.nTime on
   `>= INIT_PROTO_VERSION`. (src/net.cpp:486-527, src/net.h:327, src/protocol.h:78-91)
 """
+import base64
 import copy
+import ipaddress
 import hashlib
 import struct
 import time
@@ -179,6 +181,7 @@ class CAddress:
     """
 
     def __init__(self):
+        self.net = self.NET_IPV4
         self.time = 0
         self.nServices = NODE_NETWORK
         self.ip = "0.0.0.0"
@@ -190,8 +193,17 @@ class CAddress:
             self.time = struct.unpack("<I", f.read(4))[0]
         # nServices: little-endian uint64 (CustomUintFormatter<8>, default BigEndian=false).
         self.nServices = struct.unpack("<Q", f.read(8))[0]
-        f.read(12)  # IPv4-mapped-IPv6 prefix (10 zero bytes + 0xffff)
-        self.ip = struct.unpack(">I", f.read(4))[0]
+        raw = self._read_address(f, 16)
+        if raw.startswith(b"\x00" * 10 + b"\xff\xff"):
+            self.net = self.NET_IPV4
+            # Preserve the legacy helper's integer representation for IPv4.
+            self.ip = struct.unpack(">I", raw[12:])[0]
+        elif raw.startswith(self.ONIONCAT_PREFIX):
+            self.net = self.NET_TORV2
+            self._set_address_bytes(raw[6:])
+        else:
+            self.net = self.NET_IPV6
+            self._set_address_bytes(raw)
         # port: big-endian uint16 (WrapBigEndian(port)).
         self.port = struct.unpack(">H", f.read(2))[0]
 
@@ -200,10 +212,86 @@ class CAddress:
         if with_time:
             r += struct.pack("<I", self.time)
         r += struct.pack("<Q", self.nServices)
-        r += b"\x00" * 10 + b"\xff\xff"
-        r += struct.pack(">I", self.ip if isinstance(self.ip, int) else _ip_to_int(self.ip))
+        raw = self._address_bytes()
+        if self.net == self.NET_IPV4:
+            raw = b"\x00" * 10 + b"\xff\xff" + raw
+        elif self.net == self.NET_TORV2:
+            raw = self.ONIONCAT_PREFIX + raw
+        elif self.net != self.NET_IPV6:
+            raise ValueError("Tor v3 cannot be serialized in legacy addr/gridaddr")
+        r += raw
         r += struct.pack(">H", self.port)
         return r
+
+    NET_IPV4 = 1
+    NET_IPV6 = 2
+    NET_TORV2 = 3
+    NET_TORV3 = 4
+    ADDRV2_ADDRESS_LENGTH = {NET_IPV4: 4, NET_IPV6: 16, NET_TORV2: 10, NET_TORV3: 32}
+    ONIONCAT_PREFIX = bytes.fromhex("fd87d87eeb43")
+
+    @staticmethod
+    def _read_address(f, length):
+        raw = f.read(length)
+        if len(raw) != length:
+            raise ValueError("Truncated network address")
+        return raw
+
+    @staticmethod
+    def _torv3_name(key):
+        version = b"\x03"
+        checksum = hashlib.sha3_256(b".onion checksum" + key + version).digest()[:2]
+        return base64.b32encode(key + checksum + version).decode("ascii").lower() + ".onion"
+
+    def _address_bytes(self):
+        if self.net == self.NET_IPV4:
+            return struct.pack(">I", self.ip if isinstance(self.ip, int) else _ip_to_int(self.ip))
+        if self.net == self.NET_IPV6:
+            return ipaddress.IPv6Address(self.ip).packed
+        if self.net in (self.NET_TORV2, self.NET_TORV3):
+            if not self.ip.endswith(".onion"):
+                raise ValueError("Expected an onion address")
+            raw = base64.b32decode(self.ip[:-6].upper())
+            if self.net == self.NET_TORV2 and len(raw) == 10:
+                return raw
+            if self.net == self.NET_TORV3 and len(raw) == 35:
+                key = raw[:32]
+                if self.ip.lower() == self._torv3_name(key):
+                    return key
+            raise ValueError("Invalid onion address")
+        raise ValueError("Unsupported BIP155 network")
+
+    def _set_address_bytes(self, raw):
+        if self.net == self.NET_IPV4:
+            self.ip = str(ipaddress.IPv4Address(raw))
+        elif self.net == self.NET_IPV6:
+            self.ip = str(ipaddress.IPv6Address(raw))
+        elif self.net == self.NET_TORV2:
+            self.ip = base64.b32encode(raw).decode("ascii").lower() + ".onion"
+        elif self.net == self.NET_TORV3:
+            self.ip = self._torv3_name(raw)
+        else:
+            raise ValueError("Unsupported BIP155 network")
+
+    def deserialize_v2(self, f):
+        """Read a BIP155 address (bitcoin#19954), including Tor v3."""
+        self.time = struct.unpack("<I", f.read(4))[0]
+        self.nServices = deser_compact_size(f)
+        self.net = struct.unpack("B", f.read(1))[0]
+        length = deser_compact_size(f)
+        if length > 512 or length != self.ADDRV2_ADDRESS_LENGTH.get(self.net):
+            raise ValueError("Invalid or unsupported BIP155 address length/network")
+        self._set_address_bytes(self._read_address(f, length))
+        self.port = struct.unpack(">H", f.read(2))[0]
+
+    def serialize_v2(self):
+        """Write BIP155 CompactSize services, network/length, address and port."""
+        raw = self._address_bytes()
+        if len(raw) != self.ADDRV2_ADDRESS_LENGTH[self.net]:
+            raise ValueError("Invalid BIP155 address length")
+        return (struct.pack("<I", self.time) + ser_compact_size(self.nServices)
+                + struct.pack("B", self.net) + ser_compact_size(len(raw)) + raw
+                + struct.pack(">H", self.port))
 
     def __repr__(self):
         return "CAddress(nServices=%i ip=%s port=%i)" % (self.nServices, self.ip, self.port)
@@ -691,6 +779,46 @@ class msg_addr:
         return "msg_addr(addrs=%s)" % (repr(self.addrs))
 
 
+class msg_gridaddr(msg_addr):
+    """Keep the actual Gridcoin wire command when decoding legacy addresses."""
+    command = b"gridaddr"
+
+
+class msg_addrv2:
+    __slots__ = ("addrs",)
+    command = b"addrv2"
+
+    def __init__(self):
+        self.addrs = []
+
+    def deserialize(self, f):
+        self.addrs = []
+        for _ in range(deser_compact_size(f)):
+            addr = CAddress()
+            addr.deserialize_v2(f)
+            self.addrs.append(addr)
+
+    def serialize(self):
+        return ser_compact_size(len(self.addrs)) + b"".join(a.serialize_v2() for a in self.addrs)
+
+    def __repr__(self):
+        return "msg_addrv2(addrs=%s)" % repr(self.addrs)
+
+
+class msg_sendaddrv2:
+    __slots__ = ()
+    command = b"sendaddrv2"
+
+    def deserialize(self, f):
+        pass
+
+    def serialize(self):
+        return b""
+
+    def __repr__(self):
+        return "msg_sendaddrv2()"
+
+
 class msg_inv:
     __slots__ = ("inv",)
     command = b"inv"
@@ -946,7 +1074,9 @@ MESSAGEMAP = {
     b"version": msg_version,
     b"verack": msg_verack,
     b"addr": msg_addr,
-    b"gridaddr": msg_addr,
+    b"gridaddr": msg_gridaddr,
+    b"addrv2": msg_addrv2,
+    b"sendaddrv2": msg_sendaddrv2,
     b"inv": msg_inv,
     b"getdata": msg_getdata,
     b"getblocks": msg_getblocks,
