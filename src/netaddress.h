@@ -32,6 +32,11 @@ enum Network
 class CNetAddr
 {
     protected:
+        /**
+         * Network to which this address belongs.
+         */
+        Network m_net{NET_IPV6};
+
         unsigned char ip[16]; // in network byte order
         uint32_t scopeId; // for scoped/link-local ipv6 addresses
 
@@ -40,6 +45,14 @@ class CNetAddr
         explicit CNetAddr(const struct in_addr& ipv4Addr);
         void Init();
         void SetIP(const CNetAddr& ip);
+
+        /**
+         * Set from a legacy IPv6 address.
+         * Legacy IPv6 address may be a normal IPv6 address, or another address
+         * (e.g. IPv4) disguised as IPv6. This encoding is used in the legacy
+         * `addr` encoding.
+         */
+        void SetLegacyIPv6(const uint8_t ipv6[16]);
 
         /**
         * Set raw IPv4 or IPv6 address (in network byte order)
@@ -89,12 +102,26 @@ class CNetAddr
         friend bool operator!=(const CNetAddr& a, const CNetAddr& b);
         friend bool operator<(const CNetAddr& a, const CNetAddr& b);
 
-        ADD_SERIALIZE_METHODS;
-
-        template <typename Stream, typename Operation>
-        inline void SerializationOp(Stream& s, Operation ser_action)
+        /**
+         * Serialize to a stream.
+         */
+        template <typename Stream>
+        void Serialize(Stream& s) const
         {
-            READWRITE(ip);
+            s << ip;
+        }
+
+        /**
+         * Unserialize from a stream.
+         */
+        template <typename Stream>
+        void Unserialize(Stream& s)
+        {
+            unsigned char ip_temp[sizeof(ip)];
+            s >> ip_temp;
+            // Use SetLegacyIPv6() so that m_net is set correctly. For example
+            // ::FFFF:0102:0304 should be set as m_net=NET_IPV4 (1.2.3.4).
+            SetLegacyIPv6(ip_temp);
         }
 
         friend class CSubNet;
@@ -174,7 +201,9 @@ class CService : public CNetAddr
         template <typename Stream, typename Operation>
         inline void SerializationOp(Stream& s, Operation ser_action)
         {
-             READWRITE(ip);
+             // Go through CNetAddr's (un)serializer so m_net is set on read.
+             // The bytes on the wire are unchanged.
+             READWRITEAS(CNetAddr, *this);
              READWRITE(WrapBigEndian(port));
         }
 };
