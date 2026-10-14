@@ -89,6 +89,7 @@ enum
 
 bool IsLimited(enum Network net);
 bool IsLimited(const CNetAddr& addr);
+CService MaybeFlipIPv6toCJDNS(const CService& service);
 bool AddLocal(const CService& addr, int nScore = LOCAL_NONE);
 bool AddLocal(const CNetAddr& addr, int nScore = LOCAL_NONE);
 bool SeenLocal(const CService& addr);

@@ -37,8 +37,7 @@ static const int ADDRV2_FORMAT = 0x20000000;
 /// as used in BIP155, without the checksum and the version byte.
 static constexpr size_t ADDR_TORV3_SIZE = 32;
 
-/// Size of CJDNS address (in bytes). Defined for BIP155 size checks only;
-/// Gridcoin does not support CJDNS (id 6 addresses are ignored).
+/// Size of CJDNS address (in bytes).
 static constexpr size_t ADDR_CJDNS_SIZE = 16;
 
 enum Network
@@ -196,9 +195,8 @@ class CNetAddr
     private:
         /**
          * BIP155 network ids recognized by this software.
-         * I2P (5) and CJDNS (6) are listed for completeness but Gridcoin has no
-         * NET_I2P and does not support NET_CJDNS, so they are silently ignored on
-         * unserialize (treated like unknown future ids).
+         * I2P (5) is listed for completeness but Gridcoin has no NET_I2P, so it
+         * is silently ignored on unserialize (treated like an unknown future id).
          */
         enum BIP155Network : uint8_t {
             IPV4 = 1,
@@ -231,9 +229,9 @@ class CNetAddr
         /**
          * Set `m_net` from the provided BIP155 network id and size after validation.
          * @retval true the network was recognized, is valid and `m_net` was set
-         * @retval false not recognised (from future?, or I2P/CJDNS) and should be silently ignored
+         * @retval false not recognised (from future?, or I2P) and should be silently ignored
          * @throws std::ios_base::failure if the network is one of the supported BIP155
-         * networks (id 1..4) with wrong address size.
+         * networks (id 1..4 or 6) with wrong address size.
          */
         bool SetNetFromBIP155Network(uint8_t possible_bip155_net, size_t address_size);
 
@@ -270,14 +268,14 @@ class CNetAddr
                 memcpy(arr, INTERNAL_IN_IPV6_PREFIX.data(), prefix_size);
                 memcpy(arr + prefix_size, m_addr.data(), m_addr.size());
                 return;
-            case NET_CJDNS: // Reserved; unreadable in Gridcoin.
+            case NET_CJDNS:
                 break;
             case NET_UNROUTABLE:
             case NET_MAX:
                 assert(false); // LINT-OK-ASSERT: m_net is never set to UNROUTABLE/MAX
             } // no default case, so the compiler can warn about missing cases
 
-            // TORv3 and the reserved CJDNS type have no V1 representation.
+            // TORv3 and CJDNS have no V1 representation.
             memset(arr, 0x0, V1_SERIALIZATION_SIZE);
         }
 
@@ -358,6 +356,11 @@ class CNetAddr
                 m_addr.resize(address_size);
                 s.read(AsWritableBytes(Span<uint8_t>{m_addr.data(), m_addr.size()}));
 
+                // BIP155 CJDNS addresses must be in fc00::/8.
+                if (m_net == NET_CJDNS && m_addr[0] != 0xfc) {
+                    Init();
+                    return;
+                }
                 if (m_net != NET_IPV6) {
                     return;
                 }
@@ -384,7 +387,7 @@ class CNetAddr
                 // encoding). Unserialize as !IsValid(), thus ignoring them.
             } else {
                 // If we receive an unknown BIP155 network id (from the future?), or
-                // I2P/CJDNS which Gridcoin does not support, then ignore the
+                // I2P which Gridcoin does not support, then ignore the
                 // address - unserialize as !IsValid().
                 s.ignore(address_size);
             }
@@ -500,6 +503,8 @@ class CService : public CNetAddr
              READWRITEAS(CNetAddr, *this);
              READWRITE(WrapBigEndian(port));
         }
+
+        friend CService MaybeFlipIPv6toCJDNS(const CService& service);
 };
 
 #endif // BITCOIN_NETADDRESS_H
