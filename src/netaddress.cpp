@@ -8,6 +8,9 @@
 #endif
 
 #include "netaddress.h"
+#include "prevector.h"
+#include "crypto/sha3.h"
+#include "crypto/common.h"
 #include "hash.h"
 #include "util/strencodings.h"
 #include "util/string.h"
@@ -15,8 +18,83 @@
 
 #include <algorithm>
 #include <array>
+#include <ios>
 #include <iterator>
 #include <tuple>
+
+CNetAddr::BIP155Network CNetAddr::GetBIP155Network() const
+{
+    switch (m_net) {
+    case NET_IPV4:
+        return BIP155Network::IPV4;
+    case NET_IPV6:
+        return BIP155Network::IPV6;
+    case NET_TOR:
+        switch (m_addr.size()) {
+        case ADDR_TORV2_SIZE:
+            return BIP155Network::TORV2;
+        case ADDR_TORV3_SIZE:
+            return BIP155Network::TORV3;
+        default:
+            assert(false);
+        }
+    case NET_CJDNS:      // Gridcoin never sets m_net to NET_CJDNS
+    case NET_INTERNAL:   // should have been handled before calling this function
+    case NET_UNROUTABLE: // m_net is never and should not be set to NET_UNROUTABLE
+    case NET_MAX:        // m_net is never and should not be set to NET_MAX
+        assert(false);
+    } // no default case, so the compiler can warn about missing cases
+
+    assert(false);
+}
+
+bool CNetAddr::SetNetFromBIP155Network(uint8_t possible_bip155_net, size_t address_size)
+{
+    switch (possible_bip155_net) {
+    case BIP155Network::IPV4:
+        if (address_size == ADDR_IPV4_SIZE) {
+            m_net = NET_IPV4;
+            return true;
+        }
+        throw std::ios_base::failure(
+            strprintf("BIP155 IPv4 address with length %u (should be %u)", address_size,
+                      ADDR_IPV4_SIZE));
+    case BIP155Network::IPV6:
+        if (address_size == ADDR_IPV6_SIZE) {
+            m_net = NET_IPV6;
+            return true;
+        }
+        throw std::ios_base::failure(
+            strprintf("BIP155 IPv6 address with length %u (should be %u)", address_size,
+                      ADDR_IPV6_SIZE));
+    case BIP155Network::TORV2:
+        if (address_size == ADDR_TORV2_SIZE) {
+            m_net = NET_TOR;
+            return true;
+        }
+        throw std::ios_base::failure(
+            strprintf("BIP155 TORv2 address with length %u (should be %u)", address_size,
+                      ADDR_TORV2_SIZE));
+    case BIP155Network::TORV3:
+        if (address_size == ADDR_TORV3_SIZE) {
+            m_net = NET_TOR;
+            return true;
+        }
+        throw std::ios_base::failure(
+            strprintf("BIP155 TORv3 address with length %u (should be %u)", address_size,
+                      ADDR_TORV3_SIZE));
+    case BIP155Network::I2P:
+    case BIP155Network::CJDNS:
+        // Gridcoin adaptation: no I2P/CJDNS support. Treat like an unknown id
+        // (silently skip) instead of upstream's size-check/accept.
+        return false;
+    }
+
+    // Don't throw on addresses with unknown network ids (maybe from the future).
+    // Instead silently drop them and have the unserialization code consume
+    // subsequent ones which may be known to us.
+    return false;
+}
 
 void CNetAddr::Init()
 {
@@ -36,7 +114,7 @@ void CNetAddr::SetIP(const CNetAddr& ipIn)
         assert(ipIn.m_addr.size() == ADDR_IPV6_SIZE);
         break;
     case NET_TOR:
-        assert(ipIn.m_addr.size() == ADDR_TORV2_SIZE);
+        assert(ipIn.m_addr.size() == ADDR_TORV2_SIZE || ipIn.m_addr.size() == ADDR_TORV3_SIZE);
         break;
     case NET_INTERNAL:
         assert(ipIn.m_addr.size() == ADDR_INTERNAL_SIZE);
@@ -79,15 +157,73 @@ bool CNetAddr::SetInternal(const std::string& name)
     return true;
 }
 
-bool CNetAddr::SetSpecial(const std::string& name)
+namespace torv3 {
+// https://gitweb.torproject.org/torspec.git/tree/rend-spec-v3.txt#n2135
+static constexpr size_t CHECKSUM_LEN = 2;
+static const unsigned char VERSION[] = {3};
+static constexpr size_t TOTAL_LEN = ADDR_TORV3_SIZE + CHECKSUM_LEN + sizeof(VERSION);
+
+static void Checksum(Span<const uint8_t> addr_pubkey, uint8_t (&checksum)[CHECKSUM_LEN])
 {
-    if (name.size() > 6 && name.substr(name.size() - 6) == ".onion") {
-        const auto addr = DecodeBase32(name.substr(0, name.size() - 6).c_str());
-        if (addr.size() != ADDR_TORV2_SIZE) return false;
+    // TORv3 CHECKSUM = H(".onion checksum" | PUBKEY | VERSION)[:2]
+    static const unsigned char prefix[] = ".onion checksum";
+    static constexpr size_t prefix_len = 15;
+
+    SHA3_256 hasher;
+
+    hasher.Write(Span<const unsigned char>{prefix, prefix_len});
+    hasher.Write(addr_pubkey);
+    hasher.Write(VERSION);
+
+    uint8_t checksum_full[SHA3_256::OUTPUT_SIZE];
+
+    hasher.Finalize(checksum_full);
+
+    memcpy(checksum, checksum_full, sizeof(checksum));
+}
+
+}; // namespace torv3
+
+bool CNetAddr::SetSpecial(const std::string& str)
+{
+    static const char* suffix{".onion"};
+    static constexpr size_t suffix_len{6};
+
+    if (!ValidAsCString(str) || str.size() <= suffix_len ||
+        str.substr(str.size() - suffix_len) != suffix) {
+        return false;
+    }
+
+    bool invalid;
+    const auto& input = DecodeBase32(str.substr(0, str.size() - suffix_len).c_str(), &invalid);
+
+    if (invalid) {
+        return false;
+    }
+
+    switch (input.size()) {
+    case ADDR_TORV2_SIZE:
         m_net = NET_TOR;
-        m_addr.assign(addr.begin(), addr.end());
+        m_addr.assign(input.begin(), input.end());
+        return true;
+    case torv3::TOTAL_LEN: {
+        Span<const uint8_t> input_pubkey{input.data(), ADDR_TORV3_SIZE};
+        Span<const uint8_t> input_checksum{input.data() + ADDR_TORV3_SIZE, torv3::CHECKSUM_LEN};
+        Span<const uint8_t> input_version{input.data() + ADDR_TORV3_SIZE + torv3::CHECKSUM_LEN, sizeof(torv3::VERSION)};
+
+        uint8_t calculated_checksum[torv3::CHECKSUM_LEN];
+        torv3::Checksum(input_pubkey, calculated_checksum);
+
+        if (input_checksum != calculated_checksum || input_version != torv3::VERSION) {
+            return false;
+        }
+
+        m_net = NET_TOR;
+        m_addr.assign(input_pubkey.begin(), input_pubkey.end());
         return true;
     }
+    }
+
     return false;
 }
 
@@ -191,6 +327,12 @@ bool CNetAddr::IsRFC4843() const
 
 bool CNetAddr::IsTor() const { return m_net == NET_TOR; }
 
+/**
+ * Check whether this object represents a CJDNS address.
+ * Always false in Gridcoin today (nothing sets NET_CJDNS).
+ */
+bool CNetAddr::IsCJDNS() const { return m_net == NET_CJDNS; }
+
 bool CNetAddr::IsLocal() const
 {
     // IPv4 loopback
@@ -265,28 +407,70 @@ enum Network CNetAddr::GetNetwork() const
     return m_net;
 }
 
+static std::string IPv6ToString(Span<const uint8_t> a)
+{
+    assert(a.size() == ADDR_IPV6_SIZE);
+    // clang-format off
+    return strprintf("%x:%x:%x:%x:%x:%x:%x:%x",
+                     ReadBE16(&a[0]),
+                     ReadBE16(&a[2]),
+                     ReadBE16(&a[4]),
+                     ReadBE16(&a[6]),
+                     ReadBE16(&a[8]),
+                     ReadBE16(&a[10]),
+                     ReadBE16(&a[12]),
+                     ReadBE16(&a[14]));
+    // clang-format on
+}
+
 std::string CNetAddr::ToStringIP() const
 {
-    if (IsTor())
-        return EncodeBase32(m_addr.data(), m_addr.size()) + ".onion";
-    if (IsInternal())
-        return EncodeBase32(m_addr.data(), m_addr.size()) + ".internal";
-    CService serv(*this, 0);
-    struct sockaddr_storage sockaddr;
-    socklen_t socklen = sizeof(sockaddr);
-    if (serv.GetSockAddr((struct sockaddr*)&sockaddr, &socklen)) {
-        char name[1025] = "";
-        if (!getnameinfo((const struct sockaddr*)&sockaddr, socklen, name, sizeof(name), nullptr, 0, NI_NUMERICHOST))
-            return std::string(name);
+    switch (m_net) {
+    case NET_IPV4:
+    case NET_IPV6: {
+        CService serv(*this, 0);
+        struct sockaddr_storage sockaddr;
+        socklen_t socklen = sizeof(sockaddr);
+        if (serv.GetSockAddr((struct sockaddr*)&sockaddr, &socklen)) {
+            char name[1025] = "";
+            if (!getnameinfo((const struct sockaddr*)&sockaddr, socklen, name,
+                             sizeof(name), nullptr, 0, NI_NUMERICHOST))
+                return std::string(name);
+        }
+        if (m_net == NET_IPV4) {
+            return strprintf("%u.%u.%u.%u", m_addr[0], m_addr[1], m_addr[2], m_addr[3]);
+        }
+        return IPv6ToString(Span<const uint8_t>{m_addr.data(), m_addr.size()});
     }
-    if (IsIPv4())
-        return strprintf("%u.%u.%u.%u", m_addr[0], m_addr[1], m_addr[2], m_addr[3]);
-    assert(IsIPv6());
-    return strprintf("%x:%x:%x:%x:%x:%x:%x:%x",
-                     m_addr[0] << 8 | m_addr[1], m_addr[2] << 8 | m_addr[3],
-                     m_addr[4] << 8 | m_addr[5], m_addr[6] << 8 | m_addr[7],
-                     m_addr[8] << 8 | m_addr[9], m_addr[10] << 8 | m_addr[11],
-                     m_addr[12] << 8 | m_addr[13], m_addr[14] << 8 | m_addr[15]);
+    case NET_TOR:
+        switch (m_addr.size()) {
+        case ADDR_TORV2_SIZE:
+            return EncodeBase32(m_addr.data(), m_addr.size()) + ".onion";
+        case ADDR_TORV3_SIZE: {
+
+            uint8_t checksum[torv3::CHECKSUM_LEN];
+            torv3::Checksum(Span<const uint8_t>{m_addr.data(), m_addr.size()}, checksum);
+
+            // TORv3 onion_address = base32(PUBKEY | CHECKSUM | VERSION) + ".onion"
+            prevector<torv3::TOTAL_LEN, uint8_t> address{m_addr.begin(), m_addr.end()};
+            address.insert(address.end(), checksum, checksum + torv3::CHECKSUM_LEN);
+            address.insert(address.end(), torv3::VERSION, torv3::VERSION + sizeof(torv3::VERSION));
+
+            return EncodeBase32(address.data(), address.size()) + ".onion";
+        }
+        default:
+            assert(false);
+        }
+    case NET_CJDNS:
+        return IPv6ToString(Span<const uint8_t>{m_addr.data(), m_addr.size()});
+    case NET_INTERNAL:
+        return EncodeBase32(m_addr.data(), m_addr.size()) + ".internal";
+    case NET_UNROUTABLE: // m_net is never and should not be set to NET_UNROUTABLE
+    case NET_MAX:        // m_net is never and should not be set to NET_MAX
+        assert(false);
+    } // no default case, so the compiler can warn about missing cases
+
+    assert(false);
 }
 
 std::string CNetAddr::ToString() const
@@ -704,8 +888,10 @@ CSubNet::CSubNet(const CNetAddr& addr, const CNetAddr& mask) : CSubNet()
 CSubNet::CSubNet(const CNetAddr& addr) : CSubNet()
 {
     // Gridcoin BanMan uses single-address subnets for Tor host bans.
-    // Retain those; CIDR and explicit netmasks remain IP-only.
-    valid = addr.IsIPv4() || addr.IsIPv6() || addr.IsTor();
+    // Retain v2 host bans; v3 cannot fit the legacy subnet mask.
+    // CIDR and explicit netmasks remain IP-only.
+    valid = addr.IsIPv4() || addr.IsIPv6() ||
+            (addr.IsTor() && addr.m_addr.size() == ADDR_TORV2_SIZE);
     if (!valid) {
         return;
     }
@@ -726,9 +912,10 @@ CSubNet::CSubNet(const CNetAddr& addr) : CSubNet()
  */
 bool CSubNet::Match(const CNetAddr &addr) const
 {
-    if (!valid || !addr.IsValid() || network.m_net != addr.m_net)
+    if (!valid || !addr.IsValid() || network.m_net != addr.m_net ||
+        network.m_addr.size() != addr.m_addr.size() ||
+        addr.m_addr.size() > sizeof(netmask))
         return false;
-    assert(network.m_addr.size() == addr.m_addr.size());
     for (size_t x = 0; x < addr.m_addr.size(); ++x) {
         if ((addr.m_addr[x] & netmask[x]) != network.m_addr[x]) {
             return false;
