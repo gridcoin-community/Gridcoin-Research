@@ -284,6 +284,17 @@ public:
     // The handshake's other gate, set last by the version handler; atomic as
     // nVersion is, so a reader on another thread sees it whole.
     std::atomic<bool> fSuccessfullyConnected{false};
+    /**
+     * Whether the peer has signaled support for receiving ADDRv2 (BIP155)
+     * messages, implying a preference to receive ADDRv2 instead of ADDR ones.
+     */
+    std::atomic_bool m_wants_addrv2{false};
+    /**
+     * Set when the peer's VERACK is processed. Gridcoin sets fSuccessfullyConnected
+     * while handling VERSION (not VERACK as upstream does), so bitcoin#20564's
+     * "sendaddrv2 after verack" check has to use this flag instead.
+     */
+    std::atomic_bool m_verack_received{false};
     std::atomic_bool fDisconnect;
     CSemaphoreGrant grantOutbound;
 protected:
@@ -426,7 +437,12 @@ public:
         // Known checking here is only to save space from duplicates.
         // SendMessages will filter it again for knowns that were added
         // after addresses were pushed.
-        if (addr.IsValid() && !setAddrKnown.count(addr) && vAddrToSend.size() < 10000)
+        // Whether the peer supports the address in `addr`. For example,
+        // nodes that do not implement BIP155 cannot receive Tor v3 addresses
+        // because they require ADDRv2 (BIP155) encoding.
+        const bool addr_format_supported = m_wants_addrv2 || addr.IsAddrV1Compatible();
+
+        if (addr.IsValid() && !setAddrKnown.count(addr) && vAddrToSend.size() < 10000 && addr_format_supported)
             vAddrToSend.push_back(addr);
     }
 
@@ -516,6 +532,31 @@ public:
         }
         catch (...)
         {
+            AbortMessage();
+            throw;
+        }
+    }
+
+    /** Like PushMessage, but serializes the payload with extra stream-version
+     *  flags OR'd in (e.g. ADDRV2_FORMAT). Gridcoin's stand-in for upstream's
+     *  CNetMsgMaker::Make(flags, ...). */
+    template<typename... Args>
+    void PushMessageWithFlags(int flags, const char* pszCommand, Args... args)
+    {
+        LOCK(cs_vSend);
+
+        const int nOrigVersion = ssSend.GetVersion();
+        try
+        {
+            BeginMessage(pszCommand);
+            ssSend.SetVersion(nOrigVersion | flags);
+            PushFields(args...);
+            ssSend.SetVersion(nOrigVersion);
+            EndMessage();
+        }
+        catch (...)
+        {
+            ssSend.SetVersion(nOrigVersion);
             AbortMessage();
             throw;
         }
