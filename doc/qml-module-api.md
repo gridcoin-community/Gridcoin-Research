@@ -13,8 +13,9 @@ names later changes will add.
 - The tests are `test_gridcoin-qml`, built into `<build>/qmltest/`. It is registered with
   CTest as `gridcoin_qml_tests`.
 - No executable uses the module yet. Without the option the module is not built; the default
-  build still changes in the core-message routing, the detach step and the detach guard's reap
-  of the global thread pool.
+  build still changes in the core-message routing, the detach step, the detach guard's reap of
+  the global thread pool, and the process's exit status, which is now the one
+  `StartGridcoinQt` returns.
 - On Debian and Ubuntu the module needs `qt6-declarative-dev` to build and
   `qml6-module-qtquick` at run time. `qml6-module-qtqml-models` is needed by QML that
   imports `QtQml` (the module's tests import only `QtQuick`).

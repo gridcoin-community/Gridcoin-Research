@@ -19,10 +19,23 @@ private Q_SLOTS:
     void showMainSetsShellShown();
     void requestCloseDecidesQuitOrHide();
     void throwingHideMainStillClosesRunner();
+    void rootLoadErrorsReachStderr();
+    void unloadableRootEndsTheGui();
     void requestQuitSetsQuitRequested();
     void modalMessageReachesShellWithoutWaiting();
     void serialRunnerThreadNeverWaits();
     void pooledRunnerThreadNeverWaits();
+    void constructFailsWhenRootDoesNotLoad();
 };
+
+namespace qml_test {
+//! The first argument that makes the test binary run GuiMain as the child of
+//! QmlBridgeTests::unloadableRootEndsTheGui instead of running the tests.
+inline constexpr const char* GUIMAIN_CHILD_ARG = "--guimain-child-unloadable-root";
+//! Runs GuiMain with a QML front end whose root does not exist, closing each
+//! message box it shows after printing the box's text, then prints GuiMain's
+//! status and returns it.
+int RunGuiMainChild(int argc, char* argv[]);
+} // namespace qml_test
 
 #endif // BITCOIN_QT_QUICK_TEST_BRIDGETESTS_H

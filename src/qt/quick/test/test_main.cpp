@@ -11,10 +11,16 @@
 #include <QTest>
 #include <QtGlobal>
 
+#include <cstring>
 #include <iostream>
 
 int main(int argc, char* argv[])
 {
+    // QmlBridgeTests::unloadableRootEndsTheGui runs GuiMain in a child copy of
+    // this binary; the child runs no test.
+    if (argc > 1 && std::strcmp(argv[1], qml_test::GUIMAIN_CHILD_ARG) == 0) {
+        return qml_test::RunGuiMainChild(argc, argv);
+    }
     // The shell asks QSystemTrayIcon and the quit test shows windows, so the
     // application needs a platform plugin and a scene-graph backend that run
     // headless; an explicit setting still wins.

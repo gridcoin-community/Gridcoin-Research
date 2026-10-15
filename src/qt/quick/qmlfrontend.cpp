@@ -92,6 +92,12 @@ QObject* QmlFrontEnd::construct()
     m_root = SetupQmlEngine(*m_engine, *m_provider, m_root_url);
     if (!m_root) {
         GUILogPrintf("QML: the root %s did not load", m_root_url.toString().toStdString());
+        // Without a root the process would run with no window and no tray.
+        // StartGridcoinQt reports this and ends the GUI with EXIT_FAILURE before
+        // the core starts; under -multiprocess the daemon keeps running.
+        throw GuiFrontEndUnusable("QML: the root " + m_root_url.toString().toStdString() +
+                                  " did not load; the QML errors are on stderr and in the GUI log "
+                                  "(debug.log, or debug_gui.log under -multiprocess)");
     }
     m_bridge = std::make_unique<QmlCoreBridge>(m_provider->shell());
     return m_bridge.get();

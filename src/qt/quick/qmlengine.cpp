@@ -11,6 +11,8 @@
 #include <QQmlEngine>
 #include <QQmlError>
 
+#include <iostream>
+
 std::unique_ptr<QObject> SetupQmlEngine(QQmlEngine& engine, QmlProvider& provider, const QUrl& root)
 {
     // Qt below 6.5 does not search qrc:/qt/qml, where the QML-file modules live.
@@ -22,6 +24,7 @@ std::unique_ptr<QObject> SetupQmlEngine(QQmlEngine& engine, QmlProvider& provide
     if (!object) {
         for (const QQmlError& error : component.errors()) {
             GUILogPrintf("QML: %s", error.toString().toStdString());
+            std::cerr << "QML: " << error.toString().toStdString() << std::endl;
         }
     }
     return object;
