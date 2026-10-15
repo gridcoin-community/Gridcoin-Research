@@ -187,6 +187,30 @@ CBlock StakeBlockOn(const CBlockIndex* pindex_prev, const CTransaction& tx_from,
     return block;
 }
 
+//! Takes a transaction's entry out of the transaction index for the scope and
+//! puts it back exactly, however the case exits.
+struct IndexEntryRemoved
+{
+    uint256 m_hash;
+    CTxIndex m_saved;
+
+    explicit IndexEntryRemoved(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) : m_hash(tx.GetHash())
+    {
+        CTxDB txdb;
+        BOOST_REQUIRE(txdb.ReadTxIndex(m_hash, m_saved));
+        BOOST_REQUIRE(txdb.EraseTxIndex(tx));
+    }
+
+    ~IndexEntryRemoved()
+    {
+        CTxDB txdb;
+        txdb.UpdateTxIndex(m_hash, m_saved);
+    }
+
+    IndexEntryRemoved(const IndexEntryRemoved&) = delete;
+    IndexEntryRemoved& operator=(const IndexEntryRemoved&) = delete;
+};
+
 } // anonymous namespace
 
 BOOST_FIXTURE_TEST_SUITE(kernel_branch_lookup_tests, grc_test::WalletTxScope, *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
@@ -373,6 +397,53 @@ BOOST_AUTO_TEST_CASE(a_side_branch_stake_passes_the_proof_of_stake_check_from_v1
     BOOST_TEST_MESSAGE(pass_from_v15 << " stakes pass from v15, " << pass_below_v15 << " below it");
     BOOST_CHECK_GT(pass_from_v15, 0);
     BOOST_CHECK_EQUAL(pass_below_v15, 0);
+}
+
+BOOST_AUTO_TEST_CASE(an_input_missing_from_the_index_is_searched_for_only_in_the_blocks_own_branch)
+{
+    const MockTimeReset reset_clock;
+    grc_test::RequireV15Unscheduled();
+
+    mempool.clear();
+
+    // X is mined only in A1, which then leaves the main chain, so the index does
+    // not hold it. Clearing the mempool keeps X out of B1.
+    const CTransaction tx_x = PoolSpend();
+    const uint256 x_hash = tx_x.GetHash();
+
+    const CBlock a1 = MineOne();
+    BOOST_REQUIRE_MESSAGE(BlockHasTx(a1, x_hash), "A1 does not carry X");
+
+    LeaveForParentOf(a1);
+    mempool.clear();
+
+    const CBlock b1 = MineOne();
+    BOOST_REQUIRE(!BlockHasTx(b1, x_hash));
+
+    // U is mined on the main chain, in B2.
+    const CTransaction tx_u = PoolSpend();
+    const uint256 u_hash = tx_u.GetHash();
+
+    const CBlock b2 = MineOne();
+    BOOST_REQUIRE_MESSAGE(BlockHasTx(b2, u_hash), "B2 does not carry U");
+
+    LOCK(cs_main);
+
+    CBlockIndex* const pindex_a1 = mapBlockIndex.at(a1.GetHash(true));
+    CBlockIndex* const pindex_b2 = mapBlockIndex.at(b2.GetHash(true));
+    BOOST_REQUIRE(!pindex_a1->IsInMainChain());
+    BOOST_REQUIRE(pindex_b2 == pindexBest);
+    BOOST_REQUIRE(!CTxDB("r").ContainsTx(x_hash));
+
+    // A child of A1 finds X in its own branch; a child of the tip cannot have it.
+    BOOST_CHECK(InputBlockFor(x_hash, pindex_a1) == a1.GetHash(true));
+    BOOST_CHECK(InputBlockFor(x_hash, pindex_b2) == uint256());
+
+    // The index is authoritative for the main chain: with U's entry gone, a
+    // child of the tip refuses U.
+    const IndexEntryRemoved removed(tx_u);
+
+    BOOST_CHECK(InputBlockFor(u_hash, pindex_b2) == uint256());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

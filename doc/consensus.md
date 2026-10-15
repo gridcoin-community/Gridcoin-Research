@@ -829,6 +829,8 @@ The proof-of-stake check (`CheckProofOfStakeV8`) reads the staked input's transa
 
 From V15, judged at the height of the block being checked, the staked input must be in the block's own history, and the block that confirms it there supplies the time. The fork point is the block's newest ancestor on the main chain (the parent itself when the parent is on the main chain). An indexed main-chain block at or below the fork point is shared history and is used. Otherwise the blocks above the fork point, from the parent down, are searched, and a block whose input is not in its own history fails the check. For a block extending the main chain's tip this is the transaction index's answer, so such blocks are unaffected. The gate applies per checked block, so side-branch blocks below V15 keep the old lookup.
 
+At every height (ungated), when the transaction index has no entry for the staked input, only the blocks above the fork point, from the parent down, are searched. The index covers the main chain, so such an input can only be in the block's own side branch.
+
 > **Source:** `src/gridcoin/staking/kernel.cpp` `ReadStakedInput`, `TakeStakedInputFromOwnHistory`.
 
 ---

@@ -518,21 +518,19 @@ bool GRC::ReadStakedInput(
 
     // Get transaction index for the previous transaction
     if (!txdb.ReadTxIndex(prevout_hash, tx_index)) {
+        // The index covers the main chain, so an input it does not hold can
+        // only be in a side branch: the blocks above the checked block's
+        // newest ancestor on the main chain, from its parent down. Only those
+        // are searched.
         if (pindexPrev != nullptr) {
-            for (CBlockIndex* pindex = pindexPrev; pindex->pprev != nullptr; pindex = pindex->pprev) {
-                CBlock block;
-                ReadBlockFromDisk(block, pindex, Params().GetConsensus());
+            std::vector<const CBlockIndex*> branch;
+            FindBranch(pindexPrev, branch);
 
-                for (const auto& tx : block.vtx) {
-                    if (tx.GetHash() == prevout_hash) {
-                        error("Found tx %s in block %s", tx.GetHash().ToString(), pindex->GetBlockHash().ToString());
-                        out_txprev = tx;
-                        out_header = pindex->GetBlockHeader();
-                        return true;
-                    }
-                }
+            if (FindInBranch(prevout_hash, branch, out_header, out_txprev)) {
+                return true;
             }
         }
+
         // Previous transaction not in main chain, may occur during initial download
         return error("%s: tx index not found for input tx %s", __func__, prevout_hash.GetHex());
     }
