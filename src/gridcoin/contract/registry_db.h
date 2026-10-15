@@ -729,6 +729,27 @@ public:
         return Load(hash, entry);
     }
 
+    //!
+    //! \brief Get a record, read without loading it into the historical map (see contains()).
+    //!
+    //! \param hash The hash value with which to match on the key.
+    //!
+    //! \return The record, or nullptr if no record with this key is stored.
+    //!
+    std::shared_ptr<E> peek(const uint256& hash)
+    {
+        if (const auto iter = m_historical.find(hash); iter != m_historical.end()) {
+            return iter->second;
+        }
+
+        SE entry;
+
+        if (Load(hash, entry)) {
+            return std::make_shared<E>(entry);
+        }
+
+        return nullptr;
+    }
 
     //!
     //! \brief Advances the iterator to the next element.

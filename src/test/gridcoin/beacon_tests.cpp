@@ -2036,6 +2036,52 @@ void RevertAdvertisement(GRC::BeaconRegistry& registry, const GRC::Cpid& cpid, c
     registry.Revert({contract, tx, &index});
 }
 
+//!
+//! \brief Apply a v2 beacon deletion (revocation) to the registry, as a block at the given height would.
+//!
+uint256 DeleteBeacon(GRC::BeaconRegistry& registry, const GRC::Cpid& cpid, const CPubKey& key,
+                     const int64_t time, const int height)
+{
+    CMutableTransaction mtx;
+    mtx.nTime = time;
+    mtx.nLockTime = static_cast<uint32_t>(height);
+    const CTransaction tx(mtx);
+
+    CBlockIndex index;
+    index.nVersion = 13;
+    index.nHeight = height;
+    index.nTime = time;
+
+    GRC::BeaconPayload payload {2, cpid, GRC::Beacon(key)};
+    const GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::REMOVE, payload);
+
+    registry.Delete({contract, tx, &index});
+
+    return tx.GetHash();
+}
+
+//!
+//! \brief Revert the deletion DeleteBeacon applied with the same arguments.
+//!
+void RevertDeletion(GRC::BeaconRegistry& registry, const GRC::Cpid& cpid, const CPubKey& key,
+                    const int64_t time, const int height)
+{
+    CMutableTransaction mtx;
+    mtx.nTime = time;
+    mtx.nLockTime = static_cast<uint32_t>(height);
+    const CTransaction tx(mtx);
+
+    CBlockIndex index;
+    index.nVersion = 13;
+    index.nHeight = height;
+    index.nTime = time;
+
+    GRC::BeaconPayload payload {2, cpid, GRC::Beacon(key)};
+    const GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::REMOVE, payload);
+
+    registry.Revert({contract, tx, &index});
+}
+
 constexpr int64_t DAY = 60 * 60 * 24;
 constexpr int64_t START_TIME = 1600000000;
 } // anonymous namespace
@@ -2336,6 +2382,122 @@ BOOST_AUTO_TEST_CASE(beacon_registry_revert_takes_an_advertisement_s_own_records
     ReloadRegistry(registry);
     BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
     BOOST_CHECK(registry.PendingBeacons().at(id)->m_hash == first);
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_revert_of_a_pending_beacon_deletion_restores_it_from_v15)
+{
+    LOCK(cs_main);
+    grc_test::V15HeightGuard v15(1);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const CKeyID id = key.GetPubKey().GetID();
+
+    const uint256 advertisement = AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME, 1);
+    const uint256 deletion = DeleteBeacon(registry, cpid, key.GetPubKey(), START_TIME + DAY, 2);
+    BOOST_REQUIRE(registry.PendingBeacons().empty());
+    BOOST_REQUIRE_EQUAL(registry.DeletedEntries(cpid).size(), 1U);
+
+    // The revert finds its records even after they leave memory.
+    registry.PassivateDB();
+    RevertDeletion(registry, cpid, key.GetPubKey(), START_TIME + DAY, 2);
+
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_CHECK(registry.PendingBeacons().at(id)->m_hash == advertisement);
+    BOOST_CHECK(registry.GetBeaconDB().find(deletion) == registry.GetBeaconDB().end());
+    BOOST_CHECK(registry.DeletedEntries(cpid).empty());
+
+    ReloadRegistry(registry);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_CHECK(registry.PendingBeacons().at(id)->m_hash == advertisement);
+    BOOST_CHECK(registry.DeletedEntries(cpid).empty());
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_revert_of_an_expired_beacon_deletion_restores_both_records_from_v15)
+{
+    LOCK(cs_main);
+    grc_test::V15HeightGuard v15(1);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const CKeyID id = key.GetPubKey().GetID();
+    const uint256 superblock = uint256S("0909090909090909090909090909090909090909090909090909090909090909");
+
+    const uint256 advertisement = AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME, 1);
+    registry.ActivatePending({id}, START_TIME + DAY, superblock, 2);
+    const uint256 activation = Hash(superblock, advertisement);
+
+    // After the beacon expires, re-advertising the same key is not a renewal: it waits as a pending beacon.
+    const int64_t later = START_TIME + GRC::Beacon::MAX_AGE + 2 * DAY;
+    const uint256 readvertisement = AddPendingBeacon(registry, cpid, key.GetPubKey(), later, 3);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_REQUIRE(registry.PendingBeacons().at(id)->m_hash == readvertisement);
+
+    // The deletion removes both the expired active beacon and the pending one.
+    DeleteBeacon(registry, cpid, key.GetPubKey(), later + DAY, 4);
+    BOOST_REQUIRE(registry.Try(cpid) == nullptr);
+    BOOST_REQUIRE(registry.PendingBeacons().empty());
+
+    RevertDeletion(registry, cpid, key.GetPubKey(), later + DAY, 4);
+    BOOST_REQUIRE(registry.Try(cpid));
+    BOOST_CHECK(registry.Try(cpid)->m_hash == activation);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_CHECK(registry.PendingBeacons().at(id)->m_hash == readvertisement);
+
+    ReloadRegistry(registry);
+    BOOST_REQUIRE(registry.Try(cpid));
+    BOOST_CHECK(registry.Try(cpid)->m_hash == activation);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_CHECK(registry.PendingBeacons().at(id)->m_hash == readvertisement);
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_deleted_entries_are_in_chain_order)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key_1;
+    key_1.MakeNewKey(true);
+    CKey key_2;
+    key_2.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const uint256 superblock_1 = uint256S("0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a");
+    const uint256 superblock_2 = uint256S("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+
+    const uint256 advertisement_1 = AddPendingBeacon(registry, cpid, key_1.GetPubKey(), START_TIME, 1);
+    registry.ActivatePending({key_1.GetPubKey().GetID()}, START_TIME + DAY, superblock_1, 2);
+    const uint256 deletion_1 = DeleteBeacon(registry, cpid, key_1.GetPubKey(), START_TIME + 2 * DAY, 3);
+
+    const uint256 advertisement_2 = AddPendingBeacon(registry, cpid, key_2.GetPubKey(), START_TIME + 3 * DAY, 4);
+    registry.ActivatePending({key_2.GetPubKey().GetID()}, START_TIME + 4 * DAY, superblock_2, 5);
+    const uint256 deletion_2 = DeleteBeacon(registry, cpid, key_2.GetPubKey(), START_TIME + 5 * DAY, 6);
+
+    for (const bool restart : {false, true}) {
+        if (restart) ReloadRegistry(registry);
+
+        const std::vector<GRC::Beacon_ptr> deleted = registry.DeletedEntries(cpid);
+        BOOST_REQUIRE_EQUAL(deleted.size(), 2U);
+        BOOST_CHECK(deleted[0]->m_hash == deletion_1);
+        BOOST_CHECK(deleted[0]->m_previous_hash == Hash(superblock_1, advertisement_1));
+        BOOST_CHECK(deleted[1]->m_hash == deletion_2);
+        BOOST_CHECK(deleted[1]->m_previous_hash == Hash(superblock_2, advertisement_2));
+    }
 
     registry.Reset();
 }

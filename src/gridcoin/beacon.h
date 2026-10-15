@@ -737,6 +737,14 @@ public:
     const BeaconOption FindHistorical(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
+    //! \brief Get a CPID's beacon deletion records, in chain order.
+    //!
+    //! \return Each DELETED record. Its m_hash is the deletion's transaction hash and its m_previous_hash the
+    //! active record it removed (null when it removed none).
+    //!
+    std::vector<Beacon_ptr> DeletedEntries(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
     //! \brief Determine whether a beacon is active for the specified CPID.
     //!
     //! \param cpid The CPID to check for an active beacon.
@@ -978,6 +986,17 @@ private:
     //! only, so it never keeps a record in memory.
     //!
     std::map<uint256, uint256> m_displaced_pending GUARDED_BY(cs_main);
+
+    //!
+    //! \brief Pending beacons a deletion removed: deletion tx hash -> hash of the removed pending record. Kept
+    //! while the deletion's record exists; rebuilt by the load.
+    //!
+    std::map<uint256, uint256> m_deletion_removed_pending GUARDED_BY(cs_main);
+
+    //!
+    //! \brief Each CPID's deletion records (deletion tx hashes), in chain order. Rebuilt by the load.
+    //!
+    std::unordered_map<Cpid, std::vector<uint256>> m_deleted_by_cpid GUARDED_BY(cs_main);
 
     //!
     //! \brief Derive the registry's side state from one stored record during Initialize. Called before the

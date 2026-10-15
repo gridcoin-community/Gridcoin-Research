@@ -394,6 +394,26 @@ const BeaconOption BeaconRegistry::FindHistorical(const uint256& hash)
     return nullptr;
 }
 
+std::vector<Beacon_ptr> BeaconRegistry::DeletedEntries(const Cpid& cpid)
+{
+    std::vector<Beacon_ptr> deleted;
+
+    const auto iter = m_deleted_by_cpid.find(cpid);
+
+    if (iter == m_deleted_by_cpid.end()) {
+        return deleted;
+    }
+
+    // A read: a passivated record stays passivated.
+    for (const uint256& hash : iter->second) {
+        if (Beacon_ptr record = m_beacon_db.peek(hash)) {
+            deleted.push_back(std::move(record));
+        }
+    }
+
+    return deleted;
+}
+
 bool BeaconRegistry::ContainsActive(const Cpid& cpid, const int64_t now) const
 {
     if (const BeaconOption beacon = Try(cpid)) {
@@ -459,6 +479,8 @@ void BeaconRegistry::Reset()
     m_expired_pending.clear();
     m_replaced_by_last_superblock.clear();
     m_displaced_pending.clear();
+    m_deletion_removed_pending.clear();
+    m_deleted_by_cpid.clear();
     m_last_superblock_hash.reset();
     EraseLastSuperblockHash();
     m_beacon_db.clear();
@@ -697,6 +719,14 @@ void BeaconRegistry::Delete(const ContractContext& ctx)
     }
 
     const auto payload = ctx->SharePayloadAs<BeaconPayload>();
+    const uint256 deletion_hash = ctx.m_tx.GetHash();
+
+    // Remember a pending beacon the deletion removes, so a revert from block version 15 can restore it.
+    uint256 removed_pending_hash;
+
+    if (const auto removed = m_pending.find(payload->m_beacon.GetId()); removed != m_pending.end()) {
+        removed_pending_hash = removed->second->m_hash;
+    }
 
     if (ctx->m_version >= 2) {
         m_pending.erase(payload->m_beacon.GetId());
@@ -730,8 +760,17 @@ void BeaconRegistry::Delete(const ContractContext& ctx)
     deleted_beacon.m_previous_hash = last_active_ctx_hash;
     deleted_beacon.m_status = BeaconStatusForStorage::DELETED;
 
-    // Insert the deleted beacon entry in the storage db.
-    m_beacon_db.insert(deleted_beacon.m_hash, height, deleted_beacon);
+    // Insert the deleted beacon entry in the storage db. A deletion applied again (its record already stored) left
+    // its link when it was first stored, and the load rebuilds it, so only a record stored here records it.
+    if (m_beacon_db.insert(deleted_beacon.m_hash, height, deleted_beacon) && !removed_pending_hash.IsNull()) {
+        m_deletion_removed_pending[deletion_hash] = removed_pending_hash;
+    }
+
+    std::vector<uint256>& deletions = m_deleted_by_cpid[payload->m_cpid];
+
+    if (std::find(deletions.begin(), deletions.end(), deletion_hash) == deletions.end()) {
+        deletions.push_back(deletion_hash);
+    }
 
     // A beacon revocation changes the researcher's eligibility status,
     // so mark the context dirty to refresh the cached status.
@@ -901,13 +940,19 @@ void BeaconRegistry::Revert(const ContractContext& ctx)
     // records are handled in the Deactivate function, which is the block level Revert for the superblock reversion.
     if (ctx->m_action == ContractAction::REMOVE)
     {
-        uint256 deletion_hash = ctx.m_tx.GetHash();
+        const uint256 deletion_hash = ctx.m_tx.GetHash();
+
+        // From block version 15 the revert also brings back a pending beacon the deletion removed, and erases the
+        // deletion's record, since a revert removes every record its block created. Below block version 15 the
+        // earlier rule applies.
+        const bool v15_rules = ctx.m_pindex && IsV15Enabled(ctx.m_pindex->nHeight);
 
         auto deleted_beacon_record = m_beacon_db.find(deletion_hash);
 
         if (deleted_beacon_record != m_beacon_db.end())
         {
-            auto record_to_restore = m_beacon_db.find(deleted_beacon_record->second->m_previous_hash);
+            const uint256 restore_hash = deleted_beacon_record->second->m_previous_hash;
+            auto record_to_restore = m_beacon_db.find(restore_hash);
 
             if (record_to_restore != m_beacon_db.end())
             {
@@ -931,18 +976,48 @@ void BeaconRegistry::Revert(const ContractContext& ctx)
                     error("%s: Transaction hash %s: In a revert of a beacon deletion for cpid %s, the beacon pointed to by "
                           "the deletion entry does not contain a status of ACTIVE, RENEWAL, or PENDING. The status is %i.",
                           __func__,
-                          ctx.m_tx.GetHash().GetHex(),
+                          deletion_hash.GetHex(),
                           payload->m_cpid.ToString(),
                           beacon_to_restore_ptr->m_status.Raw());
                 }
             }
-            else
+            else if (!v15_rules || !restore_hash.IsNull())
             {
+                // From block version 15 a deletion that removed no active beacon has a null back-link by design.
                 error("%s: Transaction hash %s: In a revert of a beacon deletion for cpid %s, no previous beacon record "
                       "to restore was found.",
                       __func__,
-                      ctx.m_tx.GetHash().GetHex(),
+                      deletion_hash.GetHex(),
                       payload->m_cpid.ToString());
+            }
+
+            if (v15_rules) {
+                const auto removed = m_deletion_removed_pending.find(deletion_hash);
+
+                if (removed != m_deletion_removed_pending.end()) {
+                    const auto removed_entry = m_beacon_db.find(removed->second);
+
+                    if (removed_entry != m_beacon_db.end()
+                        && removed_entry->second->m_status == BeaconStatusForStorage::PENDING) {
+                        m_pending[removed_entry->second->GetId()] = removed_entry->second;
+                        RestoreOwnershipProof(removed_entry->second);
+                    }
+
+                    m_deletion_removed_pending.erase(removed);
+                }
+
+                m_beacon_db.erase(deletion_hash);
+
+                const auto deletions = m_deleted_by_cpid.find(payload->m_cpid);
+
+                if (deletions != m_deleted_by_cpid.end()) {
+                    std::vector<uint256>& hashes = deletions->second;
+                    hashes.erase(std::remove(hashes.begin(), hashes.end(), deletion_hash), hashes.end());
+
+                    if (hashes.empty()) {
+                        m_deleted_by_cpid.erase(deletions);
+                    }
+                }
             }
         }
     } // if (ctx->m_action == ContractAction::REMOVE)
@@ -1671,6 +1746,21 @@ void BeaconRegistry::ObserveLoadedRecord(const Beacon& entry, const BeaconMap& e
             m_displaced_pending[entry.m_hash] = displaced->second->m_hash;
         }
     }
+
+    // A deletion: the pending beacon it removed (see Delete), and the CPID's deletion index.
+    if (entry.m_status == BeaconStatusForStorage::DELETED) {
+        const auto removed = pending_entries.find(entry.m_public_key.GetID());
+
+        if (removed != pending_entries.end()) {
+            m_deletion_removed_pending[entry.m_hash] = removed->second->m_hash;
+        }
+
+        std::vector<uint256>& deletions = m_deleted_by_cpid[entry.m_cpid];
+
+        if (std::find(deletions.begin(), deletions.end(), entry.m_hash) == deletions.end()) {
+            deletions.push_back(entry.m_hash);
+        }
+    }
 }
 
 void BeaconRegistry::ResetInMemoryOnly()
@@ -1681,6 +1771,8 @@ void BeaconRegistry::ResetInMemoryOnly()
     m_expired_pending.clear();
     m_replaced_by_last_superblock.clear();
     m_displaced_pending.clear();
+    m_deletion_removed_pending.clear();
+    m_deleted_by_cpid.clear();
     m_last_superblock_hash.reset();
     m_beacon_db.clear_in_memory_only();
 }
