@@ -45,7 +45,7 @@ that arrive later.)
 | `ipcNodeIdentity` | property | The node's raw identity token; empty means unavailable. |
 | `ipcNetwork` | property | The node's chain network ("main", "test", ...). |
 | `requestQuit()` | invokable | Begins an application quit through the front end. |
-| `requestClose()` | invokable | For the main window's close handler. Returns true when the window may close and the application quits; false when it was hidden to the tray instead (`hideToTrayRequested`). A hidden window with no tray could not be restored, so there is no hide without a tray. |
+| `requestClose()` | invokable | For the main window's close handler. Returns true when the window may close and the application quits; false when it was hidden to the tray instead (`hideToTrayRequested`). A hidden window with no tray could not be restored, so there is no hide without a tray. A later change may answer false and ask QML to confirm first, for confirm-on-close, quitting once QML answers. |
 | `shownChanged`, `startMinimizedChanged`, `quitRequestedChanged`, `ipcInfoChanged` | signals | The matching property changed. |
 | `coreMessage(caption, message, modal)` | signal | A core message, delivered queued: the thread that raised it never waits for QML. |
 | `updateAvailable(caption, version, updateVersion, message)` | signal | The core found a newer version. |
@@ -163,8 +163,12 @@ module; `test/lint/lint-qml-module.sh` checks it.
 ## 6. Lanes
 
 `QmlCallRunner`'s serial lane (one thread, in order) runs every call not named here. The
-pooled lane (the global `QThreadPool`) runs `checkForLatestUpdate`, `runDiagnostics`,
-`executeRpcConsoleCommand` and the scraper snapshot.
+pooled lane (the global `QThreadPool`) runs calls whose results may arrive in any order.
+Planned, not in the module yet: `checkForLatestUpdate`, `runDiagnostics` and the scraper
+snapshot on the pooled lane. The RPC console's commands will run in the order they were
+typed, on an ordered lane, as the Widgets console runs them: a `walletpassphrase` must
+finish before the command typed after it starts. The pooled lane keeps no order, so the
+console never uses it.
 
 Both lanes deliver on the GUI thread, queued, under a generation. `drain()` cancels queued
 calls on both lanes and waits only for the in-flight serial call. After `close()` or
