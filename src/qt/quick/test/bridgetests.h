@@ -20,6 +20,7 @@ private Q_SLOTS:
     void requestCloseDecidesQuitOrHide();
     void throwingHideMainStillClosesRunner();
     void nativeWindowIdIsAHiddenWindow();
+    void destroyMainClosesRunner();
     void rootLoadErrorsReachStderr();
     void unloadableRootEndsTheGui();
     void requestQuitSetsQuitRequested();

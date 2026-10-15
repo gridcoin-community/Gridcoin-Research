@@ -110,6 +110,11 @@ QObject* QmlFrontEnd::construct()
 
 void QmlFrontEnd::destroyMain()
 {
+    // First: no call starts and no result is delivered once the root is gone,
+    // also on the paths that never reach the detach (a shutdown before the core
+    // is ready, an early throw).
+    m_runner->close();
+    m_runner->bumpGeneration();
     m_bridge.reset();
     m_root.reset();
     m_engine.reset();
