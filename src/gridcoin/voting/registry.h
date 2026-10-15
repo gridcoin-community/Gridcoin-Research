@@ -101,11 +101,12 @@ public:
     //!
     //! \brief Get the votes associated with the poll.
     //!
-    //! \return The set of transaction hashes of the associated votes, in connection order. For a poll stored in
-    //! the poll db the list is read from the vote link chain and cached until the chain changes. Requires
-    //! PollRegistry::cs_poll_registry.
+    //! \return A copy of the transaction hashes of the associated votes, in connection order. For a poll stored in
+    //! the poll db the list is read from the vote link chain and cached until the chain changes. Takes
+    //! PollRegistry::cs_poll_registry (recursive, so a caller may already hold it); PollRegistry is incomplete
+    //! here, so the requirement cannot be annotated on the declaration.
     //!
-    const std::vector<uint256>& Votes() const;
+    std::vector<uint256> Votes() const;
 
     //!
     //! \brief Get the timestamp of the poll transaction.
@@ -486,7 +487,7 @@ public:
     //!
     //! \return The block height through which the databases hold records.
     //!
-    int Initialize() override;
+    int Initialize() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief The higher of the two databases' heights. Every stored record advances its own database's height, so

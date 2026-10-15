@@ -501,8 +501,12 @@ const std::string& PollReference::Title() const
     return m_title;
 }
 
-const std::vector<uint256>& PollReference::Votes() const
+std::vector<uint256> PollReference::Votes() const
 {
+    // The cache below is written here and the chain it reads changes on block connection, so both are read under
+    // the registry lock, and the caller gets a copy that stays valid after it is released.
+    LOCK(PollRegistry::cs_poll_registry);
+
     // An in-memory poll (registered by the historical lookup) keeps the list it linked.
     if (!m_stored || m_registry == nullptr) {
         return m_votes;
