@@ -2990,6 +2990,110 @@ BOOST_AUTO_TEST_CASE(beacon_registry_reads_of_passivated_records_leave_them_pass
     registry.Reset();
 }
 
+namespace {
+//!
+//! \brief Connect a superblock block as GridcoinConnectBlock does: activate the verified beacons, then apply the
+//! block's contracts.
+//!
+void ConnectSuperblockBlock(GRC::BeaconRegistry& registry, const std::vector<uint160>& verified,
+                            const uint256& superblock, const CBlock& block, const CBlockIndex& index)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    registry.ActivatePending(verified, index.nTime, superblock, index.nHeight);
+
+    GRC::RegistryBookmarks db_heights;
+    bool found = false;
+    GRC::ApplyContracts(block, &index, db_heights, found);
+}
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(beacon_registry_removal_s_key_is_judged_when_applied_from_v15)
+{
+    LOCK(cs_main);
+    grc_test::V15HeightGuard v15(1);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+
+    CKey key_0, key_1, key_3;
+    key_0.MakeNewKey(true);
+    key_1.MakeNewKey(true);
+    key_3.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const uint256 superblock = uint256S("1616161616161616161616161616161616161616161616161616161616161616");
+
+    // The CPID's first beacon is pending, with key 0. Block 2 carries the superblock that activates it, and a removal
+    // that carries key 3. The removal is not applied.
+    {
+        registry.Reset();
+        AddPendingBeacon(registry, cpid, key_0.GetPubKey(), START_TIME, 1);
+
+        const CBlock block_2 = ContractBlock({BeaconContractTx(GRC::ContractAction::REMOVE, cpid, key_3,
+                                                               START_TIME + DAY)});
+        const CBlockIndex index_2 = ContractIndex(2, START_TIME + DAY);
+        ConnectSuperblockBlock(registry, {key_0.GetPubKey().GetID()}, superblock, block_2, index_2);
+
+        BOOST_REQUIRE(registry.Try(cpid));
+        BOOST_CHECK(registry.Try(cpid)->m_public_key == key_0.GetPubKey());
+        BOOST_CHECK(registry.DeletedEntries(cpid).empty());
+
+        ReloadRegistry(registry);
+        BOOST_REQUIRE(registry.Try(cpid));
+        BOOST_CHECK(registry.Try(cpid)->m_public_key == key_0.GetPubKey());
+
+        // Disconnected in the inverse order, the block leaves the beacon pending again, on a running node and after a
+        // restart.
+        GRC::RevertContracts(block_2, &index_2);
+        registry.Deactivate(superblock, 2);
+        BOOST_CHECK(registry.Try(cpid) == nullptr);
+        BOOST_CHECK_EQUAL(registry.PendingBeacons().count(key_0.GetPubKey().GetID()), 1U);
+
+        ReloadRegistry(registry);
+        BOOST_CHECK(registry.Try(cpid) == nullptr);
+        BOOST_CHECK_EQUAL(registry.PendingBeacons().count(key_0.GetPubKey().GetID()), 1U);
+    }
+
+    // The CPID is active with key 0 and advertised key 1. Block 4 carries the superblock that activates key 1, and a
+    // removal that carries key 0. The removal is not applied.
+    {
+        registry.Reset();
+        AddPendingBeacon(registry, cpid, key_0.GetPubKey(), START_TIME, 1);
+        registry.ActivatePending({key_0.GetPubKey().GetID()}, START_TIME + DAY, superblock, 2);
+        AddPendingBeacon(registry, cpid, key_1.GetPubKey(), START_TIME + 2 * DAY, 3);
+
+        const CBlock block_4 = ContractBlock({BeaconContractTx(GRC::ContractAction::REMOVE, cpid, key_0,
+                                                               START_TIME + 3 * DAY)});
+        ConnectSuperblockBlock(registry, {key_1.GetPubKey().GetID()},
+                               uint256S("1717171717171717171717171717171717171717171717171717171717171717"),
+                               block_4, ContractIndex(4, START_TIME + 3 * DAY));
+
+        BOOST_REQUIRE(registry.Try(cpid));
+        BOOST_CHECK(registry.Try(cpid)->m_public_key == key_1.GetPubKey());
+
+        ReloadRegistry(registry);
+        BOOST_REQUIRE(registry.Try(cpid));
+        BOOST_CHECK(registry.Try(cpid)->m_public_key == key_1.GetPubKey());
+    }
+
+    // A removal carrying the key the block activates removes that beacon.
+    {
+        registry.Reset();
+        AddPendingBeacon(registry, cpid, key_0.GetPubKey(), START_TIME, 1);
+
+        const CBlock block_2 = ContractBlock({BeaconContractTx(GRC::ContractAction::REMOVE, cpid, key_0,
+                                                               START_TIME + DAY)});
+        ConnectSuperblockBlock(registry, {key_0.GetPubKey().GetID()}, superblock, block_2,
+                               ContractIndex(2, START_TIME + DAY));
+
+        BOOST_CHECK(registry.Try(cpid) == nullptr);
+        BOOST_CHECK_EQUAL(registry.DeletedEntries(cpid).size(), 1U);
+
+        ReloadRegistry(registry);
+        BOOST_CHECK(registry.Try(cpid) == nullptr);
+    }
+
+    registry.Reset();
+}
+
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif

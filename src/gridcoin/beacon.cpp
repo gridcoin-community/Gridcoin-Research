@@ -721,6 +721,23 @@ void BeaconRegistry::Delete(const ContractContext& ctx)
     const auto payload = ctx->SharePayloadAs<BeaconPayload>();
     const uint256 deletion_hash = ctx.m_tx.GetHash();
 
+    // From block version 15 a removal takes the CPID's active beacon only if it carries that beacon's key, judged when
+    // it is applied, as it is in validation. A removal that does not carry the active beacon's key changes nothing
+    // and stores nothing.
+    if (ctx.m_pindex && IsV15Enabled(ctx.m_pindex->nHeight)) {
+        const auto active = m_beacons.find(payload->m_cpid);
+
+        if (active != m_beacons.end() && active->second->m_public_key != payload->m_beacon.m_public_key) {
+            LogPrint(LogFlags::BEACON, "INFO: %s: Removal %s of cpid %s does not carry the key of the cpid's active "
+                                       "beacon; it changes nothing.",
+                     __func__,
+                     deletion_hash.GetHex(),
+                     payload->m_cpid.ToString());
+
+            return;
+        }
+    }
+
     // Remember a pending beacon the deletion removes, so a revert from block version 15 can restore it.
     uint256 removed_pending_hash;
 
