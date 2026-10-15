@@ -341,6 +341,17 @@ void QmlBridgeTests::nativeWindowIdIsAHiddenWindow()
     QCOMPARE(fe.nativeWindowId(), WId(0));
 }
 
+void QmlBridgeTests::destroyMainClosesRunner()
+{
+    std::atomic<int> disconnects{0};
+    QmlFrontEnd fe(qml_test::FIXTURE_ROOT_URL, qml_test::CountingCallbacks(disconnects));
+    QVERIFY(fe.construct());
+    fe.destroyMain();
+
+    QVERIFY2(fe.callRunner().closed(), "destroyMain() left the call runner open");
+    QVERIFY2(!fe.callRunner().postSerial([] {}, [] {}), "the call runner took a post after destroyMain()");
+}
+
 void QmlBridgeTests::rootLoadErrorsReachStderr()
 {
     std::atomic<int> disconnects{0};

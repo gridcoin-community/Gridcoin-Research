@@ -75,8 +75,9 @@ public:
     //! Creates the engine, loads the root and returns the core-message bridge.
     //! Throws GuiFrontEndUnusable when the root does not load.
     QObject* construct() override;
-    //! Destroys the bridge, the root, the engine and the window of
-    //! nativeWindowId(), in that order; idempotent.
+    //! Closes the call runner and moves it to a new generation, then destroys
+    //! the bridge, the root, the engine and the window of nativeWindowId(), in
+    //! that order; idempotent.
     void destroyMain() override;
     //! Marks the splash active and returns its adapter.
     QObject* createSplash() override;
