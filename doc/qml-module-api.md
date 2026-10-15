@@ -51,7 +51,7 @@ that arrive later.)
 | `updateAvailable(caption, version, updateVersion, message)` | signal | The core found a newer version. |
 | `buildMismatchWarning(guiCommit, nodeCommit)` | signal | The mixed-build banner. |
 | `showMainRequested(minimized)` | signal | The root should show its main window. |
-| `hideMainRequested()` | signal | The root should hide its main window (the first step of the detach). |
+| `hideMainRequested()` | signal | The first step of the detach: the root hides every window it shows, not only the main window. Qt's quit closes none of them, and the GUI thread pumps no events for the rest of the teardown. `QmlFrontEnd::hideMain()` then hides any top-level window still visible. |
 | `hideToTrayRequested()` | signal | Emitted by `requestClose()` when it hides to the tray. |
 
 ### `Splash` (singleton)

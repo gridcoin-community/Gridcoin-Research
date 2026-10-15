@@ -109,9 +109,10 @@ public:
     QObject* rootObject() const;
 
 protected:
-    //! Cancels the runner's queued calls and waits for its in-flight serial
-    //! call; pooled calls are reaped by the composition root's global-pool
-    //! waits. Then tells QML to hide the main window.
+    //! Tells QML to hide its windows, hides any top-level window still visible,
+    //! then cancels the runner's queued calls and waits for its in-flight
+    //! serial call; pooled calls are reaped by the composition root's
+    //! global-pool waits.
     void hideMain() override;
     void detachClient() override;
     void detachWallet() override;

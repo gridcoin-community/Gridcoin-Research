@@ -21,6 +21,8 @@ private Q_SLOTS:
     void throwingHideMainStillClosesRunner();
     void nativeWindowIdIsAHiddenWindow();
     void destroyMainClosesRunner();
+    void hideMainHidesBeforeDrain();
+    void hideMainHidesEveryTopLevelWindow();
     void rootLoadErrorsReachStderr();
     void unloadableRootEndsTheGui();
     void requestQuitSetsQuitRequested();

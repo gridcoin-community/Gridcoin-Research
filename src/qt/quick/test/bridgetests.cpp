@@ -352,6 +352,49 @@ void QmlBridgeTests::destroyMainClosesRunner()
     QVERIFY2(!fe.callRunner().postSerial([] {}, [] {}), "the call runner took a post after destroyMain()");
 }
 
+void QmlBridgeTests::hideMainHidesBeforeDrain()
+{
+    std::atomic<int> disconnects{0};
+    QmlFrontEnd fe(qml_test::FIXTURE_ROOT_URL, qml_test::CountingCallbacks(disconnects));
+    std::atomic<bool> hidden{false};
+    std::atomic<bool> started{false};
+    std::atomic<bool> saw_hidden{false};
+    QObject::connect(&fe.provider().shell(), &ShellAdapter::hideMainRequested, &fe.provider().shell(),
+                     [&hidden] { hidden = true; });
+    const bool posted = fe.callRunner().postSerial(
+        [&] {
+            started = true;
+            const auto deadline = std::chrono::steady_clock::now() + 5s;
+            while (!hidden && std::chrono::steady_clock::now() < deadline) {
+                std::this_thread::sleep_for(1ms);
+            }
+            saw_hidden = hidden.load();
+        },
+        {});
+    const auto deadline = std::chrono::steady_clock::now() + 30s;
+    while (!started && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(1ms);
+    }
+    fe.detachModels();
+
+    QVERIFY(posted);
+    QVERIFY(started);
+    QVERIFY2(saw_hidden, "the main window was hidden only after the in-flight serial call finished");
+}
+
+void QmlBridgeTests::hideMainHidesEveryTopLevelWindow()
+{
+    std::atomic<int> disconnects{0};
+    QmlFrontEnd fe(qml_test::FIXTURE_ROOT_URL, qml_test::CountingCallbacks(disconnects));
+    // A window the root does not know, as a view's createObject(window) makes.
+    QWindow stray;
+    stray.show();
+    QVERIFY(stray.isVisible());
+    fe.detachModels();
+
+    QVERIFY2(!stray.isVisible(), "a top-level window the root does not know stayed visible after hideMain");
+}
+
 void QmlBridgeTests::rootLoadErrorsReachStderr()
 {
     std::atomic<int> disconnects{0};

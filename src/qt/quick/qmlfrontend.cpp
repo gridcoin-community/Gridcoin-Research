@@ -12,6 +12,7 @@
 #include <qt/quick/splashadapter.h>
 
 #include <QCoreApplication>
+#include <QGuiApplication>
 #include <QQmlEngine>
 #include <QWindow>
 
@@ -210,11 +211,17 @@ QObject* QmlFrontEnd::rootObject() const
 
 void QmlFrontEnd::hideMain()
 {
-    // Drain cancels queued calls on both lanes and waits only for the in-flight
-    // serial call; pooled calls are reaped by the composition root's
+    // Hide first: the drain can wait for a long serial call, and no event loop
+    // runs here. Drain cancels queued calls on both lanes and waits only for the
+    // in-flight serial call; pooled calls are reaped by the composition root's
     // global-pool waits.
-    m_runner->drain();
     shell().notifyHideMain();
+    // A window a view opened with createObject(window) is out of the root's
+    // reach, and Qt hides no transient child with its parent.
+    for (QWindow* w : QGuiApplication::topLevelWindows()) {
+        if (w->isVisible()) w->hide();
+    }
+    m_runner->drain();
 }
 
 void QmlFrontEnd::detachClient()
