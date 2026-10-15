@@ -84,6 +84,10 @@ ShellAdapter& QmlFrontEnd::shell()
 
 QObject* QmlFrontEnd::construct()
 {
+    if (m_constructed) {
+        throw std::logic_error("QmlFrontEnd::construct() called twice");
+    }
+    m_constructed = true;
     // First, so a native window exists whatever the root does; create() makes
     // it now, not on the first winId() call.
     m_anchor = std::make_unique<QWindow>();
@@ -91,6 +95,8 @@ QObject* QmlFrontEnd::construct()
     m_engine = std::make_unique<QQmlEngine>();
     // Quit goes through the front end, like every other quit path.
     QObject::connect(m_engine.get(), &QQmlEngine::quit, m_engine.get(), [this] { requestQuit(); });
+    // Qt.exit(code) too; the code is dropped: StartGridcoinQt sets the process status.
+    QObject::connect(m_engine.get(), &QQmlEngine::exit, m_engine.get(), [this](int) { requestQuit(); });
     // QGuiApplication::lastWindowClosed is deliberately not connected: Qt emits
     // it from the event loop whenever the last visible window closes, even with
     // quit-on-last-window-closed off, and a secondary window closed while the

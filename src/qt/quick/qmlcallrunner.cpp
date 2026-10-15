@@ -19,10 +19,12 @@
 
 //! The state a runner shares with the jobs and deliveries it posts, so they
 //! never hold the runner itself.
-struct QmlCallRunner::State {
+struct QmlCallRunner::State
+{
     //! One serial-lane call: the work, its delivery and the generation it was
     //! posted in.
-    struct Job {
+    struct Job
+    {
         std::function<void()> fn;
         std::function<void()> deliver;
         uint64_t captured{0};

@@ -23,6 +23,7 @@
 #include <QMetaObject>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QQmlEngine>
 #include <QSettings>
 #include <QSignalSpy>
 #include <QString>
@@ -393,6 +394,35 @@ void QmlBridgeTests::hideMainHidesEveryTopLevelWindow()
     fe.detachModels();
 
     QVERIFY2(!stray.isVisible(), "a top-level window the root does not know stayed visible after hideMain");
+}
+
+void QmlBridgeTests::constructTwiceThrows()
+{
+    std::atomic<int> disconnects{0};
+    {
+        QmlFrontEnd fe(qml_test::FIXTURE_ROOT_URL, qml_test::CountingCallbacks(disconnects));
+        QVERIFY(fe.construct());
+        QVERIFY_THROWS_EXCEPTION(std::logic_error, fe.construct());
+    }
+    {
+        QmlFrontEnd fe(qml_test::FIXTURE_ROOT_URL, qml_test::CountingCallbacks(disconnects));
+        QVERIFY(fe.construct());
+        fe.destroyMain();
+        QVERIFY_THROWS_EXCEPTION(std::logic_error, fe.construct());
+    }
+}
+
+void QmlBridgeTests::qtQuitAndExitReachRequestQuit()
+{
+    std::atomic<int> disconnects{0};
+    qml_test::CountingQuitFrontEnd fe(qml_test::FIXTURE_ROOT_URL, qml_test::CountingCallbacks(disconnects));
+    QVERIFY(fe.construct());
+    QQmlEngine* const engine = qmlEngine(fe.rootObject());
+    QVERIFY(engine);
+    Q_EMIT engine->quit();
+    QCOMPARE(fe.quits, 1);
+    Q_EMIT engine->exit(3);
+    QVERIFY2(fe.quits == 2, "Qt.exit did not reach requestQuit");
 }
 
 void QmlBridgeTests::rootLoadErrorsReachStderr()

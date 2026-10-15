@@ -62,7 +62,8 @@ public:
     //! composition root. Quit needs no callback: RequestGuiQuit calls
     //! requestQuit() on the registered front end, and the module's own quit
     //! paths call it directly.
-    struct Callbacks {
+    struct Callbacks
+    {
         std::function<bool(const std::string&)> is_disconnect;
         std::function<void(const std::string&)> on_disconnect;
     };
@@ -73,6 +74,8 @@ public:
     ~QmlFrontEnd() override;
 
     //! Creates the engine, loads the root and returns the core-message bridge.
+    //! Call it once per front end: destroyMain() closes the call runner for
+    //! good, so a second call throws std::logic_error, also after destroyMain().
     //! Throws GuiFrontEndUnusable when the root does not load.
     QObject* construct() override;
     //! Closes the call runner and moves it to a new generation, then destroys
@@ -135,6 +138,7 @@ private:
     std::unique_ptr<QQmlEngine> m_engine;
     std::unique_ptr<QObject> m_root;
     std::unique_ptr<QmlCoreBridge> m_bridge;
+    bool m_constructed{false};                  // set by construct(), never cleared
     ClientModel* m_client{nullptr};
     WalletModel* m_wallet{nullptr};
     MRCModel* m_mrc{nullptr};
