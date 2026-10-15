@@ -172,7 +172,7 @@ void RemoveTestBeacon(const GRC::Cpid cpid) NO_THREAD_SAFETY_ANALYSIS
         cpid,
         std::move(public_key));
 
-    GRC::GetBeaconRegistry().Deactivate(mock_superblock_hash);
+    GRC::GetBeaconRegistry().Deactivate(mock_superblock_hash, 0);
     GRC::GetBeaconRegistry().Delete({ contract, ctx_tx, nullptr });
 }
 

@@ -830,8 +830,16 @@ public:
     //! ActivatePending that was applied for that superblock, i.e. it is the inverse of ActivatePending.
     //!
     //! \param hash of the superblock.
+    //! \param height Height of the superblock being disconnected.
     //!
-    void Deactivate(const uint256 superblock_hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Deactivate(const uint256 superblock_hash, const int height) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Whether the expired-pending set and the replaced-beacon map describe the most recently connected
+    //! superblock. ActivatePending makes them current and Deactivate consumes them; they are current again when
+    //! the next superblock connects. A beacon db with no marker counts as current.
+    //!
+    bool SuperblockStateCurrent() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Initialize the BeaconRegistry, which now includes restoring the state of the BeaconRegistry from
@@ -949,6 +957,13 @@ private:
     //! beacon registry and is only accessible by beacon registry functions.
     //!
     BeaconDB m_beacon_db GUARDED_BY(cs_main);
+
+    //!
+    //! \brief Block hash of the superblock whose expired-pending set and replaced-beacon map are current; a null
+    //! hash once a disconnect consumed them; nullopt when the beacon db holds no marker. Persisted under the beacon
+    //! db key ("beacon_db", "last_superblock_hash") so a restarted node has the same view.
+    //!
+    std::optional<uint256> m_last_superblock_hash GUARDED_BY(cs_main);
 
     //!
     //! \brief The function that is used in Add() to try to renew a beacon by matching the incoming beacon's

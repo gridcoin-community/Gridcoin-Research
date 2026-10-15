@@ -2050,7 +2050,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_deactivate_skips_missing_pending_records)
     registry.GetBeaconDB().erase(advertisement_2);
 
     // Deactivate has nothing to restore either beacon to, and returns.
-    registry.Deactivate(superblock);
+    registry.Deactivate(superblock, 3);
 
     BOOST_CHECK(registry.PendingBeacons().empty());
     BOOST_CHECK(registry.Try(cpid_1) != nullptr);
@@ -2102,6 +2102,51 @@ BOOST_AUTO_TEST_CASE(beacon_registry_a_db_stored_at_version_3_is_rebuilt_on_the_
     BOOST_CHECK(registry.PendingBeacons().empty());
     BOOST_CHECK(registry.GetBeaconDB().find(advertisement) == registry.GetBeaconDB().end());
     BOOST_CHECK_EQUAL(StoredBeaconDBVersion(), 4U);
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_superblock_state_survives_a_restart)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    const uint256 superblock = uint256S("0404040404040404040404040404040404040404040404040404040404040404");
+
+    registry.ActivatePending({}, START_TIME, superblock, 3);
+    BOOST_CHECK(registry.SuperblockStateCurrent());
+
+    ReloadRegistry(registry);
+    BOOST_CHECK(registry.SuperblockStateCurrent());
+
+    // A disconnect consumes the state; a restart keeps it consumed.
+    registry.Deactivate(superblock, 3);
+    BOOST_CHECK(!registry.SuperblockStateCurrent());
+
+    ReloadRegistry(registry);
+    BOOST_CHECK(!registry.SuperblockStateCurrent());
+
+    // The next connected superblock makes it current again.
+    registry.ActivatePending({}, START_TIME + DAY, superblock, 3);
+    BOOST_CHECK(registry.SuperblockStateCurrent());
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_missing_marker_counts_as_current)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+
+    // Reset erases the marker, as a db written before it existed has none.
+    registry.Reset();
+    BOOST_CHECK(registry.SuperblockStateCurrent());
+
+    ReloadRegistry(registry);
+    BOOST_CHECK(registry.SuperblockStateCurrent());
 
     registry.Reset();
 }

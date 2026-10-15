@@ -411,12 +411,54 @@ bool BeaconRegistry::ContainsActive(const Cpid& cpid) const
 //!
 //! \brief This resets the in-memory maps of the registry and the LevelDB backing storage.
 //!
+namespace {
+std::pair<std::string, std::string> LastSuperblockKey()
+{
+    return std::make_pair(std::string("beacon_db"), std::string("last_superblock_hash"));
+}
+
+void StoreLastSuperblockHash(const uint256& hash)
+{
+    CTxDB txdb("rw");
+    auto key = LastSuperblockKey();
+    uint256 value = hash;
+    txdb.WriteGenericSerializable(key, value);
+}
+
+std::optional<uint256> LoadLastSuperblockHash()
+{
+    CTxDB txdb("r");
+    auto key = LastSuperblockKey();
+    uint256 hash;
+
+    if (!txdb.ReadGenericSerializable(key, hash)) {
+        return std::nullopt;
+    }
+
+    return hash;
+}
+
+void EraseLastSuperblockHash()
+{
+    CTxDB txdb("rw");
+    auto key = LastSuperblockKey();
+    txdb.EraseGenericSerializable(key);
+}
+} // anonymous namespace
+
+bool BeaconRegistry::SuperblockStateCurrent() const
+{
+    return !m_last_superblock_hash || !m_last_superblock_hash->IsNull();
+}
+
 void BeaconRegistry::Reset()
 {
     m_beacons.clear();
     m_pending.clear();
     m_pending_ownership_proofs.clear();
     m_expired_pending.clear();
+    m_last_superblock_hash.reset();
+    EraseLastSuperblockHash();
     m_beacon_db.clear();
 }
 
@@ -1252,9 +1294,13 @@ void BeaconRegistry::ActivatePending(
             ++iter;
         }
     }
+
+    // This superblock's expired-pending set and replaced-beacon map are now the current ones.
+    m_last_superblock_hash = block_hash;
+    StoreLastSuperblockHash(block_hash);
 }
 
-void BeaconRegistry::Deactivate(const uint256 superblock_hash)
+void BeaconRegistry::Deactivate(const uint256 superblock_hash, const int height)
 {
     // Remember this function is a form of reversion, intended to be called during block disconnects as the inverse
     // of the ActivatePending, which is called when superblocks are committed.
@@ -1338,6 +1384,10 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
     // (during the activation) repopulate the m_expired_pending map with a new set of expired_beacons. (This is very, very likely
     // to be the same set, BTW.)
     m_expired_pending.clear();
+
+    // The set and the map described this superblock, and no superblock is connected after it now.
+    m_last_superblock_hash = uint256();
+    StoreLastSuperblockHash(uint256());
 
     // Note that making this foolproof in a reorganization across more than one SB boundary means we would have to repopulate the
     // expired pending beacon map from the PREVIOUS set of expired pending beacons. This would require a traversal of the entire
@@ -1502,6 +1552,8 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
 
 int BeaconRegistry::Initialize()
 {
+    m_last_superblock_hash = LoadLastSuperblockHash();
+
     int height = m_beacon_db.Initialize(m_beacons, m_pending, m_expired_pending, m_beacon_first_entries, false);
 
     LogPrint(LogFlags::BEACON, "INFO: %s: m_beacon_db size after load: %u", __func__, m_beacon_db.size());
@@ -1527,6 +1579,7 @@ void BeaconRegistry::ResetInMemoryOnly()
     m_pending.clear();
     m_pending_ownership_proofs.clear();
     m_expired_pending.clear();
+    m_last_superblock_hash.reset();
     m_beacon_db.clear_in_memory_only();
 }
 

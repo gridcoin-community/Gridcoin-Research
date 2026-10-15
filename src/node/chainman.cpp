@@ -178,7 +178,7 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
             // itself. It would not be verified. AND if the beacon is a renewal, it would never be in the activation list
             // for a superblock. We call GetBeaconRegistry directly here, because the IHandler class does not have
             // a virtual method that corresponds to this call, as it is only relevant to beacons.
-            GRC::GetBeaconRegistry().Deactivate(pindexBest->GetBlockHash());
+            GRC::GetBeaconRegistry().Deactivate(pindexBest->GetBlockHash(), pindexBest->nHeight);
 
             // Count it so we can decide after the loop whether to flag a beacon-registry rebuild
             // for the next startup (the Deactivate-via-m_expired_pending path is only correct
