@@ -2,12 +2,14 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "arith_uint256.h"
 #include "chain.h"
 #include "chainparams.h"
 #include "consensus/merkle.h"
 #include "dbwrapper.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/contract/registry.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/voting/payloads.h"
@@ -25,6 +27,8 @@
 #include "util.h"
 
 #include <boost/test/unit_test.hpp>
+
+#include <deque>
 
 // Tests are single-threaded and drive the PollRegistry contract handler
 // directly. The handler is EXCLUSIVE_LOCKS_REQUIRED(cs_main); the tests take
@@ -85,9 +89,16 @@ PollTx MakePollTx(const std::string& title, const int64_t tx_time,
 
 CBlockIndex MakeBlockIndex(const int height, const int64_t time)
 {
+    // A stored poll record carries its block's hash, so each test block index gets one, made from its height and
+    // time. The hashes outlive every test (a deque keeps their addresses as it grows).
+    static std::deque<uint256> hashes;
+    hashes.push_back(ArithToUint256((arith_uint256(static_cast<uint64_t>(height)) << 64)
+                                    | arith_uint256(static_cast<uint64_t>(time))));
+
     CBlockIndex index {};
     index.nHeight = height;
     index.nTime = time;
+    index.phashBlock = &hashes.back();
 
     return index;
 }
@@ -166,8 +177,11 @@ BOOST_AUTO_TEST_CASE(a_revert_removes_only_the_poll_its_contract_added)
     registry.Add({second.contract, second.tx, &index_second});
 
     {
+        // Below v15 a second poll with the same title key is registered by its txid, but the first keeps the
+        // title.
         LOCK(GRC::PollRegistry::cs_poll_registry);
-        BOOST_REQUIRE(registry.TryByTxid(second.tx.GetHash()) == nullptr);
+        BOOST_REQUIRE(registry.TryByTxid(second.tx.GetHash()) != nullptr);
+        BOOST_REQUIRE(registry.TryByTitle("title") == registry.TryByTxid(first.tx.GetHash()));
     }
 
     // A revert removes only the poll its own contract added.
@@ -328,6 +342,59 @@ BOOST_AUTO_TEST_CASE(magnitude_weight_factor_sees_an_earlier_stamped_entry_mined
     const GRC::PollReference* ref = registry.TryByTxid(poll.tx.GetHash());
     BOOST_REQUIRE(ref != nullptr);
     BOOST_CHECK(ref->GetMagnitudeWeightFactor() == Fraction(618034, 1000000, true));
+}
+
+BOOST_AUTO_TEST_CASE(the_poll_registry_is_backed_by_dbs_for_both_contract_types)
+{
+    BOOST_CHECK(GRC::RegistryBookmarks::IsRegistryBackedByDB(GRC::ContractType::POLL));
+    BOOST_CHECK(GRC::RegistryBookmarks::IsRegistryBackedByDB(GRC::ContractType::VOTE));
+    BOOST_CHECK(&GRC::RegistryBookmarks::GetRegistryWithDB(GRC::ContractType::POLL) == &GRC::GetPollRegistry());
+    BOOST_CHECK(&GRC::RegistryBookmarks::GetRegistryWithDB(GRC::ContractType::VOTE) == &GRC::GetPollRegistry());
+}
+
+BOOST_AUTO_TEST_CASE(the_handler_stores_nothing_below_v11)
+{
+    CBlockIndex index = MakeBlockIndex(Params().GetConsensus().BlockV11Height - 1, 1600000000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Old", 1600000000);
+
+    registry.Add({poll.contract, poll.tx, &index});
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash()) == nullptr);
+    BOOST_CHECK(registry.TryByTitle("old") == nullptr);
+    BOOST_CHECK(!registry.TitleOwner("old"));
+    BOOST_CHECK(!registry.IsStored(poll.tx.GetHash()));
+}
+
+BOOST_AUTO_TEST_CASE(a_restarted_registry_holds_the_same_polls)
+{
+    CBlockIndex index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx first = MakePollTx("Alpha", 1700000000);
+    const PollTx second = MakePollTx("Beta", 1700000100);
+
+    registry.Add({first.contract, first.tx, &index});
+    registry.Add({second.contract, second.tx, &index});
+
+    registry.ResetInMemoryOnly();
+    registry.Initialize();
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    const GRC::PollReference* alpha = registry.TryByTxid(first.tx.GetHash());
+    const GRC::PollReference* beta = registry.TryByTxid(second.tx.GetHash());
+    BOOST_REQUIRE(alpha != nullptr);
+    BOOST_REQUIRE(beta != nullptr);
+    BOOST_CHECK_EQUAL(alpha->Title(), "Alpha");
+    BOOST_CHECK(registry.TryByTitle("beta") == beta);
+    BOOST_CHECK(registry.TitleOwner("alpha") == first.tx.GetHash());
+    BOOST_CHECK_EQUAL(registry.GetDBHeight(), V13Height() + 10);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

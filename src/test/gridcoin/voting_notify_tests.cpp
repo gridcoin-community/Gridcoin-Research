@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "chain.h"
+#include "chainparams.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/staking/status.h"
@@ -89,6 +90,7 @@ struct PollRegistryFixture
     const GRC::Contract vote_contract{MakeVoteContract(poll_tx.GetHash())};
     const GRC::Contract legacy_vote_contract{MakeLegacyVoteContract()};
 
+    const uint256 block_hash{uint256::ONE};
     CBlockIndex index;
 
     int poll_calls{0};
@@ -100,6 +102,11 @@ struct PollRegistryFixture
 
     PollRegistryFixture()
     {
+        // The poll registry applies nothing below V11, and it stores a poll
+        // with its block's hash. Put the block at V11 and give it a hash.
+        index.nHeight = Params().GetConsensus().BlockV11Height;
+        index.phashBlock = &block_hash;
+
         // Of these steps only the version 2 vote's finished-poll check reads
         // the block time. Give it the poll's own time.
         index.nTime = poll_tx.nTime;

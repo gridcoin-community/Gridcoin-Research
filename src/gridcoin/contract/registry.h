@@ -56,15 +56,13 @@ public:
         case ContractType::SIDESTAKE:      return GetSideStakeRegistry();
         case ContractType::POOL_REGISTER:  return GetPoolRegistry();
         case ContractType::POOL_APPROVE:   return GetPoolRegistry();
+        case ContractType::POLL:           return GetPollRegistry();
+        case ContractType::VOTE:           return GetPollRegistry();
         case ContractType::UNKNOWN:
             [[fallthrough]];
         case ContractType::CLAIM:
             [[fallthrough]];
         case ContractType::MESSAGE:
-            [[fallthrough]];
-        case ContractType::POLL:
-            [[fallthrough]];
-        case ContractType::VOTE:
             [[fallthrough]];
         case ContractType::MRC:
             [[fallthrough]];
@@ -175,6 +173,11 @@ public:
             if (iter.first == GRC::ContractType::SIDESTAKE and db_height < Params().GetConsensus().BlockV13Height) {
                 db_height = Params().GetConsensus().BlockV13Height;
             }
+
+            //! POLL and VOTE need no clamp here, although their bookmark is 0 until the poll registry stores its first
+            //! record: the poll registry's floor is V11 on every node (see PollRegistry::Add), and
+            //! InitializeContracts already takes max(GetLowestRegistryBlockHeight(), V11) for the replay's start, so a
+            //! 0 here can never pull the replay below V11. This is the one registry whose floor is V11 by design.
 
             //! Analogous treatment for POOL contracts (issue #1783) gated behind V15. Both contract
             //! types share the same PoolRegistry/RegistryDB instance, so both bookmark entries get

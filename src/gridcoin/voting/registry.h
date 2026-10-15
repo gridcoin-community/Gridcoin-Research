@@ -8,11 +8,13 @@
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/voting/filter.h"
 #include "gridcoin/voting/fwd.h"
+#include "gridcoin/voting/poll_entry.h"
 #include "sync.h"
 #include "uint256.h"
 #include "util.h"
 #include <atomic>
 #include <map>
+#include <optional>
 
 class CTxDB;
 
@@ -239,6 +241,9 @@ private:
     const CBlockIndex* m_pindex;                //!< Block that contains the poll contract.
     std::vector<uint256> m_votes;               //!< Hashes of the linked vote transactions.
     mutable bool m_expiration_warn_notified;    //!< Flag to indicate whether the expiration warning was sent.
+    bool m_stored;                              //!< Backed by the poll db (a poll from V11 on).
+    bool m_deleted;                             //!< Deleted by a master-key REMOVE; kept for its txid and title.
+    const PollRegistry* m_registry;             //!< The registry that holds this reference.
 }; // PollReference
 
 //!
@@ -251,8 +256,15 @@ private:
 class PollRegistry : public IContractHandler
 {
 public:
-    using PollMapByTitle = std::map<std::string, PollReference>;
-    using PollMapByTxid = std::map<uint256, PollReference*>;
+    //! Display map: title key (ToLower(title)) to the ACTIVE poll that registered it first.
+    using PollMapByTitle = std::map<std::string, PollReference*>;
+    //! Owning map: every poll the registry holds, ACTIVE or DELETED, by txid.
+    using PollMapByTxid = std::map<uint256, PollReference>;
+
+    //!
+    //! \brief Initialize an empty poll registry with its poll and vote link databases.
+    //!
+    PollRegistry();
 
     //!
     //! \brief Lock for poll registry.
@@ -465,6 +477,51 @@ public:
     void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
+    //! \brief Load the poll and vote link databases and rebuild the in-memory indexes from their records, in
+    //! record order. Idempotent until the next Reset() or ResetInMemoryOnly(): InitializeContracts calls it once for
+    //! POLL and once for VOTE, which both map to this registry.
+    //!
+    //! \return The block height through which the databases hold records.
+    //!
+    int Initialize() override;
+
+    //!
+    //! \brief The higher of the two databases' heights. Every stored record advances its own database's height, so
+    //! every POLL and VOTE contract below the higher height was processed.
+    //!
+    int GetDBHeight() override;
+
+    //!
+    //! \brief Set both databases' heights (a disconnect winding the bookmark back).
+    //!
+    void SetDBHeight(int& height) override;
+
+    //!
+    //! \brief Remove from memory the records that no current map references.
+    //!
+    uint64_t PassivateDB() override;
+
+    //!
+    //! \brief Clear the in-memory state only, keeping the databases (a restart, for tests).
+    //!
+    void ResetInMemoryOnly();
+
+    //!
+    //! \brief Whether a poll record or vote link with this hash is stored. Reads without loading a passivated record.
+    //!
+    bool IsStored(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+
+    //!
+    //! \brief The hash of the poll's newest vote link, or null when it has none.
+    //!
+    uint256 VoteHead(const uint256& poll_txid) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+
+    //!
+    //! \brief The txid of the poll that registered a title key first in chain order, ACTIVE or DELETED.
+    //!
+    std::optional<uint256> TitleOwner(const std::string& title_key) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+
+    //!
     //! \brief Perform contextual validation for the provided contract.
     //!
     //! \param contract Contract to validate.
@@ -539,9 +596,31 @@ public:
     std::atomic<bool> reorg_occurred_during_reg_traversal = false; //!< Boolean to indicate whether a reorg occurred.
 
 private:
-    PollMapByTitle m_polls GUARDED_BY(cs_poll_registry);             //!< Poll references keyed by title.
-    PollMapByTxid m_polls_by_txid GUARDED_BY(cs_poll_registry);      //!< Poll references keyed by TXID.
+    PollMapByTitle m_polls GUARDED_BY(cs_poll_registry);             //!< Display map: ACTIVE polls by title key.
+    PollMapByTxid m_polls_by_txid GUARDED_BY(cs_poll_registry);      //!< Every poll held, by txid (owning).
     const PollReference* m_latest_poll GUARDED_BY(cs_poll_registry); //!< Cache for the most recent poll.
+
+    PollEntryDB m_poll_db GUARDED_BY(cs_poll_registry);                       //!< Poll records, from V11.
+    VoteLinkDB m_vote_db GUARDED_BY(cs_poll_registry);                        //!< Vote links, from V11.
+    PollEntryMap m_poll_entries GUARDED_BY(cs_poll_registry);                 //!< Poll txid to its newest record.
+    VoteLinkMap m_vote_links GUARDED_BY(cs_poll_registry);                    //!< Poll txid to its newest link.
+    std::map<std::string, uint256> m_title_index GUARDED_BY(cs_poll_registry); //!< Title key to first registration.
+    bool m_initialized GUARDED_BY(cs_poll_registry);                           //!< Initialize() has loaded the dbs.
+
+    //! Set while TryByTxidWithAddHistoricalPollAndVotes registers a pre-V11 poll in memory only, the one path that
+    //! passes the V11 floor (until the legacy store replaces it).
+    bool m_registering_legacy_poll GUARDED_BY(cs_poll_registry);
+
+    //!
+    //! \brief Clear every in-memory structure, keeping the dbs' contents.
+    //!
+    void ClearInMemory() EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+
+    //!
+    //! \brief Update the in-memory indexes from one poll record: the load observer calls it for every stored record
+    //! in record order, and a live connect calls it for the record it just stored.
+    //!
+    void IndexPollRecord(const PollEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
 
     //!
     //! \brief Get the poll with the specified title.
