@@ -155,6 +155,13 @@ void QmlFrontEnd::showMain(bool minimized)
     shell().setStartMinimized(minimized);
     shell().notifyShowMain(minimized);
     shell().setShown(true);
+    // A quit requested before the event loop runs (a queued quit request handled
+    // in StartGridcoinQt's readiness wait) did nothing then: quit acts only inside
+    // the event loop. Post it again. Nothing processes events between this call
+    // and the start of the event loop, so the loop delivers it once it starts.
+    if (shell().quitRequested()) {
+        QMetaObject::invokeMethod(qApp, &QCoreApplication::quit, Qt::QueuedConnection);
+    }
 }
 
 WId QmlFrontEnd::nativeWindowId()
@@ -165,8 +172,8 @@ WId QmlFrontEnd::nativeWindowId()
 
 void QmlFrontEnd::requestQuit()
 {
-    // Quit does nothing outside the event loop; the flag lets the root's close
-    // handler accept the closes quit sends.
+    // Quit does nothing outside the event loop; the flag makes the root's close
+    // handler accept closes once a quit was requested.
     shell().setQuitRequested();
     QCoreApplication::quit();
 }

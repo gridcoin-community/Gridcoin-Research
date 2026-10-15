@@ -14,6 +14,7 @@ class QmlQuitTests : public QObject
 
 private Q_SLOTS:
     void secondaryWindowCloseDoesNotQuit();
+    void quitBeforeTheLoopEndsTheLoop();
 };
 
 #endif // BITCOIN_QT_QUICK_TEST_QUITTESTS_H
