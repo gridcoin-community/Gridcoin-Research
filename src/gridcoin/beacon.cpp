@@ -1351,7 +1351,17 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash, const int height)
     // the map. This is done by the m_beacon_db.find which will pull the beacon record from leveldb if it does not exist in
     // memory, which makes this passivation-proof up to a reorganization depth of the interval between two SB's (approximately
     // 960 blocks).
+    const bool v15_rules = IsV15Enabled(height);
+
     for (const auto& iter : m_expired_pending) {
+        // From block version 15 a disconnect undoes the expirations this superblock recorded, and erases their
+        // records with it, since a revert removes every record its block created. ActivatePending gives each of
+        // them the hash Hash(superblock block hash, pending beacon hash). Below block version 15 the behaviour is
+        // unchanged.
+        if (v15_rules && iter->m_hash != Hash(superblock_hash, iter->m_previous_hash)) {
+            continue;
+        }
+
         // Get the pending beacon entry that is the antecedent of the expired entry.
         auto pending_beacon_entry = m_beacon_db.find(iter->m_previous_hash);
 
@@ -1362,11 +1372,8 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash, const int height)
                   superblock_hash.GetHex(),
                   iter->m_hash.GetHex(),
                   iter->m_cpid.ToString());
-            continue;
-        }
-
-        // Resurrect pending beacon entry
-        if (!m_pending.insert(std::make_pair(pending_beacon_entry->second->GetId(), pending_beacon_entry->second)).second) {
+        } else if (!m_pending.insert(std::make_pair(pending_beacon_entry->second->GetId(),
+                                                    pending_beacon_entry->second)).second) {
             LogPrintf("WARN: %s: Resurrected pending beacon entry, hash %s, from expired pending beacon for cpid %s during deactivation "
                       " of superblock hash %s already exists in the pending beacon map corresponding to beacon address %s.",
                       __func__,
@@ -1377,6 +1384,10 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash, const int height)
                       );
         } else {
             RestoreOwnershipProof(pending_beacon_entry->second);
+        }
+
+        if (v15_rules) {
+            m_beacon_db.erase(iter->m_hash);
         }
     }
 

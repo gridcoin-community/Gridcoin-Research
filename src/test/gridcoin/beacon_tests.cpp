@@ -2151,6 +2151,67 @@ BOOST_AUTO_TEST_CASE(beacon_registry_missing_marker_counts_as_current)
     registry.Reset();
 }
 
+namespace {
+struct TwoExpiringSuperblocks
+{
+    CKey key_1;
+    CKey key_2;
+    GRC::Cpid cpid_1 = GRC::Cpid::Parse("00010203040506070809101112131415");
+    GRC::Cpid cpid_2 = GRC::Cpid::Parse("15141312111009080706050403020100");
+    uint256 advertisement_1;
+    uint256 advertisement_2;
+    uint256 superblock_1 = uint256S("0505050505050505050505050505050505050505050505050505050505050505");
+    uint256 superblock_2 = uint256S("0606060606060606060606060606060606060606060606060606060606060606");
+
+    //! Superblock 1 (height 2) expires the first pending beacon and activates nothing; superblock 2 (height 4)
+    //! expires the second. The registry is then reloaded from the beacon db, and the expired set holds both.
+    explicit TwoExpiringSuperblocks(GRC::BeaconRegistry& registry) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        key_1.MakeNewKey(true);
+        key_2.MakeNewKey(true);
+
+        advertisement_1 = AddPendingBeacon(registry, cpid_1, key_1.GetPubKey(), START_TIME, 1);
+        registry.ActivatePending({}, START_TIME + GRC::PendingBeacon::RETENTION_AGE + DAY, superblock_1, 2);
+
+        const int64_t time_2 = START_TIME + GRC::PendingBeacon::RETENTION_AGE + 2 * DAY;
+        advertisement_2 = AddPendingBeacon(registry, cpid_2, key_2.GetPubKey(), time_2, 3);
+        registry.ActivatePending({}, time_2 + GRC::PendingBeacon::RETENTION_AGE + DAY, superblock_2, 4);
+
+        ReloadRegistry(registry);
+    }
+};
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(beacon_registry_deactivate_undoes_its_superblock_s_expirations_from_v15)
+{
+    LOCK(cs_main);
+    grc_test::V15HeightGuard v15(1);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    TwoExpiringSuperblocks chain(registry);
+    BOOST_REQUIRE(registry.PendingBeacons().empty());
+    BOOST_REQUIRE_EQUAL(registry.ExpiredBeacons().size(), 2U);
+
+    registry.Deactivate(chain.superblock_2, 4);
+
+    // Only superblock 2's expiration is undone, and its record goes with it.
+    BOOST_CHECK_EQUAL(registry.PendingBeacons().size(), 1U);
+    BOOST_CHECK_EQUAL(registry.PendingBeacons().count(chain.key_2.GetPubKey().GetID()), 1U);
+    BOOST_CHECK(registry.GetBeaconDB().find(Hash(chain.superblock_2, chain.advertisement_2))
+                == registry.GetBeaconDB().end());
+    BOOST_CHECK(registry.GetBeaconDB().find(Hash(chain.superblock_1, chain.advertisement_1))
+                != registry.GetBeaconDB().end());
+
+    // A restart computes the same pending set.
+    ReloadRegistry(registry);
+    BOOST_CHECK_EQUAL(registry.PendingBeacons().size(), 1U);
+    BOOST_CHECK_EQUAL(registry.PendingBeacons().count(chain.key_2.GetPubKey().GetID()), 1U);
+
+    registry.Reset();
+}
+
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
