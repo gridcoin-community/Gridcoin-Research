@@ -23,6 +23,8 @@ private Q_SLOTS:
     void destroyMainClosesRunner();
     void hideMainHidesBeforeDrain();
     void hideMainHidesEveryTopLevelWindow();
+    void constructTwiceThrows();
+    void qtQuitAndExitReachRequestQuit();
     void rootLoadErrorsReachStderr();
     void unloadableRootEndsTheGui();
     void requestQuitSetsQuitRequested();

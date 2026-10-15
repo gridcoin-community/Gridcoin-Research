@@ -22,7 +22,7 @@ set_target_properties(test_gridcoin-qml PROPERTIES
 )
 
 target_link_libraries(test_gridcoin-qml PRIVATE
-${RUNTIME_LIBS}
+    ${RUNTIME_LIBS}
     gridcoinqml
     gridcoinqmlplugin
     gridcoinqmlfixtureplugin

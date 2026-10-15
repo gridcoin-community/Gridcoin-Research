@@ -28,9 +28,11 @@ class QmlCallRunner
 {
 public:
     //! How a call that throws is classified. matches(what) true means the
-    //! daemon connection is gone: notify(what) is called once, on the worker
-    //! thread, and the call's deliver is dropped.
-    struct DisconnectPolicy {
+    //! daemon connection is gone: notify(what) is called once for each call
+    //! that throws so, on the worker thread, and that call's deliver is
+    //! dropped.
+    struct DisconnectPolicy
+    {
         std::function<bool(const std::string&)> matches;
         std::function<void(const std::string&)> notify;
     };

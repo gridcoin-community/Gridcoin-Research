@@ -42,7 +42,7 @@ struct ModelBundle
 //! What DeliverCoreMessage did with one core message.
 enum class CoreMessageDelivery {
     Queued,          //!< Not modal: delivered queued, as before.
-    Blocking,        //!< Modal, front end does not queue modal messages: blocking connection, as before.
+    Blocking,        //!< Modal, front end does not queue modal messages: blocking queued connection from another thread, direct call on the GUI thread, as before.
     QueuedAndLogged, //!< Modal, queuing front end: delivered queued and written to the GUI log and stderr.
 };
 
@@ -60,8 +60,9 @@ public:
 };
 
 //! Delivers one core message to `target`'s error(QString,QString,bool) slot.
-//! With no front end, or one that does not queue modal messages, it uses the
-//! blocking connection for a modal message and a queued one otherwise, as
+//! With no front end, or one that does not queue modal messages, a modal
+//! message goes through a blocking queued connection from another thread and a
+//! direct call on the GUI thread, and any other message is queued, as
 //! ThreadSafeMessageBox always did. For a front end that queues modal messages
 //! it posts every message queued, from any thread, and returns at once; a modal
 //! one is also written to the GUI log and to stderr. The result says which of
@@ -116,7 +117,10 @@ public:
 
     //! True for a front end whose core-message target cannot block inside its
     //! error slot; DeliverCoreMessage then never makes the raising thread wait.
-    //! Default false (the Widgets front end keeps it).
+    //! Default false (the Widgets front end keeps it). DeliverCoreMessage calls
+    //! it from whatever thread raised the message, core threads included, while
+    //! the front end is registered: it reads no GUI state and returns the same
+    //! value for the front end's whole life.
     virtual bool queuesModalCoreMessages() const;
 
     //! Detach every model from the front end, in the order StartGridcoinQt's
