@@ -665,6 +665,16 @@ bool BlockValidateContracts(const CBlockIndex* const pindex, const CTransaction&
 //! \param pindex Block index for the block that contains the transaction.
 //!
 void RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//!
+//! \brief Revert the registry contracts of a disconnected block: the inverse of ApplyContracts. From block version
+//! 15 (by the block's height) they are reverted in reverse order, last transaction and last contract first. Below
+//! block version 15 they are reverted in block order.
+//!
+//! \param block  The block being disconnected.
+//! \param pindex Index entry of that block.
+//!
+void RevertContracts(const CBlock& block, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 }
 
 #endif // GRIDCOIN_CONTRACT_CONTRACT_H

@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/contract/registry.h"
 #include "gridcoin/project.h"
 #include "gridcoin/autogreylist.h"
 #include "gridcoin/autogreylist_v2.h"
@@ -199,6 +200,60 @@ struct AutoGreylistEntryState
 //! \brief Dummy transaction for contract handler API.
 //!
 CTransaction g_tx;
+
+CTransaction ProjectContractTx(const GRC::ContractAction action, const std::string& name, const std::string& url,
+                               const int64_t time)
+{
+    CMutableTransaction mtx;
+    mtx.nTime = time;
+    mtx.vContracts.push_back(
+        GRC::MakeContract<GRC::Project>(uint32_t {3}, action, uint32_t {3}, name, url, false));
+
+    return CTransaction(mtx);
+}
+
+//! A block whose first two slots (coinbase and coinstake) carry no registry contracts.
+CBlock BlockWithContractTxs(const std::vector<CTransaction>& txs)
+{
+    CBlock block;
+    block.vtx.resize(2);
+    block.vtx.insert(block.vtx.end(), txs.begin(), txs.end());
+
+    return block;
+}
+
+std::string ProjectUrl(const std::string& name)
+{
+    for (const auto& project : GRC::GetWhitelist().Snapshot(GRC::GreylistState::NONE,
+                                                            GRC::ProjectEntry::ProjectFilterFlag::ACTIVE)) {
+        if (project.m_name == name) return project.m_url;
+    }
+
+    return std::string {};
+}
+
+//! Block 1 whitelists the project; block 2 removes it and adds it back with another URL. Returns block 2.
+CBlock RemoveAndReaddInOneBlock(CBlockIndex& index_2) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    GRC::RegistryBookmarks db_heights;
+    bool found = false;
+
+    CBlockIndex index_1;
+    index_1.nHeight = 1;
+    index_1.nTime = 1;
+    GRC::ApplyContracts(BlockWithContractTxs({ProjectContractTx(GRC::ContractAction::ADD, "Enigma",
+                                                                "http://enigma.test", 1)}),
+                        &index_1, db_heights, found);
+
+    index_2.nHeight = 2;
+    index_2.nTime = 2;
+    const CBlock block_2 = BlockWithContractTxs({
+        ProjectContractTx(GRC::ContractAction::REMOVE, "Enigma", std::string {}, 2),
+        ProjectContractTx(GRC::ContractAction::ADD, "Enigma", "http://enigma2.test", 2)});
+    GRC::ApplyContracts(block_2, &index_2, db_heights, found);
+
+    return block_2;
+}
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -3784,6 +3839,28 @@ BOOST_AUTO_TEST_CASE(it_does_not_throw_when_the_40SB_average_truncates_to_zero)
 
     // A zero 40-SB average means negligible long-term work availability, so WAS = 0.0.
     BOOST_CHECK(candidate.GetWAS() == Fraction(0));
+}
+
+BOOST_AUTO_TEST_CASE(a_block_s_project_contracts_revert_in_inverse_order_from_v15)
+{
+    LOCK(cs_main);
+    grc_test::V15HeightGuard v15(2);
+
+    GRC::Whitelist& whitelist = GRC::GetWhitelist();
+    whitelist.Reset();
+
+    CBlockIndex index_2;
+    const CBlock block_2 = RemoveAndReaddInOneBlock(index_2);
+    BOOST_REQUIRE_EQUAL(ProjectUrl("Enigma"), "http://enigma2.test");
+
+    GRC::RevertContracts(block_2, &index_2);
+    BOOST_CHECK_EQUAL(ProjectUrl("Enigma"), "http://enigma.test");
+
+    whitelist.ResetInMemoryOnly();
+    whitelist.Initialize();
+    BOOST_CHECK_EQUAL(ProjectUrl("Enigma"), "http://enigma.test");
+
+    whitelist.Reset();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

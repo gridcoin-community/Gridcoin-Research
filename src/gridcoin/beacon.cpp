@@ -792,15 +792,9 @@ void BeaconRegistry::Revert(const ContractContext& ctx)
     //
     // REMOVE is the revoke beacon order.
     //
-    // Note that Deactivate, which occurs at the block level, will be called on a superblock revert BEFORE the first
-    // transaction level beacon revert is called. It could very well be that there are only activations to revert at the
-    // superblock revert (Deactivate), and there are no beacon advertisement transactions (contracts) to revert here.
-    // Any records activated in the superblock itself to be reverted will already be reverted to the PENDING state.
-    // There is no danger here though of an overly aggressive deletion of those PENDING records, because those pending
-    // records would have to be advertised IN THE SUPERBLOCK itself if that were the case, for those to be included in
-    // the transaction based reversion here where the transaction resides in a superblock. That is extremely unlikely
-    // because of the process required in the scrapers and the convergence required to get activated, and in the unlikely
-    // event that does happen, the record would be properly found here and reverted, otherwise not.
+    // Below block version 15, Deactivate runs on a superblock revert BEFORE the block's transaction-level reverts;
+    // from block version 15 it runs AFTER them, the inverse of block connection, which activates before it applies
+    // the block's contracts (see DisconnectBlocksBatch).
     //
     // Revert the ADD action:
     if (ctx->m_action == ContractAction::ADD)

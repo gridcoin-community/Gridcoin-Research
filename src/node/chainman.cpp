@@ -175,13 +175,19 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
             GRC::Tally::ForgetRewardBlock(pindexBest);
         }
 
+        // From block version 15 the block is reverted in the inverse order of its connection: its contracts first,
+        // in reverse, then its superblock, which connection applies before the contracts. Below block version 15 the
+        // superblock is reverted first and the contracts after it, in block order, as before.
+        const bool v15_revert_order = IsV15Enabled(pindexBest->nHeight);
+
+        if (v15_revert_order && pindexBest->IsContract()) {
+            GRC::RevertContracts(block, pindexBest);
+        }
+
         if (pindexBest->IsSuperblock()) {
             // Revert beacon activations which were done by the superblock to revert and resurrect pending records
-            // for the reverted activations. This is safe to do before the transactional level reverts with beacon
-            // contracts, because any beacon that is activated CANNOT have been a new advertisement in the superblock
-            // itself. It would not be verified. AND if the beacon is a renewal, it would never be in the activation list
-            // for a superblock. We call GetBeaconRegistry directly here, because the IHandler class does not have
-            // a virtual method that corresponds to this call, as it is only relevant to beacons.
+            // for the reverted activations. We call GetBeaconRegistry directly here, because the IHandler class does
+            // not have a virtual method that corresponds to this call, as it is only relevant to beacons.
             if (IsV15Enabled(pindexBest->nHeight) && !GRC::GetBeaconRegistry().SuperblockStateCurrent()) {
                 stale_superblock_state = true;
             }
@@ -207,24 +213,8 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
 
         // Delete beacons, scraper entries, protocol entries, projects, polls and votes from contracts
         // in disconnected blocks.
-        if (pindexBest->IsContract())
-        {
-            // Skip coinbase and coinstake transactions:
-            for (auto tx = std::next(block.vtx.begin(), 2), end = block.vtx.end();
-                tx != end;
-                ++tx)
-            {
-                // This reverts contracts for those contract types which have handlers that properly handle
-                // contract level reversions.
-                for (const auto& contract : tx->GetContracts())
-                {
-                    if (GRC::RegistryBookmarks::IsRegistryRevertCapable(contract.m_type.Value())) {
-                        const GRC::ContractContext contract_context(contract, *tx, pindexBest);
-
-                        GRC::RegistryBookmarks::GetRegistryWithRevert(contract.m_type.Value()).Revert(contract_context);
-                    }
-                }
-            }
+        if (!v15_revert_order && pindexBest->IsContract()) {
+            GRC::RevertContracts(block, pindexBest);
         }
 
         // New best block

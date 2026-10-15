@@ -26,6 +26,8 @@
 #include "util.h"
 #include "wallet/wallet.h"
 
+#include <algorithm>
+
 using namespace GRC;
 
 // -----------------------------------------------------------------------------
@@ -622,6 +624,46 @@ void GRC::RevertContracts(const CTransaction& tx, const CBlockIndex* const pinde
         }
 
         g_dispatcher.Revert({ contract, tx, pindex });
+    }
+}
+
+void GRC::RevertContracts(const CBlock& block, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    // The coinbase and coinstake carry no registry contracts.
+    if (block.vtx.size() <= 2) {
+        return;
+    }
+
+    const bool reverse_order = IsV15Enabled(pindex->nHeight);
+
+    std::vector<const CTransaction*> txs;
+
+    for (auto tx = std::next(block.vtx.begin(), 2); tx != block.vtx.end(); ++tx) {
+        txs.push_back(&*tx);
+    }
+
+    if (reverse_order) {
+        std::reverse(txs.begin(), txs.end());
+    }
+
+    for (const CTransaction* tx : txs) {
+        std::vector<const Contract*> contracts;
+
+        for (const auto& contract : tx->GetContracts()) {
+            contracts.push_back(&contract);
+        }
+
+        if (reverse_order) {
+            std::reverse(contracts.begin(), contracts.end());
+        }
+
+        for (const Contract* contract : contracts) {
+            if (RegistryBookmarks::IsRegistryRevertCapable(contract->m_type.Value())) {
+                const ContractContext contract_context(*contract, *tx, pindex);
+
+                RegistryBookmarks::GetRegistryWithRevert(contract->m_type.Value()).Revert(contract_context);
+            }
+        }
     }
 }
 
