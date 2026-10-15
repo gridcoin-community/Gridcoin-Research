@@ -12,17 +12,21 @@
 # output that is not in the list can be deleted without the next run noticing:
 # it prints "Build up-to-date" and builds nothing. The scenarios below delete
 # one listed output at a time and expect a build. They also hold the other
-# direction: an unchanged tree is skipped, and a run without ENABLE_QML does
-# not wait for the outputs only an ENABLE_QML=true build has.
+# direction: an unchanged tree is skipped, a run without ENABLE_QML does not
+# wait for the outputs only an ENABLE_QML=true build has, and a run whose
+# EXTRA_CMAKE_ARGS turn the tests off does not wait for the QML test binary,
+# while one whose EXTRA_CMAKE_ARGS may turn them back on, or whose build
+# directory's cache says the last build had them on or was left by a failed
+# configure, still does.
 #
 # Nothing is compiled and the caller's tree is not written to. The script under
 # test is copied into a scratch git repository, because get_current_git_state
 # reports "unknown" outside a work-tree root and should_skip_build never skips
 # that state. The stand-ins are written beside the copy and put first in PATH:
-# cmake creates the files a successful build leaves, and uname names the kernel
-# each scenario asks for, so the Linux native block and the macOS block can
-# both run on one host. Everything lives in one mktemp directory, removed on
-# exit.
+# cmake writes ENABLE_TESTS to CMakeCache.txt and creates the files a
+# successful build leaves, and uname names the kernel each scenario asks for,
+# so the Linux native block and the macOS block can both run on one host.
+# Everything lives in one mktemp directory, removed on exit.
 #
 # Usage: lint-build-targets-skip.sh [build_targets.sh to test]
 # Without an argument the build_targets.sh of this checkout is tested.
@@ -90,6 +94,8 @@ CONFIGURE_DIR=""
 BUILD_DIR=""
 QML="OFF"
 TESTS="OFF"
+TYPE=""
+FAIL_CONFIGURE=""
 PREVIOUS=""
 for ARGUMENT in "$@"; do
     case "${PREVIOUS}" in
@@ -99,13 +105,26 @@ for ARGUMENT in "$@"; do
     # A repeated option keeps its last value here.
     case "${ARGUMENT}" in
         -DENABLE_QML=*) QML="${ARGUMENT#*=}" ;;
-        -DENABLE_TESTS=*) TESTS="${ARGUMENT#*=}" ;;
+        -DENABLE_TESTS=*) TESTS="${ARGUMENT#*=}"; TYPE="" ;;
+        -DENABLE_TESTS:*=*)
+            TESTS="${ARGUMENT#*=}"
+            TYPE="${ARGUMENT#-DENABLE_TESTS:}"
+            TYPE="${TYPE%%=*}"
+            ;;
+        # Stands for a configure that fails after it has written the cache, as
+        # one does when the package is missing.
+        -DSYSTEM_LEVELDB=ON) FAIL_CONFIGURE=1 ;;
     esac
     PREVIOUS="${ARGUMENT}"
 done
 if [ -n "${CONFIGURE_DIR}" ]; then
     mkdir -p "${CONFIGURE_DIR}"
     echo "${QML} ${TESTS}" > "${CONFIGURE_DIR}/.stub_configuration"
+    # CMake keeps the value and the type as they were given.
+    echo "ENABLE_TESTS:${TYPE:-BOOL}=${TESTS}" > "${CONFIGURE_DIR}/CMakeCache.txt"
+    if [ -n "${FAIL_CONFIGURE}" ]; then
+        exit 1
+    fi
 fi
 if [ -n "${BUILD_DIR}" ]; then
     read -r QML TESTS < "${BUILD_DIR}/.stub_configuration"
@@ -208,11 +227,29 @@ expect_skip() {
     fi
 }
 
+# expect_failure <scenario>: the run configured and failed, so it was not skipped
+expect_failure() {
+    CHECKS=$((CHECKS + 1))
+    if grep -q -F "Build up-to-date" "${OUT}"; then
+        fail "$1: skipped as up to date, expected a failed configure"
+    elif [ "${RC}" -eq 0 ]; then
+        fail "$1: build_targets.sh exited 0, expected a failed configure"
+    elif ! grep -q -e "^cmake -B ${DIR} " "${STUB_LOG}"; then
+        fail "$1: no configure call, expected a failed configure"
+    fi
+}
+
 # target_scenarios <kernel> <TARGET value> <build directory> <name of the block>
 target_scenarios() {
     local KERNEL=$1
     local TARGET="TARGET=$2"
     local OUTPUT
+    local ARGS
+    local STAY_ON
+    local OFF_ARGS="EXTRA_CMAKE_ARGS=-DENABLE_TESTS=OFF"
+    local ON_AGAIN_ARGS="EXTRA_CMAKE_ARGS=-DENABLE_TESTS=OFF -DENABLE_TESTS=ON"
+    local ONE_ARGS="EXTRA_CMAKE_ARGS=-DENABLE_TESTS:STRING=1"
+    local FAILING_ARGS="EXTRA_CMAKE_ARGS=-DENABLE_TESTS=OFF -DSYSTEM_LEVELDB=ON"
     DIR=$3
     BLOCK=$4
 
@@ -240,6 +277,94 @@ target_scenarios() {
     rm -f "${TREE}/${DIR}/bin/gridcoinresearch-qml" "${TREE}/${DIR}/qmltest/test_gridcoin-qml"
     run_script "${KERNEL}" "${TARGET}"
     expect_skip "ENABLE_QML off, rerun without the QML outputs" OFF
+
+    # EXTRA_CMAKE_ARGS follows the script's own -DENABLE_TESTS=ON and the last
+    # definition wins. A build with the tests off leaves no QML test binary, so
+    # its rerun does not wait for one; once they are on again, a run builds it.
+    rm -rf "${TREE:?}/${DIR}"
+
+    run_script "${KERNEL}" "${TARGET}" ENABLE_QML=true "${OFF_ARGS}"
+    expect_build "ENABLE_QML=true, ${OFF_ARGS}, first run" ON
+
+    run_script "${KERNEL}" "${TARGET}" ENABLE_QML=true "${OFF_ARGS}"
+    expect_skip "ENABLE_QML=true, ${OFF_ARGS}, rerun with nothing changed" ON
+
+    run_script "${KERNEL}" "${TARGET}" ENABLE_QML=true "${ON_AGAIN_ARGS}"
+    expect_build "ENABLE_QML=true, ${ON_AGAIN_ARGS}, after the tests-off build" ON
+
+    run_script "${KERNEL}" "${TARGET}" ENABLE_QML=true "${ON_AGAIN_ARGS}"
+    expect_skip "ENABLE_QML=true, ${ON_AGAIN_ARGS}, rerun with nothing changed" ON
+
+    # Each of these keeps the tests on, so its run still waits for the QML
+    # test binary: an option other than -D, before or after the definition; a
+    # value CMake reads as true, among them one with an = in it and one that
+    # only ends in NOTFOUND; a name that holds CMAKE, DIR, ROOT, PATH or FILE,
+    # in one word or two; a quoted name; a -D with nothing after it; a -D word
+    # with no =; a definition with no name; a name that only starts with
+    # ENABLE_TESTS; and a definition of ENABLE_GUI or USE_QT6. The cmake
+    # stand-in builds the test binary from its ENABLE_TESTS words only, so a run
+    # can leave the test binary behind: it is deleted before each run, and so is
+    # the cache, so that only the run's own arguments keep the binary listed.
+    STAY_ON=(
+        "-DENABLE_TESTS=OFF -C init.cmake"
+        "--preset=tc -DENABLE_TESTS=OFF"
+        "-DENABLE_TESTS=x-notfound"
+        "-D CMAKE_TOOLCHAIN_FILE=tc.cmake -DENABLE_TESTS=OFF"
+        "-DENABLE_TESTS=OFF -DCMAKE_USER_MAKE_RULES_OVERRIDE=rules.cmake"
+        "-DQt6_DIR=qt -DENABLE_TESTS=OFF"
+        "-DBoost_ROOT=boost -DENABLE_TESTS=OFF"
+        "-DQT_ADDITIONAL_PACKAGES_PREFIX_PATH=qt -DENABLE_TESTS=OFF"
+        "-DPkg_USE_FILE=use.cmake -DENABLE_TESTS=OFF"
+        '-DENABLE_TESTS=OFF -D"ENABLE_TESTS"=ON'
+        "-DENABLE_TESTS=OFF -D"
+        "-DENABLE_TESTS=ON=OFF"
+        "-DENABLE_TESTS=XNOTFOUND"
+        "-DENABLE_TESTS=OFF -DWERROR"
+        "-D=x -DENABLE_TESTS=OFF"
+        "-DENABLE_TESTS_EXTRA=OFF"
+        "-DENABLE_TESTS=OFF -DENABLE_GUI=OFF"
+        "-DENABLE_TESTS=OFF -DUSE_QT6=OFF"
+    )
+    for ARGS in "${STAY_ON[@]}"; do
+        rm -f "${TREE}/${DIR}/qmltest/test_gridcoin-qml" "${TREE}/${DIR}/CMakeCache.txt"
+        run_script "${KERNEL}" "${TARGET}" ENABLE_QML=true "EXTRA_CMAKE_ARGS=${ARGS}"
+        expect_build "ENABLE_QML=true, EXTRA_CMAKE_ARGS=${ARGS}, rerun without the test binary" ON
+    done
+
+    # The cache of a build made with the tests on keeps the QML test binary
+    # listed when a rerun turns them off, so a rerun after the binary was
+    # deleted is not skipped, whatever true value the cache holds. That rerun
+    # writes the tests off into the cache, and its unchanged rerun is skipped.
+    rm -rf "${TREE:?}/${DIR}"
+    run_script "${KERNEL}" "${TARGET}" ENABLE_QML=true
+    expect_build "ENABLE_QML=true, a tests-on build in a new directory" ON
+    rm -f "${TREE}/${DIR}/qmltest/test_gridcoin-qml"
+    run_script "${KERNEL}" "${TARGET}" ENABLE_QML=true "${OFF_ARGS}"
+    expect_build "ENABLE_QML=true, ${OFF_ARGS}, rerun after that build lost its test binary" ON
+    run_script "${KERNEL}" "${TARGET}" ENABLE_QML=true "${OFF_ARGS}"
+    expect_skip "ENABLE_QML=true, ${OFF_ARGS}, its rerun with nothing changed" ON
+
+    rm -rf "${TREE:?}/${DIR}"
+    run_script "${KERNEL}" "${TARGET}" ENABLE_QML=true "${ONE_ARGS}"
+    expect_build "ENABLE_QML=true, ${ONE_ARGS}, first run" ON
+    rm -f "${TREE}/${DIR}/qmltest/test_gridcoin-qml"
+    run_script "${KERNEL}" "${TARGET}" ENABLE_QML=true "${OFF_ARGS}"
+    expect_build "ENABLE_QML=true, ${OFF_ARGS}, rerun after the ${ONE_ARGS} build" ON
+
+    # A configure that fails has still written the tests off into the cache,
+    # and no state was recorded after it, so the cache is newer than the state:
+    # the next identical run keeps the test binary listed and fails again
+    # instead of being skipped. The state is dated back, so that the cache is
+    # newer on a file system that keeps whole seconds too.
+    rm -rf "${TREE:?}/${DIR}"
+    run_script "${KERNEL}" "${TARGET}" ENABLE_QML=true
+    expect_build "ENABLE_QML=true, a tests-on build before a failing configure" ON
+    rm -f "${TREE}/${DIR}/qmltest/test_gridcoin-qml"
+    touch -t 200001010000 "${TREE}/${DIR}/.build_state"
+    run_script "${KERNEL}" "${TARGET}" ENABLE_QML=true "${FAILING_ARGS}"
+    expect_failure "ENABLE_QML=true, ${FAILING_ARGS}, rerun after that build lost its test binary"
+    run_script "${KERNEL}" "${TARGET}" ENABLE_QML=true "${FAILING_ARGS}"
+    expect_failure "ENABLE_QML=true, ${FAILING_ARGS}, the same rerun again"
 }
 
 target_scenarios Linux native build "Linux native"

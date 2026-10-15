@@ -264,6 +264,96 @@ write_build_state() {
     echo "${CAPTURED_BUILD_STATE:-unknown}" > "$BUILD_DIR/.build_state"
 }
 
+# Check whether the tests are still on after the given CMake arguments
+# Usage: tests_stay_on $EXTRA_ARGS (unquoted, so that it splits into the
+# words the configure call gets)
+# Returns 0 (true) if the tests may be built, 1 (false) only if they are off
+#
+# The native and macOS configure calls pass -DENABLE_TESTS=ON before
+# $EXTRA_ARGS, and CMake keeps the last definition. The answer is off only
+# when every word is part of a plain definition, -DNAME=VALUE or
+# -DNAME:TYPE=VALUE in one word or two, and the last definition named exactly
+# ENABLE_TESTS has a value CMake reads as false: empty, 0, N, NO, OFF, FALSE
+# or IGNORE in any case, or NOTFOUND or *-NOTFOUND as written. Any other word
+# keeps the answer on whatever follows, among them every option other than -D
+# (-C, --preset and --toolchain too), a -D word with no "=", a definition
+# whose name holds CMAKE, DIR, ROOT, PATH or FILE (the way CMake and its
+# packages name a script or a place to look for one), one whose name is
+# empty or has characters other than letters, digits and underscores, and a
+# definition of ENABLE_GUI or USE_QT6, either of which can stop the configure
+# of an ENABLE_QML=true build. A definition's name ends at its first ":" or
+# "=", and its value starts after its first "=". This reads only these words,
+# not the environment or any CMake file; tests_were_on reads the build
+# directory's cache. A wrong "on" makes every rerun build; a wrong "off" would
+# skip a build that lost its test binary.
+tests_stay_on() {
+    local TESTS="on"
+    local PREFIX=""
+    local ARG
+    local NAME
+    local VALUE
+    local LOWER
+    for ARG in "$@"; do
+        # "-D NAME=VALUE" in two words is the same definition.
+        ARG="$PREFIX$ARG"
+        PREFIX=""
+        case "$ARG" in
+            -D)
+                PREFIX="-D"
+                continue
+                ;;
+            -D*=*)
+                ;;
+            *)
+                return 0
+                ;;
+        esac
+        # CMake takes the name up to the first ":" or "=".
+        NAME="${ARG#-D}"
+        NAME="${NAME%%=*}"
+        NAME="${NAME%%:*}"
+        case "$NAME" in
+            ""|*[![:alnum:]_]*|*CMAKE*|*DIR*|*ROOT*|*PATH*|*FILE*|ENABLE_GUI|USE_QT6)
+                return 0
+                ;;
+            ENABLE_TESTS)
+                VALUE="${ARG#*=}"
+                LOWER=$(printf '%s' "$VALUE" | tr '[:upper:]' '[:lower:]')
+                TESTS="on"
+                case "$LOWER" in ""|0|n|no|off|false|ignore) TESTS="off" ;; esac
+                case "$VALUE" in NOTFOUND|*-NOTFOUND) TESTS="off" ;; esac
+                ;;
+        esac
+    done
+    # A -D with nothing after it is a word this cannot read.
+    [ -z "$PREFIX" ] || return 0
+    [ "$TESTS" = "on" ]
+}
+
+# Check whether the last configure of a build directory had the tests on
+# Usage: tests_were_on BUILD_DIR
+# Returns 0 (true) if BUILD_DIR/CMakeCache.txt is newer than
+# BUILD_DIR/.build_state or holds an ENABLE_TESTS entry whose value CMake
+# reads as true, 1 (false) otherwise, and also when there is no cache to read
+#
+# A build made with the tests on keeps its test binary in the list on a rerun
+# whose EXTRA_CMAKE_ARGS turn the tests off, so that a deleted test binary is
+# not skipped over. CMake writes the value as it was given (ON, 1, on, Yes)
+# and with the type it was given (BOOL, STRING), so the entry is matched by
+# name and its value read by the rules tests_stay_on uses. This also reads the
+# cache's file time: CMake writes the cache at the end of a configure, a
+# failed one too, and the state is recorded only after a build and its tests
+# pass, so a cache newer than the state was left by a run that recorded
+# nothing, and its entry does not say what the last recorded build had.
+tests_were_on() {
+    local CACHE="$1/CMakeCache.txt"
+    local ENTRY
+    [ -r "$CACHE" ] || return 1
+    [ "$CACHE" -nt "$1/.build_state" ] && return 0
+    ENTRY=$(grep -m 1 '^ENABLE_TESTS:[^=]*=' "$CACHE") || return 1
+    tests_stay_on "-D$ENTRY"
+}
+
 # ==============================================================================
 # ARGUMENT PARSING
 # ==============================================================================
@@ -523,7 +613,8 @@ if [[ "$TARGET" == "all" || "$TARGET" == "native" ]] && [[ "$(uname -s)" == "Lin
 
     ARTIFACTS=("$TARGET1_DAEMON")
     if [ "$WITH_GUI" == "true" ]; then ARTIFACTS+=("$TARGET1_GUI"); fi
-    if [ "$ENABLE_QML" == "true" ]; then ARTIFACTS+=("$TARGET1_QML" "$TARGET1_QML_TEST"); fi
+    if [ "$ENABLE_QML" == "true" ]; then ARTIFACTS+=("$TARGET1_QML"); fi
+    if [ "$ENABLE_QML" == "true" ] && { tests_stay_on $EXTRA_ARGS || tests_were_on build; }; then ARTIFACTS+=("$TARGET1_QML_TEST"); fi
 
     if should_skip_build "build" "${ARTIFACTS[@]}"; then
         echo ">>> Executable(s) found and version matches. Skipping build."
@@ -784,7 +875,8 @@ if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darw
 
     ARTIFACTS=("$TARGET4_DAEMON")
     if [ "$WITH_GUI" == "true" ]; then ARTIFACTS+=("$TARGET4_GUI"); fi
-    if [ "$ENABLE_QML" == "true" ]; then ARTIFACTS+=("$TARGET4_QML" "$TARGET4_QML_TEST"); fi
+    if [ "$ENABLE_QML" == "true" ]; then ARTIFACTS+=("$TARGET4_QML"); fi
+    if [ "$ENABLE_QML" == "true" ] && { tests_stay_on $EXTRA_ARGS || tests_were_on build_macos; }; then ARTIFACTS+=("$TARGET4_QML_TEST"); fi
 
     if should_skip_build "build_macos" "${ARTIFACTS[@]}"; then
         echo ">>> Executable(s) found and version matches. Skipping build."
