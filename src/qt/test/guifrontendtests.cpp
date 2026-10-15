@@ -8,6 +8,7 @@
 #include "qt/bitcoingui.h"
 #include "qt/guifrontend.h"
 #include "qt/splashscreen.h"
+#include "qt/widgetsfrontend.h"
 
 #include <QCoreApplication>
 #include <QMetaObject>
@@ -102,9 +103,22 @@ public:
     bool queuesModalCoreMessages() const override { return true; }
 };
 
-//! A deadlock never resolves, so a generous bound loses no power and keeps slow
-//! CI legs green.
-constexpr std::chrono::seconds DEADLOCK_BOUND{10};
+//! Every event pump and no-pump window in these tests: a deadlock never
+//! resolves, so a generous bound loses no power and keeps the emulated CI legs
+//! green, as in GuiEventLoopTests.
+constexpr std::chrono::seconds WAIT_BOUND{30};
+//! The watchdog's bound: above 3 x WAIT_BOUND, the most any one test waits, so
+//! a failure that is not a deadlock fails its case instead of aborting the
+//! binary.
+constexpr std::chrono::seconds WATCHDOG_BOUND{120};
+static_assert(WATCHDOG_BOUND.count() == 120, "the watchdog's message names 120 s");
+//! How long CoreMessageTarget::error() waits for its caller to come back, when
+//! asked to. A caller blocked until the slot returns cannot come back during
+//! the wait, so on correct code it always runs out and its length costs only
+//! time. A caller that does not wait comes back a few instructions after its
+//! post, so the check misses it only if that thread is not scheduled at all
+//! for the whole window.
+constexpr std::chrono::seconds CALLER_RETURN_WINDOW{2};
 
 //! Processes events until `done()` holds or `bound` passes; returns done().
 bool PumpUntil(const std::function<bool()>& done, std::chrono::milliseconds bound)
@@ -119,19 +133,19 @@ bool PumpUntil(const std::function<bool()>& done, std::chrono::milliseconds boun
 }
 
 //! Aborts the process, naming the test, if it is not destroyed within
-//! DEADLOCK_BOUND: a test that deadlocks then fails loudly instead of hanging.
+//! WATCHDOG_BOUND: a test that deadlocks then fails loudly instead of hanging.
 class Watchdog
 {
 public:
     explicit Watchdog(const char* name)
         : m_thread([this, name] {
               std::unique_lock<std::mutex> lock(m_mutex);
-              if (!m_cv.wait_for(lock, DEADLOCK_BOUND, [this] { return m_disarmed; })) {
+              if (!m_cv.wait_for(lock, WATCHDOG_BOUND, [this] { return m_disarmed; })) {
                   // C stdio: a test that points std::cerr elsewhere still
                   // gets its name reported.
                   std::fputs("WATCHDOG: ", stderr);
                   std::fputs(name, stderr);
-                  std::fputs(" did not finish within 10 s\n", stderr);
+                  std::fputs(" did not finish within 120 s\n", stderr);
                   std::fflush(stderr);
                   // With QTest's SIGABRT handler installed, an abort from this
                   // thread printed its signal report without end. Restore the
@@ -203,6 +217,8 @@ class CoreMessageTarget : public QObject
 
 public:
     std::atomic<int> calls{0};
+    //! When set, error() waits up to CALLER_RETURN_WINDOW for the caller to set
+    //! it, and saw_caller_returned records whether it did.
     std::atomic<bool>* caller_returned{nullptr};
     bool saw_caller_returned{false};
     std::atomic<bool> last_modal{false};
@@ -213,7 +229,13 @@ public Q_SLOTS:
     {
         Q_UNUSED(caption);
         Q_UNUSED(message);
-        saw_caller_returned = caller_returned && caller_returned->load();
+        if (caller_returned) {
+            const auto deadline = std::chrono::steady_clock::now() + CALLER_RETURN_WINDOW;
+            while (!caller_returned->load() && std::chrono::steady_clock::now() < deadline) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            saw_caller_returned = caller_returned->load();
+        }
         last_modal = modal;
         slot_thread = QThread::currentThread();
         ++calls;
@@ -329,13 +351,14 @@ void GUIFrontEndTests::widgetsPathBlocksUntilSlotReturns()
             outcome = DeliverCoreMessage(&target, &fake, "caption", "message", true);
             caller_returned = true;
         });
-        PumpUntil([&] { return target.calls == 1; }, DEADLOCK_BOUND);
+        PumpUntil([&] { return target.calls == 1; }, WAIT_BOUND);
         caller.join();
     }
 
     QVERIFY2(outcome == CoreMessageDelivery::Blocking, "the Widgets path did not use the blocking connection");
     QVERIFY2(target.calls == 1, "the target's error slot did not run exactly once");
-    QVERIFY2(!target.saw_caller_returned, "the caller returned before the target's error slot ran");
+    QVERIFY2(target.slot_thread.load() == qApp->thread(), "the target's error slot did not run on the GUI thread");
+    QVERIFY2(!target.saw_caller_returned, "the caller returned before the target's error slot returned");
 }
 
 void GUIFrontEndTests::detachClosesBeforeFirstHook()
@@ -376,7 +399,7 @@ void GUIFrontEndTests::queuedModalMessageNeverBlocksPostingThread()
         });
         // No event is processed here, so a poster that waits for the GUI
         // thread cannot return.
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        const auto deadline = std::chrono::steady_clock::now() + WAIT_BOUND;
         while (!returned && std::chrono::steady_clock::now() < deadline) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
@@ -386,13 +409,13 @@ void GUIFrontEndTests::queuedModalMessageNeverBlocksPostingThread()
             // The poster has let go of the lock the GUI thread wants.
             std::lock_guard<std::mutex> lock(m);
         }
-        PumpUntil([&] { return target.calls == 1; }, DEADLOCK_BOUND);
+        PumpUntil([&] { return target.calls == 1; }, WAIT_BOUND);
         poster.join();
 
         // On the GUI thread too, the message is posted, not run inline.
         DeliverCoreMessage(&target, &fe, "c2", "m2", true);
         calls_after_gui_post = target.calls.load();
-        PumpUntil([&] { return target.calls == 2; }, std::chrono::seconds(2));
+        PumpUntil([&] { return target.calls == 2; }, WAIT_BOUND);
     }
 
     QVERIFY2(returned_unpumped, "the modal caller waited for the GUI thread");
@@ -435,7 +458,7 @@ void GUIFrontEndTests::queuedModalMessageIsLogged()
         });
         // Pumped before the join: a modal call that waits for the GUI thread
         // returns only once its slot has run.
-        pumped = PumpUntil([&] { return target.calls == 2; }, std::chrono::seconds(5));
+        pumped = PumpUntil([&] { return target.calls == 2; }, WAIT_BOUND);
         poster.join();
     }
 
@@ -459,6 +482,56 @@ void GUIFrontEndTests::queuedModalMessageIsLogged()
     QVERIFY2(err.find("ncap") == std::string::npos, "a non-modal message was written to stderr");
     QVERIFY2(log_count == 1, "a modal message was not written to the GUI log");
     QVERIFY2(log_ncap == 0, "a non-modal message was written to the GUI log");
+}
+
+void GUIFrontEndTests::widgetsFrontEndKeepsTheOldRouting()
+{
+    const std::unique_ptr<GuiFrontEnd> widgets = MakeWidgetsFrontEnd();
+    QVERIFY2(!widgets->queuesModalCoreMessages(), "the Widgets front end queues modal core messages");
+
+    gui_frontend_test::CoreMessageTarget target;
+    std::mutex log_mutex;
+    std::vector<std::string> log_lines;
+    std::ostringstream err_capture;
+    std::streambuf* const old_cerr = std::cerr.rdbuf();
+    ScopeExit restore([old_cerr] {
+        LogInstance().DisconnectTestLogger();
+        std::cerr.rdbuf(old_cerr);
+    });
+    std::cerr.rdbuf(err_capture.rdbuf());
+    LogInstance().PushBackCallback([&log_mutex, &log_lines](const std::string& line) {
+        std::lock_guard<std::mutex> lock(log_mutex);
+        log_lines.push_back(line);
+    });
+    LogInstance().StartLogging();
+
+    CoreMessageDelivery modal_outcome = CoreMessageDelivery::Queued;
+    CoreMessageDelivery plain_outcome = CoreMessageDelivery::Blocking;
+    bool pumped = false;
+    {
+        Watchdog dog("widgetsFrontEndKeepsTheOldRouting");
+        std::thread caller([&] {
+            modal_outcome = DeliverCoreMessage(&target, widgets.get(), "wcap", "wtext", true);
+            plain_outcome = DeliverCoreMessage(&target, widgets.get(), "pcap", "ptext", false);
+        });
+        pumped = PumpUntil([&] { return target.calls == 2; }, WAIT_BOUND);
+        caller.join();
+    }
+
+    bool logged = false;
+    {
+        std::lock_guard<std::mutex> lock(log_mutex);
+        for (const std::string& line : log_lines) {
+            if (line.find("wcap") != std::string::npos || line.find("pcap") != std::string::npos) logged = true;
+        }
+    }
+    const std::string err = err_capture.str();
+
+    QVERIFY2(pumped, "the target's error slot did not run for both messages");
+    QVERIFY2(modal_outcome == CoreMessageDelivery::Blocking, "the Widgets path did not use the blocking connection for a modal message");
+    QVERIFY2(plain_outcome == CoreMessageDelivery::Queued, "the Widgets path did not queue a non-modal message");
+    QVERIFY2(!logged && err.find("wcap") == std::string::npos && err.find("pcap") == std::string::npos,
+             "the Widgets path wrote to stderr or the GUI log");
 }
 
 void GUIFrontEndTests::detachGuardReapsGlobalPool()

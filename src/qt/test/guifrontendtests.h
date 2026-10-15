@@ -22,6 +22,7 @@ private Q_SLOTS:
     void detachClosesBeforeFirstHook();
     void queuedModalMessageNeverBlocksPostingThread();
     void queuedModalMessageIsLogged();
+    void widgetsFrontEndKeepsTheOldRouting();
     void detachGuardReapsGlobalPool();
     void detachGuardReapsJobStartedByHook();
 };
