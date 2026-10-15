@@ -10,6 +10,7 @@
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/support/enumbytes.h"
 
+#include <functional>
 #include <type_traits>
 
 using LogFlags = BCLog::LogFlags;
@@ -58,6 +59,14 @@ public:
     typedef const std::shared_ptr<E> entry_ptr;
 
     typedef const entry_ptr entry_option;
+
+    //!
+    //! \brief Optional callback that Initialize runs for each stored record, in record-number order, BEFORE the
+    //! record updates the current-entry maps. It sees those maps as they were just before the record, so a
+    //! registry can derive state of its own from the same ordered pass that rebuilds the maps. Empty by default; a
+    //! registry sets it around its call to Initialize and clears it afterwards.
+    //!
+    std::function<void(const E& entry, const M& entries, const P& pending_entries)> m_load_observer;
 
     //!
     //! \brief Initializes the template registry entry map structures from the replay of the entry states stored
@@ -178,6 +187,10 @@ public:
             // Insert the entry into the historical map.
             m_historical[iter.second.m_hash] = std::make_shared<E>(entry);
             entry_ptr& historical_entry_ptr = m_historical[iter.second.m_hash];
+
+            if (m_load_observer) {
+                m_load_observer(entry, entries, pending_entries);
+            }
 
             HandleCurrentHistoricalEntries(entries, pending_entries, expired_entries, first_entries, entry,
                                                 historical_entry_ptr, recnum, key_type, populate_first_entries);

@@ -966,6 +966,20 @@ private:
     std::optional<uint256> m_last_superblock_hash GUARDED_BY(cs_main);
 
     //!
+    //! \brief Beacons the most recently connected superblock replaced: activation record hash -> hash of the
+    //! record it displaced from m_beacons. Cleared by the next ActivatePending and by Deactivate, like
+    //! m_expired_pending, and rebuilt by the load from m_last_superblock_hash. Hashes only.
+    //!
+    std::map<uint256, uint256> m_replaced_by_last_superblock GUARDED_BY(cs_main);
+
+    //!
+    //! \brief Derive the registry's side state from one stored record during Initialize. Called before the
+    //! record updates \p entries and \p pending_entries, in record-number order.
+    //!
+    void ObserveLoadedRecord(const Beacon& entry, const BeaconMap& entries, const PendingBeaconMap& pending_entries)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
     //! \brief The function that is used in Add() to try to renew a beacon by matching the incoming beacon's
     //! public key.
     //!

@@ -457,6 +457,7 @@ void BeaconRegistry::Reset()
     m_pending.clear();
     m_pending_ownership_proofs.clear();
     m_expired_pending.clear();
+    m_replaced_by_last_superblock.clear();
     m_last_superblock_hash.reset();
     EraseLastSuperblockHash();
     m_beacon_db.clear();
@@ -1188,6 +1189,8 @@ void BeaconRegistry::ActivatePending(
 {
     LogPrint(LogFlags::BEACON, "INFO: %s: Called for superblock at height %i.", __func__, height);
 
+    m_replaced_by_last_superblock.clear();
+
     // It is possible that more than one pending beacon with the same CPID can be attempted to be
     // activated in the same superblock. The behavior here to agree with the original implementation
     // is the last one. Here we are going to use a map keyed by the CPID with the array style insert
@@ -1237,6 +1240,11 @@ void BeaconRegistry::ActivatePending(
                  activated_beacon.m_hash.GetHex());
 
         m_beacon_db.insert(activated_beacon.m_hash, height, activated_beacon);
+
+        // Remember a beacon this activation replaces, so a disconnect from block version 15 can restore it.
+        if (const auto replaced = m_beacons.find(activated_beacon.m_cpid); replaced != m_beacons.end()) {
+            m_replaced_by_last_superblock[activated_beacon.m_hash] = replaced->second->m_hash;
+        }
 
         // This is the subscript form of insert. Important here because an activated beacon should
         // overwrite any existing entry in the m_beacons map.
@@ -1302,11 +1310,17 @@ void BeaconRegistry::ActivatePending(
 
 void BeaconRegistry::Deactivate(const uint256 superblock_hash, const int height)
 {
+    const bool v15_rules = IsV15Enabled(height);
+
     // Remember this function is a form of reversion, intended to be called during block disconnects as the inverse
     // of the ActivatePending, which is called when superblocks are committed.
     //
     // Find beacons that were activated by the superblock to be reverted and restore them to pending status. These come
     // from the beacon db.
+    // Beacons this superblock replaced, put back after the loop: inserting into m_beacons while iterating it
+    // could rehash and invalidate the iterator.
+    std::vector<std::pair<Cpid, uint256>> replaced_to_restore;
+
     for (auto iter = m_beacons.begin(); iter != m_beacons.end();) {
         uint256 activation_hash = Hash(superblock_hash, iter->second->m_previous_hash);
         // If we have an active beacon whose hash matches the composite hash assigned by ActivatePending...
@@ -1334,6 +1348,15 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash, const int height)
                     pending_beacon_entry->second;
             RestoreOwnershipProof(pending_beacon_entry->second);
 
+            // From block version 15 a beacon this superblock replaced is active again.
+            if (v15_rules) {
+                const auto replaced = m_replaced_by_last_superblock.find(activation_hash);
+
+                if (replaced != m_replaced_by_last_superblock.end()) {
+                    replaced_to_restore.emplace_back(cpid, replaced->second);
+                }
+            }
+
             // Erase the entry from the active beacons map. This also increments the iterator.
             iter = m_beacons.erase(iter);
 
@@ -1346,13 +1369,27 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash, const int height)
         }
     }
 
+    for (const auto& [cpid, replaced_hash] : replaced_to_restore) {
+        const auto replaced_entry = m_beacon_db.find(replaced_hash);
+
+        if (replaced_entry == m_beacon_db.end()) {
+            error("%s: Superblock hash %s: No record %s found to restore for cpid %s, which the superblock's "
+                  "activation replaced.",
+                  __func__,
+                  superblock_hash.GetHex(),
+                  replaced_hash.GetHex(),
+                  cpid.ToString());
+            continue;
+        }
+
+        m_beacons[cpid] = replaced_entry->second;
+    }
+
     // With the newer m_expired_pending set, the resurrection of expired pending beacons is relatively painless. We traverse
     // the m_expired_pending set and simply restore the pending beacon pointed to as the antecedent of each expired beacon in
     // the map. This is done by the m_beacon_db.find which will pull the beacon record from leveldb if it does not exist in
     // memory, which makes this passivation-proof up to a reorganization depth of the interval between two SB's (approximately
     // 960 blocks).
-    const bool v15_rules = IsV15Enabled(height);
-
     for (const auto& iter : m_expired_pending) {
         // From block version 15 a disconnect undoes the expirations this superblock recorded, and erases their
         // records with it, since a revert removes every record its block created. ActivatePending gives each of
@@ -1395,6 +1432,7 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash, const int height)
     // (during the activation) repopulate the m_expired_pending map with a new set of expired_beacons. (This is very, very likely
     // to be the same set, BTW.)
     m_expired_pending.clear();
+    m_replaced_by_last_superblock.clear();
 
     // The set and the map described this superblock, and no superblock is connected after it now.
     m_last_superblock_hash = uint256();
@@ -1565,7 +1603,14 @@ int BeaconRegistry::Initialize()
 {
     m_last_superblock_hash = LoadLastSuperblockHash();
 
+    m_beacon_db.m_load_observer = [this](const Beacon& entry, const BeaconMap& entries,
+                                         const PendingBeaconMap& pending_entries) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+        ObserveLoadedRecord(entry, entries, pending_entries);
+    };
+
     int height = m_beacon_db.Initialize(m_beacons, m_pending, m_expired_pending, m_beacon_first_entries, false);
+
+    m_beacon_db.m_load_observer = nullptr;
 
     LogPrint(LogFlags::BEACON, "INFO: %s: m_beacon_db size after load: %u", __func__, m_beacon_db.size());
     LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons size after load: %u", __func__, m_beacons.size());
@@ -1584,12 +1629,30 @@ int BeaconRegistry::Initialize()
     return height;
 }
 
+void BeaconRegistry::ObserveLoadedRecord(const Beacon& entry, const BeaconMap& entries,
+                                         const PendingBeaconMap& pending_entries)
+{
+    // A beacon the most recently connected superblock replaced (see ActivatePending): that superblock's activation
+    // record has the hash Hash(superblock block hash, pending beacon hash) and finds the CPID's earlier record
+    // current.
+    if (entry.m_status == BeaconStatusForStorage::ACTIVE
+        && m_last_superblock_hash && !m_last_superblock_hash->IsNull()
+        && entry.m_hash == Hash(*m_last_superblock_hash, entry.m_previous_hash)) {
+        const auto replaced = entries.find(entry.m_cpid);
+
+        if (replaced != entries.end()) {
+            m_replaced_by_last_superblock[entry.m_hash] = replaced->second->m_hash;
+        }
+    }
+}
+
 void BeaconRegistry::ResetInMemoryOnly()
 {
     m_beacons.clear();
     m_pending.clear();
     m_pending_ownership_proofs.clear();
     m_expired_pending.clear();
+    m_replaced_by_last_superblock.clear();
     m_last_superblock_hash.reset();
     m_beacon_db.clear_in_memory_only();
 }

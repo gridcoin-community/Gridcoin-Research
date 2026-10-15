@@ -2212,6 +2212,63 @@ BOOST_AUTO_TEST_CASE(beacon_registry_deactivate_undoes_its_superblock_s_expirati
     registry.Reset();
 }
 
+namespace {
+struct ReplacementActivation
+{
+    CKey key_1;
+    CKey key_2;
+    GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    uint256 superblock_1 = uint256S("0707070707070707070707070707070707070707070707070707070707070707");
+    uint256 superblock_2 = uint256S("0808080808080808080808080808080808080808080808080808080808080808");
+
+    //! Superblock 1 (height 2) activates key 1; a forced re-advertisement of key 2 (height 3) is activated by
+    //! superblock 2 (height 4), replacing key 1.
+    explicit ReplacementActivation(GRC::BeaconRegistry& registry) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        key_1.MakeNewKey(true);
+        key_2.MakeNewKey(true);
+
+        AddPendingBeacon(registry, cpid, key_1.GetPubKey(), START_TIME, 1);
+        registry.ActivatePending({key_1.GetPubKey().GetID()}, START_TIME + DAY, superblock_1, 2);
+
+        AddPendingBeacon(registry, cpid, key_2.GetPubKey(), START_TIME + 2 * DAY, 3);
+        registry.ActivatePending({key_2.GetPubKey().GetID()}, START_TIME + 3 * DAY, superblock_2, 4);
+    }
+};
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(beacon_registry_deactivate_restores_a_replaced_beacon_from_v15)
+{
+    LOCK(cs_main);
+    grc_test::V15HeightGuard v15(1);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+
+    for (const bool restart_first : {false, true}) {
+        registry.Reset();
+
+        ReplacementActivation chain(registry);
+        BOOST_REQUIRE(registry.Try(chain.cpid));
+        BOOST_REQUIRE(registry.Try(chain.cpid)->m_public_key == chain.key_2.GetPubKey());
+
+        // A restart before the disconnect rebuilds the replaced-beacon map from the persisted superblock hash.
+        if (restart_first) ReloadRegistry(registry);
+
+        registry.Deactivate(chain.superblock_2, 4);
+
+        BOOST_REQUIRE(registry.Try(chain.cpid));
+        BOOST_CHECK(registry.Try(chain.cpid)->m_public_key == chain.key_1.GetPubKey());
+        BOOST_CHECK_EQUAL(registry.PendingBeacons().count(chain.key_2.GetPubKey().GetID()), 1U);
+
+        ReloadRegistry(registry);
+        BOOST_REQUIRE(registry.Try(chain.cpid));
+        BOOST_CHECK(registry.Try(chain.cpid)->m_public_key == chain.key_1.GetPubKey());
+        BOOST_CHECK_EQUAL(registry.PendingBeacons().count(chain.key_2.GetPubKey().GetID()), 1U);
+    }
+
+    registry.Reset();
+}
+
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
