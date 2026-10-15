@@ -85,12 +85,15 @@ public:
     //! Stores the model pointers and tells the shell whether closing the window
     //! minimizes it.
     void attachModels(const ModelBundle& models) override;
+    //! Asks the root to show its main window and sets Shell.shown. A quit
+    //! requested before the event loop runs is posted again here, so the event
+    //! loop delivers it as soon as it starts.
     void showMain(bool minimized) override;
     //! No native main window is owned in C++: the root creates its windows.
     WId nativeWindowId() override;
     //! Records the quit on the shell and quits the application. Quit does
-    //! nothing outside the event loop; the flag lets the root's close handler
-    //! accept the closes quit sends.
+    //! nothing outside the event loop; the flag makes the root's close handler
+    //! accept closes once a quit was requested.
     void requestQuit() override;
     bool queuesModalCoreMessages() const override;
 

@@ -51,3 +51,27 @@ void QmlQuitTests::secondaryWindowCloseDoesNotQuit()
 
     QCOMPARE(fe.quits, 0);
 }
+
+void QmlQuitTests::quitBeforeTheLoopEndsTheLoop()
+{
+    std::atomic<int> disconnects{0};
+    QmlFrontEnd fe(qml_test::FIXTURE_ROOT_URL, qml_test::CountingCallbacks(disconnects));
+    QVERIFY(fe.construct());
+    // As a queued quit request handled in the readiness wait: before the loop.
+    fe.requestQuit();
+    fe.showMain(false);
+    bool fell_back = false;
+    QTimer fallback;
+    fallback.setSingleShot(true);
+    QObject::connect(&fallback, &QTimer::timeout, &fallback, [&fell_back] {
+        fell_back = true;
+        QCoreApplication::exit(3);
+    });
+    fallback.start(10000);
+    const int rc = qApp->exec();
+    fallback.stop();
+    fe.destroyMain();
+
+    QVERIFY2(!fell_back, "a quit requested before the event loop did not end it");
+    QCOMPARE(rc, 0);
+}

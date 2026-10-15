@@ -33,7 +33,7 @@ that arrive later.)
 | `marker` | property, constant | Identifies the provider that owns the instance; used by the identity tests. |
 | `shown` | property | True once the composition root asked the root to show its main window (`showMain`). |
 | `startMinimized` | property | True when the main window was asked to show minimized (`-min`). |
-| `quitRequested` | property | True once a quit was requested; the root's close handler accepts the closes the quit sends. |
+| `quitRequested` | property | True once a quit was requested; from then on `requestClose()` returns true, so the main window's close handler accepts every close. |
 | `ipcActive` | property | True in a split (`-multiprocess`) build, where the IPC facts below are set. |
 | `ipcGitCommitMismatch` | property | True when the GUI and the node were built from different commits. |
 | `ipcGuiVersion` | property | The GUI process's own version. |
