@@ -1123,7 +1123,7 @@ BOOST_AUTO_TEST_CASE(a_zero_active_vote_weight_does_not_validate_a_poll)
 {
     grc_test::StateGuard guard;
     RegistryReset reset;
-    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+    LOCK(cs_main);
 
     const PollTx poll = MakePollTx("Title", GetAdjustedTime(), GRC::ContractAction::ADD,
                                    GRC::PollWeightType::BALANCE, /*payload_version=*/3);
@@ -1137,9 +1137,15 @@ BOOST_AUTO_TEST_CASE(a_zero_active_vote_weight_does_not_validate_a_poll)
     GRC::PollRegistry& registry = GRC::GetPollRegistry();
     registry.Add({poll.contract, poll.tx, tip.m_pindex});
 
-    const GRC::PollReference* ref = registry.TryByTxid(poll.tx.GetHash());
-    BOOST_REQUIRE(ref != nullptr);
-    BOOST_REQUIRE_EQUAL(ref->GetPollPayloadVersion(), 3U);
+    // The result is built as the RPCs and the GUI build it: without the registry lock, which BuildFor takes where it
+    // needs it. Reading a vote takes the block commit lock, which block connection takes before the registry lock.
+    const GRC::PollReference* ref = nullptr;
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        ref = registry.TryByTxid(poll.tx.GetHash());
+        BOOST_REQUIRE(ref != nullptr);
+        BOOST_REQUIRE_EQUAL(ref->GetPollPayloadVersion(), 3U);
+    }
 
     const GRC::PollResultOption result = GRC::PollResult::BuildFor(*ref, tip.m_pindex);
     BOOST_REQUIRE(result);
@@ -1200,7 +1206,7 @@ BOOST_AUTO_TEST_CASE(a_legacy_poll_weighs_magnitude_as_of_its_end)
 {
     grc_test::StateGuard guard;
     RegistryReset reset;
-    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+    LOCK(cs_main);
 
     const int64_t start = GetAdjustedTime() - 20 * 86400;
     const auto legacy_tx = [](const int64_t time, const std::string& contract) {
@@ -1242,9 +1248,14 @@ BOOST_AUTO_TEST_CASE(a_legacy_poll_weighs_magnitude_as_of_its_end)
     registry.Add({poll_tx.GetContracts()[0], poll_tx, polled.m_pindex});
     registry.Add({vote_tx.GetContracts()[0], vote_tx, polled.m_pindex});
 
-    const GRC::PollReference* ref = registry.TryByTxid(poll_tx.GetHash());
-    BOOST_REQUIRE(ref != nullptr);
-    BOOST_REQUIRE_EQUAL(ref->Votes().size(), 1U);
+    // Built without the registry lock, as the RPCs and the GUI build a result (see the case above).
+    const GRC::PollReference* ref = nullptr;
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        ref = registry.TryByTxid(poll_tx.GetHash());
+        BOOST_REQUIRE(ref != nullptr);
+        BOOST_REQUIRE_EQUAL(ref->Votes().size(), 1U);
+    }
 
     const GRC::PollResultOption result = GRC::PollResult::BuildFor(*ref, after.m_pindex);
     BOOST_REQUIRE(result);
