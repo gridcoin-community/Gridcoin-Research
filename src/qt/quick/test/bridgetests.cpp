@@ -488,7 +488,7 @@ void QmlBridgeTests::modalMessageReachesShellWithoutWaiting()
         });
         // No event is processed here, so a poster that waits for the GUI
         // thread cannot return.
-        const auto deadline = std::chrono::steady_clock::now() + 2000ms;
+        const auto deadline = std::chrono::steady_clock::now() + qml_test::WAIT_BOUND;
         while (!returned && std::chrono::steady_clock::now() < deadline) {
             std::this_thread::sleep_for(1ms);
         }
@@ -498,7 +498,7 @@ void QmlBridgeTests::modalMessageReachesShellWithoutWaiting()
             // The poster has let go of the lock the GUI thread wants.
             std::lock_guard<std::mutex> lock(m);
         }
-        qml_test::PumpUntil([&] { return spy.count() == 1; }, std::chrono::seconds(5));
+        qml_test::PumpUntil([&] { return spy.count() == 1; }, qml_test::WAIT_BOUND);
         poster.join();
     }
 
@@ -535,7 +535,7 @@ void QmlBridgeTests::serialRunnerThreadNeverWaits()
             {});
         // No event is pumped before the GUI thread takes `m`, so a worker that
         // waits for the GUI thread while holding `m` deadlocks deterministically.
-        const auto deadline = std::chrono::steady_clock::now() + 2000ms;
+        const auto deadline = std::chrono::steady_clock::now() + qml_test::WAIT_BOUND;
         while (!holds && std::chrono::steady_clock::now() < deadline) {
             std::this_thread::sleep_for(1ms);
         }
@@ -544,7 +544,7 @@ void QmlBridgeTests::serialRunnerThreadNeverWaits()
             {
                 std::lock_guard<std::mutex> lock(m);
             }
-            qml_test::PumpUntil([&] { return done.load(); }, qml_test::DEADLOCK_BOUND);
+            qml_test::PumpUntil([&] { return done.load(); }, qml_test::WAIT_BOUND);
         }
         runner.drain();
     }
@@ -580,7 +580,7 @@ void QmlBridgeTests::pooledRunnerThreadNeverWaits()
                 done = true;
             },
             {});
-        const auto deadline = std::chrono::steady_clock::now() + 2000ms;
+        const auto deadline = std::chrono::steady_clock::now() + qml_test::WAIT_BOUND;
         while (!holds && std::chrono::steady_clock::now() < deadline) {
             std::this_thread::sleep_for(1ms);
         }
@@ -589,7 +589,7 @@ void QmlBridgeTests::pooledRunnerThreadNeverWaits()
             {
                 std::lock_guard<std::mutex> lock(m);
             }
-            qml_test::PumpUntil([&] { return done.load(); }, qml_test::DEADLOCK_BOUND);
+            qml_test::PumpUntil([&] { return done.load(); }, qml_test::WAIT_BOUND);
         }
         runner.drain();
         QThreadPool::globalInstance()->waitForDone();

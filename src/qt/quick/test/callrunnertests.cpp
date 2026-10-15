@@ -87,7 +87,7 @@ void QmlCallRunnerTests::serialLaneNotBlockedByPooled()
     const bool posted_pooled = runner.postPooled([&] { started = true; latch.wait(); }, {});
     qml_test::PumpUntil([&] { return started.load(); }, 2s);
     const bool posted_serial = runner.postSerial([] {}, [&] { serial_delivered = true; });
-    const bool serial_ok = qml_test::PumpUntil([&] { return serial_delivered.load(); }, qml_test::DEADLOCK_BOUND);
+    const bool serial_ok = qml_test::PumpUntil([&] { return serial_delivered.load(); }, qml_test::WAIT_BOUND);
 
     QVERIFY(posted_pooled && posted_serial);
     QVERIFY2(serial_ok, "a serial call waited behind a pooled one");
