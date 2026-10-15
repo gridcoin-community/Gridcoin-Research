@@ -129,6 +129,10 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
     // rebuilt lives at that call site.
     int sb_cross_count = 0;
 
+    // From block version 15, set when a superblock disconnect finds the registry's superblock state not current
+    // (BeaconRegistry::SuperblockStateCurrent). The registry is then rebuilt below.
+    bool stale_superblock_state = false;
+
     while(pindexBest != pcommon)
     {
         if(!pindexBest->pprev)
@@ -178,6 +182,10 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
             // itself. It would not be verified. AND if the beacon is a renewal, it would never be in the activation list
             // for a superblock. We call GetBeaconRegistry directly here, because the IHandler class does not have
             // a virtual method that corresponds to this call, as it is only relevant to beacons.
+            if (IsV15Enabled(pindexBest->nHeight) && !GRC::GetBeaconRegistry().SuperblockStateCurrent()) {
+                stale_superblock_state = true;
+            }
+
             GRC::GetBeaconRegistry().Deactivate(pindexBest->GetBlockHash(), pindexBest->nHeight);
 
             // Count it so we can decide after the loop whether to flag a beacon-registry rebuild
@@ -383,11 +391,12 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
         // Single-SB reorgs are NOT rebuilt: the existing Deactivate path is
         // fidelity-correct for that case and the rebuild would be wasted work on
         // the most common case.
-        if (sb_cross_count >= 2) {
-            LogPrintf("WARN: %s: reorg disconnected %d superblock(s); beacon registry expired-pending "
+        if (sb_cross_count >= 2 || stale_superblock_state) {
+            LogPrintf("WARN: %s: reorg disconnected %d superblock(s)%s; beacon registry expired-pending "
                       "fidelity is degraded for the prior SB(s). Rebuilding beacon registry in-line "
                       "to maintain consensus.",
-                      __func__, sb_cross_count);
+                      __func__, sb_cross_count,
+                      stale_superblock_state ? ", superblock state not current" : "");
             GRC::RebuildBeaconRegistry();
         }
     }

@@ -277,6 +277,7 @@ BASE_SCRIPTS = [
     # abandoned cases, and that the re-pooled transaction is re-announced.
     'feature_reorg_conflicted.py',
     'feature_beacon_activation.py',
+    'feature_beacon_superblock_disconnects.py',
     'feature_research_reward.py',
     'feature_mrc.py',
     'feature_contract_replay.py',
