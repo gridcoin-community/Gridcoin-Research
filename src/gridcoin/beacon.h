@@ -804,8 +804,8 @@ public:
     //!
     //! \param contract The beacon contract to check.
     //!
-    //! \return \c false only if the contract is a beacon removal for a CPID that
-    //! has a current beacon, and does not carry that beacon's key.
+    //! \return \c false only if the contract is a beacon removal and the CPID
+    //! has no current beacon, or the removal does not carry that beacon's key.
     //!
     bool RemoveCarriesCurrentKey(const Contract& contract) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 

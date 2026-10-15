@@ -2585,8 +2585,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_remove_carries_current_key)
     BOOST_CHECK(registry.RemoveCarriesCurrentKey(contract(GRC::ContractAction::REMOVE, cpid, owner)));
     BOOST_CHECK(!registry.RemoveCarriesCurrentKey(contract(GRC::ContractAction::REMOVE, cpid, other)));
 
-    // The check applies to a CPID that has a current beacon.
-    BOOST_CHECK(registry.RemoveCarriesCurrentKey(contract(GRC::ContractAction::REMOVE, unknown, other)));
+    // A CPID with no beacon has nothing to remove.
+    BOOST_CHECK(!registry.RemoveCarriesCurrentKey(contract(GRC::ContractAction::REMOVE, unknown, other)));
 
     // An advertisement is not a removal.
     BOOST_CHECK(registry.RemoveCarriesCurrentKey(contract(GRC::ContractAction::ADD, cpid, other)));
@@ -3090,6 +3090,89 @@ BOOST_AUTO_TEST_CASE(beacon_registry_removal_s_key_is_judged_when_applied_from_v
         ReloadRegistry(registry);
         BOOST_CHECK(registry.Try(cpid) == nullptr);
     }
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_removal_needs_the_cpid_s_current_beacon_from_v15)
+{
+    LOCK(cs_main);
+    grc_test::V15HeightGuard v15(1);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key_1, key_3;
+    key_1.MakeNewKey(true);
+    key_3.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+
+    // The CPID's beacon is only pending, so the CPID has no current beacon. Block validation refuses a removal for
+    // it, with key 3 and with the pending beacon's key.
+    AddPendingBeacon(registry, cpid, key_1.GetPubKey(), START_TIME, 1);
+
+    const CBlockIndex index_2 = ContractIndex(2, START_TIME + DAY);
+
+    for (CKey* key : {&key_3, &key_1}) {
+        // Signed, so that only the key rule can refuse it.
+        GRC::BeaconPayload payload {2, cpid, GRC::Beacon(key->GetPubKey())};
+        BOOST_REQUIRE(payload.Sign(*key));
+
+        CMutableTransaction mtx;
+        mtx.nTime = START_TIME + DAY;
+        mtx.vContracts.push_back(GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::REMOVE, payload));
+        const CTransaction removal(mtx);
+
+        int DoS = 0;
+        BOOST_REQUIRE(registry.Validate(removal.GetContracts().front(), removal, DoS));
+        BOOST_CHECK(!registry.RemoveCarriesCurrentKey(removal.GetContracts().front()));
+        BOOST_CHECK(!registry.BlockValidate({removal.GetContracts().front(), removal, &index_2}, DoS));
+        BOOST_CHECK_EQUAL(DoS, 25);
+    }
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_restart_replay_judges_a_removal_s_key_from_v15)
+{
+    LOCK(cs_main);
+    grc_test::V15HeightGuard v15(1);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key_0, key_1;
+    key_0.MakeNewKey(true);
+    key_1.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+
+    AddPendingBeacon(registry, cpid, key_0.GetPubKey(), START_TIME, 1);
+    registry.ActivatePending({key_0.GetPubKey().GetID()}, START_TIME + DAY,
+                             uint256S("1919191919191919191919191919191919191919191919191919191919191919"), 2);
+    AddPendingBeacon(registry, cpid, key_1.GetPubKey(), START_TIME + 2 * DAY, 3);
+
+    // Block 4 carries the superblock that activates key 1, and two removals that carry key 0.
+    const CBlock block_4 = ContractBlock({BeaconContractTx(GRC::ContractAction::REMOVE, cpid, key_0, START_TIME + 3 * DAY),
+                                          BeaconContractTx(GRC::ContractAction::REMOVE, cpid, key_0,
+                                                           START_TIME + 3 * DAY + 1)});
+    const CBlockIndex index_4 = ContractIndex(4, START_TIME + 3 * DAY + 1);
+
+    for (const CTransaction& tx : {block_4.vtx[2], block_4.vtx[3]}) {
+        BOOST_REQUIRE(registry.RemoveCarriesCurrentKey(tx.GetContracts().front()));
+    }
+
+    ConnectSuperblockBlock(registry, {key_1.GetPubKey().GetID()},
+                           uint256S("2020202020202020202020202020202020202020202020202020202020202020"),
+                           block_4, index_4);
+    BOOST_REQUIRE(registry.Try(cpid) && registry.Try(cpid)->m_public_key == key_1.GetPubKey());
+    BOOST_REQUIRE(registry.DeletedEntries(cpid).empty());
+
+    // A restart while block 4 is the beacon db height replays its removals. The registry is unchanged.
+    ReloadAndReplay(registry, block_4, index_4);
+    BOOST_REQUIRE(registry.Try(cpid));
+    BOOST_CHECK(registry.Try(cpid)->m_public_key == key_1.GetPubKey());
+    BOOST_CHECK(registry.DeletedEntries(cpid).empty());
+    BOOST_CHECK(registry.PendingBeacons().empty());
 
     registry.Reset();
 }

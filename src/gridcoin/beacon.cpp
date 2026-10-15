@@ -1306,7 +1306,8 @@ bool BeaconRegistry::RemoveCarriesCurrentKey(const Contract& contract) const
     const auto payload = contract.SharePayloadAs<BeaconPayload>();
     const BeaconOption current_beacon = Try(payload->m_cpid);
 
-    return !current_beacon || current_beacon->m_public_key == payload->m_beacon.m_public_key;
+    // A CPID with no beacon has nothing to remove.
+    return current_beacon && current_beacon->m_public_key == payload->m_beacon.m_public_key;
 }
 
 void BeaconRegistry::ActivatePending(
