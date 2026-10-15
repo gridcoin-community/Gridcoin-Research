@@ -80,6 +80,7 @@ add_executable(test_gridcoin
     gridcoin/mrc_tests.cpp
     gridcoin/newbie_window_tests.cpp
     gridcoin/poll_result_cache_tests.cpp
+    gridcoin/poll_entry_tests.cpp
     gridcoin/poll_registry_tests.cpp
     gridcoin/poll_result_tests.cpp
     gridcoin/pool_chain_tests.cpp
