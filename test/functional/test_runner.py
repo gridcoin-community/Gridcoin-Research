@@ -257,6 +257,8 @@ BASE_SCRIPTS = [
     'rpc_changesettings.py',
     'feature_sidestake.py',
     'feature_vote_results.py',
+    # feature_poll_registry.py: the poll registry keeps polls and votes across a reorg and a restart.
+    'feature_poll_registry.py',
     'feature_generatesuperblock.py',
     # feature_reorg_resurrect.py: a wallet transaction whose block is
     # disconnected returns to the mempool and stays unconfirmed, not
