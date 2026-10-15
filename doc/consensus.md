@@ -821,6 +821,16 @@ Both call `GetPoolRegistry().ActivePoolsAtHeight(poll_start_height)` where `poll
 
 `RegistryBookmarks::GetLowestRegistryBlockHeight` in `src/gridcoin/contract/registry.h` is extended with a POOL block analogous to the existing SIDESTAKE block: a conditional max that raises a `POOL_REGISTER` or `POOL_APPROVE` bookmark below `GetBlockV15Height()` (which honours `-blockv15height`) up to that height. Before activation `GetBlockV15Height()` is `std::numeric_limits<int>::max()`, so POOL bookmarks clamp to `::max()`. That value drops out: the function returns the lowest height across all registry bookmarks, so a `::max()` entry can never lower the replay floor. With V15 activated, the clamp keeps contract replay from descending below the V15 height while the POOL bookmark is still 0, and keeps a real bookmark once it has advanced past V15.
 
+### 11.6 Staked Input From the Block's Own History
+
+This is a separate rule that activates with block version 15; it is not part of the pool registry above.
+
+The proof-of-stake check (`CheckProofOfStakeV8`) reads the staked input's transaction and the header of the block that confirmed it; that block's time feeds the kernel hash and the minimum stake age. `ReadStakedInput` finds the transaction through the transaction index, which follows the main chain. A transaction broadcast before a fork is usually mined on both sides, in a different block on each, so for a block on a side branch the index can name the other side's block. Below V15 that copy is used, and once the fork outlasts the minimum stake age a node rejects such blocks of a heavier side branch, so it cannot reorganize onto that branch.
+
+From V15, judged at the height of the block being checked, the staked input must be in the block's own history, and the block that confirms it there supplies the time. The fork point is the block's newest ancestor on the main chain (the parent itself when the parent is on the main chain). An indexed main-chain block at or below the fork point is shared history and is used. Otherwise the blocks above the fork point, from the parent down, are searched, and a block whose input is not in its own history fails the check. For a block extending the main chain's tip this is the transaction index's answer, so such blocks are unaffected. The gate applies per checked block, so side-branch blocks below V15 keep the old lookup.
+
+> **Source:** `src/gridcoin/staking/kernel.cpp` `ReadStakedInput`, `TakeStakedInputFromOwnHistory`.
+
 ---
 
 ## 12. Cross-Cutting Consensus Rules
