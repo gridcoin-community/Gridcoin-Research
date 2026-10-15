@@ -278,6 +278,7 @@ BASE_SCRIPTS = [
     'feature_reorg_conflicted.py',
     'feature_beacon_activation.py',
     'feature_beacon_superblock_disconnects.py',
+    'feature_beacon_reorg_restart.py',
     'feature_research_reward.py',
     'feature_mrc.py',
     'feature_contract_replay.py',
