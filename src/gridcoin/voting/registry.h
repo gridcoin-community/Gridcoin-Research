@@ -101,7 +101,9 @@ public:
     //!
     //! \brief Get the votes associated with the poll.
     //!
-    //! \return The set of transaction hashes of the associated votes.
+    //! \return The set of transaction hashes of the associated votes, in connection order. For a poll stored in
+    //! the poll db the list is read from the vote link chain and cached until the chain changes. Requires
+    //! PollRegistry::cs_poll_registry.
     //!
     const std::vector<uint256>& Votes() const;
 
@@ -239,7 +241,8 @@ private:
     int64_t m_timestamp;                        //!< Timestamp of the poll transaction.
     uint32_t m_duration_days;                   //!< Number of days the poll remains active.
     const CBlockIndex* m_pindex;                //!< Block that contains the poll contract.
-    std::vector<uint256> m_votes;               //!< Hashes of the linked vote transactions.
+    mutable std::vector<uint256> m_votes;       //!< Linked votes: the list (in-memory poll) or the cached chain (stored poll).
+    mutable uint256 m_votes_head;               //!< The chain head m_votes was read at (stored poll).
     mutable bool m_expiration_warn_notified;    //!< Flag to indicate whether the expiration warning was sent.
     bool m_stored;                              //!< Backed by the poll db (a poll from V11 on).
     bool m_deleted;                             //!< Deleted by a master-key REMOVE; kept for its txid and title.
@@ -522,6 +525,12 @@ public:
     std::optional<uint256> TitleOwner(const std::string& title_key) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
+    //! \brief The poll's linked votes in connection order, read from its vote link chain. Older links are read with
+    //! RegistryDB::peek(), so they stay passivated.
+    //!
+    std::vector<uint256> WalkVotes(const uint256& poll_txid) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+
+    //!
     //! \brief Perform contextual validation for the provided contract.
     //!
     //! \param contract Contract to validate.
@@ -601,7 +610,8 @@ private:
     const PollReference* m_latest_poll GUARDED_BY(cs_poll_registry); //!< Cache for the most recent poll.
 
     PollEntryDB m_poll_db GUARDED_BY(cs_poll_registry);                       //!< Poll records, from V11.
-    VoteLinkDB m_vote_db GUARDED_BY(cs_poll_registry);                        //!< Vote links, from V11.
+    //! Vote links, from V11. Mutable because WalkVotes reads it with peek(), which changes no observable state.
+    mutable VoteLinkDB m_vote_db GUARDED_BY(cs_poll_registry);
     PollEntryMap m_poll_entries GUARDED_BY(cs_poll_registry);                 //!< Poll txid to its newest record.
     VoteLinkMap m_vote_links GUARDED_BY(cs_poll_registry);                    //!< Poll txid to its newest link.
     std::map<std::string, uint256> m_title_index GUARDED_BY(cs_poll_registry); //!< Title key to first registration.
@@ -610,6 +620,11 @@ private:
     //! Set while TryByTxidWithAddHistoricalPollAndVotes registers a pre-V11 poll in memory only, the one path that
     //! passes the V11 floor (until the legacy store replaces it).
     bool m_registering_legacy_poll GUARDED_BY(cs_poll_registry);
+
+    //!
+    //! \brief Erase a stored vote's link, which must be its poll's newest, and make the previous link current.
+    //!
+    void EraseVoteLink(const uint256& vote_txid) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Clear every in-memory structure, keeping the dbs' contents.

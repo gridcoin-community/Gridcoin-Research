@@ -135,6 +135,31 @@ struct RegistryReset
         GRC::GetProtocolRegistry().Reset();
     }
 };
+
+//! A version 2 vote contract for \p poll_txid, as it reaches the registry from a block.
+GRC::Contract MakeVoteContract(const uint256& poll_txid)
+{
+    return GRC::MakeContract<GRC::Vote>(
+        uint32_t {2}, GRC::ContractAction::ADD,
+        GRC::Vote::CURRENT_VERSION, poll_txid, std::vector<uint8_t> {0}, GRC::VoteWeightClaim());
+}
+
+//! A transaction carrying \p contract, stamped \p tx_time (which gives each one its own txid).
+CTransaction MakeVoteTxFor(const GRC::Contract& contract, const int64_t tx_time)
+{
+    CMutableTransaction mtx;
+    mtx.nTime = tx_time;
+    mtx.vContracts.push_back(contract);
+
+    return CTransaction(mtx);
+}
+
+//! The registry as a restarted node holds it.
+void Restart(GRC::PollRegistry& registry) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    registry.ResetInMemoryOnly();
+    registry.Initialize();
+}
 } // anonymous namespace
 
 BOOST_AUTO_TEST_SUITE(poll_registry_tests)
@@ -182,6 +207,7 @@ BOOST_AUTO_TEST_CASE(a_revert_removes_only_the_poll_its_contract_added)
         LOCK(GRC::PollRegistry::cs_poll_registry);
         BOOST_REQUIRE(registry.TryByTxid(second.tx.GetHash()) != nullptr);
         BOOST_REQUIRE(registry.TryByTitle("title") == registry.TryByTxid(first.tx.GetHash()));
+        BOOST_CHECK(registry.TitleOwner("title") == first.tx.GetHash());
     }
 
     // A revert removes only the poll its own contract added.
@@ -395,6 +421,112 @@ BOOST_AUTO_TEST_CASE(a_restarted_registry_holds_the_same_polls)
     BOOST_CHECK(registry.TryByTitle("beta") == beta);
     BOOST_CHECK(registry.TitleOwner("alpha") == first.tx.GetHash());
     BOOST_CHECK_EQUAL(registry.GetDBHeight(), V13Height() + 10);
+}
+
+BOOST_AUTO_TEST_CASE(votes_come_back_in_connection_order_after_a_restart)
+{
+    CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex vote_index = MakeBlockIndex(V13Height() + 11, 1700000600);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+    registry.Add({poll.contract, poll.tx, &poll_index});
+
+    const GRC::Contract vote = MakeVoteContract(poll.tx.GetHash());
+    const CTransaction v1 = MakeVoteTxFor(vote, 1700000500);
+    const CTransaction v2 = MakeVoteTxFor(vote, 1700000400); // stamped earlier, later in the block
+    registry.Add({vote, v1, &vote_index});
+    registry.Add({vote, v2, &vote_index});
+
+    const std::vector<uint256> expected {v1.GetHash(), v2.GetHash()};
+
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash())->Votes() == expected);
+    }
+
+    Restart(registry);
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash())->Votes() == expected);
+    BOOST_CHECK(registry.VoteHead(poll.tx.GetHash()) == v2.GetHash());
+}
+
+BOOST_AUTO_TEST_CASE(a_vote_already_linked_is_not_linked_again)
+{
+    CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex vote_index = MakeBlockIndex(V13Height() + 11, 1700000600);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+    registry.Add({poll.contract, poll.tx, &poll_index});
+
+    const GRC::Contract vote = MakeVoteContract(poll.tx.GetHash());
+    const CTransaction v1 = MakeVoteTxFor(vote, 1700000500);
+    registry.Add({vote, v1, &vote_index});
+    registry.Add({vote, v1, &vote_index});
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK_EQUAL(registry.TryByTxid(poll.tx.GetHash())->Votes().size(), 1U);
+}
+
+BOOST_AUTO_TEST_CASE(a_deleted_poll_keeps_its_title_and_leaves_the_display_map)
+{
+    CBlockIndex index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex remove_index = MakeBlockIndex(V13Height() + 12, 1700002000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+    const PollTx remove = MakePollTx("Title", 1700001000, GRC::ContractAction::REMOVE);
+    registry.Add({poll.contract, poll.tx, &index});
+    registry.Delete({remove.contract, remove.tx, &remove_index});
+
+    for (int pass = 0; pass < 2; ++pass) {
+        {
+            LOCK(GRC::PollRegistry::cs_poll_registry);
+            BOOST_CHECK(registry.TryByTitle("title") == nullptr);
+            BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash()) == nullptr);
+            BOOST_CHECK(registry.TitleOwner("title") == poll.tx.GetHash());
+            BOOST_CHECK(registry.IsStored(remove.tx.GetHash()));
+        }
+
+        // The second pass checks the restarted registry.
+        Restart(registry);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(a_remove_resolves_only_to_the_active_display_poll)
+{
+    CBlockIndex index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex dup_index = MakeBlockIndex(V13Height() + 11, 1700000500);
+    CBlockIndex remove_index = MakeBlockIndex(V13Height() + 12, 1700002000);
+    CBlockIndex remove2_index = MakeBlockIndex(V13Height() + 13, 1700003000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx first = MakePollTx("Title", 1700000000);
+    const PollTx duplicate = MakePollTx("TITLE", 1700000500); // the same title key, below v15
+    const PollTx remove = MakePollTx("Title", 1700001000, GRC::ContractAction::REMOVE);
+    const PollTx remove_again = MakePollTx("Title", 1700001500, GRC::ContractAction::REMOVE);
+
+    registry.Add({first.contract, first.tx, &index});
+    registry.Add({duplicate.contract, duplicate.tx, &dup_index});
+    registry.Delete({remove.contract, remove.tx, &remove_index});
+    registry.Delete({remove_again.contract, remove_again.tx, &remove2_index});
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    // The first REMOVE deletes the poll that owns the title. The second resolves to no ACTIVE poll and stores
+    // nothing; the other poll stays registered by its txid.
+    BOOST_CHECK(registry.TryByTxid(duplicate.tx.GetHash()) != nullptr);
+    BOOST_CHECK(registry.IsStored(remove.tx.GetHash()));
+    BOOST_CHECK(!registry.IsStored(remove_again.tx.GetHash()));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

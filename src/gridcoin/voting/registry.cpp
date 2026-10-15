@@ -425,6 +425,7 @@ PollReference::PollReference()
     , m_duration_days(0)
     , m_pindex(nullptr)
     , m_votes({})
+    , m_votes_head()
     , m_expiration_warn_notified(false)
     , m_stored(false)
     , m_deleted(false)
@@ -493,16 +494,27 @@ PollType PollReference::GetPollType() const
 
 const std::string& PollReference::Title() const
 {
-    if (!m_ptitle) {
-        static const std::string empty("");
-        return empty;
-    }
-
+    // m_title is the poll's own title, empty for a default-constructed reference. (m_ptitle points at the display
+    // map's key only for the poll that owns its title, so a later poll with the same title key has none.)
     return m_title;
 }
 
 const std::vector<uint256>& PollReference::Votes() const
 {
+    // An in-memory poll (registered by the historical lookup) keeps the list it linked.
+    if (!m_stored || m_registry == nullptr) {
+        return m_votes;
+    }
+
+    // A stored poll's votes are its vote link chain. The cached list stays valid while the chain's head is the one
+    // it was read at.
+    const uint256 head = m_registry->VoteHead(m_txid);
+
+    if (head != m_votes_head) {
+        m_votes = m_registry->WalkVotes(m_txid);
+        m_votes_head = head;
+    }
+
     return m_votes;
 }
 
@@ -1035,6 +1047,59 @@ std::optional<uint256> PollRegistry::TitleOwner(const std::string& title_key) co
     return iter->second;
 }
 
+std::vector<uint256> PollRegistry::WalkVotes(const uint256& poll_txid) const
+{
+    std::vector<uint256> votes;
+
+    for (uint256 hash = VoteHead(poll_txid); !hash.IsNull();) {
+        const auto link = m_vote_db.peek(hash);
+
+        if (!link) {
+            error("%s: vote link %s of poll %s is missing", __func__, hash.ToString(), poll_txid.ToString());
+            break;
+        }
+
+        votes.push_back(link->m_hash);
+        hash = link->m_previous_hash;
+    }
+
+    std::reverse(votes.begin(), votes.end());
+
+    return votes;
+}
+
+void PollRegistry::EraseVoteLink(const uint256& vote_txid)
+{
+    // A vote that was never linked (outside the window, or for a poll the registry does not hold) has no record.
+    if (!m_vote_db.contains(vote_txid)) {
+        return;
+    }
+
+    const auto link = m_vote_db.peek(vote_txid);
+    const uint256 poll_txid = link->m_poll_txid;
+
+    // A disconnect pops a poll's links newest first, so the link must be the poll's newest.
+    if (VoteHead(poll_txid) != vote_txid) {
+        error("%s: vote %s is not the newest link of poll %s", __func__, vote_txid.ToString(), poll_txid.ToString());
+        return;
+    }
+
+    m_vote_db.erase(vote_txid);
+
+    if (link->m_previous_hash.IsNull()) {
+        m_vote_links.erase(poll_txid);
+    } else {
+        m_vote_links[poll_txid] = m_vote_db.find(link->m_previous_hash)->second;
+    }
+
+    // Keep the poll's cached list in step when it was current.
+    if (const auto iter = m_polls_by_txid.find(poll_txid);
+        iter != m_polls_by_txid.end() && iter->second.m_votes_head == vote_txid && !iter->second.m_votes.empty()) {
+        iter->second.m_votes.pop_back();
+        iter->second.m_votes_head = link->m_previous_hash;
+    }
+}
+
 void PollRegistry::IndexPollRecord(const PollEntry& entry)
 {
     const std::string title_key = ToLower(entry.m_title);
@@ -1504,62 +1569,84 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
 
 void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
+    // Only a vote's ADD links a vote. A master-key VOTE REMOVE reaches Add only when it is reverted, and it links
+    // nothing, so its revert stores nothing either.
+    if (ctx->m_action != ContractAction::ADD) {
+        return;
+    }
+
+    const uint256 vote_txid = ctx.m_tx.GetHash();
+    PollReference* poll_ref = nullptr;
+
     if (ctx->m_version >= 2) {
         const auto vote = ctx->SharePayloadAs<Vote>();
 
-        if (PollReference* poll_ref = TryBy(vote->m_poll_txid)) {
-            if (poll_ref->Expired(ctx.m_pindex->nTime)) {
-                LogPrint(LogFlags::VOTE,
-                    "%s: ignored vote %s for finished poll %s",
-                    __func__,
-                    ctx.m_tx.GetHash().ToString(),
-                    poll_ref->Txid().ToString());
-            } else {
-                // In a contract replay inserts may overlap what was already inserted. Check to see if vote already exists, and
-                // if so skip this add. This gets expensive as the number of votes increases.
-                // TODO: consider changing Votes to a map.
-                auto existing_vote = std::find(poll_ref->Votes().begin(), poll_ref->Votes().end(), ctx.m_tx.GetHash());
-                if (existing_vote != poll_ref->Votes().end()) {
-                    return;
-                }
+        poll_ref = TryBy(vote->m_poll_txid);
 
-                poll_ref->LinkVote(ctx.m_tx.GetHash());
+        if (poll_ref != nullptr && poll_ref->Expired(ctx.m_pindex->nTime)) {
+            LogPrint(LogFlags::VOTE,
+                "%s: ignored vote %s for finished poll %s",
+                __func__,
+                vote_txid.ToString(),
+                poll_ref->Txid().ToString());
 
-                LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added vote %s to poll %s, poll_ref->Votes().size() = %u.",
-                         __func__,
-                         ctx.m_tx.GetHash().GetHex(),
-                         *poll_ref->m_ptitle,
-                         poll_ref->Votes().size());
-
-                if (!poll_ref->Expired(GetAdjustedTime())) {
-                    uiInterface.NewVoteReceived(poll_ref->Txid());
-                }
-            }
-        }
-
-        return;
-    }
-
-    const ContractPayload vote = ctx->m_body.AssumeLegacy();
-    const std::string title = ParseLegacyVoteTitle(vote->LegacyKeyString());
-
-    if (title.empty()) {
-        return;
-    }
-
-    if (PollReference* poll_ref = TryBy(title)) {
-        // In a contract replay inserts may overlap what was already inserted. Check to see if vote already exists, and
-        // if so skip this add. This gets expensive as the number of votes increases.
-        // TODO: consider changing Votes to a map.
-        auto existing_vote = std::find(poll_ref->Votes().begin(), poll_ref->Votes().end(), ctx.m_tx.GetHash());
-        if (existing_vote != poll_ref->Votes().end()) {
             return;
         }
-        poll_ref->LinkVote(ctx.m_tx.GetHash());
+    } else {
+        // A legacy vote names its poll by title in lower case. (On mainnet legacy votes exist only below V11.)
+        const ContractPayload vote = ctx->m_body.AssumeLegacy();
+        const std::string title = ParseLegacyVoteTitle(vote->LegacyKeyString());
 
-        if (!poll_ref->Expired(GetAdjustedTime())) {
-            uiInterface.NewVoteReceived(poll_ref->Txid());
+        if (!title.empty()) {
+            poll_ref = TryBy(title);
         }
+    }
+
+    if (poll_ref == nullptr) {
+        return;
+    }
+
+    if (!poll_ref->m_stored) {
+        // An in-memory poll from the historical lookup: link in memory.
+        if (std::find(poll_ref->m_votes.begin(), poll_ref->m_votes.end(), vote_txid) != poll_ref->m_votes.end()) {
+            return;
+        }
+
+        poll_ref->LinkVote(vote_txid);
+    } else {
+        // Already linked: the startup replay of the db-height block, or a duplicate apply. contains() leaves a
+        // passivated link passivated (find() would load it and make a later insert refuse it).
+        if (m_vote_db.contains(vote_txid)) {
+            return;
+        }
+
+        VoteLinkEntry link;
+        link.m_poll_txid = poll_ref->m_txid;
+        link.m_timestamp = ctx.m_tx.nTime;
+        link.m_hash = vote_txid;
+        link.m_previous_hash = VoteHead(poll_ref->m_txid);
+        link.m_block_hash = ctx.m_pindex->GetBlockHash();
+        link.m_block_height = ctx.m_pindex->nHeight;
+        link.m_status = VoteLinkStatus::ACTIVE;
+
+        if (!m_vote_db.insert(vote_txid, ctx.m_pindex->nHeight, link)) {
+            error("%s: vote link %s was not stored", __func__, vote_txid.ToString());
+            return;
+        }
+
+        // Keep the poll's cached list in step when it is current; otherwise it is read again on next use.
+        if (poll_ref->m_votes_head == link.m_previous_hash) {
+            poll_ref->m_votes.push_back(vote_txid);
+            poll_ref->m_votes_head = vote_txid;
+        }
+
+        m_vote_links[poll_ref->m_txid] = m_vote_db.find(vote_txid)->second; // just inserted: nothing loaded
+    }
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added vote %s to poll %s.", __func__, vote_txid.GetHex(), poll_ref->m_title);
+
+    if (!poll_ref->Expired(GetAdjustedTime())) {
+        uiInterface.NewVoteReceived(poll_ref->Txid());
     }
 }
 
@@ -1603,8 +1690,25 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
     m_latest_poll = nullptr;
 
     if (ctx->m_action == ContractAction::REMOVE) {
-        // A master-key REMOVE: the poll stays registered by its txid and keeps its title.
+        // A master-key REMOVE: the poll stays registered by its txid and keeps its title. For a stored poll the
+        // REMOVE stores a DELETED record that links back to the poll's current record, so a restart rebuilds the
+        // same state.
         poll_ref->m_deleted = true;
+
+        if (poll_ref->m_stored && !m_poll_db.contains(ctx.m_tx.GetHash())) {
+            PollEntry entry = *m_poll_entries.at(txid);
+            entry.m_previous_hash = entry.m_hash;
+            entry.m_hash = ctx.m_tx.GetHash();
+            entry.m_block_hash = ctx.m_pindex->GetBlockHash();
+            entry.m_block_height = ctx.m_pindex->nHeight;
+            entry.m_status = PollEntryStatus::DELETED;
+
+            if (m_poll_db.insert(entry.m_hash, ctx.m_pindex->nHeight, entry)) {
+                m_poll_entries[txid] = m_poll_db.find(entry.m_hash)->second; // just inserted: nothing loaded
+            } else {
+                error("%s: deletion record %s was not stored", __func__, entry.m_hash.ToString());
+            }
+        }
     } else {
         // The poll's own ADD, reverted: its record, its title (if it owned it) and its entry go.
         if (poll_ref->m_stored) {
@@ -1633,12 +1737,16 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
         const auto vote = ctx->SharePayloadAs<Vote>();
 
         if (PollReference* poll_ref = TryBy(vote->m_poll_txid)) {
-            poll_ref->UnlinkVote(ctx.m_tx.GetHash());
+            if (poll_ref->m_stored) {
+                EraseVoteLink(ctx.m_tx.GetHash());
+            } else {
+                poll_ref->UnlinkVote(ctx.m_tx.GetHash());
+            }
 
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Deleted vote %s from poll %s, poll_ref->Votes().size() = %u.",
                      __func__,
                      ctx.m_tx.GetHash().GetHex(),
-                     *poll_ref->m_ptitle,
+                     poll_ref->m_title,
                      poll_ref->Votes().size());
 
             if (!poll_ref->Expired(GetAdjustedTime())) {
@@ -1657,7 +1765,11 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
     }
 
     if (PollReference* poll_ref = TryBy(title)) {
-        poll_ref->UnlinkVote(ctx.m_tx.GetHash());
+        if (poll_ref->m_stored) {
+            EraseVoteLink(ctx.m_tx.GetHash());
+        } else {
+            poll_ref->UnlinkVote(ctx.m_tx.GetHash());
+        }
 
         if (!poll_ref->Expired(GetAdjustedTime())) {
             uiInterface.NewVoteReceived(poll_ref->Txid());
