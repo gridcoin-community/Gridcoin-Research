@@ -8,12 +8,12 @@
 #include <QString>
 
 //! Pre-formatted facts about the GUI<->node IPC connection, for the About
-//! dialog's multiprocess section and the mixed-build banner. Populated in main()
-//! from the connect handshake in the -multiprocess split build; in the monolith
-//! build (GUI and node share one process) `active` is false and there is nothing
-//! to show. Strings are display-ready values (not tr()-wrapped captions); the
-//! dialog owns the labels. Doing the formatting in main() keeps the GUI widgets
-//! free of any ipc/handshake dependency.
+//! dialog's multiprocess section and the mixed-build banner. Populated in
+//! GuiMain() from the connect handshake in the -multiprocess split build; in the
+//! monolith build (GUI and node share one process) `active` is false and there
+//! is nothing to show. Strings are display-ready values (not tr()-wrapped
+//! captions); the dialog owns the labels. Doing the formatting in GuiMain() keeps
+//! the GUI widgets free of any ipc/handshake dependency.
 struct GuiIpcInfo
 {
     bool active = false;               //!< Split (-multiprocess) build: show the section.

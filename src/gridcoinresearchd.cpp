@@ -136,7 +136,7 @@ bool AppInit(int argc, char* argv[])
         //
         // Parameters
         //
-        // If Qt is used, parameters/gridcoinresearch.conf are parsed in qt/bitcoin.cpp's main()
+        // If Qt is used, parameters/gridcoinresearch.conf are parsed in qt/bitcoin.cpp's GuiMain()
         std::string error;
         if (!gArgs.ParseParameters(argc, argv, error)) {
             return InitError(strprintf("Error parsing command line arguments: %s\n", error));
