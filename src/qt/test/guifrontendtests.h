@@ -13,6 +13,7 @@ class GUIFrontEndTests : public QObject
     Q_OBJECT
 
 private Q_SLOTS:
+    void cleanupTestCase();
     void detachSequence();
     void guardRunsDetachOnThrow();
     void detachResumesAfterThrowingHook();
@@ -23,6 +24,7 @@ private Q_SLOTS:
     void detachClosesBeforeFirstHook();
     void queuedModalMessageNeverBlocksPostingThread();
     void queuedModalMessageIsLogged();
+    void widgetsFrontEndKeepsTheOldRouting();
     void detachGuardReapsGlobalPool();
     void detachGuardReapsJobStartedByHook();
 };
