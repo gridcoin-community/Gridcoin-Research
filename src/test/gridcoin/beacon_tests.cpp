@@ -2502,6 +2502,41 @@ BOOST_AUTO_TEST_CASE(beacon_registry_deleted_entries_are_in_chain_order)
     registry.Reset();
 }
 
+BOOST_AUTO_TEST_CASE(beacon_registry_remove_carries_current_key)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey owner;
+    owner.MakeNewKey(true);
+    CKey other;
+    other.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const GRC::Cpid unknown = GRC::Cpid::Parse("15141312111009080706050403020100");
+
+    AddPendingBeacon(registry, cpid, owner.GetPubKey(), START_TIME, 1);
+    registry.ActivatePending({owner.GetPubKey().GetID()}, START_TIME + DAY,
+                             uint256S("0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"), 2);
+
+    const auto contract = [](const GRC::ContractAction action, const GRC::Cpid& for_cpid, const CKey& key) {
+        GRC::BeaconPayload payload {2, for_cpid, GRC::Beacon(key.GetPubKey())};
+        return GRC::MakeContract<GRC::BeaconPayload>(3, action, payload);
+    };
+
+    BOOST_CHECK(registry.RemoveCarriesCurrentKey(contract(GRC::ContractAction::REMOVE, cpid, owner)));
+    BOOST_CHECK(!registry.RemoveCarriesCurrentKey(contract(GRC::ContractAction::REMOVE, cpid, other)));
+
+    // The check applies to a CPID that has a current beacon.
+    BOOST_CHECK(registry.RemoveCarriesCurrentKey(contract(GRC::ContractAction::REMOVE, unknown, other)));
+
+    // An advertisement is not a removal.
+    BOOST_CHECK(registry.RemoveCarriesCurrentKey(contract(GRC::ContractAction::ADD, cpid, other)));
+
+    registry.Reset();
+}
+
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
