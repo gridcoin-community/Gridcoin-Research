@@ -1636,9 +1636,10 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash, const int height)
         // Insert or replace the existing map entry for the cpid with the latest active or renewed for that CPID.
         entries[entry.m_cpid] = historical_entry_ptr;
 
-        // Delete any entry in the pending map with THE SAME public key.
+        // Delete any entry in the pending map with THE SAME public key. Only an activation does: it takes the
+        // pending beacon it activates. A renewal leaves the pending beacons alone, as TryRenewal does.
         auto pending_to_delete = pending_entries.find(entry.GetId());
-        if (pending_to_delete != pending_entries.end())
+        if (entry.m_status == BeaconStatusForStorage::ACTIVE && pending_to_delete != pending_entries.end())
         {
             LogPrint(LogFlags::CONTRACT, "INFO: %s: %s: pending entry delete after active insert: cpid %s, address %s, "
                      "timestamp %" PRId64 ", hash %s, previous_hash %s, beacon status %s, recnum %" PRId64 ".",

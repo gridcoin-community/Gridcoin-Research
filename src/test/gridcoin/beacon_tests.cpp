@@ -2902,6 +2902,37 @@ BOOST_AUTO_TEST_CASE(beacon_registry_restart_replay_of_two_renewals)
     registry.Reset();
 }
 
+BOOST_AUTO_TEST_CASE(beacon_registry_load_leaves_pending_beacons_at_a_renewal_record)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid_x = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const GRC::Cpid cpid_y = GRC::Cpid::Parse("15141312111009080706050403020100");
+    const CKeyID id = key.GetPubKey().GetID();
+
+    AddPendingBeacon(registry, cpid_x, key.GetPubKey(), START_TIME, 1);
+    registry.ActivatePending({id}, START_TIME + DAY,
+                             uint256S("1111111111111111111111111111111111111111111111111111111111111111"), 2);
+
+    // A further advertisement of the key is pending when the CPID renews its beacon.
+    const uint256 other = AddPendingBeacon(registry, cpid_y, key.GetPubKey(), START_TIME + 2 * DAY, 3);
+    AddPendingBeacon(registry, cpid_x, key.GetPubKey(), START_TIME + 3 * DAY, 4);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_REQUIRE(registry.PendingBeacons().at(id)->m_hash == other);
+
+    // A renewal does not touch the pending beacons, on a running node or after a restart.
+    ReloadRegistry(registry);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_CHECK(registry.PendingBeacons().at(id)->m_hash == other);
+
+    registry.Reset();
+}
+
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
