@@ -31,6 +31,7 @@ public:
 
 class Contract;
 class PollRegistry;
+class SuperblockPtr;
 
 //!
 //! \brief Stores an in-memory reference to a poll contract and its votes.
@@ -137,6 +138,10 @@ public:
     //!
     //! \brief Get the block index pointer for the first block in the poll duration.
     //!
+    //! This is the block that contains the poll contract, recorded when the poll
+    //! was registered. It needs no lock: block index entries are never freed, and
+    //! the registry deletes the poll if that block is disconnected.
+    //!
     //! \return pointer to block index object.
     //!
     CBlockIndex* GetStartingBlockIndexPtr() const;
@@ -165,19 +170,26 @@ public:
     //!
     //! \brief Get the magnitude weight factor at the poll start.
     //!
+    //! Resolved on each call from the poll's block and transaction time, against
+    //! the current protocol registry, as a read of the poll from disk always did.
+    //! A factor fixed at registration could differ between a node that saw the
+    //! poll arrive and one that replayed it later, when an entry stamped before
+    //! the poll was mined after it.
+    //!
     //! \return Fraction representing magnitude weight factor.
     //!
     Fraction GetMagnitudeWeightFactor() const;
 
     //!
     //! \brief Computes the Active Vote Weight for the poll, which is used to determine whether the poll is validated.
-    //! \param result: The actual tabulated votes (poll result)
+    //! \param result: The actual tabulated votes (poll result). Its poll supplies
+    //! the magnitude weight factor, the one the votes were weighed with.
     //! \param pindex_tip: Pinned chain tip used as the end of the range for an
     //! active poll, so every poll in a table build tallies against one consistent
     //! tip rather than a live pindexBest that shifts each block.
     //! \return ActiveVoteWeight
     //!
-    std::optional<CAmount> GetActiveVoteWeight(const PollResultOption &result, const CBlockIndex* pindex_tip) const;
+    std::optional<CAmount> GetActiveVoteWeight(const PollResult& result, const CBlockIndex* pindex_tip) const;
 
     //!
     //! \brief Provides string equivalent of PollNotificationType
@@ -219,13 +231,13 @@ private:
     uint256 m_txid;                             //!< Hash of the poll transaction.
     uint32_t m_payload_version;                 //!< Version of the poll (payload).
     PollType m_type;                            //!< Type of the poll.
-    mutable PollWeightType m_weight_type;       //!< Weight type of the poll.
+    PollWeightType m_weight_type;               //!< Weight type of the poll.
     const std::string* m_ptitle;                //!< Title of the poll for indexing/mapping purposes.
     std::string m_title;                        //!< Original title of the poll for display purposes.
-    mutable int64_t m_timestamp;                //!< Timestamp of the poll transaction.
+    int64_t m_timestamp;                        //!< Timestamp of the poll transaction.
     uint32_t m_duration_days;                   //!< Number of days the poll remains active.
+    const CBlockIndex* m_pindex;                //!< Block that contains the poll contract.
     std::vector<uint256> m_votes;               //!< Hashes of the linked vote transactions.
-    mutable Fraction m_magnitude_weight_factor; //!< Magnitude weight factor for the poll (defined at poll start).
     mutable bool m_expiration_warn_notified;    //!< Flag to indicate whether the expiration warning was sent.
 }; // PollReference
 
@@ -443,7 +455,8 @@ public:
     //!
     //! \return Points to a poll object or \c nullptr if no poll added that matches
     //! the supplied txid.
-    const PollReference* TryByTxidWithAddHistoricalPollAndVotes(const uint256 txid);
+    const PollReference* TryByTxidWithAddHistoricalPollAndVotes(const uint256 txid)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical
@@ -585,6 +598,19 @@ private:
 //! \return Current global poll registry instance.
 //!
 PollRegistry& GetPollRegistry();
+
+//!
+//! \brief Find the last well-formed superblock at or before a block.
+//!
+//! The superblock flags in the block index are not set for superblocks before
+//! height 1034768 on mainnet or 196562 on testnet, so below those heights the
+//! claim of every block is read.
+//!
+//! \param pindex The block to search back from.
+//!
+//! \return The superblock, bound to its block, or nothing if none is found.
+//!
+std::optional<SuperblockPtr> LastWellFormedSuperblock(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 }
 
 #endif // GRIDCOIN_VOTING_REGISTRY_H

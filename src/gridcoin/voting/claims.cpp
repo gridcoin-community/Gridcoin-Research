@@ -5,6 +5,8 @@
 #include "hash.h"
 #include "gridcoin/voting/claims.h"
 
+#include <set>
+
 using namespace GRC;
 
 namespace {
@@ -90,6 +92,26 @@ bool MagnitudeClaim::VerifySignature(
 // -----------------------------------------------------------------------------
 // Class: PollEligibilityClaim
 // -----------------------------------------------------------------------------
+
+bool PollEligibilityClaim::EntriesDistinct() const
+{
+    std::set<CPubKey> keys;
+    std::set<COutPoint> outpoints;
+
+    for (const auto& address_claim : m_balance_claim.m_address_claims) {
+        if (!keys.insert(address_claim.m_public_key).second) {
+            return false;
+        }
+
+        for (const auto& txo : address_claim.m_outpoints) {
+            if (!outpoints.insert(txo).second) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
 
 void PollEligibilityClaim::ExpandDummySignatures()
 {

@@ -214,7 +214,7 @@ int64_t Poll::Expiration() const
     return m_timestamp + (m_duration_days * 86400);
 }
 
-Fraction Poll::ResolveMagnitudeWeightFactor(const CBlockIndex* index) const
+Fraction Poll::ResolveMagnitudeWeightFactor(const CBlockIndex* index, const int64_t timestamp)
 {
     if (index == nullptr) {
         return Fraction();
@@ -228,7 +228,7 @@ Fraction Poll::ResolveMagnitudeWeightFactor(const CBlockIndex* index) const
     }
 
     // Find the current protocol entry value for Magnitude Weight Factor, if it exists.
-    ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeweightfactor", m_timestamp);
+    ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeweightfactor", timestamp);
 
     // If their is an entry prior or equal in timestamp to the start of the poll and it is active then set the magnitude weight
     // factor to that value. If the last entry is not active (i.e. deleted), then leave at the default.
