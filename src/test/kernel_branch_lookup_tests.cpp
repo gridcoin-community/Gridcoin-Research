@@ -439,6 +439,17 @@ BOOST_AUTO_TEST_CASE(an_input_missing_from_the_index_is_searched_for_only_in_the
     BOOST_CHECK(InputBlockFor(x_hash, pindex_a1) == a1.GetHash(true));
     BOOST_CHECK(InputBlockFor(x_hash, pindex_b2) == uint256());
 
+    // A branch with no block on the main chain has no fork point, so nothing
+    // is searched: a detached index that reads A1's block from disk.
+    CBlockIndex detached;
+    detached.phashBlock = pindex_a1->phashBlock;
+    detached.nFile = pindex_a1->nFile;
+    detached.nBlockPos = pindex_a1->nBlockPos;
+    detached.nHeight = pindex_a1->nHeight;
+    BOOST_REQUIRE(detached.pprev == nullptr && !detached.IsInMainChain());
+
+    BOOST_CHECK(InputBlockFor(x_hash, &detached) == uint256());
+
     // The index is authoritative for the main chain: with U's entry gone, a
     // child of the tip refuses U.
     const IndexEntryRemoved removed(tx_u);

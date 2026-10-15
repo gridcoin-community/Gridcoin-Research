@@ -521,12 +521,12 @@ bool GRC::ReadStakedInput(
         // The index covers the main chain, so an input it does not hold can
         // only be in a side branch: the blocks above the checked block's
         // newest ancestor on the main chain, from its parent down. Only those
-        // are searched.
+        // are searched, and nothing is when the block has no such ancestor.
         if (pindexPrev != nullptr) {
             std::vector<const CBlockIndex*> branch;
-            FindBranch(pindexPrev, branch);
 
-            if (FindInBranch(prevout_hash, branch, out_header, out_txprev)) {
+            if (FindBranch(pindexPrev, branch) != nullptr
+                && FindInBranch(prevout_hash, branch, out_header, out_txprev)) {
                 return true;
             }
         }
