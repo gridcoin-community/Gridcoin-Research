@@ -553,14 +553,15 @@ void GRC::ApplyContracts(
             continue;
         }
 
-        // Likewise for the poll registry: a POLL or VOTE contract of the block AT the poll registry's db height
-        // whose record is stored is already in the loaded state; skip it so it neither links again nor announces.
-        // Poll reverts erase their records at every height, so no poll or vote record is stored above the db height.
-        // Below V11 the poll registry stores nothing (its floor), so nothing is skipped.
+        // Likewise for the poll registry, but for every POLL or VOTE contract of the block AT the poll registry's
+        // db height, stored or not. That block was applied in full before it was committed (a block that never
+        // committed is never replayed), so the loaded state is the state after it, and the replay applies none of
+        // the block's POLL or VOTE contracts again. Poll reverts erase their records at every height, so no poll or
+        // vote record is stored above the db height. Below V11 the poll registry stores nothing (its floor), so
+        // nothing is skipped.
         if (skip_stored_registry_contracts
             && (contract.m_type == ContractType::POLL || contract.m_type == ContractType::VOTE)
-            && db_heights.GetRegistryBlockHeight(contract.m_type.Value()) == pindex->nHeight
-            && GetPollRegistry().IsStoredForReplay(tx.GetHash())) {
+            && db_heights.GetRegistryBlockHeight(contract.m_type.Value()) == pindex->nHeight) {
             out_found_contract = true;
             continue;
         }

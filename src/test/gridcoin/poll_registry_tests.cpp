@@ -717,6 +717,92 @@ BOOST_AUTO_TEST_CASE(a_link_reverted_out_of_order_flags_a_rebuild)
     BOOST_CHECK_EQUAL(version, 0U);
 }
 
+BOOST_AUTO_TEST_CASE(the_replay_of_the_db_height_block_skips_its_vote_contracts)
+{
+    // The vote comes before its poll in the block, so when the block connects the poll is not registered yet and the
+    // vote links to nothing. The startup replay of that block skips the vote: the loaded state is the state after
+    // the block.
+    CBlockIndex index = MakeBlockIndex(V13Height() + 12, 1700010000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700010000);
+    const CTransaction vote_tx = MakeVoteTxFor(MakeVoteContract(poll.tx.GetHash()), 1700010100);
+
+    CBlock block;
+    block.vtx.resize(2);
+    block.vtx.push_back(vote_tx);
+    block.vtx.push_back(poll.tx);
+
+    GRC::RegistryBookmarks live_heights;
+    bool found = false;
+    GRC::ApplyContracts(block, &index, live_heights, found, false);
+
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_REQUIRE(registry.TryByTxid(poll.tx.GetHash()) != nullptr);
+        BOOST_REQUIRE(registry.TryByTxid(poll.tx.GetHash())->Votes().empty());
+    }
+
+    Restart(registry);
+
+    GRC::RegistryBookmarks db_heights;
+    BOOST_REQUIRE(db_heights.GetRegistryBlockHeight(GRC::ContractType::VOTE) == index.nHeight);
+    GRC::ReplayBlock(block, &index, db_heights, true, found);
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash())->Votes().empty());
+    BOOST_CHECK(!registry.IsStored(vote_tx.GetHash()));
+}
+
+BOOST_AUTO_TEST_CASE(the_replay_of_the_db_height_block_skips_its_poll_contracts)
+{
+    // A master-key removal comes before a poll with the title it names, so when the block connects it finds no poll
+    // and does nothing. The startup replay of that block skips both contracts: the loaded state is the state after
+    // the block.
+    CBlockIndex index = MakeBlockIndex(V13Height() + 14, 1700020000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx removal = MakePollTx("Title", 1700019000, GRC::ContractAction::REMOVE);
+    const PollTx poll = MakePollTx("Title", 1700020000);
+
+    CBlock block;
+    block.vtx.resize(2);
+    block.vtx.push_back(removal.tx);
+    block.vtx.push_back(poll.tx);
+
+    GRC::RegistryBookmarks live_heights;
+    bool found = false;
+    GRC::ApplyContracts(block, &index, live_heights, found, false);
+
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_REQUIRE(registry.TryByTitle("title") != nullptr);
+        BOOST_REQUIRE(!registry.IsStored(removal.tx.GetHash()));
+    }
+
+    Restart(registry);
+
+    GRC::RegistryBookmarks db_heights;
+    BOOST_REQUIRE(db_heights.GetRegistryBlockHeight(GRC::ContractType::POLL) == index.nHeight);
+    GRC::ReplayBlock(block, &index, db_heights, true, found);
+
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_CHECK(registry.TryByTitle("title") != nullptr);
+        BOOST_CHECK(!registry.IsStored(removal.tx.GetHash()));
+    }
+
+    // The registry holds the same poll after a second restart.
+    Restart(registry);
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK(registry.TryByTitle("title") != nullptr);
+}
+
 BOOST_AUTO_TEST_CASE(clearing_either_history_clears_both_dbs)
 {
     CBlockIndex index = MakeBlockIndex(V13Height() + 10, 1700000000);

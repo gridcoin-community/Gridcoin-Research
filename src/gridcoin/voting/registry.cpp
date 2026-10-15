@@ -1031,13 +1031,6 @@ bool PollRegistry::IsStored(const uint256& hash)
     return m_poll_db.contains(hash) || m_vote_db.contains(hash);
 }
 
-bool PollRegistry::IsStoredForReplay(const uint256& hash)
-{
-    LOCK(cs_poll_registry);
-
-    return IsStored(hash);
-}
-
 uint256 PollRegistry::VoteHead(const uint256& poll_txid) const
 {
     const auto iter = m_vote_links.find(poll_txid);

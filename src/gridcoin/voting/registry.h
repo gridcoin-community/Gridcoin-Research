@@ -634,11 +634,6 @@ public:
         const bool m_saved;
     };
 
-    //!
-    //! \brief IsStored(), taking the registry lock: for the startup replay's skip of stored contracts.
-    //!
-    bool IsStoredForReplay(const uint256& hash);
-
 private:
     PollMapByTitle m_polls GUARDED_BY(cs_poll_registry);             //!< Display map: ACTIVE polls by title key.
     PollMapByTxid m_polls_by_txid GUARDED_BY(cs_poll_registry);      //!< Every poll held, by txid (owning).
