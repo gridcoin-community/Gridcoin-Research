@@ -18,6 +18,7 @@
 #include <string>
 
 class QQmlEngine;
+class QWindow;
 class ShellAdapter;
 
 //! The target of bitcoin.cpp's string-invoked core bridges. Its slots only emit
@@ -74,7 +75,8 @@ public:
     //! Creates the engine, loads the root and returns the core-message bridge.
     //! Throws GuiFrontEndUnusable when the root does not load.
     QObject* construct() override;
-    //! Destroys the bridge, the root and the engine, in that order; idempotent.
+    //! Destroys the bridge, the root, the engine and the window of
+    //! nativeWindowId(), in that order; idempotent.
     void destroyMain() override;
     //! Marks the splash active and returns its adapter.
     QObject* createSplash() override;
@@ -89,7 +91,11 @@ public:
     //! requested before the event loop runs is posted again here, so the event
     //! loop delivers it as soon as it starts.
     void showMain(bool minimized) override;
-    //! No native main window is owned in C++: the root creates its windows.
+    //! The native id of a window that is never shown, created by construct()
+    //! and destroyed by destroyMain(); 0 outside that span. On Windows,
+    //! WinShutdownMonitor sees WM_QUERYENDSESSION only through a Qt window's
+    //! procedure, and until showMain() (the start-up wait, -min) the root has
+    //! created no window.
     WId nativeWindowId() override;
     //! Records the quit on the shell and quits the application. Quit does
     //! nothing outside the event loop; the flag makes the root's close handler
@@ -123,6 +129,7 @@ private:
     Callbacks m_callbacks;
     std::unique_ptr<QmlProvider> m_provider;   // destroyed after the runner, the engine, the root and the bridge
     std::unique_ptr<QmlCallRunner> m_runner;    // destroyed before the provider
+    std::unique_ptr<QWindow> m_anchor;          // never shown; see nativeWindowId()
     std::unique_ptr<QQmlEngine> m_engine;
     std::unique_ptr<QObject> m_root;
     std::unique_ptr<QmlCoreBridge> m_bridge;
