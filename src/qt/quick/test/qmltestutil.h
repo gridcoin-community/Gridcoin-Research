@@ -29,9 +29,13 @@
 
 namespace qml_test {
 
-//! A deadlock never resolves, so a generous bound loses no power and keeps slow
-//! CI legs green.
-constexpr std::chrono::seconds DEADLOCK_BOUND{10};
+//! Every event pump and no-pump window under the watchdog: a deadlock never
+//! resolves, so a generous bound loses no power and keeps slow CI legs green.
+constexpr std::chrono::seconds WAIT_BOUND{30};
+//! The watchdog's bound: above 3 x WAIT_BOUND, the most any one test waits
+//! under it, so a failure that is not a deadlock fails its case instead of
+//! aborting the binary.
+constexpr std::chrono::seconds WATCHDOG_BOUND{120};
 
 //! Processes events until `done()` holds or `bound` passes; returns done().
 inline bool PumpUntil(const std::function<bool()>& done, std::chrono::milliseconds bound)
@@ -56,15 +60,16 @@ inline void PumpFor(std::chrono::milliseconds span)
 }
 
 //! Aborts the process, naming the test, if it is not destroyed within
-//! DEADLOCK_BOUND: a test that deadlocks then fails loudly instead of hanging.
+//! WATCHDOG_BOUND: a test that deadlocks then fails loudly instead of hanging.
 class Watchdog
 {
 public:
     explicit Watchdog(const char* name)
         : m_thread([this, name] {
               std::unique_lock<std::mutex> lock(m_mutex);
-              if (!m_cv.wait_for(lock, DEADLOCK_BOUND, [this] { return m_disarmed; })) {
-                  std::cerr << "WATCHDOG: " << name << " did not finish within 10 s" << std::endl;
+              if (!m_cv.wait_for(lock, WATCHDOG_BOUND, [this] { return m_disarmed; })) {
+                  std::cerr << "WATCHDOG: " << name << " did not finish within " << WATCHDOG_BOUND.count()
+                            << " s" << std::endl;
                   // With QTest's SIGABRT handler installed, an abort from this
                   // thread printed its signal report without end. Restore the
                   // default action first, so the process ends at once.
