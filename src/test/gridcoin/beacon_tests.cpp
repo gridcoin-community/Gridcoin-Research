@@ -7,6 +7,8 @@
 #include "gridcoin/beacon.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/registry.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/superblock.h"
 #include <key_io.h>
 #include "rpc/blockchain.h"
 #include "test/data/testnet_beacon.bin.h"
@@ -2643,6 +2645,62 @@ BOOST_AUTO_TEST_CASE(beacon_registry_a_block_s_two_advertisements_revert_in_inve
 
     ReloadRegistry(registry);
     BOOST_CHECK(registry.PendingBeacons().empty());
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_replay_follows_connection_order)
+{
+    LOCK(cs_main);
+    grc_test::V15HeightGuard v15(1);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+
+    const uint256 advertisement = AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME, 1);
+
+    // Block 2 carries a superblock that verifies the beacon, and a beacon advertisement.
+    const int64_t time_2 = START_TIME + DAY;
+
+    CBlockIndex index_2;
+    index_2.nVersion = 13;
+    index_2.nHeight = 2;
+    index_2.nTime = time_2;
+    index_2.MarkAsSuperblock();
+
+    GRC::Superblock superblock;
+    superblock.m_verified_beacons.m_verified.push_back(key.GetPubKey().GetID());
+
+    GRC::Claim claim;
+    claim.m_superblock = GRC::SuperblockPtr::BindShared(std::move(superblock), &index_2);
+
+    CMutableTransaction coinbase;
+    coinbase.vContracts.push_back(
+        GRC::MakeContract<GRC::Claim>(uint32_t {3}, GRC::ContractAction::ADD, std::move(claim)));
+
+    CBlock block_2;
+    block_2.nVersion = 13;
+    block_2.nTime = time_2;
+    block_2.vtx.push_back(CTransaction(coinbase));
+    block_2.vtx.emplace_back();
+    block_2.vtx.push_back(BeaconContractTx(GRC::ContractAction::ADD, cpid, key, time_2));
+
+    const uint256 block_2_hash = block_2.GetHash();
+    index_2.phashBlock = &block_2_hash;
+
+    GRC::RegistryBookmarks db_heights;
+    bool found = false;
+    GRC::ReplayBlock(block_2, &index_2, db_heights, true, found);
+
+    // As block connection does: the superblock activates the advertisement, then the block's advertisement renews it.
+    const GRC::BeaconOption beacon = registry.Try(cpid);
+    BOOST_REQUIRE(beacon);
+    BOOST_CHECK(beacon->m_status == GRC::BeaconStatusForStorage::RENEWAL);
+    BOOST_CHECK(beacon->m_previous_hash == Hash(block_2_hash, advertisement));
 
     registry.Reset();
 }

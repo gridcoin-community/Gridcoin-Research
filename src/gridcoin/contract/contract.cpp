@@ -437,15 +437,16 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EX
         // If the NeedsIsContractCorrection flag is set which means all blocks within the scan range
         // have to be checked, OR the block index entry is already marked to contain contract(s),
         // then apply the contracts found in the block.
-        if (beacons.NeedsIsContractCorrection() || pindex->IsContract()) {
+        const bool apply_contracts = beacons.NeedsIsContractCorrection() || pindex->IsContract();
+        const bool superblock = pindex->IsSuperblock() && pindex->nVersion >= 11;
+
+        if (apply_contracts || superblock) {
             if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
                 continue;
             }
 
-            // The ApplyContracts below handles all of the contract types. The rest of this is special
-            // processing required for beacons.
-            bool found_contract;
-            ApplyContracts(block, pindex, db_heights, found_contract);
+            bool found_contract = false;
+            ReplayBlock(block, pindex, db_heights, apply_contracts, found_contract);
 
             // If a contract was found and the NeedsIsContractCorrection flag is set, then
             // record that a contract was found in the block index. This corrects the block index
@@ -467,36 +468,6 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EX
                     error("%s: Block index correction of IsContract flag for block %i failed.",
                           __func__,
                           pindex->nHeight);
-                }
-            }
-        }
-
-        if (pindex->IsSuperblock() && pindex->nVersion >= 11) {
-            if (block.hashPrevBlock != pindex->pprev->GetBlockHash()
-                && !ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
-            {
-                continue;
-            }
-
-            // Only apply activations that have not already been stored/loaded into
-            // the beacon DB. This is at the block level, so we have to be careful here.
-            // If the pindex->nHeight is equal to the beacon db height, then the ActivatePending
-            // has already been replayed for this block and we do not need to call it again for that block.
-            // BECAUSE ActivatePending is called at the block level. We do not need to worry about multiple
-            // calls within the same block like below in ApplyContracts.
-            std::optional<int> beacon_db_height = db_heights.GetRegistryBlockHeight(ContractType::BEACON);
-
-            if (beacon_db_height) {
-                if (pindex->nHeight > *beacon_db_height) {
-                    beacons.ActivatePending(
-                                block.GetSuperblock()->m_verified_beacons.m_verified,
-                                block.GetBlockTime(),
-                                block.GetHash(),
-                                pindex->nHeight);
-                } else {
-                    LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: GetBeaconRegistry().ActivatePending() "
-                              "skipped for superblock: pindex->height = %i <= beacon_db_height = %i.",
-                             __func__, pindex->nHeight, *beacon_db_height);
                 }
             }
         }
@@ -664,6 +635,45 @@ void GRC::RevertContracts(const CBlock& block, const CBlockIndex* const pindex) 
                 RegistryBookmarks::GetRegistryWithRevert(contract->m_type.Value()).Revert(contract_context);
             }
         }
+    }
+}
+
+void GRC::ReplayBlock(const CBlock& block, const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
+                      const bool apply_contracts, bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    out_found_contract = false;
+
+    // From block version 15 the replay follows block connection: a superblock's activations, then the block's
+    // contracts.
+    const bool connection_order = IsV15Enabled(pindex->nHeight);
+
+    if (apply_contracts && !connection_order) {
+        ApplyContracts(block, pindex, db_heights, out_found_contract);
+    }
+
+    if (pindex->IsSuperblock() && pindex->nVersion >= 11) {
+        // Only apply activations that have not already been stored/loaded into the beacon DB. ActivatePending is
+        // called at the block level, so if the block's height equals the beacon db height it has already been
+        // replayed for this block.
+        std::optional<int> beacon_db_height = db_heights.GetRegistryBlockHeight(ContractType::BEACON);
+
+        if (beacon_db_height) {
+            if (pindex->nHeight > *beacon_db_height) {
+                GetBeaconRegistry().ActivatePending(
+                            block.GetSuperblock()->m_verified_beacons.m_verified,
+                            block.GetBlockTime(),
+                            block.GetHash(),
+                            pindex->nHeight);
+            } else {
+                LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: GetBeaconRegistry().ActivatePending() "
+                          "skipped for superblock: pindex->height = %i <= beacon_db_height = %i.",
+                         __func__, pindex->nHeight, *beacon_db_height);
+            }
+        }
+    }
+
+    if (apply_contracts && connection_order) {
+        ApplyContracts(block, pindex, db_heights, out_found_contract);
     }
 }
 

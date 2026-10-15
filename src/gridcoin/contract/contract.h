@@ -675,6 +675,19 @@ void RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex) EX
 //! \param pindex Index entry of that block.
 //!
 void RevertContracts(const CBlock& block, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//!
+//! \brief Replay one block's registry changes. From block version 15 it uses the order block connection applies them:
+//! a superblock's beacon activations first (GridcoinConnectBlock), then the block's contracts.
+//!
+//! \param block              The block being replayed.
+//! \param pindex             Index entry of that block.
+//! \param db_heights         Registry db heights at the start of the replay.
+//! \param apply_contracts    Whether to apply the block's contracts.
+//! \param out_found_contract Set when the block carried a contract.
+//!
+void ReplayBlock(const CBlock& block, const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
+                 const bool apply_contracts, bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 }
 
 #endif // GRIDCOIN_CONTRACT_CONTRACT_H
