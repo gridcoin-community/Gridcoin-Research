@@ -14,18 +14,34 @@
 #include <qt/quick/shelladapter.h>
 #include <qt/quick/splashadapter.h>
 
+#include <QApplication>
+#include <QByteArray>
+#include <QDir>
+#include <QFileInfo>
+#include <QMessageBox>
 #include <QMetaObject>
+#include <QProcess>
+#include <QProcessEnvironment>
+#include <QSettings>
 #include <QSignalSpy>
 #include <QString>
+#include <QTemporaryDir>
 #include <QThread>
 #include <QThreadPool>
+#include <QTimer>
+#include <QUrl>
 
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
+#include <iostream>
+#include <memory>
 #include <mutex>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 //!
@@ -69,6 +85,65 @@ public:
 };
 
 } // namespace
+
+namespace {
+
+//! Set in the child that unloadableRootEndsTheGui starts, before GuiMain
+//! builds its application object.
+std::atomic<bool> g_guimain_child{false};
+
+//! The child's front-end factory: a QML front end whose root does not exist.
+std::unique_ptr<GuiFrontEnd> MakeUnloadableQmlFrontEnd()
+{
+    QmlFrontEnd::Callbacks callbacks{
+        IsDaemonDisconnectMessage,
+        [](const std::string&) {
+            QuitOnDaemonConnectionLost("a QML front-end call was interrupted by the daemon disconnecting");
+        }};
+    return std::make_unique<QmlFrontEnd>(QUrl(QStringLiteral("qrc:/qmltest/missing.qml")), std::move(callbacks));
+}
+
+//! Runs when an application object is built. In the child only, it closes each
+//! modal message box GuiMain shows, after printing its text, so the child never
+//! waits for a user.
+void CloseGuiMainMessageBoxes()
+{
+    if (!g_guimain_child) return;
+    auto* timer = new QTimer(QCoreApplication::instance());
+    QObject::connect(timer, &QTimer::timeout, timer, [] {
+        if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+            std::cout << "MESSAGE BOX: " << box->text().toStdString() << std::endl;
+            box->close();
+        }
+    });
+    timer->start(50);
+}
+
+} // namespace
+
+Q_COREAPP_STARTUP_FUNCTION(CloseGuiMainMessageBoxes)
+
+int qml_test::RunGuiMainChild(int argc, char* argv[])
+{
+    // Every setting GuiMain reads or writes goes to an INI store under the
+    // directory the parent names, on every platform: the native stores of macOS
+    // and Windows are the user's own, and regtest shares mainnet's.
+    const QByteArray settings_dir = qgetenv("GRC_QMLTEST_SETTINGS_DIR");
+    if (settings_dir.isEmpty()) {
+        std::cerr << "the GuiMain child needs GRC_QMLTEST_SETTINGS_DIR; it will not open the real settings" << std::endl;
+        return EXIT_FAILURE;
+    }
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, QString::fromLocal8Bit(settings_dir));
+    g_guimain_child = true;
+    // GuiMain gets every argument but the child flag.
+    std::vector<char*> args{argv[0]};
+    for (int i = 2; i < argc; ++i) args.push_back(argv[i]);
+    args.push_back(nullptr);
+    const int rc = GuiMain(static_cast<int>(args.size()) - 1, args.data(), MakeUnloadableQmlFrontEnd);
+    std::cout << "GUIMAIN RETURNED " << rc << std::endl;
+    return rc;
+}
 
 void QmlBridgeTests::bridgeSlotSignatures()
 {
@@ -243,6 +318,65 @@ void QmlBridgeTests::throwingHideMainStillClosesRunner()
     QVERIFY(!posted);
 }
 
+void QmlBridgeTests::rootLoadErrorsReachStderr()
+{
+    std::atomic<int> disconnects{0};
+    QmlFrontEnd fe(QUrl(QStringLiteral("qrc:/qmltest/missing.qml")), qml_test::CountingCallbacks(disconnects));
+    std::ostringstream err;
+    std::streambuf* const old_cerr = std::cerr.rdbuf(err.rdbuf());
+    qml_test::ScopeExit restore([old_cerr] { std::cerr.rdbuf(old_cerr); });
+    try {
+        fe.construct();
+    } catch (const GuiFrontEndUnusable&) {
+    }
+    std::cerr.rdbuf(old_cerr);
+
+    QVERIFY2(err.str().find("QML: qrc:/qmltest/missing.qml") != std::string::npos,
+             "the QML errors were not written to stderr");
+}
+
+void QmlBridgeTests::unloadableRootEndsTheGui()
+{
+    // GuiMain builds its own application object, so it runs in a child copy of
+    // this binary, with a data directory and settings of its own.
+    constexpr int CHILD_BOUND_MS = 120000;
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString datadir = dir.filePath(QStringLiteral("datadir"));
+    QVERIFY(QDir().mkpath(datadir));
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+    env.insert(QStringLiteral("XDG_CONFIG_HOME"), dir.filePath(QStringLiteral("config")));
+    env.insert(QStringLiteral("GRC_QMLTEST_SETTINGS_DIR"), dir.filePath(QStringLiteral("config")));
+    QProcess child;
+    child.setProcessEnvironment(env);
+    child.start(QCoreApplication::applicationFilePath(),
+                {QString::fromLatin1(qml_test::GUIMAIN_CHILD_ARG), QStringLiteral("-regtest"),
+                 QStringLiteral("-listen=0"), QStringLiteral("-datadir=") + datadir});
+    QVERIFY2(child.waitForStarted(), "the GuiMain child did not start");
+    const bool ended = child.waitForFinished(CHILD_BOUND_MS);
+    if (!ended) {
+        child.kill();
+        child.waitForFinished();
+    }
+    const QString out = QString::fromLocal8Bit(child.readAllStandardOutput());
+    const QString err = QString::fromLocal8Bit(child.readAllStandardError());
+    const QByteArray tail = (QStringLiteral("\nchild stdout: ") + out.right(600) +
+                             QStringLiteral("\nchild stderr: ") + err.right(600)).toLocal8Bit();
+
+    QVERIFY2(ended, (QByteArray("the GuiMain child did not end") + tail).constData());
+    QVERIFY2(out.contains(QStringLiteral("GUIMAIN RETURNED 1")),
+             (QByteArray("GuiMain did not return: the process ended inside it") + tail).constData());
+    QCOMPARE(child.exitStatus(), QProcess::NormalExit);
+    QCOMPARE(child.exitCode(), EXIT_FAILURE);
+    QVERIFY2(out.contains(QStringLiteral("MESSAGE BOX: The GUI could not start:")),
+             (QByteArray("no message box named the failure") + tail).constData());
+    QVERIFY2(err.contains(QStringLiteral("Error: the GUI could not start: QML: the root qrc:/qmltest/missing.qml")),
+             (QByteArray("the failure was not written to stderr") + tail).constData());
+    QVERIFY2(QFileInfo::exists(dir.filePath(QStringLiteral("config/Gridcoin/Gridcoin-Qt.ini"))),
+             "the child's settings did not go to the temp directory");
+}
+
 void QmlBridgeTests::requestQuitSetsQuitRequested()
 {
     std::atomic<int> disconnects{0};
@@ -387,4 +521,15 @@ void QmlBridgeTests::pooledRunnerThreadNeverWaits()
     QVERIFY(posted);
     QVERIFY2(held, "the job never took the lock");
     QVERIFY2(outcome == CoreMessageDelivery::QueuedAndLogged, "a pooled-lane modal message was not delivered queued and logged");
+}
+
+void QmlBridgeTests::constructFailsWhenRootDoesNotLoad()
+{
+    std::atomic<int> disconnects{0};
+    QmlFrontEnd fe(QUrl(QStringLiteral("qrc:/qmltest/missing.qml")), qml_test::CountingCallbacks(disconnects));
+
+    // StartGridcoinQt then reports it in a message box and on stderr and
+    // returns EXIT_FAILURE (unloadableRootEndsTheGui), instead of running
+    // with no window.
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, fe.construct());
 }

@@ -72,6 +72,7 @@ public:
     ~QmlFrontEnd() override;
 
     //! Creates the engine, loads the root and returns the core-message bridge.
+    //! Throws GuiFrontEndUnusable when the root does not load.
     QObject* construct() override;
     //! Destroys the bridge, the root and the engine, in that order; idempotent.
     void destroyMain() override;

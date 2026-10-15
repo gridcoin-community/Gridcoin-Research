@@ -12,6 +12,7 @@
 #include <QWidget>
 
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 class ClientModel;
@@ -47,6 +48,17 @@ enum class CoreMessageDelivery {
 
 class GuiFrontEnd;
 
+//! Thrown by GuiFrontEnd::construct(), and only there, when the front end
+//! cannot build its main window. StartGridcoinQt catches it before anything
+//! has started, writes it to the GUI log and stderr, shows it in a message box
+//! and returns EXIT_FAILURE through its ordinary teardown; GuiMain returns that
+//! status.
+class GuiFrontEndUnusable : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
 //! Delivers one core message to `target`'s error(QString,QString,bool) slot.
 //! With no front end, or one that does not queue modal messages, it uses the
 //! blocking connection for a modal message and a queued one otherwise, as
@@ -73,7 +85,8 @@ public:
     //! Create the main window. The returned object is the target of the
     //! string-invoked core bridges and must provide the slots
     //! error(QString,QString,bool), update(QString,QString,int,QString) and
-    //! handleURI(QString).
+    //! handleURI(QString). Throws GuiFrontEndUnusable when the main window
+    //! cannot be built.
     virtual QObject* construct() = 0;
     //! Destroy the main window; idempotent.
     virtual void destroyMain() = 0;

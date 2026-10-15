@@ -17,8 +17,8 @@ class QmlProvider;
 //! import path (Qt below 6.5 does not search it, and the QML-file modules live
 //! there), installs `provider` so the singletons' create() functions find it,
 //! and creates the component at `root`. Returns the root object, which the
-//! caller owns; null when the root did not load, after logging every error the
-//! component reported.
+//! caller owns; null when the root did not load, after writing every error the
+//! component reported to the GUI log and to stderr.
 [[nodiscard]] std::unique_ptr<QObject> SetupQmlEngine(QQmlEngine& engine, QmlProvider& provider, const QUrl& root);
 
 #endif // BITCOIN_QT_QUICK_QMLENGINE_H

@@ -30,6 +30,7 @@ ${RUNTIME_LIBS}
     ${QT}::Quick
     ${QT}::Qml
     ${QT}::Widgets
+    gridcoinguimain
     gridcoinqt
     gridcoin_util
 )
