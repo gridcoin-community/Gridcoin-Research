@@ -855,11 +855,13 @@ public:
     void Deactivate(const uint256 superblock_hash, const int height) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
-    //! \brief Whether the expired-pending set and the replaced-beacon map describe the most recently connected
-    //! superblock. ActivatePending makes them current and Deactivate consumes them; they are current again when
-    //! the next superblock connects. A beacon db with no marker counts as current.
+    //! \brief Whether the expired-pending set and the replaced-beacon map describe the given superblock, the
+    //! most recently connected one. ActivatePending makes them current for the superblock it connects, and
+    //! Deactivate consumes them. A beacon db with no marker counts as current.
     //!
-    bool SuperblockStateCurrent() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    //! \param superblock_hash Block hash of the superblock about to be disconnected.
+    //!
+    bool SuperblockStateCurrent(const uint256& superblock_hash) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Initialize the BeaconRegistry, which now includes restoring the state of the BeaconRegistry from

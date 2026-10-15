@@ -2240,21 +2240,21 @@ BOOST_AUTO_TEST_CASE(beacon_registry_superblock_state_survives_a_restart)
     const uint256 superblock = uint256S("0404040404040404040404040404040404040404040404040404040404040404");
 
     registry.ActivatePending({}, START_TIME, superblock, 3);
-    BOOST_CHECK(registry.SuperblockStateCurrent());
+    BOOST_CHECK(registry.SuperblockStateCurrent(superblock));
 
     ReloadRegistry(registry);
-    BOOST_CHECK(registry.SuperblockStateCurrent());
+    BOOST_CHECK(registry.SuperblockStateCurrent(superblock));
 
     // A disconnect consumes the state; a restart keeps it consumed.
     registry.Deactivate(superblock, 3);
-    BOOST_CHECK(!registry.SuperblockStateCurrent());
+    BOOST_CHECK(!registry.SuperblockStateCurrent(superblock));
 
     ReloadRegistry(registry);
-    BOOST_CHECK(!registry.SuperblockStateCurrent());
+    BOOST_CHECK(!registry.SuperblockStateCurrent(superblock));
 
     // The next connected superblock makes it current again.
     registry.ActivatePending({}, START_TIME + DAY, superblock, 3);
-    BOOST_CHECK(registry.SuperblockStateCurrent());
+    BOOST_CHECK(registry.SuperblockStateCurrent(superblock));
 
     registry.Reset();
 }
@@ -2265,12 +2265,14 @@ BOOST_AUTO_TEST_CASE(beacon_registry_missing_marker_counts_as_current)
 
     GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
 
+    const uint256 superblock = uint256S("0404040404040404040404040404040404040404040404040404040404040404");
+
     // Reset erases the marker, as a db written before it existed has none.
     registry.Reset();
-    BOOST_CHECK(registry.SuperblockStateCurrent());
+    BOOST_CHECK(registry.SuperblockStateCurrent(superblock));
 
     ReloadRegistry(registry);
-    BOOST_CHECK(registry.SuperblockStateCurrent());
+    BOOST_CHECK(registry.SuperblockStateCurrent(superblock));
 
     registry.Reset();
 }
@@ -2929,6 +2931,26 @@ BOOST_AUTO_TEST_CASE(beacon_registry_load_leaves_pending_beacons_at_a_renewal_re
     ReloadRegistry(registry);
     BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
     BOOST_CHECK(registry.PendingBeacons().at(id)->m_hash == other);
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_superblock_state_is_current_only_for_its_own_superblock)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    const uint256 superblock_1 = uint256S("1212121212121212121212121212121212121212121212121212121212121212");
+    const uint256 superblock_2 = uint256S("1313131313131313131313131313131313131313131313131313131313131313");
+
+    // A db with no marker counts as current for any superblock.
+    BOOST_CHECK(registry.SuperblockStateCurrent(superblock_1));
+
+    registry.ActivatePending({}, START_TIME, superblock_1, 3);
+    BOOST_CHECK(registry.SuperblockStateCurrent(superblock_1));
+    BOOST_CHECK(!registry.SuperblockStateCurrent(superblock_2));
 
     registry.Reset();
 }

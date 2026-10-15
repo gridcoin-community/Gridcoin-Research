@@ -466,9 +466,9 @@ void EraseLastSuperblockHash()
 }
 } // anonymous namespace
 
-bool BeaconRegistry::SuperblockStateCurrent() const
+bool BeaconRegistry::SuperblockStateCurrent(const uint256& superblock_hash) const
 {
-    return !m_last_superblock_hash || !m_last_superblock_hash->IsNull();
+    return !m_last_superblock_hash || *m_last_superblock_hash == superblock_hash;
 }
 
 void BeaconRegistry::Reset()
@@ -1721,6 +1721,9 @@ int BeaconRegistry::Initialize()
     int height = m_beacon_db.Initialize(m_beacons, m_pending, m_expired_pending, m_beacon_first_entries, false);
 
     m_beacon_db.m_load_observer = nullptr;
+
+    // The load clears the beacon db, and the marker with it, when the db's version does not match this code.
+    m_last_superblock_hash = LoadLastSuperblockHash();
 
     LogPrint(LogFlags::BEACON, "INFO: %s: m_beacon_db size after load: %u", __func__, m_beacon_db.size());
     LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons size after load: %u", __func__, m_beacons.size());

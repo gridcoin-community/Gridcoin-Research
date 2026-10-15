@@ -188,7 +188,7 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
             // Revert beacon activations which were done by the superblock to revert and resurrect pending records
             // for the reverted activations. We call GetBeaconRegistry directly here, because the IHandler class does
             // not have a virtual method that corresponds to this call, as it is only relevant to beacons.
-            if (IsV15Enabled(pindexBest->nHeight) && !GRC::GetBeaconRegistry().SuperblockStateCurrent()) {
+            if (IsV15Enabled(pindexBest->nHeight) && !GRC::GetBeaconRegistry().SuperblockStateCurrent(pindexBest->GetBlockHash())) {
                 stale_superblock_state = true;
             }
 
