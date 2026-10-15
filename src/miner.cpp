@@ -911,7 +911,7 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
                                     nHeight_mod, StakeModifier);
 
     // The kernel target before the UTXO weight is the same for every coin.
-    const arith_uint320 base_kernel_target = arith_uint256().SetCompact(blocknew.nBits);
+    const arith_uint320 base_kernel_target = GRC::GetKernelTarget(blocknew.nBits, txnew.nTime, pindexPrev);
 
     for (const StakeCandidate& candidate : CoinsToStake)
     {
@@ -1736,6 +1736,7 @@ void StakeMiner(CWallet *pwallet)
         if (!IsMiningAllowed(pwallet))
         {
             g_miner_status.ClearLastSearch();
+            SetClockWarningStaking(false);
             continue;
         }
 
@@ -1755,7 +1756,19 @@ void StakeMiner(CWallet *pwallet)
 
         StakeBlock.nVersion = ComputeBlockVersion(pindexPrev->nHeight + 1);
 
-        StakeBlock.nTime = GetAdjustedTime();
+        const int64_t adjusted_now = GetAdjustedTime();
+        StakeBlock.nTime = GRC::GetStakeTime(pindexPrev, adjusted_now);
+
+        // From v15 the stamp is lifted to parent - 48 when this node's clock is behind the parent. More than 96 s
+        // behind, the lifted stamp is outside this node's own acceptance window and the block would be rejected
+        // locally, so skip the attempt until the clock catches up.
+        if (IsV15Enabled(pindexPrev->nHeight + 1)
+            && CheckBlockTime(StakeBlock.nTime, pindexPrev->GetBlockTime(), adjusted_now, true) != BlockTimeCheck::OK) {
+            LogPrint(BCLog::LogFlags::MINER, "%s: clock too far behind the last block to stake on it", __func__);
+            SetClockWarningStaking(true);
+            continue;
+        }
+
         StakeBlock.nNonce = 0;
         StakeBlock.nBits = GRC::GetNextTargetRequired(pindexPrev);
         StakeBlock.vtx.resize(2);
@@ -1767,6 +1780,7 @@ void StakeMiner(CWallet *pwallet)
         vector<const CWalletTx*> StakeInputs;
 
         bool createcoinstake_success = CreateCoinStake(StakeBlock, mtxCoinstake, BlockKey, StakeInputs, *pwallet, pindexPrev);
+        SetClockWarningStaking(g_miner_status.StakingActive());
 
         g_timer.GetTimes(function + "CreateCoinStake", "miner");
 
@@ -1916,9 +1930,22 @@ bool TryMineRegtestBlock(CWallet* pwallet,
     // target fails, and (because generatetoaddress mines many blocks within one
     // 16-second wall-clock window) a same-slot retry re-rolls nothing. Stepping
     // to the next slot rerolls the kernel. Offset 0 (the first attempt) keeps
-    // the original behaviour.
-    StakeBlock.nTime = GetAdjustedTime()
-        + static_cast<int64_t>(stake_time_slot_offset) * (GRC::STAKE_TIMESTAMP_MASK + 1);
+    // the original behaviour. From v15 a stamp more than 48 s ahead is not
+    // accepted, so the retries stay inside the window.
+    const bool v15 = IsV15Enabled(pindexPrev->nHeight + 1);
+    const int max_offset = v15
+        ? static_cast<int>(GRC::V15_FUTURE_TIME_BOUND / (GRC::STAKE_TIMESTAMP_MASK + 1))
+        : stake_time_slot_offset;
+    const int64_t adjusted_now = GetAdjustedTime();
+    StakeBlock.nTime = GRC::GetStakeTime(pindexPrev, adjusted_now
+        + static_cast<int64_t>(std::min(stake_time_slot_offset, max_offset)) * (GRC::STAKE_TIMESTAMP_MASK + 1));
+
+    // As in StakeMiner: a clock more than 96 s behind the parent cannot build a
+    // block its own validation accepts.
+    if (v15 && CheckBlockTime(StakeBlock.nTime, pindexPrev->GetBlockTime(), adjusted_now, true) != BlockTimeCheck::OK) {
+        err = "stake time is outside this node's block acceptance window (clock too far behind the last block)";
+        return false;
+    }
     StakeBlock.nNonce = 0;
     StakeBlock.nBits = GRC::GetNextTargetRequired(pindexPrev);
     StakeBlock.vtx.resize(2);

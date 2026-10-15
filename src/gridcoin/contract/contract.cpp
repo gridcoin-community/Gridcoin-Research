@@ -973,13 +973,12 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint3
     return ContractPayload::Make<EmptyPayload>();
 }
 
-// The in-body comments below note that cs_main is expected to be held when
-// the POLL/PROJECT/PROTOCOL/SCRAPER branches read nBestHeight. Annotated as
-// EXCLUSIVE_LOCKS_REQUIRED here; the cascade reaches into serializer paths
-// (Contract::Body::ResetType is called from Unserialize implementations of
-// CTransaction's body). Tx-deserialize call sites are tightened in this
-// same Phase 2 commit batch.
-void Contract::Body::ResetType(const ContractType type) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+// The poll, project, protocol and scraper payloads each set their version during
+// deserialization, from the stream or, for a legacy protocol or scraper entry, to
+// 1, and nothing read before that depends on the version. So the version a
+// payload is constructed with here never reaches the parsed contract, and parsing
+// a contract depends on no chain state and needs no lock.
+void Contract::Body::ResetType(const ContractType type)
 {
     switch (type) {
         case ContractType::UNKNOWN:
@@ -998,32 +997,16 @@ void Contract::Body::ResetType(const ContractType type) EXCLUSIVE_LOCKS_REQUIRED
             m_payload.Reset(new TxMessage());
             break;
         case ContractType::POLL:
-            // Note that the contract code expects cs_main to already be taken which
-            // means that the access to nBestHeight is safe.
-            // TODO: This ternary should be removed at the next mandatory after
-            // Kermit's Mom.
-            m_payload.Reset(new PollPayload(IsPollV3Enabled(nBestHeight) ? 3 : 2));
+            m_payload.Reset(new PollPayload());
             break;
         case ContractType::PROJECT:
-            // Note that the contract code expects cs_main to already be taken which
-            // means that the access to nBestHeight is safe.
-            // TODO: This ternary should be removed at the next mandatory after
-            // Kermit's Mom.
-            m_payload.Reset(new Project(IsV13Enabled(nBestHeight) ? 3 : 2));
+            m_payload.Reset(new Project());
             break;
         case ContractType::PROTOCOL:
-            // Note that the contract code expects cs_main to already be taken which
-            // means that the access to nBestHeight is safe.
-            // TODO: This ternary should be removed at the next mandatory after
-            // Kermit's Mom.
-            m_payload.Reset(new ProtocolEntryPayload(IsV13Enabled(nBestHeight) ? 2 : 1));
+            m_payload.Reset(new ProtocolEntryPayload());
             break;
         case ContractType::SCRAPER:
-            // Note that the contract code expects cs_main to already be taken which
-            // means that the access to nBestHeight is safe.
-            // TODO: This ternary should be removed at the next mandatory after
-            // Kermit's Mom.
-            m_payload.Reset(new ScraperEntryPayload(IsV13Enabled(nBestHeight) ? 2 : 1));
+            m_payload.Reset(new ScraperEntryPayload());
             break;
         case ContractType::VOTE:
             m_payload.Reset(new Vote());

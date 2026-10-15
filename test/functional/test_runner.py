@@ -127,8 +127,10 @@ BASE_SCRIPTS = [
     #   - p2p_version_handshake.py: version/verack + ping/pong against a node
     #   - p2p_block_tx_relay.py: relay a node-produced tx and block over P2P
     # Phase 4A adds the investor-mode starter suite (no beacon/CPID required):
-    #   - wallet_basic.py: raw-tx + sendtoaddress spend, balance, confirmations
-    #   - wallet_backup.py: backupwallet + dumpprivkey/importprivkey round-trip
+    #   - wallet_basic.py: premine via listunspent, staked balance, raw spend of a
+    #     coinstake output (no sendtoaddress; confirmation not asserted)
+    #   - wallet_backup.py: dumpprivkey returns a key + invalid-address error
+    #     (backupwallet and importprivkey are not exercised)
     #   - mempool_accept.py: sendrawtransaction accept + double-spend rejection
     #   - rpc_net.py: two-node peer state, disconnectnode, disconnect_nodes
     #   - p2p_disconnect_nodes_churn.py: disconnect_nodes with a peer arriving mid-wait
@@ -190,6 +192,8 @@ BASE_SCRIPTS = [
     'rpc_netinfo.py',
     'rpc_getaddednodeinfo.py',
     'rpc_multisig.py',
+    # rpc_votebyid.py: votebyid refuses a choice id outside 0..255.
+    'rpc_votebyid.py',
     'wallet_basic.py',
     'wallet_backup.py',
     'wallet_keypool.py',
@@ -212,6 +216,7 @@ BASE_SCRIPTS = [
     # string that reads as true.
     'rpc_changesettings.py',
     'feature_sidestake.py',
+    'feature_vote_results.py',
     'feature_generatesuperblock.py',
     # feature_reorg_resurrect.py: a wallet transaction whose block is
     # disconnected returns to the mempool and stays unconfirmed, not
@@ -226,6 +231,9 @@ BASE_SCRIPTS = [
     # can collide, reconnect, and assert the shorter node reorganizes. It was
     # in EXTENDED_SCRIPTS while it raced two stakers on the shared premine.
     'feature_reorg.py',
+    # feature_v15_spacing.py: crosses v15 on regtest and checks both retarget rules, kernel easing,
+    # the miner's stamp guard and the penalty-free future band.
+    'feature_v15_spacing.py',
     # feature_reorg_conflicted.py: a wallet transaction conflicted by a block
     # stops being conflicted when that block is disconnected, provided whatever
     # took its outpoint went with the block; also the refused, descendant and

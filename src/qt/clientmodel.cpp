@@ -90,7 +90,7 @@ double ClientModel::getDifficulty() const
 double ClientModel::getNetWeight() const
 {
     if (m_cached_net_weight == -1) {
-        m_cached_net_weight = m_staking_status.getNetworkWeight() / 80.0;
+        m_cached_net_weight = m_staking_status.getNetworkWeight() / interfaces::STAKE_WEIGHT_UNITS_PER_COIN;
     }
 
     return m_cached_net_weight;
@@ -141,7 +141,7 @@ void ClientModel::updateNumBlocks(int height, int64_t best_time, uint32_t target
     }
 
     if (const auto net_weight = m_staking_status.tryGetNetworkWeight()) {
-        m_cached_net_weight = *net_weight / 80.0;
+        m_cached_net_weight = *net_weight / interfaces::STAKE_WEIGHT_UNITS_PER_COIN;
     }
 
     emit difficultyChanged(getDifficulty());

@@ -5,11 +5,17 @@
 #ifndef GRIDCOIN_INTERFACES_STAKING_H
 #define GRIDCOIN_INTERFACES_STAKING_H
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 
 namespace interfaces {
+
+//! V8 stake weight units per GRC, for converting getNetworkWeight() to GRC. It equals
+//! GRC::STAKE_WEIGHT_UNITS_PER_COIN, which the GUI cannot include; a static_assert in the
+//! implementation keeps the two equal.
+constexpr int64_t STAKE_WEIGHT_UNITS_PER_COIN = 80;
 
 //! Staking/miner status interface for the GUI: queries only -- status-change
 //! notifications arrive through Node::handleMinerStatusChanged. The same
@@ -37,7 +43,7 @@ public:
     //! lock.
     virtual double getCoinWeight() = 0;
 
-    //! Estimated network staking weight. Blocking: takes cs_main.
+    //! Estimated network staking weight, in V8 stake weight units. Blocking: takes cs_main.
     virtual double getNetworkWeight() = 0;
 
     //! Non-blocking variant of getNetworkWeight().

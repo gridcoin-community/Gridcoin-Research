@@ -240,11 +240,10 @@ public:
         //!
         //! \param type Indicates which IContractHandler type to construct.
         //!
-        //! THREAD SAFETY: Called from Contract::Unserialize (template,
-        //! header-defined below). Reads nBestHeight for POLL/PROJECT/PROTOCOL/
-        //! SCRAPER payload version selection — requires cs_main.
+        //! A payload with a version sets it during deserialization, so the
+        //! payload is constructed independently of chain state.
         //!
-        void ResetType(const ContractType type) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+        void ResetType(const ContractType type);
     }; // Contract::Body
 
     //!
@@ -452,14 +451,10 @@ public:
     //!
     //! For CTransaction::nVersion >= 2.
     //!
-    //! THREAD SAFETY: m_body.ResetType reads nBestHeight for payload version
-    //! selection — requires cs_main. Callers (CTransaction deserialization
-    //! paths invoked from block / mempool / wallet load) must hold cs_main.
-    //!
     //! \param stream The input stream.
     //!
     template<typename Stream>
-    void Unserialize(Stream& s) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    void Unserialize(Stream& s)
     {
         s >> m_version;
         s >> m_type;

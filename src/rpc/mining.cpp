@@ -133,7 +133,7 @@ UniValue getstakinginfo(const UniValue& params)
     obj.pushKV("stakeweight", weight);
 
     obj.pushKV("netstakeweight", nNetworkWeight);
-    obj.pushKV("netstakingGRCvalue", nNetworkWeight / 80.0);
+    obj.pushKV("netstakingGRCvalue", nNetworkWeight / GRC::STAKE_WEIGHT_UNITS_PER_COIN);
     obj.pushKV("staking", g_miner_status.StakingActive());
     obj.pushKV("mining-error", g_miner_status.FormatErrors());
     obj.pushKV("time-to-stake_days", nExpectedTime/86400.0);

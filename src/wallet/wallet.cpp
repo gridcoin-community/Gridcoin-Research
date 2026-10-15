@@ -2958,6 +2958,7 @@ unsigned int CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQU
     unsigned int txns_failed_validation = 0;
     unsigned int txns_erased_from_wallet = 0;
     unsigned int txns_reoffer_refused = 0;
+    unsigned int txns_inactive_generated = 0;
 
     // Inactive transactions to offer back to the mempool, in the chronological
     // order below so a parent goes before its child. Offered once cs_wallet is
@@ -2988,6 +2989,15 @@ unsigned int CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQU
 
             // Resend only if not confirmed AND not in the mainchain AND not in the mempool (this is depth = -1).
             if (!wtx.isConfirmed() && wtx.GetDepthInMainChain() == -1) {
+                // An inactive coinbase or coinstake is valid only in its own block, which a reorganization back to it
+                // checks again. Nothing below relays one or offers it back to the mempool, and a verdict on it as a
+                // loose transaction says nothing about its block, so it is not revalidated: it is counted and passed
+                // over.
+                if (wtx.state<TxStateInactive>() && (wtx.IsCoinBase() || wtx.IsCoinStake())) {
+                    ++txns_inactive_generated;
+                    continue;
+                }
+
                 // Don't rebroadcast until it's had plenty of time that it should have gotten in already by now.
                 // Here we are using time of approximately 5 blocks at target spacing.
                 if (fForce || g_nTimeBestReceived - (int64_t)wtx.nTimeReceived > GetTargetSpacing(nBestHeight) * 5)
@@ -3182,12 +3192,13 @@ unsigned int CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQU
 
     LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: %u transactions relayed, %u transactions left for a later pass "
                                        "with inputs not resolvable, %u inactive transactions refused by the "
-                                       "mempool, %u transactions failed validation, "
-                                       "%u transactions erased from wallet.",
+                                       "mempool, %u inactive coinbase or coinstake transactions passed over, "
+                                       "%u transactions failed validation, %u transactions erased from wallet.",
              __func__,
              txns_relayed,
              txns_inputs_unavailable,
              txns_reoffer_refused,
+             txns_inactive_generated,
              txns_failed_validation,
              txns_erased_from_wallet);
 
@@ -3526,7 +3537,13 @@ void CWallet::AvailableCoinsForStaking(vector<StakeCandidate>& vCoins, unsigned 
             // calculation here, to include recently staked amounts. The number here should be equal or very close to
             // the "Total" field on the GUI overview screen. This is the proper number to use to be able to do the
             // efficiency calculations.
-            if (!(nDepth > 0 || (pcoin->fFromMe && (pcoin->AreDependenciesConfirmed() || pcoin->IsCoinStake())))) continue;
+            //
+            // A transaction outside the main chain counts only from the mempool: AreDependenciesConfirmed() refuses
+            // one at depth -1. AcceptToMemoryPool refuses a coinstake, so one at depth -1 is outside the main chain,
+            // normally because its block was orphaned. Its outputs cannot be spent unless a reorganization connects
+            // that block again, and once the block is disconnected the output it staked counts through its own
+            // transaction.
+            if (!(nDepth > 0 || (pcoin->fFromMe && pcoin->AreDependenciesConfirmed()))) continue;
 
             for (const unsigned int i : possible_outputs)
             {

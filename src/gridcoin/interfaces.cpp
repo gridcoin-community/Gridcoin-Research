@@ -25,6 +25,7 @@
 #include "gridcoin/scraper/scraper.h"
 #include "gridcoin/sidestake.h"
 #include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/kernel.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
@@ -70,6 +71,10 @@ extern CWallet* pwalletMain;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 
 namespace interfaces {
+
+static_assert(STAKE_WEIGHT_UNITS_PER_COIN == GRC::STAKE_WEIGHT_UNITS_PER_COIN,
+              "the interface's stake weight units per GRC must match the kernel's");
+
 namespace {
 
 //! In-process StakingStatus implementation wrapping g_miner_status and the
@@ -805,19 +810,18 @@ public:
     {
         const uint256 txid = uint256S(poll_txid);
 
-        // Look up and read the poll under both locks it needs, then copy out the
-        // poll and its txid and release before building/broadcasting the vote:
-        //   - cs_poll_registry: TryByTxid reads the registry map, and
-        //     TryReadFromDisk mutates the PollReference (m_timestamp,
-        //     m_magnitude_weight_factor).
-        //   - cs_main: TryReadFromDisk's ResolveMagnitudeWeightFactor walks the
-        //     chain index (GetStartingBlockIndexPtr).
+        // Look up and read the poll under cs_poll_registry, then copy out the poll
+        // and its txid and release before building/broadcasting the vote:
+        // TryByTxid reads the registry map, and the reference it returns lives
+        // only as long as the registry keeps it. Reading the poll needs no
+        // cs_main: contract parsing reads no chain state, and the magnitude
+        // weight factor comes from the block the registry recorded.
         // SendVoteContract takes cs_main + cs_wallet itself, so the build/broadcast
-        // must run OUTSIDE these locks (and cs_main is no longer held across it).
+        // must run OUTSIDE this lock.
         GRC::PollOption poll;
         uint256 poll_reference_txid;
         {
-            LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+            LOCK(GRC::PollRegistry::cs_poll_registry);
 
             const GRC::PollReference* ref = GRC::GetPollRegistry().TryByTxid(txid);
             if (!ref) {

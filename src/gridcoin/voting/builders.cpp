@@ -1444,6 +1444,18 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
         throw VotingError(_("No wallet available."));
     }
 
+    // Building the contract signs claims and the transaction with the wallet's
+    // keys, so the wallet must be fully unlocked. One read of the scope answers
+    // both questions.
+    switch (pwallet->GetUnlockScope()) {
+    case UnlockScope::Locked:
+        throw VotingError(_("Error: Wallet locked, unable to create transaction."));
+    case UnlockScope::StakingOnly:
+        throw VotingError(_("Error: Wallet unlocked for staking only, unable to create transaction."));
+    case UnlockScope::Full:
+        break;
+    }
+
     if (m_poll->m_response_type == PollResponseType::YES_NO_ABSTAIN) {
         if (!m_poll->m_choices.empty()) {
             throw VotingError(_(
@@ -1589,13 +1601,13 @@ VoteBuilder VoteBuilder::AddResponse(const uint8_t offset)
     if (!m_poll->Choices().OffsetInRange(offset)) {
         throw VotingError(strprintf(
             _("\"%s\" is not a valid poll choice."),
-            ToString(offset)));
+            ToString(static_cast<int>(offset))));
     }
 
     if (m_vote->ResponseExists(offset)) {
         throw VotingError(strprintf(
             _("Duplicate response for poll choice: %s"),
-            ToString(offset)));
+            ToString(static_cast<int>(offset))));
     }
 
     // This is effectively handled by the previous conditions. We'll leave
@@ -1625,6 +1637,18 @@ CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
 {
     if (!pwallet) {
         throw VotingError(_("No wallet available."));
+    }
+
+    // Building the contract signs claims and the transaction with the wallet's
+    // keys, so the wallet must be fully unlocked. One read of the scope answers
+    // both questions.
+    switch (pwallet->GetUnlockScope()) {
+    case UnlockScope::Locked:
+        throw VotingError(_("Error: Wallet locked, unable to create transaction."));
+    case UnlockScope::StakingOnly:
+        throw VotingError(_("Error: Wallet unlocked for staking only, unable to create transaction."));
+    case UnlockScope::Full:
+        break;
     }
 
     if (m_vote->m_responses.empty()) {

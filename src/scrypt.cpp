@@ -29,7 +29,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include <vector>
+#include <memory>
 
 #include "util.h"
 #include "scrypt.h"
@@ -166,26 +166,41 @@ uint256 scrypt(const void* data, size_t datalen, const void* salt, size_t saltle
     return result;
 }
 
+// The scratchpads are per call. They used to be static thread_local vectors, but a
+// thread_local must be trivially destructible: MinGW's emulated TLS frees the storage
+// before the C runtime runs the destructor at thread exit (test/lint/lint-thread-local.sh).
+// A thread_local array would avoid the allocation but put 128 KiB of static TLS in every
+// thread on Linux and macOS. The allocation is cheap instead: about 0.1 us against about
+// 120 us for the hash, because the buffer is left uninitialised -- scrypt_core writes all
+// of V before it reads any of it, and nothing outside V is read. scrypt_blockhash runs for
+// every header with nVersion < 7 (CBlockHeader::ComputeHash), so that matters. The
+// multiround hash reuses one scratchpad for all of its rounds.
+static std::unique_ptr<unsigned char[]> NewScratchpad()
+{
+    return std::unique_ptr<unsigned char[]>(new unsigned char[SCRYPT_BUFFER_SIZE]);
+}
+
 uint256 scrypt_hash(const void* input, size_t inputlen)
 {
-    static thread_local std::vector<unsigned char> scratchpad(SCRYPT_BUFFER_SIZE);
-    return scrypt_nosalt(input, inputlen, scratchpad.data());
+    const auto scratchpad = NewScratchpad();
+    return scrypt_nosalt(input, inputlen, scratchpad.get());
 }
 
 uint256 scrypt_salted_hash(const void* input, size_t inputlen, const void* salt, size_t saltlen)
 {
-    static thread_local std::vector<unsigned char> scratchpad(SCRYPT_BUFFER_SIZE);
-    return scrypt(input, inputlen, salt, saltlen, scratchpad.data());
+    const auto scratchpad = NewScratchpad();
+    return scrypt(input, inputlen, salt, saltlen, scratchpad.get());
 }
 
 uint256 scrypt_salted_multiround_hash(const void* input, size_t inputlen, const void* salt, size_t saltlen, const unsigned int nRounds)
 {
-    uint256 resultHash = scrypt_salted_hash(input, inputlen, salt, saltlen);
+    const auto scratchpad = NewScratchpad();
+    uint256 resultHash = scrypt(input, inputlen, salt, saltlen, scratchpad.get());
     uint256 transitionalHash = resultHash;
 
     for(unsigned int i = 1; i < nRounds; i++)
     {
-        resultHash = scrypt_salted_hash(input, inputlen, (const void*)&transitionalHash, 32);
+        resultHash = scrypt(input, inputlen, (const void*)&transitionalHash, 32, scratchpad.get());
         transitionalHash = resultHash;
     }
 
@@ -194,6 +209,6 @@ uint256 scrypt_salted_multiround_hash(const void* input, size_t inputlen, const 
 
 uint256 scrypt_blockhash(const void* input)
 {
-    static thread_local std::vector<unsigned char> scratchpad(SCRYPT_BUFFER_SIZE);
-    return scrypt_nosalt(input, 80, scratchpad.data());
+    const auto scratchpad = NewScratchpad();
+    return scrypt_nosalt(input, 80, scratchpad.get());
 }

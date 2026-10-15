@@ -23,13 +23,17 @@ namespace {
 //! Two distinct, non-equal tip hashes for the reuse-policy cases.
 const uint256 TIP_A = uint256S("00000000000000000000000000000000000000000000000000000000000000a1");
 const uint256 TIP_B = uint256S("00000000000000000000000000000000000000000000000000000000000000b2");
+const uint256 TIP_C = uint256S("00000000000000000000000000000000000000000000000000000000000000c3");
+//! Stands for "the current chain has no block at the tallied height".
+const uint256 NONE;
 } // namespace
 
 BOOST_AUTO_TEST_SUITE(poll_result_cache_tests)
 
 // Signature: PollResultReusable(cached_finished, now_finished,
 //                               tallied_tip_hash, tallied_tip_height,
-//                               current_tip_hash, current_tip_height)
+//                               current_tip_hash, current_tip_height,
+//                               current_hash_at_tallied_height)
 
 // ---------------------------------------------------------------------------
 // Active polls (still active now): reusable only while the tip is exactly the
@@ -41,21 +45,22 @@ BOOST_AUTO_TEST_CASE(active_poll_reusable_when_tip_unchanged)
 {
     BOOST_CHECK(GRC::PollResultReusable(/*cached_finished=*/false, /*now_finished=*/false,
                                         /*tallied_tip_hash=*/TIP_A, /*tallied_tip_height=*/100,
-                                        /*current_tip_hash=*/TIP_A, /*current_tip_height=*/100));
+                                        /*current_tip_hash=*/TIP_A, /*current_tip_height=*/100,
+                                        /*current_hash_at_tallied_height=*/TIP_A));
 }
 
 BOOST_AUTO_TEST_CASE(active_poll_not_reusable_when_tip_advances)
 {
     // A new block (new tip hash, higher height) must re-tally an active poll even
     // though nothing else changed — the AVW range now includes the new block.
-    BOOST_CHECK(!GRC::PollResultReusable(false, false, TIP_A, 100, TIP_B, 101));
+    BOOST_CHECK(!GRC::PollResultReusable(false, false, TIP_A, 100, TIP_B, 101, TIP_A));
 }
 
 BOOST_AUTO_TEST_CASE(active_poll_not_reusable_on_same_height_reorg)
 {
     // A same-height reorg to a different block changes the tip hash, so the active
     // tally is stale and must be rebuilt.
-    BOOST_CHECK(!GRC::PollResultReusable(false, false, TIP_A, 100, TIP_B, 100));
+    BOOST_CHECK(!GRC::PollResultReusable(false, false, TIP_A, 100, TIP_B, 100, TIP_B));
 }
 
 BOOST_AUTO_TEST_CASE(active_poll_not_reusable_when_expired_by_time_on_stalled_tip)
@@ -64,40 +69,49 @@ BOOST_AUTO_TEST_CASE(active_poll_not_reusable_when_expired_by_time_on_stalled_ti
     // with the tip unchanged (stalled). The finished-state transition alone must
     // invalidate the entry, or the GUI would keep showing it active indefinitely.
     BOOST_CHECK(!GRC::PollResultReusable(/*cached_finished=*/false, /*now_finished=*/true,
-                                         TIP_A, 100, TIP_A, 100));
+                                         TIP_A, 100, TIP_A, 100, TIP_A));
 }
 
 // ---------------------------------------------------------------------------
 // Closed polls (finished when tallied and still finished): immutable while the
-// tip only advances; reusable exactly while the current height has not dropped
-// below the height they were tallied at.
+// tip only advances; reusable exactly while the tip they were tallied against is
+// still on the current chain.
 // ---------------------------------------------------------------------------
 
 BOOST_AUTO_TEST_CASE(closed_poll_reusable_when_tip_unchanged)
 {
     BOOST_CHECK(GRC::PollResultReusable(/*cached_finished=*/true, /*now_finished=*/true,
-                                        TIP_A, 100, TIP_A, 100));
+                                        TIP_A, 100, TIP_A, 100, TIP_A));
 }
 
 BOOST_AUTO_TEST_CASE(closed_poll_reusable_when_tip_advances)
 {
-    // The tip moving forward (new hash, higher height) does not affect a closed
+    // The tip moving forward on top of the tallied tip (new hash, higher
+    // height, the tallied tip still its ancestor) does not affect a closed
     // poll's fixed window, so the cached tally is still served.
-    BOOST_CHECK(GRC::PollResultReusable(true, true, TIP_A, 100, TIP_B, 250));
+    BOOST_CHECK(GRC::PollResultReusable(true, true, TIP_A, 100, TIP_B, 250, TIP_A));
 }
 
-BOOST_AUTO_TEST_CASE(closed_poll_reusable_on_same_height_reorg)
+BOOST_AUTO_TEST_CASE(closed_poll_not_reusable_when_tallied_tip_left_the_chain)
 {
-    // Closed polls gate on height only, not hash: a same-height reorg leaves the
-    // (older) poll window untouched, so the tally stays valid.
-    BOOST_CHECK(GRC::PollResultReusable(true, true, TIP_A, 100, TIP_B, 100));
+    // A reorg that replaces the tallied tip and ends higher: the block at the
+    // tallied height is now another one, which may have changed the poll's
+    // last blocks, so the closed tally is rebuilt.
+    BOOST_CHECK(!GRC::PollResultReusable(true, true, TIP_A, 100, TIP_C, 101, TIP_B));
+}
+
+BOOST_AUTO_TEST_CASE(closed_poll_not_reusable_on_same_height_reorg)
+{
+    // A same-height reorg replaces the tallied tip, so the closed tally is
+    // rebuilt.
+    BOOST_CHECK(!GRC::PollResultReusable(true, true, TIP_A, 100, TIP_B, 100, TIP_B));
 }
 
 BOOST_AUTO_TEST_CASE(closed_poll_not_reusable_on_backward_reorg)
 {
     // A backward reorg (current height below the tally height) could drag the tip
     // below the poll's end block and reopen it, so the closed tally is discarded.
-    BOOST_CHECK(!GRC::PollResultReusable(true, true, TIP_A, 100, TIP_B, 99));
+    BOOST_CHECK(!GRC::PollResultReusable(true, true, TIP_A, 100, TIP_B, 99, NONE));
 }
 
 // ---------------------------------------------------------------------------

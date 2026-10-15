@@ -19,8 +19,10 @@ EXEEXT=@CMAKE_EXECUTABLE_SUFFIX@
 # ENABLE_GRIDCOIND gates whether functional tests run at all — test_runner.py
 # exits early (rc 0, "No functional tests to run") when it is false.
 ENABLE_GRIDCOIND=@ENABLE_GRIDCOIND_CONF@
-# Gridcoin ships no separate gridcoin-cli; the daemon answers RPC directly, and
-# the functional suite drives nodes over JSON-RPC, so the CLI path is unused.
+# Gridcoin ships no separate gridcoin-cli; the daemon doubles as its own RPC
+# client, which interface_cli.py and interface_cli_settings.py drive through
+# node.cli and feature_stop_node_twice.py uses for one stop. Every other test
+# uses JSON-RPC by default.
 ENABLE_CLI=@ENABLE_CLI_CONF@
 # Gridcoin always builds the BDB wallet.
 ENABLE_WALLET=@ENABLE_WALLET_CONF@

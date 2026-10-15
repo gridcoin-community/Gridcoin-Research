@@ -429,4 +429,118 @@ BOOST_AUTO_TEST_CASE(without_a_quorum_the_offset_falls_back_to_zero)
     BOOST_CHECK_EQUAL(GetTimeOffset(), Weighted(100));
 }
 
+BOOST_AUTO_TEST_CASE(clock_warning_follows_the_quorum_and_the_peer_median)
+{
+    const TimeDataReset reset;
+
+    // No quorum: the warning applies only to a staking node, which is then using its own clock.
+    BOOST_CHECK(!HasTimeQuorum());
+    BOOST_CHECK_EQUAL(GetPeerTimeMedian(), 0);
+    BOOST_CHECK(!GetClockWarning(/* staking */ true).empty());
+    BOOST_CHECK(GetClockWarning(/* staking */ false).empty());
+
+    // Four peer groups make a quorum with the node's own 0. A median of 24 s is within the threshold, 25 s is not,
+    // in either direction, staking or not.
+    const auto vote_all = [](int64_t offset) {
+        for (int i = 1; i <= 4; ++i) {
+            AddTimeData(i, Addr(strprintf("%d.%d.0.1", i, i)), offset);
+        }
+    };
+
+    vote_all(24);
+    BOOST_CHECK(HasTimeQuorum());
+    BOOST_CHECK_EQUAL(GetPeerTimeMedian(), 24);
+    BOOST_CHECK(GetClockWarning(true).empty());
+    BOOST_CHECK(GetClockWarning(false).empty());
+
+    vote_all(25);
+    BOOST_CHECK_EQUAL(GetPeerTimeMedian(), 25);
+    BOOST_CHECK(!GetClockWarning(true).empty());
+    BOOST_CHECK(!GetClockWarning(false).empty());
+
+    vote_all(-25);
+    BOOST_CHECK_EQUAL(GetPeerTimeMedian(), -25);
+    BOOST_CHECK(!GetClockWarning(false).empty());
+
+    // Losing the quorum clears the median.
+    RemoveTimeData(4);
+    BOOST_CHECK(!HasTimeQuorum());
+    BOOST_CHECK_EQUAL(GetPeerTimeMedian(), 0);
+    BOOST_CHECK(GetClockWarning(false).empty());
+}
+
+BOOST_AUTO_TEST_CASE(clock_warning_follows_the_staking_state_the_miner_reports)
+{
+    const TimeDataReset reset;
+
+    // No quorum: the warning shows only while the miner reports that it is trying to stake.
+    SetClockWarningStaking(true);
+    BOOST_CHECK(!GetCurrentClockWarning().empty());
+    SetClockWarningStaking(false);
+    BOOST_CHECK(GetCurrentClockWarning().empty());
+}
+
+BOOST_AUTO_TEST_CASE(clock_warning_changes_are_logged_once_each)
+{
+    const TimeDataReset reset;
+
+    std::vector<std::string> lines;
+    const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) {
+        if (s.find("Clock warning") != std::string::npos) lines.push_back(s);
+    });
+
+    SetClockWarningStaking(true);   // no quorum while staking
+    SetClockWarningStaking(true);   // unchanged: not logged again
+    BOOST_REQUIRE_EQUAL(lines.size(), 1U);
+    BOOST_CHECK(lines[0].find("staking without a network time quorum") != std::string::npos);
+
+    for (int i = 1; i <= 4; ++i) {
+        AddTimeData(i, Addr(strprintf("%d.%d.0.1", i, i)), 30);   // quorum, median 30 s
+    }
+    BOOST_REQUIRE_EQUAL(lines.size(), 2U);
+    BOOST_CHECK(lines[1].find("+30") != std::string::npos);
+
+    for (int i = 1; i <= 4; ++i) {
+        AddTimeData(i, Addr(strprintf("%d.%d.0.1", i, i)), 10);   // median 10 s: cleared
+    }
+    BOOST_REQUIRE_EQUAL(lines.size(), 3U);
+    BOOST_CHECK(lines[2].find("cleared") != std::string::npos);
+
+    LogInstance().DeleteCallback(callback);
+}
+
+BOOST_AUTO_TEST_CASE(a_rejected_offset_raises_the_clock_warning_not_the_old_one)
+{
+    const TimeDataReset reset;
+    const std::string saved = strMiscWarning;
+    strMiscWarning.clear();
+
+    // Every peer two hours ahead: the 70-minute check rejects the offset. The clock warning reports it; the old
+    // one-shot message box warning is gone.
+    for (int i = 1; i <= 4; ++i) {
+        AddTimeData(i, Addr(strprintf("%d.%d.0.1", i, i)), 2 * 60 * 60);
+    }
+    BOOST_CHECK_EQUAL(GetTimeOffset(), 0);
+    BOOST_CHECK(strMiscWarning.empty());
+    BOOST_CHECK(!GetClockWarning(/* staking */ false).empty());
+
+    strMiscWarning = saved;
+}
+
+BOOST_AUTO_TEST_CASE(block_lead_counters_bucket_by_threshold)
+{
+    // The counters are process-wide and cumulative, so compare deltas.
+    const BlockLeadCounts before = GetBlockLeadCounts();
+    for (const int64_t lead : {-5, 16, 17, 33, 48, 49, 128, 129}) {
+        RecordBlockLead(lead);
+    }
+    const BlockLeadCounts after = GetBlockLeadCounts();
+
+    BOOST_CHECK_EQUAL(after.seen - before.seen, 8U);
+    BOOST_CHECK_EQUAL(after.over16 - before.over16, 6U);   // 17, 33, 48, 49, 128, 129
+    BOOST_CHECK_EQUAL(after.over32 - before.over32, 5U);   // 33, 48, 49, 128, 129
+    BOOST_CHECK_EQUAL(after.over48 - before.over48, 3U);   // 49, 128, 129
+    BOOST_CHECK_EQUAL(after.over128 - before.over128, 1U); // 129
+}
+
 BOOST_AUTO_TEST_SUITE_END()

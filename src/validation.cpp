@@ -18,6 +18,7 @@
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/chain_trust.h"
 #include "gridcoin/staking/reward.h"
+#include "gridcoin/voting/payloads.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/exceptions.h"
 #include "gridcoin/staking/kernel.h"
@@ -1677,6 +1678,24 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
     return true;
 }
 
+BlockTimeCheck CheckBlockTime(int64_t block_time, int64_t parent_time, int64_t adjusted_now, bool v15)
+{
+    // The past bound depends only on the parent, so it is deterministic consensus. The future bound depends on the
+    // receiver's clock. From v15 a block up to 128 s ahead is rejected without penalty and accepted once the
+    // receiver's clock catches up, so nodes whose clocks differ only delay each other.
+    constexpr int64_t max_lead = 128;
+    const int64_t past_bound = v15 ? GRC::V15_PAST_TIME_BOUND : 128;
+    const int64_t future_bound = v15 ? GRC::V15_FUTURE_TIME_BOUND : max_lead;
+
+    if (parent_time - block_time > past_bound) return BlockTimeCheck::TOO_EARLY;
+
+    const int64_t lead = block_time - adjusted_now;
+    if (lead > max_lead) return BlockTimeCheck::TOO_FAR_AHEAD;
+    if (lead > future_bound) return BlockTimeCheck::AHEAD_UNPENALIZED;
+
+    return BlockTimeCheck::OK;
+}
+
 bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
@@ -1749,13 +1768,22 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
     }
 
     if (block.nVersion >= 12) {
-        // Check timestamp
-        if (pindexPrev->GetBlockTime() - block.GetBlockTime() > 128) {
-            return state.DoS(50, error("%s: block timestamp too early", __func__));
+        if (!generated_by_me) {
+            RecordBlockLead(block.GetBlockTime() - GetAdjustedTime());
         }
 
-        if (block.GetBlockTime() - GetAdjustedTime() > 128) {
+        // Check timestamp
+        switch (CheckBlockTime(block.GetBlockTime(), pindexPrev->GetBlockTime(), GetAdjustedTime(),
+                               IsV15Enabled(nHeight))) {
+        case BlockTimeCheck::TOO_EARLY:
+            return state.DoS(50, error("%s: block timestamp too early", __func__));
+        case BlockTimeCheck::TOO_FAR_AHEAD:
             return state.DoS(25, error("%s: block timestamp too far in future", __func__));
+        case BlockTimeCheck::AHEAD_UNPENALIZED:
+            return state.Invalid(error("%s: block timestamp ahead of the acceptance window", __func__),
+                                 REJECT_TIME_TOO_NEW);
+        case BlockTimeCheck::OK:
+            break;
         }
 
         if (block.vtx[1].nTime != block.GetBlockTime()) {
@@ -2193,6 +2221,14 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
             if (contract.m_type == GRC::ContractType::CLAIM) {
                 return state.DoS(100, error("%s: claim contract in a non-coinbase transaction", __func__),
                                  "claim-outside-coinbase");
+            }
+
+            // PollRegistry::BlockValidate requires this from the same height.
+            // (CheckContracts, which refuses a legacy contract, runs later.)
+            if (contract.m_type == GRC::ContractType::POLL && contract.m_version >= 2
+                && !contract.SharePayloadAs<GRC::PollPayload>()->m_claim.EntriesDistinct()) {
+                return state.DoS(25, error("%s: poll claim keys or outputs are not distinct", __func__),
+                                 "bad-poll-claim");
             }
         }
     }

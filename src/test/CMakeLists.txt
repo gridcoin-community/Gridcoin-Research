@@ -42,12 +42,15 @@ add_executable(test_gridcoin
     gridcoin/claim_tests.cpp
     gridcoin/contract_tests.cpp
     gridcoin/cpid_tests.cpp
+    gridcoin/difficulty_tests.cpp
     gridcoin/enumbytes_tests.cpp
     gridcoin/kernel_tests.cpp
     gridcoin/magnitude_tests.cpp
     gridcoin/mnemonics_tests.cpp
     gridcoin/mrc_tests.cpp
     gridcoin/poll_result_cache_tests.cpp
+    gridcoin/poll_registry_tests.cpp
+    gridcoin/poll_result_tests.cpp
     gridcoin/pool_chain_tests.cpp
     gridcoin/pool_tests.cpp
     gridcoin/project_tests.cpp
@@ -159,6 +162,7 @@ add_executable(test_gridcoin
     gridcoin/connectinputs_tests.cpp
     rpc_allowlist_tests.cpp
     script_tests.cpp
+    scrypt_tests.cpp
     serialize_tests.cpp
     sigopcount_tests.cpp
     sync_tests.cpp
@@ -169,6 +173,7 @@ add_executable(test_gridcoin
     txmempool_tests.cpp
     uint256_tests.cpp
     util_tests.cpp
+    util_threadnames_tests.cpp
     wallet_tests.cpp
 )
 

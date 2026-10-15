@@ -13,6 +13,18 @@ using namespace GRC;
 namespace {
 //! The process-wide instance backing GetPollResultCache().
 PollResultCache g_poll_result_cache;
+
+//! The hash of the block at \p height on the chain that ends at \p pindex, or a
+//! null hash when that chain has no block there. Block index entries are never
+//! freed and their pprev links never change, so the walk needs no lock.
+uint256 HashAtHeight(const CBlockIndex* pindex, int height)
+{
+    while (pindex && pindex->nHeight > height) {
+        pindex = pindex->pprev;
+    }
+
+    return pindex && pindex->nHeight == height ? pindex->GetBlockHash() : uint256();
+}
 } // anonymous namespace
 
 PollResultCache& GRC::GetPollResultCache()
@@ -25,7 +37,8 @@ bool GRC::PollResultReusable(bool cached_finished,
                              const uint256& tallied_tip_hash,
                              int tallied_tip_height,
                              const uint256& current_tip_hash,
-                             int current_tip_height)
+                             int current_tip_height,
+                             const uint256& current_hash_at_tallied_height)
 {
     // Finished state is time-based (Poll::Expired(GetAdjustedTime())), so a poll
     // can transition active -> finished even with a stalled tip. If that state has
@@ -37,12 +50,13 @@ bool GRC::PollResultReusable(bool cached_finished,
 
     if (cached_finished) {
         // Closed poll: its votes and its fixed AVW end block are immutable while
-        // the tip only advances. A backward reorg (the tip below the height we
-        // tallied at) could reach the poll window, so rebuild to be safe. This is
-        // conservative — it also rebuilds on shallow backward reorgs that never
-        // touch the window — but backward reorgs are rare, so the extra work is
-        // negligible and it keeps the closed-poll path free of a chain walk.
-        return current_tip_height >= tallied_tip_height;
+        // the tip only advances. Any reorg that replaces the tip we tallied
+        // against could reach the poll's last blocks, so reuse only while that
+        // tip is still on the current chain. This is conservative: it also
+        // rebuilds after a reorg that never touches the window, but reorgs are
+        // rare.
+        return current_tip_height >= tallied_tip_height
+            && current_hash_at_tallied_height == tallied_tip_hash;
     }
 
     // Active poll: PollReference::GetActiveVoteWeight ends the AVW range at the
@@ -51,15 +65,23 @@ bool GRC::PollResultReusable(bool cached_finished,
     return tallied_tip_hash == current_tip_hash;
 }
 
-bool PollResultCache::IsEntryValid(const CacheEntry& entry, const uint256& tip_hash, int tip_height) const
+bool PollResultCache::IsEntryValid(const CacheEntry& entry,
+                                   const CBlockIndex* pindex_tip,
+                                   const uint256& tip_hash,
+                                   int tip_height) const
 {
     // Re-evaluate the poll's finished state against the current adjusted time so a
     // poll that expired by wall-clock time (with no new block) invalidates its
     // cached "active" tally.
     const bool now_finished = entry.item.result.m_poll.Expired(GetAdjustedTime());
 
+    // Only a closed entry needs the chain walk; an active one compares tips.
+    const uint256 hash_at_tallied_height = entry.finished
+        ? HashAtHeight(pindex_tip, entry.tallied_tip_height)
+        : tip_hash;
+
     return PollResultReusable(entry.finished, now_finished, entry.tallied_tip_hash,
-                              entry.tallied_tip_height, tip_hash, tip_height);
+                              entry.tallied_tip_height, tip_hash, tip_height, hash_at_tallied_height);
 }
 
 std::optional<PollResultItem> PollResultCache::GetOrBuild(const PollReference& ref,
@@ -72,7 +94,14 @@ std::optional<PollResultItem> PollResultCache::GetOrBuild(const PollReference& r
         LOCK(m_mutex);
 
         auto it = m_entries.find(txid);
-        if (it != m_entries.end() && IsEntryValid(it->second, tip_hash, tip_height)) {
+        if (it != m_entries.end() && IsEntryValid(it->second, pindex_tip, tip_hash, tip_height)) {
+            // A closed result whose tip is still on the chain holds for this
+            // tip too, so check it from here next time and keep the walk short.
+            if (it->second.finished) {
+                it->second.tallied_tip_hash = tip_hash;
+                it->second.tallied_tip_height = tip_height;
+            }
+
             return it->second.item;
         }
     }
@@ -87,6 +116,13 @@ std::optional<PollResultItem> PollResultCache::GetOrBuild(const PollReference& r
     }
 
     PollResultItem item(txid, ref.GetPollPayloadVersion(), std::move(*result));
+
+    // A reorg flagged during the traversal can change what the tally read, so
+    // the result is not kept. The flag misses some reorgs; for a closed poll the
+    // main-chain check above catches those when the entry is next used.
+    if (GetPollRegistry().reorg_occurred_during_reg_traversal) {
+        return item;
+    }
 
     {
         LOCK(m_mutex);

@@ -1,3 +1,4 @@
+#include <limits>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -22,7 +23,8 @@
 using namespace GRC;
 
 namespace {
-const PollReference* TryPollByTitleOrId(const std::string& title_or_id) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
+const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     PollRegistry& registry = GetPollRegistry();
 
@@ -31,7 +33,7 @@ const PollReference* TryPollByTitleOrId(const std::string& title_or_id) EXCLUSIV
 
         // This will return a ref to the poll in the registry if found, or, try and load it and return the ref if
         // the load is successful.
-        if (const PollReference* ref = WITH_LOCK(cs_main, return registry.TryByTxidWithAddHistoricalPollAndVotes(txid))) {
+        if (const PollReference* ref = registry.TryByTxidWithAddHistoricalPollAndVotes(txid)) {
             return ref;
         }
     }
@@ -128,8 +130,9 @@ UniValue PollResultToJson(const PollResult& result, const PollReference& poll_re
         }
     }
 
-    json.pushKV("votes", (uint64_t)poll_ref.Votes().size());
+    json.pushKV("votes", (uint64_t)result.m_vote_count);
     json.pushKV("invalid_votes", (uint64_t)result.m_invalid_votes);
+    json.pushKV("superseded_votes", (uint64_t)result.m_superseded_votes);
     json.pushKV("total_weight", ValueFromAmount(result.m_total_weight));
 
     if (result.m_active_vote_weight) {
@@ -329,6 +332,19 @@ UniValue VoteClaimToJson(const VoteWeightClaim& claim)
     json.pushKV("balance_claim", BalanceClaimToJson(claim.m_balance_claim));
 
     return json;
+}
+
+//! Read a poll choice id from an RPC parameter. A vote holds each choice as
+//! one byte, so an id outside 0..255 is a parameter error.
+uint8_t ChoiceIdFromParam(const UniValue& param)
+{
+    const int choice_id = param.get_int();
+
+    if (choice_id < 0 || choice_id > std::numeric_limits<uint8_t>::max()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("choice id %d is out of range", choice_id));
+    }
+
+    return static_cast<uint8_t>(choice_id);
 }
 
 UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
@@ -762,7 +778,14 @@ UniValue getpollresults(const UniValue& params)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wthread-safety-analysis"
 #endif
-   if (const PollReference* ref = WITH_LOCK(GRC::PollRegistry::cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
+   const PollReference* ref = nullptr;
+   {
+       // cs_main before cs_poll_registry, the order block connection takes them: a
+       // txid argument may load a historical poll, which needs cs_main.
+       LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+       ref = TryPollByTitleOrId(title_or_id);
+   }
+   if (ref) {
         return PollResultToJson(*ref);
     }
 #if defined(__clang__)
@@ -937,7 +960,7 @@ UniValue votebyid(const UniValue& params)
     VoteBuilder builder = VoteBuilder::ForPoll(*poll, poll_id);
 
     for (size_t i = 1; i < params.size(); ++i) {
-        builder = builder.AddResponse(params[i].get_int());
+        builder = builder.AddResponse(ChoiceIdFromParam(params[i]));
     }
 
     return SubmitVote(*poll, std::move(builder));
@@ -970,7 +993,14 @@ UniValue votedetails(const UniValue& params)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wthread-safety-analysis"
 #endif
-   if (const PollReference* ref = WITH_LOCK(GRC::PollRegistry::cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
+   const PollReference* ref = nullptr;
+   {
+       // cs_main before cs_poll_registry, the order block connection takes them: a
+       // txid argument may load a historical poll, which needs cs_main.
+       LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+       ref = TryPollByTitleOrId(title_or_id);
+   }
+   if (ref) {
         return VoteDetailsToJson(*ref);
     }
 #if defined(__clang__)

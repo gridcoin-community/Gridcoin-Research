@@ -9,6 +9,8 @@
 #include "gridcoin/contract/message.h"
 #include "gridcoin/sidestake.h"
 #include "gridcoin/tx_message.h"
+#include "gridcoin/voting/builders.h"
+#include "gridcoin/voting/poll.h"
 #include "init.h"
 #include "wallet/wallet.h"
 #include "net_processing.h"
@@ -1034,6 +1036,69 @@ BOOST_AUTO_TEST_CASE(a_send_held_off_by_a_narrowing_refuses_on_its_own_scope_che
     BOOST_CHECK_EQUAL(result, _("Error: Wallet unlocked for staking only, unable to create transaction."));
 
     staking.Lock();
+}
+
+//!
+//! Building a poll or a vote needs the wallet fully unlocked. A locked wallet
+//! and one unlocked for staking only are each refused with the reason, before
+//! the builder signs anything.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_or_vote_build_refuses_a_wallet_not_fully_unlocked)
+{
+    CWallet wallet;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("voting-scope-test");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    const GRC::Poll poll(
+        GRC::PollType::SURVEY,
+        GRC::PollWeightType::BALANCE,
+        GRC::PollResponseType::YES_NO_ABSTAIN,
+        7,
+        "Title",
+        "https://gridcoin.us",
+        "Question?",
+        GRC::Poll::ChoiceList(),
+        GetAdjustedTime(),
+        Fraction());
+
+    const auto build_error = [&](const bool vote) {
+        try {
+            LOCK(cs_main);
+
+            if (vote) {
+                GRC::VoteBuilder::ForPoll(poll, uint256::ONE).AddResponse(uint8_t {0}).BuildContractTx(&wallet, 2);
+            } else {
+                GRC::PollBuilder().BuildContractTx(&wallet, 2);
+            }
+        } catch (const GRC::VotingError& e) {
+            return std::string(e.what());
+        }
+
+        return std::string();
+    };
+
+    const std::string locked = _("Error: Wallet locked, unable to create transaction.");
+    const std::string staking_only = _("Error: Wallet unlocked for staking only, unable to create transaction.");
+
+    BOOST_CHECK_EQUAL(build_error(true), locked);
+    BOOST_CHECK_EQUAL(build_error(false), locked);
+
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::StakingOnly));
+    BOOST_REQUIRE(wallet.IsUnlockedForStakingOnly());
+
+    BOOST_CHECK_EQUAL(build_error(true), staking_only);
+    BOOST_CHECK_EQUAL(build_error(false), staking_only);
+
+    wallet.Lock();
 }
 
 //!

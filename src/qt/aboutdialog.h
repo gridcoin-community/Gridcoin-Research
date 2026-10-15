@@ -29,6 +29,13 @@ public:
     //! schema/protocol, socket, node identity) from the connect handshake. Shows
     //! it only when info.active (the -multiprocess split build); hidden otherwise.
     void setIpcConnectionInfo(const GuiIpcInfo& info);
+
+    //! The licence texts of the third-party fonts the GUI bundles (Inter, Inconsolata),
+    //! read from the embedded resources, each under a heading. Shown by the
+    //! "Third-Party Licenses" button so the SIL OFL 1.1 notices that ship inside the
+    //! binary are viewable by the user (OFL 1.1 condition 2). Empty headings are
+    //! never produced: a missing resource yields an explicit "not available" line.
+    static QString thirdPartyLicensesText();
 private:
     //! Result of the off-thread GitHub version check (see
     //! handlePressVersionInfoButton). upgrade_type is carried as an int so the
@@ -58,6 +65,7 @@ private:
 private slots:
     void on_buttonBox_accepted();
     void handlePressVersionInfoButton();
+    void showThirdPartyLicenses();
     void versionCheckFinished();
 };
 

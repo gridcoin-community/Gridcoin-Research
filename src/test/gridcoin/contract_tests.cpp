@@ -5,12 +5,38 @@
 #include "hash.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
+#include "gridcoin/protocol.h"
+#include "gridcoin/scraper/scraper_registry.h"
+#include "gridcoin/voting/payloads.h"
+#include "key_io.h"
+#include "test/state_guard.h"
 #include "wallet/wallet.h"
 
 #include <boost/test/unit_test.hpp>
+#include <limits>
 #include <vector>
 
 namespace {
+
+//!
+//! \brief Serialize a contract carrying a payload under each action, parse it back
+//! with Contract::Unserialize called directly and without cs_main, and check the
+//! parsed payload's version.
+//!
+template <typename PayloadType>
+void CheckParsedVersion(const PayloadType& payload, const uint32_t expected)
+{
+    for (const auto action : {GRC::ContractAction::ADD, GRC::ContractAction::REMOVE}) {
+        CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+        stream << GRC::MakeContract<PayloadType>(action, payload);
+
+        GRC::Contract contract;
+        contract.Unserialize(stream);
+
+        BOOST_CHECK_EQUAL(contract.SharePayloadAs<PayloadType>()->m_version, expected);
+    }
+}
+
 //!
 //! \brief A contract payload for testing.
 //!
@@ -776,6 +802,37 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     BOOST_CHECK(contract.m_type == GRC::ContractType::PROJECT);
     BOOST_CHECK(contract.m_action == GRC::ContractAction::ADD);
     BOOST_CHECK(payload->LegacyKeyString() == "test");
+}
+
+BOOST_AUTO_TEST_CASE(it_takes_payload_versions_from_the_stream_not_the_chain_tip)
+{
+    // Restores nBestHeight.
+    grc_test::StateGuard guard;
+
+    CKey key;
+    key.MakeNewKey(true);
+    const std::string scraper_address = EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
+
+    // No chain, so no version gate is active; then a tip past every activation height.
+    for (const int height : {-1, std::numeric_limits<int>::max()}) {
+        WITH_LOCK(cs_main, nBestHeight = height);
+
+        for (const uint32_t version : {1, 2, 3}) {
+            CheckParsedVersion(GRC::PollPayload(version), version);
+        }
+
+        for (const uint32_t version : {1, 2, 3, 4}) {
+            CheckParsedVersion(GRC::Project(version), version);
+        }
+
+        CheckParsedVersion(GRC::ProtocolEntryPayload(2), 2);
+        CheckParsedVersion(GRC::ScraperEntryPayload(2), 2);
+
+        // A legacy key-value entry parses as version 1, which is not the
+        // version either payload is constructed with.
+        CheckParsedVersion(GRC::ProtocolEntryPayload::Parse("key", "value"), 1);
+        CheckParsedVersion(GRC::ScraperEntryPayload(scraper_address, "true"), 1);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
