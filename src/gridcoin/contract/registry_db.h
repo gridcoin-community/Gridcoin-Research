@@ -709,6 +709,28 @@ public:
     }
 
     //!
+    //! \brief Whether a record with this key is stored, read without loading it into the historical map.
+    //!
+    //! find() loads a passivated record into the historical map, and insert() then refuses to store that key again;
+    //! this test leaves the map as it was.
+    //!
+    //! \param hash The hash value with which to match on the key.
+    //!
+    //! \return true if the record is in the historical map or in LevelDB.
+    //!
+    bool contains(const uint256& hash)
+    {
+        if (m_historical.find(hash) != m_historical.end()) {
+            return true;
+        }
+
+        SE entry;
+
+        return Load(hash, entry);
+    }
+
+
+    //!
     //! \brief Advances the iterator to the next element.
     //!
     //! \param iter

@@ -2013,6 +2013,29 @@ uint32_t StoredBeaconDBVersion()
     return version;
 }
 
+//!
+//! \brief Revert the advertisement AddPendingBeacon applied with the same arguments, as a disconnect of its block
+//! would.
+//!
+void RevertAdvertisement(GRC::BeaconRegistry& registry, const GRC::Cpid& cpid, const CPubKey& key,
+                         const int64_t time, const int height)
+{
+    CMutableTransaction mtx;
+    mtx.nTime = time;
+    mtx.nLockTime = static_cast<uint32_t>(height);
+    const CTransaction tx(mtx);
+
+    CBlockIndex index;
+    index.nVersion = 13;
+    index.nHeight = height;
+    index.nTime = time;
+
+    GRC::BeaconPayload payload {2, cpid, GRC::Beacon(key)};
+    const GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload);
+
+    registry.Revert({contract, tx, &index});
+}
+
 constexpr int64_t DAY = 60 * 60 * 24;
 constexpr int64_t START_TIME = 1600000000;
 } // anonymous namespace
@@ -2265,6 +2288,54 @@ BOOST_AUTO_TEST_CASE(beacon_registry_deactivate_restores_a_replaced_beacon_from_
         BOOST_CHECK(registry.Try(chain.cpid)->m_public_key == chain.key_1.GetPubKey());
         BOOST_CHECK_EQUAL(registry.PendingBeacons().count(chain.key_2.GetPubKey().GetID()), 1U);
     }
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_revert_takes_an_advertisement_s_own_records_from_v15)
+{
+    LOCK(cs_main);
+    grc_test::V15HeightGuard v15(1);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid_1 = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const GRC::Cpid cpid_2 = GRC::Cpid::Parse("15141312111009080706050403020100");
+    const CKeyID id = key.GetPubKey().GetID();
+
+    // Two advertisements of one key for one CPID: the pending entry under the key is the second.
+    const uint256 first = AddPendingBeacon(registry, cpid_1, key.GetPubKey(), START_TIME, 1);
+    const uint256 second = AddPendingBeacon(registry, cpid_1, key.GetPubKey(), START_TIME + DAY, 2);
+    BOOST_REQUIRE(registry.PendingBeacons().at(id)->m_hash == second);
+
+    RevertAdvertisement(registry, cpid_1, key.GetPubKey(), START_TIME + DAY, 2);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_CHECK(registry.PendingBeacons().at(id)->m_hash == first);
+    BOOST_CHECK(registry.GetBeaconDB().find(second) == registry.GetBeaconDB().end());
+
+    ReloadRegistry(registry);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_CHECK(registry.PendingBeacons().at(id)->m_hash == first);
+
+    // A third advertisement of the key takes the pending entry; its revert restores the first.
+    const uint256 other = AddPendingBeacon(registry, cpid_2, key.GetPubKey(), START_TIME + 2 * DAY, 3);
+    BOOST_REQUIRE(registry.PendingBeacons().at(id)->m_hash == other);
+
+    // A restart between the displacement and its revert: the load rebuilds the displacement link.
+    ReloadRegistry(registry);
+    BOOST_REQUIRE(registry.PendingBeacons().at(id)->m_hash == other);
+
+    RevertAdvertisement(registry, cpid_2, key.GetPubKey(), START_TIME + 2 * DAY, 3);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_CHECK(registry.PendingBeacons().at(id)->m_hash == first);
+    BOOST_CHECK(registry.PendingBeacons().at(id)->m_cpid == cpid_1);
+
+    ReloadRegistry(registry);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_CHECK(registry.PendingBeacons().at(id)->m_hash == first);
 
     registry.Reset();
 }

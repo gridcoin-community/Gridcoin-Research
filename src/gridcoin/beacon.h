@@ -973,6 +973,13 @@ private:
     std::map<uint256, uint256> m_replaced_by_last_superblock GUARDED_BY(cs_main);
 
     //!
+    //! \brief Pending beacons a same-key advertisement displaced from m_pending: advertisement tx hash -> hash of
+    //! the displaced pending record. Kept while the advertisement's record exists; rebuilt by the load. Hashes
+    //! only, so it never keeps a record in memory.
+    //!
+    std::map<uint256, uint256> m_displaced_pending GUARDED_BY(cs_main);
+
+    //!
     //! \brief Derive the registry's side state from one stored record during Initialize. Called before the
     //! record updates \p entries and \p pending_entries, in record-number order.
     //!
