@@ -24,6 +24,7 @@
 #include "rpc/blockchain.h"
 #include "test/chain_setup.h"
 #include "test/state_guard.h"
+#include "txdb.h"
 #include "util.h"
 
 #include <boost/test/unit_test.hpp>
@@ -527,6 +528,192 @@ BOOST_AUTO_TEST_CASE(a_remove_resolves_only_to_the_active_display_poll)
     BOOST_CHECK(registry.TryByTxid(duplicate.tx.GetHash()) != nullptr);
     BOOST_CHECK(registry.IsStored(remove.tx.GetHash()));
     BOOST_CHECK(!registry.IsStored(remove_again.tx.GetHash()));
+}
+
+BOOST_AUTO_TEST_CASE(reverting_two_votes_of_one_block_newest_first_keeps_the_chain)
+{
+    CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex first_vote_index = MakeBlockIndex(V13Height() + 11, 1700000600);
+    CBlockIndex vote_index = MakeBlockIndex(V13Height() + 12, 1700001200);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+    registry.Add({poll.contract, poll.tx, &poll_index});
+
+    const GRC::Contract vote = MakeVoteContract(poll.tx.GetHash());
+    const CTransaction v0 = MakeVoteTxFor(vote, 1700000550);
+    const CTransaction v1 = MakeVoteTxFor(vote, 1700001100);
+    const CTransaction v2 = MakeVoteTxFor(vote, 1700001150);
+    registry.Add({vote, v0, &first_vote_index});
+    registry.Add({vote, v1, &vote_index});
+    registry.Add({vote, v2, &vote_index});
+
+    // A block disconnect pops its records newest first: v2, then v1.
+    registry.Revert({vote, v2, &vote_index});
+    registry.Revert({vote, v1, &vote_index});
+
+    for (int pass = 0; pass < 2; ++pass) {
+        {
+            LOCK(GRC::PollRegistry::cs_poll_registry);
+            BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash())->Votes() == std::vector<uint256> {v0.GetHash()});
+            BOOST_CHECK(registry.VoteHead(poll.tx.GetHash()) == v0.GetHash());
+            BOOST_CHECK(!registry.IsStored(v1.GetHash()));
+            BOOST_CHECK(!registry.IsStored(v2.GetHash()));
+        }
+
+        Restart(registry);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(reverting_a_removal_brings_the_poll_back)
+{
+    CBlockIndex index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex remove_index = MakeBlockIndex(V13Height() + 12, 1700002000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+    const PollTx remove = MakePollTx("Title", 1700001000, GRC::ContractAction::REMOVE);
+    registry.Add({poll.contract, poll.tx, &index});
+    registry.Delete({remove.contract, remove.tx, &remove_index});
+    registry.Revert({remove.contract, remove.tx, &remove_index});
+
+    for (int pass = 0; pass < 2; ++pass) {
+        {
+            LOCK(GRC::PollRegistry::cs_poll_registry);
+            BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash()) != nullptr);
+            BOOST_CHECK(registry.TryByTitle("title") == registry.TryByTxid(poll.tx.GetHash()));
+            BOOST_CHECK(!registry.IsStored(remove.tx.GetHash()));
+        }
+
+        Restart(registry);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(reverting_a_poll_frees_its_title)
+{
+    CBlockIndex index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+    registry.Add({poll.contract, poll.tx, &index});
+    registry.Revert({poll.contract, poll.tx, &index});
+
+    for (int pass = 0; pass < 2; ++pass) {
+        {
+            LOCK(GRC::PollRegistry::cs_poll_registry);
+            BOOST_CHECK(!registry.TitleOwner("title"));
+            BOOST_CHECK(!registry.IsStored(poll.tx.GetHash()));
+        }
+
+        Restart(registry);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(reconnecting_a_reverted_block_rebuilds_the_same_chain)
+{
+    CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex vote_index = MakeBlockIndex(V13Height() + 12, 1700001200);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+    registry.Add({poll.contract, poll.tx, &poll_index});
+
+    const GRC::Contract vote = MakeVoteContract(poll.tx.GetHash());
+    const CTransaction v1 = MakeVoteTxFor(vote, 1700001100);
+    const CTransaction v2 = MakeVoteTxFor(vote, 1700001150);
+
+    registry.Add({vote, v1, &vote_index});
+    registry.Add({vote, v2, &vote_index});
+    registry.Revert({vote, v2, &vote_index});
+    registry.Revert({vote, v1, &vote_index});
+    registry.Add({vote, v1, &vote_index});
+    registry.Add({vote, v2, &vote_index});
+
+    const std::vector<uint256> expected {v1.GetHash(), v2.GetHash()};
+
+    for (int pass = 0; pass < 2; ++pass) {
+        {
+            LOCK(GRC::PollRegistry::cs_poll_registry);
+            BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash())->Votes() == expected);
+        }
+
+        Restart(registry);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(a_block_revert_below_v15_pops_poll_and_vote_records_newest_first)
+{
+    grc_test::RequireV15Unscheduled();
+
+    CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex vote_index = MakeBlockIndex(V13Height() + 12, 1700001200);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+    registry.Add({poll.contract, poll.tx, &poll_index});
+
+    const GRC::Contract vote = MakeVoteContract(poll.tx.GetHash());
+    const CTransaction v1 = MakeVoteTxFor(vote, 1700001100);
+    const CTransaction v2 = MakeVoteTxFor(vote, 1700001150);
+
+    CBlock block;
+    block.vtx.resize(2);
+    block.vtx.push_back(v1);
+    block.vtx.push_back(v2);
+
+    GRC::RegistryBookmarks heights;
+    bool found = false;
+    GRC::ApplyContracts(block, &vote_index, heights, found, false);
+    GRC::RevertContracts(block, &vote_index);
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash())->Votes().empty());
+    BOOST_CHECK(registry.VoteHead(poll.tx.GetHash()).IsNull());
+    BOOST_CHECK(!registry.IsStored(v1.GetHash()));
+    BOOST_CHECK(!registry.IsStored(v2.GetHash()));
+}
+
+BOOST_AUTO_TEST_CASE(a_link_reverted_out_of_order_flags_a_rebuild)
+{
+    CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex vote_index = MakeBlockIndex(V13Height() + 12, 1700001200);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+    registry.Add({poll.contract, poll.tx, &poll_index});
+
+    const GRC::Contract vote = MakeVoteContract(poll.tx.GetHash());
+    const CTransaction v1 = MakeVoteTxFor(vote, 1700001100);
+    const CTransaction v2 = MakeVoteTxFor(vote, 1700001150);
+    registry.Add({vote, v1, &vote_index});
+    registry.Add({vote, v2, &vote_index});
+
+    // The older link first: out of order. Nothing is erased and the registry is flagged for a rebuild.
+    registry.Revert({vote, v1, &vote_index});
+
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_CHECK(registry.IsStored(v1.GetHash()));
+        BOOST_CHECK(registry.IsStored(v2.GetHash()));
+    }
+
+    uint32_t version = 1;
+    std::pair<std::string, std::string> key = std::make_pair(std::string("poll_db"), std::string("version"));
+    CTxDB txdb("r");
+    BOOST_REQUIRE(txdb.ReadGenericSerializable(key, version));
+    BOOST_CHECK_EQUAL(version, 0U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

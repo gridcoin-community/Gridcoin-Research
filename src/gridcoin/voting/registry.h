@@ -567,6 +567,14 @@ public:
     void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
+    //! \brief Revert a POLL or VOTE contract of a disconnected block. A disconnect pops a block's records newest first
+    //! at every height (RevertContracts), so each revert erases the newest record of its chain: a poll's ADD record
+    //! (with its title, if it owns it), a REMOVE's DELETED record (the ADD record becomes current again), or a vote's
+    //! link (the previous link becomes current again). Below V11 nothing is reverted (the V11 floor).
+    //!
+    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
     //! \brief Detect reorganizations that would affect registry traversal.
     //!
     void DetectReorg();
@@ -624,7 +632,15 @@ private:
     //!
     //! \brief Erase a stored vote's link, which must be its poll's newest, and make the previous link current.
     //!
-    void EraseVoteLink(const uint256& vote_txid) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+    //! \return false, changing nothing, when the link is not the poll's newest.
+    //!
+    bool EraseVoteLink(const uint256& vote_txid) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+
+    //!
+    //! \brief Mark the poll dbs for a rebuild at the next start: write version 0 under the poll db's version key, so
+    //! the next Initialize() clears both dbs and the startup replay rebuilds them from V11.
+    //!
+    void FlagRebuild() EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Clear every in-memory structure, keeping the dbs' contents.

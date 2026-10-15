@@ -27,6 +27,7 @@
 #include "wallet/wallet.h"
 
 #include <algorithm>
+#include <functional>
 
 using namespace GRC;
 
@@ -624,36 +625,55 @@ void GRC::RevertContracts(const CBlock& block, const CBlockIndex* const pindex) 
         return;
     }
 
-    const bool reverse_order = IsV15Enabled(pindex->nHeight);
+    // From block version 15 every registry's contracts are reverted newest first. Below it the other registries keep
+    // block order, but POLL and VOTE contracts are reverted newest first at every height: the poll and vote dbs are
+    // record chains that stay sound only if a block's records are popped in reverse. Below v15 the poll registry
+    // feeds no validation, so this changes nothing an older node could disagree with, and the registries never read
+    // each other while reverting, so separating them is safe.
+    const bool reverse_all = IsV15Enabled(pindex->nHeight);
 
-    std::vector<const CTransaction*> txs;
+    const auto is_poll_type = [](const Contract& contract) {
+        return contract.m_type == ContractType::POLL || contract.m_type == ContractType::VOTE;
+    };
 
-    for (auto tx = std::next(block.vtx.begin(), 2); tx != block.vtx.end(); ++tx) {
-        txs.push_back(&*tx);
-    }
+    const auto revert_pass = [&](const bool reverse, const std::function<bool(const Contract&)>& include)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+        std::vector<const CTransaction*> txs;
 
-    if (reverse_order) {
-        std::reverse(txs.begin(), txs.end());
-    }
-
-    for (const CTransaction* tx : txs) {
-        std::vector<const Contract*> contracts;
-
-        for (const auto& contract : tx->GetContracts()) {
-            contracts.push_back(&contract);
+        for (auto tx = std::next(block.vtx.begin(), 2); tx != block.vtx.end(); ++tx) {
+            txs.push_back(&*tx);
         }
 
-        if (reverse_order) {
-            std::reverse(contracts.begin(), contracts.end());
+        if (reverse) {
+            std::reverse(txs.begin(), txs.end());
         }
 
-        for (const Contract* contract : contracts) {
-            if (RegistryBookmarks::IsRegistryRevertCapable(contract->m_type.Value())) {
-                const ContractContext contract_context(*contract, *tx, pindex);
+        for (const CTransaction* tx : txs) {
+            std::vector<const Contract*> contracts;
 
-                RegistryBookmarks::GetRegistryWithRevert(contract->m_type.Value()).Revert(contract_context);
+            for (const auto& contract : tx->GetContracts()) {
+                contracts.push_back(&contract);
+            }
+
+            if (reverse) {
+                std::reverse(contracts.begin(), contracts.end());
+            }
+
+            for (const Contract* contract : contracts) {
+                if (include(*contract) && RegistryBookmarks::IsRegistryRevertCapable(contract->m_type.Value())) {
+                    const ContractContext contract_context(*contract, *tx, pindex);
+
+                    RegistryBookmarks::GetRegistryWithRevert(contract->m_type.Value()).Revert(contract_context);
+                }
             }
         }
+    };
+
+    if (reverse_all) {
+        revert_pass(true, [](const Contract&) { return true; });
+    } else {
+        revert_pass(false, [&](const Contract& contract) { return !is_poll_type(contract); });
+        revert_pass(true, is_poll_type);
     }
 }
 

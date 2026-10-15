@@ -1068,11 +1068,11 @@ std::vector<uint256> PollRegistry::WalkVotes(const uint256& poll_txid) const
     return votes;
 }
 
-void PollRegistry::EraseVoteLink(const uint256& vote_txid)
+bool PollRegistry::EraseVoteLink(const uint256& vote_txid)
 {
     // A vote that was never linked (outside the window, or for a poll the registry does not hold) has no record.
     if (!m_vote_db.contains(vote_txid)) {
-        return;
+        return true;
     }
 
     const auto link = m_vote_db.peek(vote_txid);
@@ -1081,7 +1081,7 @@ void PollRegistry::EraseVoteLink(const uint256& vote_txid)
     // A disconnect pops a poll's links newest first, so the link must be the poll's newest.
     if (VoteHead(poll_txid) != vote_txid) {
         error("%s: vote %s is not the newest link of poll %s", __func__, vote_txid.ToString(), poll_txid.ToString());
-        return;
+        return false;
     }
 
     m_vote_db.erase(vote_txid);
@@ -1098,6 +1098,18 @@ void PollRegistry::EraseVoteLink(const uint256& vote_txid)
         iter->second.m_votes.pop_back();
         iter->second.m_votes_head = link->m_previous_hash;
     }
+
+    return true;
+}
+
+void PollRegistry::FlagRebuild()
+{
+    uint32_t version = 0;
+    std::pair<std::string, std::string> key = std::make_pair(std::string("poll_db"), std::string("version"));
+
+    if (!CTxDB("rw").WriteGenericSerializable(key, version)) {
+        error("%s: could not flag the poll registry for a rebuild", __func__);
+    }
 }
 
 void PollRegistry::IndexPollRecord(const PollEntry& entry)
@@ -1113,7 +1125,9 @@ void PollRegistry::IndexPollRecord(const PollEntry& entry)
         ref.m_weight_type = static_cast<PollWeightType>(entry.m_weight_type);
         ref.m_timestamp = entry.m_timestamp;
         ref.m_duration_days = entry.m_duration_days;
-        ref.m_pindex = LookupBlockIndex(entry.m_block_hash);
+        if (const CBlockIndex* pindex = LookupBlockIndex(entry.m_block_hash)) {
+            ref.m_pindex = pindex;
+        }
         ref.m_stored = true;
         ref.m_deleted = false;
         ref.m_registry = this;
@@ -1464,6 +1478,92 @@ void PollRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(c
     } else {
         DeletePoll(ctx);
     }
+}
+
+void PollRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    LOCK(cs_poll_registry);
+
+    DetectReorg();
+
+    // V11 floor: see the comment in Add.
+    if (ctx.m_pindex && ctx.m_pindex->nHeight < Params().GetConsensus().BlockV11Height) {
+        return;
+    }
+
+    const uint256 hash = ctx.m_tx.GetHash();
+
+    if (ctx->m_type == ContractType::VOTE) {
+        // A VOTE REMOVE linked nothing, so its revert erases nothing.
+        if (ctx->m_action != ContractAction::ADD) {
+            return;
+        }
+
+        if (m_vote_db.contains(hash)) {
+            // A disconnect pops a poll's links newest first. For a link that is not its poll's newest, nothing is
+            // erased: the error is logged and the registry is rebuilt from the chain at the next start. No assert:
+            // asserts are live in release builds.
+            if (!EraseVoteLink(hash)) {
+                error("%s: poll registry flagged for a rebuild at the next start", __func__);
+                FlagRebuild();
+            }
+
+            return;
+        }
+
+        // A vote linked to an in-memory poll from the historical lookup.
+        DeleteVote(ctx);
+
+        return;
+    }
+
+    if (!m_poll_db.contains(hash)) {
+        // Not stored: a REMOVE that resolved to nothing, or an in-memory poll from the historical lookup.
+        if (ctx->m_action == ContractAction::ADD) {
+            DeletePoll(ctx);
+        }
+
+        return;
+    }
+
+    const std::shared_ptr<PollEntry> record = m_poll_db.peek(hash);
+    const uint256 poll_txid = record->m_poll_txid;
+
+    if (record->m_status == PollEntryStatus::DELETED) {
+        // Reverting a REMOVE: its DELETED record goes, the poll's ADD record is current again, and the poll returns to
+        // the display map when it owns its title.
+        m_poll_db.erase(hash);
+
+        const auto add_record = m_poll_db.find(record->m_previous_hash);
+
+        if (add_record == m_poll_db.end()) {
+            error("%s: poll %s has no ADD record behind its DELETED record; poll registry flagged for a rebuild",
+                  __func__, poll_txid.ToString());
+            FlagRebuild();
+            return;
+        }
+
+        m_poll_entries[poll_txid] = add_record->second;
+        IndexPollRecord(*add_record->second);
+
+        if (const auto iter = m_polls_by_txid.find(poll_txid); iter != m_polls_by_txid.end()) {
+            iter->second.Notify(PollReference::PollNotificationType::POLL_ADD);
+        }
+
+        uiInterface.NewPollReceived(record->m_timestamp);
+
+        return;
+    }
+
+    // Reverting a poll's ADD. Its votes were in its own block after it or in later blocks, all popped already.
+    if (m_vote_links.count(poll_txid)) {
+        error("%s: poll %s still has vote links when its ADD is reverted; poll registry flagged for a rebuild",
+              __func__, poll_txid.ToString());
+        FlagRebuild();
+        return;
+    }
+
+    DeletePoll(ctx);
 }
 
 void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
