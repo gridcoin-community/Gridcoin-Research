@@ -18,6 +18,7 @@
 #include <QByteArray>
 #include <QDir>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QProcess>
@@ -30,6 +31,7 @@
 #include <QThreadPool>
 #include <QTimer>
 #include <QUrl>
+#include <QWindow>
 
 #include <atomic>
 #include <chrono>
@@ -316,6 +318,27 @@ void QmlBridgeTests::throwingHideMainStillClosesRunner()
     QVERIFY2(!flag, "a pooled call ran after a detach whose first hook threw");
     QVERIFY(QThreadPool::globalInstance()->waitForDone(0));
     QVERIFY(!posted);
+}
+
+void QmlBridgeTests::nativeWindowIdIsAHiddenWindow()
+{
+    std::atomic<int> disconnects{0};
+    QmlFrontEnd fe(qml_test::FIXTURE_ROOT_URL, qml_test::CountingCallbacks(disconnects));
+    const QWindowList before = QGuiApplication::topLevelWindows();
+    QVERIFY(fe.construct());
+    QWindowList added;
+    for (QWindow* w : QGuiApplication::topLevelWindows()) {
+        if (!before.contains(w)) added << w;
+    }
+
+    QVERIFY2(added.size() == 1, "construct() did not add exactly one top-level window");
+    // Read before anything calls nativeWindowId(): winId() would create the
+    // native window itself.
+    QVERIFY2(added[0]->handle() != nullptr, "the anchor window has no native window after construct()");
+    QVERIFY2(!added[0]->isVisible(), "the anchor window is visible");
+    QCOMPARE(fe.nativeWindowId(), added[0]->winId());
+    fe.destroyMain();
+    QCOMPARE(fe.nativeWindowId(), WId(0));
 }
 
 void QmlBridgeTests::rootLoadErrorsReachStderr()

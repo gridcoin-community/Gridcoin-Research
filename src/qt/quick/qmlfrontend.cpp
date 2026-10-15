@@ -13,6 +13,7 @@
 
 #include <QCoreApplication>
 #include <QQmlEngine>
+#include <QWindow>
 
 #include <stdexcept>
 #include <utility>
@@ -82,6 +83,10 @@ ShellAdapter& QmlFrontEnd::shell()
 
 QObject* QmlFrontEnd::construct()
 {
+    // First, so a native window exists whatever the root does; create() makes
+    // it now, not on the first winId() call.
+    m_anchor = std::make_unique<QWindow>();
+    m_anchor->create();
     m_engine = std::make_unique<QQmlEngine>();
     // Quit goes through the front end, like every other quit path.
     QObject::connect(m_engine.get(), &QQmlEngine::quit, m_engine.get(), [this] { requestQuit(); });
@@ -108,6 +113,7 @@ void QmlFrontEnd::destroyMain()
     m_bridge.reset();
     m_root.reset();
     m_engine.reset();
+    m_anchor.reset();
 }
 
 QObject* QmlFrontEnd::createSplash()
@@ -166,8 +172,7 @@ void QmlFrontEnd::showMain(bool minimized)
 
 WId QmlFrontEnd::nativeWindowId()
 {
-    // No native main window is owned in C++: the root creates its windows.
-    return 0;
+    return m_anchor ? m_anchor->winId() : 0;
 }
 
 void QmlFrontEnd::requestQuit()
