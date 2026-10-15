@@ -2955,6 +2955,41 @@ BOOST_AUTO_TEST_CASE(beacon_registry_superblock_state_is_current_only_for_its_ow
     registry.Reset();
 }
 
+BOOST_AUTO_TEST_CASE(beacon_registry_reads_of_passivated_records_leave_them_passivated)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+
+    const uint256 advertisement = AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME, 1);
+    const CBlock block_2 = ContractBlock({BeaconContractTx(GRC::ContractAction::REMOVE, cpid, key, START_TIME + DAY)});
+    const CBlockIndex index_2 = ContractIndex(2, START_TIME + DAY);
+
+    GRC::RegistryBookmarks db_heights;
+    bool found = false;
+    GRC::ApplyContracts(block_2, &index_2, db_heights, found);
+    BOOST_REQUIRE(registry.PendingBeacons().empty());
+
+    registry.PassivateDB();
+    const size_t in_memory = registry.GetBeaconDB().size();
+
+    // Both records are stored, and neither test loads one.
+    BOOST_CHECK(registry.GetBeaconDB().contains(advertisement));
+    BOOST_CHECK(registry.GetBeaconDB().contains(block_2.vtx[2].GetHash()));
+    BOOST_CHECK(!registry.GetBeaconDB().contains(uint256S("1515151515151515151515151515151515151515151515151515151515151515")));
+    BOOST_CHECK_EQUAL(registry.GetBeaconDB().size(), in_memory);
+
+    BOOST_CHECK_EQUAL(registry.DeletedEntries(cpid).size(), 1U);
+    BOOST_CHECK_EQUAL(registry.GetBeaconDB().size(), in_memory);
+
+    registry.Reset();
+}
+
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
