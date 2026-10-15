@@ -2018,6 +2018,42 @@ uint32_t StoredBeaconDBVersion()
 }
 
 //!
+//! \brief A block whose first two slots (coinbase and coinstake) carry no registry contracts.
+//!
+CBlock ContractBlock(const std::vector<CTransaction>& txs)
+{
+    CBlock block;
+    block.vtx.resize(2);
+    block.vtx.insert(block.vtx.end(), txs.begin(), txs.end());
+
+    return block;
+}
+
+CBlockIndex ContractIndex(const int height, const int64_t time)
+{
+    CBlockIndex index;
+    index.nVersion = 13;
+    index.nHeight = height;
+    index.nTime = time;
+
+    return index;
+}
+
+//!
+//! \brief Restart as a production node does: reload the registry from the beacon db, then run the startup replay
+//! over the newest beacon block, whose contracts are at the db height and so are applied again.
+//!
+void ReloadAndReplay(GRC::BeaconRegistry& registry, const CBlock& block, const CBlockIndex& index)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    ReloadRegistry(registry);
+
+    GRC::RegistryBookmarks db_heights;
+    bool found = false;
+    GRC::ReplayBlock(block, &index, db_heights, true, found);
+}
+
+//!
 //! \brief A transaction carrying one v2 beacon contract, for a test block.
 //!
 CTransaction BeaconContractTx(const GRC::ContractAction action, const GRC::Cpid& cpid, const CKey& key,
@@ -2701,6 +2737,167 @@ BOOST_AUTO_TEST_CASE(beacon_registry_replay_follows_connection_order)
     BOOST_REQUIRE(beacon);
     BOOST_CHECK(beacon->m_status == GRC::BeaconStatusForStorage::RENEWAL);
     BOOST_CHECK(beacon->m_previous_hash == Hash(block_2_hash, advertisement));
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_restart_replay_of_two_advertisements_from_v15)
+{
+    LOCK(cs_main);
+    grc_test::V15HeightGuard v15(1);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const CKeyID id = key.GetPubKey().GetID();
+
+    const uint256 first = AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME, 1);
+
+    // Block 2, the newest beacon block, carries two more advertisements of the key.
+    const CBlock block_2 = ContractBlock({BeaconContractTx(GRC::ContractAction::ADD, cpid, key, START_TIME + DAY),
+                                          BeaconContractTx(GRC::ContractAction::ADD, cpid, key, START_TIME + DAY + 1)});
+    const CBlockIndex index_2 = ContractIndex(2, START_TIME + DAY + 1);
+
+    GRC::RegistryBookmarks db_heights;
+    bool found = false;
+    GRC::ApplyContracts(block_2, &index_2, db_heights, found);
+
+    ReloadAndReplay(registry, block_2, index_2);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_REQUIRE(registry.PendingBeacons().at(id)->m_hash == block_2.vtx[3].GetHash());
+
+    GRC::RevertContracts(block_2, &index_2);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_CHECK(registry.PendingBeacons().at(id)->m_hash == first);
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_restart_replay_of_a_deletion_and_advertisement_from_v15)
+{
+    LOCK(cs_main);
+    grc_test::V15HeightGuard v15(1);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const CKeyID id = key.GetPubKey().GetID();
+
+    const uint256 first = AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME, 1);
+
+    // Block 2, the newest beacon block, deletes the pending beacon and advertises the key again.
+    const CBlock block_2 = ContractBlock({BeaconContractTx(GRC::ContractAction::REMOVE, cpid, key, START_TIME + DAY),
+                                          BeaconContractTx(GRC::ContractAction::ADD, cpid, key, START_TIME + DAY + 1)});
+    const CBlockIndex index_2 = ContractIndex(2, START_TIME + DAY + 1);
+
+    GRC::RegistryBookmarks db_heights;
+    bool found = false;
+    GRC::ApplyContracts(block_2, &index_2, db_heights, found);
+
+    ReloadAndReplay(registry, block_2, index_2);
+
+    GRC::RevertContracts(block_2, &index_2);
+    BOOST_REQUIRE_EQUAL(registry.PendingBeacons().count(id), 1U);
+    BOOST_CHECK(registry.PendingBeacons().at(id)->m_hash == first);
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_restart_replay_of_a_renewal_and_revocation_from_v15)
+{
+    LOCK(cs_main);
+    grc_test::V15HeightGuard v15(3);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const uint256 superblock = uint256S("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f");
+
+    const uint256 advertisement = AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME, 1);
+    registry.ActivatePending({key.GetPubKey().GetID()}, START_TIME + DAY, superblock, 2);
+    const uint256 activation = Hash(superblock, advertisement);
+
+    // Block 3, the newest beacon block, renews the beacon and then revokes it.
+    const int64_t time_3 = START_TIME + 2 * DAY;
+    const CBlock block_3 = ContractBlock({BeaconContractTx(GRC::ContractAction::ADD, cpid, key, time_3),
+                                          BeaconContractTx(GRC::ContractAction::REMOVE, cpid, key, time_3)});
+    const CBlockIndex index_3 = ContractIndex(3, time_3);
+
+    GRC::RegistryBookmarks db_heights;
+    bool found = false;
+    GRC::ApplyContracts(block_3, &index_3, db_heights, found);
+
+    // The restart's replay of block 3 must not change what the db holds.
+    ReloadAndReplay(registry, block_3, index_3);
+    BOOST_CHECK(registry.Try(cpid) == nullptr);
+    BOOST_CHECK(registry.PendingBeacons().empty());
+
+    ReloadAndReplay(registry, block_3, index_3);
+    BOOST_CHECK(registry.PendingBeacons().empty());
+
+    GRC::RevertContracts(block_3, &index_3);
+    BOOST_REQUIRE(registry.Try(cpid));
+    BOOST_CHECK(registry.Try(cpid)->m_hash == activation);
+    BOOST_CHECK(registry.PendingBeacons().empty());
+
+    ReloadRegistry(registry);
+    BOOST_REQUIRE(registry.Try(cpid));
+    BOOST_CHECK(registry.Try(cpid)->m_hash == activation);
+
+    registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_restart_replay_of_two_renewals)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const uint256 superblock = uint256S("1010101010101010101010101010101010101010101010101010101010101010");
+
+    const uint256 advertisement = AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME, 1);
+    registry.ActivatePending({key.GetPubKey().GetID()}, START_TIME + DAY, superblock, 2);
+    const uint256 activation = Hash(superblock, advertisement);
+
+    // Block 3, the newest beacon block, carries two renewals of the beacon.
+    const int64_t time_3 = START_TIME + 2 * DAY;
+    const CBlock block_3 = ContractBlock({BeaconContractTx(GRC::ContractAction::ADD, cpid, key, time_3),
+                                          BeaconContractTx(GRC::ContractAction::ADD, cpid, key, time_3 + 1)});
+    const CBlockIndex index_3 = ContractIndex(3, time_3 + 1);
+    const uint256 renewal_1 = block_3.vtx[2].GetHash();
+    const uint256 renewal_2 = block_3.vtx[3].GetHash();
+
+    GRC::RegistryBookmarks db_heights;
+    bool found = false;
+    GRC::ApplyContracts(block_3, &index_3, db_heights, found);
+    BOOST_REQUIRE(registry.Try(cpid) && registry.Try(cpid)->m_hash == renewal_2);
+
+    for (int restart = 0; restart < 2; ++restart) {
+        ReloadAndReplay(registry, block_3, index_3);
+
+        BOOST_REQUIRE(registry.Try(cpid));
+        BOOST_CHECK(registry.Try(cpid)->m_hash == renewal_2);
+
+        const auto stored_renewal_1 = registry.GetBeaconDB().find(renewal_1);
+        BOOST_REQUIRE(stored_renewal_1 != registry.GetBeaconDB().end());
+        BOOST_CHECK(stored_renewal_1->second->m_previous_hash == activation);
+
+        // The chain from the current beacon back to its root is intact.
+        BOOST_CHECK_NO_THROW(registry.GetBeaconChainletRoot(registry.Try(cpid)));
+    }
 
     registry.Reset();
 }

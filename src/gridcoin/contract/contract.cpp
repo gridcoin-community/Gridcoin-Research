@@ -488,7 +488,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EX
 void GRC::ApplyContracts(
     const CBlock& block,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    bool& out_found_contract, const bool skip_stored_beacon_contracts) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     out_found_contract = false;
 
@@ -497,14 +497,14 @@ void GRC::ApplyContracts(
         iter != end;
         ++iter)
     {
-        ApplyContracts(*iter, pindex, db_heights, out_found_contract);
+        ApplyContracts(*iter, pindex, db_heights, out_found_contract, skip_stored_beacon_contracts);
     }
 }
 
 void GRC::ApplyContracts(
     const CTransaction& tx,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    bool& out_found_contract, const bool skip_stored_beacon_contracts) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     for (const auto& contract : tx.GetContracts()) {
         // Do not (re)apply contracts that have already been stored/loaded into
@@ -532,6 +532,16 @@ void GRC::ApplyContracts(
         }
 
         if (skip_apply_contract) continue;
+
+        // The startup replay applies the contracts of the block at a registry's db height again, on top of the state
+        // loaded from the db. A beacon contract of that block whose record is already stored is in that state, and is
+        // skipped. Above the db height the contract is applied.
+        if (skip_stored_beacon_contracts && contract.m_type == ContractType::BEACON
+            && db_heights.GetRegistryBlockHeight(ContractType::BEACON) == pindex->nHeight
+            && GetBeaconRegistry().GetBeaconDB().contains(tx.GetHash())) {
+            out_found_contract = true;
+            continue;
+        }
 
         // V2 contracts are checked upon receipt:
         if (contract.m_version == 1 && !CheckLegacyContract(contract, tx, pindex->nHeight)) {
@@ -648,7 +658,7 @@ void GRC::ReplayBlock(const CBlock& block, const CBlockIndex* const pindex, cons
     const bool connection_order = IsV15Enabled(pindex->nHeight);
 
     if (apply_contracts && !connection_order) {
-        ApplyContracts(block, pindex, db_heights, out_found_contract);
+        ApplyContracts(block, pindex, db_heights, out_found_contract, /* skip_stored_beacon_contracts */ true);
     }
 
     if (pindex->IsSuperblock() && pindex->nVersion >= 11) {
@@ -673,7 +683,7 @@ void GRC::ReplayBlock(const CBlock& block, const CBlockIndex* const pindex, cons
     }
 
     if (apply_contracts && connection_order) {
-        ApplyContracts(block, pindex, db_heights, out_found_contract);
+        ApplyContracts(block, pindex, db_heights, out_found_contract, /* skip_stored_beacon_contracts */ true);
     }
 }
 

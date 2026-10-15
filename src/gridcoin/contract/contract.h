@@ -618,10 +618,12 @@ void ReplayContracts(CBlockIndex *pindex_end, CBlockIndex *pindex_start = nullpt
 //! \param pindex           Block index context for the block.
 //! \param beacon_db_height Height that db is updated to prior to call
 //! \param out_found        Will update to \c true when a block contains a contract.
+//! \param skip_stored_beacon_contracts Skip a beacon contract whose record the beacon db already holds (the
+//! startup replay of the block at the db height).
 //!
 void ApplyContracts(const CBlock& block,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool& out_found_contract, const bool skip_stored_beacon_contracts = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Apply contracts from transactions by passing them to the appropriate
@@ -630,10 +632,11 @@ void ApplyContracts(const CBlock& block,
 //! \param tx               Transaction to extract contracts from.
 //! \param pindex           Block index for the block that contains the transaction.
 //! \param beacon_db_height Height that db is updated to prior to call
+//! \param skip_stored_beacon_contracts Skip a beacon contract whose record the beacon db already holds.
 //!
 void ApplyContracts(const CTransaction& tx,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool& out_found_contract, const bool skip_stored_beacon_contracts = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Perform contextual validation for the contracts in a transaction.
