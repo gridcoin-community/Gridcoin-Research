@@ -1371,8 +1371,9 @@ void SetupServerArgs()
     hidden_args.emplace_back("-autogreylistredesignheight");
 
     // This puts hidden options in the form of -clear<type>history, where <type> is the contract types that have a
-    // registry with a backing db. This is currently beacon, project, protocol, scraper, sidestake (starting at V13
-    // height), and the two pool types, which share the pool registry.
+    // registry with a backing db. This is currently beacon, project, protocol, scraper, sidestake (from V13),
+    // pool_register and pool_approve (one pool registry), and poll and vote (one poll registry, from V11; either
+    // -clearpollhistory or -clearvotehistory clears both of its dbs).
     for (const auto& contract_type : GRC::RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
         std::string history_arg = "-clear" + GRC::Contract::Type::ToString(contract_type) + "history";
 

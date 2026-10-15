@@ -611,6 +611,33 @@ public:
 
     std::atomic<int> registry_traversal_in_progress = 0;           //!< Count of registry traversals in progress.
     std::atomic<bool> reorg_occurred_during_reg_traversal = false; //!< Boolean to indicate whether a reorg occurred.
+    std::atomic<bool> m_replay_in_progress = false;                //!< A replay or rebuild is applying contracts.
+
+    //!
+    //! \brief Marks a contract replay (the startup replay or a rebuild) for its scope, so the polls and votes it
+    //! applies are not announced: only a block that connects live runs -pollnotify or signals the GUI.
+    //!
+    class ReplayScope
+    {
+    public:
+        explicit ReplayScope(PollRegistry& registry)
+            : m_registry(registry), m_saved(registry.m_replay_in_progress.exchange(true))
+        {
+        }
+        ~ReplayScope() { m_registry.m_replay_in_progress = m_saved; }
+
+        ReplayScope(const ReplayScope&) = delete;
+        ReplayScope& operator=(const ReplayScope&) = delete;
+
+    private:
+        PollRegistry& m_registry;
+        const bool m_saved;
+    };
+
+    //!
+    //! \brief IsStored(), taking the registry lock: for the startup replay's skip of stored contracts.
+    //!
+    bool IsStoredForReplay(const uint256& hash);
 
 private:
     PollMapByTitle m_polls GUARDED_BY(cs_poll_registry);             //!< Display map: ACTIVE polls by title key.
@@ -640,7 +667,7 @@ private:
     //! \brief Mark the poll dbs for a rebuild at the next start: write version 0 under the poll db's version key, so
     //! the next Initialize() clears both dbs and the startup replay rebuilds them from V11.
     //!
-    void FlagRebuild() EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+    void FlagRebuild() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Clear every in-memory structure, keeping the dbs' contents.

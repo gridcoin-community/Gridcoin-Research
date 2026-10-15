@@ -621,13 +621,13 @@ void ReplayContracts(CBlockIndex *pindex_end, CBlockIndex *pindex_start = nullpt
 //! \param pindex           Block index context for the block.
 //! \param beacon_db_height Height that db is updated to prior to call
 //! \param out_found        Will update to \c true when a block contains a contract.
-//! \param skip_stored_beacon_contracts Skip a beacon contract whose record the beacon db already holds (the
-//! startup replay of the block at the db height).
+//! \param skip_stored_registry_contracts Skip a beacon, poll or vote contract whose record its db already holds
+//! when the block is at that db's height (the startup replay of the block at the db height).
 //! \param beacons_only     Apply beacon contracts alone (a beacon registry rebuild).
 //!
 void ApplyContracts(const CBlock& block,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract, const bool skip_stored_beacon_contracts = false, const bool beacons_only = false)
+    bool& out_found_contract, const bool skip_stored_registry_contracts = false, const bool beacons_only = false)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
@@ -637,12 +637,12 @@ void ApplyContracts(const CBlock& block,
 //! \param tx               Transaction to extract contracts from.
 //! \param pindex           Block index for the block that contains the transaction.
 //! \param beacon_db_height Height that db is updated to prior to call
-//! \param skip_stored_beacon_contracts Skip a beacon contract whose record the beacon db already holds.
+//! \param skip_stored_registry_contracts See the block overload.
 //! \param beacons_only     Apply beacon contracts alone (a beacon registry rebuild).
 //!
 void ApplyContracts(const CTransaction& tx,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract, const bool skip_stored_beacon_contracts = false, const bool beacons_only = false)
+    bool& out_found_contract, const bool skip_stored_registry_contracts = false, const bool beacons_only = false)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!

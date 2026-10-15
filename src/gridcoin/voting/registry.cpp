@@ -20,6 +20,8 @@
 #include "validation.h"
 #include <util/string.h>
 
+#include <set>
+
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
@@ -1029,6 +1031,13 @@ bool PollRegistry::IsStored(const uint256& hash)
     return m_poll_db.contains(hash) || m_vote_db.contains(hash);
 }
 
+bool PollRegistry::IsStoredForReplay(const uint256& hash)
+{
+    LOCK(cs_poll_registry);
+
+    return IsStored(hash);
+}
+
 uint256 PollRegistry::VoteHead(const uint256& poll_txid) const
 {
     const auto iter = m_vote_links.find(poll_txid);
@@ -1050,8 +1059,18 @@ std::optional<uint256> PollRegistry::TitleOwner(const std::string& title_key) co
 std::vector<uint256> PollRegistry::WalkVotes(const uint256& poll_txid) const
 {
     std::vector<uint256> votes;
+    std::set<uint256> seen;
 
     for (uint256 hash = VoteHead(poll_txid); !hash.IsNull();) {
+        // A link chain that loops back on itself is an error. Cut the walk and rebuild the registry from the chain
+        // at the next start.
+        if (!seen.insert(hash).second) {
+            error("%s: vote link chain of poll %s loops at %s; poll registry flagged for a rebuild",
+                  __func__, poll_txid.ToString(), hash.ToString());
+            FlagRebuild();
+            break;
+        }
+
         const auto link = m_vote_db.peek(hash);
 
         if (!link) {
@@ -1102,7 +1121,7 @@ bool PollRegistry::EraseVoteLink(const uint256& vote_txid)
     return true;
 }
 
-void PollRegistry::FlagRebuild()
+void PollRegistry::FlagRebuild() const
 {
     uint32_t version = 0;
     std::pair<std::string, std::string> key = std::make_pair(std::string("poll_db"), std::string("version"));
@@ -1546,11 +1565,13 @@ void PollRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(c
         m_poll_entries[poll_txid] = add_record->second;
         IndexPollRecord(*add_record->second);
 
-        if (const auto iter = m_polls_by_txid.find(poll_txid); iter != m_polls_by_txid.end()) {
+        if (const auto iter = m_polls_by_txid.find(poll_txid); iter != m_polls_by_txid.end() && !m_replay_in_progress) {
             iter->second.Notify(PollReference::PollNotificationType::POLL_ADD);
         }
 
-        uiInterface.NewPollReceived(record->m_timestamp);
+        if (!m_replay_in_progress) {
+            uiInterface.NewPollReceived(record->m_timestamp);
+        }
 
         return;
     }
@@ -1655,10 +1676,12 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
 
     m_latest_poll = &poll_ref;
 
-    poll_ref.Notify(PollReference::PollNotificationType::POLL_ADD);
+    if (!m_replay_in_progress) {
+        poll_ref.Notify(PollReference::PollNotificationType::POLL_ADD);
 
-    if (!poll_ref.Expired(GetAdjustedTime())) {
-        uiInterface.NewPollReceived(poll_ref.Time());
+        if (!poll_ref.Expired(GetAdjustedTime())) {
+            uiInterface.NewPollReceived(poll_ref.Time());
+        }
     }
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added poll %s to the registry, m_polls.size() = %u.",
@@ -1745,7 +1768,7 @@ void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added vote %s to poll %s.", __func__, vote_txid.GetHex(), poll_ref->m_title);
 
-    if (!poll_ref->Expired(GetAdjustedTime())) {
+    if (!m_replay_in_progress && !poll_ref->Expired(GetAdjustedTime())) {
         uiInterface.NewVoteReceived(poll_ref->Txid());
     }
 }
@@ -1777,7 +1800,9 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
         return;
     }
 
-    poll_ref->Notify(PollReference::PollNotificationType::POLL_DELETE);
+    if (!m_replay_in_progress) {
+        poll_ref->Notify(PollReference::PollNotificationType::POLL_DELETE);
+    }
 
     const uint256 txid = poll_ref->Txid();
     const std::string title_key = ToLower(poll_ref->m_title);
@@ -1828,7 +1853,9 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
              payload->m_poll.m_title,
              m_polls.size());
 
-    uiInterface.NewPollReceived(poll_time);
+    if (!m_replay_in_progress) {
+        uiInterface.NewPollReceived(poll_time);
+    }
 }
 
 void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
@@ -1849,7 +1876,7 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
                      poll_ref->m_title,
                      poll_ref->Votes().size());
 
-            if (!poll_ref->Expired(GetAdjustedTime())) {
+            if (!m_replay_in_progress && !poll_ref->Expired(GetAdjustedTime())) {
                 uiInterface.NewVoteReceived(poll_ref->Txid());
             }
         }
@@ -1871,7 +1898,7 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
             poll_ref->UnlinkVote(ctx.m_tx.GetHash());
         }
 
-        if (!poll_ref->Expired(GetAdjustedTime())) {
+        if (!m_replay_in_progress && !poll_ref->Expired(GetAdjustedTime())) {
             uiInterface.NewVoteReceived(poll_ref->Txid());
         }
     }

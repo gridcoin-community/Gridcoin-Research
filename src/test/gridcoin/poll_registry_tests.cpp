@@ -19,6 +19,7 @@
 #include "index/disktxpos.h"
 #include "index/txindex.h"
 #include "node/blockstorage.h"
+#include "node/ui_interface.h"
 #include "primitives/block.h"
 #include "primitives/transaction.h"
 #include "rpc/blockchain.h"
@@ -713,6 +714,106 @@ BOOST_AUTO_TEST_CASE(a_link_reverted_out_of_order_flags_a_rebuild)
     std::pair<std::string, std::string> key = std::make_pair(std::string("poll_db"), std::string("version"));
     CTxDB txdb("r");
     BOOST_REQUIRE(txdb.ReadGenericSerializable(key, version));
+    BOOST_CHECK_EQUAL(version, 0U);
+}
+
+BOOST_AUTO_TEST_CASE(clearing_either_history_clears_both_dbs)
+{
+    CBlockIndex index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+    const GRC::Contract vote = MakeVoteContract(poll.tx.GetHash());
+    const CTransaction v1 = MakeVoteTxFor(vote, 1700000100);
+    registry.Add({poll.contract, poll.tx, &index});
+    registry.Add({vote, v1, &index});
+
+    // What -clearpollhistory or -clearvotehistory does before Initialize.
+    registry.Reset();
+    registry.Initialize();
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK(!registry.IsStored(poll.tx.GetHash()));
+    BOOST_CHECK(!registry.IsStored(v1.GetHash()));
+    BOOST_CHECK_EQUAL(registry.GetDBHeight(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(a_replayed_block_announces_no_poll)
+{
+    const int64_t now = GetAdjustedTime();
+    CBlockIndex replayed_index = MakeBlockIndex(V13Height() + 10, now);
+    CBlockIndex live_index = MakeBlockIndex(V13Height() + 11, now + 60);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    int announced = 0;
+    boost::signals2::scoped_connection watch = uiInterface.NewPollReceived_connect([&announced](int64_t) { ++announced; });
+
+    const PollTx replayed = MakePollTx("Replayed", now);
+    const PollTx live = MakePollTx("Live", now + 60);
+
+    CBlock replayed_block;
+    replayed_block.vtx.resize(2);
+    replayed_block.vtx.push_back(replayed.tx);
+
+    CBlock live_block;
+    live_block.vtx.resize(2);
+    live_block.vtx.push_back(live.tx);
+
+    GRC::RegistryBookmarks heights;
+    bool found = false;
+
+    // A poll the startup replay or a rebuild applies is registered but not announced.
+    GRC::ReplayBlock(replayed_block, &replayed_index, heights, true, found);
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_REQUIRE(GRC::GetPollRegistry().TryByTxid(replayed.tx.GetHash()) != nullptr);
+    }
+    BOOST_CHECK_EQUAL(announced, 0);
+
+    // A poll a connecting block applies is announced.
+    GRC::ApplyContracts(live_block, &live_index, heights, found, false);
+    BOOST_CHECK_EQUAL(announced, 1);
+}
+
+BOOST_AUTO_TEST_CASE(a_cyclic_vote_chain_is_cut_and_flags_a_rebuild)
+{
+    CBlockIndex index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+    registry.Add({poll.contract, poll.tx, &index});
+
+    // Two links that point at each other, written straight to the vote db.
+    const uint256 a = uint256S("a1");
+    const uint256 b = uint256S("b2");
+    GRC::VoteLinkDB links(1);
+
+    for (const auto& [hash, previous] : {std::make_pair(a, b), std::make_pair(b, a)}) {
+        GRC::VoteLinkEntry link;
+        link.m_poll_txid = poll.tx.GetHash();
+        link.m_hash = hash;
+        link.m_previous_hash = previous;
+        link.m_block_height = index.nHeight;
+        link.m_status = GRC::VoteLinkStatus::ACTIVE;
+        BOOST_REQUIRE(links.insert(hash, index.nHeight, link));
+    }
+
+    Restart(registry);
+
+    // Reading the votes ends, and the registry is flagged for a rebuild at the next start.
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_CHECK_LE(registry.TryByTxid(poll.tx.GetHash())->Votes().size(), 2U);
+    }
+
+    uint32_t version = 1;
+    std::pair<std::string, std::string> key = std::make_pair(std::string("poll_db"), std::string("version"));
+    BOOST_REQUIRE(CTxDB("r").ReadGenericSerializable(key, version));
     BOOST_CHECK_EQUAL(version, 0U);
 }
 

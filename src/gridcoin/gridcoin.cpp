@@ -284,12 +284,15 @@ void InitializeContracts(CBlockIndex* pindexBest) EXCLUSIVE_LOCKS_REQUIRED(cs_ma
     // by the following remaining contract types which have no registry (backing) db:
     //
     // CONTRACT type                      Wallet startup replay requirement           Block reorg replay requirement
-    // POLL/VOTE (polls and voting)               V11 or std lookback                             false
+    // POLL/VOTE (polls and voting)       from the poll registry's db height          false
     //
-    // Note that the handler reset and contract replay forwards from lookback_window_low_height no longer is required
-    // for polls and votes. The reason for this is quite simple. Polls and votes are UNIQUE. The reversion of an add
-    // is simply to delete them. The wallet startup replay requirement is still required for polls and votes, because
-    // the Poll/Vote classes do not have a backing registry db yet.
+    // Polls and votes now have backing dbs: a poll db and a vote link db in the poll registry, loaded like the
+    // other registries' dbs, with the block at the db height replayed and its stored contracts skipped. Unlike every
+    // other registry, the poll registry's floor is V11 on every node: its handler stores nothing below V11, although
+    // block connection applies contracts from the research-age height (364,501 on mainnet), and the max() with
+    // V11_height below keeps its 0 bookmark (before its first record) from pulling the replay under V11. The poll
+    // registry's scope is what the poll history shows and, from v15, its title index is consensus, so both must be
+    // the same on every node.
     int start_height = std::min(std::max(db_heights.GetLowestRegistryBlockHeight(), V11_height),
                                 lookback_window_low_height);
 

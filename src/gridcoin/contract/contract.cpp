@@ -490,7 +490,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start, co
 void GRC::ApplyContracts(
     const CBlock& block,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract, const bool skip_stored_beacon_contracts, const bool beacons_only)
+    bool& out_found_contract, const bool skip_stored_registry_contracts, const bool beacons_only)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     out_found_contract = false;
@@ -500,14 +500,14 @@ void GRC::ApplyContracts(
         iter != end;
         ++iter)
     {
-        ApplyContracts(*iter, pindex, db_heights, out_found_contract, skip_stored_beacon_contracts, beacons_only);
+        ApplyContracts(*iter, pindex, db_heights, out_found_contract, skip_stored_registry_contracts, beacons_only);
     }
 }
 
 void GRC::ApplyContracts(
     const CTransaction& tx,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract, const bool skip_stored_beacon_contracts, const bool beacons_only)
+    bool& out_found_contract, const bool skip_stored_registry_contracts, const bool beacons_only)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     for (const auto& contract : tx.GetContracts()) {
@@ -546,9 +546,21 @@ void GRC::ApplyContracts(
         // The startup replay applies the contracts of the block at a registry's db height again, on top of the state
         // loaded from the db. A beacon contract of that block whose record is already stored is in that state, and is
         // skipped. Above the db height the contract is applied.
-        if (skip_stored_beacon_contracts && contract.m_type == ContractType::BEACON
+        if (skip_stored_registry_contracts && contract.m_type == ContractType::BEACON
             && db_heights.GetRegistryBlockHeight(ContractType::BEACON) == pindex->nHeight
             && GetBeaconRegistry().GetBeaconDB().contains(tx.GetHash())) {
+            out_found_contract = true;
+            continue;
+        }
+
+        // Likewise for the poll registry: a POLL or VOTE contract of the block AT the poll registry's db height
+        // whose record is stored is already in the loaded state; skip it so it neither links again nor announces.
+        // Poll reverts erase their records at every height, so no poll or vote record is stored above the db height.
+        // Below V11 the poll registry stores nothing (its floor), so nothing is skipped.
+        if (skip_stored_registry_contracts
+            && (contract.m_type == ContractType::POLL || contract.m_type == ContractType::VOTE)
+            && db_heights.GetRegistryBlockHeight(contract.m_type.Value()) == pindex->nHeight
+            && GetPollRegistry().IsStoredForReplay(tx.GetHash())) {
             out_found_contract = true;
             continue;
         }
@@ -683,12 +695,16 @@ void GRC::ReplayBlock(const CBlock& block, const CBlockIndex* const pindex, cons
 {
     out_found_contract = false;
 
+    // Contracts the startup replay or a rebuild applies are not announced (no -pollnotify command, no GUI signal);
+    // only a block that connects live announces its polls and votes.
+    const PollRegistry::ReplayScope replaying(GetPollRegistry());
+
     // From block version 15 the replay follows block connection: a superblock's activations, then the block's
     // contracts.
     const bool connection_order = IsV15Enabled(pindex->nHeight);
 
     if (apply_contracts && !connection_order) {
-        ApplyContracts(block, pindex, db_heights, out_found_contract, /* skip_stored_beacon_contracts */ true,
+        ApplyContracts(block, pindex, db_heights, out_found_contract, /* skip_stored_registry_contracts */ true,
                        beacons_only);
     }
 
@@ -714,7 +730,7 @@ void GRC::ReplayBlock(const CBlock& block, const CBlockIndex* const pindex, cons
     }
 
     if (apply_contracts && connection_order) {
-        ApplyContracts(block, pindex, db_heights, out_found_contract, /* skip_stored_beacon_contracts */ true,
+        ApplyContracts(block, pindex, db_heights, out_found_contract, /* skip_stored_registry_contracts */ true,
                        beacons_only);
     }
 }
