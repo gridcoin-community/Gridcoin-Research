@@ -276,8 +276,9 @@ The root, `WindowManager.qml`, shows each core message in a window of its own, a
 - Qt versions: the carried tree loads on Qt 6.4 or later with the Qt5Compat
   GraphicalEffects module (section 1). Without it `gridcoinresearch-qml` stops at start with
   a message naming the module (section 1). A root that compiles but cannot be created ends
-  with a fatal-error message, and the GUI log (debug.log, or debug_gui.log under
-  `-multiprocess`) holds the QML errors. Three files import the module: `ColorizableImage.qml`
+  the GUI with a "could not start" message box and EXIT_FAILURE, and the GUI log (debug.log,
+  or debug_gui.log under `-multiprocess`) holds the QML errors. Three files import the
+  module: `ColorizableImage.qml`
   tints the tab menu's icons with its `ColorOverlay`, and `InfoPopup.qml` and
   `MMPControls/GroupBox.qml` draw their shadows with `DropShadow`. Under Qt Quick's software
   adaptation the tinted icons and the shadows draw nothing.

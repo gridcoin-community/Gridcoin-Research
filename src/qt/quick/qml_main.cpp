@@ -86,9 +86,11 @@ int main(int argc, char* argv[])
 {
     // A root that does not compile, for example without the Qt5Compat
     // GraphicalEffects module, is stopped at start by the factory's root
-    // compile; a root that compiles but cannot be created makes
-    // QmlFrontEnd::construct() throw, and StartGridcoinQt exits with a fatal
-    // error (in the monolithic build, before the core starts).
+    // compile. A root that compiles but cannot be created makes
+    // QmlFrontEnd::construct() throw GuiFrontEndUnusable: StartGridcoinQt
+    // reports it in a message box and on stderr, and GuiMain returns
+    // EXIT_FAILURE through its ordinary teardown (in the monolithic build
+    // before the core starts; under -multiprocess the daemon keeps running).
     try {
         return GuiMain(argc, argv, MakeQmlFrontEnd);
     } catch (const QmlRootUnusable&) {
