@@ -349,35 +349,26 @@ uint32_t StoredVersion(const std::string& key_type)
 //!
 PollRegistry g_poll_registry;
 
-//! The first block after \p pindex_start, at or below \p pindex_bound's height, whose time exceeds \p end_time, or
-//! nullptr. Walks the main chain forward; the caller has checked that \p pindex_start and \p pindex_bound are on it.
-const CBlockIndex* FindPastEndBlock(const CBlockIndex* pindex_start, const int64_t end_time,
-                                    const CBlockIndex* pindex_bound) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+//! Walk the main chain forward from the block after \p pindex_searched, at most to \p pindex_bound's height, until the
+//! first block whose time exceeds \p end_time. Records the first block whose time is at or past \p end_time in
+//! \p pindex_at_or_past (if not yet found) and the first block past it in \p pindex_past_end, and leaves
+//! \p pindex_searched at the last block examined. Does nothing once \p pindex_past_end is set. The caller has checked
+//! that \p pindex_searched and \p pindex_bound are on the main chain.
+void SearchForEnd(const CBlockIndex*& pindex_searched, const CBlockIndex*& pindex_at_or_past,
+                  const CBlockIndex*& pindex_past_end, const int64_t end_time, const CBlockIndex* pindex_bound)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    for (const CBlockIndex* pindex = pindex_start->pnext;
-         pindex && pindex->nHeight <= pindex_bound->nHeight;
-         pindex = pindex->pnext) {
-        if (pindex->nTime > end_time) {
-            return pindex;
+    while (!pindex_past_end && pindex_searched->pnext && pindex_searched->pnext->nHeight <= pindex_bound->nHeight) {
+        pindex_searched = pindex_searched->pnext;
+
+        if (!pindex_at_or_past && pindex_searched->nTime >= end_time) {
+            pindex_at_or_past = pindex_searched;
+        }
+
+        if (pindex_searched->nTime > end_time) {
+            pindex_past_end = pindex_searched;
         }
     }
-
-    return nullptr;
-}
-
-//! The first block from \p pindex_start (itself included) whose time is at or past \p end_time, stopping at
-//! \p pindex_tip: a finished poll's active vote weight range end, bounded by the pinned tip. Same preconditions as
-//! FindPastEndBlock.
-const CBlockIndex* FindFirstBlockAtOrPast(const CBlockIndex* pindex_start, const int64_t end_time,
-                                          const CBlockIndex* pindex_tip) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    const CBlockIndex* pindex = pindex_start;
-
-    while (pindex->pnext && pindex->nHeight < pindex_tip->nHeight && pindex->nTime < end_time) {
-        pindex = pindex->pnext;
-    }
-
-    return pindex;
 }
 } // Anonymous namespace
 
@@ -467,7 +458,9 @@ PollReference::PollReference()
     , m_stored(false)
     , m_deleted(false)
     , m_registry(nullptr)
-    , m_past_end_from(nullptr)
+    , m_end_search_from(nullptr)
+    , m_end_searched(nullptr)
+    , m_at_or_past_end(nullptr)
     , m_past_end(nullptr)
 {
 }
@@ -1287,12 +1280,20 @@ PollSnapshot PollRegistry::SnapshotWithoutVotes(const PollReference& ref, const 
     }
 
     if (ref.m_pindex) {
-        // A block stays the first past the end exactly while it stays on the main chain (the blocks before it are
-        // then unchanged), so the walk runs once per poll, and again only after a reorg replaces that block.
-        if (ref.m_past_end_from != ref.m_pindex || ref.m_past_end == nullptr || !ref.m_past_end->IsInMainChain()) {
-            ref.m_past_end_from = ref.m_pindex;
-            ref.m_past_end = FindPastEndBlock(ref.m_pindex, snapshot.m_end_time, pindexBest);
+        // The search for the poll's end runs once per poll and stops at the first block past the end; an open poll's
+        // resumes after the last block it examined. Everything it found stays valid exactly while that block stays on
+        // the main chain (the blocks before it are then unchanged). A reorg that disconnects it, or a reference
+        // re-created with another block, starts the search again from the poll's block, which counts toward the first
+        // block at or past the end but not toward the first block past it.
+        if (ref.m_end_search_from != ref.m_pindex || ref.m_end_searched == nullptr
+            || !ref.m_end_searched->IsInMainChain()) {
+            ref.m_end_search_from = ref.m_pindex;
+            ref.m_end_searched = ref.m_pindex;
+            ref.m_at_or_past_end = ref.m_pindex->nTime >= snapshot.m_end_time ? ref.m_pindex : nullptr;
+            ref.m_past_end = nullptr;
         }
+
+        SearchForEnd(ref.m_end_searched, ref.m_at_or_past_end, ref.m_past_end, snapshot.m_end_time, pindexBest);
 
         // The pinned tip's chain is the main chain up to the tip's height.
         if (ref.m_past_end && ref.m_past_end->nHeight <= pindex_tip->nHeight) {
@@ -1315,8 +1316,11 @@ PollSnapshot PollRegistry::SnapshotWithoutVotes(const PollReference& ref, const 
 
     // A finished poll's active vote weight range ends at its first block at or past the end; an open
     // poll's ends at the pinned tip (m_pindex_end stays nullptr).
-    if (snapshot.m_finished && ref.m_pindex) {
-        snapshot.m_pindex_end = FindFirstBlockAtOrPast(ref.m_pindex, snapshot.m_end_time, pindex_tip);
+    // A finished poll's first block at or past the end is on the tip's chain at or below the tip: it is at or
+    // below the first block past the end, which is at or below the tip for a poll with m_v15_end, and for a poll
+    // finished by the tip's time is the tip or a block before it (or the poll's own block, when that is the tip).
+    if (snapshot.m_finished) {
+        snapshot.m_pindex_end = ref.m_at_or_past_end;
     }
 
     return snapshot;

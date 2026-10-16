@@ -1797,6 +1797,64 @@ BOOST_AUTO_TEST_CASE(the_newest_open_poll_is_judged_by_blocks)
     BOOST_CHECK_EQUAL(voting->latestActivePollTime(), 0);
 }
 
+//!
+//! A finished poll's active vote weight range end is found once, with its first block past the end, and served from
+//! the poll's cache while that block stays on the main chain. A block's time never changes in production, so a second
+//! walk would find the same block; the test changes one only to see whether the walk runs again.
+//!
+BOOST_AUTO_TEST_CASE(a_finished_polls_range_end_is_found_once)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 10 * DAY;
+    const int64_t end = t0 + 7 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip at_end = LinkBlock(polled.m_pindex, end, GRC::Claim(), {}, bits);
+    const LinkedTip past_end = LinkBlock(at_end.m_pindex, end + 60, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    BOOST_REQUIRE(TakeSnapshot(poll.tx.GetHash(), past_end.m_pindex).m_pindex_end == at_end.m_pindex);
+
+    at_end.m_pindex->nTime = end - 1;
+    const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), past_end.m_pindex);
+    at_end.m_pindex->nTime = end;
+
+    BOOST_CHECK(snapshot.m_pindex_end == at_end.m_pindex);
+}
+
+//!
+//! An open poll's search for its first block past the end resumes where the last snapshot left it, rather than
+//! walking again from the poll's block on every snapshot. As above, the test changes a block's time
+//! only to see whether the walk passes that block again.
+//!
+BOOST_AUTO_TEST_CASE(an_open_polls_search_for_its_end_resumes_where_it_stopped)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 3 * DAY;
+    const int64_t end = t0 + 7 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip first = LinkBlock(polled.m_pindex, t0 + DAY, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    BOOST_REQUIRE(!TakeSnapshot(poll.tx.GetHash(), first.m_pindex).m_finished);
+
+    const LinkedTip second = LinkBlock(first.m_pindex, t0 + 2 * DAY, GRC::Claim(), {}, bits);
+    first.m_pindex->nTime = end + 60;
+    const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), second.m_pindex);
+    first.m_pindex->nTime = t0 + DAY;
+
+    BOOST_CHECK(snapshot.m_pindex_past_end == nullptr);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 #if defined(__clang__)

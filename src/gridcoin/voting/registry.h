@@ -226,11 +226,16 @@ private:
     bool m_stored;                              //!< Backed by the poll db (a poll from V11 on).
     bool m_deleted;                             //!< Deleted by a master-key REMOVE; kept for its txid and title.
     const PollRegistry* m_registry;             //!< The registry that holds this reference.
-    //! The first block past the poll's end found on the main chain, and the poll block it was found from: a cache for
-    //! PollRegistry::Snapshot, checked against the main chain on every read, so a reorg that disconnects the block
-    //! invalidates it at the next read. Block index entries are never freed (GRC::BlockIndexPool), so the pointer
-    //! stays valid after the block leaves the main chain. Guarded by cs_poll_registry.
-    mutable const CBlockIndex* m_past_end_from;
+    //! PollRegistry::Snapshot's cache of the forward search on the main chain for the poll's end: the poll block the
+    //! search started from, the last block it examined, and the first block at or past the end and the first block
+    //! past the end it found (nullptr until found). The search stops at the first block past the end; an open poll's
+    //! resumes after the last block examined. The cache holds while the last block examined is on the main chain (its
+    //! ancestors, and so everything found, are then unchanged), checked on every read, so a reorg that disconnects it
+    //! invalidates the cache at the next read. Block index entries are never freed (GRC::BlockIndexPool), so the
+    //! pointers stay valid after a block leaves the main chain. Guarded by cs_poll_registry.
+    mutable const CBlockIndex* m_end_search_from;
+    mutable const CBlockIndex* m_end_searched;
+    mutable const CBlockIndex* m_at_or_past_end;
     mutable const CBlockIndex* m_past_end;
 }; // PollReference
 
