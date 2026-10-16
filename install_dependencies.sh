@@ -22,6 +22,10 @@ install_deps() {
     # existing 3-arg callers are unaffected. Note: libmultiprocess is not packaged
     # by any distro and must be built from source (see the note emitted below).
     local ENABLE_MULTIPROCESS="${4:-false}"
+    # QML front end (an ENABLE_QML=ON build): when "true", add the Qt Quick
+    # development packages and the QML runtime modules. Defaults to "false" so
+    # existing 3- and 4-arg callers are unaffected.
+    local ENABLE_QML="${5:-false}"
 
     # Detect OS Type first
     OS_TYPE=$(uname -s)
@@ -441,6 +445,48 @@ install_deps() {
                 ;;
             alpine)
                 append_base capnproto capnproto-dev
+                ;;
+        esac
+    fi
+
+    # --- QML Front End (Qt Quick) Dependencies ---
+    # The packages join PKGS_QT, which on Linux is installed only for a Qt 6
+    # GUI build, the only build that can set ENABLE_QML. The apt install below
+    # runs with --no-install-recommends and qt6-declarative-dev does not depend
+    # on the QML runtime modules, so each module is listed. macOS needs nothing
+    # more: its Qt 6 subset above already includes qtdeclarative.
+    if [[ "$ENABLE_QML" == "true" ]]; then
+        echo "QML front end requested: adding the Qt Quick packages."
+        case $OS in
+            debian|ubuntu|linuxmint)
+                append_qt qt6-declarative-dev qt6-declarative-dev-tools
+                append_qt qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+                    qml6-module-qtquick-window qml6-module-qtquick-templates qml6-module-qtquick-shapes \
+                    qml6-module-qt-labs-platform
+                append_qt qml6-module-qtqml qml6-module-qtqml-models qml6-module-qtqml-workerscript \
+                    qml6-module-qttest
+                # Qt reads SVG images only through its svg image-format plugin
+                # (imageformats/libqsvg.so). Where the archive ships Qt's svg
+                # plugins as a package of their own (qt6-svg-plugins: Debian
+                # trixie and later, Ubuntu 25.10 and later), apt only recommends
+                # it, so name it; where it ships no such package (Ubuntu 24.04),
+                # libqt6svg6 carries the plugin. madison, not show: show also
+                # succeeds for a name apt knows only as virtual.
+                if [[ -n "$(apt-cache madison qt6-svg-plugins 2>/dev/null)" ]]; then
+                    append_qt qt6-svg-plugins
+                fi
+                ;;
+            fedora|rhel)
+                append_qt qt6-qtdeclarative-devel
+                ;;
+            opensuse*|sles)
+                append_qt qt6-declarative-devel
+                ;;
+            arch|manjaro)
+                append_qt qt6-declarative
+                ;;
+            alpine)
+                append_qt qt6-qtdeclarative-dev
                 ;;
         esac
     fi
