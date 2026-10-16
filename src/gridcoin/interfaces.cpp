@@ -1504,6 +1504,18 @@ private:
 
         const int64_t now = GetAdjustedTime();
 
+        // A beacon is pending only once it is on chain. Until a new beacon's
+        // advertisement confirms, say that it is in the mempool, rather than that
+        // there is no beacon or that the expired one needs renewing. An active
+        // beacon keeps its own status.
+        if ((beacon_status == BeaconStatus::ACTIVE || beacon_status == BeaconStatus::NO_BEACON)
+            && !pending_beacon
+            && (!beacon || beacon->Expired(now))
+            && mempool.HasBeaconForCpid(*cpid))
+        {
+            beacon_status = BeaconStatus::ALREADY_IN_MEMPOOL;
+        }
+
         if (beacon_status != BeaconStatus::ACTIVE) {
             // Keep the mapped/derived status.
         } else if (pending_beacon) {
@@ -1539,11 +1551,12 @@ private:
         snap.beacon_expired = beacon && beacon->Expired(now);
         snap.has_renewable_beacon = beacon && beacon->Renewable(now);
 
-        bool has_pending = false;
-        if (pending) {
-            GRC::PendingBeacon pending_beacon(*pending);
-            has_pending = !pending_beacon.PendingExpired(now);
-        }
+        // Pending until a superblock activates it or sweeps it out as expired,
+        // not merely until its pending age passes: up to that superblock it can
+        // still activate, and the send path refuses a second advertisement for
+        // as long (TryOwnPendingBeacon). Shown any shorter, the wizard would
+        // offer a send that is then refused.
+        const bool has_pending = pending != nullptr;
         snap.has_pending_beacon = has_pending;
 
         if (!has_pending) {
@@ -1562,7 +1575,9 @@ private:
         }
 
         if (pending) {
-            snap.time_to_pending_beacon_expiration = GRC::PendingBeacon::RETENTION_AGE - pending->Age(now);
+            // Zero once the pending age has passed: the next superblock decides.
+            snap.time_to_pending_beacon_expiration =
+                std::max<int64_t>(0, GRC::PendingBeacon::RETENTION_AGE - pending->Age(now));
             snap.beacon_verification_code = pending->GetVerificationCode();
         }
     }

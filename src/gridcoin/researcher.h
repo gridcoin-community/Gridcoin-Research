@@ -619,7 +619,9 @@ public:
     std::optional<Beacon> TryBeacon() const;
 
     //!
-    //! \brief Get the pending beacon for the current CPID if it exists.
+    //! \brief Get this wallet's pending beacon for the current CPID if it
+    //! exists: on chain, from the block that confirms its advertisement until a
+    //! superblock activates it or sweeps it out as expired.
     //!
     //! \return Contains the pending beacon for the CPID or does not.
     //!
@@ -662,7 +664,9 @@ public:
     //! of the following are true:
     //!
     //!  - The node obtained a valid CPID from BOINC (not a non-cruncher)
-    //!  - The node did not send a beacon transaction recently
+    //!  - The node is in sync
+    //!  - This wallet has no pending beacon for the CPID on chain
+    //!  - The mempool holds no beacon for the CPID
     //!  - No beacon exists for the CPID or it expired, or...
     //!  - A beacon for the CPID exists and elapsed the renewal threshold
     //!  - The wallet generated a new beacon key successfully if needed
@@ -675,7 +679,8 @@ public:
     //! allows a user to send a beacon to recover the claim to their CPID if
     //! they lost the original private key.
     //!
-    //! \param force Ignore active and pending beacons for the current CPID.
+    //! \param force Ignore active and pending beacons for the current CPID. A
+    //! beacon in the mempool still refuses the advertisement.
     //!
     //! \return A variant that contains the new public key if successful or a
     //! description of the error that occurred.
