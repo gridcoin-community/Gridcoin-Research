@@ -23,6 +23,7 @@
 #include "consensus/consensus.h"
 
 #include <zlib.h>
+#include <limits>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/iostreams/copy.hpp>
@@ -5859,8 +5860,17 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
 
     // If we meet the rule of CONVERGENCE_BY_PROJECT_RATIO, then proceed to fill out the rest of the map. Note that the greylisted
     // projects are excluded from the count in the denominator as it is not expected to necessarily achieve convergence on those.
-    if ((double)iCountSuccessfulConvergedProjects /
-            (double)(projectWhitelist.size() - StructConvergedManifest.vGreylistedProjects.size()) >= convergence_by_project_ratio())
+    //
+    // With every whitelisted project greylisted the denominator is zero. The ratio is then the value the division gave:
+    // +infinity if any project converged, which meets any ratio, and NaN if none did, which meets none. It is spelled
+    // out so the comparison sees exactly what it always did without dividing by zero.
+    const size_t projects_expected = projectWhitelist.size() - StructConvergedManifest.vGreylistedProjects.size();
+    const double converged_project_ratio = projects_expected > 0
+        ? (double)iCountSuccessfulConvergedProjects / (double)projects_expected
+        : (iCountSuccessfulConvergedProjects > 0 ? std::numeric_limits<double>::infinity()
+                                                 : std::numeric_limits<double>::quiet_NaN());
+
+    if (converged_project_ratio >= convergence_by_project_ratio())
     {
         AppCacheSection mScrapers = GetScrapersCache();
 

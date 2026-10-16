@@ -39,7 +39,7 @@ static const int MODIFIER_INTERVAL_RATIO = 3;
 template <typename TimeType>
 TimeType MaskStakeTime(const TimeType timestamp)
 {
-    return timestamp & (~STAKE_TIMESTAMP_MASK);
+    return timestamp & ~static_cast<TimeType>(STAKE_TIMESTAMP_MASK);
 }
 
 // Compute the hash modifier for proof-of-stake
