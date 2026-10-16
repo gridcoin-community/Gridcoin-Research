@@ -648,3 +648,70 @@ void QmlRootWiringTests::quitBeforeTheLoopStillQuits()
     QCOMPARE(rc, 0);
     QCOMPARE(fe.quits, 1);
 }
+
+void QmlRootWiringTests::hideMainHidesTheRootsWindows()
+{
+    const bool old_quit = qApp->quitOnLastWindowClosed();
+    qApp->setQuitOnLastWindowClosed(false);
+    qml_test::ScopeExit restore_quit([old_quit] { qApp->setQuitOnLastWindowClosed(old_quit); });
+
+    std::atomic<int> disconnects{0};
+    qml_test::CountingQuitFrontEnd fe(ROOT_URL, qml_test::CountingCallbacks(disconnects));
+    QVERIFY2(Start(fe), "the root did not load");
+    QString error;
+    Evaluate(fe, QStringLiteral("showAboutWindow()"), error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    Notify(fe, "hidetest", "m", true);
+    QVERIFY2(qml_test::PumpUntil([&] { return Showing(fe, "hidetest"); }, 2s), "the core message was not shown");
+    Evaluate(fe, QStringLiteral("showOnboardingWindow()"), error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+
+    const QPointer<QQuickWindow> main = RootWindow(fe, "mainWindow");
+    const QPointer<QQuickWindow> about = RootWindow(fe, "aboutWindow");
+    const QPointer<QQuickWindow> message = MessageWindow(fe);
+    const QPointer<QQuickWindow> splash = RootWindow(fe, "splashWindow");
+    const QPointer<QQuickWindow> onboarding = RootWindow(fe, "onboardingWindow");
+    QVERIFY2(qml_test::PumpUntil([&] {
+                 return main && main->isVisible() && about && about->isVisible() && message &&
+                        message->isVisible() && splash && splash->isVisible() && onboarding &&
+                        onboarding->isVisible();
+             }, 2s),
+             "not every one of the root's five windows was shown");
+
+    // The root's own hide, without QmlFrontEnd::hideMain()'s sweep of every
+    // top-level window, which would hide them all anyway.
+    fe.provider().shell().notifyHideMain();
+
+    QVERIFY2(!main->isVisible(), "the main window stayed visible after hideMainRequested");
+    QVERIFY2(!about->isVisible(), "the About window stayed visible after hideMainRequested");
+    QVERIFY2(!message->isVisible(), "the core-message window stayed visible after hideMainRequested");
+    QVERIFY2(!splash->isVisible(), "the splash stayed visible after hideMainRequested");
+    QVERIFY2(!onboarding->isVisible(), "the onboarding window stayed visible after hideMainRequested");
+}
+
+void QmlRootWiringTests::hideMainHidesAViewsWindow()
+{
+    const bool old_quit = qApp->quitOnLastWindowClosed();
+    qApp->setQuitOnLastWindowClosed(false);
+    qml_test::ScopeExit restore_quit([old_quit] { qApp->setQuitOnLastWindowClosed(old_quit); });
+
+    std::atomic<int> disconnects{0};
+    qml_test::CountingQuitFrontEnd fe(ROOT_URL, qml_test::CountingCallbacks(disconnects));
+    QVERIFY2(Start(fe), "the root did not load");
+    // As SettingsView opens its debug console: createObject(window), so the
+    // root keeps no reference and the main window is its transient parent.
+    QString error;
+    QObject* const opened = Evaluate(fe,
+                                     QStringLiteral("(function() { var w = Qt.createComponent('DebugConsoleWindow.qml')"
+                                                    ".createObject(mainWindow); w.show(); return w; })()"),
+                                     error)
+                                .value<QObject*>();
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    const QPointer<QQuickWindow> console = qobject_cast<QQuickWindow*>(opened);
+    QVERIFY2(console, "the debug console was not created");
+    QVERIFY2(qml_test::PumpUntil([&] { return console->isVisible(); }, 2s), "the debug console was not shown");
+
+    fe.detachModels();
+
+    QVERIFY2(!console->isVisible(), "a window a view opened stayed visible after hideMain");
+}

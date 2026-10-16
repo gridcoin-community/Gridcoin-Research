@@ -13,6 +13,7 @@ Item {
     property MainWindow mainWindow: null
     property AboutWindow aboutWindow: null
     property var splashWindow: null
+    property var onboardingWindow: null
 
     // Core messages wait here in arrival order; one is shown at a time.
     property var coreMessages: []
@@ -46,7 +47,13 @@ Item {
             }
         }
         function onHideMainRequested() {
+            // Every window the root keeps: Qt's quit closes none of them, and
+            // no event loop runs for the rest of the teardown.
             if (mainWindow) mainWindow.hide()
+            if (aboutWindow) aboutWindow.hide()
+            if (coreMessageWindow) coreMessageWindow.hide()
+            if (splashWindow) splashWindow.hide()
+            if (onboardingWindow) onboardingWindow.hide()
         }
         function onHideToTrayRequested() {
             if (mainWindow) mainWindow.hide()
@@ -190,9 +197,9 @@ Item {
 
     function showOnboardingWindow() {
         var component = Qt.createComponent("OnboardingWindow.qml")
-        var windowObj = component.createObject(root)
-        windowObj.onboardingFinished.connect(showMainWindow)
-        windowObj.show()
+        onboardingWindow = component.createObject(root)
+        onboardingWindow.onboardingFinished.connect(showMainWindow)
+        onboardingWindow.show()
     }
 
     function showAboutWindow() {
