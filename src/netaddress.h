@@ -246,12 +246,12 @@ class CNetAddr
 
             switch (m_net) {
             case NET_IPV6:
-                assert(m_addr.size() == sizeof(arr));
+                assert(m_addr.size() == sizeof(arr)); // LINT-OK-ASSERT: m_addr size always matches m_net, enforced by every setter
                 memcpy(arr, m_addr.data(), m_addr.size());
                 return;
             case NET_IPV4:
                 prefix_size = IPV4_IN_IPV6_PREFIX.size();
-                assert(prefix_size + m_addr.size() == sizeof(arr));
+                assert(prefix_size + m_addr.size() == sizeof(arr)); // LINT-OK-ASSERT: m_addr size always matches m_net, enforced by every setter
                 memcpy(arr, IPV4_IN_IPV6_PREFIX.data(), prefix_size);
                 memcpy(arr + prefix_size, m_addr.data(), m_addr.size());
                 return;
@@ -260,13 +260,13 @@ class CNetAddr
                     break;
                 }
                 prefix_size = TORV2_IN_IPV6_PREFIX.size();
-                assert(prefix_size + m_addr.size() == sizeof(arr));
+                assert(prefix_size + m_addr.size() == sizeof(arr)); // LINT-OK-ASSERT: TORv3 broke out above, so m_addr is the TORv2 size
                 memcpy(arr, TORV2_IN_IPV6_PREFIX.data(), prefix_size);
                 memcpy(arr + prefix_size, m_addr.data(), m_addr.size());
                 return;
             case NET_INTERNAL:
                 prefix_size = INTERNAL_IN_IPV6_PREFIX.size();
-                assert(prefix_size + m_addr.size() == sizeof(arr));
+                assert(prefix_size + m_addr.size() == sizeof(arr)); // LINT-OK-ASSERT: m_addr size always matches m_net, enforced by every setter
                 memcpy(arr, INTERNAL_IN_IPV6_PREFIX.data(), prefix_size);
                 memcpy(arr + prefix_size, m_addr.data(), m_addr.size());
                 return;
@@ -274,7 +274,7 @@ class CNetAddr
                 break;
             case NET_UNROUTABLE:
             case NET_MAX:
-                assert(false);
+                assert(false); // LINT-OK-ASSERT: m_net is never set to UNROUTABLE/MAX
             } // no default case, so the compiler can warn about missing cases
 
             // TORv3 and the reserved CJDNS type have no V1 representation.
