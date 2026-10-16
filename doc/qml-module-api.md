@@ -16,7 +16,8 @@ names later changes will add.
   with the QML front end (section 8). Without the option the module is not built; the default
   build still changes in the core-message routing, the detach step and the detach guard's reap
   of the global thread pool.
-- On Debian and Ubuntu the module needs `qt6-declarative-dev` to build. At run time the module
+- On Debian 12 or later and Ubuntu 24.04 or later (Ubuntu 22.04's Qt 6.2 is below the 6.4
+  floor) the module needs `qt6-declarative-dev` to build. At run time the module
   needs `qml6-module-qtquick`; the carried tree also needs `qml6-module-qtquick-controls`,
   `-layouts`, `-templates`, `-window`, `-shapes`, `qml6-module-qt-labs-platform`,
   `qml6-module-qtqml-models`, `qml6-module-qtqml-workerscript`,
@@ -179,7 +180,10 @@ a request id. The module emits a signal saying what it needs. QML answers throug
 the request open. There is no nested event loop and no blocking connection anywhere in the
 module but one: `gridcoinresearch-qml`'s start-up error box in `qml_main.cpp`, shown from
 the factory before `GuiMain` opens its log, connects to a daemon or starts the core, as
-`GuiMain`'s own start-up error boxes are. `test/lint/lint-qml-module.sh` checks the rest.
+`GuiMain`'s own start-up error boxes are. The one wait on the GUI thread is
+`QmlCallRunner::drain()`, by design: teardown waits there for an in-flight serial call.
+`test/lint/lint-qml-module.sh` is a tripwire for the common blocking constructs in the
+rest, not a proof.
 
 ## 6. Lanes
 

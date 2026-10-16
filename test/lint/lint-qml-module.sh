@@ -6,14 +6,19 @@
 #
 # Checks on the QML front end's two trees.
 #
-# src/qt/quick, the C++ module, must never block the GUI thread, except
-# qml_main.cpp's start-up error box, shown before any event loop runs: every
-# prompt is a request, then a signal, then an answer, and long calls run on
-# QmlCallRunner's lanes. The first check fails on the constructs that block or
-# spin a nested event loop: QEventLoop, an exec() call, a blocking queued
-# connection (including GUIUtil's helper that returns one) and
-# waitForFinished. The module's tests (src/qt/quick/test/) are not scanned: a
-# test may run the application's own event loop, as the quit test does.
+# src/qt/quick, the C++ module, does not hold the GUI thread for a prompt or a
+# long call: every prompt is a request, then a signal, then an answer, and long
+# calls run on QmlCallRunner's lanes. Two waits are by design:
+# QmlCallRunner::drain(), where teardown waits for an in-flight serial call,
+# and qml_main.cpp's start-up error box, shown before any event loop runs
+# (qml_main.cpp is not scanned). The first check is a tripwire for the common
+# constructs that block or spin a nested event loop, not a proof that none
+# exists: QEventLoop, an exec call, a blocking queued connection (including
+# GUIUtil's helper that returns one), waitForFinished, waitForDone,
+# processEvents, qWait, a QFuture result, and the static dialogs of
+# QMessageBox, QFileDialog, QInputDialog, QColorDialog and QFontDialog. The
+# module's tests (src/qt/quick/test/) are not scanned: a test may run the
+# application's own event loop, as the quit test does.
 #
 # src/qt/qml, the carried QML front end, holds QML only, so the module's checks
 # cannot be sidestepped there. Its files still bind the context properties of
@@ -46,8 +51,8 @@ if [ -z "$(git ls-files -- src/qt/qml)" ]; then
     exit 1
 fi
 
-PATTERN='QEventLoop|\bexec\(\)|BlockingQueuedConnection|blockingGUIThreadConnection|waitForFinished'
-OUTPUT=$(git grep -n -E "${PATTERN}" -- src/qt/quick ':!src/qt/quick/test')
+PATTERN='QEventLoop|\bexec[[:space:]]*\(|BlockingQueuedConnection|blockingGUIThreadConnection|waitForFinished|waitForDone|processEvents|qWait|\.result[[:space:]]*\(|QMessageBox::(critical|warning|information|question|about)|QFileDialog::get|QInputDialog::get|QColorDialog::getColor|QFontDialog::getFont'
+OUTPUT=$(git grep -n -E "${PATTERN}" -- src/qt/quick ':!src/qt/quick/test' ':!src/qt/quick/qml_main.cpp')
 RC=$? # 0: a match, 1: no match, anything else: git grep failed
 if [ ${RC} -eq 0 ]; then
     echo "Blocking construct(s) in the QML module (src/qt/quick, tests excluded):"
