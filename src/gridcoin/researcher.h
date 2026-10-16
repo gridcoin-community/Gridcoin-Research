@@ -406,6 +406,67 @@ AdvertiseBeaconResult SendBeaconContractV3(
     const bool force = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet);
 
 //!
+//! \brief How long this wallet's own beacon advertisement may wait in the
+//! mempool, unconfirmed, before advertising the beacon again replaces it.
+//!
+//! A beacon transaction that peers accept is normally in a block within a few
+//! blocks. One still unconfirmed after an hour most likely never reached the
+//! network, or was sent from a short-lived fork.
+//!
+constexpr int64_t STALE_BEACON_ADVERTISEMENT_AGE = 60 * 60;
+
+//!
+//! \brief Take this wallet's stale beacon advertisements for a CPID out of the
+//! mempool and abandon them.
+//!
+//! The beacon send paths refuse while the mempool holds a beacon for the CPID,
+//! and the local pool can hold this wallet's own transaction indefinitely: it
+//! has no time-based expiry, the wallet rebroadcasts only transactions the pool
+//! does not hold, abandontransaction refuses a pooled transaction,
+//! cancelunbroadcasttransaction refuses one a peer has fetched, and a restart
+//! puts it back. Without this, an advertisement that never confirmed would
+//! block every later one, the automatic renewal included.
+//!
+//! A transaction is retired when it carries a beacon advertisement for \p cpid,
+//! is in \p wallet and spends at least one of its coins, and was received at
+//! least STALE_BEACON_ADVERTISEMENT_AGE ago. Its pooled descendants leave the
+//! pool with it, relay memory stops serving any of them, and abandoning it
+//! releases the inputs it spent and abandons its wallet descendants. A beacon
+//! for the CPID from another wallet, or a recent one from this wallet, is left
+//! alone.
+//!
+//! Does nothing while the node is out of sync: it cannot tell then whether the
+//! transaction confirmed.
+//!
+//! \param wallet The wallet that sent the advertisements.
+//! \param cpid   CPID to retire the advertisements of.
+//!
+//! \return The number of advertisements retired.
+//!
+unsigned int RetireStaleBeaconAdvertisements(CWallet& wallet, const Cpid& cpid)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, wallet.cs_wallet);
+
+//!
+//! \brief Get this wallet's own beacon advertisement for a CPID that is waiting
+//! in the mempool and is not yet stale.
+//!
+//! For display: until it confirms or goes stale, the advertisement is shown as
+//! the pending beacon, as it was while waiting to confirm before a beacon was
+//! counted as pending only once on chain. A stale one is not shown, because
+//! advertising again replaces it (RetireStaleBeaconAdvertisements).
+//!
+//! The advertisement is this wallet's if it holds the beacon key, and its age
+//! is from the transaction's own time, so cs_wallet is not needed.
+//!
+//! \param wallet The wallet that holds the beacon keys.
+//! \param cpid   CPID to find the advertisement for.
+//!
+//! \return The newest such advertisement's beacon, if any.
+//!
+std::optional<Beacon> TryRecentBeaconAdvertisement(const CWallet& wallet, const Cpid& cpid)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//!
 //! \brief Manages the global BOINC researcher context.
 //!
 //! This class governs a singleton that contains the global BOINC context set
@@ -666,7 +727,8 @@ public:
     //!  - The node obtained a valid CPID from BOINC (not a non-cruncher)
     //!  - The node is in sync
     //!  - This wallet has no pending beacon for the CPID on chain
-    //!  - The mempool holds no beacon for the CPID
+    //!  - The mempool holds no beacon for the CPID, once this wallet's own stale
+    //!    advertisement is retired
     //!  - No beacon exists for the CPID or it expired, or...
     //!  - A beacon for the CPID exists and elapsed the renewal threshold
     //!  - The wallet generated a new beacon key successfully if needed

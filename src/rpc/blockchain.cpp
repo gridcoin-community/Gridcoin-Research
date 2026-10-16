@@ -1644,7 +1644,8 @@ UniValue advertisebeacon(const UniValue& params)
         case GRC::BeaconError::ALEADY_IN_MEMPOOL:
             throw JSONRPCError(
                 RPC_INVALID_REQUEST,
-                "Beacon transaction for this CPID is already in the mempool");
+                "Beacon transaction for this CPID is already in the mempool. If it is this wallet's "
+                "advertisement, advertising again an hour after sending replaces it");
         case GRC::BeaconError::OUT_OF_SYNC:
             throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
     }
@@ -1887,7 +1888,8 @@ UniValue advertisebeaconv3(const UniValue& params)
         case GRC::BeaconError::ALEADY_IN_MEMPOOL:
             throw JSONRPCError(
                 RPC_INVALID_REQUEST,
-                "Beacon transaction for this CPID is already in the mempool");
+                "Beacon transaction for this CPID is already in the mempool. If it is this wallet's "
+                "advertisement, advertising again an hour after sending replaces it");
         case GRC::BeaconError::OUT_OF_SYNC:
             throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
     }

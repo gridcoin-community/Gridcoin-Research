@@ -75,7 +75,8 @@ QString ResearcherModel::mapBeaconStatus(const BeaconStatus status)
         case BeaconStatus::RENEWAL_POSSIBLE:
             return tr("Beacon eligible for renewal.");
         case BeaconStatus::ALREADY_IN_MEMPOOL:
-            return tr("Beacon advertisement transaction already in mempool.");
+            return tr("Beacon advertisement transaction already in mempool. If it is this wallet's "
+                      "and is still unconfirmed an hour after sending, sending again replaces it.");
         case BeaconStatus::UNKNOWN:
             return tr("Waiting for sync...");
     }
