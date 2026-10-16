@@ -4,6 +4,7 @@
 
 #include "gridcoin/voting/poll_result_cache.h"
 #include "gridcoin/voting/registry.h"
+#include "hash.h"
 #include "logging.h"
 #include "util/time.h"
 #include "chain.h"
@@ -14,16 +15,18 @@ namespace {
 //! The process-wide instance backing GetPollResultCache().
 PollResultCache g_poll_result_cache;
 
-//! The hash of the block at \p height on the chain that ends at \p pindex, or a
-//! null hash when that chain has no block there. Block index entries are never
-//! freed and their pprev links never change, so the walk needs no lock.
-uint256 HashAtHeight(const CBlockIndex* pindex, int height)
+//! Whether a poll that has (\p finished) or has not finished at the pinned tip passes \p flags. Judged from the
+//! snapshot, by blocks, not by the wall clock as PollRegistry::Sequence filters. No flag, or both, passes every poll.
+bool Wanted(const PollFilterFlag flags, const bool finished)
 {
-    while (pindex && pindex->nHeight > height) {
-        pindex = pindex->pprev;
+    const bool active = flags & ACTIVE;
+    const bool done = flags & FINISHED;
+
+    if (active == done) {
+        return true;
     }
 
-    return pindex && pindex->nHeight == height ? pindex->GetBlockHash() : uint256();
+    return finished ? done : active;
 }
 } // anonymous namespace
 
@@ -32,94 +35,50 @@ PollResultCache& GRC::GetPollResultCache()
     return g_poll_result_cache;
 }
 
-bool GRC::PollResultReusable(bool cached_finished,
-                             bool now_finished,
-                             const uint256& tallied_tip_hash,
-                             int tallied_tip_height,
-                             const uint256& current_tip_hash,
-                             int current_tip_height,
-                             const uint256& current_hash_at_tallied_height)
+PollResultKey GRC::KeyFor(const PollSnapshot& snapshot)
 {
-    // Finished state is time-based (Poll::Expired(GetAdjustedTime())), so a poll
-    // can transition active -> finished even with a stalled tip. If that state has
-    // changed since the tally, the cached m_finished and AVW-derived fields are
-    // stale regardless of the tip, so force a rebuild.
-    if (cached_finished != now_finished) {
-        return false;
+    PollResultKey key;
+    key.m_finished = snapshot.m_finished;
+
+    // A finished poll is keyed by its first block past the end; an open one, or a skeleton reference with no block,
+    // by the pinned tip.
+    const CBlockIndex* const pindex = snapshot.m_finished && snapshot.m_pindex_past_end
+        ? snapshot.m_pindex_past_end
+        : snapshot.m_pindex_tip;
+
+    if (pindex) {
+        key.m_block_hash = pindex->GetBlockHash();
     }
 
-    if (cached_finished) {
-        // Closed poll: its votes and its fixed AVW end block are immutable while
-        // the tip only advances. Any reorg that replaces the tip we tallied
-        // against could reach the poll's last blocks, so reuse only while that
-        // tip is still on the current chain. This is conservative: it also
-        // rebuilds after a reorg that never touches the window, but reorgs are
-        // rare.
-        return current_tip_height >= tallied_tip_height
-            && current_hash_at_tallied_height == tallied_tip_hash;
-    }
+    key.m_votes_digest = SerializeHash(snapshot.m_votes);
 
-    // Active poll: PollReference::GetActiveVoteWeight ends the AVW range at the
-    // tip, and that range grows every block, so the result changes on every tip
-    // advance. Reuse only while the tip is exactly the one we tallied against.
-    return tallied_tip_hash == current_tip_hash;
+    return key;
 }
 
-bool PollResultCache::IsEntryValid(const CacheEntry& entry,
-                                   const CBlockIndex* pindex_tip,
-                                   const uint256& tip_hash,
-                                   int tip_height) const
+std::optional<PollResultItem> PollResultCache::GetOrBuild(const PollSnapshot& snapshot)
 {
-    // Re-evaluate the poll's finished state against the current adjusted time so a
-    // poll that expired by wall-clock time (with no new block) invalidates its
-    // cached "active" tally.
-    const bool now_finished = entry.item.result.m_poll.Expired(GetAdjustedTime());
+    const PollResultKey key = KeyFor(snapshot);
 
-    // Only a closed entry needs the chain walk; an active one compares tips.
-    const uint256 hash_at_tallied_height = entry.finished
-        ? HashAtHeight(pindex_tip, entry.tallied_tip_height)
-        : tip_hash;
-
-    return PollResultReusable(entry.finished, now_finished, entry.tallied_tip_hash,
-                              entry.tallied_tip_height, tip_hash, tip_height, hash_at_tallied_height);
-}
-
-std::optional<PollResultItem> PollResultCache::GetOrBuild(const PollReference& ref,
-                                                          const uint256& txid,
-                                                          const CBlockIndex* pindex_tip,
-                                                          const uint256& tip_hash,
-                                                          int tip_height)
-{
     {
         LOCK(m_mutex);
 
-        auto it = m_entries.find(txid);
-        if (it != m_entries.end() && IsEntryValid(it->second, pindex_tip, tip_hash, tip_height)) {
-            // A closed result whose tip is still on the chain holds for this
-            // tip too, so check it from here next time and keep the walk short.
-            if (it->second.finished) {
-                it->second.tallied_tip_hash = tip_hash;
-                it->second.tallied_tip_height = tip_height;
-            }
-
+        auto it = m_entries.find(snapshot.m_txid);
+        if (it != m_entries.end() && it->second.key == key) {
             return it->second.item;
         }
     }
 
-    // Not cached, or the cached tally is no longer valid for this tip. Tally
-    // without holding m_mutex — BuildFor is the expensive step and may throw
-    // InvalidDuetoReorgFork, which propagates to BuildPollTable to restart.
-    PollResultOption result = PollResult::BuildFor(ref, pindex_tip);
+    // Not cached, or cached under another key. Tally without holding m_mutex: BuildFor is the expensive step and may
+    // throw InvalidDuetoReorgFork, which propagates to BuildPollTable to restart.
+    PollResultOption result = PollResult::BuildFor(snapshot);
 
     if (!result) {
         return std::nullopt;
     }
 
-    PollResultItem item(txid, ref.GetPollPayloadVersion(), std::move(*result));
+    PollResultItem item(snapshot.m_txid, snapshot.m_payload_version, std::move(*result));
 
-    // A reorg flagged during the traversal can change what the tally read, so
-    // the result is not kept. The flag misses some reorgs; for a closed poll the
-    // main-chain check above catches those when the entry is next used.
+    // A reorg flagged during the traversal can change what the tally read, so the result is not kept.
     if (GetPollRegistry().reorg_occurred_during_reg_traversal) {
         return item;
     }
@@ -127,11 +86,10 @@ std::optional<PollResultItem> PollResultCache::GetOrBuild(const PollReference& r
     {
         LOCK(m_mutex);
 
-        // PollResult holds a const Poll, so it is move-constructible but not
-        // move-assignable; use erase + emplace (construction only) rather than
-        // operator[] / insert_or_assign, which would need assignment.
-        m_entries.erase(txid);
-        m_entries.emplace(txid, CacheEntry{item, tip_hash, tip_height, item.result.m_finished});
+        // PollResult holds a const Poll, so it is move-constructible but not move-assignable; use erase + emplace
+        // (construction only) rather than operator[] / insert_or_assign, which would need assignment.
+        m_entries.erase(snapshot.m_txid);
+        m_entries.emplace(snapshot.m_txid, CacheEntry{item, key});
     }
 
     return item;
@@ -158,20 +116,12 @@ std::vector<PollResultItem> PollResultCache::BuildPollTable(PollFilterFlag flags
     for (unsigned int i = 0; i < 3; ++i) {
         items.clear();
 
-        // Pin the chain tip once for this whole attempt. cs_main is taken only to
-        // read the tip and is released before cs_poll_registry is acquired below,
-        // preserving the cs_main -> cs_poll_registry order and keeping the tally
-        // itself lock-free against a single consistent tip.
+        // Pin the chain tip once for this whole attempt: every poll's snapshot below is taken on it, and the
+        // tallies run on it without holding cs_main.
         const CBlockIndex* pindex_tip = nullptr;
-        uint256 tip_hash;
-        int tip_height = 0;
         {
             LOCK(cs_main);
             pindex_tip = pindexBest;
-            if (pindex_tip) {
-                tip_hash = pindex_tip->GetBlockHash();
-                tip_height = pindex_tip->nHeight;
-            }
         }
 
         // No chain yet (early startup / not synced): nothing to tally.
@@ -179,71 +129,51 @@ std::vector<PollResultItem> PollResultCache::BuildPollTable(PollFilterFlag flags
             break;
         }
 
-        // THREAD-SAFETY EXCEPTION, deliberate and load-bearing.
-        //
-        // This is the one traversal in the tree that walks the poll registry
-        // WITHOUT holding cs_poll_registry, and it cannot hold it: GetOrBuild()
-        // tallies each poll, which takes cs_main, and the lock order is
-        // cs_main -> cs_poll_registry. Holding the registry lock across the walk
-        // would invert it and deadlock against the validation thread.
-        //
-        // What protects the walk instead is the TraversalScope opened at the top
-        // of this function plus the reorg_occurred_during_reg_traversal recheck
-        // after every element: a reorg that could invalidate the iterator sets the
-        // flag, and the loop abandons the attempt and rebuilds the sequence from a
-        // freshly pinned tip. Clang's analyzer cannot express "guarded by a
-        // different protocol", so the diagnostic is suppressed for this traversal.
-        // (It is suppressed in a few other places too -- rpc/voting.cpp, result.cpp;
-        // this is the only one where an unlocked registry WALK is the deliberate
-        // design rather than an unreviewed legacy.)
-        //
-        // If you are copying this pattern: don't. Every other caller holds the
-        // lock for the whole traversal (gridcoin.cpp NotifyPoll, rpc/voting.cpp
-        // listpolls, interfaces.cpp latestActivePollTime). Dropping the lock
-        // without ALSO opening a TraversalScope and rechecking the flag per
-        // element is an iterator use-after-free -- which is precisely the bug that
-        // was live in latestActivePollTime until the lock requirements were moved
-        // onto the declarations in registry.h and made visible to callers.
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-analysis"
-#endif
-        for (const auto& iter : WITH_LOCK(PollRegistry::cs_poll_registry, return registry.Polls().Where(flags))) {
-            // Read the poll's identifiers outside cs_poll_registry, matching the
-            // former GUI traversal: the coarse reorg detector below guards the
-            // reference against a reorg that would invalidate it mid-walk.
-            const PollReference& ref = iter->Ref();
-            const uint256 txid = ref.Txid();
+        // Collect the txids under the registry lock, then take each poll's snapshot under cs_main and the registry
+        // lock, looking it up again by txid. No registry reference or iterator outlives a lock, and the tally reads
+        // only the snapshot. The lock order is cs_main before cs_poll_registry, as block connection takes them.
+        std::vector<uint256> txids;
+        {
+            LOCK(PollRegistry::cs_poll_registry);
 
+            for (const auto& iter : registry.Polls()) {
+                txids.push_back(iter->Ref().Txid());
+            }
+        }
+
+        for (const uint256& txid : txids) {
             try {
-                if (std::optional<PollResultItem> item = GetOrBuild(ref, txid, pindex_tip, tip_hash, tip_height)) {
-                    items.push_back(std::move(*item));
+                std::optional<PollSnapshot> snapshot;
+                {
+                    LOCK2(cs_main, PollRegistry::cs_poll_registry);
+
+                    // A poll removed since the txids were collected is skipped.
+                    if (const PollReference* ref = registry.TryByTxid(txid)) {
+                        snapshot = registry.Snapshot(*ref, pindex_tip);
+                    }
+                }
+
+                if (snapshot && Wanted(flags, snapshot->m_finished)) {
+                    if (std::optional<PollResultItem> item = GetOrBuild(*snapshot)) {
+                        items.push_back(std::move(*item));
+                    }
                 }
             } catch (const InvalidDuetoReorgFork&) {
-                // A reorg aborted this poll's tally. Treat that as a hard signal to
-                // abandon the whole attempt and retry from a freshly pinned tip,
-                // rather than falling through and possibly returning a table that
-                // is missing this poll (the flag check below could miss it if the
-                // reorg clears between the throw and the check).
+                // A reorg aborted this poll's snapshot or tally. Abandon the whole attempt and retry from a freshly
+                // pinned tip, rather than return a table missing this poll.
                 LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Invalidated due to reorg/fork. Starting over.", __func__);
                 items.clear();
                 fork_reorg_during_run = true;
                 break;
             }
 
-            // Must be checked AFTER GetOrBuild: if a reorg during traversal
-            // invalidated the Ref the sequence points at, incrementing the
-            // iterator to the next position would segfault. Abandon this attempt
-            // and rebuild the sequence from scratch on the next try.
+            // A reorg flagged during the attempt can change what the tallies read; abandon it and retry.
             if (registry.reorg_occurred_during_reg_traversal) {
                 items.clear();
                 fork_reorg_during_run = true;
                 break;
             }
         }
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#endif
 
         // Done if no fork/reorg interrupted this attempt.
         if (!fork_reorg_during_run) {

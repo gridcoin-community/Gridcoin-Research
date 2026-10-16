@@ -14,6 +14,7 @@
 #include "gridcoin/quorum.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/voting/payloads.h"
+#include "gridcoin/voting/poll_result_cache.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
 #include "gridcoin/voting/vote.h"
@@ -999,6 +1000,14 @@ LinkedTip LinkBlock(CBlockIndex* prev, const int64_t now, GRC::Claim claim,
         tx_pos += ::GetSerializeSize(block.vtx[i], SER_DISK, CLIENT_VERSION);
     }
 
+    // Linking on a block that already has a successor is a reorg: unlink the branch it abandons, as
+    // DisconnectBlocksBatch does, so IsInMainChain() sees those blocks off the main chain.
+    for (CBlockIndex* pindex = prev->pnext; pindex;) {
+        CBlockIndex* const next = pindex->pnext;
+        pindex->pnext = nullptr;
+        pindex = next;
+    }
+
     prev->pnext = tip.m_pindex;
     pindexBest = tip.m_pindex;
     hashBestChain = tip.m_pindex->GetBlockHash();
@@ -1089,6 +1098,13 @@ public:
 
 private:
     const CBlockIndex* m_pindex;
+};
+
+//! The poll result cache is a process-wide singleton; leave it empty for the next test.
+struct CacheReset
+{
+    CacheReset() { GRC::GetPollResultCache().Clear(); }
+    ~CacheReset() { GRC::GetPollResultCache().Clear(); }
 };
 
 //! The registry's snapshot of the poll \p txid on \p pindex_tip, taken as the RPCs and the poll table take it.
@@ -1630,6 +1646,124 @@ BOOST_AUTO_TEST_CASE(a_reorg_that_removes_the_first_block_past_the_end_reopens_a
     BOOST_CHECK(!snapshot.m_finished);
     BOOST_CHECK(snapshot.m_pindex_past_end == nullptr);
     BOOST_CHECK(snapshot.m_pindex_end == nullptr);
+}
+
+//!
+//! A finished poll's cached result is served whatever the wall clock reads.
+//!
+BOOST_AUTO_TEST_CASE(a_finished_polls_cached_result_survives_any_wall_clock)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    CacheReset cache_reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 10 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    LinkBlock(polled.m_pindex, t0 + 8 * DAY, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    GRC::PollResultCache& cache = GRC::GetPollResultCache();
+    {
+        const TxIndexScope indexed(poll.tx, polled.m_tx_positions[0]);
+        const std::vector<GRC::PollResultItem> table = cache.BuildPollTable(GRC::NO_FILTER);
+        BOOST_REQUIRE_EQUAL(table.size(), 1U);
+        BOOST_REQUIRE(table[0].result.m_finished);
+    }
+
+    SetMockTime(t0 + DAY); // the clock moves back before the poll's end
+    const std::vector<GRC::PollResultItem> table = cache.BuildPollTable(GRC::NO_FILTER);
+    BOOST_REQUIRE_EQUAL(table.size(), 1U);
+    BOOST_CHECK(table[0].result.m_finished);
+}
+
+//!
+//! An open poll's cached result is served at the tip it was tallied on, whatever the wall clock reads, and nowhere
+//! else.
+//!
+BOOST_AUTO_TEST_CASE(an_open_polls_cached_result_serves_only_its_tip)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    CacheReset cache_reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    GRC::PollResultCache& cache = GRC::GetPollResultCache();
+    {
+        const TxIndexScope indexed(poll.tx, polled.m_tx_positions[0]);
+        BOOST_REQUIRE_EQUAL(cache.BuildPollTable(GRC::NO_FILTER).size(), 1U);
+    }
+
+    SetMockTime(t0 + 8 * DAY); // the clock passes the poll's end; no block does
+    const std::vector<GRC::PollResultItem> table = cache.BuildPollTable(GRC::NO_FILTER);
+    BOOST_REQUIRE_EQUAL(table.size(), 1U);
+    BOOST_CHECK(!table[0].result.m_finished);
+
+    LinkBlock(polled.m_pindex, t0 + 3600, GRC::Claim(), {}, bits);
+    BOOST_CHECK(cache.BuildPollTable(GRC::NO_FILTER).empty());
+}
+
+//!
+//! A finished poll's cached result is served while its first block past the end stays on the chain, and dropped
+//! when a reorg replaces that block.
+//!
+BOOST_AUTO_TEST_CASE(replacing_a_finished_polls_past_end_block_drops_its_cached_result)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    CacheReset cache_reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 10 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip past_end = LinkBlock(polled.m_pindex, t0 + 8 * DAY, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    GRC::PollResultCache& cache = GRC::GetPollResultCache();
+    {
+        const TxIndexScope indexed(poll.tx, polled.m_tx_positions[0]);
+        BOOST_REQUIRE_EQUAL(cache.BuildPollTable(GRC::NO_FILTER).size(), 1U);
+    }
+
+    LinkBlock(past_end.m_pindex, t0 + 9 * DAY, GRC::Claim(), {}, bits);
+    BOOST_CHECK_EQUAL(cache.BuildPollTable(GRC::NO_FILTER).size(), 1U);
+
+    LinkBlock(polled.m_pindex, t0 + 8 * DAY + 60, GRC::Claim(), {}, bits);
+    BOOST_CHECK(cache.BuildPollTable(GRC::NO_FILTER).empty());
+}
+
+//!
+//! The poll table lists a poll as active until a block past its end, though the wall clock has passed the end.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_table_lists_a_poll_as_active_until_a_block_past_its_end)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    CacheReset cache_reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 8 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const TxIndexScope indexed(poll.tx, polled.m_tx_positions[0]);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    GRC::PollResultCache& cache = GRC::GetPollResultCache();
+    const std::vector<GRC::PollResultItem> active = cache.BuildPollTable(GRC::ACTIVE);
+    BOOST_REQUIRE_EQUAL(active.size(), 1U);
+    BOOST_CHECK(!active[0].result.m_finished);
+    BOOST_CHECK(cache.BuildPollTable(GRC::FINISHED).empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
