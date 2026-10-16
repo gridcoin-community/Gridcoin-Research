@@ -314,12 +314,12 @@ testnet so that your nodes can be identified.
 ### DEBUG_LOCKORDER
 
 Gridcoin is a multi-threaded application, and deadlocks or other
-multi-threading bugs can be very difficult to track down. Building with
-`-DENABLE_DEBUG_LOCKORDER=ON` adds `-DDEBUG_LOCKORDER` to the compiler
-flags. This inserts run-time checks to keep track of which locks are held
-and adds warnings to the `debug.log` file if inconsistencies are detected.
-This option is independent of `CMAKE_BUILD_TYPE` so it can be used with any
-build configuration.
+multi-threading bugs can be very difficult to track down. `DEBUG_LOCKORDER`
+inserts run-time checks to keep track of which locks are held and adds
+warnings to the `debug.log` file if inconsistencies are detected. A `Debug`
+build defines it, along with `ABORT_ON_FAILED_ASSUME`, as Bitcoin Core's
+Debug builds do; `-DENABLE_DEBUG_LOCKORDER=ON` adds it to any other build
+type.
 
 ### Assertions and Checks
 

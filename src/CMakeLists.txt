@@ -389,9 +389,15 @@ if(ENABLE_UPNP)
     target_link_libraries(gridcoin_util PUBLIC ${LIBMINIUPNPC})
 endif()
 
-if(ENABLE_DEBUG_LOCKORDER)
-    target_compile_definitions(gridcoin_util PUBLIC DEBUG_LOCKORDER)
-endif()
+# Debug builds run the runtime lock checks and abort on a failed Assume(), as
+# Bitcoin Core's Debug builds do. ENABLE_DEBUG_LOCKORDER adds the lock checks to
+# any other build type. DEBUG_LOCKCONTENTION, which Core also defines here, is
+# left out: Gridcoin's version logs every contended lock unconditionally rather
+# than under a log category.
+target_compile_definitions(gridcoin_util PUBLIC
+    $<$<OR:$<CONFIG:Debug>,$<BOOL:${ENABLE_DEBUG_LOCKORDER}>>:DEBUG_LOCKORDER>
+    $<$<CONFIG:Debug>:ABORT_ON_FAILED_ASSUME>
+)
 
 # Daemon
 # ======
