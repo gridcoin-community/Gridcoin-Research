@@ -435,11 +435,11 @@ PollReference::PollReference()
 {
 }
 
-PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
+PollOption GRC::ReadPollFromDisk(CTxDB& txdb, const uint256& txid)
 {
     CTransaction tx;
 
-    if (!txdb.ReadDiskTx(m_txid, tx)) {
+    if (!txdb.ReadDiskTx(txid, tx)) {
         error("%s: failed to read poll tx from disk", __func__);
         return std::nullopt;
     }
@@ -450,19 +450,6 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
             // The time for the poll is the time of the containing transaction.
             payload.m_poll.m_timestamp = tx.nTime;
 
-            // Neither the timestamp nor the magnitude weight factor is serialized. Resolve the factor
-            // from the block AddPoll recorded, rather than looking the poll's block up again: that
-            // lookup read the chain index without cs_main, and took cs_main inside callers holding
-            // only cs_poll_registry. Nothing is written back to this reference, which callers share.
-            payload.m_poll.m_magnitude_weight_factor = GetMagnitudeWeightFactor();
-
-            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: reference.m_timestamp = %" PRId64 " , poll.m_timestamp = %" PRId64 " , "
-                     "poll.m_magnitude_weight_factor = %s",
-                     __func__,
-                     m_timestamp,
-                     payload.m_poll.m_timestamp,
-                     payload.m_poll.m_magnitude_weight_factor.ToString());
-
             return std::move(payload.m_poll);
         }
     }
@@ -470,6 +457,28 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
     error("%s: transaction does not contain a poll contract", __func__);
 
     return std::nullopt;
+}
+
+PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
+{
+    PollOption poll = ReadPollFromDisk(txdb, m_txid);
+
+    if (poll) {
+        // Neither the timestamp nor the magnitude weight factor is serialized. Resolve the factor from the block
+        // AddPoll recorded, rather than looking the poll's block up again: that lookup read the chain index without
+        // cs_main, and took cs_main inside callers holding only cs_poll_registry. Nothing is written back to this
+        // reference, which callers share.
+        poll->m_magnitude_weight_factor = GetMagnitudeWeightFactor();
+
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: reference.m_timestamp = %" PRId64 " , poll.m_timestamp = %" PRId64 " , "
+                 "poll.m_magnitude_weight_factor = %s",
+                 __func__,
+                 m_timestamp,
+                 poll->m_timestamp,
+                 poll->m_magnitude_weight_factor.ToString());
+    }
+
+    return poll;
 }
 
 PollOption PollReference::TryReadFromDisk() const
@@ -602,8 +611,7 @@ Fraction PollReference::GetMagnitudeWeightFactor() const
     return Poll::ResolveMagnitudeWeightFactor(m_pindex, m_timestamp);
 }
 
-std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& result,
-                                                          const CBlockIndex* pindex_tip) const
+std::optional<CAmount> GRC::ActiveVoteWeight(const PollSnapshot& snapshot, const PollResult& result)
 {
     // Instrument this so we can log real time performance.
     g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
@@ -611,24 +619,25 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
     // Unfortunately, cs_main must be locked for the duration of this method, because it uses the chain index pointers.
     LOCK(cs_main);
 
-    // Get the start and end of the poll.
-    CBlockIndex* const pindex_start = GetStartingBlockIndexPtr();
+    // The range comes from the snapshot the tally ran on. The chain helpers below take non-const block index
+    // pointers; the entries are only read.
+    CBlockIndex* const pindex_start = const_cast<CBlockIndex*>(snapshot.m_pindex_start);
 
     // If pindex_start is a nullptr, this is a degenerate poll reference. Return std::nullopt.
     if (pindex_start == nullptr) return std::nullopt;
 
-    const CBlockIndex* pindex_end = GetEndingBlockIndexPtr(pindex_start);
+    const CBlockIndex* pindex_end = snapshot.m_pindex_end;
 
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll start height = %i.",
              __func__, pindex_start->nHeight);
 
-    // If the poll is still active, then pindex_end will be nullptr, so then use the pinned chain tip
-    // supplied by the caller (captured once under cs_main) rather than re-reading the live pindexBest.
+    // If the poll is still active, then pindex_end will be nullptr, so then use the snapshot's pinned tip
+    // rather than re-reading the live pindexBest.
     // This keeps every active poll in a table build anchored to the same end height; on a genuine tip
     // change the poll-result cache re-tallies against the new tip.
     if (pindex_end == nullptr) {
-        pindex_end = pindex_tip;
+        pindex_end = snapshot.m_pindex_tip;
 
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll is still active. Using head of the chain (%i) as end height.",
                  __func__, pindex_end->nHeight);
@@ -641,7 +650,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
     unsigned int blocks = 0;
 
     // If poll weight type is balance only, then simply sum up the netweights over the block range of the poll.
-    if (m_weight_type == PollWeightType::BALANCE) {
+    if (snapshot.m_weight_type == PollWeightType::BALANCE) {
         for (CBlockIndex* pindex = pindex_start; pindex ; pindex = pindex->pnext) {
 
             arith_uint256 net_weight = GetAvgNetworkWeight(pindex);
@@ -663,7 +672,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
         // If it is not balance only (handled by above), and is not BALANCE_AND_MAGNITUDE (everything else) then return nullopt.
         // In reality all weight types other than BALANCE and BALANCE_AND_MAGNITUDE are deprecated in Fern onwards, so this
         // only applies for legacy polls.
-    } else if (m_weight_type != PollWeightType::BALANCE_AND_MAGNITUDE) {
+    } else if (snapshot.m_weight_type != PollWeightType::BALANCE_AND_MAGNITUDE) {
         return std::nullopt;
     }
 
@@ -705,8 +714,8 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
     arith_uint256 scaled_pool_magnitude = 0;
     arith_uint256 scaled_network_magnitude = 0;
 
-    // The factor the votes were weighed with: the one TryReadFromDisk put in the
-    // result's poll. Resolving it again here could pick up a protocol entry
+    // The factor the votes were weighed with: the one PollResult::BuildFor put in
+    // the result's poll. Resolving it again here could pick up a protocol entry
     // connected during the tally, and the vote percentage would mix two factors.
     const Fraction magnitude_weight_factor = result.m_poll.m_magnitude_weight_factor;
 
@@ -756,8 +765,8 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
         LogPrintf("WARNING: %s: No valid superblock found prior to start of poll txid %s, title \"%s\", so no active vote "
                   "weight can be calculated.",
                  __func__,
-                 Txid().GetHex(),
-                 Title()
+                 snapshot.m_txid.GetHex(),
+                 snapshot.m_title
                  );
 
         return std::nullopt;
@@ -835,14 +844,14 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
 
     // Testing shows that the final 256 bit division below adds a negligible amount of execution time after this point, so
     // a single timer call to print out execution time is good enough.
-    g_timer.GetTimes("finished execution for poll id " + Txid().GetHex() + " title \"" + Title() + "\"", __func__);
+    g_timer.GetTimes("finished execution for poll id " + snapshot.m_txid.GetHex() + " title \"" + snapshot.m_title + "\"", __func__);
 
     if (!blocks) {
         LogPrintf("WARNING: %s: No blocks tallied for poll txid %s, title \"%s\", so no active vote weight can be "
                   "calculated.",
                  __func__,
-                 Txid().GetHex(),
-                 Title()
+                 snapshot.m_txid.GetHex(),
+                 snapshot.m_title
                  );
 
         return std::nullopt;
@@ -856,8 +865,8 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResult& resu
     } else {
         error("%s: Overflow in calculation for poll txid %s, title \"%s\", so no active vote weight can be calculated.",
                  __func__,
-                 Txid().GetHex(),
-                 Title()
+                 snapshot.m_txid.GetHex(),
+                 snapshot.m_title
                  );
 
         return std::nullopt;
@@ -1226,6 +1235,31 @@ const PollReference* PollRegistry::TryByTxid(const uint256 txid) const EXCLUSIVE
     }
 
     return &iter->second;
+}
+
+PollSnapshot PollRegistry::Snapshot(const PollReference& ref, const CBlockIndex* pindex_tip) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
+    PollSnapshot snapshot;
+
+    snapshot.m_txid = ref.m_txid;
+    snapshot.m_payload_version = ref.m_payload_version;
+    snapshot.m_type = ref.m_type;
+    snapshot.m_weight_type = ref.m_weight_type;
+    snapshot.m_title = ref.m_title;
+    snapshot.m_timestamp = ref.m_timestamp;
+    snapshot.m_end_time = ref.Expiration();
+    snapshot.m_votes = ref.Votes();
+    snapshot.m_pindex_tip = pindex_tip;
+    snapshot.m_pindex_start = ref.m_pindex;
+    snapshot.m_v15 = ref.m_pindex && IsV15Enabled(ref.m_pindex->nHeight);
+
+    // The end is judged by the adjusted time, and a finished poll's active vote weight range ends at the first block
+    // at or past the end.
+    snapshot.m_finished = ref.Expired(GetAdjustedTime());
+    snapshot.m_pindex_end = ref.GetEndingBlockIndexPtr();
+
+    return snapshot;
 }
 
 PollReference* PollRegistry::TryBy(const uint256 txid) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)

@@ -11,6 +11,7 @@
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/registry.h"
 #include "gridcoin/protocol.h"
+#include "gridcoin/quorum.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/voting/payloads.h"
 #include "gridcoin/voting/registry.h"
@@ -1067,6 +1068,39 @@ public:
 private:
     const CTransaction m_tx;
 };
+
+constexpr int64_t DAY = 86400;
+
+//! Make \p superblock, bound to \p pindex, the live current superblock for the scope, as connecting its block would.
+class LiveSuperblockScope
+{
+public:
+    LiveSuperblockScope(GRC::SuperblockPtr superblock, const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+        : m_pindex(pindex)
+    {
+        superblock.Rebind(pindex);
+        GRC::Quorum::PushSuperblock(std::move(superblock));
+    }
+
+    ~LiveSuperblockScope() EXCLUSIVE_LOCKS_REQUIRED(cs_main) { GRC::Quorum::PopSuperblock(m_pindex); }
+
+    LiveSuperblockScope(const LiveSuperblockScope&) = delete;
+    LiveSuperblockScope& operator=(const LiveSuperblockScope&) = delete;
+
+private:
+    const CBlockIndex* m_pindex;
+};
+
+//! The registry's snapshot of the poll \p txid on \p pindex_tip, taken as the RPCs and the poll table take it.
+GRC::PollSnapshot TakeSnapshot(const uint256& txid, const CBlockIndex* pindex_tip)
+{
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    const GRC::PollReference* ref = GRC::GetPollRegistry().TryByTxid(txid);
+    BOOST_REQUIRE(ref != nullptr);
+
+    return GRC::GetPollRegistry().Snapshot(*ref, pindex_tip);
+}
 } // anonymous namespace
 
 BOOST_AUTO_TEST_SUITE(poll_registry_chain_tests, *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
@@ -1102,7 +1136,7 @@ BOOST_AUTO_TEST_CASE(active_vote_weight_uses_the_factor_in_the_result)
         GRC::Poll weighed = poll.contract.CopyPayloadAs<GRC::PollPayload>().m_poll;
         weighed.m_magnitude_weight_factor = factor;
 
-        return ref->GetActiveVoteWeight(GRC::PollResult(std::move(weighed)), tip);
+        return GRC::ActiveVoteWeight(registry.Snapshot(*ref, tip), GRC::PollResult(std::move(weighed)));
     };
 
     const std::optional<CAmount> without_magnitude = active_vote_weight(Fraction(0, 1));
@@ -1268,6 +1302,81 @@ BOOST_AUTO_TEST_CASE(a_legacy_poll_weighs_magnitude_as_of_its_end)
         factor * GRC::Magnitude::RoundFrom(50).Scaled() / GRC::Magnitude::SCALE_FACTOR + 100 * COIN;
 
     BOOST_CHECK_EQUAL(result->m_total_weight, expected);
+}
+
+//!
+//! A tally reads only its snapshot: a vote linked after the snapshot is not counted, and the poll leaving the
+//! registry does not stop the tally.
+//!
+BOOST_AUTO_TEST_CASE(a_tally_reads_only_its_snapshot)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 3600;
+    const PollTx poll = MakePollTx("Title", t0);
+    const CTransaction first = MakeVoteTx(poll.tx.GetHash(), t0 + 60);
+    const CTransaction second = MakeVoteTx(poll.tx.GetHash(), t0 + 120);
+
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip first_block = LinkBlock(polled.m_pindex, t0 + 60, GRC::Claim(), {first}, bits);
+    const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
+    const TxIndexScope first_indexed(first, first_block.m_tx_positions[0]);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    registry.Add({poll.contract, poll.tx, polled.m_pindex});
+    registry.Add({first.GetContracts()[0], first, first_block.m_pindex});
+
+    const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), first_block.m_pindex);
+    BOOST_CHECK(snapshot.m_txid == poll.tx.GetHash());
+    BOOST_CHECK(snapshot.m_pindex_start == polled.m_pindex);
+    BOOST_CHECK(snapshot.m_pindex_tip == first_block.m_pindex);
+    BOOST_CHECK(!snapshot.m_v15);
+    BOOST_REQUIRE_EQUAL(snapshot.m_votes.size(), 1U);
+
+    // A second vote is linked after the snapshot, and then the registry is emptied.
+    const LinkedTip second_block = LinkBlock(first_block.m_pindex, t0 + 120, GRC::Claim(), {second}, bits);
+    registry.Add({second.GetContracts()[0], second, second_block.m_pindex});
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_REQUIRE_EQUAL(registry.TryByTxid(poll.tx.GetHash())->Votes().size(), 2U);
+    }
+    RegistryReset::Reset();
+
+    const GRC::PollResultOption result = GRC::PollResult::BuildFor(snapshot);
+    BOOST_REQUIRE(result);
+    BOOST_CHECK_EQUAL(result->m_vote_count, 1U);
+}
+
+//!
+//! The superblock that weighs magnitude comes from the pinned tip's own chain. The live current superblock here is in
+//! a block above the pinned tip: a tally on the pinned tip takes the superblock below the tip, and a tally on the
+//! live superblock's block takes that one.
+//!
+BOOST_AUTO_TEST_CASE(the_superblock_that_weighs_magnitude_is_on_the_pinned_tip_s_chain)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 2 * DAY;
+    const PollTx poll_tx = MakePollTx("Title", t0, GRC::ContractAction::ADD, GRC::PollWeightType::BALANCE_AND_MAGNITUDE);
+    const LinkedTip before = LinkBlock(pindexGenesisBlock, t0 - DAY, SuperblockClaim(100), {}, bits);
+    const LinkedTip polled = LinkBlock(before.m_pindex, t0, GRC::Claim(), {poll_tx.tx}, bits);
+    const LinkedTip pinned = LinkBlock(polled.m_pindex, t0 + DAY, GRC::Claim(), {}, bits);
+    const LinkedTip late = LinkBlock(pinned.m_pindex, t0 + DAY + 60, SuperblockClaim(900), {}, bits);
+    const LiveSuperblockScope live(SuperblockClaim(900).m_superblock, late.m_pindex);
+
+    // A poll read from a block carries no timestamp; the registry sets it from the transaction, as here.
+    GRC::Poll poll = poll_tx.contract.CopyPayloadAs<GRC::PollPayload>().m_poll;
+    poll.m_timestamp = t0;
+    BOOST_REQUIRE(!poll.Expired(late.m_pindex->nTime));
+
+    BOOST_CHECK_EQUAL(GRC::ResolveSuperblockForPoll(poll, pinned.m_pindex).m_height, before.m_pindex->nHeight);
+    BOOST_CHECK_EQUAL(GRC::ResolveSuperblockForPoll(poll, late.m_pindex).m_height, late.m_pindex->nHeight);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

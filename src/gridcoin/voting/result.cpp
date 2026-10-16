@@ -1842,43 +1842,6 @@ private:
 }; // VoteCounter
 
 //!
-//! \brief Fetch the superblock used to calculate magnitude weight for the
-//! specified poll.
-//!
-//! \param poll Poll to fetch the superblock for.
-//! \param pindex_tip Pinned chain tip to walk back from (in place of the live
-//! pindexBest) so the result is consistent with the rest of the tally.
-//!
-//! \return Latest superblock active during the poll.
-//!
-SuperblockPtr ResolveSuperblockForPoll(const Poll& poll, const CBlockIndex* pindex_tip)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    SuperblockPtr superblock = Quorum::CurrentSuperblock();
-
-    if (!poll.Expired(superblock.m_timestamp)) {
-        return superblock;
-    }
-
-    const CBlockIndex* pindex = pindex_tip;
-
-    // Seek past the current superblock:
-    for (; pindex && pindex->nHeight >= superblock.m_height; pindex = pindex->pprev);
-
-    // Find the superblock active at the end of the poll:
-    for (; pindex; pindex = pindex->pprev) {
-        if (!pindex->IsSuperblock() || poll.Expired(pindex->nTime)) {
-            continue;
-        }
-
-        superblock = SuperblockPtr::ReadFromDisk(pindex);
-        break;
-    }
-
-    return superblock;
-}
-
-//!
 //! \brief Get the last block in the poll window.
 //!
 //! \param poll Poll to find the block for.
@@ -1908,6 +1871,51 @@ const CBlockIndex* PollEndBlock(const Poll& poll, const CBlockIndex* pindex_tip)
 // -----------------------------------------------------------------------------
 // Global Functions
 // -----------------------------------------------------------------------------
+
+//!
+//! \brief Fetch the superblock used to calculate magnitude weight for the
+//! specified poll.
+//!
+//! \param poll Poll to fetch the superblock for.
+//! \param pindex_tip Pinned chain tip to walk back from (in place of the live
+//! pindexBest) so the result is consistent with the rest of the tally.
+//!
+//! \return Latest superblock active during the poll.
+//!
+//! The live superblock serves only when it is on the pinned tip's own chain.
+//!
+SuperblockPtr GRC::ResolveSuperblockForPoll(const Poll& poll, const CBlockIndex* pindex_tip)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    SuperblockPtr superblock = Quorum::CurrentSuperblock();
+    const CBlockIndex* pindex = pindex_tip;
+
+    // The live current superblock belongs to the live tip, and a table build tallies each poll on the tip it pinned.
+    // The live superblock is on the pinned tip's own chain only when the pinned tip is still on the main chain and the
+    // superblock is at or below it (both are then main chain blocks, so the superblock is the tip's ancestor). Only
+    // then may it serve, or be skipped past; otherwise the walk below reads only the pinned tip's chain. The result is
+    // the one for the pinned tip.
+    if (pindex_tip->IsInMainChain() && superblock.m_height <= pindex_tip->nHeight) {
+        if (!poll.Expired(superblock.m_timestamp)) {
+            return superblock;
+        }
+
+        // Seek past the current superblock:
+        for (; pindex && pindex->nHeight >= superblock.m_height; pindex = pindex->pprev);
+    }
+
+    // Find the superblock active at the end of the poll:
+    for (; pindex; pindex = pindex->pprev) {
+        if (!pindex->IsSuperblock() || poll.Expired(pindex->nTime)) {
+            continue;
+        }
+
+        superblock = SuperblockPtr::ReadFromDisk(pindex);
+        break;
+    }
+
+    return superblock;
+}
 
 bool GRC::MeetsMinimumVotePercentAVW(
     const PollResult::Weight total_weight,
@@ -1980,6 +1988,18 @@ PollResult::PollResult(Poll poll)
 
 PollResultOption PollResult::BuildFor(const PollReference& poll_ref, const CBlockIndex* pindex_tip)
 {
+    PollSnapshot snapshot;
+
+    {
+        LOCK2(cs_main, PollRegistry::cs_poll_registry);
+        snapshot = GetPollRegistry().Snapshot(poll_ref, pindex_tip);
+    }
+
+    return BuildFor(snapshot);
+}
+
+PollResultOption PollResult::BuildFor(const PollSnapshot& snapshot)
+{
     // Create the timer HERE, at the engine's outermost entry, not in a caller.
     //
     // Every "buildPollTable" read in this file -- SetSuperblock, CountVotes,
@@ -1997,128 +2017,110 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref, const CBloc
 
     g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
 
-    if (PollOption poll = poll_ref.TryReadFromDisk()) {
-        CTxDB txdb("r");
-        PollResult result(std::move(*poll));
+    CTxDB txdb("r");
+    PollOption poll = ReadPollFromDisk(txdb, snapshot.m_txid);
 
-        // Anchor consensus-critical pool queries (AVW) to the poll's start
-        // height. Skeleton poll references shouldn't reach here, but if
-        // GetStartingHeight() returns std::nullopt, fall back to the
-        // current tip so VoteCounter still functions; the per-vote
-        // recording is best-effort in that degenerate case.
-        //
-        // GetStartingHeight() walks the chain index, so it requires cs_main —
-        // matching the pattern in PollReference::GetActiveVoteWeight in
-        // voting/registry.cpp. The degenerate fallback uses the pinned tip's
-        // height (nHeight is immutable per block index and the object is never
-        // freed, so it needs no lock) instead of the live nBestHeight.
-        //
-        // The v15 tally rules apply to polls that start at or after the v15
-        // height; an earlier poll is tallied exactly as before. A poll with no
-        // known starting height keeps the earlier rules.
-        int poll_start_height;
-        bool v15_rules;
-        const CBlockIndex* pindex_end = nullptr;
-        CAmount legacy_money_supply = 0;
-        SuperblockPtr legacy_superblock;
-        {
-            LOCK(cs_main);
-            const std::optional<int> start_height = poll_ref.GetStartingHeight();
-            poll_start_height = start_height.value_or(pindex_tip->nHeight);
-            v15_rules = start_height && IsV15Enabled(*start_height);
-
-            // The last block in the poll window gives the money supply for the
-            // magnitude weight of a poll weighed by magnitude. A legacy poll
-            // weighed by balance and magnitude also takes the last well-formed
-            // superblock at or before that block for its legacy magnitude
-            // factor. Where none is found, and for every other poll, which does
-            // not use the factor, the current superblock serves. Resolved under
-            // the cs_main we already hold here, so the tally itself stays
-            // lock-free.
-            if (result.m_poll.IncludesMagnitudeWeight()) {
-                pindex_end = PollEndBlock(result.m_poll, pindex_tip);
-            }
-
-            std::optional<SuperblockPtr> end_superblock;
-
-            if (pindex_end && poll_ref.GetPollPayloadVersion() == 1
-                && result.m_poll.m_weight_type == PollWeightType::BALANCE_AND_MAGNITUDE) {
-                legacy_money_supply = pindex_end->nMoneySupply;
-                end_superblock = LastWellFormedSuperblock(pindex_end);
-            }
-
-            legacy_superblock = end_superblock ? std::move(*end_superblock) : Quorum::CurrentSuperblock();
-        }
-
-        // The poll counts as finished for the beacon key rule when the tip the
-        // tally runs on is past its end, so every node with this tip agrees.
-        VoteCounter counter(txdb, result.m_poll, poll_start_height, v15_rules, legacy_money_supply,
-                            std::move(legacy_superblock), result.m_poll.Expired(pindex_tip->nTime));
-
-        if (result.m_poll.IncludesMagnitudeWeight()) {
-            SuperblockPtr superblock;
-            uint64_t supply;
-
-            {
-                LOCK(cs_main);
-                superblock = ResolveSuperblockForPoll(result.m_poll, pindex_tip);
-                supply = pindex_end->nMoneySupply;
-            }
-
-            counter.EnableMagnitudeWeight(std::move(superblock), supply);
-        }
-
-        // Snapshot the vote txid list under cs_poll_registry before tallying:
-        // PollReference::LinkVote/UnlinkVote mutate this vector under that lock on
-        // the block-connection thread, so iterating the live Votes() reference in
-        // CountVotes could race with a concurrent link/unlink (and crash if the
-        // vector reallocates). The copy is taken inside the lock scope.
-        std::vector<uint256> vote_txids;
-        {
-            LOCK(PollRegistry::cs_poll_registry);
-            vote_txids = poll_ref.Votes();
-        }
-
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: number of votes = %u for poll %s",
-                 __func__, vote_txids.size(), result.m_poll.m_title);
-
-        counter.CountVotes(result, vote_txids);
-
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: poll_ref.Time() = %" PRId64 " poll.m_magnitude_weight_factor = %s",
-                 __func__,
-                 poll_ref.Time(),
-                 result.m_poll.m_magnitude_weight_factor.ToString());
-
-        if (auto active_vote_weight = poll_ref.GetActiveVoteWeight(result, pindex_tip)) {
-            result.m_active_vote_weight = active_vote_weight;
-
-            // A percentage of a zero active vote weight has no meaning, so none is computed.
-            if (*result.m_active_vote_weight > 0) {
-                result.m_vote_percent_avw = (double) result.m_total_weight / (double) *result.m_active_vote_weight * 100.0;
-            }
-
-            // For v1 and v2 polls, there is only one type, SURVEY, that was used on the blockchain for all polls, so this
-            // can only be done for v3+. Validation uses integer arithmetic: see MeetsMinimumVotePercentAVW, which
-            // fails a poll whose active vote weight is zero.
-            if (poll_ref.GetPollPayloadVersion() > 2) {
-                const uint32_t min_vote_percent_avw_for_validation
-                        = Poll::POLL_TYPE_RULES[(int) poll_ref.GetPollType()].m_min_vote_percent_AVW;
-
-                result.m_poll_results_validated = MeetsMinimumVotePercentAVW(
-                    result.m_total_weight,
-                    *result.m_active_vote_weight,
-                    min_vote_percent_avw_for_validation);
-            }
-        }
-
+    if (!poll) {
         g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
 
-        return result;
+        return std::nullopt;
     }
+
+    // Neither the timestamp nor the magnitude weight factor is serialized. The factor is resolved from the poll's
+    // block and transaction time, as PollReference::GetMagnitudeWeightFactor resolves it, from the snapshot's copies.
+    poll->m_magnitude_weight_factor = Poll::ResolveMagnitudeWeightFactor(snapshot.m_pindex_start, snapshot.m_timestamp);
+
+    PollResult result(std::move(*poll));
+    const CBlockIndex* const pindex_tip = snapshot.m_pindex_tip;
+
+    // Anchor consensus-critical pool queries (AVW) to the poll's start height. A skeleton reference (no block)
+    // shouldn't reach here; if one does, the pinned tip's height keeps VoteCounter working, and the v15 rules,
+    // which apply to polls whose block is at or above the v15 height, do not apply.
+    const int poll_start_height = snapshot.m_pindex_start ? snapshot.m_pindex_start->nHeight : pindex_tip->nHeight;
+    const bool v15_rules = snapshot.m_v15;
+    const CBlockIndex* pindex_end = nullptr;
+    CAmount legacy_money_supply = 0;
+    SuperblockPtr legacy_superblock;
+    {
+        LOCK(cs_main);
+
+        // The last block in the poll window gives the money supply for the
+        // magnitude weight of a poll weighed by magnitude. A legacy poll
+        // weighed by balance and magnitude also takes the last well-formed
+        // superblock at or before that block for its legacy magnitude
+        // factor. Where none is found, and for every other poll, which does
+        // not use the factor, the current superblock serves. Resolved under
+        // the cs_main we already hold here, so the tally itself stays
+        // lock-free.
+        if (result.m_poll.IncludesMagnitudeWeight()) {
+            pindex_end = PollEndBlock(result.m_poll, pindex_tip);
+        }
+
+        std::optional<SuperblockPtr> end_superblock;
+
+        if (pindex_end && snapshot.m_payload_version == 1
+            && result.m_poll.m_weight_type == PollWeightType::BALANCE_AND_MAGNITUDE) {
+            legacy_money_supply = pindex_end->nMoneySupply;
+            end_superblock = LastWellFormedSuperblock(pindex_end);
+        }
+
+        legacy_superblock = end_superblock ? std::move(*end_superblock) : Quorum::CurrentSuperblock();
+    }
+
+    // The poll counts as finished for the beacon key rule when the tip the
+    // tally runs on is past its end, so every node with this tip agrees.
+    VoteCounter counter(txdb, result.m_poll, poll_start_height, v15_rules, legacy_money_supply,
+                        std::move(legacy_superblock), result.m_poll.Expired(pindex_tip->nTime));
+
+    if (result.m_poll.IncludesMagnitudeWeight()) {
+        SuperblockPtr superblock;
+        uint64_t supply;
+
+        {
+            LOCK(cs_main);
+            superblock = ResolveSuperblockForPoll(result.m_poll, pindex_tip);
+            supply = pindex_end->nMoneySupply;
+        }
+
+        counter.EnableMagnitudeWeight(std::move(superblock), supply);
+    }
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: number of votes = %u for poll %s",
+             __func__, snapshot.m_votes.size(), result.m_poll.m_title);
+
+    counter.CountVotes(result, snapshot.m_votes);
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: snapshot.m_timestamp = %" PRId64 " poll.m_magnitude_weight_factor = %s",
+             __func__,
+             snapshot.m_timestamp,
+             result.m_poll.m_magnitude_weight_factor.ToString());
+
+    if (auto active_vote_weight = ActiveVoteWeight(snapshot, result)) {
+        result.m_active_vote_weight = active_vote_weight;
+
+        // No percentage is computed without an active vote weight.
+        if (*result.m_active_vote_weight > 0) {
+            result.m_vote_percent_avw = (double) result.m_total_weight / (double) *result.m_active_vote_weight * 100.0;
+        }
+
+        // For v1 and v2 polls, there is only one type, SURVEY, that was used on the blockchain for all polls, so this
+        // can only be done for v3+. Validation uses integer arithmetic: see MeetsMinimumVotePercentAVW.
+        if (snapshot.m_payload_version > 2) {
+            const uint32_t min_vote_percent_avw_for_validation
+                    = Poll::POLL_TYPE_RULES[(int) snapshot.m_type].m_min_vote_percent_AVW;
+
+            result.m_poll_results_validated = MeetsMinimumVotePercentAVW(
+                result.m_total_weight,
+                *result.m_active_vote_weight,
+                min_vote_percent_avw_for_validation);
+        }
+    }
+
+    result.m_finished = snapshot.m_finished;
 
     g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
 
-    return std::nullopt;
+    return result;
 }
 
 size_t PollResult::Winner() const

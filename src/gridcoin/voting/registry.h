@@ -15,7 +15,10 @@
 #include <atomic>
 #include <map>
 #include <optional>
+#include <string>
+#include <vector>
 
+class CBlockIndex;
 class CTxDB;
 
 namespace GRC {
@@ -186,17 +189,6 @@ public:
     Fraction GetMagnitudeWeightFactor() const;
 
     //!
-    //! \brief Computes the Active Vote Weight for the poll, which is used to determine whether the poll is validated.
-    //! \param result: The actual tabulated votes (poll result). Its poll supplies
-    //! the magnitude weight factor, the one the votes were weighed with.
-    //! \param pindex_tip: Pinned chain tip used as the end of the range for an
-    //! active poll, so every poll in a table build tallies against one consistent
-    //! tip rather than a live pindexBest that shifts each block.
-    //! \return ActiveVoteWeight
-    //!
-    std::optional<CAmount> GetActiveVoteWeight(const PollResult& result, const CBlockIndex* pindex_tip) const;
-
-    //!
     //! \brief Provides string equivalent of PollNotificationType
     //! \param notify_type
     //! \return string equivalent of PollNotificationType
@@ -249,6 +241,33 @@ private:
     bool m_deleted;                             //!< Deleted by a master-key REMOVE; kept for its txid and title.
     const PollRegistry* m_registry;             //!< The registry that holds this reference.
 }; // PollReference
+
+//!
+//! \brief One consistent copy of what a tally reads from the poll registry and the chain index.
+//!
+//! PollRegistry::Snapshot takes it under cs_main and cs_poll_registry. The tally (PollResult::BuildFor), the result
+//! cache and the RPCs then read only the snapshot: a change to the registry after the snapshot changes nothing the
+//! tally reads. The block pointers need no lock to read: block index
+//! entries are never freed, and their heights, times and pprev links never change.
+//!
+struct PollSnapshot
+{
+    uint256 m_txid;                                         //!< Hash of the poll transaction.
+    uint32_t m_payload_version = 0;                         //!< Version of the poll payload.
+    PollType m_type = PollType::UNKNOWN;                    //!< Type of the poll.
+    PollWeightType m_weight_type = PollWeightType::UNKNOWN; //!< Weight type of the poll.
+    std::string m_title;                                    //!< Title of the poll, for display and logs.
+    int64_t m_timestamp = 0;                                //!< Time of the poll transaction.
+    int64_t m_end_time = 0;                                 //!< The poll's end (PollReference::Expiration()).
+    std::vector<uint256> m_votes;                           //!< Linked votes, in connection order.
+    const CBlockIndex* m_pindex_tip = nullptr;              //!< The pinned tip the snapshot was taken on.
+    const CBlockIndex* m_pindex_start = nullptr;            //!< The poll's block; nullptr for a skeleton reference.
+    //! Last block of the active vote weight range, or nullptr while the poll is open (the range then ends at the
+    //! pinned tip).
+    const CBlockIndex* m_pindex_end = nullptr;
+    bool m_v15 = false;                                     //!< The poll's block is at or above the v15 height.
+    bool m_finished = false;                                //!< The poll has finished.
+};
 
 //!
 //! \brief Tracks recent polls and votes submitted to the network.
@@ -451,6 +470,15 @@ public:
     //! the supplied transaction hash.
     //!
     const PollReference* TryByTxid(const uint256 txid) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+
+    //!
+    //! \brief Copy what a tally of \p ref reads, as of the pinned tip \p pindex_tip.
+    //!
+    //! \param ref        A poll this registry holds.
+    //! \param pindex_tip The tip the tally runs on, read under the same cs_main.
+    //!
+    PollSnapshot Snapshot(const PollReference& ref, const CBlockIndex* pindex_tip) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
 
     //!
     //! \brief Get the poll with the specified title.
@@ -744,6 +772,25 @@ PollRegistry& GetPollRegistry();
 //! \return The superblock, bound to its block, or nothing if none is found.
 //!
 std::optional<SuperblockPtr> LastWellFormedSuperblock(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//!
+//! \brief Read the poll contract in the transaction \p txid from disk, with the transaction's time as the poll's
+//! timestamp. The magnitude weight factor is not serialized; the caller resolves it.
+//!
+PollOption ReadPollFromDisk(CTxDB& txdb, const uint256& txid);
+
+//!
+//! \brief Compute the active vote weight of a tallied poll, which decides whether the poll is validated.
+//!
+//! \param snapshot The snapshot the tally ran on. The range runs from its poll block through m_pindex_end, or
+//! through its pinned tip while the poll is open.
+//! \param result   The tallied result. Its poll supplies the magnitude weight factor the votes were weighed with,
+//! and its m_pools_voted the pools that stay in the magnitude correction.
+//!
+//! \return The active vote weight, or nothing for a skeleton reference, a weight type without one, or a poll with no
+//! well-formed superblock at or before its block.
+//!
+std::optional<CAmount> ActiveVoteWeight(const PollSnapshot& snapshot, const PollResult& result);
 }
 
 #endif // GRIDCOIN_VOTING_REGISTRY_H
