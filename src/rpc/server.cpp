@@ -803,7 +803,7 @@ void ServiceConnection(AcceptedConnection *conn);
 // Forward declaration required for RPCListen
 template <typename Protocol>
 static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
-                             AcceptedConnection* conn,
+                             std::shared_ptr<AcceptedConnection> conn,
                              const boost::system::error_code& error);
 
 /**
@@ -812,8 +812,11 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
 template <typename Protocol>
 static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor)
 {
-    // Accept connection
-    AcceptedConnectionImpl<Protocol>* conn = new AcceptedConnectionImpl<Protocol>(GetIOServiceFromPtr(acceptor));
+    // Accept connection. The pending handler owns the connection: when the
+    // accept is aborted at shutdown, StopRPCThreads() may stop the io_context
+    // before a worker runs that handler, and destroying the io_context then
+    // destroys the handler without calling it.
+    auto conn = std::make_shared<AcceptedConnectionImpl<Protocol>>(GetIOServiceFromPtr(acceptor));
 
     acceptor->async_accept(
                 conn->socket,
@@ -829,7 +832,7 @@ static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > accep
  */
 template <typename Protocol>
 static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
-                             AcceptedConnection* conn,
+                             std::shared_ptr<AcceptedConnection> conn,
                              const boost::system::error_code& error)
 {
     // Immediately start accepting new connections, except when we're cancelled or our socket is closed.
@@ -842,7 +845,7 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
         // Restrict callers by IP.  It is important to
         // do this before starting client thread, to filter out
         // certain DoS and misbehaving clients.
-        AcceptedConnectionImpl<ip::tcp>* tcp_conn = dynamic_cast< AcceptedConnectionImpl<ip::tcp>* >(conn);
+        AcceptedConnectionImpl<ip::tcp>* tcp_conn = dynamic_cast< AcceptedConnectionImpl<ip::tcp>* >(conn.get());
 
         // Before the allow-list test, so it covers the rejection path too.
         //
@@ -874,17 +877,15 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
             // wake us out of the blocking read loop. If the server is already
             // stopping we skip servicing entirely rather than park with no
             // drain left to interrupt us (issue #3123).
-            if (RegisterRPCConnection(conn))
+            if (RegisterRPCConnection(conn.get()))
             {
-                ServiceConnection(conn);
-                UnregisterRPCConnection(conn);
+                ServiceConnection(conn.get());
+                UnregisterRPCConnection(conn.get());
             }
         }
 
         conn->close();
     }
-
-    delete conn;
 }
 
 //! Bind one acceptor per -rpcbind entry.
@@ -1222,9 +1223,11 @@ void StopRPCThreads()
     }
 
     // Close the listening acceptors before stopping the io_service. This makes
-    // any pending async_accept complete with operation_aborted (RPCAcceptHandler
-    // then sees !is_open() and does not re-arm), so no further connection is
-    // accepted. This is necessary but not sufficient to unblock join_all() --
+    // any pending async_accept complete with operation_aborted, so no further
+    // connection is accepted: a worker that runs RPCAcceptHandler before the
+    // stop() below sees !is_open() and does not re-arm, and a handler still
+    // queued at stop() is destroyed with the io_service, freeing the connection
+    // it owns. This is necessary but not sufficient to unblock join_all() --
     // connections already being serviced are handled by the interrupt loop
     // below (issue #3123).
     for (auto& acc : rpc_acceptors) {
