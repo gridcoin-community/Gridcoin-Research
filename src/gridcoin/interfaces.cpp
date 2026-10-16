@@ -970,6 +970,8 @@ BeaconStatus MapBeaconError(const GRC::BeaconError error)
         case GRC::BeaconError::V14_NOT_ENABLED:    return BeaconStatus::ERROR_TX_FAILED;
         case GRC::BeaconError::WALLET_LOCKED:      return BeaconStatus::ERROR_WALLET_LOCKED;
         case GRC::BeaconError::ALEADY_IN_MEMPOOL:  return BeaconStatus::ALREADY_IN_MEMPOOL;
+        // The status the snapshot itself reports while out of sync (DeriveBeacon).
+        case GRC::BeaconError::OUT_OF_SYNC:        return BeaconStatus::UNKNOWN;
     }
 
     assert(false); // unreachable: every BeaconError enumerator is handled above
