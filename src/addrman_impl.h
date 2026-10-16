@@ -163,8 +163,8 @@ public:
 /**
  * Implementation of the stochastic address manager (issue #2558 PR 6b). All
  * state and logic live here; the public AddrMan in addrman.h is a thin pimpl
- * wrapper forwarding to this. peers.dat serialization is byte-identical to the
- * pre-split AddrMan.
+ * wrapper forwarding to this. peers.dat is written in format V3_BIP155 (see
+ * Format below); V0/V1 files from older Gridcoin versions are still read.
  */
 class AddrManImpl
 {
@@ -174,8 +174,10 @@ public:
 
     /**
      * serialized format:
-     * * version byte (currently 1)
-     * * 0x20 + nKey (serialized as if it were a vector, for backward compatibility)
+     * * format version byte (see Format; currently V3_BIP155)
+     * * INCOMPATIBILITY_BASE + lowest compatible format (32 for V0/V1 files,
+     *   where it was the key size)
+     * * nKey
      * * nNew
      * * nTried
      * * number of "new" buckets XOR 2**30
@@ -184,6 +186,8 @@ public:
      * * for each bucket:
      *   * number of elements
      *   * for each element: index
+     * * asmap checksum (uint256, format >= V2_ASMAP; always zero in Gridcoin,
+     *   which has no asmap support)
      *
      * 2**30 is xorred with the number of buckets to make addrman deserializer v0 detect it
      * as incompatible. This is necessary because it did not check the version number on
@@ -205,7 +209,7 @@ public:
     enum Format : uint8_t {
         V0_HISTORICAL = 0,    //!< historic format, before commit e6b343d88
         V1_DETERMINISTIC = 1, //!< for pre-asmap files (all stock Gridcoin peers.dat)
-        V2_ASMAP = 2,         //!< upstream asmap format; never written by Gridcoin (no asmap), read like V1
+        V2_ASMAP = 2,         //!< upstream asmap format; never written by Gridcoin (no asmap), read like V1 with the checksum ignored
         V3_BIP155 = 3,        //!< same as V2_ASMAP plus addresses are in BIP155 format
     };
 
@@ -230,11 +234,16 @@ public:
         // Tor v3 addresses survive a restart.
         OverrideStream<Stream> s(&s_, s_.GetType(), s_.GetVersion() | ADDRV2_FORMAT);
 
+        // Increment `lowest_compatible` iff a newly introduced format is
+        // incompatible with the previous one. Kept separate from FILE_FORMAT,
+        // as upstream does, so a later compatible format bump does not lock
+        // this version out.
+        static constexpr uint8_t lowest_compatible = Format::V3_BIP155;
         s << static_cast<uint8_t>(FILE_FORMAT);
         // Older readers check this byte == 32 ("key size") and reject anything
-        // else. Writing INCOMPATIBILITY_BASE + lowest_compatible therefore makes
-        // a stock (pre-V3) Gridcoin fail cleanly instead of misparsing V2 data.
-        s << static_cast<uint8_t>(INCOMPATIBILITY_BASE + FILE_FORMAT);
+        // else, so a stock (pre-V3) Gridcoin fails cleanly instead of
+        // misparsing V3 data.
+        s << static_cast<uint8_t>(INCOMPATIBILITY_BASE + lowest_compatible);
         s << nKey;
         s << nNew;
         s << nTried;
@@ -275,6 +284,10 @@ public:
                 }
             }
         }
+        // Upstream V2/V3 files end with the asmap checksum. Gridcoin has no
+        // asmap, so write a zero checksum to keep the layout identical and let
+        // a future asmap backport read existing files correctly.
+        s << uint256{};
     }
 
     template<typename Stream>
@@ -380,6 +393,12 @@ public:
                     }
                 }
             }
+        }
+
+        if (format >= Format::V2_ASMAP) {
+            // No asmap support: read and discard the checksum (see Serialize).
+            uint256 serialized_asmap_checksum;
+            s >> serialized_asmap_checksum;
         }
 
          // Prune new entries with refcount 0 (as a result of collisions).
