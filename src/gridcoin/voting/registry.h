@@ -172,7 +172,7 @@ public:
     //!
     //! \brief Get the magnitude weight factor at the poll start.
     //!
-    //! Resolved on each call from the poll's block and transaction time, against
+    //! Resolved on each call from the poll's block and start (StartTime(), the block's time from v15), against
     //! the current protocol registry, as a read of the poll from disk always did.
     //! A factor fixed at registration could differ between a node that saw the
     //! poll arrive and one that replayed it later, when an entry stamped before
