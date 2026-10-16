@@ -2,6 +2,8 @@
 #include <QTest>
 #include <QObject>
 
+#include "logging.h"
+
 #include "aboutdialogtests.h"
 #include "autostarttests.h"
 #include "bitcoinunitstests.h"
@@ -41,6 +43,16 @@ int main(int argc, char *argv[])
         qputenv("QT_QPA_PLATFORM", "offscreen");
     }
     QApplication app(argc, argv);
+
+    // Log to the console, as test_gridcoin does. Until StartLogging() the
+    // logger only buffers, and nothing here ever started it, so whatever the
+    // code under test logged was discarded -- the lock-order checker's reports
+    // among it, which the CI sanitizer job looks for in this output.
+    LogInstance().m_print_to_file = false;
+    LogInstance().m_print_to_console = true;
+    if (!LogInstance().StartLogging()) {
+        return 1;
+    }
 
     bool fInvalid = false;
 
