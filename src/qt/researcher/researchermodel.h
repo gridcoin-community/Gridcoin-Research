@@ -20,6 +20,7 @@
 
 QT_BEGIN_NAMESPACE
 class QIcon;
+class QTimer;
 QT_END_NAMESPACE
 
 class ResearcherWizard;
@@ -164,6 +165,17 @@ private:
     std::atomic<int64_t> m_last_block_refresh_ms{0};
     std::atomic<bool> m_last_syncing{false};
 
+    //! How often updateSyncState() polls. OutOfSyncByAge()'s threshold is
+    //! minutes long, so this delays showing the change by at most one interval.
+    static constexpr int SYNC_STATE_POLL_INTERVAL_MS = 30 * 1000;
+
+    //! Drives updateSyncState(). Owned by this model (QObject parent).
+    QTimer* m_sync_state_timer = nullptr;
+
+    //! The last refresh() skipped its snapshot because cs_main was busy, so
+    //! updateSyncState() retries it.
+    bool m_snapshot_skipped = false;
+
     bool m_wizard_open;
     bool m_privacy_enabled;
     QString m_theme_suffix;
@@ -194,6 +206,10 @@ signals:
 public slots:
     void reload();
     void refresh();
+    //! Refresh if the node's sync state differs from the cached one, or the
+    //! last refresh skipped its snapshot. Polled by m_sync_state_timer, because
+    //! no notification reports a node falling out of sync.
+    void updateSyncState();
     void onResearcherChanged();
     bool switchToSolo(const QString& email);
     bool switchToPool();
