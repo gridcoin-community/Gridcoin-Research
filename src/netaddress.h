@@ -386,10 +386,7 @@ class CNetAddr
                 // If we receive an unknown BIP155 network id (from the future?), or
                 // I2P/CJDNS which Gridcoin does not support, then ignore the
                 // address - unserialize as !IsValid().
-                // SpanReader and OverrideStream expose read(), but not ignore().
-                // The length cap above bounds this scratch buffer and consumption.
-                std::array<uint8_t, MAX_ADDRV2_SIZE> ignored;
-                s.read(AsWritableBytes(Span<uint8_t>{ignored.data(), address_size}));
+                s.ignore(address_size);
             }
 
             // Mimic a default-constructed CNetAddr object which is !IsValid() and thus
