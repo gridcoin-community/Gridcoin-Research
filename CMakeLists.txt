@@ -427,6 +427,15 @@ if(ENABLE_TESTS)
     if(SYSTEM_XXD)
         find_program(XXD xxd REQUIRED)
     endif()
+
+    # build/test/with_sanitizer_env.py COMMAND... runs COMMAND with the sanitizer
+    # options and suppression files the CI sanitizer jobs use; any option already
+    # set in the environment wins. It is harmless on a build without sanitizers.
+    configure_file(
+        "${CMAKE_SOURCE_DIR}/test/with_sanitizer_env.py.in"
+        "${CMAKE_BINARY_DIR}/test/with_sanitizer_env.py"
+        USE_SOURCE_PERMISSIONS @ONLY
+    )
 endif()
 
 if(UNIX)
