@@ -112,13 +112,22 @@ public:
     // Canned responses (set by the test before use).
     interfaces::ResearcherSnapshot m_snapshot;
     std::vector<interfaces::PoolRow> m_pools;
+    //! trySnapshot() answers as if cs_main were busy.
+    bool m_main_busy = false;
+    //! When set, outOfSync() answers this rather than the snapshot's flag: the
+    //! flag as read before a block finished, with the snapshot taken after it.
+    std::optional<bool> m_out_of_sync_flag;
 
     // Recorded calls.
     int m_switch_mode_calls = 0;
 
     interfaces::ResearcherSnapshot snapshot() override { return m_snapshot; }
-    std::optional<interfaces::ResearcherSnapshot> trySnapshot() override { return m_snapshot; }
-    bool outOfSync() override { return m_snapshot.out_of_sync; }
+    std::optional<interfaces::ResearcherSnapshot> trySnapshot() override
+    {
+        if (m_main_busy) return std::nullopt;
+        return m_snapshot;
+    }
+    bool outOfSync() override { return m_out_of_sync_flag.value_or(m_snapshot.out_of_sync); }
     bool hasV3CapableProjects() override { return false; }
     std::vector<interfaces::ResearcherProjectRow> projects(bool /*extended*/) override { return {}; }
     std::vector<interfaces::WhitelistProject> whitelistProjects() override { return {}; }
