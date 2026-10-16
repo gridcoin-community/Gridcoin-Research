@@ -867,30 +867,55 @@ public:
 
     std::string currentPollTitle() override
     {
-        // Raw title; the GUI applies its cosmetic formatting (length cap, '_' -> ' ').
-        return GRC::GetCurrentPollTitle();
+        // Raw title; the GUI applies its cosmetic formatting (length cap, '_' -> ' '). Whether a poll is open is judged
+        // by blocks on the tip, which needs cs_main. The GUI calls this on its own thread, at
+        // startup and every minute, and must not wait for cs_main, which a rescan can hold for minutes: while another
+        // thread holds it, return the last title read. The try takes cs_main first, before
+        // GetCurrentPollTitle takes cs_poll_registry, so it compensates no lock-order inversion.
+        TRY_LOCK(cs_main, locked_main);
+
+        if (!locked_main) {
+            LOCK(m_last_read_mutex);
+            return m_last_poll_title;
+        }
+
+        std::string title = GRC::GetCurrentPollTitle();
+
+        LOCK(m_last_read_mutex);
+        m_last_poll_title = title;
+
+        return title;
     }
 
     int64_t latestActivePollTime() override
     {
         // The newest open poll's timestamp, judged by blocks on the tip like the poll table. This
-        // runs in the node; the GUI calls it through the interface and takes no lock itself. cs_main is taken before
-        // cs_poll_registry, the order block connection takes them, and both are held across the whole walk, so the
-        // registry does not change during it and every poll is judged on the same tip.
+        // runs in the node; the GUI calls it through the interface and takes no lock itself. Like currentPollTitle()
+        // it must not wait for cs_main: while another thread holds it, return the last time read.
+        // Otherwise cs_main is taken before cs_poll_registry, the order block connection takes them, and both are held
+        // across the whole walk, so the registry does not change during it and every poll is judged on the same tip.
+        TRY_LOCK(cs_main, locked_main);
+
+        if (!locked_main) {
+            LOCK(m_last_read_mutex);
+            return m_last_poll_time;
+        }
+
         GRC::PollRegistry& registry = GRC::GetPollRegistry();
 
         int64_t latest = 0;
-        LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+        LOCK(GRC::PollRegistry::cs_poll_registry);
 
-        if (!pindexBest) {
-            return latest;
-        }
-
-        for (const auto& iter : registry.Polls()) {
-            if (registry.OpenAt(iter->Ref(), pindexBest)) {
-                latest = std::max<int64_t>(latest, iter->Ref().Time());
+        if (pindexBest) {
+            for (const auto& iter : registry.Polls()) {
+                if (registry.OpenAt(iter->Ref(), pindexBest)) {
+                    latest = std::max<int64_t>(latest, iter->Ref().Time());
+                }
             }
         }
+
+        LOCK(m_last_read_mutex);
+        m_last_poll_time = latest;
 
         return latest;
     }
@@ -1037,6 +1062,12 @@ public:
     }
 
 private:
+    //! The last title and time currentPollTitle() and latestActivePollTime() read, which they return while another
+    //! thread holds cs_main; "" and 0 until the first read. A leaf lock: nothing is taken under it.
+    Mutex m_last_read_mutex;
+    std::string m_last_poll_title GUARDED_BY(m_last_read_mutex);
+    int64_t m_last_poll_time GUARDED_BY(m_last_read_mutex) = 0;
+
     //! Flatten a core tally bundle into the pointer-free value row the GUI renders.
     //! Mirrors the former VotingModel BuildPollItem field-for-field, but produces
     //! std::string / value types and leaves cosmetic string transforms (underscore

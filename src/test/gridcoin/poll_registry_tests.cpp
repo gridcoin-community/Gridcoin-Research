@@ -33,11 +33,13 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <chrono>
 #include <deque>
+#include <future>
 
-// Tests are single-threaded and drive the PollRegistry contract handler
-// directly. The handler is EXCLUSIVE_LOCKS_REQUIRED(cs_main); the tests take
-// cs_main where the code asserts it, and suppress the analyzer for the rest.
+// Tests drive the PollRegistry contract handler directly, on the test thread.
+// The handler is EXCLUSIVE_LOCKS_REQUIRED(cs_main); the tests take cs_main
+// where the code asserts it, and suppress the analyzer for the rest.
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wthread-safety-analysis"
@@ -1857,6 +1859,57 @@ BOOST_AUTO_TEST_CASE(the_newest_open_poll_is_judged_by_blocks)
     LinkBlock(inside.m_pindex, end + 60, GRC::Claim(), {}, bits);
 
     BOOST_CHECK_EQUAL(GRC::GetCurrentPollTitle(), _("No current polls"));
+    BOOST_CHECK_EQUAL(voting->latestActivePollTime(), 0);
+}
+
+//!
+//! The GUI reads the newest open poll's title and time through the voting interface on its own thread, at startup and
+//! every minute. While another thread holds cs_main (a rescan can hold it for minutes), each read returns the last
+//! value it read rather than wait for the lock.
+//!
+BOOST_AUTO_TEST_CASE(the_guis_reads_of_the_newest_open_poll_do_not_wait_on_cs_main)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+
+    const int64_t t0 = GetAdjustedTime() - 8 * DAY;
+    const int64_t end = t0 + 7 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const std::unique_ptr<interfaces::VotingManager> voting = interfaces::MakeVotingManager();
+    unsigned int bits = 0;
+    CBlockIndex* pindex_polled = nullptr;
+    {
+        LOCK(cs_main);
+        bits = pindexGenesisBlock->nBits;
+        pindex_polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits).m_pindex;
+        GRC::GetPollRegistry().Add({poll.contract, poll.tx, pindex_polled});
+    }
+
+    BOOST_REQUIRE_EQUAL(voting->currentPollTitle(), "Title");
+    BOOST_REQUIRE_EQUAL(voting->latestActivePollTime(), t0);
+
+    std::future<std::string> title;
+    std::future<int64_t> time;
+    bool title_waited = true;
+    bool time_waited = true;
+    {
+        // A block past the end finishes the poll: a read that took cs_main now would find no open poll.
+        LOCK(cs_main);
+        LinkBlock(pindex_polled, end + 60, GRC::Claim(), {}, bits);
+
+        title = std::async(std::launch::async, [&voting] { return voting->currentPollTitle(); });
+        time = std::async(std::launch::async, [&voting] { return voting->latestActivePollTime(); });
+        title_waited = title.wait_for(std::chrono::seconds(30)) != std::future_status::ready;
+        time_waited = time.wait_for(std::chrono::seconds(30)) != std::future_status::ready;
+    }
+
+    BOOST_CHECK(!title_waited);
+    BOOST_CHECK(!time_waited);
+    BOOST_CHECK_EQUAL(title.get(), "Title");
+    BOOST_CHECK_EQUAL(time.get(), t0);
+
+    // With cs_main free again, each read sees the block past the end.
+    BOOST_CHECK_EQUAL(voting->currentPollTitle(), _("No current polls"));
     BOOST_CHECK_EQUAL(voting->latestActivePollTime(), 0);
 }
 
