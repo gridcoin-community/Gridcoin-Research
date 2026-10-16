@@ -159,6 +159,85 @@ jobs:
           echo "Only sync_tests' deliberate mutex1/mutex2 report present."
 
   # ----------------------------------------------------------------------
+  # JOB 1b: ThreadSanitizer
+  # Data races and lock-order inversions as TSan sees them: the unit suite,
+  # mptest and the functional suite against a TSan daemon. Until this job
+  # nothing in CI looked for races at run time; the Thread Safety job checks
+  # the lock annotations at compile time only.
+  #
+  # RelWithDebInfo, and no ENABLE_DEBUG_LOCKORDER: Debug would define
+  # DEBUG_LOCKORDER, and the checker records every lock acquisition under one
+  # global mutex, which orders any two threads that take a lock and hides
+  # their races from TSan. GUI off, as in Bitcoin Core's TSan job: Qt is not
+  # instrumented.
+  # ----------------------------------------------------------------------
+  tsan:
+    name: ThreadSanitizer (Clang)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install System Deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake build-essential libboost-all-dev \
+            libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
+            capnproto libcapnp-dev \
+            libcurl4-openssl-dev libzip-dev zipcmp zipmerge ziptool ccache
+
+      - name: Restore Ccache
+        uses: actions/cache@v5
+        with:
+          path: /home/runner/.ccache
+          key: ccache-tsan-${{ github.sha }}
+          restore-keys: ccache-tsan-
+
+      - name: Setup Concurrency
+        run: |
+          if [ -z "$CMAKE_BUILD_PARALLEL_LEVEL" ]; then
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "CTEST_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "Concurrency: Auto-detected $(nproc) cores."
+          else
+            echo "Concurrency: Limit set externally to $CMAKE_BUILD_PARALLEL_LEVEL."
+          fi
+
+      - name: Configure (ThreadSanitizer)
+        run: |
+          # FUNCTIONAL_TEST_ATTEMPTS=1: no retries, so a race that halts a node
+          # and fails its test with a timeout is not hidden by a passing retry.
+          SAN="-fsanitize=thread -fno-omit-frame-pointer"
+          cmake -B build_tsan \
+            -DENABLE_GUI=OFF \
+            -DENABLE_TESTS=ON \
+            -DENABLE_MULTIPROCESS=ON \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_FLAGS="$SAN" \
+            -DCMAKE_CXX_FLAGS="$SAN" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread" \
+            -DFUNCTIONAL_TEST_ATTEMPTS=1 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build build_tsan
+
+      - name: Test (With ThreadSanitizer)
+        run: |
+          # halt_on_error=1 (from with_sanitizer_env.py): the first race fails
+          # the binary that hit it, so a unit case fails ctest and a daemon's
+          # report fails the functional test that ran it.
+          #
+          # A 512 KiB stack, as in Core's sanitizer jobs: glibc takes every
+          # new thread's default stack from this limit too, so code that needs
+          # more stack than it asks for fails here.
+          set -o pipefail
+          ulimit -s 512
+          python3 build_tsan/test/with_sanitizer_env.py \
+            ctest --test-dir build_tsan --output-on-failure 2>&1 | tee ctest_tsan.log
+
+  # ----------------------------------------------------------------------
   # JOB 2: Linter
   # Replaces: lint
   # Ported from: 04_install.sh, 05_before_script.sh, 06_script.sh
