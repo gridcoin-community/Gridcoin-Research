@@ -602,6 +602,29 @@ BOOST_AUTO_TEST_CASE(unbroadcast_tracks_local_origination)
     BOOST_CHECK(set.count(b.GetHash()) == 1);
 }
 
+BOOST_AUTO_TEST_CASE(a_fetch_clears_a_never_sent_entry_but_not_a_reorganization_mark)
+{
+    // A peer's getdata is evidence that a never-sent transaction went out. It is
+    // not evidence against what a reorganization showed: peers had that one in a
+    // block. Its mark stays until it leaves the pool.
+    CTxMemPool pool;
+    const CTransaction sent = MakePlainTx(31);
+    const CTransaction reorged = MakePlainTx(32);
+    pool.addUnchecked(sent.GetHash(), MakeEntryFee(sent, 10));
+    pool.addUnchecked(reorged.GetHash(), MakeEntryFee(reorged, 10));
+    pool.AddUnbroadcast(sent.GetHash());
+    pool.AddUnbroadcast(reorged.GetHash(), UnbroadcastReason::Reannounce);
+
+    pool.ClearUnbroadcastOnFetch(sent.GetHash());
+    pool.ClearUnbroadcastOnFetch(reorged.GetHash());
+
+    BOOST_CHECK(!pool.IsUnbroadcastTx(sent.GetHash()));
+    BOOST_CHECK(pool.GetUnbroadcastReason(reorged.GetHash()) == std::optional{UnbroadcastReason::Reannounce});
+
+    pool.remove(reorged);
+    BOOST_CHECK(!pool.IsUnbroadcastTx(reorged.GetHash()));
+}
+
 //!
 //! A reorg-re-pooled transaction still wants announcing, but peers have seen it,
 //! so it must not open the cancel gate. Discriminates on the two accessors
