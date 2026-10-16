@@ -36,7 +36,7 @@ class ChainTrustCache
 {
 public:
     ChainTrustCache()
-        : m_best_pindex(new CBlockIndex()) // Genesis bootstrap placeholder
+        : m_best_pindex(&GenesisPlaceholder())
     {
     }
 
@@ -50,10 +50,6 @@ public:
     void Initialize(const CBlockIndex* genesis, const CBlockIndex* tip) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         int64_t start_time = GetTimeMillis();
-
-        if (m_best_pindex->phashBlock == nullptr) {
-            delete m_best_pindex; // Free genesis bootstrap placeholder
-        }
 
         m_best_pindex = tip;
         m_best_trust = 0;
@@ -158,6 +154,19 @@ public:
     }
 
 private:
+    //!
+    //! \brief Stands in for the tip until the first Initialize() or SetBest()
+    //! so that GetTrust() can read m_best_pindex unconditionally.
+    //!
+    //! Static, so neither call has to free it. On a new chain SetBest() runs
+    //! before Initialize(), which is where the placeholder used to be freed.
+    //!
+    static const CBlockIndex& GenesisPlaceholder()
+    {
+        static const CBlockIndex placeholder;
+        return placeholder;
+    }
+
     //!
     //! \brief A circular buffer that caches chain trust values for blocks
     //! recently-connected to the chain.
