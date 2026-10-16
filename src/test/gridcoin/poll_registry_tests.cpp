@@ -13,6 +13,7 @@
 #include "gridcoin/protocol.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/voting/claims.h"
 #include "gridcoin/voting/payloads.h"
 #include "gridcoin/voting/poll_result_cache.h"
 #include "gridcoin/voting/registry.h"
@@ -21,6 +22,7 @@
 #include "index/disktxpos.h"
 #include "index/txindex.h"
 #include "interfaces/voting.h"
+#include "key.h"
 #include "node/blockstorage.h"
 #include "node/ui_interface.h"
 #include "primitives/block.h"
@@ -1170,6 +1172,48 @@ struct WindowChain
     const LinkedTip past_end;
     const LinkedTip late;
 };
+
+//! A transaction paying \p amount to \p key, its input made unique by \p salt.
+CTransaction PayTo(const CKey& key, const CAmount amount, const int64_t tx_time, const uint32_t salt)
+{
+    CScript script;
+    script.SetDestination(CTxDestination(key.GetPubKey().GetID()));
+
+    CMutableTransaction mtx;
+    mtx.nTime = tx_time;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(Hash(ToString(salt)), 0);
+    mtx.vout.emplace_back(amount, script);
+
+    return CTransaction(mtx);
+}
+
+//! A version 2 vote for \p poll_txid whose claim names output 0 of \p coin, signed by \p key, which \p coin pays.
+CTransaction MakeClaimedVoteTx(const uint256& poll_txid, const CTransaction& coin, const CKey& key,
+                               const int64_t tx_time)
+{
+    CMutableTransaction mtx;
+    mtx.nTime = tx_time;
+
+    GRC::Vote unsigned_vote;
+    unsigned_vote.m_poll_txid = poll_txid;
+    unsigned_vote.m_responses = {0};
+
+    GRC::AddressClaim address_claim;
+    address_claim.m_public_key = key.GetPubKey();
+    address_claim.m_outpoints = {COutPoint(coin.GetHash(), 0)};
+    CKey signer = key; // AddressClaim::Sign takes a mutable key.
+    BOOST_REQUIRE(address_claim.Sign(signer, GRC::PackVoteMessage(unsigned_vote, CTransaction(mtx))));
+
+    GRC::VoteWeightClaim claim;
+    claim.m_balance_claim.m_address_claims.push_back(std::move(address_claim));
+
+    mtx.vContracts.push_back(GRC::MakeContract<GRC::Vote>(
+        uint32_t {2}, GRC::ContractAction::ADD,
+        GRC::Vote::CURRENT_VERSION, poll_txid, std::vector<uint8_t> {0}, std::move(claim)));
+
+    return CTransaction(mtx);
+}
 } // anonymous namespace
 
 BOOST_AUTO_TEST_SUITE(poll_registry_chain_tests, *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
@@ -2208,6 +2252,43 @@ BOOST_AUTO_TEST_CASE(a_vote_after_a_reorg_that_removes_the_first_block_past_the_
     Restart(registry);
 
     BOOST_CHECK(Linked(poll.tx.GetHash(), vote));
+}
+
+//!
+//! A tally bounded by blocks whose bound has left the main chain since its snapshot throws InvalidDuetoReorgFork, so
+//! the poll table retries on a fresh tip and an RPC reports the reorg. The vote claims a coin, so the tally
+//! looks a block up against its bound.
+//!
+BOOST_AUTO_TEST_CASE(a_tally_whose_bound_left_the_main_chain_throws)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - DAY;
+    CKey key;
+    key.MakeNewKey(true);
+    const PollTx poll = MakePollTx("Title", t0);
+    const CTransaction coin = PayTo(key, 100 * COIN, t0, 1);
+    const CTransaction vote = MakeClaimedVoteTx(poll.tx.GetHash(), coin, key, t0 + 60);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx, coin}, bits);
+    const LinkedTip voted = LinkBlock(polled.m_pindex, t0 + 60, GRC::Claim(), {vote}, bits);
+    const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
+    const TxIndexScope coin_indexed(coin, polled.m_tx_positions[1]);
+    const TxIndexScope vote_indexed(vote, voted.m_tx_positions[0]);
+    grc_test::V15HeightGuard v15(0);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+    GRC::GetPollRegistry().Add({vote.vContracts[0], vote, voted.m_pindex});
+
+    const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), voted.m_pindex);
+    BOOST_REQUIRE(snapshot.m_pindex_bound == voted.m_pindex);
+    BOOST_REQUIRE_EQUAL(snapshot.m_votes.size(), 1U);
+
+    // A reorg replaces the bound.
+    LinkBlock(polled.m_pindex, t0 + 120, GRC::Claim(), {}, bits);
+
+    BOOST_CHECK_THROW(GRC::PollResult::BuildFor(snapshot), GRC::InvalidDuetoReorgFork);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

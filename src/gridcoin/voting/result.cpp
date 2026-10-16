@@ -190,12 +190,16 @@ public:
     //! \param poll_finished Whether the tally's tip is past the poll's end.
     //! \param v15_rules     Whether the poll started at or after the v15 height,
     //! which selects how a spent claimed output is resolved (ResolveAmount).
+    //! \param pindex_bound  The block that bounds the tally by blocks (PollSnapshot::m_pindex_bound), or nullptr
+    //! when the poll keeps the time rules of #3470.
     //!
-    VoteResolver(CTxDB& txdb, const Poll& poll, const bool poll_finished, const bool v15_rules)
+    VoteResolver(CTxDB& txdb, const Poll& poll, const bool poll_finished, const bool v15_rules,
+                 const CBlockIndex* pindex_bound)
         : m_txdb(txdb)
         , m_poll(poll)
         , m_poll_finished(poll_finished)
         , m_v15_rules(v15_rules)
+        , m_pindex_bound(pindex_bound)
         , m_superblock(SuperblockPtr::Empty())
     {
     }
@@ -276,6 +280,9 @@ private:
     const Poll& m_poll;         //!< The poll to resolve voting weight for.
     const bool m_poll_finished; //!< Whether the tally's tip is past the poll's end.
     const bool m_v15_rules;     //!< The poll started at or after the v15 height.
+    //! The block that bounds the tally by blocks, or nullptr when the poll keeps the time rules of #3470. Its height
+    //! never changes, so it is read without cs_main.
+    const CBlockIndex* const m_pindex_bound;
     SuperblockPtr m_superblock; //!< Used to determine magnitude weight.
 
     //!
@@ -318,7 +325,7 @@ private:
     //!
     struct Spender
     {
-        int64_t m_block_time = 0;  //!< Time of the block that contains it.
+        bool m_after_end = false;  //!< Its block is after the poll's end (AfterEnd).
         bool m_coinstake = false;  //!< Whether it is a coinstake.
         bool m_carries_vote = false; //!< Whether it carries a vote contract.
         uint256 m_hash;            //!< Its hash.
@@ -370,9 +377,9 @@ private:
             throw InvalidVoteError();
         }
 
-        spender.m_block_time = header.nTime;
+        spender.m_after_end = AfterEnd(header);
 
-        if (m_poll.Expired(spender.m_block_time)) {
+        if (spender.m_after_end) {
             return spender;
         }
 
@@ -427,6 +434,75 @@ private:
     //! The blocks of each beacon advertisement looked up in this tally, by
     //! advertisement hash.
     std::map<uint256, Verification> m_verifications;
+
+    //! The main chain height of each block looked up in this tally, by block hash; nothing for a block off the main
+    //! chain.
+    std::map<uint256, std::optional<int>> m_heights;
+
+    //!
+    //! \brief Get the height of the block that \p header heads, if that block is on the main chain. It is looked up
+    //! under a brief cs_main and kept for the rest of the tally.
+    //!
+    //! \throws InvalidDuetoReorgFork If the block that bounds the tally has left the main chain: a reorg during the
+    //! tally. The callers retry on it, as on PollRegistry::reorg_occurred_during_reg_traversal.
+    //!
+    std::optional<int> MainChainHeight(const CBlockHeader& header)
+    {
+        const uint256 hash = header.GetHash();
+        const auto found = m_heights.find(hash);
+
+        if (found != m_heights.end()) {
+            return found->second;
+        }
+
+        LOCK(cs_main);
+
+        if (m_pindex_bound && !m_pindex_bound->IsInMainChain()) {
+            throw InvalidDuetoReorgFork();
+        }
+
+        const auto iter = mapBlockIndex.find(hash);
+        std::optional<int> height;
+
+        if (iter != mapBlockIndex.end() && iter->second != nullptr && iter->second->IsInMainChain()) {
+            height = iter->second->nHeight;
+        }
+
+        m_heights.emplace(hash, height);
+
+        return height;
+    }
+
+    //!
+    //! \brief Whether the block that \p header heads is after the poll's end: for a poll bounded by blocks, a block
+    //! above the bound or off the main chain; for any other poll, a block stamped after the end (#3470).
+    //!
+    //! \throws InvalidDuetoReorgFork As MainChainHeight.
+    //!
+    bool AfterEnd(const CBlockHeader& header)
+    {
+        if (!m_pindex_bound) {
+            return m_poll.Expired(header.nTime);
+        }
+
+        const std::optional<int> height = MainChainHeight(header);
+
+        return !height || *height > m_pindex_bound->nHeight;
+    }
+
+    //! As AfterEnd(const CBlockHeader&), for a block index entry.
+    bool AfterEnd(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        if (!m_pindex_bound) {
+            return m_poll.Expired(pindex->nTime);
+        }
+
+        if (!m_pindex_bound->IsInMainChain()) {
+            throw InvalidDuetoReorgFork();
+        }
+
+        return !pindex->IsInMainChain() || pindex->nHeight > m_pindex_bound->nHeight;
+    }
 
     //!
     //! \brief Whether a counted vote, or the vote being resolved, already
@@ -494,7 +570,7 @@ private:
         }
 
         // A beacon confirmed after the poll ends supplies no magnitude.
-        if (m_poll.Expired(header.nTime)) {
+        if (AfterEnd(header)) {
             LogPrint(LogFlags::VOTE, "%s: beacon confirmed after poll", __func__);
             return std::nullopt;
         }
@@ -614,7 +690,7 @@ private:
             return *in_force;
         }
 
-        if (m_poll_finished && (!current || (first_verified && m_poll.Expired(first_verified->nTime)))) {
+        if (m_poll_finished && (!current || (first_verified && AfterEnd(first_verified)))) {
             if (const std::optional<bool> in_force = KeyInForce(NamedEntry(beacon_txid), key, vote_height, vote_time)) {
                 return *in_force;
             }
@@ -995,7 +1071,7 @@ private:
         }
 
         // An output confirmed after the poll ends supplies no weight.
-        if (m_poll.Expired(header.nTime)) {
+        if (AfterEnd(header)) {
             LogPrint(LogFlags::VOTE, "%s: txo confirmed after poll", __func__);
             return 0;
         }
@@ -1117,7 +1193,7 @@ private:
 
             Spender& spender = ReadSpender(frame.m_pos);
 
-            if (m_poll.Expired(spender.m_block_time)) {
+            if (spender.m_after_end) {
                 continue; // Txo spent after the poll finished is irrelevant
             }
 
@@ -1409,13 +1485,16 @@ public:
     //! poll's last block, or the current superblock where there is none,
     //! forwarded to the legacy vote counter for its magnitude factor.
     //! \param poll_finished Whether the tally's tip is past the poll's end.
+    //! \param pindex_bound The block that bounds the tally by blocks (PollSnapshot::m_pindex_bound), or nullptr.
     //!
     VoteCounter(CTxDB& txdb, const Poll& poll, int poll_start_height, const bool v15_rules,
-                const CAmount legacy_money_supply, SuperblockPtr legacy_superblock, const bool poll_finished)
+                const CBlockIndex* pindex_bound, const CAmount legacy_money_supply, SuperblockPtr legacy_superblock,
+                const bool poll_finished)
         : m_txdb(txdb)
         , m_poll(poll)
         , m_poll_start_height(poll_start_height)
-        , m_resolver(txdb, poll, poll_finished, v15_rules)
+        , m_v15_rules(v15_rules)
+        , m_resolver(txdb, poll, poll_finished, v15_rules, pindex_bound)
         , m_legacy(poll, legacy_money_supply, std::move(legacy_superblock))
     {
         // Snapshot the pool CPID set at the poll's start height into an
@@ -1538,6 +1617,7 @@ private:
     CTxDB& m_txdb;
     const Poll& m_poll;
     int m_poll_start_height; //!< Anchor for ActivePoolsAtHeight queries — see ctor.
+    const bool m_v15_rules; //!< The poll's block is at or above the v15 height.
     std::unordered_set<Cpid> m_pool_cpids_at_start; //!< Cached pool CPIDs as of m_poll_start_height.
     std::vector<VoteDetail> m_votes;
     std::vector<Cpid> m_pools_voted;
@@ -1582,14 +1662,19 @@ private:
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk unlocked", __func__);
         }
 
-        if (tx.nTime < m_poll.m_timestamp) {
-            LogPrintf("WARN: %s: tx earlier than poll", __func__);
-            throw InvalidVoteError();
-        }
+        // From v15 a poll reads no vote transaction time: the registry linked each of its votes by the vote's block,
+        // inside the poll's window, and the tally does not repeat that judgment. Any other poll keeps the
+        // #3470 rule: the vote's transaction time must be in the window.
+        if (!m_v15_rules) {
+            if (tx.nTime < m_poll.m_timestamp) {
+                LogPrintf("WARN: %s: tx earlier than poll", __func__);
+                throw InvalidVoteError();
+            }
 
-        if (m_poll.Expired(tx.nTime)) {
-            LogPrintf("WARN: %s: tx exceeds expiration", __func__);
-            throw InvalidVoteError();
+            if (m_poll.Expired(tx.nTime)) {
+                LogPrintf("WARN: %s: tx exceeds expiration", __func__);
+                throw InvalidVoteError();
+            }
         }
 
         for (auto& contract : tx.GetContracts()) {
@@ -2056,8 +2141,10 @@ PollResultOption PollResult::BuildFor(const PollSnapshot& snapshot)
         // not use the factor, the current superblock serves. Resolved under
         // the cs_main we already hold here, so the tally itself stays
         // lock-free.
+        // A poll bounded by blocks reads the money supply at its bound (the closing block, or the pinned tip while
+        // it is open); any other at the last block at or before its end.
         if (result.m_poll.IncludesMagnitudeWeight()) {
-            pindex_end = PollEndBlock(result.m_poll, pindex_tip);
+            pindex_end = snapshot.m_pindex_bound ? snapshot.m_pindex_bound : PollEndBlock(result.m_poll, pindex_tip);
         }
 
         std::optional<SuperblockPtr> end_superblock;
@@ -2073,8 +2160,8 @@ PollResultOption PollResult::BuildFor(const PollSnapshot& snapshot)
 
     // The poll counts as finished for the beacon key rule when it has finished at the tip the tally runs on (the
     // snapshot's judgment), so every node with this tip agrees.
-    VoteCounter counter(txdb, result.m_poll, poll_start_height, v15_rules, legacy_money_supply,
-                        std::move(legacy_superblock), snapshot.m_finished);
+    VoteCounter counter(txdb, result.m_poll, poll_start_height, v15_rules, snapshot.m_pindex_bound,
+                        legacy_money_supply, std::move(legacy_superblock), snapshot.m_finished);
 
     if (result.m_poll.IncludesMagnitudeWeight()) {
         SuperblockPtr superblock;
@@ -2082,7 +2169,12 @@ PollResultOption PollResult::BuildFor(const PollSnapshot& snapshot)
 
         {
             LOCK(cs_main);
-            superblock = ResolveSuperblockForPoll(result.m_poll, pindex_tip);
+
+            // A poll bounded by blocks takes the last well-formed superblock at or before its bound, from the bound's
+            // chain alone, or none; any other the superblock of its window.
+            superblock = snapshot.m_pindex_bound
+                ? LastWellFormedSuperblock(snapshot.m_pindex_bound).value_or(SuperblockPtr::Empty())
+                : ResolveSuperblockForPoll(result.m_poll, pindex_tip);
             supply = pindex_end->nMoneySupply;
         }
 
