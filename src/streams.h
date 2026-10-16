@@ -63,6 +63,7 @@ public:
     int GetVersion() const { return nVersion; }
     int GetType() const { return nType; }
     size_t size() const { return stream->size(); }
+    void ignore(size_t size) { return stream->ignore(size); }
 };
 
 /* Minimal stream for overwriting and/or appending to an existing byte vector
@@ -173,6 +174,14 @@ public:
         }
         memcpy(dst.data(), m_data.data(), dst.size());
         m_data = m_data.subspan(dst.size());
+    }
+
+    void ignore(size_t n)
+    {
+        if (n > m_data.size()) {
+            throw std::ios_base::failure("SpanReader::ignore(): end of data");
+        }
+        m_data = m_data.subspan(n);
     }
 };
 
