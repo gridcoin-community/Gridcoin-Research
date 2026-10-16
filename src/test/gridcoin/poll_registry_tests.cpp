@@ -1149,7 +1149,7 @@ struct WindowChain
         , late_vote(MakeVoteTxFor(vote_contract, t0 + 7 * DAY - 20))
         , polled(LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, pindexGenesisBlock->nBits))
         , inside(LinkBlock(polled.m_pindex, t0 + DAY, GRC::Claim(), {inside_vote}, pindexGenesisBlock->nBits))
-        , past_end(LinkBlock(inside.m_pindex, t0 + 7 * DAY + 60, GRC::Claim(), {}, pindexGenesisBlock->nBits))
+        , past_end(LinkBlock(inside.m_pindex, t0 + 7 * DAY + 30, GRC::Claim(), {}, pindexGenesisBlock->nBits))
         , late(LinkBlock(past_end.m_pindex, t0 + 7 * DAY - 10, GRC::Claim(), {late_vote}, pindexGenesisBlock->nBits))
     {
     }
@@ -1592,8 +1592,8 @@ BOOST_AUTO_TEST_CASE(a_later_block_does_not_reopen_a_v15_poll)
     const int64_t end = t0 + 7 * DAY;
     const PollTx poll = MakePollTx("Title", t0);
     const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
-    const LinkedTip past_end = LinkBlock(polled.m_pindex, end + 60, GRC::Claim(), {}, bits);
-    const LinkedTip retrograde = LinkBlock(past_end.m_pindex, end - 60, GRC::Claim(), {}, bits);
+    const LinkedTip past_end = LinkBlock(polled.m_pindex, end + 30, GRC::Claim(), {}, bits);
+    const LinkedTip retrograde = LinkBlock(past_end.m_pindex, end - 10, GRC::Claim(), {}, bits);
     GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
 
     {
@@ -1621,8 +1621,8 @@ BOOST_AUTO_TEST_CASE(a_poll_that_straddles_the_v15_height_finishes_by_block)
     const int64_t end = t0 + 7 * DAY;
     const PollTx poll = MakePollTx("Title", t0);
     const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
-    const LinkedTip past_end = LinkBlock(polled.m_pindex, end + 60, GRC::Claim(), {}, bits);
-    const LinkedTip retrograde = LinkBlock(past_end.m_pindex, end - 60, GRC::Claim(), {}, bits);
+    const LinkedTip past_end = LinkBlock(polled.m_pindex, end + 30, GRC::Claim(), {}, bits);
+    const LinkedTip retrograde = LinkBlock(past_end.m_pindex, end - 10, GRC::Claim(), {}, bits);
     GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
 
     {
@@ -2257,7 +2257,8 @@ BOOST_AUTO_TEST_CASE(a_vote_after_a_reorg_that_removes_the_first_block_past_the_
 //!
 //! A tally bounded by blocks whose bound has left the main chain since its snapshot throws InvalidDuetoReorgFork, so
 //! the poll table retries on a fresh tip and an RPC reports the reorg. The vote claims a coin, so the tally
-//! looks a block up against its bound.
+//! looks a block up against its bound. The snapshot pins the block above the vote's, and the reorg replaces only that
+//! block: the vote's block stays on the main chain.
 //!
 BOOST_AUTO_TEST_CASE(a_tally_whose_bound_left_the_main_chain_throws)
 {
@@ -2274,6 +2275,7 @@ BOOST_AUTO_TEST_CASE(a_tally_whose_bound_left_the_main_chain_throws)
     const CTransaction vote = MakeClaimedVoteTx(poll.tx.GetHash(), coin, key, t0 + 60);
     const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx, coin}, bits);
     const LinkedTip voted = LinkBlock(polled.m_pindex, t0 + 60, GRC::Claim(), {vote}, bits);
+    const LinkedTip above = LinkBlock(voted.m_pindex, t0 + 120, GRC::Claim(), {}, bits);
     const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
     const TxIndexScope coin_indexed(coin, polled.m_tx_positions[1]);
     const TxIndexScope vote_indexed(vote, voted.m_tx_positions[0]);
@@ -2281,12 +2283,12 @@ BOOST_AUTO_TEST_CASE(a_tally_whose_bound_left_the_main_chain_throws)
     GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
     GRC::GetPollRegistry().Add({vote.vContracts[0], vote, voted.m_pindex});
 
-    const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), voted.m_pindex);
-    BOOST_REQUIRE(snapshot.m_pindex_bound == voted.m_pindex);
+    const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), above.m_pindex);
+    BOOST_REQUIRE(snapshot.m_pindex_bound == above.m_pindex);
     BOOST_REQUIRE_EQUAL(snapshot.m_votes.size(), 1U);
 
     // A reorg replaces the bound.
-    LinkBlock(polled.m_pindex, t0 + 120, GRC::Claim(), {}, bits);
+    LinkBlock(voted.m_pindex, t0 + 180, GRC::Claim(), {}, bits);
 
     BOOST_CHECK_THROW(GRC::PollResult::BuildFor(snapshot), GRC::InvalidDuetoReorgFork);
 }
