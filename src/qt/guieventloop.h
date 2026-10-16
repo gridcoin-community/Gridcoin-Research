@@ -36,11 +36,15 @@ public:
 //! Returns, or lets an exception from `run` propagate, only once every job on
 //! the global QThreadPool has finished.
 //!
-//! Pooled jobs start inside the event loop and may use objects the caller
-//! declared before this call; the About dialog's version check uses
-//! interfaces::Node. If `run` throws, the caller's unwind destroys those
-//! objects before any catch clause runs. The guard is armed before `run`, so
-//! it reaps as the exception leaves this function, before it reaches them.
+//! Pooled jobs started inside the event loop may use objects the caller
+//! declared before this call (the About dialog's version check uses
+//! interfaces::Node). If `run` throws, the caller's unwind destroys those
+//! objects before any catch clause runs. This function's guard is armed
+//! before `run`, so it reaps every pooled job still running, including one
+//! started before the loop, as `run` returns or as the exception leaves this
+//! function, before it reaches them. On a throw after StartGridcoinQt arms
+//! FrontEndDetachGuard and before this call, that guard's destructor reaps
+//! the pool instead.
 //!
 //! A function rather than a guard written into StartGridcoinQt, so that
 //! test_gridcoin-qt runs this exact code (GuiEventLoopTests).
