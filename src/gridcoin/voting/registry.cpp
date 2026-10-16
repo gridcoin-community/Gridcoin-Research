@@ -1380,6 +1380,46 @@ void PollRegistry::AdvanceEndSearch(const PollReference& ref, const CBlockIndex*
     SearchForEnd(ref.m_end_searched, ref.m_at_or_past_end, ref.m_past_end, end_time, pindex_bound);
 }
 
+bool PollRegistry::VoteInWindow(const PollReference& poll_ref, const CBlockIndex* pindex_vote,
+                                const bool legacy_vote) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
+    const CBlockIndex* const pindex_poll = poll_ref.m_pindex;
+
+    // From v15 a vote is linked only from a block after the poll's block.
+    if (pindex_poll && IsV15Enabled(pindex_poll->nHeight) && pindex_vote->nHeight <= pindex_poll->nHeight) {
+        return false;
+    }
+
+    // The poll's first block past the end on the vote's chain, if it is the vote's block or a block before it. The
+    // search runs no further than the block before the vote's, and only for a vote whose block is at or above the v15
+    // height: below it, no first block past the end at or before the vote's block can be at or above the height, and
+    // the #3470 rule below decides alone.
+    const CBlockIndex* past_end = nullptr;
+
+    if (pindex_poll && pindex_vote->nHeight > pindex_poll->nHeight && IsV15Enabled(pindex_vote->nHeight)) {
+        AdvanceEndSearch(poll_ref, pindex_vote->pprev);
+
+        if (poll_ref.m_past_end && poll_ref.m_past_end->nHeight < pindex_vote->nHeight) {
+            past_end = poll_ref.m_past_end;
+        }
+    }
+
+    if (!past_end && pindex_vote->nTime > poll_ref.Expiration()) {
+        past_end = pindex_vote;
+    }
+
+    // A poll whose first block past the end is at or above the v15 height has closed by block: no vote after its
+    // closing block is linked.
+    if (past_end && IsV15Enabled(past_end->nHeight)) {
+        return false;
+    }
+
+    // Otherwise the #3470 rules: a vote from version 2 is linked when its block's time does not exceed the end, and a
+    // legacy vote by its title alone.
+    return legacy_vote || !poll_ref.Expired(pindex_vote->nTime);
+}
+
 PollReference* PollRegistry::TryBy(const uint256 txid) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return const_cast<PollReference*>(TryByTxid(txid));
@@ -1855,16 +1895,6 @@ void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         const auto vote = ctx->SharePayloadAs<Vote>();
 
         poll_ref = TryBy(vote->m_poll_txid);
-
-        if (poll_ref != nullptr && poll_ref->Expired(ctx.m_pindex->nTime)) {
-            LogPrint(LogFlags::VOTE,
-                "%s: ignored vote %s for finished poll %s",
-                __func__,
-                vote_txid.ToString(),
-                poll_ref->Txid().ToString());
-
-            return;
-        }
     } else {
         // A legacy vote names its poll by title in lower case. (On mainnet legacy votes exist only below V11.)
         const ContractPayload vote = ctx->m_body.AssumeLegacy();
@@ -1876,6 +1906,16 @@ void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
     }
 
     if (poll_ref == nullptr) {
+        return;
+    }
+
+    if (!VoteInWindow(*poll_ref, ctx.m_pindex, ctx->m_version < 2)) {
+        LogPrint(LogFlags::VOTE,
+            "%s: ignored vote %s outside the window of poll %s",
+            __func__,
+            vote_txid.ToString(),
+            poll_ref->Txid().ToString());
+
         return;
     }
 

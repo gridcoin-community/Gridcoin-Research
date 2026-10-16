@@ -692,6 +692,22 @@ private:
         EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
 
     //!
+    //! \brief Whether a vote in \p pindex_vote is linked to \p poll_ref.
+    //!
+    //! From v15 a vote is linked only from a block after the poll's block. A poll whose first block past the end on the
+    //! vote's chain is at or above the v15 height, at or before the vote's block, has closed by block, and links
+    //! nothing more. Otherwise the #3470 rules stand: a vote from version 2 is linked when its block's time does not
+    //! exceed the poll's end, and a legacy vote by its title alone. It reads no block after \p pindex_vote: while a
+    //! block is connected its parent is the tip, and in a replay or a rebuild it is on the main chain.
+    //!
+    //! \param poll_ref    The poll the vote names.
+    //! \param pindex_vote The block that carries the vote.
+    //! \param legacy_vote Whether the vote is a legacy (version 1) contract.
+    //!
+    bool VoteInWindow(const PollReference& poll_ref, const CBlockIndex* pindex_vote, bool legacy_vote) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
+
+    //!
     //! \brief Everything Snapshot takes except the vote list.
     //!
     PollSnapshot SnapshotWithoutVotes(const PollReference& ref, const CBlockIndex* pindex_tip) const

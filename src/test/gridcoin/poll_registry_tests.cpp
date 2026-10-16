@@ -1120,6 +1120,56 @@ GRC::PollSnapshot TakeSnapshot(const uint256& txid, const CBlockIndex* pindex_ti
 
     return GRC::GetPollRegistry().Snapshot(*ref, pindex_tip);
 }
+
+//! Whether the registry links \p vote to the poll \p poll_txid.
+bool Linked(const uint256& poll_txid, const CTransaction& vote)
+{
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+
+    const GRC::PollReference* ref = GRC::GetPollRegistry().TryByTxid(poll_txid);
+    BOOST_REQUIRE(ref != nullptr);
+
+    const std::vector<uint256> votes = ref->Votes();
+
+    return std::find(votes.begin(), votes.end(), vote.GetHash()) != votes.end();
+}
+
+//!
+//! A poll, a vote in a block inside its window, its first block past the end, and a vote in the block after that.
+//! The two votes carry one contract and differ by their transactions' times.
+//!
+struct WindowChain
+{
+    explicit WindowChain(const int64_t t0) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+        : poll(MakePollTx("Title", t0))
+        , vote_contract(MakeVoteContract(poll.tx.GetHash()))
+        , inside_vote(MakeVoteTxFor(vote_contract, t0 + DAY))
+        , late_vote(MakeVoteTxFor(vote_contract, t0 + 7 * DAY - 20))
+        , polled(LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, pindexGenesisBlock->nBits))
+        , inside(LinkBlock(polled.m_pindex, t0 + DAY, GRC::Claim(), {inside_vote}, pindexGenesisBlock->nBits))
+        , past_end(LinkBlock(inside.m_pindex, t0 + 7 * DAY + 60, GRC::Claim(), {}, pindexGenesisBlock->nBits))
+        , late(LinkBlock(past_end.m_pindex, t0 + 7 * DAY - 10, GRC::Claim(), {late_vote}, pindexGenesisBlock->nBits))
+    {
+    }
+
+    //! Apply the poll and both votes, in block order, as connecting the blocks does.
+    void Register() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        GRC::PollRegistry& registry = GRC::GetPollRegistry();
+        registry.Add({poll.contract, poll.tx, polled.m_pindex});
+        registry.Add({vote_contract, inside_vote, inside.m_pindex});
+        registry.Add({vote_contract, late_vote, late.m_pindex});
+    }
+
+    const PollTx poll;
+    const GRC::Contract vote_contract;
+    const CTransaction inside_vote;
+    const CTransaction late_vote;
+    const LinkedTip polled;
+    const LinkedTip inside;
+    const LinkedTip past_end;
+    const LinkedTip late;
+};
 } // anonymous namespace
 
 BOOST_AUTO_TEST_SUITE(poll_registry_chain_tests, *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
@@ -2052,6 +2102,112 @@ BOOST_AUTO_TEST_CASE(a_poll_that_closes_by_block_ends_at_its_closing_block)
         BOOST_REQUIRE(!open.m_finished);
         BOOST_CHECK(open.m_pindex_bound == nullptr);
     }
+}
+
+//!
+//! From v15 a vote in the poll's own block is not linked, for a poll whose block is at the v15 height
+//! itself.
+//!
+BOOST_AUTO_TEST_CASE(from_v15_a_vote_in_the_polls_own_block_is_not_linked)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const int64_t t0 = GetAdjustedTime() - DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const GRC::Contract vote_contract = MakeVoteContract(poll.tx.GetHash());
+    const CTransaction vote = MakeVoteTxFor(vote_contract, t0);
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx, vote}, bits);
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+
+    {
+        grc_test::V15HeightGuard v15(polled.m_pindex->nHeight);
+        registry.Add({poll.contract, poll.tx, polled.m_pindex});
+        registry.Add({vote_contract, vote, polled.m_pindex});
+
+        BOOST_CHECK(!Linked(poll.tx.GetHash(), vote));
+    }
+}
+
+//!
+//! From v15 a vote is linked from a block after the poll's block through its closing block, the block before its
+//! first block past the end; no vote in a later block is linked.
+//!
+BOOST_AUTO_TEST_CASE(a_v15_vote_is_linked_only_through_the_closing_block)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const WindowChain chain(GetAdjustedTime() - 10 * DAY);
+
+    {
+        grc_test::V15HeightGuard v15(0);
+        chain.Register();
+
+        BOOST_CHECK(Linked(chain.poll.tx.GetHash(), chain.inside_vote));
+        BOOST_CHECK(!Linked(chain.poll.tx.GetHash(), chain.late_vote));
+    }
+}
+
+//!
+//! A poll that straddles the v15 height (its block below it): a vote in a block after its first block past the end is
+//! not linked when that block is at or above the height.
+//!
+BOOST_AUTO_TEST_CASE(a_vote_for_a_poll_that_straddles_the_v15_height_follows_its_first_block_past_the_end)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const WindowChain chain(GetAdjustedTime() - 10 * DAY);
+
+    {
+        grc_test::V15HeightGuard v15(chain.past_end.m_pindex->nHeight);
+        chain.Register();
+
+        BOOST_CHECK(Linked(chain.poll.tx.GetHash(), chain.inside_vote));
+        BOOST_CHECK(!Linked(chain.poll.tx.GetHash(), chain.late_vote));
+    }
+}
+
+//!
+//! A reorg that replaces a v15 poll's first block past the end with a block stamped before the end reopens the poll:
+//! a vote in a later block of the new branch is linked, and stays linked across a restart. The link reads the poll's
+//! cached search, which holds only while its last block is on the main chain.
+//!
+BOOST_AUTO_TEST_CASE(a_vote_after_a_reorg_that_removes_the_first_block_past_the_end_is_linked)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 10 * DAY;
+    const int64_t end = t0 + 7 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const GRC::Contract vote_contract = MakeVoteContract(poll.tx.GetHash());
+    const CTransaction vote = MakeVoteTxFor(vote_contract, end - 25);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip inside = LinkBlock(polled.m_pindex, t0 + DAY, GRC::Claim(), {}, bits);
+    const LinkedTip past_end = LinkBlock(inside.m_pindex, end + 60, GRC::Claim(), {}, bits);
+    grc_test::V15HeightGuard v15(0);
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    registry.Add({poll.contract, poll.tx, polled.m_pindex});
+
+    BOOST_REQUIRE(TakeSnapshot(poll.tx.GetHash(), past_end.m_pindex).m_pindex_past_end == past_end.m_pindex);
+
+    const LinkedTip replacement = LinkBlock(inside.m_pindex, end - 30, GRC::Claim(), {}, bits);
+    const LinkedTip voted = LinkBlock(replacement.m_pindex, end - 20, GRC::Claim(), {vote}, bits);
+    registry.Add({vote_contract, vote, voted.m_pindex});
+
+    BOOST_CHECK(Linked(poll.tx.GetHash(), vote));
+
+    Restart(registry);
+
+    BOOST_CHECK(Linked(poll.tx.GetHash(), vote));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
