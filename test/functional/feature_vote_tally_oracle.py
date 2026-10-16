@@ -15,15 +15,12 @@ votes. The oracle
 writes the v15 rules out again in Python; when the two disagree, the test
 fails.
 
-After the steps the polls end. A vote cast while the polls are open and mined
-after their end is not linked. Five pairs of polls end on five consecutive 16 s
-stake slots: POLL_DAYS * 86400 is a multiple of 16, so a pair's "on" poll ends
-on a slot second, where a block can be stamped, and its "before" poll ends one
-second earlier. Every one gets a vote, cast while it is open, and all of them
-are mined in one block, which lands on one of those five slots (the miner
-tries five). Each poll links its vote iff the block's time is not past its
-end; exactly one "on" poll ends at the block's time and links, and its
-"before" poll does not.
+After the steps the polls end. A vote cast while a poll is open and mined in
+the first block past its end is not linked. From v15 a poll starts at its block
+and ends at its closing block, the block before its first block past the end;
+feature_poll_v15_window.py checks that boundary to the block (a block stamped at
+the end leaves the poll open, the next one closes it), and the unit tests check
+the closing-block rule.
 
 node0 holds the regtest premine, funds the voters and creates the polls;
 node1 stakes the blocks; node2-4 vote, send and stake, and node2 is the side
@@ -70,9 +67,6 @@ STAKER = 1
 VOTERS = (2, 3, 4)
 REORG_NODE = 2
 OBSERVER = 5
-# generatetoaddress tries five consecutive stake slots, so five pairs of polls
-# ending on consecutive slots cover whichever slot the block lands on.
-BOUNDARY_PAIRS = 5
 
 # addpoll arguments: the weight type is passed as PollWeightType - 1, so 1 is
 # BALANCE; response type 2 is SINGLE_CHOICE and 3 MULTIPLE_CHOICE. SURVEY is
@@ -299,43 +293,13 @@ class VoteTallyOracleTest(GridcoinTestFramework):
             self.polls.append(dict(id=poll_id, title=title, choices=len(answers.split(";")),
                                    multiple=response_type == RESPONSE_MULTIPLE_CHOICE))
 
-    def add_boundary_polls(self):
-        """BOUNDARY_PAIRS pairs of polls: pair k's "on" poll is created at the
-        start of the stake slot k slots after the first, and its "before" poll one
-        second earlier.
-
-        POLL_DAYS * 86400 is a multiple of the 16 s stake slot, so the "on" polls
-        end on consecutive slots, where a block can be stamped, and each "before"
-        poll ends one second before its pair's. Random steps never vote on these;
-        end_polls() does.
-        """
-        node0 = self.nodes[FUNDER]
-        slot = (max(n.mock_now() for n in self.nodes) + 2 * STAKE_SLOT) & ~STAKE_TIMESTAMP_MASK
-        self.pairs = []
-        for k in range(BOUNDARY_PAIRS):
-            pair = {}
-            for name, at in [("before", slot + k * STAKE_SLOT - 1), ("on", slot + k * STAKE_SLOT)]:
-                for n in self.nodes:
-                    n.advance_mocktime_to(at)
-                title = "pair %d, %s" % (k, name)
-                poll_id = node0.addpoll("survey", title, POLL_DAYS, "Which?", "A;B",
-                                        WEIGHT_BALANCE, RESPONSE_SINGLE_CHOICE, "https://gridcoin.us")["id"]
-                assert_equal(self.tx_time(node0, poll_id), at)
-                pair[name] = dict(id=poll_id, title=title, choices=2, multiple=False)
-            self.pairs.append(pair)
-        self.confirm()
-        assert_equal(self.poll_end(self.pairs[0]["on"]) % STAKE_SLOT, 0)
-
     def all_polls(self):
-        return self.polls + [pair[name] for pair in self.pairs for name in ("before", "on")]
-
-    @staticmethod
-    def tx_time(node, txid):
-        """A transaction's own time (getrawtransaction prints its block's time)."""
-        return node.decoderawtransaction(node.getrawtransaction(txid))["time"]
+        return self.polls
 
     def poll_end(self, poll):
-        return self.tx_time(self.nodes[FUNDER], poll["id"]) + POLL_DAYS * 86400
+        """A v15 poll's end: its block's time plus its duration."""
+        node0 = self.nodes[FUNDER]
+        return node0.getblock(node0.getrawtransaction(poll["id"], 1)["blockhash"])["time"] + POLL_DAYS * 86400
 
     def fund_voters(self):
         """Send each voter one STAKE_COIN coin and 3-6 coins of 1-500 GRC, spread
@@ -717,99 +681,40 @@ class VoteTallyOracleTest(GridcoinTestFramework):
                 return i, txid
         raise AssertionError("no voter could vote on '%s'" % poll["title"])
 
-    def boundary_vote(self, i, poll, coin):
-        """votewithclaim by voter i on `poll` with a claim of `coin` alone."""
-        txid = self.nodes[i].votewithclaim(poll["id"], [0], [{"txid": coin[0], "vout": coin[1]}])["vote_txid"]
-        assert_equal(self.tx_time(self.nodes[i], txid), self.nodes[i].mock_now())
-        return txid
-
     def end_polls(self):
-        """Mine, in one block, a vote on a main poll cast while it was open, and a
-        vote on every boundary poll, cast while it was open: at the second its
-        pair's "on" poll 0 ends (S) for every poll but pair 0's "before" poll,
-        which ends at S - 1 and is voted on then.
+        """Mine, in the first block past the polls' end, a vote on one of them cast
+        while it was open: it is not linked.
 
-        The miner stamps the block at S, or, when no kernel meets the target
-        there, at one of the next four slots (generatetoaddress tries five), so
-        the block's time T is the end second of exactly one "on" poll; the
-        caller checks every pair against T.
-
-        The clocks first jump to shortly before the main polls end; the votes
-        are cast there, and the further step to S stays within the peer timeout
-        and within the age at which a wallet counts itself in sync
-        (OutOfSyncByAge, 900 s since the tip's parent), which voting needs.
-        Each boundary vote claims one confirmed coin of its voter.
+        The clocks first jump to shortly before the first poll ends; the vote is
+        cast there, and the further step to the slot past the last poll's end
+        stays within the peer timeout and within the age at which a wallet counts
+        itself in sync (OutOfSyncByAge, 900 s since the tip's parent), which
+        voting needs.
         """
         node0, staker = self.nodes[FUNDER], self.nodes[STAKER]
-        first = self.pairs[0]["on"]
-        start = self.poll_end(first)
-        for k, pair in enumerate(self.pairs):
-            assert_equal(self.poll_end(pair["on"]), start + k * STAKE_SLOT)
-            assert_equal(self.poll_end(pair["before"]), start + k * STAKE_SLOT - 1)
-        main_end = min(self.poll_end(poll) for poll in self.polls)
-        jump = (main_end - 320) & ~STAKE_TIMESTAMP_MASK
-        assert_greater_than(900 - 60, start - (jump + SPACING))
+        first_end = min(self.poll_end(poll) for poll in self.polls)
+        last_end = max(self.poll_end(poll) for poll in self.polls)
+        jump = (first_end - 320) & ~STAKE_TIMESTAMP_MASK
+        past = (last_end + STAKE_SLOT) & ~STAKE_TIMESTAMP_MASK
+        assert_greater_than(900 - 60, past - (jump + SPACING))
         # The jump drops the links, and a reconnected peer is not told about the
         # mempool it missed: the staker takes the pending transactions first.
         self.gather(staker)
         self.warp_to(jump)
-        for poll in self.all_polls():
+        for poll in self.polls:
             assert not node0.getpollresults(poll["id"])["poll_expired"]
 
         late_poll = self.rng.choice(self.polls)
         _, late = self.cast_any(late_poll)
-        coins = {}
-        for i in VOTERS:
-            held = sorted((u for u in self.nodes[i].listunspent(1) if u["amount"] >= 1),
-                          key=lambda u: (u["amount"], u["txid"], u["vout"]))
-            assert held, "node%d has no confirmed coin of 1 GRC or more" % i
-            coin = held[-2] if len(held) > 1 else held[-1]
-            coins[i] = (coin["txid"], coin["vout"])
-
-        votes = []
         for n in self.nodes:
-            n.advance_mocktime_to(start - 1)
-        votes.append(self.boundary_vote(VOTERS[0], self.pairs[0]["before"], coins[VOTERS[0]]))
-        for n in self.nodes:
-            n.advance_mocktime_to(start)
-            assert_equal(n.mock_now(), start)
-        for k, pair in enumerate(self.pairs):
-            for side, name in enumerate(("before", "on")):
-                if (k, name) != (0, "before"):
-                    i = VOTERS[(2 * k + side) % len(VOTERS)]
-                    votes.append(self.boundary_vote(i, pair[name], coins[i]))
+            n.advance_mocktime_to(past)
         self.gather(staker)
         staker.generatetoaddress(1, staker.getnewaddress())
         self.sync_blocks(wait=0.1)
         block = node0.getblock(node0.getbestblockhash())
-        mined_at = block["time"]
-        assert mined_at in [start + k * STAKE_SLOT for k in range(BOUNDARY_PAIRS)], (mined_at, start)
-        for txid in [late] + votes:
-            assert txid in block["tx"], txid
-        assert_greater_than(mined_at, self.poll_end(late_poll))
-        return start, mined_at
-
-    def assert_boundary(self, start, mined_at):
-        """A poll links a vote iff the block's time is not past its end; a linked
-        vote here is valid and has weight. The pair whose "on" poll ends at the
-        block's time must exist: its "on" poll links the vote and its "before"
-        poll, which ended one second earlier, does not."""
-        node0 = self.nodes[FUNDER]
-        exact = 0
-        for k, pair in enumerate(self.pairs):
-            for name, end in (("before", start + k * STAKE_SLOT - 1), ("on", start + k * STAKE_SLOT)):
-                result = node0.getpollresults(pair[name]["id"])
-                if mined_at <= end:
-                    assert_equal((result["votes"], result["invalid_votes"]), (1, 0))
-                    assert_greater_than(sats(result["total_weight"]), 0)
-                else:
-                    assert_equal(result["votes"], 0)
-                if mined_at == end:
-                    exact += 1
-                    assert_equal(name, "on")
-        assert_equal(exact, 1)
-        self.log.info("  the block came %d s after the first slot; pair %d's \"on\" poll ends at it",
-                      mined_at - start, (mined_at - start) // STAKE_SLOT)
+        assert late in block["tx"], late
+        assert_greater_than(block["time"], last_end)
+        assert_equal(node0.getpollresults(late_poll["id"])["poll_expired"], True)
 
     # ------------------------------------------------------------------
 
@@ -822,7 +727,6 @@ class VoteTallyOracleTest(GridcoinTestFramework):
         self.votes_by_voter = {i: [] for i in VOTERS}
         self.last_vote = None
         self.put_back = set()
-        self.pairs = []
         self.snapshot = None
         self.counts = Counter()
         self.refusals = Counter()
@@ -835,18 +739,15 @@ class VoteTallyOracleTest(GridcoinTestFramework):
         # A poll's balance claim names coins at least CLAIM_DEPTH deep.
         self.bury()
         self.add_polls()
-        self.add_boundary_polls()
         self.fund_voters()
         self.bury()
         self.compare("setup", "setup")
 
         self.random_steps(ACTIONS, self.options.steps, "main")
 
-        self.log.info("votes mined at the polls' end: a vote on a main poll cast while it was open, "
-                      "and a vote on each boundary poll")
-        start, mined_at = self.end_polls()
-        self.compare("end", "votes mined at the polls' end")
-        self.assert_boundary(start, mined_at)
+        self.log.info("a vote cast while a poll was open, mined in the first block past the polls' end")
+        self.end_polls()
+        self.compare("end", "a vote mined in the first block past the polls' end")
         node0 = self.nodes[FUNDER]
         self.stake()
         for poll in self.all_polls():

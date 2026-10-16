@@ -12,16 +12,20 @@ getpollresults; when the two disagree, the test fails and a person decides
 which side is wrong. Nothing here is derived from a tally the node reports.
 
 The rules, for a BALANCE poll whose block is at or after the v15 height:
-- a poll ends `duration_days` days after its transaction time; a time t is past
-  the end when t - poll time > duration (Poll::Expired);
-- a vote is linked to the poll when its block follows the poll's transaction
-  and the block's time is not past the end (PollRegistry::AddVote);
+- a poll starts at its block's time and ends `duration_days` days later; its
+  first block past the end is the first block after the poll's block whose time
+  exceeds the end, and its closing block is the block before that
+  (PollReference::StartTime, PollRegistry::Snapshot);
+- the tally is bounded by the closing block once the poll has one, and by the
+  tip while it is open (PollSnapshot::m_pindex_bound); a block is after the
+  bound when its height is above the bound's;
+- a vote is linked to the poll when its block is after the poll's block and
+  not after the bound (PollRegistry::VoteInWindow);
 - linked votes resolve newest first (VoteCounter::CountVotes);
-- a vote whose transaction time is before the poll's or past the end is
-  invalid before any of its claim resolves (FetchVoteCandidate);
+- no vote transaction time is read (FetchVoteCandidate);
 - a claimed output the vote has already recorded gives 0;
 - a claimed output whose transaction is not in the chain, or is confirmed in a
-  block past the end, gives 0;
+  block after the bound, gives 0;
 - a claimed output out of range, under 1 GRC, without a single destination, or
   at another address than its claim's key makes the vote invalid;
 - a claimed output a counted vote holds gives 0;
@@ -30,8 +34,9 @@ The rules, for a BALANCE poll whose block is at or after the v15 height:
   spender, if that is a coinstake or a vote transaction, to the spender's
   outputs at the claim's address that no counted vote holds and the vote has
   not recorded, recording each output it follows and following each of those
-  that is spent in turn; a spend by any other transaction inside the window
-  takes the value away (VoteResolver::ResolveAmount);
+  that is spent in turn; a spend by any other transaction in a block not after
+  the bound takes the value away, and a spend in a block after the bound is
+  irrelevant (VoteResolver::ResolveAmount);
 - a vote resolved to no weight is superseded if it reached an output a counted
   vote holds, and invalid otherwise; a vote with weight and a response out of
   range is invalid;
@@ -176,6 +181,10 @@ class VoteOracle:
             self.addresses[public_key] = self.node.decodescript(push + public_key + "ac")["addresses"][0]
         return self.addresses[public_key]
 
+    def block_time(self, height):
+        """The time of the active chain's block at `height`."""
+        return self.blocks[self.hashes[height]][0]["block_time"]
+
     # ------------------------------------------------------------------
     # Tally
     # ------------------------------------------------------------------
@@ -189,18 +198,19 @@ class VoteOracle:
         assert body is not None, "%s is not a poll" % poll_id
         assert body["weight_type"] == WEIGHT_BALANCE, "only balance polls are implemented"
         assert poll["height"] >= self.v15_height, "only polls that start at or after v15 are implemented"
-        poll_time = poll["time"]
-        duration = body["duration_days"] * 86400
+        end = poll["block_time"] + body["duration_days"] * 86400
         choice_count = len(body["choices"])
+        tip = max(self.hashes)
+        past_end = next((h for h in range(poll["height"] + 1, tip + 1) if self.block_time(h) > end), None)
+        bound = past_end - 1 if past_end is not None else tip
 
-        def expired(t):
-            return t - poll_time > duration
+        def after_end(height):
+            return height > bound
 
         linked = sorted(
             (tx["height"], tx["index"], txid) for txid, tx in self.txs.items()
             if any(p == poll_id for p, _ in tx["votes"])
-            and (tx["height"], tx["index"]) > (poll["height"], poll["index"])
-            and not expired(tx["block_time"]))
+            and poll["height"] < tx["height"] <= bound)
 
         held = set()  # outputs the counted votes recorded
         responses = [0] * choice_count
@@ -213,13 +223,13 @@ class VoteOracle:
             # The protocol allows one contract per transaction. These checks come
             # before the claim resolves.
             choices = next((rs for _, rs in vote_tx["votes"] if rs), None)
-            if vote_tx["time"] < poll_time or expired(vote_tx["time"]) or choices is None:
+            if choices is None:
                 self.events["vote invalid before its claim resolves"] += 1
                 invalid += 1
                 continue
             vote = VoteRecords(held)
             try:
-                amount = self.resolve_claim(txid, vote, expired)
+                amount = self.resolve_claim(txid, vote, after_end)
             except InvalidVote:
                 self.events["vote invalid while its claim resolves"] += 1
                 invalid += 1
@@ -246,17 +256,17 @@ class VoteOracle:
         return dict(total_weight=total, responses=responses, invalid_votes=invalid,
                     superseded_votes=superseded, votes=len(linked))
 
-    def resolve_claim(self, vote_txid, vote, expired):
+    def resolve_claim(self, vote_txid, vote, after_end):
         """The weight of a vote's balance claim, recording into `vote` the outputs
         it reaches. The caller adds them to the held outputs only if the vote is
         counted."""
         amount = 0
         for address, outpoints in self.claim(vote_txid):
             for outpoint in outpoints:
-                amount += self.resolve_output(outpoint, address, vote, expired)
+                amount += self.resolve_output(outpoint, address, vote, after_end)
         return amount
 
-    def resolve_output(self, outpoint, address, vote, expired):
+    def resolve_output(self, outpoint, address, vote, after_end):
         """One claimed output, with VoteResolver::Resolve(COutPoint)'s checks in
         its order."""
         if outpoint in vote.recorded:
@@ -267,7 +277,7 @@ class VoteOracle:
             self.events["claimed output not in the chain"] += 1
             return 0  # no transaction index entry
         tx = self.txs[txid]
-        if expired(tx["block_time"]):
+        if after_end(tx["height"]):
             self.events["claimed output confirmed after the end"] += 1
             return 0
         if n >= len(tx["vout"]):
@@ -290,9 +300,9 @@ class VoteOracle:
             self.events["claimed output unspent"] += 1
             return value
         self.events["claimed output spent"] += 1
-        return self.walk(address, self.spender[outpoint], value, vote, expired)
+        return self.walk(address, self.spender[outpoint], value, vote, after_end)
 
-    def walk(self, address, spender, value, vote, expired):
+    def walk(self, address, spender, value, vote, after_end):
         """VoteResolver::ResolveAmount: follow a spent claimed output through
         coinstakes and vote transactions to their outputs at `address`."""
         amount = value
@@ -300,7 +310,7 @@ class VoteOracle:
         while queue:
             txid, frame_amount = queue.popleft()
             tx = self.txs[txid]
-            if expired(tx["block_time"]):
+            if after_end(tx["height"]):
                 self.events["walk: spent after the end"] += 1
                 continue  # the value stays
             amount -= frame_amount
