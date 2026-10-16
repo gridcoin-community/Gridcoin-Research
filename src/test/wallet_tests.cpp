@@ -1184,6 +1184,12 @@ BOOST_AUTO_TEST_CASE(a_contract_send_held_off_by_a_narrowing_refuses_on_its_own_
 //! only whether the scheduler has been told to stop, so a task enqueued before
 //! the thread comes up is run when it gets there. Waiting on
 //! AreThreadsServicingQueue() here would be the racy version of this.
+//!
+//! Declare it AFTER the wallet its tasks touch, so it is destroyed first: its
+//! destructor joins the service thread, which may still be inside a relock. A
+//! case sees the relock through IsLocked(), and LockIfCurrent() locks before it
+//! raises NotifyStatusChanged, so a wallet destroyed first is destroyed under
+//! that call (ThreadSanitizer reported it as a race on the signal's mutex).
 struct SchedulerForThisCase {
     std::unique_ptr<CScheduler> m_saved;
     CScheduler* m_saved_handle;
@@ -1228,9 +1234,9 @@ static void WaitForRelock(const CWallet& wallet)
 //!
 BOOST_AUTO_TEST_CASE(a_superseded_scheduled_relock_does_nothing)
 {
+    CWallet wallet;
     SchedulerForThisCase scheduler;
 
-    CWallet wallet;
     CKey key;
     key.MakeNewKey(true);
     {
@@ -1394,9 +1400,9 @@ BOOST_AUTO_TEST_CASE(a_timed_unlock_whose_relock_cannot_be_armed_locks_the_walle
 //!
 BOOST_AUTO_TEST_CASE(an_elevation_keeps_the_unlock_and_its_relock)
 {
+    CWallet wallet;
     SchedulerForThisCase scheduler;
 
-    CWallet wallet;
     CKey key;
     key.MakeNewKey(true);
     {
@@ -1484,9 +1490,9 @@ BOOST_AUTO_TEST_CASE(an_elevation_demands_the_passphrase_and_an_unlock_to_widen)
 //!
 BOOST_AUTO_TEST_CASE(locking_reports_the_unlock_it_ended)
 {
+    CWallet wallet;
     SchedulerForThisCase scheduler;
 
-    CWallet wallet;
     CKey key;
     key.MakeNewKey(true);
     {
@@ -1522,9 +1528,9 @@ BOOST_AUTO_TEST_CASE(locking_reports_the_unlock_it_ended)
 //!
 BOOST_AUTO_TEST_CASE(a_passphrase_change_keeps_the_unlock_deadline)
 {
+    CWallet wallet;
     SchedulerForThisCase scheduler;
 
-    CWallet wallet;
     CKey key;
     key.MakeNewKey(true);
     {
