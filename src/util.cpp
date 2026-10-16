@@ -684,11 +684,16 @@ void ThreadHandler::interruptAll(){
     threadGroup.interrupt_all();
 }
 
+// boost::thread_group deletes the threads it holds when it is destroyed, but
+// remove_thread() hands that ownership back to the caller, so both of these
+// delete each thread they remove.
 void ThreadHandler::removeByName(const std::string tname)
 {
-    threadGroup.remove_thread(threadMap[tname]);
-    threadMap[tname]->join();
+    boost::thread* thread = threadMap[tname];
+    threadGroup.remove_thread(thread);
+    thread->join();
     threadMap.erase(tname);
+    delete thread;
 }
 
 void ThreadHandler::removeAll()
@@ -698,6 +703,7 @@ void ThreadHandler::removeAll()
     for (auto it=threadMap.begin(); it!=threadMap.end(); ++it)
     {
         threadGroup.remove_thread(it->second);
+        delete it->second;
     }
     threadMap.clear();
 }

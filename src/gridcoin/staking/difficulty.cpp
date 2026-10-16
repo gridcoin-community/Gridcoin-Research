@@ -15,6 +15,7 @@
 #include "consensus/consensus.h"
 
 #include <algorithm>
+#include <limits>
 #include <vector>
 
 using namespace GRC;
@@ -185,6 +186,16 @@ double GRC::GetBlockDifficulty(unsigned int nBits)
 {
     // Floating point number that is a multiple of the minimum difficulty,
     // minimum difficulty = 1.0.
+    //
+    // A zero mantissa encodes a target of zero, so the difficulty is
+    // unbounded. Return that directly rather than dividing by zero: the
+    // division gave the same +infinity, which the shifts below leave alone,
+    // so every caller, CheckBlock's difficulty ceiling among them, sees the
+    // value it always did.
+    if ((nBits & 0x00ffffff) == 0) {
+        return std::numeric_limits<double>::infinity();
+    }
+
     int nShift = (nBits >> 24) & 0xff;
     double dDiff = (double)0x0000ffff / (double)(nBits & 0x00ffffff);
 

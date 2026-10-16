@@ -314,12 +314,12 @@ testnet so that your nodes can be identified.
 ### DEBUG_LOCKORDER
 
 Gridcoin is a multi-threaded application, and deadlocks or other
-multi-threading bugs can be very difficult to track down. Building with
-`-DENABLE_DEBUG_LOCKORDER=ON` adds `-DDEBUG_LOCKORDER` to the compiler
-flags. This inserts run-time checks to keep track of which locks are held
-and adds warnings to the `debug.log` file if inconsistencies are detected.
-This option is independent of `CMAKE_BUILD_TYPE` so it can be used with any
-build configuration.
+multi-threading bugs can be very difficult to track down. `DEBUG_LOCKORDER`
+inserts run-time checks to keep track of which locks are held and adds
+warnings to the `debug.log` file if inconsistencies are detected. A `Debug`
+build defines it, along with `ABORT_ON_FAILED_ASSUME`, as Bitcoin Core's
+Debug builds do; `-DENABLE_DEBUG_LOCKORDER=ON` adds it to any other build
+type.
 
 ### Assertions and Checks
 
@@ -362,6 +362,19 @@ $ valgrind --suppressions=contrib/valgrind.supp --leak-check=full \
       --show-leak-kinds=all build/src/test/test_gridcoin --log_level=test_suite
 $ valgrind -v --leak-check=full build/bin/gridcoinresearchd -printtoconsole
 ```
+
+The Valgrind CI job builds with Clang, `RelWithDebInfo`, and runs the unit
+suite as in the first line, then the functional suite with `--valgrind`, which
+runs every node under memcheck and stops it at its first error:
+
+```shell
+$ GRIDCOIND=$PWD/build/bin/gridcoinresearchd GRIDCOINCLI=$PWD/build/bin/gridcoinresearchd \
+      test/functional/test_runner.py --configfile=$PWD/build/test/config.ini \
+      --valgrind --timeout-factor=10
+```
+
+Valgrind reports what ASan does not: reads of uninitialised memory. Expect the
+unit suite to take about nine times as long as it does natively.
 
 ### Compiling for test coverage
 
@@ -530,47 +543,65 @@ conditions, or undefined behavior. These sanitizers have runtime overhead,
 so they are most useful when testing changes or producing debugging builds.
 Sanitizers are actively used in CI (see `.github/workflows/cmake_quality.yml`).
 
-To build with AddressSanitizer (ASan) and UndefinedBehaviorSanitizer (UBSan),
-pass the flags via `CMAKE_CXX_FLAGS` and `CMAKE_EXE_LINKER_FLAGS`:
+To build with AddressSanitizer (ASan) and UndefinedBehaviorSanitizer (UBSan)
+the way the CI sanitizer job does, pass the flags via `CMAKE_C_FLAGS`,
+`CMAKE_CXX_FLAGS` and the linker flags:
 
 ```bash
+SAN="-fsanitize=address,float-divide-by-zero,integer,undefined -fno-omit-frame-pointer -ftrivial-auto-var-init=pattern"
 cmake -B build_asan \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
   -DCMAKE_BUILD_TYPE=Debug \
+  -DENABLE_GUI=ON -DUSE_QT6=ON -DENABLE_MULTIPROCESS=ON -DENABLE_TESTS=ON \
   -DUSE_ASM=OFF \
-  -DENABLE_DEBUG_LOCKORDER=ON \
-  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+  -DCMAKE_C_FLAGS="$SAN" \
+  -DCMAKE_CXX_FLAGS="$SAN -DARENA_DEBUG" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,float-divide-by-zero,integer,undefined" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,float-divide-by-zero,integer,undefined"
 cmake --build build_asan -j $(nproc)
 
-# Run tests with suppression files and the options CI uses. The suppression
-# paths are absolute because ctest runs each test from its own directory:
-LSAN_OPTIONS=suppressions=$PWD/test/sanitizer_suppressions/lsan:print_suppressions=0 \
-UBSAN_OPTIONS=suppressions=$PWD/test/sanitizer_suppressions/ubsan:print_stacktrace=1:halt_on_error=1:report_error_type=1 \
-ASAN_OPTIONS=detect_leaks=0:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1 \
-  ctest --test-dir build_asan --output-on-failure
+# Run the tests with the options and suppression files CI uses:
+build_asan/test/with_sanitizer_env.py ctest --test-dir build_asan --output-on-failure
 ```
 
-`ENABLE_DEBUG_LOCKORDER` adds the runtime lock checks, as the CI job does.
-Leak checking is off (`detect_leaks=0`) until the leaks the unit and
-functional suites report at exit are fixed; set `detect_leaks=1` to see them.
-Do not set `malloc_context_size=0`: it removes the allocation and free stacks
-from every use-after-free report, and it stops LeakSanitizer from reporting
-anything.
+`with_sanitizer_env.py` is generated into every build with tests. It runs its
+arguments with the sanitizer options and suppression files the CI jobs use,
+leak checking included, and any option already in the environment wins, e.g.
+`ASAN_OPTIONS=detect_leaks=0 build_asan/test/with_sanitizer_env.py ctest ...`.
+It also works for running a single binary or a daemon by hand. Do not set
+`malloc_context_size=0`: it removes the allocation and free stacks from every
+use-after-free report, and it stops LeakSanitizer from reporting anything.
+
+A Debug build defines `DEBUG_LOCKORDER`, so the runtime lock checks run too, as
+in the CI job.
+
+`integer` is a Clang sanitizer, so the recipe selects Clang, as the CI job does.
+It reports behaviour that is defined but usually unintended: unsigned
+wrap-around, and implicit conversions that change a value. The places that
+mean it, mostly hash arithmetic and dependencies, are listed in
+`test/sanitizer_suppressions/ubsan`. A new report is a finding: fix the code, or
+add a suppression that names the function and says why the wrap is intended.
 
 To build with ThreadSanitizer (TSan) instead:
 
 ```bash
 cmake -B build_tsan \
-  -DCMAKE_BUILD_TYPE=Debug \
-  -DCMAKE_CXX_FLAGS="-fsanitize=thread" \
-  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DENABLE_MULTIPROCESS=ON -DENABLE_TESTS=ON \
+  -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+  -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
 cmake --build build_tsan -j $(nproc)
 
-TSAN_OPTIONS=suppressions=$PWD/test/sanitizer_suppressions/tsan:halt_on_error=1:second_deadlock_stack=1 \
-  ctest --test-dir build_tsan --output-on-failure
+build_tsan/test/with_sanitizer_env.py ctest --test-dir build_tsan --output-on-failure
 ```
 
-No CI job builds with TSan.
+This is what the ThreadSanitizer CI job builds. Do not build TSan as Debug, and
+do not add `ENABLE_DEBUG_LOCKORDER`: the lock-order checker records every lock
+acquisition under one global mutex, so any two threads that take a lock are
+ordered through it, and TSan treats their unsynchronised accesses as ordered
+and does not report them.
 
 Suppression files for known issues in dependencies are located in
 `test/sanitizer_suppressions/` (lsan, tsan, ubsan).

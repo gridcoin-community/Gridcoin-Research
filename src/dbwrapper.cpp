@@ -31,6 +31,12 @@ extern bool fQtActive;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
 
+// The block cache and filter policy txdb was opened with. LevelDB does not take
+// ownership of either, and every CTxDB after the first shares txdb without
+// options of its own, so CTxDB::Close() frees these rather than its own copy.
+static leveldb::Cache* txdb_block_cache = nullptr;
+static const leveldb::FilterPolicy* txdb_filter_policy = nullptr;
+
 static leveldb::Options GetOptions() {
     leveldb::Options options;
 
@@ -92,7 +98,8 @@ CTxDB::CTxDB(const char* pszMode)
 
     options = GetOptions();
     options.create_if_missing = fCreate;
-    options.filter_policy = leveldb::NewBloomFilterPolicy(10);
+    txdb_block_cache = options.block_cache;
+    txdb_filter_policy = options.filter_policy;
 
     init_blockindex(options); // Init directory
     pdb = txdb;
@@ -136,9 +143,11 @@ void CTxDB::Close()
 {
     delete txdb;
     txdb = pdb = nullptr;
-    delete options.filter_policy;
+    delete txdb_filter_policy;
+    txdb_filter_policy = nullptr;
+    delete txdb_block_cache;
+    txdb_block_cache = nullptr;
     options.filter_policy = nullptr;
-    delete options.block_cache;
     options.block_cache = nullptr;
     delete activeBatch;
     activeBatch = nullptr;

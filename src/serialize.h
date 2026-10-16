@@ -255,15 +255,15 @@ template<typename X> const X& ReadWriteAsHelper(const X& x) { return x; }
     FORMATTER_METHODS(cls, obj)
 
 #ifndef CHAR_EQUALS_INT8
-template<typename Stream> inline void Serialize(Stream& s, char a    ) { ser_writedata8(s, a); } // TODO Get rid of bare char
+template<typename Stream> inline void Serialize(Stream& s, char a    ) { ser_writedata8(s, uint8_t(a)); } // TODO Get rid of bare char
 #endif
-template<typename Stream> inline void Serialize(Stream& s, int8_t a  ) { ser_writedata8(s, a); }
+template<typename Stream> inline void Serialize(Stream& s, int8_t a  ) { ser_writedata8(s, uint8_t(a)); }
 template<typename Stream> inline void Serialize(Stream& s, uint8_t a ) { ser_writedata8(s, a); }
-template<typename Stream> inline void Serialize(Stream& s, int16_t a ) { ser_writedata16(s, a); }
+template<typename Stream> inline void Serialize(Stream& s, int16_t a ) { ser_writedata16(s, uint16_t(a)); }
 template<typename Stream> inline void Serialize(Stream& s, uint16_t a) { ser_writedata16(s, a); }
-template<typename Stream> inline void Serialize(Stream& s, int32_t a ) { ser_writedata32(s, a); }
+template<typename Stream> inline void Serialize(Stream& s, int32_t a ) { ser_writedata32(s, uint32_t(a)); }
 template<typename Stream> inline void Serialize(Stream& s, uint32_t a) { ser_writedata32(s, a); }
-template<typename Stream> inline void Serialize(Stream& s, int64_t a ) { ser_writedata64(s, a); }
+template<typename Stream> inline void Serialize(Stream& s, int64_t a ) { ser_writedata64(s, uint64_t(a)); }
 template<typename Stream> inline void Serialize(Stream& s, uint64_t a) { ser_writedata64(s, a); }
 template<typename Stream> inline void Serialize(Stream& s, float a   ) { ser_writedata32(s, ser_float_to_uint32(a)); }
 template<typename Stream> inline void Serialize(Stream& s, double a  ) { ser_writedata64(s, ser_double_to_uint64(a)); }
@@ -273,15 +273,15 @@ template<typename Stream> inline void Serialize(Stream& s, const Span<const unsi
 template<typename Stream> inline void Serialize(Stream& s, const Span<unsigned char>& span) { s.write(CharCast(span.data()), span.size()); }
 
 #ifndef CHAR_EQUALS_INT8
-template<typename Stream> inline void Unserialize(Stream& s, char& a    ) { a = ser_readdata8(s); } // TODO Get rid of bare char
+template<typename Stream> inline void Unserialize(Stream& s, char& a    ) { a = char(ser_readdata8(s)); } // TODO Get rid of bare char
 #endif
-template<typename Stream> inline void Unserialize(Stream& s, int8_t& a  ) { a = ser_readdata8(s); }
+template<typename Stream> inline void Unserialize(Stream& s, int8_t& a  ) { a = int8_t(ser_readdata8(s)); }
 template<typename Stream> inline void Unserialize(Stream& s, uint8_t& a ) { a = ser_readdata8(s); }
-template<typename Stream> inline void Unserialize(Stream& s, int16_t& a ) { a = ser_readdata16(s); }
+template<typename Stream> inline void Unserialize(Stream& s, int16_t& a ) { a = int16_t(ser_readdata16(s)); }
 template<typename Stream> inline void Unserialize(Stream& s, uint16_t& a) { a = ser_readdata16(s); }
-template<typename Stream> inline void Unserialize(Stream& s, int32_t& a ) { a = ser_readdata32(s); }
+template<typename Stream> inline void Unserialize(Stream& s, int32_t& a ) { a = int32_t(ser_readdata32(s)); }
 template<typename Stream> inline void Unserialize(Stream& s, uint32_t& a) { a = ser_readdata32(s); }
-template<typename Stream> inline void Unserialize(Stream& s, int64_t& a ) { a = ser_readdata64(s); }
+template<typename Stream> inline void Unserialize(Stream& s, int64_t& a ) { a = int64_t(ser_readdata64(s)); }
 template<typename Stream> inline void Unserialize(Stream& s, uint64_t& a) { a = ser_readdata64(s); }
 template<typename Stream> inline void Unserialize(Stream& s, float& a   ) { a = ser_uint32_to_float(ser_readdata32(s)); }
 template<typename Stream> inline void Unserialize(Stream& s, double& a  ) { a = ser_uint64_to_double(ser_readdata64(s)); }
@@ -289,8 +289,8 @@ template<typename Stream, int N> inline void Unserialize(Stream& s, char (&a)[N]
 template<typename Stream, int N> inline void Unserialize(Stream& s, unsigned char (&a)[N]) { s.read(MakeWritableByteSpan(a)); }
 template<typename Stream> inline void Unserialize(Stream& s, Span<unsigned char>& span) { s.read(span); }
 
-template<typename Stream> inline void Serialize(Stream& s, bool a)    { char f=a; ser_writedata8(s, f); }
-template<typename Stream> inline void Unserialize(Stream& s, bool& a) { char f=ser_readdata8(s); a=f; }
+template<typename Stream> inline void Serialize(Stream& s, bool a)    { uint8_t f=a; ser_writedata8(s, f); }
+template<typename Stream> inline void Unserialize(Stream& s, bool& a) { uint8_t f=ser_readdata8(s); a=f; }
 
 
 

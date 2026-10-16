@@ -2200,6 +2200,12 @@ void CConnman::RelayAddress(const CAddress& addr, bool fReachable)
 
 bool CConnman::Start()
 {
+    LOCK(m_start_stop_mutex);
+    if (m_stopped) {
+        LogPrintf("%s: shutdown began before the network started; not starting it", __func__);
+        return false;
+    }
+
     SetShutdownInProgress(false);
     MAX_OUTBOUND_CONNECTIONS = m_options.nMaxOutbound;
     int max_connections = m_options.nMaxConnections;
@@ -2265,6 +2271,9 @@ void CConnman::Interrupt()
 
 void CConnman::Stop()
 {
+    LOCK(m_start_stop_mutex);
+    m_stopped = true;
+
     Interrupt();
 
     // Join the std::thread net threads. They wake via ShutdownInProgress() plus the global

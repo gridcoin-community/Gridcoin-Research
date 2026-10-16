@@ -13,6 +13,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <cmath>
+#include <limits>
 #include <vector>
 
 namespace {
@@ -361,6 +363,42 @@ BOOST_FIXTURE_TEST_CASE(stake_time_is_masked_and_guarded_from_v15, grc_test::Sta
         const bool accepted = CheckBlockTime(stamp, P, now, true) == BlockTimeCheck::OK;
         BOOST_CHECK_MESSAGE(accepted == (now >= P - 2 * GRC::V15_PAST_TIME_BOUND), "now = P + " << now - P);
     }
+}
+
+// A zero mantissa encodes a target of zero. GetBlockDifficulty() returns
+// +infinity for it, the value dividing by the mantissa gave, whatever the
+// exponent, and CheckBlock's difficulty ceiling compares against that.
+BOOST_AUTO_TEST_CASE(a_zero_mantissa_is_an_unbounded_difficulty)
+{
+    for (const unsigned int exponent : {0x00u, 0x01u, 0x1cu, 0x1du, 0x1eu, 0x20u, 0xffu}) {
+        const double difficulty = GRC::GetBlockDifficulty(exponent << 24);
+        BOOST_CHECK_MESSAGE(std::isinf(difficulty) && difficulty > 0,
+                            "exponent " << exponent << " gave " << difficulty);
+    }
+
+    // A non-zero mantissa still divides: the minimum difficulty is exactly 1.
+    BOOST_CHECK_EQUAL(GRC::GetBlockDifficulty(0x1d00ffff), 1.0);
+    BOOST_CHECK_EQUAL(GRC::GetBlockDifficulty(0x1e00ffff), 1.0 / 256.0);
+}
+
+// MaskStakeTime() clears the low four bits for both types it is used with:
+// block and transaction times (uint32_t) and adjusted time (int64_t), negative
+// values included. These are the values the mask gave when it was ~int(15)
+// converted to the stamp's type.
+BOOST_AUTO_TEST_CASE(mask_stake_time_clears_the_low_four_bits)
+{
+    BOOST_CHECK_EQUAL(GRC::MaskStakeTime(uint32_t{0}), uint32_t{0});
+    BOOST_CHECK_EQUAL(GRC::MaskStakeTime(uint32_t{15}), uint32_t{0});
+    BOOST_CHECK_EQUAL(GRC::MaskStakeTime(uint32_t{1790000021}), uint32_t{1790000016});
+    BOOST_CHECK_EQUAL(GRC::MaskStakeTime(std::numeric_limits<uint32_t>::max()), uint32_t{0xfffffff0});
+
+    BOOST_CHECK_EQUAL(GRC::MaskStakeTime(int64_t{1790000021}), int64_t{1790000016});
+    BOOST_CHECK_EQUAL(GRC::MaskStakeTime(int64_t{-1}), int64_t{-16});
+    BOOST_CHECK_EQUAL(GRC::MaskStakeTime(int64_t{-17}), int64_t{-32});
+    BOOST_CHECK_EQUAL(GRC::MaskStakeTime(std::numeric_limits<int64_t>::max()),
+                      std::numeric_limits<int64_t>::max() - 15);
+    BOOST_CHECK_EQUAL(GRC::MaskStakeTime(std::numeric_limits<int64_t>::min()),
+                      std::numeric_limits<int64_t>::min());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

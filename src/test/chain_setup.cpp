@@ -219,10 +219,9 @@ ChainState& State()
 ChainState::ChainState()
 {
     // Regtest, and the datadir must follow it: GetDataDir() appends a
-    // network-specific component, and the global TestingSetup points -datadir
-    // at a temp path it never creates, so GetDataDir() resolves empty until it
-    // does exist. The block flat files are not mocked -- only LevelDB is -- so
-    // blk0001.dat and CheckDiskSpace both need a real directory.
+    // network-specific component. The block flat files are not mocked -- only
+    // LevelDB is -- so blk0001.dat and CheckDiskSpace both need a real
+    // directory.
     SelectParams(CBaseChainParams::REGTEST);
     gArgs.ClearPathCache();
 

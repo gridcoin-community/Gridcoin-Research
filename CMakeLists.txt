@@ -427,6 +427,15 @@ if(ENABLE_TESTS)
     if(SYSTEM_XXD)
         find_program(XXD xxd REQUIRED)
     endif()
+
+    # build/test/with_sanitizer_env.py COMMAND... runs COMMAND with the sanitizer
+    # options and suppression files the CI sanitizer jobs use; any option already
+    # set in the environment wins. It is harmless on a build without sanitizers.
+    configure_file(
+        "${CMAKE_SOURCE_DIR}/test/with_sanitizer_env.py.in"
+        "${CMAKE_BINARY_DIR}/test/with_sanitizer_env.py"
+        USE_SOURCE_PERMISSIONS @ONLY
+    )
 endif()
 
 if(UNIX)
@@ -887,6 +896,12 @@ endif()
 #   * a convenience target `check-functional` (run via `cmake --build . --target check-functional`)
 # both of which drive test/functional/test_runner.py.
 if(ENABLE_TESTS AND ENABLE_DAEMON)
+    # How many times the functional_tests case runs a script that failed with one
+    # of test_runner.py's known transient slow-node signatures (--attempts). The
+    # CI sanitizer jobs set 1: a node halted by a sanitizer can fail its test with
+    # one of those signatures, and a retry that passes would hide it.
+    set(FUNCTIONAL_TEST_ATTEMPTS 3 CACHE STRING "test_runner.py --attempts for the functional_tests ctest case")
+
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         set(PACKAGE_NAME "${PROJECT_NAME}")
@@ -924,7 +939,7 @@ if(ENABLE_TESTS AND ENABLE_DAEMON)
                 COMMAND ${Python3_EXECUTABLE}
                         "${CMAKE_SOURCE_DIR}/test/functional/test_runner.py"
                         "--configfile=${CMAKE_BINARY_DIR}/test/config.ini"
-                        --ci --quiet --combinedlogslen=4000 --attempts=3
+                        --ci --quiet --combinedlogslen=4000 --attempts=${FUNCTIONAL_TEST_ATTEMPTS}
             )
             set_tests_properties(functional_tests PROPERTIES
                 ENVIRONMENT "${_functional_env}"

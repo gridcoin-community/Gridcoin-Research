@@ -321,9 +321,9 @@ BOOST_AUTO_TEST_CASE(sidestake_editors_do_not_revert_the_field_not_being_edited)
     registry.NonContractDelete(dest, /*save_to_file=*/false); // start clean
 
     // The editors persist through SaveLocalSideStakesToConfig(), which needs a real
-    // data directory. TestingSetup points -datadir at a temp path but never creates
-    // it, so GetDataDir() is empty and the settings write asserts. Create it here
-    // rather than reaching into the shared fixture.
+    // data directory, or GetDataDir() is empty and the settings write asserts.
+    // TestingSetup creates -datadir; this makes sure of it rather than relying on
+    // the shared fixture.
     const fs::path datadir = gArgs.GetArg("-datadir", "");
     BOOST_REQUIRE(!datadir.empty());
     fs::create_directories(datadir);

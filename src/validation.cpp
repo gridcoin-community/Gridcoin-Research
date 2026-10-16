@@ -36,6 +36,7 @@
 #include "wallet/wallet.h"
 #include "txmempool.h"
 
+#include <limits>
 #include <set>
 #include <stdexcept>
 
@@ -1878,7 +1879,7 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
     // Write block to history file
     if (!CheckDiskSpace(::GetSerializeSize(block, SER_DISK, CLIENT_VERSION)))
         return error("%s: out of disk space", __func__);
-    unsigned int nFile = -1;
+    unsigned int nFile = std::numeric_limits<unsigned int>::max();
     unsigned int nBlockPos = 0;
     if (!WriteBlockToDisk(block, nFile, nBlockPos, Params().MessageStart()))
         return error("%s: WriteToDisk failed", __func__);
