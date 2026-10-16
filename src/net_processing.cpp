@@ -1035,15 +1035,28 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
             else if (inv.IsKnownType())
             {
-                // Send stream from relay memory
+                // Send stream from relay memory. The stream is copied out and
+                // pushed after cs_mapRelay is released: PushMessage takes the
+                // peer's cs_vSend, which the message handler holds across
+                // SendMessages while its wallet lookup waits for cs_wallet, and
+                // RelayTransaction takes cs_mapRelay under cs_wallet. Pushing
+                // under cs_mapRelay made cs_mapRelay -> cs_vSend -> cs_wallet ->
+                // cs_mapRelay a cycle, which could not deadlock only because
+                // the message handler is the one thread taking both of its
+                // first two edges (net_processing.h, the rule for announcing
+                // under cs_wallet).
                 bool pushed = false;
+                CDataStream relay_stream(SER_NETWORK, PROTOCOL_VERSION);
                 {
                     LOCK(cs_mapRelay);
                     map<CInv, CDataStream>::iterator mi = mapRelay.find(inv);
                     if (mi != mapRelay.end()) {
-                        pfrom->PushMessage(inv.GetCommand(), mi->second);
+                        relay_stream = mi->second;
                         pushed = true;
                     }
+                }
+                if (pushed) {
+                    pfrom->PushMessage(inv.GetCommand(), std::move(relay_stream));
                 }
                 // A peer asking for one of our txs is evidence it is propagating,
                 // so stop tracking it for initial broadcast. Do this for the
