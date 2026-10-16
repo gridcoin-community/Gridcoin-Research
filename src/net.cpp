@@ -2184,6 +2184,8 @@ void CConnman::RelayAddress(const CAddress& addr, bool fReachable)
     for (auto const& pnode : m_nodes)
     {
         CNode* pnodeRaw = pnode.get();
+        // Only pick relay peers that can receive this address (bitcoin#20661).
+        if (!pnodeRaw->IsAddrCompatible(addr)) continue;
         // Mix node identity into the relay selection. Cast the pointer value to an
         // integer rather than memcpy'ing its object representation: well-defined, and
         // (intentionally) the same low-order value as the old memcpy on this platform,

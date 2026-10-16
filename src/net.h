@@ -418,15 +418,19 @@ public:
         setAddrKnown.insert(addr);
     }
 
+    /** Whether this peer can receive addr: peers that did not send
+     *  sendaddrv2 (BIP155) cannot receive e.g. Tor v3 addresses. */
+    bool IsAddrCompatible(const CNetAddr& addr) const
+    {
+        return m_wants_addrv2 || addr.IsAddrV1Compatible();
+    }
+
     void PushAddress(const CAddress& addr)
     {
         // Known checking here is only to save space from duplicates.
         // SendMessages will filter it again for knowns that were added
         // after addresses were pushed.
-        // Whether the peer supports the address in `addr`. For example,
-        // nodes that do not implement BIP155 cannot receive Tor v3 addresses
-        // because they require ADDRv2 (BIP155) encoding.
-        const bool addr_format_supported = m_wants_addrv2 || addr.IsAddrV1Compatible();
+        const bool addr_format_supported = IsAddrCompatible(addr);
 
         if (addr.IsValid() && !setAddrKnown.count(addr) && vAddrToSend.size() < 10000 && addr_format_supported)
             vAddrToSend.push_back(addr);
