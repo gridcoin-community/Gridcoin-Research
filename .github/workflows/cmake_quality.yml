@@ -95,11 +95,20 @@ jobs:
 
       - name: Test (With Sanitizers)
         env:
-          # ASAN options to prevent false positives or known minor issues from failing the build
-          LSAN_OPTIONS: suppressions=${{ github.workspace }}/test/sanitizer_suppressions/lsan
-          TSAN_OPTIONS: suppressions=${{ github.workspace }}/test/sanitizer_suppressions/tsan
-          UBSAN_OPTIONS: suppressions=${{ github.workspace }}/test/sanitizer_suppressions/ubsan:print_stacktrace=1:halt_on_error=1
-          ASAN_OPTIONS: malloc_context_size=0:check_initialization_order=1
+          # The runtime options Bitcoin Core's test/with_sanitizer_env.py.in
+          # sets, except detect_leaks. detect_stack_use_after_return is the
+          # default on Linux since LLVM 15; it is set here so the job does not
+          # depend on that. malloc_context_size stays at its default: a
+          # use-after-free report is only useful with the stacks that
+          # allocated and freed the memory.
+          #
+          # detect_leaks=0 until the leaks the unit and functional suites
+          # report at exit are fixed. The job's earlier malloc_context_size=0
+          # kept LeakSanitizer from reporting anything, so it has not been
+          # checking for leaks; this says so instead of hiding it.
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/test/sanitizer_suppressions/lsan:print_suppressions=0
+          UBSAN_OPTIONS: suppressions=${{ github.workspace }}/test/sanitizer_suppressions/ubsan:print_stacktrace=1:halt_on_error=1:report_error_type=1
+          ASAN_OPTIONS: detect_leaks=0:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1
         run: |
           # We exclude the Qt tests here if they trigger false positives in GUI libs
           # -V so the suite's own output is captured even for tests that pass:

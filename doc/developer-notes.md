@@ -537,16 +537,25 @@ pass the flags via `CMAKE_CXX_FLAGS` and `CMAKE_EXE_LINKER_FLAGS`:
 cmake -B build_asan \
   -DCMAKE_BUILD_TYPE=Debug \
   -DUSE_ASM=OFF \
+  -DENABLE_DEBUG_LOCKORDER=ON \
   -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
   -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
 cmake --build build_asan -j $(nproc)
 
-# Run tests with suppression files:
-LSAN_OPTIONS=suppressions=test/sanitizer_suppressions/lsan \
-UBSAN_OPTIONS=suppressions=test/sanitizer_suppressions/ubsan:print_stacktrace=1:halt_on_error=1 \
-ASAN_OPTIONS=malloc_context_size=0:check_initialization_order=1 \
+# Run tests with suppression files and the options CI uses. The suppression
+# paths are absolute because ctest runs each test from its own directory:
+LSAN_OPTIONS=suppressions=$PWD/test/sanitizer_suppressions/lsan:print_suppressions=0 \
+UBSAN_OPTIONS=suppressions=$PWD/test/sanitizer_suppressions/ubsan:print_stacktrace=1:halt_on_error=1:report_error_type=1 \
+ASAN_OPTIONS=detect_leaks=0:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1 \
   ctest --test-dir build_asan --output-on-failure
 ```
+
+`ENABLE_DEBUG_LOCKORDER` adds the runtime lock checks, as the CI job does.
+Leak checking is off (`detect_leaks=0`) until the leaks the unit and
+functional suites report at exit are fixed; set `detect_leaks=1` to see them.
+Do not set `malloc_context_size=0`: it removes the allocation and free stacks
+from every use-after-free report, and it stops LeakSanitizer from reporting
+anything.
 
 To build with ThreadSanitizer (TSan) instead:
 
@@ -557,9 +566,11 @@ cmake -B build_tsan \
   -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
 cmake --build build_tsan -j $(nproc)
 
-TSAN_OPTIONS=suppressions=test/sanitizer_suppressions/tsan \
+TSAN_OPTIONS=suppressions=$PWD/test/sanitizer_suppressions/tsan:halt_on_error=1:second_deadlock_stack=1 \
   ctest --test-dir build_tsan --output-on-failure
 ```
+
+No CI job builds with TSan.
 
 Suppression files for known issues in dependencies are located in
 `test/sanitizer_suppressions/` (lsan, tsan, ubsan).

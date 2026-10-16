@@ -37,13 +37,13 @@ struct CLockLocation {
         int nLine,
         bool fTryIn,
         bool fOrderExemptIn,
-        const std::string& thread_name
+        std::string&& thread_name
         )
         : fTry(fTryIn),
           fOrderExempt(fOrderExemptIn),
           mutexName(pszName),
           sourceFile(pszFile),
-          m_thread_name(thread_name),
+          m_thread_name(std::move(thread_name)),
           sourceLine(nLine) {}
 
     std::string ToString() const
@@ -70,7 +70,9 @@ private:
     bool fOrderExempt;
     std::string mutexName;
     std::string sourceFile;
-    const std::string& m_thread_name;
+    //! A copy: the stack entry outlives the call that pushed it, and the
+    //! lock-order map keeps it after its thread has exited.
+    const std::string m_thread_name;
     int sourceLine;
 };
 
