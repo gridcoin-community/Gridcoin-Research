@@ -1979,7 +1979,7 @@ PollResult::PollResult(Poll poll)
     , m_active_vote_weight()
     , m_vote_percent_avw()
     , m_poll_results_validated()
-    , m_finished(m_poll.Expired(GetAdjustedTime()))
+    , m_finished(false)
     , m_self_voted(false)
     , m_self_vote_detail()
 {
@@ -2067,10 +2067,10 @@ PollResultOption PollResult::BuildFor(const PollSnapshot& snapshot)
         legacy_superblock = end_superblock ? std::move(*end_superblock) : Quorum::CurrentSuperblock();
     }
 
-    // The poll counts as finished for the beacon key rule when the tip the
-    // tally runs on is past its end, so every node with this tip agrees.
+    // The poll counts as finished for the beacon key rule when it has finished at the tip the tally runs on (the
+    // snapshot's judgment), so every node with this tip agrees.
     VoteCounter counter(txdb, result.m_poll, poll_start_height, v15_rules, legacy_money_supply,
-                        std::move(legacy_superblock), result.m_poll.Expired(pindex_tip->nTime));
+                        std::move(legacy_superblock), snapshot.m_finished);
 
     if (result.m_poll.IncludesMagnitudeWeight()) {
         SuperblockPtr superblock;

@@ -240,6 +240,12 @@ private:
     bool m_stored;                              //!< Backed by the poll db (a poll from V11 on).
     bool m_deleted;                             //!< Deleted by a master-key REMOVE; kept for its txid and title.
     const PollRegistry* m_registry;             //!< The registry that holds this reference.
+    //! The first block past the poll's end found on the main chain, and the poll block it was found from: a cache for
+    //! PollRegistry::Snapshot, checked against the main chain on every read, so a reorg that disconnects the block
+    //! invalidates it at the next read. Block index entries are never freed (GRC::BlockIndexPool), so the pointer
+    //! stays valid after the block leaves the main chain. Guarded by cs_poll_registry.
+    mutable const CBlockIndex* m_past_end_from;
+    mutable const CBlockIndex* m_past_end;
 }; // PollReference
 
 //!
@@ -262,11 +268,20 @@ struct PollSnapshot
     std::vector<uint256> m_votes;                           //!< Linked votes, in connection order.
     const CBlockIndex* m_pindex_tip = nullptr;              //!< The pinned tip the snapshot was taken on.
     const CBlockIndex* m_pindex_start = nullptr;            //!< The poll's block; nullptr for a skeleton reference.
+    //! First block after the poll's block, on the chain that ends at the pinned tip, whose time exceeds the end;
+    //! nullptr while that chain has none. The block before it is the poll's closing block.
+    const CBlockIndex* m_pindex_past_end = nullptr;
     //! Last block of the active vote weight range, or nullptr while the poll is open (the range then ends at the
     //! pinned tip).
     const CBlockIndex* m_pindex_end = nullptr;
     bool m_v15 = false;                                     //!< The poll's block is at or above the v15 height.
-    bool m_finished = false;                                //!< The poll has finished.
+    //! The poll's end follows the v15 rules: its first block past the end is at or above the v15 height. True for
+    //! every v15 poll that has closed, and for a poll whose block is below the height but which closes at or above it.
+    //! Only the end follows it: the start rules follow m_v15.
+    bool m_v15_end = false;
+    //! The poll has finished at the pinned tip: its first block past the end is on the tip's chain and at or above the
+    //! v15 height (m_v15_end), or the tip's time exceeds the end (a poll that closes below that height).
+    bool m_finished = false;
 };
 
 //!

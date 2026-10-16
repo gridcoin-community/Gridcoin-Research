@@ -1379,6 +1379,259 @@ BOOST_AUTO_TEST_CASE(the_superblock_that_weighs_magnitude_is_on_the_pinned_tip_s
     BOOST_CHECK_EQUAL(GRC::ResolveSuperblockForPoll(poll, late.m_pindex).m_height, late.m_pindex->nHeight);
 }
 
+//!
+//! A poll stays open until a block past its end is on the chain the tally runs on, however far the wall clock has
+//! passed the end.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_is_open_until_a_block_past_its_end)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 8 * DAY; // the clock is a day past the poll's end
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip tip = LinkBlock(polled.m_pindex, t0 + DAY, GRC::Claim(), {}, bits);
+    const TxIndexScope indexed(poll.tx, polled.m_tx_positions[0]);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), tip.m_pindex);
+    BOOST_CHECK(!snapshot.m_finished);
+    BOOST_CHECK(snapshot.m_pindex_past_end == nullptr);
+    BOOST_CHECK(snapshot.m_pindex_end == nullptr);
+
+    const GRC::PollResultOption result = GRC::PollResult::BuildFor(snapshot);
+    BOOST_REQUIRE(result);
+    BOOST_CHECK(!result->m_finished);
+}
+
+//!
+//! A poll finishes at its first block past the end, though the wall clock has not reached the end.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_finishes_at_its_first_block_past_the_end_whatever_the_clock)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - DAY; // the clock is six days before the poll's end
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip past_end = LinkBlock(polled.m_pindex, t0 + 7 * DAY + 1, GRC::Claim(), {}, bits);
+    const TxIndexScope indexed(poll.tx, polled.m_tx_positions[0]);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), past_end.m_pindex);
+    BOOST_CHECK(snapshot.m_finished);
+    BOOST_CHECK(snapshot.m_pindex_past_end == past_end.m_pindex);
+
+    const GRC::PollResultOption result = GRC::PollResult::BuildFor(snapshot);
+    BOOST_REQUIRE(result);
+    BOOST_CHECK(result->m_finished);
+}
+
+//!
+//! A table pinned on an earlier tip sees the poll as that tip's chain shows it: open, with its range ending at the
+//! pinned tip, though the live chain already has a block past the end.
+//!
+BOOST_AUTO_TEST_CASE(the_pinned_tip_decides_whether_a_poll_has_finished)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 8 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip inside = LinkBlock(polled.m_pindex, t0 + DAY, GRC::Claim(), {}, bits);
+    const LinkedTip past_end = LinkBlock(inside.m_pindex, t0 + 7 * DAY + 60, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    const GRC::PollSnapshot at_inside = TakeSnapshot(poll.tx.GetHash(), inside.m_pindex);
+    BOOST_CHECK(!at_inside.m_finished);
+    BOOST_CHECK(at_inside.m_pindex_past_end == nullptr);
+    BOOST_CHECK(at_inside.m_pindex_end == nullptr);
+
+    const GRC::PollSnapshot at_tip = TakeSnapshot(poll.tx.GetHash(), past_end.m_pindex);
+    BOOST_CHECK(at_tip.m_finished);
+    BOOST_CHECK(at_tip.m_pindex_past_end == past_end.m_pindex);
+
+    // The block found for the later tip is cached; the earlier tip still sees an open poll.
+    BOOST_CHECK(!TakeSnapshot(poll.tx.GetHash(), inside.m_pindex).m_finished);
+}
+
+//!
+//! A poll at or above the v15 height is finished from its first block past the end on: a later block does not reopen
+//! it.
+//!
+BOOST_AUTO_TEST_CASE(a_later_block_does_not_reopen_a_v15_poll)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 8 * DAY;
+    const int64_t end = t0 + 7 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip past_end = LinkBlock(polled.m_pindex, end + 60, GRC::Claim(), {}, bits);
+    const LinkedTip retrograde = LinkBlock(past_end.m_pindex, end - 60, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    {
+        grc_test::V15HeightGuard v15(0);
+
+        const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), retrograde.m_pindex);
+        BOOST_REQUIRE(snapshot.m_v15);
+        BOOST_CHECK(snapshot.m_finished);
+        BOOST_CHECK(snapshot.m_pindex_past_end == past_end.m_pindex);
+    }
+}
+
+//!
+//! A poll that straddles the v15 height (its block below it, its first block past the end at or above it) finishes at
+//! that block, and a later block does not reopen it. Only its end follows v15; its start rules do not.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_that_straddles_the_v15_height_finishes_by_block)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 8 * DAY;
+    const int64_t end = t0 + 7 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip past_end = LinkBlock(polled.m_pindex, end + 60, GRC::Claim(), {}, bits);
+    const LinkedTip retrograde = LinkBlock(past_end.m_pindex, end - 60, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    {
+        grc_test::V15HeightGuard v15(past_end.m_pindex->nHeight);
+
+        const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), retrograde.m_pindex);
+        BOOST_REQUIRE(!snapshot.m_v15);
+        BOOST_CHECK(snapshot.m_v15_end);
+        BOOST_CHECK(snapshot.m_finished);
+        BOOST_CHECK(snapshot.m_pindex_past_end == past_end.m_pindex);
+    }
+}
+
+//!
+//! A finished poll's active vote weight range ends at its first block at or past the end: a block stamped exactly at
+//! the end closes it. Its first block past the end is the next one.
+//!
+BOOST_AUTO_TEST_CASE(a_finished_polls_range_ends_at_its_first_block_at_or_past_the_end)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 10 * DAY;
+    const int64_t end = t0 + 7 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip at_end = LinkBlock(polled.m_pindex, end, GRC::Claim(), {}, bits);
+    const LinkedTip past_end = LinkBlock(at_end.m_pindex, end + 60, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), past_end.m_pindex);
+    BOOST_CHECK(snapshot.m_finished);
+    BOOST_CHECK(snapshot.m_pindex_end == at_end.m_pindex);
+    BOOST_CHECK(snapshot.m_pindex_past_end == past_end.m_pindex);
+}
+
+//!
+//! A snapshot on a tip a reorg moved off the main chain throws, so the poll table retries on a fresh tip and an RPC
+//! reports the reorg. The reorg here carries no poll or vote contract, so
+//! reorg_occurred_during_reg_traversal is not set, and the snapshot's own check throws.
+//!
+BOOST_AUTO_TEST_CASE(a_snapshot_on_a_tip_off_the_main_chain_throws)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip stale = LinkBlock(polled.m_pindex, t0 + 60, GRC::Claim(), {}, bits);
+    const LinkedTip replacement = LinkBlock(polled.m_pindex, t0 + 120, GRC::Claim(), {}, bits);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    registry.Add({poll.contract, poll.tx, polled.m_pindex});
+    const GRC::PollReference* ref = registry.TryByTxid(poll.tx.GetHash());
+    BOOST_REQUIRE(ref != nullptr);
+
+    BOOST_CHECK_THROW(registry.Snapshot(*ref, stale.m_pindex), GRC::InvalidDuetoReorgFork);
+    BOOST_CHECK_NO_THROW(registry.Snapshot(*ref, replacement.m_pindex));
+}
+
+//!
+//! A reorg that replaces a poll's first block past the end: the next snapshot finds the new one.
+//!
+BOOST_AUTO_TEST_CASE(a_replaced_first_block_past_the_end_is_found_again)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 8 * DAY;
+    const int64_t end = t0 + 7 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip first = LinkBlock(polled.m_pindex, end + 60, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    BOOST_CHECK(TakeSnapshot(poll.tx.GetHash(), first.m_pindex).m_pindex_past_end == first.m_pindex);
+
+    const LinkedTip second = LinkBlock(polled.m_pindex, end + 120, GRC::Claim(), {}, bits);
+    const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), second.m_pindex);
+    BOOST_CHECK(snapshot.m_finished);
+    BOOST_CHECK(snapshot.m_pindex_past_end == second.m_pindex);
+}
+
+//!
+//! A reorg that leaves no block past the end on the main chain reopens a v15 poll: the first block past the end that a
+//! snapshot found before the reorg is dropped, not served.
+//!
+BOOST_AUTO_TEST_CASE(a_reorg_that_removes_the_first_block_past_the_end_reopens_a_v15_poll)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 8 * DAY;
+    const int64_t end = t0 + 7 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip past_end = LinkBlock(polled.m_pindex, end + 60, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    grc_test::V15HeightGuard v15(0);
+
+    BOOST_REQUIRE(TakeSnapshot(poll.tx.GetHash(), past_end.m_pindex).m_pindex_past_end == past_end.m_pindex);
+
+    // The replacement is as tall as the block it replaces, so the pinned-tip bound alone would still serve the cached
+    // block; only the main-chain check drops it.
+    const LinkedTip replacement = LinkBlock(polled.m_pindex, end - 60, GRC::Claim(), {}, bits);
+    const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), replacement.m_pindex);
+    BOOST_REQUIRE(snapshot.m_v15);
+    BOOST_CHECK(!snapshot.m_finished);
+    BOOST_CHECK(snapshot.m_pindex_past_end == nullptr);
+    BOOST_CHECK(snapshot.m_pindex_end == nullptr);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 #if defined(__clang__)

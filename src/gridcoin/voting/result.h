@@ -107,7 +107,9 @@ public:
     std::optional<CAmount> m_active_vote_weight;  //!< Active vote weight of poll.
     std::optional<double> m_vote_percent_avw;     //!< Vote weight percent of AVW.
     std::optional<bool> m_poll_results_validated; //!< Whether the poll's AVW is >= the minimum AVW for the poll.
-    bool m_finished;                              //!< Whether the poll finished as of this result.
+    //! Whether the poll had finished at the tip the result was tallied on. Set by BuildFor from the snapshot; false in
+    //! a result built any other way.
+    bool m_finished;
     bool m_self_voted;                            //!< Whether the wallet holder voted.
     VoteDetail m_self_vote_detail;                //!< The wallet holder's counted votes, combined
 
