@@ -1464,7 +1464,7 @@ private:
 
     //! Ports ResearcherModel::updateBeacon(): derive the beacon status and flatten
     //! the committed active/pending beacons into the snapshot's value fields.
-    void DeriveBeacon(const GRC::Researcher& researcher, ResearcherSnapshot& snap)
+    void DeriveBeacon(const GRC::Researcher& researcher, ResearcherSnapshot& snap) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const GRC::CpidOption cpid = researcher.Id().TryCpid();
 
@@ -1490,6 +1490,13 @@ private:
         if (auto beacon_option = researcher.TryPendingBeacon()) {
             pending_beacon = std::make_unique<GRC::Beacon>(std::move(*beacon_option));
             beacon_key_present = pending_beacon->WalletHasPrivateKey(m_wallet);
+        } else if (m_wallet) {
+            // Shown as pending while it waits to confirm; the send path still
+            // refuses on the mempool check, not on this.
+            if (auto advertisement = GRC::TryRecentBeaconAdvertisement(*m_wallet, *cpid)) {
+                pending_beacon = std::make_unique<GRC::Beacon>(std::move(*advertisement));
+                beacon_key_present = true;
+            }
         }
 
         BeaconStatus beacon_status;
