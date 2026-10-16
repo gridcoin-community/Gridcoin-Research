@@ -20,6 +20,7 @@
 #include "gridcoin/voting/vote.h"
 #include "index/disktxpos.h"
 #include "index/txindex.h"
+#include "interfaces/voting.h"
 #include "node/blockstorage.h"
 #include "node/ui_interface.h"
 #include "primitives/block.h"
@@ -1764,6 +1765,36 @@ BOOST_AUTO_TEST_CASE(a_poll_table_lists_a_poll_as_active_until_a_block_past_its_
     BOOST_REQUIRE_EQUAL(active.size(), 1U);
     BOOST_CHECK(!active[0].result.m_finished);
     BOOST_CHECK(cache.BuildPollTable(GRC::FINISHED).empty());
+}
+
+//!
+//! The newest open poll, which getmininginfo's current_poll, the GUI's current poll title and the GUI's latest poll time
+//! show, is judged by blocks on the tip like the poll table: open until a block past its end, however far the clock
+//! has passed the end.
+//!
+BOOST_AUTO_TEST_CASE(the_newest_open_poll_is_judged_by_blocks)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 8 * DAY;
+    const int64_t end = t0 + 7 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip inside = LinkBlock(polled.m_pindex, t0 + DAY, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+    const std::unique_ptr<interfaces::VotingManager> voting = interfaces::MakeVotingManager();
+
+    // The clock is a day past the end, but no block is: the poll is open.
+    BOOST_CHECK_EQUAL(GRC::GetCurrentPollTitle(), "Title");
+    BOOST_CHECK_EQUAL(voting->latestActivePollTime(), t0);
+
+    LinkBlock(inside.m_pindex, end + 60, GRC::Claim(), {}, bits);
+
+    BOOST_CHECK_EQUAL(GRC::GetCurrentPollTitle(), _("No current polls"));
+    BOOST_CHECK_EQUAL(voting->latestActivePollTime(), 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

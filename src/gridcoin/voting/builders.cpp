@@ -2003,6 +2003,8 @@ VoteBuilder VoteBuilder::SetFeeOutpoint(const COutPoint& outpoint)
 
 VoteBuilder VoteBuilder::ForPoll(const Poll& poll, const uint256 poll_txid)
 {
+    // Judged by the wall clock on purpose, not by blocks: a vote built now is mined after now, so
+    // once the clock passes the end it would land in the first block past the end or later, where it does not count.
     if (poll.Expired(GetAdjustedTime())) {
         throw VotingError(_("Poll has already finished."));
     }

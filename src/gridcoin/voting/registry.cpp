@@ -421,10 +421,14 @@ std::optional<SuperblockPtr> GRC::LastWellFormedSuperblock(const CBlockIndex* pi
 
 std::string GRC::GetCurrentPollTitle()
 {
-    LOCK(PollRegistry::cs_poll_registry);
+    // cs_main before cs_poll_registry, the order block connection takes them: whether a poll is open is judged by
+    // blocks on the tip. Both are held across the whole judgment, so no reorg lands in between.
+    LOCK2(cs_main, PollRegistry::cs_poll_registry);
 
-    if (const PollReference* poll_ref = GetPollRegistry().TryLatestActive()) {
-        return poll_ref->Title();
+    if (pindexBest) {
+        if (const PollReference* poll_ref = GetPollRegistry().TryLatestActive(pindexBest)) {
+            return poll_ref->Title();
+        }
     }
 
     return _("No current polls");
@@ -597,40 +601,9 @@ CBlockIndex* PollReference::GetStartingBlockIndexPtr() const
     return const_cast<CBlockIndex*>(m_pindex);
 }
 
-CBlockIndex* PollReference::GetEndingBlockIndexPtr(CBlockIndex* pindex_start) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    if (!pindex_start) {
-        pindex_start = GetStartingBlockIndexPtr();
-
-        // If there is still no pindex_start, there cannot be an end either.
-        if (!pindex_start) {
-            return nullptr;
-        }
-    }
-
-    // Has poll ended?
-    if (Expired(GetAdjustedTime())) {
-        // Find and return the last block that contains valid votes for the poll.
-        return GRC::BlockFinder::FindByMinTimeFromGivenIndex(Expiration(), pindex_start);
-    }
-
-    return nullptr;
-}
-
 std::optional<int> PollReference::GetStartingHeight() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const CBlockIndex* pindex = GetStartingBlockIndexPtr();
-
-    if (pindex != nullptr) {
-        return pindex->nHeight;
-    }
-
-    return std::nullopt;
-}
-
-std::optional<int> PollReference::GetEndingHeight() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    CBlockIndex* pindex = GetEndingBlockIndexPtr();
 
     if (pindex != nullptr) {
         return pindex->nHeight;
@@ -929,6 +902,10 @@ std::string PollReference::Notify(const PollNotificationType& notify_type) const
 #if HAVE_SYSTEM
     // Support running an external command on poll creation. Do not notify for already expired polls. This is especially
     // important during a sync to avoid spamming poll notifications.
+    //
+    // Judged by the wall clock on purpose, not by blocks like every display of whether a poll is open:
+    // a notification is about the user's present. Judged by the block being connected, a node syncing through
+    // history would find every poll open at its own block and announce each one.
     if (!Expired(GetAdjustedTime())) {
         if (!strCmd.empty()) {
             // The placeholders %s1 and %s2 are replaced with the txid and the notification type.
@@ -1231,31 +1208,26 @@ const PollRegistry::Sequence PollRegistry::Polls() const
 
 }
 
-const PollReference* PollRegistry::TryLatestActive() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
+const PollReference* PollRegistry::TryLatestActive(const CBlockIndex* pindex_tip) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
-    int64_t now = GetAdjustedTime();
-
-    if (m_latest_poll && !m_latest_poll->Expired(now)) {
+    // Whether a poll is open is judged by blocks on the tip, like the poll table and the result RPCs,
+    // never by the wall clock.
+    if (m_latest_poll && OpenAt(*m_latest_poll, pindex_tip)) {
         return m_latest_poll;
     }
 
-    if (m_polls.empty()) {
-        return nullptr;
-    }
+    const PollReference* latest_open = nullptr;
 
-    const PollReference* latest_not_expired = nullptr;
-    int64_t latest_not_expired_timestamp = 0;
-
-    // Go through m_polls finding the latest poll that is not expired.
+    // Maybe more than one poll has the same timestamp... therefore use >=.
     for (auto iter = m_polls.cbegin(); iter != m_polls.cend(); ++iter) {
-        // Maybe more than one poll has the same timestamp... therefore use >=.
-        if (!iter->second->Expired(now) && iter->second->m_timestamp >= latest_not_expired_timestamp) {
-            latest_not_expired = iter->second;
-            latest_not_expired_timestamp = latest_not_expired->m_timestamp;
+        if ((!latest_open || iter->second->m_timestamp >= latest_open->m_timestamp)
+            && OpenAt(*iter->second, pindex_tip)) {
+            latest_open = iter->second;
         }
     }
 
-    return latest_not_expired;
+    return latest_open;
 }
 
 const PollReference* PollRegistry::TryByTxid(const uint256 txid) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
@@ -1273,6 +1245,21 @@ const PollReference* PollRegistry::TryByTxid(const uint256 txid) const EXCLUSIVE
 PollSnapshot PollRegistry::Snapshot(const PollReference& ref, const CBlockIndex* pindex_tip) const
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
+    PollSnapshot snapshot = SnapshotWithoutVotes(ref, pindex_tip);
+    snapshot.m_votes = ref.Votes();
+
+    return snapshot;
+}
+
+bool PollRegistry::OpenAt(const PollReference& ref, const CBlockIndex* pindex_tip) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
+    return !SnapshotWithoutVotes(ref, pindex_tip).m_finished;
+}
+
+PollSnapshot PollRegistry::SnapshotWithoutVotes(const PollReference& ref, const CBlockIndex* pindex_tip) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
     PollSnapshot snapshot;
 
     snapshot.m_txid = ref.m_txid;
@@ -1282,7 +1269,6 @@ PollSnapshot PollRegistry::Snapshot(const PollReference& ref, const CBlockIndex*
     snapshot.m_title = ref.m_title;
     snapshot.m_timestamp = ref.m_timestamp;
     snapshot.m_end_time = ref.Expiration();
-    snapshot.m_votes = ref.Votes();
     snapshot.m_pindex_tip = pindex_tip;
     snapshot.m_pindex_start = ref.m_pindex;
     snapshot.m_v15 = ref.m_pindex && IsV15Enabled(ref.m_pindex->nHeight);
@@ -1784,6 +1770,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
     if (!m_replay_in_progress) {
         poll_ref.Notify(PollReference::PollNotificationType::POLL_ADD);
 
+        // Judged by the wall clock on purpose; see PollReference::Notify.
         if (!poll_ref.Expired(GetAdjustedTime())) {
             uiInterface.NewPollReceived(poll_ref.Time());
         }
@@ -1873,6 +1860,7 @@ void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added vote %s to poll %s.", __func__, vote_txid.GetHex(), poll_ref->m_title);
 
+    // Judged by the wall clock on purpose; see PollReference::Notify.
     if (!m_replay_in_progress && !poll_ref->Expired(GetAdjustedTime())) {
         uiInterface.NewVoteReceived(poll_ref->Txid());
     }
@@ -1981,6 +1969,7 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
                      poll_ref->m_title,
                      poll_ref->Votes().size());
 
+            // Judged by the wall clock on purpose; see PollReference::Notify.
             if (!m_replay_in_progress && !poll_ref->Expired(GetAdjustedTime())) {
                 uiInterface.NewVoteReceived(poll_ref->Txid());
             }
@@ -2003,6 +1992,7 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
             poll_ref->UnlinkVote(ctx.m_tx.GetHash());
         }
 
+        // Judged by the wall clock on purpose; see PollReference::Notify.
         if (!m_replay_in_progress && !poll_ref->Expired(GetAdjustedTime())) {
             uiInterface.NewVoteReceived(poll_ref->Txid());
         }
@@ -2037,36 +2027,14 @@ void PollRegistry::DetectReorg()
 
 using Sequence = PollRegistry::Sequence;
 
-Sequence::Sequence(const PollMapByTitle& polls, const FilterFlag flags) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
-    : m_polls(polls), m_flags(flags)
+Sequence::Sequence(const PollMapByTitle& polls) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
+    : m_polls(polls)
 {
-}
-
-Sequence Sequence::Where(const FilterFlag flags) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
-{
-    return Sequence(m_polls, flags);
-}
-
-Sequence Sequence::OnlyActive(const bool active_only) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
-{
-    int flags = m_flags;
-
-    if (active_only) {
-        flags = (flags & ~FINISHED) | ACTIVE;
-    }
-
-    return Sequence(m_polls, static_cast<FilterFlag>(flags));
 }
 
 Sequence::Iterator Sequence::begin() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
-    int64_t now = 0;
-
-    if (!((m_flags & ACTIVE) && (m_flags & FINISHED))) {
-        now = GetAdjustedTime();
-    }
-
-    return Iterator(m_polls.begin(), m_polls.end(), m_flags, now);
+    return Iterator(m_polls.begin(), m_polls.end());
 }
 
 Sequence::Iterator Sequence::end() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
@@ -2080,17 +2048,8 @@ Sequence::Iterator Sequence::end() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::
 
 using Iterator = PollRegistry::Sequence::Iterator;
 
-Iterator::Iterator(
-    BaseIterator iter,
-    BaseIterator end,
-    const FilterFlag flags,
-    const int64_t now)
-    : m_iter(iter)
-    , m_end(end)
-    , m_flags(flags)
-    , m_now(now)
+Iterator::Iterator(BaseIterator iter, BaseIterator end) : m_iter(iter), m_end(end)
 {
-    SeekNextMatch();
 }
 
 Iterator::Iterator(BaseIterator end) : m_iter(end), m_end(end)
@@ -2120,7 +2079,6 @@ Iterator::pointer Iterator::operator->() const
 Iterator& Iterator::operator++() EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     ++m_iter;
-    SeekNextMatch();
 
     return *this;
 }
@@ -2141,27 +2099,4 @@ bool Iterator::operator==(const Iterator& other) const EXCLUSIVE_LOCKS_REQUIRED(
 bool Iterator::operator!=(const Iterator& other) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return m_iter != other.m_iter;
-}
-
-void Iterator::SeekNextMatch() EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
-{
-    if (m_flags == FilterFlag::NO_FILTER) {
-        return;
-    }
-
-    while (m_iter != m_end) {
-        if (m_now > 0) {
-            if (m_flags & ACTIVE) {
-                if (!m_iter->second->Expired(m_now)) {
-                    break;
-                }
-            } else {
-                if (m_iter->second->Expired(m_now)) {
-                    break;
-                }
-            }
-        }
-
-        ++m_iter;
-    }
 }

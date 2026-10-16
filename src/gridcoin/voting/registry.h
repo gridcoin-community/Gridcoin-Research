@@ -155,25 +155,11 @@ public:
     CBlockIndex* GetStartingBlockIndexPtr() const;
 
     //!
-    //! \brief Get the block index pointer for the last block in the poll duration.
-    //!
-    //! \return pointer to block index object.
-    //!
-    CBlockIndex* GetEndingBlockIndexPtr(CBlockIndex* pindex_start = nullptr) const;
-
-    //!
     //! \brief Get the starting block height for the poll.
     //!
     //! \return block number if begun or std::nullopt (if skeleton reference - this should never happen).
     //!
     std::optional<int> GetStartingHeight() const;
-
-    //!
-    //! \brief Get the ending block height for the poll.
-    //!
-    //! \return block number if ended or std::nullopt if still active.
-    //!
-    std::optional<int> GetEndingHeight() const;
 
     //!
     //! \brief Get the magnitude weight factor at the poll start.
@@ -329,11 +315,12 @@ public:
     //!
     //! \brief A traversable, immutable sequence of the polls in the registry.
     //!
+    //! It walks every poll. Whether a poll is open is judged by blocks on a tip (PollRegistry::OpenAt, Snapshot), not
+    //! here.
+    //!
     class Sequence
     {
     public:
-        using FilterFlag = PollFilterFlag;
-
         //!
         //! \brief Behaves like a forward \c const iterator.
         //!
@@ -351,11 +338,7 @@ public:
             //!
             //! \brief Initialize an iterator for the beginning of the sequence.
             //!
-            Iterator(
-                BaseIterator iter,
-                BaseIterator end,
-                const FilterFlag flags,
-                const int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+            Iterator(BaseIterator iter, BaseIterator end) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Initialize an iterator for the end of the sequence.
@@ -411,39 +394,14 @@ public:
         private:
             BaseIterator m_iter GUARDED_BY(cs_poll_registry); //!< The current position.
             BaseIterator m_end GUARDED_BY(cs_poll_registry);  //!< Element after the end of the sequence.
-            FilterFlag m_flags GUARDED_BY(cs_poll_registry);  //!< Attributes to filter polls by.
-            int64_t m_now GUARDED_BY(cs_poll_registry);       //!< Current time in seconds.
-
-            //!
-            //! \brief Advance the iterator to the next item that matches the
-            //! configured filters.
-            //!
-            void SeekNextMatch() EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
         }; // Iterator
 
         //!
         //! \brief Initialize a poll sequence.
         //!
         //! \param polls The set of poll references in the registry.
-        //! \param flags Attributes to filter polls by.
         //!
-        Sequence(const PollMapByTitle& polls, const FilterFlag flags = NO_FILTER) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
-
-        //!
-        //! \brief Set the attributes to filter polls by.
-        //!
-        //! \return A new sequence for the specified poll filters.
-        //!
-        Sequence Where(const FilterFlag flags) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
-
-        //!
-        //! \brief Set whether the sequence skips finished polls.
-        //!
-        //! \param active_only Whether the sequence skips finished polls.
-        //!
-        //! \return A new sequence for the specified poll status filters.
-        //!
-        Sequence OnlyActive(const bool active_only = true) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+        Sequence(const PollMapByTitle& polls) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
         //!
         //! \brief Returns an iterator to the beginning.
@@ -457,7 +415,6 @@ public:
 
     private:
         const PollMapByTitle& m_polls GUARDED_BY(cs_poll_registry) ; //!< Poll references in the registry.
-        FilterFlag m_flags GUARDED_BY(cs_poll_registry) ;            //!< Attributes to filter polls by.
     }; // Sequence
 
     //!
@@ -469,12 +426,10 @@ public:
     const Sequence Polls() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
-    //! \brief Get the most recent poll submitted to the network.
+    //! \brief Get the newest poll still open on \p pindex_tip, judged by blocks, or nullptr.
     //!
-    //! \return Points to a poll object or \c nullptr when no recent polls
-    //! exist.
-    //!
-    const PollReference* TryLatestActive() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+    const PollReference* TryLatestActive(const CBlockIndex* pindex_tip) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
 
     //!
     //! \brief Get the poll with the specified transaction ID.
@@ -493,6 +448,14 @@ public:
     //! \param pindex_tip The tip the tally runs on, read under the same cs_main.
     //!
     PollSnapshot Snapshot(const PollReference& ref, const CBlockIndex* pindex_tip) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
+
+    //!
+    //! \brief Whether the poll is open on \p pindex_tip, judged exactly as Snapshot judges m_finished (by blocks),
+    //! without copying the vote list. Throws InvalidDuetoReorgFork as Snapshot does; a caller holding
+    //! cs_main from reading the tip to its last call (all of them today) never sees it.
+    //!
+    bool OpenAt(const PollReference& ref, const CBlockIndex* pindex_tip) const
         EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
 
     //!
@@ -694,6 +657,12 @@ private:
     //! Set while TryByTxidWithAddHistoricalPollAndVotes registers a pre-V11 poll in memory only, the one path that
     //! passes the V11 floor (until the legacy store replaces it).
     bool m_registering_legacy_poll GUARDED_BY(cs_poll_registry);
+
+    //!
+    //! \brief Everything Snapshot takes except the vote list.
+    //!
+    PollSnapshot SnapshotWithoutVotes(const PollReference& ref, const CBlockIndex* pindex_tip) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
 
     //!
     //! \brief Erase a stored vote's link, which must be its poll's newest, and make the previous link current.

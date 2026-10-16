@@ -873,34 +873,23 @@ public:
 
     int64_t latestActivePollTime() override
     {
-        // The newest active poll's timestamp. Needs only cs_poll_registry:
-        // Polls().OnlyActive() filters on GetAdjustedTime() and PollReference::Time()
-        // reads a stored timestamp — neither touches cs_main — so cs_main is not
-        // taken, avoiding needless contention on it.
-        //
-        // The lock is held across the WHOLE walk, not just while building the
-        // sequence. This used to be a WITH_LOCK around Polls().OnlyActive() alone,
-        // which released cs_poll_registry at the end of that expression and then ran
-        // begin/end, operator++/!= and Ref() unlocked — every one of them
-        // EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry), over a GUARDED_BY map that
-        // PollRegistry::Delete erases from and Reset() clears. A block being
-        // disconnected on the validation thread while the GUI walked here was an
-        // iterator use-after-free.
-        //
-        // The old comment claimed this matched PollResultCache::BuildPollTable. It
-        // did not: BuildPollTable additionally holds a TraversalScope and rechecks
-        // reorg_occurred_during_reg_traversal per element, precisely because it must
-        // drop the lock to tally (which takes cs_main, and cs_main must be acquired
-        // BEFORE cs_poll_registry). Nothing here needs cs_main, so simply keeping
-        // the lock is both correct and cheaper than replicating that protocol —
-        // a writer cannot mutate the map underneath us at all, so no reorg
-        // bookkeeping is required.
+        // The newest open poll's timestamp, judged by blocks on the tip like the poll table. This
+        // runs in the node; the GUI calls it through the interface and takes no lock itself. cs_main is taken before
+        // cs_poll_registry, the order block connection takes them, and both are held across the whole walk, so the
+        // registry does not change during it and every poll is judged on the same tip.
         GRC::PollRegistry& registry = GRC::GetPollRegistry();
 
         int64_t latest = 0;
-        LOCK(GRC::PollRegistry::cs_poll_registry);
-        for (const auto& iter : registry.Polls().OnlyActive()) {
-            latest = std::max<int64_t>(latest, iter->Ref().Time());
+        LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+        if (!pindexBest) {
+            return latest;
+        }
+
+        for (const auto& iter : registry.Polls()) {
+            if (registry.OpenAt(iter->Ref(), pindexBest)) {
+                latest = std::max<int64_t>(latest, iter->Ref().Time());
+            }
         }
 
         return latest;

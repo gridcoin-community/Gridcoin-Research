@@ -102,32 +102,22 @@ UniValue PollToJson(const Poll& poll, const uint256 txid)
     return json;
 }
 
-UniValue PollToJson(const Poll& poll, const PollReference& poll_ref)
-{
-    UniValue json = PollToJson(poll, poll_ref.Txid());
-    json.pushKV("votes", (uint64_t)poll_ref.Votes().size());
-
-    return json;
-}
-
-UniValue PollResultToJson(const PollResult& result, const PollReference& poll_ref)
+UniValue PollResultToJson(const PollResult& result, const PollSnapshot& snapshot)
 {
     UniValue json(UniValue::VOBJ);
 
-    json.pushKV("poll_id", poll_ref.Txid().ToString());
-    json.pushKV("poll_title", poll_ref.Title());
-    json.pushKV("poll_expired", poll_ref.Expired(GetAdjustedTime()));
+    json.pushKV("poll_id", snapshot.m_txid.ToString());
+    json.pushKV("poll_title", snapshot.m_title);
 
-    {
-        LOCK(cs_main);
+    // Judged on the tip the result was tallied on, by its blocks, as the result's own finished flag.
+    json.pushKV("poll_expired", snapshot.m_finished);
 
-        if (auto start_height = poll_ref.GetStartingHeight()) {
-            json.pushKV("starting_block_height", *start_height);
-        }
+    if (snapshot.m_pindex_start) {
+        json.pushKV("starting_block_height", snapshot.m_pindex_start->nHeight);
+    }
 
-        if (auto end_height = poll_ref.GetEndingHeight()) {
-            json.pushKV("ending_block_height", *end_height);
-        }
+    if (snapshot.m_pindex_end) {
+        json.pushKV("ending_block_height", snapshot.m_pindex_end->nHeight);
     }
 
     json.pushKV("votes", (uint64_t)result.m_vote_count);
@@ -174,38 +164,27 @@ UniValue PollResultToJson(const PollResult& result, const PollReference& poll_re
     return json;
 }
 
-UniValue PollResultToJson(const PollReference& poll_ref)
+//!
+//! \brief Find the poll \p title_or_id names and take its snapshot on the current tip, under cs_main and the registry
+//! lock. Nothing of the registry is read after they are released.
+//!
+//! \throws JSONRPCError RPC_IN_WARMUP before there is a tip.
+//!
+std::optional<PollSnapshot> SnapshotPollByTitleOrId(const std::string& title_or_id)
 {
-    // The "buildPollTable" timer is created by PollResult::BuildFor(), the engine
-    // that actually reads it -- this RPC is only one of its callers (the poll-result
-    // cache and the GUI reach it too), and creating the label here left every other
-    // path warning on a missing timer. See the comment there.
+    // cs_main before cs_poll_registry, the order block connection takes them: a txid argument may load a historical
+    // poll, which needs cs_main.
+    LOCK2(cs_main, PollRegistry::cs_poll_registry);
 
-    // Mark a traversal in progress for the whole call (RAII, cleared on every
-    // return/throw below); the count-based scope keeps the reorg detector armed
-    // even if this overlaps a GUI table build.
-    PollRegistry::TraversalScope traversal(GetPollRegistry());
-
-    // Pin the chain tip once so the whole tally reads a single consistent tip.
-    const CBlockIndex* pindex_tip = nullptr;
-    {
-        LOCK(cs_main);
-        pindex_tip = pindexBest;
-    }
-
-    if (!pindex_tip) {
+    if (!pindexBest) {
         throw JSONRPCError(RPC_IN_WARMUP, "Chain tip not available yet");
     }
 
-    try {
-         if (const PollResultOption result = PollResult::BuildFor(poll_ref, pindex_tip)) {
-            return PollResultToJson(*result, poll_ref);
-        }
-    } catch (InvalidDuetoReorgFork& e) {
-        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
+    if (const PollReference* ref = TryPollByTitleOrId(title_or_id)) {
+        return GetPollRegistry().Snapshot(*ref, pindexBest);
     }
 
-    throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk");
+    return std::nullopt;
 }
 
 UniValue VoteDetailsToJson(const PollResult& result)
@@ -238,35 +217,6 @@ UniValue VoteDetailsToJson(const PollResult& result)
     }
 
     return json;
-}
-
-UniValue VoteDetailsToJson(const PollReference& poll_ref)
-{
-    // Mark a traversal in progress for the whole call (RAII, cleared on every
-    // return/throw below); the count-based scope keeps the reorg detector armed
-    // even if this overlaps a GUI table build.
-    PollRegistry::TraversalScope traversal(GetPollRegistry());
-
-    // Pin the chain tip once so the whole tally reads a single consistent tip.
-    const CBlockIndex* pindex_tip = nullptr;
-    {
-        LOCK(cs_main);
-        pindex_tip = pindexBest;
-    }
-
-    if (!pindex_tip) {
-        throw JSONRPCError(RPC_IN_WARMUP, "Chain tip not available yet");
-    }
-
-    try {
-        if (const PollResultOption result = PollResult::BuildFor(poll_ref, pindex_tip)) {
-            return VoteDetailsToJson(*result);
-        }
-    } catch (InvalidDuetoReorgFork& e) {
-        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
-    }
-
-    throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk.");
 }
 
 UniValue AddressClaimToJson(const AddressClaim& claim)
@@ -739,11 +689,36 @@ UniValue listpolls(const UniValue& params)
 
     const bool active = params.size() > 0 ? !params[0].get_bool() : true;
 
-    LOCK(GRC::PollRegistry::cs_poll_registry);
+    // Which polls are open is judged by blocks on one tip, as the poll table and getpollresults judge it,
+    // so the RPCs agree. cs_main is taken before cs_poll_registry and both are held while the polls are judged,
+    // so no reorg lands in between (the snapshot's off-main-chain throw cannot fire here). The polls are read from
+    // disk after the locks are released.
+    std::vector<std::pair<uint256, uint64_t>> wanted; // Poll txid and vote count.
+    {
+        LOCK2(cs_main, PollRegistry::cs_poll_registry);
 
-    for (const auto& iter : GetPollRegistry().Polls().OnlyActive(active)) {
-        if (const PollOption poll = iter->TryPollFromDisk()) {
-            json.push_back(PollToJson(*poll, iter.Ref()));
+        if (!pindexBest) {
+            return json;
+        }
+
+        PollRegistry& registry = GetPollRegistry();
+
+        for (const auto& iter : registry.Polls()) {
+            const PollSnapshot snapshot = registry.Snapshot(iter->Ref(), pindexBest);
+
+            if (!active || !snapshot.m_finished) {
+                wanted.emplace_back(snapshot.m_txid, snapshot.m_votes.size());
+            }
+        }
+    }
+
+    CTxDB txdb("r");
+
+    for (const auto& [txid, votes] : wanted) {
+        if (const PollOption poll = ReadPollFromDisk(txdb, txid)) {
+            UniValue entry = PollToJson(*poll, txid);
+            entry.pushKV("votes", votes);
+            json.push_back(entry);
         }
     }
 
@@ -771,26 +746,23 @@ UniValue getpollresults(const UniValue& params)
 {
     const std::string title_or_id = params[0].get_str();
 
-    // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
-    // throw.
+    // The lookup and the snapshot are taken under the locks; the tally runs without them and throws on a reorg.
 
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-analysis"
-#endif
-   const PollReference* ref = nullptr;
-   {
-       // cs_main before cs_poll_registry, the order block connection takes them: a
-       // txid argument may load a historical poll, which needs cs_main.
-       LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
-       ref = TryPollByTitleOrId(title_or_id);
-   }
-   if (ref) {
-        return PollResultToJson(*ref);
+    // Mark a traversal in progress for the whole call (RAII, cleared on every return/throw below); the count-based
+    // scope keeps the reorg detector armed even if this overlaps a GUI table build.
+    PollRegistry::TraversalScope traversal(GetPollRegistry());
+
+    try {
+        if (const std::optional<PollSnapshot> snapshot = SnapshotPollByTitleOrId(title_or_id)) {
+            if (const PollResultOption result = PollResult::BuildFor(*snapshot)) {
+                return PollResultToJson(*result, *snapshot);
+            }
+
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk");
+        }
+    } catch (InvalidDuetoReorgFork& e) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
     }
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#endif
 
     throw JSONRPCError(RPC_MISC_ERROR, "No matching poll found");
 }
@@ -1092,25 +1064,23 @@ UniValue votedetails(const UniValue& params)
 {
     const std::string title_or_id = params[0].get_str();
 
-    // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
-    // throw.
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-analysis"
-#endif
-   const PollReference* ref = nullptr;
-   {
-       // cs_main before cs_poll_registry, the order block connection takes them: a
-       // txid argument may load a historical poll, which needs cs_main.
-       LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
-       ref = TryPollByTitleOrId(title_or_id);
-   }
-   if (ref) {
-        return VoteDetailsToJson(*ref);
+    // The lookup and the snapshot are taken under the locks; the tally runs without them and throws on a reorg.
+
+    // Mark a traversal in progress for the whole call (RAII, cleared on every return/throw below); the count-based
+    // scope keeps the reorg detector armed even if this overlaps a GUI table build.
+    PollRegistry::TraversalScope traversal(GetPollRegistry());
+
+    try {
+        if (const std::optional<PollSnapshot> snapshot = SnapshotPollByTitleOrId(title_or_id)) {
+            if (const PollResultOption result = PollResult::BuildFor(*snapshot)) {
+                return VoteDetailsToJson(*result);
+            }
+
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk.");
+        }
+    } catch (InvalidDuetoReorgFork& e) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
     }
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#endif
 
     throw JSONRPCError(RPC_MISC_ERROR, "No matching poll found");
 }
