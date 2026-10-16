@@ -212,6 +212,10 @@ BASE_SCRIPTS = [
     # (a changesettings rpcconnect is honoured) but never rewrites the file.
     'interface_cli_settings.py',
     'mempool_accept.py',
+    # mempool_unbroadcast_persist.py: unbroadcast.dat follows the unbroadcast
+    # set while the node runs, so a node killed without a shutdown reloads a
+    # send it made since and keeps out a transaction it withdrew since.
+    'mempool_unbroadcast_persist.py',
     'rpc_net.py',
     'p2p_disconnect_nodes_churn.py',
     'rpc_net_connman.py',

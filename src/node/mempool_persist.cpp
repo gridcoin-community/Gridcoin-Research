@@ -5,7 +5,6 @@
 #include "node/mempool_persist.h"
 
 #include "clientversion.h"
-#include "random.h"
 #include "streams.h"
 #include "sync.h"
 #include "txmempool.h"
@@ -21,19 +20,35 @@
 
 namespace node {
 
-bool WriteMempoolEntries(const fs::path& path, const MempoolPersistEntries& entries)
+bool WriteMempoolEntries(const fs::path& path, const MempoolPersistEntries& entries, std::string* error_out)
 {
+    const auto fail = [&](const std::string& message) {
+        if (error_out) {
+            *error_out = message;
+            return false;
+        }
+        return error("%s", message);
+    };
+
     // Write to a temporary file and rename into place so an interrupted dump can
-    // never leave a partially written file.
-    const uint16_t randv{GetRand<uint16_t>()};
+    // never leave a partially written file. The temporary name is fixed: writes
+    // to one path are serialized (UnbroadcastPersister), so a file left behind
+    // by a crash is simply replaced by the next write.
     fs::path tmp = path;
-    tmp += strprintf(".%04x", randv);
+    tmp += ".new";
+
+    // Removal of the temporary after a failure must not throw: the persister
+    // writes from the scheduler thread, where an exception ends the process.
+    const auto remove_tmp = [&] {
+        boost::system::error_code ec;
+        fs::remove(tmp, ec);
+    };
 
     FILE* file = fsbridge::fopen(tmp, "wb");
     CAutoFile fileout(file, SER_DISK, CLIENT_VERSION);
     if (fileout.IsNull()) {
         fileout.fclose();
-        return error("%s: failed to open %s", __func__, tmp.string());
+        return fail(strprintf("%s: failed to open %s", __func__, tmp.string()));
     }
 
     try {
@@ -41,20 +56,20 @@ bool WriteMempoolEntries(const fs::path& path, const MempoolPersistEntries& entr
         fileout << entries;
     } catch (const std::exception& e) {
         fileout.fclose();
-        fs::remove(tmp);
-        return error("%s: serialize error - %s", __func__, e.what());
+        remove_tmp();
+        return fail(strprintf("%s: serialize error - %s", __func__, e.what()));
     }
 
     if (!FileCommit(fileout.Get())) {
         fileout.fclose();
-        fs::remove(tmp);
-        return error("%s: FileCommit failed for %s", __func__, tmp.string());
+        remove_tmp();
+        return fail(strprintf("%s: FileCommit failed for %s", __func__, tmp.string()));
     }
     fileout.fclose();
 
     if (!RenameOver(tmp, path)) {
-        fs::remove(tmp);
-        return error("%s: rename-into-place failed for %s", __func__, path.string());
+        remove_tmp();
+        return fail(strprintf("%s: rename-into-place failed for %s", __func__, path.string()));
     }
 
     return true;
@@ -95,12 +110,38 @@ bool ReadMempoolEntries(const fs::path& path, MempoolPersistEntries& entries)
     return true;
 }
 
-bool DumpUnbroadcast(const CTxMemPool& pool, const fs::path& dump_path)
+void UnbroadcastPersister::Enable(fs::path path)
 {
+    LOCK(m_mutex);
+    m_path = std::move(path);
+    m_enabled = true;
+}
+
+bool UnbroadcastPersister::Write(const CTxMemPool& pool)
+{
+    LOCK(m_mutex);
+    return WriteLocked(pool, /*only_if_changed=*/false);
+}
+
+bool UnbroadcastPersister::WriteIfChanged(const CTxMemPool& pool)
+{
+    LOCK(m_mutex);
+    return WriteLocked(pool, /*only_if_changed=*/true);
+}
+
+bool UnbroadcastPersister::WriteLocked(const CTxMemPool& pool, const bool only_if_changed)
+{
+    AssertLockHeld(m_mutex);
+
+    if (!m_enabled) return false;
+
+    UnbroadcastKeys keys;
     MempoolPersistEntries entries;
+    bool unchanged = false;
+
     {
         LOCK(pool.cs);
-        entries.reserve(pool.m_unbroadcast.size());
+
         for (const auto& [hash, reason] : pool.m_unbroadcast) {
             // NeverSent only. A Reannounce entry says peers have already seen
             // the transaction and a reorg took it out of their pools, which is
@@ -110,15 +151,57 @@ bool DumpUnbroadcast(const CTxMemPool& pool, const fs::path& dump_path)
             // re-open the cancel gate this distinction exists to keep shut.
             if (reason != UnbroadcastReason::NeverSent) continue;
 
-            auto it = pool.mapTx.find(hash);
+            const auto it = pool.mapTx.find(hash);
             if (it != pool.mapTx.end()) {
-                entries.emplace_back(it->second.GetTx(), it->second.GetTime());
+                keys.emplace_back(hash, it->second.GetTime());
+            }
+        }
+
+        // The set is compared as a whole with what was last written, rather than
+        // told about each change, so that no path that changes it can be missed.
+        // m_unbroadcast is ordered, so equal sets give equal key lists.
+        unchanged = only_if_changed && m_written == keys;
+
+        if (!unchanged) {
+            entries.reserve(keys.size());
+            for (const auto& [hash, time] : keys) {
+                entries.emplace_back(pool.mapTx.find(hash)->second.GetTx(), time);
             }
         }
     }
 
-    // Write outside the pool lock to avoid holding cs across disk I/O.
-    return WriteMempoolEntries(dump_path, entries);
+    if (unchanged) {
+        // A failed write leaves the file as it was, so a set that has come back
+        // to what was last written is in step with the file again.
+        if (m_failing) {
+            LogPrintf("INFO: %s: %s matches the unbroadcast set again.", __func__, m_path.string());
+            m_failing = false;
+        }
+        return false;
+    }
+
+    // Written outside the pool lock, to avoid holding cs across disk I/O. The
+    // whole write is serialized by m_mutex, so a later one never replaces the
+    // file with an earlier state.
+    std::string error_message;
+    if (!WriteMempoolEntries(m_path, entries, &error_message)) {
+        // Logged once, not on every retry. m_written is left as it was, so the
+        // next call tries again even if nothing changes in between.
+        if (!m_failing) {
+            LogPrintf("ERROR: %s: %s. Retrying on every pass until the file matches the set again.",
+                      __func__, error_message);
+            m_failing = true;
+        }
+        return false;
+    }
+
+    if (m_failing) {
+        LogPrintf("INFO: %s: %s written again.", __func__, m_path.string());
+        m_failing = false;
+    }
+
+    m_written = std::move(keys);
+    return true;
 }
 
 bool LoadUnbroadcast(CTxMemPool& pool, const fs::path& load_path)
