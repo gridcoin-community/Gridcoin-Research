@@ -1734,7 +1734,12 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
     // m_nodes_mutex -> cs_vSend order taken by the socket handler.)
 
     // Address refresh broadcast
-    if (!IsInitialBlockDownload())
+    //
+    // Gridcoin marks a peer connected in the version (aries) handler, not on
+    // verack, so wait for verack here: a BIP155 peer always sends sendaddrv2
+    // before its verack. Advertising earlier would drop our Tor v3 address in
+    // PushAddress and still push nNextRebroadcastTime 12-24 hours ahead.
+    if (pto->m_verack_received && !IsInitialBlockDownload())
     {
         if (GetAdjustedTime() > pto->nNextRebroadcastTime)
         {
