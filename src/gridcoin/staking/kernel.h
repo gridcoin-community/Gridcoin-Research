@@ -59,6 +59,14 @@ int64_t GetWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd);
 //! \param prevout_hash Hash of the input transaction to load from disk.
 //! \param out_header   Header of the previous transaction's block.
 //! \param out_txprev   The previous transaction data loaded from disk.
+//! \param pindexPrev   Parent of the block whose stake is being checked, or
+//! \c nullptr. From the block version 15 activation height, judged at the
+//! checked block's height (pindexPrev->nHeight + 1), the input must be in the
+//! checked block's own history, and the block that confirms it there supplies
+//! the header, rather than the main chain's copy (see doc/consensus.md,
+//! section 11.6). At
+//! every height, an input the transaction index does not hold is looked for
+//! only in the checked block's own branch.
 //!
 //! \return \c true if the previous transaction and block header were loaded
 //! from disk successfully.

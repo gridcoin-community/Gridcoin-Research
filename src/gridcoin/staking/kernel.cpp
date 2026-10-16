@@ -394,6 +394,119 @@ bool GRC::ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nSta
     return true;
 }
 
+namespace {
+//!
+//! \brief Find the branch of the block whose parent is \p pindexPrev.
+//!
+//! \param pindexPrev Parent of the block being checked.
+//! \param out_branch The branch's blocks that are not on the main chain, from
+//! the parent down. Empty when the parent is on the main chain.
+//!
+//! \return The fork point: the newest ancestor of the block that is on the main
+//! chain, which is the parent itself when the parent is on the main chain.
+//!
+const CBlockIndex* FindBranch(
+    const CBlockIndex* const pindexPrev,
+    std::vector<const CBlockIndex*>& out_branch) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    const CBlockIndex* fork_point = pindexPrev;
+
+    for (; fork_point != nullptr && !fork_point->IsInMainChain(); fork_point = fork_point->pprev) {
+        out_branch.push_back(fork_point);
+    }
+
+    return fork_point;
+}
+
+//!
+//! \brief Search a branch's blocks for a transaction.
+//!
+//! \return \c true if found; \p out_header and \p out_txprev then hold the
+//! block's header and the transaction.
+//!
+bool FindInBranch(
+    const uint256& prevout_hash,
+    const std::vector<const CBlockIndex*>& branch,
+    CBlockHeader& out_header,
+    CTransaction& out_txprev) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    for (const CBlockIndex* const pindex : branch) {
+        CBlock block;
+
+        if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
+            return error("%s: failed to read block %s", __func__, pindex->GetBlockHash().ToString());
+        }
+
+        for (const auto& tx : block.vtx) {
+            if (tx.GetHash() == prevout_hash) {
+                out_txprev = tx;
+                out_header = pindex->GetBlockHeader();
+
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+//!
+//! \brief Make sure the staked input of a block whose parent is \p pindexPrev
+//! comes from that block's own history.
+//!
+//! The transaction index follows the main chain. A transaction broadcast
+//! before a fork is usually mined on both sides, in a different block on each,
+//! so for a block on a side branch the index can point at the other side's
+//! copy, whose block time is not the one the block's kernel was computed with.
+//! The block in the checked block's own history that confirms the input
+//! supplies the header; an input that is not in that history at all fails.
+//!
+//! \param prevout_hash Hash of the input transaction.
+//! \param out_header   On entry, the header of the block the transaction index
+//! names. Replaced by the header of the branch's own block if that differs.
+//! \param out_txprev   Replaced by the transaction from the branch's own block
+//! if that differs.
+//! \param pindexPrev   Parent of the block being checked.
+//!
+//! \return \c false if the transaction is not in the block's own history.
+//!
+bool TakeStakedInputFromOwnHistory(
+    const uint256& prevout_hash,
+    CBlockHeader& out_header,
+    CTransaction& out_txprev,
+    const CBlockIndex* const pindexPrev) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    std::vector<const CBlockIndex*> branch;
+    const CBlockIndex* const fork_point = FindBranch(pindexPrev, branch);
+
+    if (fork_point == nullptr) {
+        return error("%s: block %s has no ancestor on the main chain", __func__, pindexPrev->GetBlockHash().ToString());
+    }
+
+    const auto indexed = mapBlockIndex.find(out_header.GetHash());
+
+    if (indexed == mapBlockIndex.end()) {
+        return error("%s: input tx %s is indexed in unknown block %s",
+                     __func__, prevout_hash.ToString(), out_header.GetHash().ToString());
+    }
+
+    // A main-chain block at or below the fork point is history the checked
+    // block shares. (The index only names main-chain blocks; the
+    // IsInMainChain() check keeps a stale entry from being taken as shared
+    // history.)
+    if (indexed->second->IsInMainChain() && indexed->second->nHeight <= fork_point->nHeight) {
+        return true;
+    }
+
+    if (FindInBranch(prevout_hash, branch, out_header, out_txprev)) {
+        return true;
+    }
+
+    return error("%s: input tx %s is not in the history of the block after %s",
+                 __func__, prevout_hash.ToString(), pindexPrev->GetBlockHash().ToString());
+}
+} // anonymous namespace
+
 bool GRC::ReadStakedInput(
     CTxDB& txdb,
     const uint256 prevout_hash,
@@ -405,21 +518,19 @@ bool GRC::ReadStakedInput(
 
     // Get transaction index for the previous transaction
     if (!txdb.ReadTxIndex(prevout_hash, tx_index)) {
+        // The index covers the main chain, so an input it does not hold can
+        // only be in a side branch: the blocks above the checked block's
+        // newest ancestor on the main chain, from its parent down. Only those
+        // are searched, and nothing is when the block has no such ancestor.
         if (pindexPrev != nullptr) {
-            for (CBlockIndex* pindex = pindexPrev; pindex->pprev != nullptr; pindex = pindex->pprev) {
-                CBlock block;
-                ReadBlockFromDisk(block, pindex, Params().GetConsensus());
+            std::vector<const CBlockIndex*> branch;
 
-                for (const auto& tx : block.vtx) {
-                    if (tx.GetHash() == prevout_hash) {
-                        error("Found tx %s in block %s", tx.GetHash().ToString(), pindex->GetBlockHash().ToString());
-                        out_txprev = tx;
-                        out_header = pindex->GetBlockHeader();
-                        return true;
-                    }
-                }
+            if (FindBranch(pindexPrev, branch) != nullptr
+                && FindInBranch(prevout_hash, branch, out_header, out_txprev)) {
+                return true;
             }
         }
+
         // Previous transaction not in main chain, may occur during initial download
         return error("%s: tx index not found for input tx %s", __func__, prevout_hash.GetHex());
     }
@@ -441,6 +552,12 @@ bool GRC::ReadStakedInput(
         file >> out_txprev;
     } catch (...) {
         return error("%s: deserialize or I/O error", __func__);
+    }
+
+    // From block version 15 a block takes its staked input from its own
+    // history, not from the main chain's copy.
+    if (pindexPrev != nullptr && IsV15Enabled(pindexPrev->nHeight + 1)) {
+        return TakeStakedInputFromOwnHistory(prevout_hash, out_header, out_txprev, pindexPrev);
     }
 
     return true;
