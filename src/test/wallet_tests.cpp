@@ -3322,12 +3322,11 @@ BOOST_AUTO_TEST_CASE(reaccept_reloaded_own_unconfirmed_tx_repooled_when_accepted
         BOOST_REQUIRE(pwalletMain->AddKey(key));
     }
 
-    // A tip for ConnectInputs. Pool-allocated; StateGuard erases the entry.
+    // A tip for ConnectInputs. Pool-allocated, and its phashBlock is the map
+    // key; StateGuard erases the entry.
     {
         LOCK(cs_main);
-        uint256* phash = new uint256(GetRandHash());
-        CBlockIndex* tip = GRC::MockBlockIndex::InsertBlockIndex(*phash);
-        tip->phashBlock = phash;
+        CBlockIndex* tip = GRC::MockBlockIndex::InsertBlockIndex(GetRandHash());
         tip->nHeight = 1;
         tip->nTime = GetAdjustedTime();
         tip->nVersion = 12;

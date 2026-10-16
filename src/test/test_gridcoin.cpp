@@ -108,13 +108,20 @@ static void ReportSetupThrow()
 }
 
 struct TestingSetup {
+    //! The suite's data directory. It has to exist: GetDataDir() returns an
+    //! empty path for a -datadir that is not a directory, so everything placed
+    //! under it -- banlist.dat, which BanMan writes when it is destroyed --
+    //! landed in whatever directory the binary was run from.
+    fs::path m_path_root;
+
     TestingSetup() {
         try {
             g_setup_step = "SetupEnvironment()";
             SetupEnvironment();
 
             g_setup_step = "fs::temp_directory_path()";
-            fs::path m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / InsecureRand256().ToString();
+            m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / InsecureRand256().ToString();
+            fs::create_directories(m_path_root);
             fUseFastIndex = true; // Don't verify block hashes when loading
             g_setup_step = "gArgs -datadir / SelectParams";
             gArgs.ForceSetArg("-datadir", m_path_root.string());
@@ -191,6 +198,10 @@ struct TestingSetup {
         txdb_env = nullptr;
         g_mock_deterministic_tests = false;
         ECC_Stop();
+        // The non-throwing overload: a destructor must not throw, and a
+        // directory left behind is not worth failing a run that passed.
+        boost::system::error_code ec;
+        fs::remove_all(m_path_root, ec);
     }
 };
 
