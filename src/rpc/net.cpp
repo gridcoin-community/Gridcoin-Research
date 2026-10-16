@@ -384,7 +384,8 @@ UniValue setban(const UniValue& params)
     else
         LookupSubNet(params[0].get_str().c_str(), subNet);
 
-    if (! (isSubnet ? subNet.IsValid() : netAddr.IsValid()) )
+    // Also reject addresses that cannot be stored as a ban (e.g. Tor v3).
+    if (! (isSubnet ? subNet.IsValid() : (netAddr.IsValid() && CSubNet(netAddr).IsValid())) )
         throw JSONRPCError(RPC_CLIENT_INVALID_IP_OR_SUBNET, "Error: Invalid IP/Subnet");
 
     if (strCommand == "add")
