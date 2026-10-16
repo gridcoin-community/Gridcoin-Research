@@ -1593,6 +1593,69 @@ BOOST_AUTO_TEST_CASE(a_snapshot_on_a_tip_off_the_main_chain_throws)
 }
 
 //!
+//! The registry holds a poll whose block is off the main chain only through a corrupt poll record: a reorg that
+//! disconnects a poll's block reverts the poll under the same cs_main. A snapshot reads such a poll as one with no
+//! block and does not throw, so the poll's title and the poll table are still read. A pinned tip off the main chain
+//! still throws.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_whose_block_left_the_main_chain_is_read_as_having_no_block)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    CacheReset cache_reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const TxIndexScope indexed(poll.tx, polled.m_tx_positions[0]);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    // Replace the poll's block without reverting the poll, as a corrupt record leaves the registry.
+    const LinkedTip replacement = LinkBlock(pindexGenesisBlock, t0 + 60, GRC::Claim(), {}, bits);
+    BOOST_REQUIRE(!polled.m_pindex->IsInMainChain());
+
+    GRC::PollSnapshot snapshot;
+    BOOST_REQUIRE_NO_THROW(snapshot = TakeSnapshot(poll.tx.GetHash(), replacement.m_pindex));
+    BOOST_CHECK(snapshot.m_pindex_start == nullptr);
+    BOOST_CHECK(!snapshot.m_finished);
+
+    BOOST_CHECK_EQUAL(GRC::GetCurrentPollTitle(), "Title");
+    BOOST_CHECK_EQUAL(GRC::GetPollResultCache().BuildPollTable(GRC::NO_FILTER).size(), 1U);
+
+    BOOST_CHECK_THROW(TakeSnapshot(poll.tx.GetHash(), polled.m_pindex), GRC::InvalidDuetoReorgFork);
+}
+
+//!
+//! A finished poll read as having no block (above) has no active vote weight range end either, not the one its search
+//! for the end found while its block was on the main chain.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_read_as_having_no_block_has_no_range_end)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 10 * DAY;
+    const int64_t end = t0 + 7 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip past_end = LinkBlock(polled.m_pindex, end + 60, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    TakeSnapshot(poll.tx.GetHash(), past_end.m_pindex);
+
+    // Replace the poll's block without reverting the poll, as a corrupt record leaves the registry.
+    const LinkedTip replacement = LinkBlock(pindexGenesisBlock, end + 120, GRC::Claim(), {}, bits);
+    const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), replacement.m_pindex);
+
+    BOOST_REQUIRE(snapshot.m_finished);
+    BOOST_CHECK(snapshot.m_pindex_end == nullptr);
+}
+
+//!
 //! A reorg that replaces a poll's first block past the end: the next snapshot finds the new one.
 //!
 BOOST_AUTO_TEST_CASE(a_replaced_first_block_past_the_end_is_found_again)

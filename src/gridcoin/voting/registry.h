@@ -237,6 +237,9 @@ private:
     mutable const CBlockIndex* m_end_searched;
     mutable const CBlockIndex* m_at_or_past_end;
     mutable const CBlockIndex* m_past_end;
+    //! Set once PollRegistry::Snapshot has logged that the poll's block is off the main chain (a corrupt record), so it
+    //! logs that once per reference. Guarded by cs_poll_registry.
+    mutable bool m_off_main_chain_logged;
 }; // PollReference
 
 //!
@@ -258,7 +261,9 @@ struct PollSnapshot
     int64_t m_end_time = 0;                                 //!< The poll's end (PollReference::Expiration()).
     std::vector<uint256> m_votes;                           //!< Linked votes, in connection order.
     const CBlockIndex* m_pindex_tip = nullptr;              //!< The pinned tip the snapshot was taken on.
-    const CBlockIndex* m_pindex_start = nullptr;            //!< The poll's block; nullptr for a skeleton reference.
+    //! The poll's block; nullptr for a skeleton reference, or for a poll whose block is off the main chain (a corrupt
+    //! record, PollRegistry::Snapshot).
+    const CBlockIndex* m_pindex_start = nullptr;
     //! First block after the poll's block, on the chain that ends at the pinned tip, whose time exceeds the end;
     //! nullptr while that chain has none. The block before it is the poll's closing block.
     const CBlockIndex* m_pindex_past_end = nullptr;

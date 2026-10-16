@@ -462,6 +462,7 @@ PollReference::PollReference()
     , m_end_searched(nullptr)
     , m_at_or_past_end(nullptr)
     , m_past_end(nullptr)
+    , m_off_main_chain_logged(false)
 {
 }
 
@@ -1263,23 +1264,41 @@ PollSnapshot PollRegistry::SnapshotWithoutVotes(const PollReference& ref, const 
     snapshot.m_timestamp = ref.m_timestamp;
     snapshot.m_end_time = ref.Expiration();
     snapshot.m_pindex_tip = pindex_tip;
-    snapshot.m_pindex_start = ref.m_pindex;
-    snapshot.m_v15 = ref.m_pindex && IsV15Enabled(ref.m_pindex->nHeight);
 
     // Every judgment below is made on the chain that ends at the pinned tip, never on the wall clock.
-    // The walks below follow pnext, which describes only the current main chain, so the pinned tip and the poll's
-    // block must both still be on it. They are checked here, under cs_main.
+    // The walks below follow pnext, which describes only the current main chain, so the pinned tip must still be on
+    // it. It is checked here, under cs_main.
     //
     // This throw is the same signal as PollRegistry::reorg_occurred_during_reg_traversal, and the callers already
     // retry on it: BuildPollTable starts over on a freshly pinned tip, and getpollresults and votedetails report a
     // reorg in progress.
     // A caller that holds cs_main from pinning the tip until its last snapshot (listpolls, the interface methods the
     // GUI calls) cannot see a reorg in between and never gets this throw.
-    if (!pindex_tip->IsInMainChain() || (ref.m_pindex && !ref.m_pindex->IsInMainChain())) {
+    if (!pindex_tip->IsInMainChain()) {
         throw InvalidDuetoReorgFork();
     }
 
-    if (ref.m_pindex) {
+    // The poll's block is on the main chain for every poll the registry holds, unless the poll's record is corrupt: a
+    // reorg that disconnects the block reverts the poll under the same cs_main, and every caller in the node looks the
+    // poll up and takes this snapshot under one hold of cs_main. The snapshot does not throw for such a poll: it
+    // reads the poll as one with no block, as it reads a skeleton reference, and logs it once per reference.
+    const CBlockIndex* pindex_poll = ref.m_pindex;
+
+    if (pindex_poll && !pindex_poll->IsInMainChain()) {
+        if (!ref.m_off_main_chain_logged) {
+            LogPrintf("WARNING: %s: Block %s of poll %s is not on the main chain. Reading the poll as one with no "
+                      "block; start with -clearpollhistory to rebuild the poll registry.",
+                      __func__, pindex_poll->GetBlockHash().ToString(), ref.m_txid.ToString());
+            ref.m_off_main_chain_logged = true;
+        }
+
+        pindex_poll = nullptr;
+    }
+
+    snapshot.m_pindex_start = pindex_poll;
+    snapshot.m_v15 = pindex_poll && IsV15Enabled(pindex_poll->nHeight);
+
+    if (pindex_poll) {
         // The search for the poll's end runs once per poll and stops at the first block past the end; an open poll's
         // resumes after the last block it examined. Everything it found stays valid exactly while that block stays on
         // the main chain (the blocks before it are then unchanged). A reorg that disconnects it, or a reference
@@ -1318,8 +1337,10 @@ PollSnapshot PollRegistry::SnapshotWithoutVotes(const PollReference& ref, const 
     // poll's ends at the pinned tip (m_pindex_end stays nullptr).
     // A finished poll's first block at or past the end is on the tip's chain at or below the tip: it is at or
     // below the first block past the end, which is at or below the tip for a poll with m_v15_end, and for a poll
-    // finished by the tip's time is the tip or a block before it (or the poll's own block, when that is the tip).
-    if (snapshot.m_finished) {
+    // finished by the tip's time is the tip or a block before it (or the poll's own block, when that is the tip). A
+    // poll read with no block has no range, so it keeps nullptr too, not an end its search cached before its block
+    // left the main chain.
+    if (snapshot.m_finished && pindex_poll) {
         snapshot.m_pindex_end = ref.m_at_or_past_end;
     }
 
@@ -2009,8 +2030,8 @@ void PollRegistry::DetectReorg()
     // Note that doing the reorg detection here, in the contract handler, means that we only flag a reorg IF
     // a transaction happened to occur that involves a poll or vote contract in the scope of the reorg, because
     // these handlers are only triggered by those two contract types.
-    // PollRegistry::Snapshot throws the same InvalidDuetoReorgFork when the pinned tip or a poll's block is off the
-    // main chain, and callers retry exactly as they do on this flag.
+    // PollRegistry::Snapshot throws the same InvalidDuetoReorgFork when the pinned tip is off the main chain, and
+    // callers retry exactly as they do on this flag.
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: registry_traversal_in_progress = %d, reorg_occurred_during_reg_traversal = %d, ",
              __func__,
              registry_traversal_in_progress.load(),
