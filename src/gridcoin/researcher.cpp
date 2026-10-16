@@ -737,6 +737,14 @@ bool SignBeaconPayload(BeaconPayload& payload)
 //!
 BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    // Every beacon send passes through here. The RPCs and the renewal job also
+    // check on entry, but the GUI wizard only hides its send button, from a sync
+    // flag the model last refreshed.
+    if (OutOfSyncByAge()) {
+        LogPrintf("WARNING: %s: Not in sync.", __func__);
+        return BeaconError::OUT_OF_SYNC;
+    }
+
     if (wallet->IsLocked()) {
         LogPrintf("WARNING: %s: Wallet locked.", __func__);
         return BeaconError::WALLET_LOCKED;
@@ -1645,8 +1653,15 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force, const bool a
         g_recent_beacons.Remember(*cpid, result);
     }
 
-    if (result.Error() != GRC::BeaconError::NOT_NEEDED) {
-        m_beacon_error = result.Error();
+    // Errors that describe the moment are not kept. The snapshot maps the stored
+    // error to the beacon status, which would otherwise read "Waiting for
+    // sync..." after the node caught up.
+    switch (result.Error()) {
+        case GRC::BeaconError::NOT_NEEDED:
+        case GRC::BeaconError::OUT_OF_SYNC:
+            break;
+        default:
+            m_beacon_error = result.Error();
     }
 
     uiInterface.BeaconChanged();
