@@ -1688,6 +1688,15 @@ static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRe
                 // and with no misbehavior score, by sending one oversized locator.
                 LogPrintf("ProcessMessages(%s, %u bytes) : Exception '%s' caught", strCommand, nMessageSize, e.what());
             }
+            else if (strstr(e.what(), "BIP155 ") || strstr(e.what(), "Address too long"))
+            {
+                // Allow exceptions from malformed addrv2 (BIP155) address
+                // records, thrown by CNetAddr::SetNetFromBIP155Network and
+                // CNetAddr::UnserializeV2Stream. Like the arms above, these are
+                // peer-supplied malformed messages and must not reach
+                // PrintExceptionContinue() and strMiscWarning.
+                LogPrintf("ProcessMessages(%s, %u bytes) : Exception '%s' caught", strCommand, nMessageSize, e.what());
+            }
             else
             {
                 PrintExceptionContinue(&e, "ProcessMessages()");
