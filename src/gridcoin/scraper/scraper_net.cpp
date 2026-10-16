@@ -998,6 +998,11 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 
     if (iter != mapManifest.end())
     {
+        // phash points at the key of the map entry that holds the manifest. When that entry is erased, point it at the
+        // key of the pending-deleted entry instead, or at nothing: a convergence in ConvergedScraperStatsCache can keep
+        // the manifest alive after both entries are gone.
+        const uint256* phashPending = nullptr;
+
         if (!fImmediate)
         {
             auto iter2 = mapPendingDeletedManifest.insert(std::make_pair(nHash, std::make_pair(GetAdjustedTime(),
@@ -1009,14 +1014,16 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
             }
             else
             {
-                // Since phash in the manifest is actually a pointer, we need to change it to point to the key of the
-                // mapPendingDeletedManifest key entry, since the old pointer is now invalid.
-                CScraperManifest_shared_ptr manifest = iter2.first->second.second;
-
-                LOCK(manifest->cs_manifest);
-
-                manifest->phash = &iter2.first->first;
+                phashPending = &iter2.first->first;
             }
+        }
+
+        {
+            CScraperManifest_shared_ptr manifest = iter->second;
+
+            LOCK(manifest->cs_manifest);
+
+            manifest->phash = phashPending;
         }
 
         mapManifest.erase(nHash);
@@ -1040,6 +1047,11 @@ std::map<uint256, std::shared_ptr<CScraperManifest>>::iterator
 CScraperManifest::DeleteManifest(std::map<uint256, std::shared_ptr<CScraperManifest>>::iterator& iter,
                                  const bool& fImmediate) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 {
+    // phash points at the key of the map entry that holds the manifest. When that entry is erased, point it at the key
+    // of the pending-deleted entry instead, or at nothing: a convergence in ConvergedScraperStatsCache can keep the
+    // manifest alive after both entries are gone.
+    const uint256* phashPending = nullptr;
+
     if (!fImmediate)
     {
         auto iter2 = mapPendingDeletedManifest.insert(std::make_pair(iter->first, std::make_pair(GetAdjustedTime(),
@@ -1051,14 +1063,16 @@ CScraperManifest::DeleteManifest(std::map<uint256, std::shared_ptr<CScraperManif
         }
         else
         {
-            // Since phash in the manifest is actually a pointer, we need to change it to point to the key of the
-            // mapPendingDeletedManifest key entry, since the old pointer is now invalid.
-            CScraperManifest_shared_ptr manifest = iter2.first->second.second;
-
-            LOCK(manifest->cs_manifest);
-
-            manifest->phash = &iter2.first->first;
+            phashPending = &iter2.first->first;
         }
+    }
+
+    {
+        CScraperManifest_shared_ptr manifest = iter->second;
+
+        LOCK(manifest->cs_manifest);
+
+        manifest->phash = phashPending;
     }
 
     iter = mapManifest.erase(iter);
@@ -1091,6 +1105,16 @@ unsigned int CScraperManifest::DeletePendingDeletedManifests() EXCLUSIVE_LOCKS_R
         // Delete any entry more than nScraperSleep old.
         if (iter->second.first < nDeleteThresholdTime)
         {
+            // A convergence in ConvergedScraperStatsCache can keep the manifest alive after this entry is erased, so
+            // phash must not be left pointing at the entry's key.
+            {
+                CScraperManifest_shared_ptr manifest = iter->second.second;
+
+                LOCK(manifest->cs_manifest);
+
+                manifest->phash = nullptr;
+            }
+
             iter = mapPendingDeletedManifest.erase(iter);
             ++nDeleted;
         }
