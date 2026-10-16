@@ -587,7 +587,8 @@ BOOST_AUTO_TEST_CASE(cnetaddr_unserialize_v2)
     // of a nonstandard length, and leave the following supported record readable.
     for (uint8_t id : {uint8_t{5}, uint8_t{6}, uint8_t{0xAA}}) {
         for (size_t length : {size_t{0}, size_t{1}, size_t{16}, size_t{32}, size_t{512}}) {
-            s << id << COMPACTSIZE(length);
+            s << id;
+            WriteCompactSize(s, length);
             const std::vector<unsigned char> payload(length, 0xFC);
             s.write(MakeByteSpan(payload));
             Feed(s, "010401020304");

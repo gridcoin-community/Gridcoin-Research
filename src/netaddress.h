@@ -304,7 +304,7 @@ class CNetAddr
                 // Serialize NET_INTERNAL as embedded in IPv6. We need to
                 // serialize such addresses from addrman.
                 s << static_cast<uint8_t>(BIP155Network::IPV6);
-                s << COMPACTSIZE(ADDR_IPV6_SIZE);
+                WriteCompactSize(s, ADDR_IPV6_SIZE);
                 SerializeV1Stream(s);
                 return;
             }
