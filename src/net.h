@@ -755,7 +755,16 @@ private:
     [[maybe_unused]] const uint64_t nSeed0, nSeed1;
     std::atomic<bool> fNetworkActive;
     Options m_options;
-    std::vector<std::thread> m_net_threads;
+
+    //! Held for the whole of Start() and Stop(). Start() runs on its own thread
+    //! (StartNode), so without it a shutdown that begins while Start() is still
+    //! launching the net threads reads m_net_threads as Start() writes it, and a
+    //! Start() that runs after Stop() launches threads nothing joins.
+    Mutex m_start_stop_mutex;
+    //! Set by Stop(). Start() checks this rather than ShutdownInProgress(),
+    //! which it resets.
+    bool m_stopped GUARDED_BY(m_start_stop_mutex){false};
+    std::vector<std::thread> m_net_threads GUARDED_BY(m_start_stop_mutex);
 
     //! The connection list, owned by CConnman (issue #2558). Replaces the former
     //! file-global vNodes/cs_vNodes. RecursiveMutex is REQUIRED, not stylistic:

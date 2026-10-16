@@ -35,9 +35,10 @@ bool ShutdownRequested();
 
 //! Set whether node teardown is in progress. Passed \c true at the top of
 //! Shutdown() (and by the low-disk abort in CheckDiskSpace); reset to \c false
-//! by CConnman::Start(), which re-arms the flag for an in-process restart of
-//! the connection manager (e.g. the blockchain-reset path). Defaults to \c true
-//! so the common "begin teardown" call sites read cleanly.
+//! by CConnman::Start() as it starts the net threads. Start() runs once per
+//! CConnman and is refused once that CConnman's Stop() has begun, and Stop()
+//! sets the flag again (Interrupt()) before it joins the threads. Defaults to
+//! \c true so the common "begin teardown" call sites read cleanly.
 void SetShutdownInProgress(bool in_progress = true);
 
 //! Whether node teardown is in progress. Worker threads use this as their
