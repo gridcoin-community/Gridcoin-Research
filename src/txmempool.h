@@ -33,10 +33,11 @@ enum class UnbroadcastReason : uint8_t {
 
     //! Peers HAVE seen it -- it was in a block, or in their pools, and a reorg
     //! took it out of them. It still wants announcing, but cancelling it here
-    //! would not cancel anything, so it must not open the cancel gate. No
-    //! getdata will arrive to clear it either, because a peer that already has
-    //! the transaction never asks; the entry lives until the transaction
-    //! confirms or leaves the pool, which eraseIndexes handles.
+    //! would not cancel anything, so it must not open the cancel gate. A peer's
+    //! getdata does not clear it: a peer that still has the transaction never
+    //! asks, and one that does ask does not undo what the reorg showed. The
+    //! entry lives until the transaction confirms or leaves the pool, which
+    //! eraseIndexes handles.
     Reannounce,
 };
 
@@ -290,6 +291,19 @@ public:
     //! \brief Drop a transaction from the unbroadcast set (it propagated, or left
     //! the pool). Safe to call for a hash that is not present.
     void RemoveUnbroadcast(const uint256& hash) { LOCK(cs); m_unbroadcast.erase(hash); }
+
+    //! \brief A peer fetched \p hash: a NeverSent entry has been sent, so it
+    //! goes. A Reannounce entry stays until the transaction leaves the pool (see
+    //! UnbroadcastReason), so that the cancel gate and the beacon retirement keep
+    //! treating it as one peers had in a block. Safe for a hash not present.
+    void ClearUnbroadcastOnFetch(const uint256& hash)
+    {
+        LOCK(cs);
+        const auto it = m_unbroadcast.find(hash);
+        if (it != m_unbroadcast.end() && it->second == UnbroadcastReason::NeverSent) {
+            m_unbroadcast.erase(it);
+        }
+    }
 
     //! \brief Snapshot of the transactions still wanting announcement, either
     //! reason: the resend announces both kinds.

@@ -1064,7 +1064,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 // -- freshly relayed txs live in mapRelay for ~15 min, so the
                 // common case is served from there, not from the mempool branch.
                 if (pushed && inv.type == MSG_TX) {
-                    mempool.RemoveUnbroadcast(inv.hash);
+                    mempool.ClearUnbroadcastOnFetch(inv.hash);
                 }
                 if (!pushed && inv.type == MSG_TX) {
                     CTransaction tx;
@@ -1075,7 +1075,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         pfrom->PushMessage(NetMsgType::TX, ss);
                         // A peer asked for this tx, so it is propagating: stop
                         // tracking it for initial broadcast.
-                        mempool.RemoveUnbroadcast(inv.hash);
+                        mempool.ClearUnbroadcastOnFetch(inv.hash);
                     }
                 }
                 else if(!pushed && inv.type == MSG_PART) {
