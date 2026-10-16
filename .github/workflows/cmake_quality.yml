@@ -24,8 +24,14 @@ env:
 
 jobs:
   # ----------------------------------------------------------------------
-  # JOB 1: Sanitizers (ASan + UBSan + LSan)
+  # JOB 1: Sanitizers (ASan + LSan + UBSan)
   # Replaces: native_asan
+  #
+  # Every test binary the tree has, built with what Bitcoin Core's ASan job
+  # builds with: test_gridcoin, test_gridcoin-qt (ENABLE_GUI) and
+  # libmultiprocess's mptest plus the IPC unit tests (ENABLE_MULTIPROCESS), and
+  # the functional suite against the sanitized daemon. Before, GUI and
+  # multiprocess were both off here, so no Qt or IPC code ran under a sanitizer.
   # ----------------------------------------------------------------------
   sanitizers:
     name: Sanitizers (Clang)
@@ -38,7 +44,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang cmake build-essential libboost-all-dev \
             libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
-            qt6-base-dev qt6-tools-dev qt6-l10n-tools libcurl4-openssl-dev \
+            capnproto libcapnp-dev \
+            qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
+            libqt6svg6-dev libxkbcommon-dev libcurl4-openssl-dev \
             libzip-dev zipcmp zipmerge ziptool ccache
 
       - name: Restore Ccache
@@ -60,13 +68,32 @@ jobs:
 
       - name: Configure (Sanitizers)
         run: |
-          # -fsanitize=address includes LSan (LeakSanitizer)
-          # -fsanitize=undefined catches UB (integer overflow, null deref, etc)
+          # The sanitizers Bitcoin Core's ASan job builds with:
+          #   * address, which includes LeakSanitizer;
+          #   * undefined, for undefined behaviour;
+          #   * integer, for unsigned wrap-around and implicit conversions that
+          #     change a value. These are defined behaviour, so the places that
+          #     mean them are listed in test/sanitizer_suppressions/ubsan;
+          #   * float-divide-by-zero, which undefined leaves out.
+          # They apply to the C code (secp256k1, md5) as well as the C++.
           #
-          # ENABLE_DEBUG_LOCKORDER turns on two runtime lock checks that every
-          # other job compiles away, so this is the only place they run:
+          # -ftrivial-auto-var-init=pattern fills every uninitialised local
+          # with a fixed garbage pattern, so code that reads one fails the same
+          # way on every run instead of depending on what was on the stack.
           #
-          #   * AssertLockHeld / AssertLockNotHeld. Without the flag
+          # ARENA_DEBUG adds the locked-pool arena checks allocator_tests
+          # exercises.
+          #
+          # FUNCTIONAL_TEST_ATTEMPTS=1: no retries. A node a sanitizer halts can
+          # fail its test with one of the timeouts test_runner.py retries, and a
+          # retry that passes would hide the report.
+          #
+          # The Debug build type defines DEBUG_LOCKORDER (and
+          # ABORT_ON_FAILED_ASSUME); ENABLE_DEBUG_LOCKORDER is spelled out
+          # because this is the only job whose tests run with it. It turns on
+          # two runtime lock checks that every other job compiles away:
+          #
+          #   * AssertLockHeld / AssertLockNotHeld. Without it
           #     AssertLockHeldInternal is an empty inline (src/sync.h), so a
           #     function annotated EXCLUSIVE_LOCKS_REQUIRED can be called with
           #     no lock held and nothing notices. These abort, so they fail the
@@ -77,15 +104,23 @@ jobs:
           #
           # Both are runtime checks, which is why they live here and not on the
           # Thread Safety job: that one is compile-only and would gain nothing.
+          # They stay out of the ThreadSanitizer job: the checker serialises
+          # every lock acquisition through one mutex, which orders them and
+          # would hide the races that job is there to find.
+          SAN="-fsanitize=address,float-divide-by-zero,integer,undefined -fno-omit-frame-pointer -ftrivial-auto-var-init=pattern"
           cmake -B build_asan \
-            -DENABLE_GUI=OFF \
+            -DENABLE_GUI=ON \
             -DENABLE_TESTS=ON \
+            -DENABLE_MULTIPROCESS=ON \
             -DENABLE_DEBUG_LOCKORDER=ON \
             -DUSE_QT6=ON \
             -DUSE_ASM=OFF \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DCMAKE_C_FLAGS="$SAN" \
+            -DCMAKE_CXX_FLAGS="$SAN -DARENA_DEBUG" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,float-divide-by-zero,integer,undefined" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,float-divide-by-zero,integer,undefined" \
+            -DFUNCTIONAL_TEST_ATTEMPTS=1 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -95,27 +130,28 @@ jobs:
 
       - name: Test (With Sanitizers)
         env:
-          # The runtime options Bitcoin Core's test/with_sanitizer_env.py.in
-          # sets, except detect_leaks. detect_stack_use_after_return is the
-          # default on Linux since LLVM 15; it is set here so the job does not
-          # depend on that. malloc_context_size stays at its default: a
-          # use-after-free report is only useful with the stacks that
-          # allocated and freed the memory.
-          #
-          # detect_leaks=0 until the leaks the unit and functional suites
-          # report at exit are fixed. The job's earlier malloc_context_size=0
-          # kept LeakSanitizer from reporting anything, so it has not been
-          # checking for leaks; this says so instead of hiding it.
-          LSAN_OPTIONS: suppressions=${{ github.workspace }}/test/sanitizer_suppressions/lsan:print_suppressions=0
-          UBSAN_OPTIONS: suppressions=${{ github.workspace }}/test/sanitizer_suppressions/ubsan:print_stacktrace=1:halt_on_error=1:report_error_type=1
-          ASAN_OPTIONS: detect_leaks=0:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1
+          # test_gridcoin-qt defaults to this itself; set here so nothing in
+          # the run depends on a display.
+          QT_QPA_PLATFORM: offscreen
         run: |
-          # We exclude the Qt tests here if they trigger false positives in GUI libs
+          # with_sanitizer_env.py supplies the runtime options and suppression
+          # files, the same ones a local run gets (doc/developer-notes.md), so
+          # CI and a developer's machine cannot drift apart. They are Bitcoin
+          # Core's: LeakSanitizer on, detect_stack_use_after_return,
+          # strict_init_order, and every UBSan report fatal.
+          #
           # -V so the suite's own output is captured even for tests that pass:
           # the lock-order checker reports through the log, and
           # --output-on-failure alone shows nothing for a passing test.
+          #
+          # A 512 KiB stack, as in Core's sanitizer jobs. glibc also takes the
+          # default stack of every thread it creates from this limit, so code
+          # that needs more stack than it asks for fails here rather than on
+          # a platform with small default stacks (musl's is 128 KiB).
           set -o pipefail
-          ctest --test-dir build_asan -V 2>&1 | tee ctest_asan.log
+          ulimit -s 512
+          python3 build_asan/test/with_sanitizer_env.py \
+            ctest --test-dir build_asan -V 2>&1 | tee ctest_asan.log
 
       - name: Check for lock-order inversions
         run: |
@@ -307,8 +343,9 @@ jobs:
   # GUARDED_BY / EXCLUSIVE_LOCKS_REQUIRED annotations (issue #2869); gcc
   # ignores them entirely. WERROR_THREAD_SAFETY=ON promotes a stale or
   # missing annotation to a build error. GUI is built here (ENABLE_GUI=ON)
-  # because the Sanitizers job builds with ENABLE_GUI=OFF and would not
-  # cover the Qt wallet code.
+  # because the analysis is per translation unit: the Qt wallet code has to be
+  # compiled in this job, with WERROR_THREAD_SAFETY, for an annotation failure
+  # in it to fail the build.
   #
   # ENABLE_MULTIPROCESS=ON for the same reason: without it the IPC transport,
   # the serving interfaces and the generated capnp proxies compile in no CI job
