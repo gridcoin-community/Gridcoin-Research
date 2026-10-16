@@ -482,4 +482,66 @@ BOOST_AUTO_TEST_CASE(unserializecheck_admits_projects_at_the_cap)
     BOOST_CHECK_THROW((void)manifest->UnserializeCheck(ss, banscore), std::ios_base::failure);
 }
 
+//!
+//! phash points at the key of the map entry that holds the manifest. A manifest can outlive its entries (a convergence
+//! in ConvergedScraperStatsCache can hold it), so erasing an entry must never leave phash pointing at the erased key.
+//! In these cases the test's own reference stands in for the convergence's.
+//!
+BOOST_AUTO_TEST_CASE(an_immediate_delete_clears_phash)
+{
+    const uint256 hash = uint256S("0303030303030303030303030303030303030303030303030303030303030303");
+    const auto manifest = std::make_shared<CScraperManifest>();
+
+    LOCK(CScraperManifest::cs_mapManifest);
+
+    BOOST_REQUIRE(CScraperManifest::mapManifest.count(hash) == 0);
+    const auto entry = CScraperManifest::mapManifest.emplace(hash, manifest).first;
+    WITH_LOCK(manifest->cs_manifest, manifest->phash = &entry->first);
+
+    BOOST_CHECK(CScraperManifest::DeleteManifest(hash, true));
+
+    BOOST_CHECK(CScraperManifest::mapManifest.count(hash) == 0);
+    BOOST_CHECK(WITH_LOCK(manifest->cs_manifest, return manifest->phash) == nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(a_pending_delete_points_phash_at_the_pending_entry)
+{
+    const uint256 hash = uint256S("0404040404040404040404040404040404040404040404040404040404040404");
+    const auto manifest = std::make_shared<CScraperManifest>();
+
+    LOCK(CScraperManifest::cs_mapManifest);
+
+    BOOST_REQUIRE(CScraperManifest::mapManifest.count(hash) == 0);
+    BOOST_REQUIRE(CScraperManifest::mapPendingDeletedManifest.count(hash) == 0);
+    const auto entry = CScraperManifest::mapManifest.emplace(hash, manifest).first;
+    WITH_LOCK(manifest->cs_manifest, manifest->phash = &entry->first);
+
+    BOOST_CHECK(CScraperManifest::DeleteManifest(hash));
+
+    const auto pending = CScraperManifest::mapPendingDeletedManifest.find(hash);
+    BOOST_REQUIRE(pending != CScraperManifest::mapPendingDeletedManifest.end());
+    BOOST_CHECK(WITH_LOCK(manifest->cs_manifest, return manifest->phash) == &pending->first);
+
+    CScraperManifest::mapPendingDeletedManifest.erase(pending);
+}
+
+BOOST_AUTO_TEST_CASE(purging_a_pending_entry_clears_phash)
+{
+    const uint256 hash = uint256S("0505050505050505050505050505050505050505050505050505050505050505");
+    const auto manifest = std::make_shared<CScraperManifest>();
+
+    LOCK(CScraperManifest::cs_mapManifest);
+
+    // An entry stamped at time zero is older than any purge threshold.
+    BOOST_REQUIRE(CScraperManifest::mapPendingDeletedManifest.count(hash) == 0);
+    const auto entry =
+        CScraperManifest::mapPendingDeletedManifest.emplace(hash, std::make_pair(int64_t {0}, manifest)).first;
+    WITH_LOCK(manifest->cs_manifest, manifest->phash = &entry->first);
+
+    CScraperManifest::DeletePendingDeletedManifests();
+
+    BOOST_CHECK(CScraperManifest::mapPendingDeletedManifest.count(hash) == 0);
+    BOOST_CHECK(WITH_LOCK(manifest->cs_manifest, return manifest->phash) == nullptr);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

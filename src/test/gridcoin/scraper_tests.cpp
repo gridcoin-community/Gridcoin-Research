@@ -2,16 +2,26 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "gridcoin/project.h"
 #include "gridcoin/scraper/scraper.h"
+#include "gridcoin/scraper/scraper_net.h"
 #include "test/gridcoin/rsa_test_vectors.h"
 #include <util/strencodings.h>
 #include <util/string.h>
+#include <util/system.h>
 
 #include <boost/test/unit_test.hpp>
 
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
+
+// Defined in scraper.cpp, which declares them there rather than in a header.
+extern fs::path pathDataDir;
+extern bool ScraperConstructConvergedManifestByProject(const GRC::WhitelistSnapshot& projectWhitelist,
+                                                       mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper,
+                                                       ConvergedManifest& StructConvergedManifest);
 
 namespace {
 
@@ -57,6 +67,56 @@ std::vector<uint8_t> ValidSignature()
 {
     return ParseHex(rsa_test_vectors::g_test_signature_hex);
 }
+
+GRC::WhitelistSnapshot OneProjectWhitelist()
+{
+    return GRC::WhitelistSnapshot(std::make_shared<GRC::ProjectList>(GRC::ProjectList {
+        GRC::Project("project_a", PROJECT_A, 1234567),
+    }));
+}
+
+//! Points the scraper logger at the suite's data directory. The scraper threads set pathDataDir, and the unit tests
+//! do not start them, so without this the logger would create scraper.log in the working directory the first time a
+//! case logs a warning.
+class ScraperLogInDataDir
+{
+public:
+    ScraperLogInDataDir() : m_saved(pathDataDir)
+    {
+        if (pathDataDir.empty()) pathDataDir = GetDataDir();
+    }
+
+    ~ScraperLogInDataDir()
+    {
+        pathDataDir = m_saved;
+    }
+
+private:
+    const fs::path m_saved;
+};
+
+//! Sets CONVERGENCE_BY_PROJECT_RATIO for the life of the object.
+class ConvergenceByProjectRatio
+{
+public:
+    explicit ConvergenceByProjectRatio(double ratio)
+    {
+        LOCK(cs_ScraperGlobals);
+
+        m_saved = CONVERGENCE_BY_PROJECT_RATIO;
+        CONVERGENCE_BY_PROJECT_RATIO = ratio;
+    }
+
+    ~ConvergenceByProjectRatio()
+    {
+        LOCK(cs_ScraperGlobals);
+
+        CONVERGENCE_BY_PROJECT_RATIO = m_saved;
+    }
+
+private:
+    double m_saved{0.0};
+};
 
 } // anonymous namespace
 
@@ -184,6 +244,45 @@ BOOST_AUTO_TEST_CASE(it_keeps_distinct_project_keys)
 
     BOOST_CHECK(RemoveDuplicateProjectPublicKeys(keys).empty());
     BOOST_CHECK_EQUAL(keys.size(), 2U);
+}
+
+BOOST_AUTO_TEST_CASE(convergence_by_project_skips_a_binned_manifest_that_is_gone)
+{
+    ScraperLogInDataDir log_in_data_dir;
+
+    // A manifest binned for a scraper, then deleted by another thread before the convergence looks it up.
+    const uint256 gone = uint256S("0101010101010101010101010101010101010101010101010101010101010101");
+    {
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        BOOST_REQUIRE(CScraperManifest::mapManifest.count(gone) == 0);
+    }
+
+    mmCSManifestsBinnedByScraper binned;
+    binned["scraper_a"].insert(std::make_pair(int64_t {1234567}, std::make_pair(gone, uint256S("02"))));
+
+    ConvergedManifest converged;
+
+    BOOST_CHECK(!ScraperConstructConvergedManifestByProject(OneProjectWhitelist(), binned, converged));
+}
+
+BOOST_AUTO_TEST_CASE(convergence_by_project_fails_when_the_beacon_list_manifest_is_missing)
+{
+    ScraperLogInDataDir log_in_data_dir;
+
+    // At a ratio of zero, a pass in which no project converges still meets it, and the BeaconList is then looked up
+    // by the null hash, which no manifest has.
+    ConvergenceByProjectRatio ratio(0.0);
+    {
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        BOOST_REQUIRE(CScraperManifest::mapManifest.count(uint256()) == 0);
+    }
+
+    mmCSManifestsBinnedByScraper binned;
+    ConvergedManifest converged;
+
+    BOOST_CHECK(!ScraperConstructConvergedManifestByProject(OneProjectWhitelist(), binned, converged));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
