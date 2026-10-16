@@ -274,6 +274,81 @@ jobs:
             ctest --test-dir build_tsan --output-on-failure 2>&1 | tee ctest_tsan.log
 
   # ----------------------------------------------------------------------
+  # JOB 1c: Valgrind (memcheck)
+  # Reads of uninitialised memory, which neither ASan nor TSan reports.
+  # Bitcoin Core covers them with MSan and Valgrind jobs; MSan needs every
+  # dependency, the C++ standard library included, built with it, so this is
+  # the Valgrind half: an uninstrumented build with the unit suite and the
+  # functional suite (--valgrind, which runs each node under memcheck and
+  # stops it at its first error) run under it.
+  #
+  # Clang, as in Core's job; Core's suppression file notes that a GCC build
+  # passes under Valgrind only at -O1 (https://bugs.kde.org/show_bug.cgi?id=472329).
+  # contrib/valgrind.supp holds the dependency warnings, Berkeley DB's among
+  # them.
+  # ----------------------------------------------------------------------
+  valgrind:
+    name: Valgrind (memcheck)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install System Deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake build-essential libboost-all-dev \
+            libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
+            libcurl4-openssl-dev libzip-dev zipcmp zipmerge ziptool ccache \
+            valgrind
+
+      - name: Restore Ccache
+        uses: actions/cache@v5
+        with:
+          path: /home/runner/.ccache
+          key: ccache-valgrind-${{ github.sha }}
+          restore-keys: ccache-valgrind-
+
+      - name: Setup Concurrency
+        run: |
+          if [ -z "$CMAKE_BUILD_PARALLEL_LEVEL" ]; then
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "Concurrency: Auto-detected $(nproc) cores."
+          else
+            echo "Concurrency: Limit set externally to $CMAKE_BUILD_PARALLEL_LEVEL."
+          fi
+
+      - name: Configure
+        run: |
+          cmake -B build_valgrind \
+            -DENABLE_GUI=OFF \
+            -DENABLE_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build build_valgrind
+
+      - name: Unit suite under Valgrind
+        run: |
+          valgrind --suppressions=contrib/valgrind.supp --gen-suppressions=all \
+            --error-exitcode=1 --quiet \
+            build_valgrind/src/test/test_gridcoin
+
+      - name: Functional suite under Valgrind
+        env:
+          GRIDCOIND: ${{ github.workspace }}/build_valgrind/bin/gridcoinresearchd
+          GRIDCOINCLI: ${{ github.workspace }}/build_valgrind/bin/gridcoinresearchd
+        run: |
+          # --timeout-factor because a node under memcheck runs several times
+          # slower; --valgrind makes each node exit on its first error, which
+          # fails the test that started it.
+          python3 test/functional/test_runner.py \
+            --configfile=${{ github.workspace }}/build_valgrind/test/config.ini \
+            --ci --quiet --combinedlogslen=4000 \
+            --valgrind --timeout-factor=10
+
+  # ----------------------------------------------------------------------
   # JOB 2: Linter
   # Replaces: lint
   # Ported from: 04_install.sh, 05_before_script.sh, 06_script.sh

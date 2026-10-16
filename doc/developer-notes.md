@@ -363,6 +363,19 @@ $ valgrind --suppressions=contrib/valgrind.supp --leak-check=full \
 $ valgrind -v --leak-check=full build/bin/gridcoinresearchd -printtoconsole
 ```
 
+The Valgrind CI job builds with Clang, `RelWithDebInfo`, and runs the unit
+suite as in the first line, then the functional suite with `--valgrind`, which
+runs every node under memcheck and stops it at its first error:
+
+```shell
+$ GRIDCOIND=$PWD/build/bin/gridcoinresearchd GRIDCOINCLI=$PWD/build/bin/gridcoinresearchd \
+      test/functional/test_runner.py --configfile=$PWD/build/test/config.ini \
+      --valgrind --timeout-factor=10
+```
+
+Valgrind reports what ASan does not: reads of uninitialised memory. Expect the
+unit suite to take about nine times as long as it does natively.
+
 ### Compiling for test coverage
 
 Dedicated lcov/coverage support is not yet integrated into the CMake build
