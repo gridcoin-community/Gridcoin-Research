@@ -228,6 +228,38 @@ BOOST_AUTO_TEST_CASE(indexes_populate_on_add_and_tear_down_on_remove)
     BOOST_CHECK_EQUAL(pool.size(), 0UL);
 }
 
+BOOST_AUTO_TEST_CASE(a_cpid_keeps_its_beacon_index_entry_until_its_last_beacon_leaves)
+{
+    // Two beacons for one CPID can be pooled together: acceptance does not refuse
+    // the second. The index must keep the CPID until both have gone, or
+    // HasBeaconForCpid() lets the wallet send another advertisement while one is
+    // still pooled.
+    const GRC::Cpid cpid(InsecureRandBytes(16));
+
+    CKey first_key;
+    first_key.MakeNewKey(false);
+    CKey second_key;
+    second_key.MakeNewKey(false);
+
+    const CTransaction first = MakeTx(
+        {GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD, cpid, first_key.GetPubKey())});
+    const CTransaction second = MakeTx(
+        {GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD, cpid, second_key.GetPubKey())});
+
+    CTxMemPool pool;
+    pool.addUnchecked(first.GetHash(), MakeEntry(first));
+    pool.addUnchecked(second.GetHash(), MakeEntry(second));
+
+    BOOST_CHECK(pool.HasBeaconForCpid(cpid));
+
+    pool.remove(first);
+    BOOST_CHECK(pool.HasBeaconForCpid(cpid));
+
+    pool.remove(second);
+    BOOST_CHECK(!pool.HasBeaconForCpid(cpid));
+    BOOST_CHECK(pool.m_beacon_by_cpid.empty());
+}
+
 BOOST_AUTO_TEST_CASE(hasmrcforcpid_reports_collision_hash)
 {
     const GRC::Cpid cpid_a(InsecureRandBytes(16));

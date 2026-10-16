@@ -178,17 +178,14 @@ public:
     //! AcceptToMemoryPool DoS-rejects a second MRC for a CPID already in the pool,
     //! so mapTx never holds two same-CPID MRCs.
     std::map<GRC::Cpid, uint256> m_mrc_by_cpid;
-    //! Beacon advertisement by CPID. EXISTENCE-ONLY index (queried via
-    //! HasBeaconForCpid()'s count(); the stored hash is never read). Unlike MRCs,
-    //! duplicate PENDING beacons for one CPID are NOT rejected at acceptance (only
-    //! a wallet-side viability check guards locally), so two same-CPID beacons can
-    //! coexist in mapTx; this map then holds only the last (insert_or_assign) and
-    //! erase(cpid) drops the entry while a sibling may remain. That desync is
-    //! harmless here -- the worst case is HasBeaconForCpid() letting the wallet-side
-    //! guard pass a duplicate that the protocol already permits. Do NOT add a
-    //! consumer that reads the stored hash or treats this as 1:1 without switching
-    //! to a multimap.
-    std::map<GRC::Cpid, uint256> m_beacon_by_cpid;
+    //! Beacon contract transactions in the pool, counted by CPID. Unlike MRCs,
+    //! two beacons for one CPID are NOT rejected at acceptance: only the wallet's
+    //! own viability check refuses a second one, so a second can be pooled while
+    //! the first is still there. So this is a count, and a CPID leaves the map
+    //! only when its last beacon leaves the pool. HasBeaconForCpid() is that viability check, and a
+    //! CPID dropped while one of its beacons remained would let the wallet send a
+    //! second advertisement.
+    std::map<GRC::Cpid, size_t> m_beacon_by_cpid;
     size_t m_mandatory_sidestake_count{0};         //!< Mandatory-sidestake txs in the pool.
     //! MESSAGE-contract txs in the pool. Existence counter only, so the
     //! disable-height sweep in ConnectBlock costs one integer compare per block
