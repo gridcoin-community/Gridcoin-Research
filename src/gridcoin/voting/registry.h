@@ -119,7 +119,15 @@ public:
     int64_t Time() const;
 
     //!
-    //! \brief Get the elapsed time since poll creation.
+    //! \brief Get the poll's start.
+    //!
+    //! \return The time of the poll's block when that block is at or above the v15 height; otherwise, and for a
+    //! reference with no block, the time of the poll transaction (#3470).
+    //!
+    int64_t StartTime() const;
+
+    //!
+    //! \brief Get the elapsed time since the poll's start (StartTime()).
     //!
     //! \param now Timestamp to consider as the current time.
     //!
@@ -137,7 +145,7 @@ public:
     bool Expired(const int64_t now) const;
 
     //!
-    //! \brief Get the time when the poll expires.
+    //! \brief Get the time when the poll expires: its start (StartTime()) plus its duration.
     //!
     //! \return Expiration time as the number of seconds since the UNIX epoch.
     //!
@@ -232,7 +240,9 @@ private:
     //! resumes after the last block examined. The cache holds while the last block examined is on the main chain (its
     //! ancestors, and so everything found, are then unchanged), checked on every read, so a reorg that disconnects it
     //! invalidates the cache at the next read. Block index entries are never freed (GRC::BlockIndexPool), so the
-    //! pointers stay valid after a block leaves the main chain. Guarded by cs_poll_registry.
+    //! pointers stay valid after a block leaves the main chain. Guarded by cs_poll_registry. The poll's end needs no
+    //! place in that check: it is fixed by the poll's block and the v15 height, and neither changes in a running node
+    //! (a reorg that moves the poll re-creates the reference).
     mutable const CBlockIndex* m_end_search_from;
     mutable const CBlockIndex* m_end_searched;
     mutable const CBlockIndex* m_at_or_past_end;
@@ -257,7 +267,7 @@ struct PollSnapshot
     PollType m_type = PollType::UNKNOWN;                    //!< Type of the poll.
     PollWeightType m_weight_type = PollWeightType::UNKNOWN; //!< Weight type of the poll.
     std::string m_title;                                    //!< Title of the poll, for display and logs.
-    int64_t m_timestamp = 0;                                //!< Time of the poll transaction.
+    int64_t m_start_time = 0;                               //!< The poll's start (PollReference::StartTime()).
     int64_t m_end_time = 0;                                 //!< The poll's end (PollReference::Expiration()).
     std::vector<uint256> m_votes;                           //!< Linked votes, in connection order.
     const CBlockIndex* m_pindex_tip = nullptr;              //!< The pinned tip the snapshot was taken on.
@@ -267,9 +277,14 @@ struct PollSnapshot
     //! First block after the poll's block, on the chain that ends at the pinned tip, whose time exceeds the end;
     //! nullptr while that chain has none. The block before it is the poll's closing block.
     const CBlockIndex* m_pindex_past_end = nullptr;
-    //! Last block of the active vote weight range, or nullptr while the poll is open (the range then ends at the
-    //! pinned tip).
+    //! Last block of the active vote weight range: the closing block for a poll with m_v15_end, the first block at or
+    //! past the end for another finished poll, and nullptr while the poll is open (the range then ends at the pinned
+    //! tip).
     const CBlockIndex* m_pindex_end = nullptr;
+    //! The block that bounds the tally by blocks: the closing block (the block before m_pindex_past_end) for
+    //! a poll with m_v15_end, the pinned tip for an open poll whose block is at or above the v15 height, and nullptr
+    //! for every other poll, whose tally keeps the time rules of #3470.
+    const CBlockIndex* m_pindex_bound = nullptr;
     bool m_v15 = false;                                     //!< The poll's block is at or above the v15 height.
     //! The poll's end follows the v15 rules: its first block past the end is at or above the v15 height. True for
     //! every v15 poll that has closed, and for a poll whose block is below the height but which closes at or above it.
@@ -667,6 +682,14 @@ private:
     //! Set while TryByTxidWithAddHistoricalPollAndVotes registers a pre-V11 poll in memory only, the one path that
     //! passes the V11 floor (until the legacy store replaces it).
     bool m_registering_legacy_poll GUARDED_BY(cs_poll_registry);
+
+    //!
+    //! \brief Advance \p ref's cached search for its end on the main chain to \p pindex_bound, starting it
+    //! again from the poll's block when the cache no longer holds. The poll has a block, and \p pindex_bound is on the
+    //! main chain.
+    //!
+    void AdvanceEndSearch(const PollReference& ref, const CBlockIndex* pindex_bound) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
 
     //!
     //! \brief Everything Snapshot takes except the vote list.

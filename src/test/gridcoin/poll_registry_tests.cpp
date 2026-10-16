@@ -1971,6 +1971,89 @@ BOOST_AUTO_TEST_CASE(an_open_polls_search_for_its_end_resumes_where_it_stopped)
     BOOST_CHECK(snapshot.m_pindex_past_end == nullptr);
 }
 
+//!
+//! From v15 a poll starts at its block: a tip past the end counted from the poll's transaction, but not
+//! from its block, leaves the poll open, and the tally reads the block's time as the poll's start.
+//!
+BOOST_AUTO_TEST_CASE(a_v15_poll_starts_at_its_block)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 10 * DAY;
+    const int64_t block_time = t0 + 600;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, block_time, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip between = LinkBlock(polled.m_pindex, t0 + 7 * DAY + 60, GRC::Claim(), {}, bits);
+    const TxIndexScope indexed(poll.tx, polled.m_tx_positions[0]);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    {
+        grc_test::V15HeightGuard v15(0);
+
+        const GRC::PollSnapshot snapshot = TakeSnapshot(poll.tx.GetHash(), between.m_pindex);
+        BOOST_CHECK_EQUAL(snapshot.m_start_time, block_time);
+        BOOST_CHECK_EQUAL(snapshot.m_end_time, block_time + 7 * DAY);
+        BOOST_CHECK(!snapshot.m_finished);
+
+        const GRC::PollResultOption result = GRC::PollResult::BuildFor(snapshot);
+        BOOST_REQUIRE(result);
+        BOOST_CHECK_EQUAL(result->m_poll.m_timestamp, block_time);
+    }
+}
+
+//!
+//! A poll that closes by block (its first block past the end at or above the v15 height) ends its active vote weight
+//! range at its closing block, the block before its first block past the end, and its tally is bounded there; an
+//! open v15 poll's tally is bounded at the pinned tip. A poll that straddles the height closes the same
+//! way but has no bound while it is open.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_that_closes_by_block_ends_at_its_closing_block)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 10 * DAY;
+    const int64_t end = t0 + 7 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip at_end = LinkBlock(polled.m_pindex, end, GRC::Claim(), {}, bits);
+    const LinkedTip closing = LinkBlock(at_end.m_pindex, end - 10, GRC::Claim(), {}, bits);
+    const LinkedTip past_end = LinkBlock(closing.m_pindex, end + 60, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    {
+        grc_test::V15HeightGuard v15(0);
+
+        const GRC::PollSnapshot finished = TakeSnapshot(poll.tx.GetHash(), past_end.m_pindex);
+        BOOST_REQUIRE(finished.m_v15_end);
+        BOOST_CHECK(finished.m_pindex_end == closing.m_pindex);
+        BOOST_CHECK(finished.m_pindex_bound == closing.m_pindex);
+
+        const GRC::PollSnapshot open = TakeSnapshot(poll.tx.GetHash(), closing.m_pindex);
+        BOOST_REQUIRE(!open.m_finished);
+        BOOST_CHECK(open.m_pindex_bound == closing.m_pindex);
+    }
+
+    {
+        grc_test::V15HeightGuard v15(past_end.m_pindex->nHeight);
+
+        const GRC::PollSnapshot finished = TakeSnapshot(poll.tx.GetHash(), past_end.m_pindex);
+        BOOST_REQUIRE(finished.m_v15_end);
+        BOOST_REQUIRE(!finished.m_v15);
+        BOOST_CHECK(finished.m_pindex_end == closing.m_pindex);
+        BOOST_CHECK(finished.m_pindex_bound == closing.m_pindex);
+
+        const GRC::PollSnapshot open = TakeSnapshot(poll.tx.GetHash(), closing.m_pindex);
+        BOOST_REQUIRE(!open.m_finished);
+        BOOST_CHECK(open.m_pindex_bound == nullptr);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 #if defined(__clang__)

@@ -2026,9 +2026,13 @@ PollResultOption PollResult::BuildFor(const PollSnapshot& snapshot)
         return std::nullopt;
     }
 
-    // Neither the timestamp nor the magnitude weight factor is serialized. The factor is resolved from the poll's
-    // block and transaction time, as PollReference::GetMagnitudeWeightFactor resolves it, from the snapshot's copies.
-    poll->m_magnitude_weight_factor = Poll::ResolveMagnitudeWeightFactor(snapshot.m_pindex_start, snapshot.m_timestamp);
+    // Neither the timestamp nor the magnitude weight factor is serialized. The copy takes the poll's start from the
+    // snapshot, which from v15 is its block's time; the tally's time rules and the displays read it. The
+    // factor is resolved from the poll's block and start, as PollReference::GetMagnitudeWeightFactor resolves it, from
+    // the snapshot's copies.
+    poll->m_timestamp = snapshot.m_start_time;
+    poll->m_magnitude_weight_factor =
+        Poll::ResolveMagnitudeWeightFactor(snapshot.m_pindex_start, snapshot.m_start_time);
 
     PollResult result(std::move(*poll));
     const CBlockIndex* const pindex_tip = snapshot.m_pindex_tip;
@@ -2090,9 +2094,9 @@ PollResultOption PollResult::BuildFor(const PollSnapshot& snapshot)
 
     counter.CountVotes(result, snapshot.m_votes);
 
-    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: snapshot.m_timestamp = %" PRId64 " poll.m_magnitude_weight_factor = %s",
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: snapshot.m_start_time = %" PRId64 " poll.m_magnitude_weight_factor = %s",
              __func__,
-             snapshot.m_timestamp,
+             snapshot.m_start_time,
              result.m_poll.m_magnitude_weight_factor.ToString());
 
     if (auto active_vote_weight = ActiveVoteWeight(snapshot, result)) {

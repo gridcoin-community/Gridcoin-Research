@@ -3,6 +3,7 @@
 #include <mutex>
 #include <optional>
 #include <stdexcept>
+#include <tuple>
 
 #include "init.h"
 #include "gridcoin/contract/contract.h"
@@ -693,7 +694,7 @@ UniValue listpolls(const UniValue& params)
     // so the RPCs agree. cs_main is taken before cs_poll_registry and both are held while the polls are judged,
     // so no reorg lands in between (the snapshot's off-main-chain throw cannot fire here). The polls are read from
     // disk after the locks are released.
-    std::vector<std::pair<uint256, uint64_t>> wanted; // Poll txid and vote count.
+    std::vector<std::tuple<uint256, uint64_t, int64_t>> wanted; // Poll txid, vote count and start.
     {
         LOCK2(cs_main, PollRegistry::cs_poll_registry);
 
@@ -707,15 +708,18 @@ UniValue listpolls(const UniValue& params)
             const PollSnapshot snapshot = registry.Snapshot(iter->Ref(), pindexBest);
 
             if (!active || !snapshot.m_finished) {
-                wanted.emplace_back(snapshot.m_txid, snapshot.m_votes.size());
+                wanted.emplace_back(snapshot.m_txid, snapshot.m_votes.size(), snapshot.m_start_time);
             }
         }
     }
 
     CTxDB txdb("r");
 
-    for (const auto& [txid, votes] : wanted) {
-        if (const PollOption poll = ReadPollFromDisk(txdb, txid)) {
+    for (const auto& [txid, votes, start_time] : wanted) {
+        if (PollOption poll = ReadPollFromDisk(txdb, txid)) {
+            // The poll's start, which from v15 is its block's time.
+            poll->m_timestamp = start_time;
+
             UniValue entry = PollToJson(*poll, txid);
             entry.pushKV("votes", votes);
             json.push_back(entry);

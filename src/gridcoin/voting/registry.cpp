@@ -499,6 +499,8 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
         // AddPoll recorded, rather than looking the poll's block up again: that lookup read the chain index without
         // cs_main, and took cs_main inside callers holding only cs_poll_registry. Nothing is written back to this
         // reference, which callers share.
+        // The copy's timestamp is the poll's start, which from v15 is its block's time.
+        poll->m_timestamp = StartTime();
         poll->m_magnitude_weight_factor = GetMagnitudeWeightFactor();
 
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: reference.m_timestamp = %" PRId64 " , poll.m_timestamp = %" PRId64 " , "
@@ -569,9 +571,20 @@ int64_t PollReference::Time() const
     return m_timestamp;
 }
 
+int64_t PollReference::StartTime() const
+{
+    // From v15 a poll starts at the time of its block. Below the v15 height, and for a reference with no
+    // block, it starts at the time of its transaction (#3470).
+    if (m_pindex && IsV15Enabled(m_pindex->nHeight)) {
+        return m_pindex->nTime;
+    }
+
+    return m_timestamp;
+}
+
 int64_t PollReference::Age(const int64_t now) const
 {
-    return now - m_timestamp;
+    return now - StartTime();
 }
 
 bool PollReference::Expired(const int64_t now) const
@@ -585,7 +598,7 @@ int64_t PollReference::Expiration() const
 {
     // The casting is done to suppress the comparison of signed vs unsigned. The multiplication will not
     // overflow until 68 years, which is longer than the longest possible poll.
-    return m_timestamp + (int64_t) (m_duration_days * 86400);
+    return StartTime() + (int64_t) (m_duration_days * 86400);
 }
 
 CBlockIndex* PollReference::GetStartingBlockIndexPtr() const
@@ -608,7 +621,8 @@ std::optional<int> PollReference::GetStartingHeight() const EXCLUSIVE_LOCKS_REQU
 
 Fraction PollReference::GetMagnitudeWeightFactor() const
 {
-    return Poll::ResolveMagnitudeWeightFactor(m_pindex, m_timestamp);
+    // The factor in force at the poll's start, which from v15 is its block's time.
+    return Poll::ResolveMagnitudeWeightFactor(m_pindex, StartTime());
 }
 
 std::optional<CAmount> GRC::ActiveVoteWeight(const PollSnapshot& snapshot, const PollResult& result)
@@ -1261,7 +1275,7 @@ PollSnapshot PollRegistry::SnapshotWithoutVotes(const PollReference& ref, const 
     snapshot.m_type = ref.m_type;
     snapshot.m_weight_type = ref.m_weight_type;
     snapshot.m_title = ref.m_title;
-    snapshot.m_timestamp = ref.m_timestamp;
+    snapshot.m_start_time = ref.StartTime();
     snapshot.m_end_time = ref.Expiration();
     snapshot.m_pindex_tip = pindex_tip;
 
@@ -1299,20 +1313,7 @@ PollSnapshot PollRegistry::SnapshotWithoutVotes(const PollReference& ref, const 
     snapshot.m_v15 = pindex_poll && IsV15Enabled(pindex_poll->nHeight);
 
     if (pindex_poll) {
-        // The search for the poll's end runs once per poll and stops at the first block past the end; an open poll's
-        // resumes after the last block it examined. Everything it found stays valid exactly while that block stays on
-        // the main chain (the blocks before it are then unchanged). A reorg that disconnects it, or a reference
-        // re-created with another block, starts the search again from the poll's block, which counts toward the first
-        // block at or past the end but not toward the first block past it.
-        if (ref.m_end_search_from != ref.m_pindex || ref.m_end_searched == nullptr
-            || !ref.m_end_searched->IsInMainChain()) {
-            ref.m_end_search_from = ref.m_pindex;
-            ref.m_end_searched = ref.m_pindex;
-            ref.m_at_or_past_end = ref.m_pindex->nTime >= snapshot.m_end_time ? ref.m_pindex : nullptr;
-            ref.m_past_end = nullptr;
-        }
-
-        SearchForEnd(ref.m_end_searched, ref.m_at_or_past_end, ref.m_past_end, snapshot.m_end_time, pindexBest);
+        AdvanceEndSearch(ref, pindexBest);
 
         // The pinned tip's chain is the main chain up to the tip's height.
         if (ref.m_past_end && ref.m_past_end->nHeight <= pindex_tip->nHeight) {
@@ -1333,18 +1334,50 @@ PollSnapshot PollRegistry::SnapshotWithoutVotes(const PollReference& ref, const 
         snapshot.m_finished = pindex_tip->nTime > snapshot.m_end_time;
     }
 
-    // A finished poll's active vote weight range ends at its first block at or past the end; an open
-    // poll's ends at the pinned tip (m_pindex_end stays nullptr).
-    // A finished poll's first block at or past the end is on the tip's chain at or below the tip: it is at or
-    // below the first block past the end, which is at or below the tip for a poll with m_v15_end, and for a poll
-    // finished by the tip's time is the tip or a block before it (or the poll's own block, when that is the tip). A
-    // poll read with no block has no range, so it keeps nullptr too, not an end its search cached before its block
-    // left the main chain.
+    // A finished poll's active vote weight range ends at its closing block, the block before its first block past the
+    // end, when it has closed by block (m_v15_end), and otherwise at its first block at or past the end; an open
+    // poll's ends at the pinned tip (m_pindex_end stays nullptr). Either end is on the tip's chain
+    // at or below the tip: for a poll with m_v15_end the closing block is the parent of the first block past the end,
+    // which is; and a poll finished by the tip's time has its first block at or past the end at the tip or before it
+    // (or at the poll's own block, when that is the tip). A poll read with no block has no range, so it keeps nullptr
+    // too, not an end its search cached before its block left the main chain.
     if (snapshot.m_finished && pindex_poll) {
-        snapshot.m_pindex_end = ref.m_at_or_past_end;
+        snapshot.m_pindex_end = snapshot.m_v15_end ? snapshot.m_pindex_past_end->pprev : ref.m_at_or_past_end;
+    }
+
+    // The block that bounds the tally by blocks: the closing block once the poll has closed by block, and
+    // the pinned tip while a poll whose block is at or above the v15 height is open. Every other poll keeps the time
+    // rules of #3470 in its tally. A poll whose block is below the height has no bound while it is open: until its
+    // first block past the end exists, every block after the poll's block on the tip's chain is stamped at or before
+    // the end, so the two rules agree on all of them.
+    if (snapshot.m_v15_end) {
+        snapshot.m_pindex_bound = snapshot.m_pindex_end;
+    } else if (snapshot.m_v15 && !snapshot.m_finished) {
+        snapshot.m_pindex_bound = pindex_tip;
     }
 
     return snapshot;
+}
+
+void PollRegistry::AdvanceEndSearch(const PollReference& ref, const CBlockIndex* pindex_bound) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
+    const int64_t end_time = ref.Expiration();
+
+    // The search for the poll's end runs once per poll and stops at the first block past the end; an open poll's
+    // resumes after the last block it examined. Everything it found stays valid exactly while that block stays on the
+    // main chain (the blocks before it are then unchanged). A reorg that disconnects it, or a reference re-created with
+    // another block, starts the search again from the poll's block, which counts toward the first block at or past the
+    // end but not toward the first block past it.
+    if (ref.m_end_search_from != ref.m_pindex || ref.m_end_searched == nullptr
+        || !ref.m_end_searched->IsInMainChain()) {
+        ref.m_end_search_from = ref.m_pindex;
+        ref.m_end_searched = ref.m_pindex;
+        ref.m_at_or_past_end = ref.m_pindex->nTime >= end_time ? ref.m_pindex : nullptr;
+        ref.m_past_end = nullptr;
+    }
+
+    SearchForEnd(ref.m_end_searched, ref.m_at_or_past_end, ref.m_past_end, end_time, pindex_bound);
 }
 
 PollReference* PollRegistry::TryBy(const uint256 txid) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
