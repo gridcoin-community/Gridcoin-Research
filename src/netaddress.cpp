@@ -36,16 +36,16 @@ CNetAddr::BIP155Network CNetAddr::GetBIP155Network() const
         case ADDR_TORV3_SIZE:
             return BIP155Network::TORV3;
         default:
-            assert(false);
+            assert(false); // LINT-OK-ASSERT: NET_TOR m_addr is only ever set to the TORv2 or TORv3 size
         }
     case NET_CJDNS:      // Gridcoin never sets m_net to NET_CJDNS
     case NET_INTERNAL:   // should have been handled before calling this function
     case NET_UNROUTABLE: // m_net is never and should not be set to NET_UNROUTABLE
     case NET_MAX:        // m_net is never and should not be set to NET_MAX
-        assert(false);
+        assert(false); // LINT-OK-ASSERT: m_net is never CJDNS/UNROUTABLE/MAX; INTERNAL is handled by every caller first
     } // no default case, so the compiler can warn about missing cases
 
-    assert(false);
+    assert(false); // LINT-OK-ASSERT: unreachable, the switch above covers every enum value
 }
 
 bool CNetAddr::SetNetFromBIP155Network(uint8_t possible_bip155_net, size_t address_size)
@@ -108,21 +108,21 @@ void CNetAddr::SetIP(const CNetAddr& ipIn)
     // Size check.
     switch (ipIn.m_net) {
     case NET_IPV4:
-        assert(ipIn.m_addr.size() == ADDR_IPV4_SIZE);
+        assert(ipIn.m_addr.size() == ADDR_IPV4_SIZE); // LINT-OK-ASSERT: m_addr size always matches m_net, enforced by every setter
         break;
     case NET_IPV6:
-        assert(ipIn.m_addr.size() == ADDR_IPV6_SIZE);
+        assert(ipIn.m_addr.size() == ADDR_IPV6_SIZE); // LINT-OK-ASSERT: m_addr size always matches m_net, enforced by every setter
         break;
     case NET_TOR:
-        assert(ipIn.m_addr.size() == ADDR_TORV2_SIZE || ipIn.m_addr.size() == ADDR_TORV3_SIZE);
+        assert(ipIn.m_addr.size() == ADDR_TORV2_SIZE || ipIn.m_addr.size() == ADDR_TORV3_SIZE); // LINT-OK-ASSERT: m_addr size always matches m_net, enforced by every setter
         break;
     case NET_INTERNAL:
-        assert(ipIn.m_addr.size() == ADDR_INTERNAL_SIZE);
+        assert(ipIn.m_addr.size() == ADDR_INTERNAL_SIZE); // LINT-OK-ASSERT: m_addr size always matches m_net, enforced by every setter
         break;
     case NET_CJDNS:
     case NET_UNROUTABLE:
     case NET_MAX:
-        assert(false);
+        assert(false); // LINT-OK-ASSERT: m_net is never set to CJDNS/UNROUTABLE/MAX
     } // no default case, so the compiler can warn about missing cases
 
     m_net = ipIn.m_net;
@@ -410,10 +410,10 @@ bool CNetAddr::IsAddrV1Compatible() const
         return false;
     case NET_UNROUTABLE: // m_net is never and should not be set to NET_UNROUTABLE
     case NET_MAX:        // m_net is never and should not be set to NET_MAX
-        assert(false);
+        assert(false); // LINT-OK-ASSERT: m_net is never set to UNROUTABLE/MAX
     } // no default case, so the compiler can warn about missing cases
 
-    assert(false);
+    assert(false); // LINT-OK-ASSERT: unreachable, the switch above covers every enum value
 }
 
 enum Network CNetAddr::GetNetwork() const
@@ -429,7 +429,7 @@ enum Network CNetAddr::GetNetwork() const
 
 static std::string IPv6ToString(Span<const uint8_t> a)
 {
-    assert(a.size() == ADDR_IPV6_SIZE);
+    assert(a.size() == ADDR_IPV6_SIZE); // LINT-OK-ASSERT: callers only pass a 16-byte IPv6 or CJDNS m_addr
     // clang-format off
     return strprintf("%x:%x:%x:%x:%x:%x:%x:%x",
                      ReadBE16(&a[0]),
@@ -479,7 +479,7 @@ std::string CNetAddr::ToStringIP() const
             return EncodeBase32(address.data(), address.size()) + ".onion";
         }
         default:
-            assert(false);
+            assert(false); // LINT-OK-ASSERT: NET_TOR m_addr is only ever set to the TORv2 or TORv3 size
         }
     case NET_CJDNS:
         return IPv6ToString(Span<const uint8_t>{m_addr.data(), m_addr.size()});
@@ -487,10 +487,10 @@ std::string CNetAddr::ToStringIP() const
         return EncodeBase32(m_addr.data(), m_addr.size()) + ".internal";
     case NET_UNROUTABLE: // m_net is never and should not be set to NET_UNROUTABLE
     case NET_MAX:        // m_net is never and should not be set to NET_MAX
-        assert(false);
+        assert(false); // LINT-OK-ASSERT: m_net is never set to UNROUTABLE/MAX
     } // no default case, so the compiler can warn about missing cases
 
-    assert(false);
+    assert(false); // LINT-OK-ASSERT: unreachable, the switch above covers every enum value
 }
 
 std::string CNetAddr::ToString() const
@@ -517,7 +517,7 @@ bool CNetAddr::GetInAddr(struct in_addr* pipv4Addr) const
 {
     if (!IsIPv4())
         return false;
-    assert(sizeof(*pipv4Addr) == m_addr.size());
+    assert(sizeof(*pipv4Addr) == m_addr.size()); // LINT-OK-ASSERT: IsIPv4() implies a 4-byte m_addr
     memcpy(pipv4Addr, m_addr.data(), m_addr.size());
     return true;
 }
@@ -527,7 +527,7 @@ bool CNetAddr::GetIn6Addr(struct in6_addr* pipv6Addr) const
     if (!IsIPv6()) {
         return false;
     }
-    assert(sizeof(*pipv6Addr) == m_addr.size());
+    assert(sizeof(*pipv6Addr) == m_addr.size()); // LINT-OK-ASSERT: IsIPv6() implies a 16-byte m_addr
     memcpy(pipv6Addr, m_addr.data(), m_addr.size());
     return true;
 }
@@ -838,7 +838,7 @@ CSubNet::CSubNet(const CNetAddr& addr, uint8_t mask) : CSubNet()
         return;
     }
 
-    assert(mask <= sizeof(netmask) * 8);
+    assert(mask <= sizeof(netmask) * 8); // LINT-OK-ASSERT: mask was bounded by the address size just above
 
     network = addr;
     if (network.IsIPv4()) {
@@ -893,7 +893,7 @@ CSubNet::CSubNet(const CNetAddr& addr, const CNetAddr& mask) : CSubNet()
         }
     }
 
-    assert(mask.m_addr.size() <= sizeof(netmask));
+    assert(mask.m_addr.size() <= sizeof(netmask)); // LINT-OK-ASSERT: mask is IPv4 or IPv6, at most 16 bytes
 
     memcpy(netmask, mask.m_addr.data(), mask.m_addr.size());
 
@@ -919,7 +919,7 @@ CSubNet::CSubNet(const CNetAddr& addr) : CSubNet()
         return;
     }
 
-    assert(addr.m_addr.size() <= sizeof(netmask));
+    assert(addr.m_addr.size() <= sizeof(netmask)); // LINT-OK-ASSERT: addr is IPv4, IPv6 or TORv2 here, at most 16 bytes
 
     memset(netmask, 0xFF, sizeof(netmask));
 
