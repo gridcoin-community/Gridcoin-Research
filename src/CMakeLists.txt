@@ -100,7 +100,13 @@ endif()
 if(SYSTEM_SECP256K1)
     set(LIBSECP256K1 PkgConfig::SECP256K1)
 else()
+    # CMP0077 makes the subtree's option()s take the values set below, and
+    # CMP0126 does the same for its set(... CACHE) string settings, ASM and
+    # VALGRIND. Without CMP0126 a first configure dropped both and used AUTO,
+    # so USE_ASM=OFF still built the x86_64 assembly; a re-configure honoured
+    # them, because by then the cache entries existed.
     set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+    set(CMAKE_POLICY_DEFAULT_CMP0126 NEW)
 
     set(SECP256K1_DISABLE_SHARED ON CACHE BOOL "" FORCE)
     set(SECP256K1_ENABLE_MODULE_ECDH OFF)
