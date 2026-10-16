@@ -42,6 +42,8 @@
 #include <algorithm>
 #include <set>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -103,22 +105,98 @@ void HoldInputInWallet(const CTransaction& tx)
     pwalletMain->WalletUpdateSpent(tx, false, &walletdb);
 }
 
-//! A fixture spend of an unspent premine output, held in the wallet and put in
-//! the mempool for the next mined block.
-CTransaction PoolSpend(const int n_outputs = 1)
-{
-    const COutPoint coin = UnspentPremineOutput();
-    const CTransaction tx = grc_test::CreateSpend(grc_test::PremineCoinbase(), coin.n, 200000, n_outputs);
-    HoldInputInWallet(tx);
-    grc_test::AddToMempool(tx, 200000);
-
-    return tx;
-}
-
 bool BlockHasTx(const CBlock& block, const uint256& hash)
 {
     return std::any_of(block.vtx.begin(), block.vtx.end(),
                        [&](const CTransaction& tx) { return tx.GetHash() == hash; });
+}
+
+//! FixtureCoins() splits this many premine outputs into four coins each. A
+//! quarter of a premine output is about the size the proof-of-stake case
+//! stakes: in local runs it met the kernel target every time on this chain,
+//! where an output a quarter of that size met it only some of the time. The
+//! suite mines twelve blocks, each of which stakes at most one coin, and makes
+//! six spends, so it uses at most eighteen of the 24.
+constexpr int FIXTURE_SPLITS = 6;
+constexpr int COINS_PER_SPLIT = 4;
+
+//! The suite's coins: FIXTURE_SPLITS premine outputs, each split into
+//! COINS_PER_SPLIT outputs to the premine key, mined on first use, and again
+//! if the chain no longer has them (the chain lives as long as the suite's
+//! RegtestChainSetup).
+//!
+//! The miner stakes from the wallet the fixtures spend from. Spending the ten
+//! premine outputs directly, the suite's spends and the kernels of the blocks
+//! it mines could use all ten, depending on which outputs the stake slots let
+//! the miner take, and a late case found none left. A block stakes at most one
+//! coin, so these leave a coin for every spend whatever the miner takes.
+const std::vector<CTransaction>& FixtureCoins()
+{
+    static std::vector<CTransaction> s_splits;
+
+    if (!s_splits.empty() && WITH_LOCK(cs_main, return CTxDB("r").ContainsTx(s_splits.front().GetHash()))) {
+        return s_splits;
+    }
+
+    std::vector<CTransaction> splits;
+
+    for (int i = 0; i < FIXTURE_SPLITS; ++i) {
+        const COutPoint coin = UnspentPremineOutput();
+        const CTransaction tx = grc_test::CreateSpend(grc_test::PremineCoinbase(), coin.n, 200000, COINS_PER_SPLIT);
+        HoldInputInWallet(tx);
+        grc_test::AddToMempool(tx, 200000);
+        splits.push_back(tx);
+    }
+
+    const CBlock block = MineOne();
+
+    for (const CTransaction& tx : splits) {
+        BOOST_REQUIRE_MESSAGE(BlockHasTx(block, tx.GetHash()), "the block does not carry the fixture coins");
+    }
+
+    s_splits = std::move(splits);
+
+    return s_splits;
+}
+
+//! A fixture coin that the transaction index records as unspent and the wallet
+//! does not mark spent, with the transaction that holds it.
+std::pair<CTransaction, uint32_t> UnspentFixtureCoin()
+{
+    const std::vector<CTransaction>& splits = FixtureCoins();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CTxDB txdb("r");
+
+    for (const CTransaction& tx : splits) {
+        CTxIndex txindex;
+        BOOST_REQUIRE(txdb.ReadTxIndex(tx.GetHash(), txindex));
+
+        const auto it = pwalletMain->mapWallet.find(tx.GetHash());
+        BOOST_REQUIRE(it != pwalletMain->mapWallet.end());
+
+        for (uint32_t n = 0; n < tx.vout.size() && n < txindex.vSpent.size(); ++n) {
+            if (txindex.vSpent[n].IsNull() && !it->second.IsSpent(n)) {
+                return {tx, n};
+            }
+        }
+    }
+
+    BOOST_FAIL("no unspent fixture coin left");
+    return {};
+}
+
+//! A fixture spend of an unspent fixture coin, held in the wallet and put in
+//! the mempool for the next mined block.
+CTransaction PoolSpend()
+{
+    const auto [tx_from, n] = UnspentFixtureCoin();
+    const CTransaction tx = grc_test::CreateSpend(tx_from, n, 200000);
+    HoldInputInWallet(tx);
+    grc_test::AddToMempool(tx, 200000);
+
+    return tx;
 }
 
 //! Disconnect back to the parent of \p block, which offers its transactions
@@ -348,8 +426,10 @@ BOOST_AUTO_TEST_CASE(a_side_branch_stake_passes_the_proof_of_stake_check_from_v1
 
     mempool.clear();
 
-    // T, with four outputs to stake, is mined in A1 and again in the later B1.
-    const CTransaction tx_t = PoolSpend(4);
+    // T is mined in A1 and again in the later B1. Its one output, about a
+    // quarter of a premine output, is large enough to meet the kernel target
+    // here.
+    const CTransaction tx_t = PoolSpend();
     const uint256 t_hash = tx_t.GetHash();
 
     const CBlock a1 = MineOne();
@@ -372,10 +452,12 @@ BOOST_AUTO_TEST_CASE(a_side_branch_stake_passes_the_proof_of_stake_check_from_v1
     // the check reads B1 and must fail; from v15 it reads A1 and can pass.
     int pass_from_v15 = 0;
     int pass_below_v15 = 0;
+    int candidates = 0;
 
     for (uint32_t time = pindex_a1->nTime; time < pindex_b1->nTime; time += GRC::STAKE_TIMESTAMP_MASK + 1) {
         for (uint32_t n = 0; n < tx_t.vout.size(); ++n) {
             uint256 proof;
+            ++candidates;
 
             {
                 CBlock block = StakeBlockOn(pindex_a1, tx_t, n, time, 14);
@@ -394,7 +476,7 @@ BOOST_AUTO_TEST_CASE(a_side_branch_stake_passes_the_proof_of_stake_check_from_v1
         }
     }
 
-    BOOST_TEST_MESSAGE(pass_from_v15 << " stakes pass from v15, " << pass_below_v15 << " below it");
+    BOOST_TEST_MESSAGE(pass_from_v15 << " of " << candidates << " stakes pass from v15, " << pass_below_v15 << " below it");
     BOOST_CHECK_GT(pass_from_v15, 0);
     BOOST_CHECK_EQUAL(pass_below_v15, 0);
 }
