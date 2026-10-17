@@ -10,6 +10,7 @@
 #include "gridcoin/contract/registry.h"
 #include "gridcoin/staking/chain_trust.h"
 #include "gridcoin/staking/spam.h"
+#include "gridcoin/voting/registry.h"
 #include "node/blockstorage.h"
 #include "node/chainman.h"
 #include "util.h"
@@ -341,6 +342,13 @@ bool RunStartupCoherenceRecovery()
                   __func__, result.sb_cross_count);
         GetBeaconRegistry().Reset();
     }
+
+    // The poll registry is reset after any rewind, superblock or not, so that it holds no record from a block the
+    // rewind dropped. The contract replay from V11 rebuilds polls and votes in this start. Rewinds are rare, so the
+    // replay's cost is too. As for the beacon registry, Reset() comes first so the poll registry's GetDBHeight()
+    // returns 0 and UpdateRegistryBlockHeights() skips it.
+    LogPrintf("INFO: %s: resetting the poll registry for full replay.", __func__);
+    GetPollRegistry().Reset();
 
     RegistryBookmarks bookmarks;
     int target_height = result.pindex_consistent->nHeight;
