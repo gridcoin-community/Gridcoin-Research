@@ -19,11 +19,19 @@
 #include "server.h"
 #include "uint256.h"
 #include "util/strencodings.h"
+#include "util/string.h"
 #include "util/time.h"
 
 using namespace GRC;
 
 namespace {
+//! The error for a title that more than one poll has: their ids, so the caller can name one. The title is not echoed.
+std::string ManyPollsError(const std::vector<const PollReference*>& polls)
+{
+    return strprintf("%u polls have that title. Use the poll id: %s", polls.size(),
+                     Join(polls, std::string(", "), [](const PollReference* ref) { return ref->Txid().ToString(); }));
+}
+
 const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
@@ -39,13 +47,13 @@ const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
         }
     }
 
-    const std::string title = GRC::PollTitleKey(title_or_id);
+    const std::vector<const PollReference*> polls = registry.FindByTitle(GRC::PollTitleKey(title_or_id));
 
-    if (const PollReference* ref = registry.TryByTitle(title)) {
-        return ref;
+    if (polls.size() > 1) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, ManyPollsError(polls));
     }
 
-    return nullptr;
+    return polls.empty() ? nullptr : polls.front();
 }
 
 UniValue PollChoicesToJson(const Poll::ChoiceList& choices)
@@ -861,12 +869,18 @@ UniValue vote(const UniValue& params)
     {
         LOCK(GRC::PollRegistry::cs_poll_registry);
 
-        if (const PollReference* ref = GetPollRegistry().TryByTitle(title)) {
-            poll = ref->TryReadFromDisk();
-            poll_txid = ref->Txid();
-        } else {
+        const std::vector<const PollReference*> polls = GetPollRegistry().FindByTitle(title);
+
+        if (polls.size() > 1) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, ManyPollsError(polls));
+        }
+
+        if (polls.empty()) {
             throw JSONRPCError(RPC_MISC_ERROR, "No poll exists with that title");
         }
+
+        poll = polls.front()->TryReadFromDisk();
+        poll_txid = polls.front()->Txid();
     }
 
     if (!poll) {

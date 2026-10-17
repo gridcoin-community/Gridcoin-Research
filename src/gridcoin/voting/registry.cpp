@@ -1172,15 +1172,13 @@ void PollRegistry::IndexPollRecord(const PollEntry& entry)
         ref.m_deleted = false;
         ref.m_registry = this;
 
-        // The first registration in chain order owns the title, deleted or not. A later poll with the same
-        // title key (possible only below v15) is still registered and tallied by its txid, but never takes the
-        // title or the display map.
-        const auto owner = m_title_index.emplace(title_key, entry.m_poll_txid).first;
-
-        if (owner->second == entry.m_poll_txid) {
-            const auto shown = m_polls.emplace(title_key, &ref).first;
-            ref.m_ptitle = &shown->first;
-        }
+        // The first registration in chain order owns the title, deleted or not; only it is the poll a REMOVE
+        // by title names (below v15) and the poll announced as new. Every ACTIVE poll is shown: a later poll with the
+        // same title key (below v15 only) is listed and found by its title beside the owner. A poll's ACTIVE
+        // record is indexed once: a load meets it once, and a removal's revert follows the removal that took the
+        // poll out of the map.
+        m_title_index.emplace(title_key, entry.m_poll_txid);
+        ref.m_ptitle = &m_polls.emplace(title_key, &ref)->first;
 
         return;
     }
@@ -1188,9 +1186,18 @@ void PollRegistry::IndexPollRecord(const PollEntry& entry)
     // DELETED: the poll leaves the display map; it keeps its txid entry and its title.
     if (const auto iter = m_polls_by_txid.find(entry.m_poll_txid); iter != m_polls_by_txid.end()) {
         iter->second.m_deleted = true;
+        EraseShown(title_key, &iter->second);
+    }
+}
 
-        if (const auto shown = m_polls.find(title_key); shown != m_polls.end() && shown->second == &iter->second) {
-            m_polls.erase(shown);
+void PollRegistry::EraseShown(const std::string& title_key, const PollReference* poll_ref)
+{
+    const auto [first, last] = m_polls.equal_range(title_key);
+
+    for (auto iter = first; iter != last; ++iter) {
+        if (iter->second == poll_ref) {
+            m_polls.erase(iter);
+            return;
         }
     }
 }
@@ -1422,15 +1429,51 @@ PollReference* PollRegistry::TryBy(const uint256 txid) EXCLUSIVE_LOCKS_REQUIRED(
     return const_cast<PollReference*>(TryByTxid(txid));
 }
 
-const PollReference* PollRegistry::TryByTitle(const std::string& title) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
+const PollReference* PollRegistry::TryByTitle(const std::string& title_key) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
-    const auto iter = m_polls.find(title);
+    const auto owner = m_title_index.find(title_key);
 
-    if (iter == m_polls.end()) {
+    if (owner == m_title_index.end()) {
         return nullptr;
     }
 
-    return iter->second;
+    const auto iter = m_polls_by_txid.find(owner->second);
+
+    if (iter == m_polls_by_txid.end() || iter->second.m_deleted) {
+        return nullptr;
+    }
+
+    return &iter->second;
+}
+
+std::vector<const PollReference*> PollRegistry::FindByTitle(const std::string& title_key) const
+    EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
+{
+    // Block order, whatever order the polls entered the map in (a removal's revert puts its poll back at the end): a
+    // stored poll's record holds its block's height; a pre-V11 poll loaded on demand has its block index.
+    std::vector<std::pair<std::pair<int, uint256>, const PollReference*>> keyed;
+    const auto [first, last] = m_polls.equal_range(title_key);
+
+    for (auto iter = first; iter != last; ++iter) {
+        const PollReference* ref = iter->second;
+        int height = ref->m_pindex ? ref->m_pindex->nHeight : -1;
+
+        if (const auto entry = m_poll_entries.find(ref->m_txid); entry != m_poll_entries.end()) {
+            height = entry->second->m_block_height;
+        }
+
+        keyed.emplace_back(std::make_pair(height, ref->m_txid), ref);
+    }
+
+    std::sort(keyed.begin(), keyed.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    std::vector<const PollReference*> polls;
+
+    for (const auto& [key, ref] : keyed) {
+        polls.push_back(ref);
+    }
+
+    return polls;
 }
 
 PollReference* PollRegistry::TryBy(const std::string& title) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
@@ -1466,9 +1509,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
         return nullptr;
     }
 
-    // A poll at or above V11 is always registered already: the handler stores every one from V11 on. So in
-    // production this registers pre-V11 polls, in memory only (the legacy store replaces this path). The
-    // m_registering_legacy_poll flag lets the add pass the V11 floor and keeps it out of the dbs.
+    // Below v15 the handler registers every poll from V11 on, so in production this registers pre-V11 polls, in
+    // memory only (until the legacy store replaces this path). From v15 a poll the registry does not hold is one
+    // whose title is taken: it is not registered by rule, and not loaded here either. The m_registering_legacy_poll
+    // flag lets the add pass the V11 floor and keeps it out of the dbs.
+    if (IsV15Enabled(pindex_poll->nHeight)) {
+        return nullptr;
+    }
+
     m_registering_legacy_poll = true;
 
     for (const auto& contract : tx.GetContracts()) {
@@ -1736,7 +1784,7 @@ void PollRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(c
 
     if (record->m_status == PollEntryStatus::DELETED) {
         // Reverting a REMOVE: its DELETED record goes, the poll's ADD record is current again, and the poll returns to
-        // the display map when it owns its title.
+        // the display map.
         m_poll_db.erase(hash);
 
         const auto add_record = m_poll_db.find(record->m_previous_hash);
@@ -1806,16 +1854,9 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
 
     if (m_registering_legacy_poll) {
         // A pre-V11 poll found by TryByTxidWithAddHistoricalPollAndVotes: registered in memory only, with no record
-        // and no title-index entry. It is not registered if its title is taken.
+        // and no title-index entry. It is shown beside any poll with its title key.
         PollReference& poll_ref = m_polls_by_txid[txid];
-        const auto shown = m_polls.emplace(PollTitleKey(poll_title), &poll_ref);
-
-        if (!shown.second) {
-            m_polls_by_txid.erase(txid);
-            return;
-        }
-
-        poll_ref.m_ptitle = &shown.first->first;
+        poll_ref.m_ptitle = &m_polls.emplace(PollTitleKey(poll_title), &poll_ref)->first;
         poll_ref.m_txid = txid;
         poll_ref.m_title = poll_title;
         poll_ref.m_payload_version = payload->m_version;
@@ -1863,8 +1904,8 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
     PollReference& poll_ref = m_polls_by_txid.at(txid);
     poll_ref.m_pindex = ctx.m_pindex; // the connecting block, whose index the load would find by hash
 
-    // A later poll with a title key already taken (below v15 only) is registered by its txid but not shown, so it
-    // is not announced either.
+    // A later poll with a title key already taken (below v15 only) is listed and found by its title, but only
+    // the title's owner is announced.
     if (TryByTitle(PollTitleKey(poll_title)) != &poll_ref) {
         return;
     }
@@ -2005,9 +2046,7 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
     const std::string title_key = PollTitleKey(poll_ref->m_title);
 
     // Either way the poll leaves the display map.
-    if (const auto shown = m_polls.find(title_key); shown != m_polls.end() && shown->second == poll_ref) {
-        m_polls.erase(shown);
-    }
+    EraseShown(title_key, poll_ref);
 
     m_latest_poll = nullptr;
 

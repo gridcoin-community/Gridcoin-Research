@@ -305,8 +305,10 @@ struct PollSnapshot
 class PollRegistry : public IContractHandler
 {
 public:
-    //! Display map: title key (PollTitleKey(title)) to the ACTIVE poll that registered it first.
-    using PollMapByTitle = std::map<std::string, PollReference*>;
+    //! Display map: every ACTIVE poll by its title key (GRC::PollTitleKey). More than one poll can share a key:
+    //! below v15 a poll whose title key is taken is still registered by its txid, and a pre-V11 poll loaded on demand
+    //! can share a later poll's key. The title index, not this map, says which poll owns a title.
+    using PollMapByTitle = std::multimap<std::string, PollReference*>;
     //! Owning map: every poll the registry holds, ACTIVE or DELETED, by txid.
     using PollMapByTxid = std::map<uint256, PollReference>;
 
@@ -484,14 +486,22 @@ public:
         EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
 
     //!
-    //! \brief Get the poll with the specified title.
+    //! \brief Get the ACTIVE poll that owns a title key: the first poll registered with it since V11. A pre-V11
+    //! poll owns no title, and a title whose owner was removed names no poll, even when a later poll with its key is
+    //! active. This is the poll a master-key REMOVE by title names (below v15).
     //!
-    //! \param title The title of the poll to look up.
+    //! \param title_key The title key (GRC::PollTitleKey).
     //!
-    //! \return Points to a poll object or \c nullptr when no poll contains a
-    //! matching title.
+    const PollReference* TryByTitle(const std::string& title_key) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+
     //!
-    const PollReference* TryByTitle(const std::string& title) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+    //! \brief Get every ACTIVE poll with a title key, in block order (height, then txid): the polls registered since
+    //! V11 and the pre-V11 polls loaded on demand.
+    //!
+    //! \param title_key The title key (GRC::PollTitleKey).
+    //!
+    std::vector<const PollReference*> FindByTitle(const std::string& title_key) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Get an existing poll in the registry, or if not found, demand load a
@@ -736,6 +746,10 @@ private:
     //! in record order, and a live connect calls it for the record it just stored.
     //!
     void IndexPollRecord(const PollEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
+
+    //! Take one poll out of the display map, leaving every other poll with its title key.
+    void EraseShown(const std::string& title_key, const PollReference* poll_ref)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Get the poll with the specified title.

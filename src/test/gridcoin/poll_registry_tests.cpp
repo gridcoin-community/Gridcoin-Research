@@ -38,6 +38,7 @@
 #include <chrono>
 #include <deque>
 #include <future>
+#include <set>
 
 // Tests drive the PollRegistry contract handler directly, on the test thread.
 // The handler is EXCLUSIVE_LOCKS_REQUIRED(cs_main); the tests take cs_main
@@ -681,6 +682,71 @@ BOOST_AUTO_TEST_CASE(from_v15_the_second_poll_with_a_title_in_a_block_registers_
 
     GRC::ApplyContracts(block, &index, live_heights, found, false);
     first_only();
+}
+
+//!
+//! Every ACTIVE poll is listed and found by its title, whatever title it shares: below v15 a later poll with a
+//! taken title key is registered by its txid, and it is listed and found beside the poll that owns the title. Only the
+//! owner is the poll the title names for a REMOVE (TryByTitle). A restart, the owner's removal and the removal's
+//! revert keep it so, with each poll listed once.
+//!
+BOOST_AUTO_TEST_CASE(every_active_poll_is_listed_and_found_by_its_title)
+{
+    CBlockIndex index_owner = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex index_later = MakeBlockIndex(V13Height() + 20, 1700001000);
+    CBlockIndex index_other = MakeBlockIndex(V13Height() + 25, 1700001500);
+    CBlockIndex index_remove = MakeBlockIndex(V13Height() + 30, 1700002000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx owner = MakePollTx("Title", 1700000000);
+    const PollTx later = MakePollTx("TITLE", 1700001000);
+    const PollTx other = MakePollTx("Other", 1700001500);
+    const PollTx remove = MakePollTx("Title", 1700002000, GRC::ContractAction::REMOVE);
+
+    registry.Add({owner.contract, owner.tx, &index_owner});
+    registry.Add({later.contract, later.tx, &index_later});
+    registry.Add({other.contract, other.tx, &index_other});
+
+    const auto listed = [&] {
+        std::multiset<uint256> txids;
+        for (const auto& iter : registry.Polls()) txids.insert(iter->Ref().Txid());
+        return txids;
+    };
+    const auto found = [&](const std::string& title_key) {
+        std::vector<uint256> txids;
+        for (const GRC::PollReference* ref : registry.FindByTitle(title_key)) txids.push_back(ref->Txid());
+        return txids;
+    };
+    const std::multiset<uint256> all {owner.tx.GetHash(), later.tx.GetHash(), other.tx.GetHash()};
+    const std::vector<uint256> both {owner.tx.GetHash(), later.tx.GetHash()};
+
+    for (int pass = 0; pass < 2; ++pass) {
+        {
+            LOCK(GRC::PollRegistry::cs_poll_registry);
+            BOOST_CHECK(listed() == all);
+            BOOST_CHECK(found("title") == both);
+            BOOST_CHECK(registry.TryByTitle("title") == registry.TryByTxid(owner.tx.GetHash()));
+        }
+
+        // The second pass checks the restarted registry.
+        Restart(registry);
+    }
+
+    registry.Delete({remove.contract, remove.tx, &index_remove});
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_CHECK(listed() == (std::multiset<uint256> {later.tx.GetHash(), other.tx.GetHash()}));
+        BOOST_CHECK(found("title") == std::vector<uint256> {later.tx.GetHash()});
+        BOOST_CHECK(registry.TryByTitle("title") == nullptr);
+        BOOST_CHECK(registry.TitleOwner("title") == owner.tx.GetHash());
+    }
+
+    registry.Revert({remove.contract, remove.tx, &index_remove});
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK(listed() == all);
+    BOOST_CHECK(found("title") == both);
 }
 
 BOOST_AUTO_TEST_CASE(reverting_two_votes_of_one_block_newest_first_keeps_the_chain)
