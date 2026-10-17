@@ -6,7 +6,9 @@
 
 A poll's title key is its title in lower case without edge white space. The wallet refuses a poll whose title key a
 registered or pooled poll holds. The memory pool holds one poll per title key, and refuses a second without
-penalizing the peer that relays it.
+penalizing the peer that relays it. A block that takes a title evicts the other pooled poll with that key from every
+memory pool, and abandons it in its sender's wallet, which releases its inputs. From v15 a poll whose title is taken is
+mined but registers nothing.
 
 node0 and node1 each create a poll from a coin only they hold; node2 stakes every block, so those coins stay put.
 """
@@ -123,6 +125,30 @@ class PollTitleRuleTest(GridcoinTestFramework):
             for node in (node0, node1):
                 assert_raises_rpc_error(None, "Poll with that title already exists", self.add_poll, node, "title")
 
+        self.log.info("a block that takes the title evicts the other poll and releases its inputs in its wallet")
+        self.stake()
+        assert poll_a in node2.getblock(node2.getbestblockhash())["tx"]
+        assert_equal(node1.getrawmempool(), [])
+        unspent = {(u["txid"], u["vout"]) for u in node1.listunspent(0)}
+        assert all(outpoint in unspent for outpoint in inputs_b)
+        for node in self.nodes:
+            assert_equal([p["id"] for p in node.listpolls(True)], [poll_a])
+            assert_equal(node.getpollresults("  tItLe ")["poll_id"], poll_a)
+        assert_equal(node0.vote("  tItLe ", "A")["poll"], "Title")
+
+        self.log.info("the wallet refuses a title the registry holds")
+        for node in (node0, node1):
+            assert_raises_rpc_error(None, "Poll with that title already exists", self.add_poll, node, "title")
+
+        self.log.info("from v15 a poll whose title is taken is admitted, mined, and registers nothing")
+        node0.sendrawtransaction(raw_b)
+        # node1 relayed this transaction to node0 earlier, so node0 does not announce it back; node2 mines it.
+        self.sync_mempools([node0, node2], wait=0.1, flush_scheduler=False)
+        self.stake()
+        assert poll_b in node2.getblock(node2.getbestblockhash())["tx"]
+        for node in self.nodes:
+            assert_equal([p["id"] for p in node.listpolls(True)], [poll_a])
+            assert_raises_rpc_error(-1, "No matching poll found", node.getpollresults, poll_b)
 
     def stake_slot_only(self):
         """Move every clock past the inbound rate limit a reconnect meets (see disconnect_nodes)."""

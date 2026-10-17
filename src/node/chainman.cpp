@@ -25,6 +25,7 @@
 #include "gridcoin/tally.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/registry.h"
+#include "gridcoin/voting/payloads.h"
 #include "gridcoin/staking/chain_trust.h"
 #include "util.h"
 #include "util/time.h"
@@ -661,6 +662,54 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                 // If this transaction was in this wallet (i.e. erasure successful), then send signal for GUI.
                 if (pwalletMain->EraseFromWallet(tx.GetHash())) {
                     pwalletMain->NotifyTransactionChanged(pwalletMain, tx.GetHash(), CT_DELETED);
+                }
+            }
+
+            // Retire the pooled polls whose title this block takes. Another poll with a title key this block
+            // registers can no longer register: from v15 it would be mined with its burn spent and nothing
+            // registered. The pool holds one poll per title key, so it is another user's poll, built before this
+            // block's poll reached that user's node. It leaves the pool with its descendants and is abandoned, which
+            // releases its inputs in its sender's wallet, as the MESSAGE sweep below does and for the reasons given
+            // there; like that sweep it is not undone if this block is disconnected, and the sender can send again.
+            //
+            // Keyed on the POLL ADDs this block carries, not on the registry: a poll the pool admitted while the
+            // registry already held its title is left to be mined. This block's own transactions left the pool
+            // above. A legacy contract (below V11) names no title key.
+            for (const auto& block_tx : block.vtx) {
+                for (const auto& contract : block_tx.GetContracts()) {
+                    if (contract.m_type != GRC::ContractType::POLL || contract.m_version < 2
+                        || contract.m_action != GRC::ContractAction::ADD) {
+                        continue;
+                    }
+
+                    const std::string title_key =
+                        GRC::PollTitleKey(contract.SharePayloadAs<GRC::PollPayload>()->m_poll.m_title);
+
+                    uint256 pooled_hash;
+                    CTransaction pooled_tx;
+
+                    if (!mempool.HasPollForTitle(title_key, &pooled_hash)
+                        || !mempool.lookup(pooled_hash, pooled_tx)) {
+                        continue;
+                    }
+
+                    std::vector<CTransaction> removed;
+                    mempool.remove(pooled_tx, /*fRecursive=*/true, MemPoolRemovalReason::UNKNOWN, &removed);
+
+                    for (const auto& removed_tx : removed) {
+                        LogPrintf("%s: block %s takes the title of poll %s. Removed transaction %s from the mempool.",
+                                  __func__,
+                                  pindex->GetBlockHash().ToString(),
+                                  pooled_hash.ToString(),
+                                  removed_tx.GetHash().ToString());
+
+                        unsigned int inputs_released = 0;
+
+                        if (pwalletMain->AbandonTransaction(removed_tx.GetHash(), &inputs_released)) {
+                            LogPrintf("%s: Abandoned wallet transaction %s, releasing %u input(s).",
+                                      __func__, removed_tx.GetHash().ToString(), inputs_released);
+                        }
+                    }
                 }
             }
             // Retire MESSAGE contract transactions the chain has left behind.
