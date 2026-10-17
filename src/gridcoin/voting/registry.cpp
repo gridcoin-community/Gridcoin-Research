@@ -1829,6 +1829,15 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         return;
     }
 
+    // From v15 a poll whose title key is taken registers nothing: by a poll the title index holds -- every poll
+    // registered since V11, active or deleted -- including one earlier in this block, which applied first. The
+    // transaction stays valid and its burn is spent; no block is refused over a title.
+    if (IsV15Enabled(ctx.m_pindex->nHeight) && TitleOwner(PollTitleKey(poll_title))) {
+        LogPrint(BCLog::LogFlags::VOTE, "%s: poll %s not registered: its title is taken.",
+                 __func__, txid.ToString());
+        return;
+    }
+
     PollEntry entry;
     entry.m_poll_txid = txid;
     entry.m_title = poll_title;

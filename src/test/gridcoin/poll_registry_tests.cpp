@@ -580,6 +580,109 @@ BOOST_AUTO_TEST_CASE(a_title_differing_only_by_edge_white_space_names_the_same_p
     BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash()) == nullptr);
 }
 
+//!
+//! From v15 a POLL ADD whose title key is taken registers nothing: here the title of a poll a master key
+//! removed, which keeps its title. The transaction is valid and no block is refused; a vote naming it links to
+//! nothing. Below the v15 height such a poll is registered by its txid (#3470). (The below-v15 half adds no vote:
+//! its vote block would sit above the v15 height and search back from a block with no predecessor.)
+//!
+BOOST_AUTO_TEST_CASE(from_v15_a_poll_with_a_taken_title_registers_nothing)
+{
+    CBlockIndex index_first = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex index_remove = MakeBlockIndex(V13Height() + 15, 1700000500);
+    CBlockIndex index_duplicate = MakeBlockIndex(V13Height() + 20, 1700001000);
+    CBlockIndex index_vote = MakeBlockIndex(V13Height() + 25, 1700001500);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx first = MakePollTx("Title", 1700000000);
+    const PollTx remove = MakePollTx("Title", 1700000400, GRC::ContractAction::REMOVE);
+    const PollTx duplicate = MakePollTx(" TITLE ", 1700001000);
+    const GRC::Contract vote_contract = MakeVoteContract(duplicate.tx.GetHash());
+    const CTransaction vote = MakeVoteTxFor(vote_contract, 1700001500);
+
+    const auto register_polls = [&] {
+        registry.Add({first.contract, first.tx, &index_first});
+        registry.Delete({remove.contract, remove.tx, &index_remove});
+        registry.Add({duplicate.contract, duplicate.tx, &index_duplicate});
+    };
+
+    {
+        grc_test::V15HeightGuard v15(index_duplicate.nHeight);
+        register_polls();
+        registry.Add({vote_contract, vote, &index_vote});
+
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_CHECK(registry.TryByTxid(duplicate.tx.GetHash()) == nullptr);
+        BOOST_CHECK(!registry.IsStored(duplicate.tx.GetHash()));
+        BOOST_CHECK(!registry.IsStored(vote.GetHash()));
+        BOOST_CHECK(registry.TitleOwner("title") == first.tx.GetHash());
+    }
+
+    RegistryReset::Reset();
+
+    {
+        grc_test::V15HeightGuard v15(index_duplicate.nHeight + 1);
+        register_polls();
+
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_CHECK(registry.TryByTxid(duplicate.tx.GetHash()) != nullptr);
+        BOOST_CHECK(registry.IsStored(duplicate.tx.GetHash()));
+        BOOST_CHECK(registry.TitleOwner("title") == first.tx.GetHash());
+    }
+}
+
+//!
+//! From v15 the second POLL ADD with one title key in a block registers nothing: the first applies first and takes the
+//! title. A restart at the registry's saved height, a revert of the block and its reconnection give the same.
+//!
+BOOST_AUTO_TEST_CASE(from_v15_the_second_poll_with_a_title_in_a_block_registers_nothing)
+{
+    CBlockIndex index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    RegistryReset reset;
+    grc_test::V15HeightGuard v15(index.nHeight);
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx first = MakePollTx("Title", 1700000000);
+    const PollTx second = MakePollTx("TITLE", 1700000001);
+
+    CBlock block;
+    block.vtx.resize(2);
+    block.vtx.push_back(first.tx);
+    block.vtx.push_back(second.tx);
+
+    const auto first_only = [&] {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_REQUIRE(registry.TryByTxid(first.tx.GetHash()) != nullptr);
+        BOOST_CHECK(registry.TryByTxid(second.tx.GetHash()) == nullptr);
+        BOOST_CHECK(!registry.IsStored(second.tx.GetHash()));
+        BOOST_CHECK(registry.TitleOwner("title") == first.tx.GetHash());
+    };
+
+    GRC::RegistryBookmarks live_heights;
+    bool found = false;
+    GRC::ApplyContracts(block, &index, live_heights, found, false);
+    first_only();
+
+    Restart(registry);
+    GRC::RegistryBookmarks db_heights;
+    BOOST_REQUIRE(db_heights.GetRegistryBlockHeight(GRC::ContractType::POLL) == index.nHeight);
+    GRC::ReplayBlock(block, &index, db_heights, true, found);
+    first_only();
+
+    GRC::RevertContracts(block, &index);
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_CHECK(registry.TryByTxid(first.tx.GetHash()) == nullptr);
+        BOOST_CHECK(!registry.TitleOwner("title"));
+    }
+
+    GRC::ApplyContracts(block, &index, live_heights, found, false);
+    first_only();
+}
+
 BOOST_AUTO_TEST_CASE(reverting_two_votes_of_one_block_newest_first_keeps_the_chain)
 {
     CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, 1700000000);
