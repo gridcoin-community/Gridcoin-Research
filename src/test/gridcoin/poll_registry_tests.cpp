@@ -97,6 +97,19 @@ PollTx MakePollTx(const std::string& title, const int64_t tx_time,
     return {contract, CTransaction(mtx)};
 }
 
+//! A master-key REMOVE that names its poll by txid (payload version 4, from v15), as it reaches the registry.
+PollTx MakeRemoveByTxidTx(const uint256& poll_txid, const int64_t tx_time)
+{
+    GRC::Contract contract = GRC::MakeContract<GRC::PollPayload>(
+        uint32_t {3}, GRC::ContractAction::REMOVE, GRC::PollPayload::REMOVE_BY_TXID_VERSION, poll_txid);
+
+    CMutableTransaction mtx;
+    mtx.nTime = tx_time;
+    mtx.vContracts.push_back(contract);
+
+    return {contract, CTransaction(mtx)};
+}
+
 CBlockIndex MakeBlockIndex(const int height, const int64_t time)
 {
     // A stored poll record carries its block's hash, so each test block index gets one, made from its height and
@@ -747,6 +760,148 @@ BOOST_AUTO_TEST_CASE(every_active_poll_is_listed_and_found_by_its_title)
     LOCK(GRC::PollRegistry::cs_poll_registry);
     BOOST_CHECK(listed() == all);
     BOOST_CHECK(found("title") == both);
+}
+
+//!
+//! A REMOVE by txid (payload version 4) carries the poll's txid and nothing else, and reads back the same. A version 4
+//! ADD, and a version 4 REMOVE without a txid, are not well formed.
+//!
+BOOST_AUTO_TEST_CASE(a_removal_by_txid_carries_only_the_poll_txid)
+{
+    const uint256 poll_txid = uint256S("0x1234");
+    const PollTx remove = MakeRemoveByTxidTx(poll_txid, 1700000000);
+
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    stream << remove.contract;
+    GRC::Contract read_back;
+    stream >> read_back;
+
+    BOOST_CHECK(read_back.WellFormed());
+    const auto payload = read_back.SharePayloadAs<GRC::PollPayload>();
+    BOOST_CHECK_EQUAL(payload->m_version, GRC::PollPayload::REMOVE_BY_TXID_VERSION);
+    BOOST_CHECK(payload->m_poll_txid == poll_txid);
+
+    // The payload is its version and the txid: 4 + 32 bytes.
+    CDataStream payload_stream(SER_NETWORK, PROTOCOL_VERSION);
+    payload->Serialize(payload_stream, GRC::ContractAction::REMOVE);
+    BOOST_CHECK_EQUAL(payload_stream.size(), 36U);
+
+    BOOST_CHECK(!GRC::PollPayload(GRC::PollPayload::REMOVE_BY_TXID_VERSION, poll_txid)
+                     .WellFormed(GRC::ContractAction::ADD));
+    BOOST_CHECK(!GRC::PollPayload(GRC::PollPayload::REMOVE_BY_TXID_VERSION, uint256())
+                     .WellFormed(GRC::ContractAction::REMOVE));
+}
+
+//!
+//! From v15 a master-key REMOVE names its poll by txid: below v15 a REMOVE by txid is refused, from v15 a
+//! REMOVE by title is refused, and a version 4 ADD is refused at every height.
+//!
+BOOST_AUTO_TEST_CASE(from_v15_a_poll_removal_names_its_poll_by_txid)
+{
+    CBlockIndex index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx by_txid = MakeRemoveByTxidTx(uint256S("0x1234"), 1700000000);
+    const PollTx by_title = MakePollTx("Title", 1700000000, GRC::ContractAction::REMOVE,
+                                       GRC::PollWeightType::BALANCE, 3);
+    const GRC::Contract v4_add = GRC::MakeContract<GRC::PollPayload>(
+        uint32_t {3}, GRC::ContractAction::ADD, GRC::PollPayload::REMOVE_BY_TXID_VERSION, uint256S("0x1234"));
+    const CTransaction v4_add_tx = MakeVoteTxFor(v4_add, 1700000000); // a transaction carrying the contract
+    int DoS = 0;
+
+    {
+        grc_test::V15HeightGuard v15(index.nHeight + 1);
+        BOOST_CHECK(!registry.BlockValidate({by_txid.contract, by_txid.tx, &index}, DoS));
+        BOOST_CHECK(!registry.BlockValidate({v4_add, v4_add_tx, &index}, DoS));
+    }
+
+    grc_test::V15HeightGuard v15(index.nHeight);
+    BOOST_CHECK(registry.BlockValidate({by_txid.contract, by_txid.tx, &index}, DoS));
+    BOOST_CHECK(!registry.BlockValidate({by_title.contract, by_title.tx, &index}, DoS));
+    BOOST_CHECK(!registry.BlockValidate({v4_add, v4_add_tx, &index}, DoS));
+}
+
+//!
+//! From v15 a REMOVE by txid deletes the poll it names, here a poll that does not own its title, and the title stays
+//! with its owner. A restart and the REMOVE's revert give the same. A REMOVE by txid that names no stored
+//! poll, or a poll already removed, stores nothing.
+//!
+BOOST_AUTO_TEST_CASE(from_v15_a_removal_by_txid_deletes_the_poll_it_names)
+{
+    CBlockIndex index_owner = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex index_later = MakeBlockIndex(V13Height() + 20, 1700001000);
+    CBlockIndex index_remove = MakeBlockIndex(V13Height() + 30, 1700002000);
+    CBlockIndex index_again = MakeBlockIndex(V13Height() + 40, 1700003000);
+    RegistryReset reset;
+    grc_test::V15HeightGuard v15(index_remove.nHeight);
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx owner = MakePollTx("Title", 1700000000);
+    const PollTx later = MakePollTx("TITLE", 1700001000); // below v15: registered by its txid beside the owner
+    const PollTx remove = MakeRemoveByTxidTx(later.tx.GetHash(), 1700002000);
+    const PollTx remove_again = MakeRemoveByTxidTx(later.tx.GetHash(), 1700003000);
+    const PollTx remove_unknown = MakeRemoveByTxidTx(uint256S("0x1234"), 1700003001);
+
+    registry.Add({owner.contract, owner.tx, &index_owner});
+    registry.Add({later.contract, later.tx, &index_later});
+    registry.Delete({remove.contract, remove.tx, &index_remove});
+
+    for (int pass = 0; pass < 2; ++pass) {
+        {
+            LOCK(GRC::PollRegistry::cs_poll_registry);
+            BOOST_CHECK(registry.TryByTxid(later.tx.GetHash()) == nullptr);
+            BOOST_CHECK(registry.IsStored(remove.tx.GetHash()));
+            BOOST_CHECK(registry.TryByTxid(owner.tx.GetHash()) != nullptr);
+            BOOST_CHECK(registry.TitleOwner("title") == owner.tx.GetHash());
+        }
+
+        // The second pass checks the restarted registry.
+        Restart(registry);
+    }
+
+    registry.Delete({remove_again.contract, remove_again.tx, &index_again});
+    registry.Delete({remove_unknown.contract, remove_unknown.tx, &index_again});
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_CHECK(!registry.IsStored(remove_again.tx.GetHash()));
+        BOOST_CHECK(!registry.IsStored(remove_unknown.tx.GetHash()));
+    }
+
+    registry.Revert({remove.contract, remove.tx, &index_remove});
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK(registry.TryByTxid(later.tx.GetHash()) != nullptr);
+    BOOST_CHECK(!registry.IsStored(remove.tx.GetHash()));
+}
+
+//!
+//! The mempool and the wallet's revalidation, both through Validate, refuse a poll removal the next block would
+//! refuse, judged at the next block's height: below v15 a REMOVE by txid, from v15 a REMOVE by title,
+//! and a version 4 ADD at every height.
+//!
+BOOST_AUTO_TEST_CASE(the_mempool_refuses_a_poll_removal_the_next_block_would_refuse)
+{
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx by_txid = MakeRemoveByTxidTx(uint256S("0x1234"), 1700000000);
+    const PollTx by_title = MakePollTx("Title", 1700000000, GRC::ContractAction::REMOVE,
+                                       GRC::PollWeightType::BALANCE, 3);
+    const GRC::Contract v4_add = GRC::MakeContract<GRC::PollPayload>(
+        uint32_t {3}, GRC::ContractAction::ADD, GRC::PollPayload::REMOVE_BY_TXID_VERSION, uint256S("0x1234"));
+    const CTransaction v4_add_tx = MakeVoteTxFor(v4_add, 1700000000); // a transaction carrying the contract
+    int DoS = 0;
+
+    BOOST_CHECK(!registry.Validate(by_txid.contract, by_txid.tx, DoS));
+    BOOST_CHECK(!registry.Validate(v4_add, v4_add_tx, DoS));
+
+    grc_test::V15HeightGuard v15(0);
+    BOOST_CHECK(registry.Validate(by_txid.contract, by_txid.tx, DoS));
+    BOOST_CHECK(!registry.Validate(by_title.contract, by_title.tx, DoS));
+    BOOST_CHECK(!registry.Validate(v4_add, v4_add_tx, DoS));
 }
 
 BOOST_AUTO_TEST_CASE(reverting_two_votes_of_one_block_newest_first_keeps_the_chain)

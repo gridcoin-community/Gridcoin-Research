@@ -445,7 +445,7 @@ BOOST_AUTO_TEST_CASE(every_gated_row_is_refused_without_elevation)
         }
     }
 
-    BOOST_CHECK_EQUAL(gated, 48U);
+    BOOST_CHECK_EQUAL(gated, 49U);
 }
 
 BOOST_AUTO_TEST_CASE(elevate_rows_run_with_a_full_unlock)

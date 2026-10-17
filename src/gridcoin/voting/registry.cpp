@@ -1610,6 +1610,19 @@ void PollRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     m_vote_db.clear();
 }
 
+namespace {
+//!
+//! \brief Whether a poll contract's payload version fits the REMOVE rule at a height: from v15 a REMOVE names
+//! its poll by txid (payload version 4), and only a REMOVE from v15 is version 4.
+//!
+bool PollRemoveVersionFits(const Contract& contract, const PollPayload& payload, const int height)
+{
+    const bool remove_by_txid = payload.m_version == PollPayload::REMOVE_BY_TXID_VERSION;
+
+    return remove_by_txid == (IsV15Enabled(height) && contract.m_action == ContractAction::REMOVE);
+}
+} // anonymous namespace
+
 bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Vote contract claims do not affect consensus. Vote claim validation
@@ -1627,6 +1640,17 @@ bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, in
 
     // V2+ validations
     const auto payload = contract.SharePayloadAs<PollPayload>();
+
+    // The REMOVE rule, judged at the next block's height as the block rules will judge it.
+    if (!PollRemoveVersionFits(contract, *payload, nBestHeight + 1)) {
+        DoS = 25;
+        return false;
+    }
+
+    // A REMOVE by txid carries no poll and no claim: the master key's input (CheckContracts) is its authority.
+    if (payload->m_version == PollPayload::REMOVE_BY_TXID_VERSION) {
+        return true;
+    }
 
     if (!PollValidator(*payload, tx).Validate(DoS)) return false;
 
@@ -1654,6 +1678,19 @@ bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXC
     // Enforce v3 polls at PollV3Height
     if (IsPollV3Enabled(ctx.m_pindex->nHeight) && payload->m_version < 3) {
         return false;
+    }
+
+    // The REMOVE rule at the block's height. A version 4 REMOVE carries no poll and no claim, so nothing
+    // below applies to it.
+    if (!PollRemoveVersionFits(ctx.m_contract, *payload, ctx.m_pindex->nHeight)) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT, "%s: rejected poll contract of payload version %u at height %d",
+                 __func__, payload->m_version, ctx.m_pindex->nHeight);
+        return false;
+    }
+
+    if (payload->m_version == PollPayload::REMOVE_BY_TXID_VERSION) {
+        return true;
     }
 
     // Reject v2+ claims before multi-address activation (bidirectional enforcement)
@@ -2020,8 +2057,18 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
     PollReference* poll_ref = nullptr;
 
     if (ctx->m_action == ContractAction::REMOVE) {
-        // A master-key REMOVE names the poll by title.
-        poll_ref = TryBy(PollTitleKey(payload->m_poll.m_title));
+        if (payload->m_version == PollPayload::REMOVE_BY_TXID_VERSION) {
+            // From v15 a master-key REMOVE names its poll by txid. It resolves only to an ACTIVE poll the registry
+            // stores (registered since V11); a pre-V11 poll loaded on demand is never removed.
+            const auto iter = m_polls_by_txid.find(payload->m_poll_txid);
+
+            if (iter != m_polls_by_txid.end() && iter->second.m_stored && !iter->second.m_deleted) {
+                poll_ref = &iter->second;
+            }
+        } else {
+            // Below v15 it names the poll by title: the ACTIVE poll that owns the title.
+            poll_ref = TryBy(PollTitleKey(payload->m_poll.m_title));
+        }
     } else {
         // The poll's own ADD, reverted: a revert removes only the poll its own
         // contract added, which it finds by its transaction.
@@ -2033,8 +2080,8 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
     }
 
     if (!poll_ref) {
-        LogPrint(BCLog::LogFlags::VOTE, "%s: poll \"%s\" (%s) not found in registry.",
-                 __func__, payload->m_poll.m_title, ctx.m_tx.GetHash().ToString());
+        LogPrint(BCLog::LogFlags::VOTE, "%s: the poll named by %s is not in the registry.",
+                 __func__, ctx.m_tx.GetHash().ToString());
         return;
     }
 
@@ -2084,9 +2131,9 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
         m_polls_by_txid.erase(txid);
     }
 
-    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Deleted poll %s to the registry, m_polls.size() = %u.",
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Deleted poll %s from the registry, m_polls.size() = %u.",
              __func__,
-             payload->m_poll.m_title,
+             txid.ToString(),
              m_polls.size());
 
     if (!m_replay_in_progress) {

@@ -776,6 +776,7 @@ static const CRPCCommand vRPCCommands[] =
     { "testpollnotification",    &testpollnotification,    cat_voting, &testpollnotification_helpman, heritage_pure_gridcoin, "", access_free },
     { "vote",                    &vote,                    cat_voting, &vote_helpman, heritage_pure_gridcoin, "", access_elevate },
     { "votebyid",                &votebyid,                cat_voting, &votebyid_helpman, heritage_pure_gridcoin, "", access_elevate },
+    { "removepoll",              &removepoll,              cat_voting, &removepoll_helpman, heritage_pure_gridcoin, "", access_elevate },
     { "votedetails",             &votedetails,             cat_voting, &votedetails_helpman, heritage_pure_gridcoin, "", access_read_only },
 };
 

@@ -1711,6 +1711,10 @@
       "class": "elevate",
       "effect": "keys"
     },
+    "removepoll": {
+      "class": "elevate",
+      "effect": "keys"
+    },
     "removepool": {
       "class": "elevate",
       "effect": "keys"

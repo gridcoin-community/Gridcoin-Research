@@ -956,6 +956,68 @@ UniValue votebyid(const UniValue& params)
     return SubmitVote(*poll, std::move(builder));
 }
 
+static const RPCHelpMan removepoll_help = RPCHelpMan{
+    "removepoll",
+    "Remove a poll registered since block version 11, by its id, from block version 15. Requires the master key. "
+    "The poll keeps its title.",
+    {
+        {"poll_id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "ID (transaction hash) of the poll to remove."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "poll_id", "The removed poll's id."},
+            {RPCResult::Type::STR_HEX, "txid", "The removal's transaction id."},
+        }},
+    RPCExamples{
+        HelpExampleCli("removepoll", "\"<poll_txid>\"") +
+        HelpExampleRpc("removepoll", "\"<poll_txid>\"")},
+};
+const RPCHelpMan& removepoll_helpman() { return removepoll_help; }
+
+UniValue removepoll(const UniValue& params)
+{
+    EnsureWalletIsUnlocked();
+
+    const uint256 poll_txid = uint256S(params[0].get_str());
+    GRC::Contract contract;
+
+    {
+        LOCK(cs_main);
+
+        // A REMOVE names its poll by id from block version 15; below it the network accepts only the older
+        // form, which names a title.
+        if (!IsV15Enabled(nBestHeight + 1)) {
+            throw JSONRPCError(RPC_MISC_ERROR, "Polls can be removed by id from block version 15.");
+        }
+
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+
+        // Only an ACTIVE poll the registry stores (registered since V11); a pre-V11 poll is never removed.
+        if (!GetPollRegistry().TryByTxid(poll_txid) || !GetPollRegistry().IsStored(poll_txid)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "No poll registered since block version 11 has that id.");
+        }
+
+        contract = GRC::MakeContract<GRC::PollPayload>(
+            uint32_t {3}, GRC::ContractAction::REMOVE, GRC::PollPayload::REMOVE_BY_TXID_VERSION, poll_txid);
+    }
+
+    std::pair<CWalletTx, std::string> result;
+    {
+        LOCK(cs_main);
+        result = GRC::SendContract(contract);
+    }
+
+    if (!result.second.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, result.second);
+    }
+
+    UniValue res(UniValue::VOBJ);
+    res.pushKV("poll_id", poll_txid.ToString());
+    res.pushKV("txid", result.first.GetHash().ToString());
+
+    return res;
+}
+
 static const RPCHelpMan votewithclaim_help{
     "votewithclaim",
     "Regtest only. Cast a vote whose balance claim lists exactly the given outputs, for\n"
