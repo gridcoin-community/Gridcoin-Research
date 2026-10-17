@@ -35,10 +35,7 @@ namespace {
 //!
 std::string ParseLegacyVoteTitle(const std::string& key)
 {
-    std::string title = key.substr(0, key.find(';'));
-    title = ToLower(title);
-
-    return title;
+    return PollTitleKey(key.substr(0, key.find(';')));
 }
 
 //!
@@ -1157,7 +1154,7 @@ void PollRegistry::FlagRebuild() const
 
 void PollRegistry::IndexPollRecord(const PollEntry& entry)
 {
-    const std::string title_key = ToLower(entry.m_title);
+    const std::string title_key = PollTitleKey(entry.m_title);
 
     if (entry.m_status == PollEntryStatus::ACTIVE) {
         PollReference& ref = m_polls_by_txid[entry.m_poll_txid];
@@ -1542,7 +1539,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 
                     if (title.empty()) continue;
 
-                    if (title == ToLower(ref->Title())) {
+                    if (title == PollTitleKey(ref->Title())) {
                         ref->LinkVote(block.vtx[i].GetHash());
                     }
                 } // for contract
@@ -1811,7 +1808,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         // A pre-V11 poll found by TryByTxidWithAddHistoricalPollAndVotes: registered in memory only, with no record
         // and no title-index entry. It is not registered if its title is taken.
         PollReference& poll_ref = m_polls_by_txid[txid];
-        const auto shown = m_polls.emplace(ToLower(poll_title), &poll_ref);
+        const auto shown = m_polls.emplace(PollTitleKey(poll_title), &poll_ref);
 
         if (!shown.second) {
             m_polls_by_txid.erase(txid);
@@ -1859,7 +1856,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
 
     // A later poll with a title key already taken (below v15 only) is registered by its txid but not shown, so it
     // is not announced either.
-    if (TryByTitle(ToLower(poll_title)) != &poll_ref) {
+    if (TryByTitle(PollTitleKey(poll_title)) != &poll_ref) {
         return;
     }
 
@@ -1974,7 +1971,7 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
 
     if (ctx->m_action == ContractAction::REMOVE) {
         // A master-key REMOVE names the poll by title.
-        poll_ref = TryBy(ToLower(payload->m_poll.m_title));
+        poll_ref = TryBy(PollTitleKey(payload->m_poll.m_title));
     } else {
         // The poll's own ADD, reverted: a revert removes only the poll its own
         // contract added, which it finds by its transaction.
@@ -1996,7 +1993,7 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
     }
 
     const uint256 txid = poll_ref->Txid();
-    const std::string title_key = ToLower(poll_ref->m_title);
+    const std::string title_key = PollTitleKey(poll_ref->m_title);
 
     // Either way the poll leaves the display map.
     if (const auto shown = m_polls.find(title_key); shown != m_polls.end() && shown->second == poll_ref) {

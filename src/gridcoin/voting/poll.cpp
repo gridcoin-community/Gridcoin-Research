@@ -83,6 +83,13 @@ const Poll::ChoiceList g_yes_no_abstain_choices(std::vector<Poll::Choice> {
 });
 } // Anonymous namespace
 
+std::string GRC::PollTitleKey(const std::string& title)
+{
+    // ASCII only and locale-independent: ToLower changes A-Z alone, and TrimString's default pattern is ASCII white
+    // space.
+    return ToLower(TrimString(title));
+}
+
 // -----------------------------------------------------------------------------
 // Class: Poll
 // -----------------------------------------------------------------------------

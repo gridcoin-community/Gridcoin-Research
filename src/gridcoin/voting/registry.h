@@ -305,7 +305,7 @@ struct PollSnapshot
 class PollRegistry : public IContractHandler
 {
 public:
-    //! Display map: title key (ToLower(title)) to the ACTIVE poll that registered it first.
+    //! Display map: title key (PollTitleKey(title)) to the ACTIVE poll that registered it first.
     using PollMapByTitle = std::map<std::string, PollReference*>;
     //! Owning map: every poll the registry holds, ACTIVE or DELETED, by txid.
     using PollMapByTxid = std::map<uint256, PollReference>;

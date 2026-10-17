@@ -39,7 +39,7 @@ const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
         }
     }
 
-    const std::string title = boost::to_lower_copy(title_or_id);
+    const std::string title = GRC::PollTitleKey(title_or_id);
 
     if (const PollReference* ref = registry.TryByTitle(title)) {
         return ref;
@@ -853,7 +853,7 @@ UniValue vote(const UniValue& params)
 
     EnsureWalletIsUnlocked();
 
-    const std::string title = boost::to_lower_copy(params[0].get_str());
+    const std::string title = GRC::PollTitleKey(params[0].get_str());
 
     uint256 poll_txid;
     PollOption poll;

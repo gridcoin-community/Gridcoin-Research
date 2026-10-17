@@ -582,6 +582,14 @@ public:
         // is because it depends on the poll payload version, which is not available here.
     }
 }; // Poll
+
+//!
+//! \brief Get the key a poll's title is registered, looked up and compared under.
+//!
+//! \return The title in ASCII lower case, with leading and trailing ASCII white space removed. Titles that differ in
+//! any other way -- inner white space, invisible characters, non-ASCII case -- are different titles.
+//!
+std::string PollTitleKey(const std::string& title);
 } // namespace GRC
 
 #endif // GRIDCOIN_VOTING_POLL_H

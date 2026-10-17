@@ -1911,7 +1911,7 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
     // duplicate-title rejection is in contract validation at block acceptance;
     // this check exists to fail the user's submission early with a clear message.)
     if (WITH_LOCK(GRC::PollRegistry::cs_poll_registry,
-                  return GRC::GetPollRegistry().TryByTitle(boost::to_lower_copy(m_poll->m_title)) != nullptr)) {
+                  return GRC::GetPollRegistry().TryByTitle(GRC::PollTitleKey(m_poll->m_title)) != nullptr)) {
         throw VotingError(_("Poll with that title already exists. Please choose another title."));
     }
 

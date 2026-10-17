@@ -538,6 +538,48 @@ BOOST_AUTO_TEST_CASE(a_remove_resolves_only_to_the_active_display_poll)
     BOOST_CHECK(!registry.IsStored(remove_again.tx.GetHash()));
 }
 
+//!
+//! A poll's title key is its title in ASCII lower case without leading or trailing ASCII white space.
+//! Inner white space, invisible characters and non-ASCII case still make different titles.
+//!
+BOOST_AUTO_TEST_CASE(a_title_key_ignores_ascii_case_and_edge_white_space)
+{
+    BOOST_CHECK_EQUAL(GRC::PollTitleKey(" \tBudget 2027\r\n"), "budget 2027");
+    BOOST_CHECK_EQUAL(GRC::PollTitleKey("BUDGET 2027"), "budget 2027");
+    BOOST_CHECK(GRC::PollTitleKey("Budget  2027") != GRC::PollTitleKey("Budget 2027"));
+    BOOST_CHECK(GRC::PollTitleKey("Budget\xE2\x80\x8B 2027") != GRC::PollTitleKey("Budget 2027"));
+    BOOST_CHECK(GRC::PollTitleKey("\xC3\x84") != GRC::PollTitleKey("\xC3\xA4"));
+}
+
+//!
+//! A title that differs from a registered poll's only in case or edge white space names that poll: the display lookup
+//! and a master-key REMOVE both resolve it.
+//!
+BOOST_AUTO_TEST_CASE(a_title_differing_only_by_edge_white_space_names_the_same_poll)
+{
+    CBlockIndex index_poll = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex index_remove = MakeBlockIndex(V13Height() + 20, 1700001000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+    const PollTx remove = MakePollTx(" TITLE\t", 1700001000, GRC::ContractAction::REMOVE);
+
+    registry.Add({poll.contract, poll.tx, &index_poll});
+
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_REQUIRE(registry.TryByTitle(GRC::PollTitleKey("  title  ")) != nullptr);
+    }
+
+    registry.Delete({remove.contract, remove.tx, &index_remove});
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK(registry.TryByTitle("title") == nullptr);
+    BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash()) == nullptr);
+}
+
 BOOST_AUTO_TEST_CASE(reverting_two_votes_of_one_block_newest_first_keeps_the_chain)
 {
     CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, 1700000000);
