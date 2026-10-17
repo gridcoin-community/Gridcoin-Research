@@ -7,10 +7,12 @@
 
 #include <qt/guiipcinfo.h>
 
+#include <QObject>
 #include <QString>
 #include <QWidget>
 
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 class ClientModel;
@@ -37,6 +39,36 @@ struct ModelBundle
     interfaces::PSGTPoolContext* psgt;
 };
 
+//! What DeliverCoreMessage did with one core message.
+enum class CoreMessageDelivery {
+    Queued,          //!< Not modal: delivered queued, as before.
+    Blocking,        //!< Modal, front end does not queue modal messages: blocking queued connection from another thread, direct call on the GUI thread, as before.
+    QueuedAndLogged, //!< Modal, queuing front end: delivered queued and written to the GUI log and stderr.
+};
+
+class GuiFrontEnd;
+
+//! Thrown by GuiFrontEnd::construct(), and only there, when the front end
+//! cannot build its main window. StartGridcoinQt catches it before anything
+//! has started, writes it to the GUI log and stderr, shows it in a message box
+//! and returns EXIT_FAILURE through its ordinary teardown; GuiMain returns that
+//! status.
+class GuiFrontEndUnusable : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
+//! Delivers one core message to `target`'s error(QString,QString,bool) slot.
+//! With no front end, or one that does not queue modal messages, a modal
+//! message goes through a blocking queued connection from another thread and a
+//! direct call on the GUI thread, and any other message is queued, as
+//! ThreadSafeMessageBox always did. For a front end that queues modal messages
+//! it posts every message queued, from any thread, and returns at once; a modal
+//! one is also written to the GUI log and to stderr. The result says which of
+//! these happened.
+CoreMessageDelivery DeliverCoreMessage(QObject* target, GuiFrontEnd* frontend, const std::string& caption, const std::string& message, bool modal);
+
 //! The seam between the GUI composition root (GuiMain / StartGridcoinQt in
 //! bitcoin.cpp: Init selection, IPC connect, OptionsModel, readiness, the model
 //! bundle and teardown) and the widgets that present it. The composition root
@@ -54,7 +86,8 @@ public:
     //! Create the main window. The returned object is the target of the
     //! string-invoked core bridges and must provide the slots
     //! error(QString,QString,bool), update(QString,QString,int,QString) and
-    //! handleURI(QString).
+    //! handleURI(QString). Throws GuiFrontEndUnusable when the main window
+    //! cannot be built.
     virtual QObject* construct() = 0;
     //! Destroy the main window; idempotent.
     virtual void destroyMain() = 0;
@@ -82,9 +115,19 @@ public:
     //! minimize-on-close (#2995).
     virtual void requestQuit() = 0;
 
+    //! True for a front end whose core-message target cannot block inside its
+    //! error slot; DeliverCoreMessage then never makes the raising thread wait.
+    //! Default false (the Widgets front end keeps it). DeliverCoreMessage calls
+    //! it from whatever thread raised the message, core threads included, while
+    //! the front end is registered: it reads no GUI state and returns the same
+    //! value for the front end's whole life.
+    virtual bool queuesModalCoreMessages() const;
+
     //! Detach every model from the front end, in the order StartGridcoinQt's
     //! teardown has always used: hide the main window, then client, wallet, MRC,
     //! researcher, voting and PSGT.
+    //! Before the first hook starts, it calls onDetachStarting(); that step runs
+    //! once, on the call that starts the first hook.
     //! Each call runs, in that order, the hooks not yet started. The progress
     //! index moves past a hook before the hook runs, so a hook that throws is
     //! never re-entered and its exception propagates to the caller. After such a
@@ -115,6 +158,11 @@ protected:
     //! PSGT pool context, before the context is destroyed.
     virtual void detachPSGT() = 0;
 
+    //! Called by detachModels() before its first hook, once. A front end closes
+    //! its asynchronous work here so nothing new starts during the detach; must
+    //! not throw. Default does nothing.
+    virtual void onDetachStarting() noexcept;
+
 private:
     //! The next detach hook to start, as an index into detachModels()'s
     //! sequence. It equals the number of hooks once every hook has started.
@@ -132,6 +180,10 @@ private:
 //! therefore tolerate models that were never or only partly attached. On the
 //! normal path the explicit detachModels() call runs first and leaves this
 //! nothing to run.
+//! After the detach it waits for every job on QThreadPool::globalInstance(),
+//! including one a detach hook started, so a pooled job finishes while the
+//! models and sources declared before the guard are alive. Destroy it while
+//! the QCoreApplication is alive, as GlobalPoolReapGuard requires.
 struct FrontEndDetachGuard
 {
     GuiFrontEnd& frontend;

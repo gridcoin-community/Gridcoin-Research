@@ -228,12 +228,9 @@ static void ThreadSafeMessageBox(const std::string& message, const std::string& 
     if(guiref)
     {
         bool modal = (style & CClientUIInterface::MODAL);
-        // in case of modal message, use blocking connection to wait for user to click OK
-        QMetaObject::invokeMethod(guiref, "error",
-                                   modal ? GUIUtil::blockingGUIThreadConnection() : Qt::QueuedConnection,
-                                   Q_ARG(QString, QString::fromStdString(caption)),
-                                   Q_ARG(QString, QString::fromStdString(message)),
-                                   Q_ARG(bool, modal));
+        // The front end decides whether a modal message may hold this thread
+        // until the user answers; see DeliverCoreMessage.
+        DeliverCoreMessage(guiref, g_frontend, caption, message, modal);
     }
     else
     {
@@ -1237,7 +1234,8 @@ int GuiMain(int argc, char* argv[], GuiFrontEndFactory make_frontend)
     }
 
     /** Start Qt as normal before it was moved into this function **/
-    StartGridcoinQt(argc, argv, app, *optionsModel, *gui_node, interface_init, ipc_info, *frontend);
+    const int gui_exit_code =
+        StartGridcoinQt(argc, argv, app, *optionsModel, *gui_node, interface_init, ipc_info, *frontend);
 
     // We received a request to remove blockchain data so client user can start to sync from 0
     if (fResetBlockchainRequest)
@@ -1261,7 +1259,7 @@ int GuiMain(int argc, char* argv[], GuiFrontEndFactory make_frontend)
             GUILogPrintf("ResetBlockchainData: failed");
     }
 
-    return EXIT_SUCCESS;
+    return gui_exit_code;
 }
 
 int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel,
@@ -1314,6 +1312,9 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     app.processEvents();
 
     app.setQuitOnLastWindowClosed(false);
+
+    // What this returns, and GuiMain with it.
+    int exit_code = EXIT_SUCCESS;
 
     try
     {
@@ -1546,6 +1547,9 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // detachModels() on the normal path below it has nothing left to
                 // run; if a hook throws inside that call, it resumes the detach at
                 // the next hook. On any other throw path it is the only teardown.
+                // After that detach its destructor also reaps the global
+                // QThreadPool, so a pooled job started before the event loop
+                // finishes while the models and sources above are still alive.
                 FrontEndDetachGuard frontend_detach_guard{frontend};
                 frontend.attachModels(models);
 
@@ -1639,6 +1643,21 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         }
 
     }
+    catch (const GuiFrontEndUnusable& e)
+    {
+        // The front end could not build its main window (a QML root that does
+        // not load). construct() is the first call of the try block, so nothing
+        // has started: in the monolithic build the core has not started, and
+        // under -multiprocess only GuiMain's daemon connection is open. Report
+        // it and end through the ordinary return below, so GuiMain unwinds and
+        // closes that connection as on any other exit, instead of
+        // handleRunawayException's exit(1).
+        GUILogPrintf("Error: the GUI could not start: %s", std::string(e.what()));
+        tfm::format(std::cerr, "Error: the GUI could not start: %s\n", e.what());
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+                              QObject::tr("The GUI could not start:\n%1").arg(QString::fromStdString(e.what())));
+        exit_code = EXIT_FAILURE;
+    }
     catch (std::exception& e)
     {
         // Everything between the front end's `construct()` above and app.exec() -- and the
@@ -1692,5 +1711,5 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     // while it is mid close-rename-reopen would leave the log half-archived.
     JoinGuiArchiveThread();
 
-    return EXIT_SUCCESS;
+    return exit_code;
 }
