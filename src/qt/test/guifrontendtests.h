@@ -18,6 +18,13 @@ private Q_SLOTS:
     void detachResumesAfterThrowingHook();
     void guardRunsEveryHookPastTwoThrows();
     void bridgeSlotSignatures();
+    void widgetsPathBlocksUntilSlotReturns();
+    void detachClosesBeforeFirstHook();
+    void queuedModalMessageNeverBlocksPostingThread();
+    void queuedModalMessageIsLogged();
+    void widgetsFrontEndKeepsTheOldRouting();
+    void detachGuardReapsGlobalPool();
+    void detachGuardReapsJobStartedByHook();
 };
 
 #endif // BITCOIN_QT_TEST_GUIFRONTENDTESTS_H

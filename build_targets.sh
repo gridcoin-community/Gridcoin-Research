@@ -45,6 +45,10 @@ print_help() {
     echo "                      Default: false. Native requires system capnproto (auto-installed"
     echo "                      by SKIP_DEPS=false) and libmultiprocess; depends builds also need"
     echo "                      the depends recipes built with MULTIPROCESS=1."
+    echo "  ENABLE_QML=<bool>   Build the QML front end's C++ module and its tests. Options: true, false."
+    echo "                      Default: false. TARGET=native or macos (or all on macOS) only (the"
+    echo "                      depends Qt has no Qt Quick); needs WITH_GUI=true and USE_QT6=true."
+    echo "                      Native installs the Qt Quick packages unless SKIP_DEPS=true."
     echo "  EXTRA_CMAKE_ARGS    Pass additional arguments to CMake (e.g. '-DBoost_USE_STATIC_LIBS=ON')"
     echo "  CC=<path>           Override C compiler (also read from the CC environment variable)."
     echo "  CXX=<path>          Override C++ compiler (also read from the CXX environment variable)."
@@ -123,8 +127,9 @@ get_current_git_state() {
     fi
 }
 
-# Git state captured by should_skip_build at skip-decision time (i.e., just
-# before a build starts) and recorded by write_build_state on success.
+# Build state captured by should_skip_build at skip-decision time (i.e.,
+# just before a build starts) and recorded by write_build_state on success:
+# the git state, with a +qml suffix when ENABLE_QML=true.
 CAPTURED_BUILD_STATE=""
 
 # Check if we can skip the build
@@ -154,6 +159,18 @@ should_skip_build() {
             return 1
             ;;
     esac
+
+    # ENABLE_QML changes the CMake configuration but not the sources, so the
+    # git state alone would let a rerun that only flips it skip as up to date.
+    # Fold it into the state compared below and recorded by write_build_state.
+    # Only the non-default value adds a suffix, so an ENABLE_QML=false run
+    # compares the git state alone. The suffix is added after the
+    # indeterminate-state check above, so an "unknown" or difffail state
+    # never becomes one that can match.
+    if [ "$ENABLE_QML" = "true" ]; then
+        CURRENT_STATE="${CURRENT_STATE}+qml"
+        CAPTURED_BUILD_STATE="$CURRENT_STATE"
+    fi
 
     # If explicit clean requested, never skip
     if [ "$CLEAN_BUILD" == "true" ] || [ "$CLEAN_BUILD" == "main" ]; then
@@ -247,6 +264,96 @@ write_build_state() {
     echo "${CAPTURED_BUILD_STATE:-unknown}" > "$BUILD_DIR/.build_state"
 }
 
+# Check whether the tests are still on after the given CMake arguments
+# Usage: tests_stay_on $EXTRA_ARGS (unquoted, so that it splits into the
+# words the configure call gets)
+# Returns 0 (true) if the tests may be built, 1 (false) only if they are off
+#
+# The native and macOS configure calls pass -DENABLE_TESTS=ON before
+# $EXTRA_ARGS, and CMake keeps the last definition. The answer is off only
+# when every word is part of a plain definition, -DNAME=VALUE or
+# -DNAME:TYPE=VALUE in one word or two, and the last definition named exactly
+# ENABLE_TESTS has a value CMake reads as false: empty, 0, N, NO, OFF, FALSE
+# or IGNORE in any case, or NOTFOUND or *-NOTFOUND as written. Any other word
+# keeps the answer on whatever follows, among them every option other than -D
+# (-C, --preset and --toolchain too), a -D word with no "=", a definition
+# whose name holds CMAKE, DIR, ROOT, PATH or FILE (the way CMake and its
+# packages name a script or a place to look for one), one whose name is
+# empty or has characters other than letters, digits and underscores, and a
+# definition of ENABLE_GUI or USE_QT6, either of which can stop the configure
+# of an ENABLE_QML=true build. A definition's name ends at its first ":" or
+# "=", and its value starts after its first "=". This reads only these words,
+# not the environment or any CMake file; tests_were_on reads the build
+# directory's cache. A wrong "on" makes every rerun build; a wrong "off" would
+# skip a build that lost its test binary.
+tests_stay_on() {
+    local TESTS="on"
+    local PREFIX=""
+    local ARG
+    local NAME
+    local VALUE
+    local LOWER
+    for ARG in "$@"; do
+        # "-D NAME=VALUE" in two words is the same definition.
+        ARG="$PREFIX$ARG"
+        PREFIX=""
+        case "$ARG" in
+            -D)
+                PREFIX="-D"
+                continue
+                ;;
+            -D*=*)
+                ;;
+            *)
+                return 0
+                ;;
+        esac
+        # CMake takes the name up to the first ":" or "=".
+        NAME="${ARG#-D}"
+        NAME="${NAME%%=*}"
+        NAME="${NAME%%:*}"
+        case "$NAME" in
+            ""|*[![:alnum:]_]*|*CMAKE*|*DIR*|*ROOT*|*PATH*|*FILE*|ENABLE_GUI|USE_QT6)
+                return 0
+                ;;
+            ENABLE_TESTS)
+                VALUE="${ARG#*=}"
+                LOWER=$(printf '%s' "$VALUE" | tr '[:upper:]' '[:lower:]')
+                TESTS="on"
+                case "$LOWER" in ""|0|n|no|off|false|ignore) TESTS="off" ;; esac
+                case "$VALUE" in NOTFOUND|*-NOTFOUND) TESTS="off" ;; esac
+                ;;
+        esac
+    done
+    # A -D with nothing after it is a word this cannot read.
+    [ -z "$PREFIX" ] || return 0
+    [ "$TESTS" = "on" ]
+}
+
+# Check whether the last configure of a build directory had the tests on
+# Usage: tests_were_on BUILD_DIR
+# Returns 0 (true) if BUILD_DIR/CMakeCache.txt is newer than
+# BUILD_DIR/.build_state or holds an ENABLE_TESTS entry whose value CMake
+# reads as true, 1 (false) otherwise, and also when there is no cache to read
+#
+# A build made with the tests on keeps its test binary in the list on a rerun
+# whose EXTRA_CMAKE_ARGS turn the tests off, so that a deleted test binary is
+# not skipped over. CMake writes the value as it was given (ON, 1, on, Yes)
+# and with the type it was given (BOOL, STRING), so the entry is matched by
+# name and its value read by the rules tests_stay_on uses. This also reads the
+# cache's file time: CMake writes the cache at the end of a configure, a
+# failed one too, and the state is recorded only after a build and its tests
+# pass, so a cache newer than the state was left by a run that recorded
+# nothing, and its entry does not say what the last recorded build had.
+tests_were_on() {
+    local CACHE="$1/CMakeCache.txt"
+    local ENTRY
+    [ -r "$CACHE" ] || return 1
+    [ "$CACHE" -nt "$1/.build_state" ] && return 0
+    ENTRY=$(grep -m 1 '^ENABLE_TESTS:[^=]*=' "$CACHE") || return 1
+    tests_stay_on "-D$ENTRY"
+}
+
 # ==============================================================================
 # ARGUMENT PARSING
 # ==============================================================================
@@ -261,6 +368,7 @@ WITH_GUI="true"
 WITH_DOCS="false"
 USE_QT6="true"
 ENABLE_MULTIPROCESS="false"
+ENABLE_QML="false"
 # Seed from the conventional CC/CXX environment variables; a positional
 # CC=/CXX= argument (parsed below) still overrides them.
 CC_OVERRIDE="${CC:-}"
@@ -307,6 +415,10 @@ for arg in "$@"; do
             ENABLE_MULTIPROCESS="${arg#*=}"
             shift
             ;;
+        ENABLE_QML=*)
+            ENABLE_QML="${arg#*=}"
+            shift
+            ;;
         PARALLEL=*)
             PARALLEL="${arg#*=}"
             shift
@@ -346,6 +458,18 @@ done
 # Validate Target
 if [[ ! "$TARGET" =~ ^(native|depends|win64|macos|all)$ ]]; then
     echo "Error: Invalid TARGET '$TARGET'. Must be one of: native, depends, win64, macos, all."
+    exit 1
+fi
+
+# The QML module needs a Qt with Qt Quick. The depends Qt has none, so only the
+# native and macOS targets, which use the system Qt, can build it. TARGET=all
+# is accepted on macOS, where it builds only the macOS target.
+if [ "$ENABLE_QML" = "true" ] && { [[ "$TARGET" =~ ^(depends|win64)$ ]] || { [ "$TARGET" = "all" ] && [ "$(uname -s)" != "Darwin" ]; }; }; then
+    echo "Error: ENABLE_QML=true needs TARGET=native or TARGET=macos (the depends Qt has no Qt Quick)."
+    exit 1
+fi
+if [ "$ENABLE_QML" = "true" ] && { [ "$WITH_GUI" != "true" ] || [ "$USE_QT6" != "true" ]; }; then
+    echo "Error: ENABLE_QML=true needs WITH_GUI=true and USE_QT6=true."
     exit 1
 fi
 
@@ -408,6 +532,14 @@ else
     MULTIPROCESS_CMAKE_FLAG="-DENABLE_MULTIPROCESS=OFF"
 fi
 
+# QML front end module. Passed only to the native and macOS CMake invocations
+# (see the ENABLE_QML target check above).
+if [ "$ENABLE_QML" = "true" ]; then
+    QML_CMAKE_FLAG="-DENABLE_QML=ON"
+else
+    QML_CMAKE_FLAG="-DENABLE_QML=OFF"
+fi
+
 # Determine Concurrency
 if [ -n "$PARALLEL" ]; then
     CORES="$PARALLEL"
@@ -436,6 +568,7 @@ echo "With Docs:    $WITH_DOCS"
 echo "Lock Order:   $DEBUG_LOCKORDER"
 echo "Qt6:          $USE_QT6"
 echo "Multiprocess: $ENABLE_MULTIPROCESS"
+echo "QML:          $ENABLE_QML"
 if [ -n "$MANUAL_QT_PATH" ]; then echo "Manual Qt:    $MANUAL_QT_PATH"; fi
 if [ -n "$EXTRA_ARGS" ]; then     echo "Extra Args:   $EXTRA_ARGS"; fi
 if [ -n "$CC_OVERRIDE" ]; then    echo "C Compiler:   $CC_OVERRIDE"; fi
@@ -457,8 +590,8 @@ else
     # Check if the dependency script exists
     if [ -f "./install_dependencies.sh" ]; then
         source ./install_dependencies.sh
-        # Pass TARGET, USE_QT6, and WITH_GUI to install_deps
-        install_deps "$TARGET" "$USE_QT6" "$WITH_GUI" "$ENABLE_MULTIPROCESS"
+        # Pass TARGET, USE_QT6, WITH_GUI, ENABLE_MULTIPROCESS and ENABLE_QML to install_deps
+        install_deps "$TARGET" "$USE_QT6" "$WITH_GUI" "$ENABLE_MULTIPROCESS" "$ENABLE_QML"
     else
         echo "Error: install_dependencies.sh not found. Cannot install dependencies."
         exit 1
@@ -470,6 +603,8 @@ fi
 # ==============================================================================
 TARGET1_DAEMON="build/bin/gridcoinresearchd"
 TARGET1_GUI="build/bin/gridcoinresearch"
+TARGET1_QML="build/bin/gridcoinresearch-qml"
+TARGET1_QML_TEST="build/qmltest/test_gridcoin-qml"
 
 if [[ "$TARGET" == "all" || "$TARGET" == "native" ]] && [[ "$(uname -s)" == "Linux" ]]; then
     echo "----------------------------------------------------------------"
@@ -478,6 +613,8 @@ if [[ "$TARGET" == "all" || "$TARGET" == "native" ]] && [[ "$(uname -s)" == "Lin
 
     ARTIFACTS=("$TARGET1_DAEMON")
     if [ "$WITH_GUI" == "true" ]; then ARTIFACTS+=("$TARGET1_GUI"); fi
+    if [ "$ENABLE_QML" == "true" ]; then ARTIFACTS+=("$TARGET1_QML"); fi
+    if [ "$ENABLE_QML" == "true" ] && { tests_stay_on $EXTRA_ARGS || tests_were_on build; }; then ARTIFACTS+=("$TARGET1_QML_TEST"); fi
 
     if should_skip_build "build" "${ARTIFACTS[@]}"; then
         echo ">>> Executable(s) found and version matches. Skipping build."
@@ -494,6 +631,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "native" ]] && [[ "$(uname -s)" == "Lin
             $DOCS_CMAKE_FLAG \
             $LOCKORDER_CMAKE_FLAG \
             $MULTIPROCESS_CMAKE_FLAG \
+            $QML_CMAKE_FLAG \
             -DENABLE_QRENCODE=ON \
             -DUSE_DBUS=ON \
             -DENABLE_UPNP=ON \
@@ -727,6 +865,8 @@ fi
 # ==============================================================================
 TARGET4_DAEMON="build_macos/bin/gridcoinresearchd"
 TARGET4_GUI="build_macos/bin/gridcoinresearch.app/Contents/MacOS/gridcoinresearch"
+TARGET4_QML="build_macos/bin/gridcoinresearch-qml"
+TARGET4_QML_TEST="build_macos/qmltest/test_gridcoin-qml"
 
 if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darwin" ]]; then
     echo "----------------------------------------------------------------"
@@ -735,6 +875,8 @@ if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darw
 
     ARTIFACTS=("$TARGET4_DAEMON")
     if [ "$WITH_GUI" == "true" ]; then ARTIFACTS+=("$TARGET4_GUI"); fi
+    if [ "$ENABLE_QML" == "true" ]; then ARTIFACTS+=("$TARGET4_QML"); fi
+    if [ "$ENABLE_QML" == "true" ] && { tests_stay_on $EXTRA_ARGS || tests_were_on build_macos; }; then ARTIFACTS+=("$TARGET4_QML_TEST"); fi
 
     if should_skip_build "build_macos" "${ARTIFACTS[@]}"; then
         echo ">>> Executable(s) found and version matches. Skipping build."
@@ -816,6 +958,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darw
             $DOCS_CMAKE_FLAG \
             $LOCKORDER_CMAKE_FLAG \
             $MULTIPROCESS_CMAKE_FLAG \
+            $QML_CMAKE_FLAG \
             -DENABLE_QRENCODE=ON \
             -DENABLE_UPNP=ON \
             -DENABLE_PIE=ON \
