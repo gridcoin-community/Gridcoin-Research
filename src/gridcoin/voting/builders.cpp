@@ -15,6 +15,7 @@
 #include "gridcoin/voting/registry.h"
 #include "node/blockstorage.h"
 #include "node/ui_interface.h"
+#include "txmempool.h"
 #include "validation.h"
 #include "wallet/coincontrol.h"
 #include "wallet/wallet.h"
@@ -1902,16 +1903,15 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
         }
     }
 
-    // If a poll of the same title (not case sensitive) is already in the registry, refuse to create the new poll.
-    //
-    // The lock is scoped to the lookup: TryByTitle reads the registry's guarded
-    // map, and only the boolean "does it exist" outlives the scope, so nothing
-    // that could be invalidated afterwards escapes. (It is a check-then-act
-    // against a registry another thread can mutate, but the authoritative
-    // duplicate-title rejection is in contract validation at block acceptance;
-    // this check exists to fail the user's submission early with a clear message.)
-    if (WITH_LOCK(GRC::PollRegistry::cs_poll_registry,
-                  return GRC::GetPollRegistry().TryByTitle(GRC::PollTitleKey(m_poll->m_title)) != nullptr)) {
+    // Refuse a title whose key is taken: by a poll registered since V11, active or deleted (the title index),
+    // or by a poll in the memory pool. From v15 a poll with a taken title is mined but registers nothing and its burn
+    // is spent; before v15 it is registered by its txid. The registry lock is scoped to the lookup. A poll
+    // that takes the title after this check is met by the memory pool's refusal, or by the eviction of same-title
+    // polls when a block takes the title.
+    const std::string title_key = PollTitleKey(m_poll->m_title);
+
+    if (WITH_LOCK(GRC::PollRegistry::cs_poll_registry, return GRC::GetPollRegistry().TitleOwner(title_key).has_value())
+        || mempool.HasPollForTitle(title_key)) {
         throw VotingError(_("Poll with that title already exists. Please choose another title."));
     }
 

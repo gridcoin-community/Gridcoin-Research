@@ -2317,6 +2317,27 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         }
     }
 
+    // One poll per title key in the pool. A second is refused without a penalty: two users can choose one title
+    // within seconds, and a peer that relays the other poll is not at fault. A poll whose title the registry already
+    // holds is admitted: from v15 it is mined but registers nothing. A legacy contract never reaches here; it is
+    // refused above.
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type == GRC::ContractType::POLL && contract.m_version >= 2
+            && contract.m_action == GRC::ContractAction::ADD) {
+            const std::string title_key =
+                GRC::PollTitleKey(contract.SharePayloadAs<GRC::PollPayload>()->m_poll.m_title);
+
+            uint256 existing;
+            if (pool.HasPollForTitle(title_key, &existing)) {
+                return state.DoS(0, error("%s: poll in tx %s has the title of poll %s in the memory pool",
+                                          __func__,
+                                          tx.GetHash().ToString(),
+                                          existing.ToString()),
+                                 "poll-duplicate-title");
+            }
+        }
+    }
+
     // Check for conflicts with in-memory transactions.
     //
     // Replacement is disabled, so an outpoint already spent by a pooled

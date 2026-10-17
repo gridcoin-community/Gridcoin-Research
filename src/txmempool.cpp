@@ -8,6 +8,7 @@
 #include "consensus/tx_verify.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/mrc.h"
+#include "gridcoin/voting/payloads.h"
 #include "sync.h"
 
 CTxMemPool mempool;
@@ -54,6 +55,15 @@ CTxMemPoolEntry::CTxMemPoolEntry(const CTransaction& tx_in, CAmount fee, int64_t
         }
         case GRC::ContractType::POOL_REGISTER: {
             m_has_pool_register = true;
+            break;
+        }
+        case GRC::ContractType::POLL: {
+            // Only an ADD takes a title; a master-key REMOVE names one. AcceptToMemoryPool refuses a legacy contract
+            // before it makes an entry, so the payload is a PollPayload.
+            if (contract.m_action == GRC::ContractAction::ADD) {
+                m_has_poll_add = true;
+                m_poll_title_key = GRC::PollTitleKey(contract.SharePayloadAs<GRC::PollPayload>()->m_poll.m_title);
+            }
             break;
         }
         default:
@@ -105,6 +115,8 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry)
         }
         if (e.HasBeacon())
             ++m_beacon_by_cpid[e.GetBeaconCpid()];
+        if (e.HasPollAdd())
+            m_poll_by_title_key.insert_or_assign(e.GetPollTitleKey(), hash);
         if (e.HasMandatorySidestake())
             ++m_mandatory_sidestake_count;
         if (e.HasMessageContract())
@@ -137,6 +149,8 @@ void CTxMemPool::eraseIndexes(const CTxMemPoolEntry& entry)
             m_beacon_by_cpid.erase(it);
         }
     }
+    if (entry.HasPollAdd())
+        m_poll_by_title_key.erase(entry.GetPollTitleKey());
     if (entry.HasMandatorySidestake() && m_mandatory_sidestake_count > 0)
         --m_mandatory_sidestake_count;
     if (entry.HasMessageContract() && m_message_contract_count > 0)
@@ -234,6 +248,7 @@ void CTxMemPool::clear()
     mapNextTx.clear();
     m_mrc_by_cpid.clear();
     m_beacon_by_cpid.clear();
+    m_poll_by_title_key.clear();
     m_mandatory_sidestake_count = 0;
     m_message_contract_count = 0;
     m_pool_register_count = 0;

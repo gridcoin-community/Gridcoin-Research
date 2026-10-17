@@ -91,7 +91,7 @@ struct CTxMemPoolEvictionKey
 //! Phase 1 of the mempool modernization (#3029). The entry caches the fee, size,
 //! time, and entry height that callers previously recomputed, plus lightweight
 //! Gridcoin contract tags (contract type(s); the BEACON CPID; the MRC CPID, fee,
-//! and last-block-hash; the mandatory-sidestake flag) derived from a single pass
+//! and last-block-hash; the mandatory-sidestake flag; a POLL ADD's title key) derived from a single pass
 //! over the transaction's
 //! contracts. The tags are populated here but not yet consumed -- the O(n)
 //! contract scans they will replace remain in place until Phase 2 swaps them for
@@ -118,6 +118,8 @@ private:
     bool m_has_mandatory_sidestake{false};
     bool m_has_message{false};
     bool m_has_pool_register{false};
+    bool m_has_poll_add{false};
+    std::string m_poll_title_key;
 
 public:
     CTxMemPoolEntry(const CTransaction& tx, CAmount fee, int64_t time,
@@ -147,6 +149,10 @@ public:
     bool HasMandatorySidestake() const { return m_has_mandatory_sidestake; }
     bool HasMessageContract() const { return m_has_message; }
     bool HasPoolRegister() const { return m_has_pool_register; }
+    //! Whether the transaction adds a poll. A master-key REMOVE names a poll's title but adds none.
+    bool HasPollAdd() const { return m_has_poll_add; }
+    //! The added poll's title key (GRC::PollTitleKey); empty without a POLL ADD.
+    const std::string& GetPollTitleKey() const { return m_poll_title_key; }
 };
 
 //! Aggregate mempool statistics, collected under a single lock for getmempoolinfo.
@@ -187,6 +193,9 @@ public:
     //! CPID dropped while one of its beacons remained would let the wallet send a
     //! second advertisement.
     std::map<GRC::Cpid, size_t> m_beacon_by_cpid;
+    //! One POLL ADD per title key (GRC::PollTitleKey); value is the tx hash. Sound as a key-unique map because
+    //! AcceptToMemoryPool refuses a poll whose title key a pooled poll already holds, so mapTx never holds two.
+    std::map<std::string, uint256> m_poll_by_title_key;
     size_t m_mandatory_sidestake_count{0};         //!< Mandatory-sidestake txs in the pool.
     //! MESSAGE-contract txs in the pool. Existence counter only, so the
     //! disable-height sweep in ConnectBlock costs one integer compare per block
@@ -365,6 +374,17 @@ public:
         LOCK(cs);
         auto it = m_mrc_by_cpid.find(cpid);
         if (it == m_mrc_by_cpid.end()) return false;
+        if (existing) *existing = it->second;
+        return true;
+    }
+
+    //! \brief Whether the pool already holds a poll with the title key \p title_key (GRC::PollTitleKey). When it
+    //! does and \p existing is non-null, that poll's transaction hash is written there.
+    bool HasPollForTitle(const std::string& title_key, uint256* existing = nullptr) const
+    {
+        LOCK(cs);
+        auto it = m_poll_by_title_key.find(title_key);
+        if (it == m_poll_by_title_key.end()) return false;
         if (existing) *existing = it->second;
         return true;
     }

@@ -263,6 +263,8 @@ BASE_SCRIPTS = [
     'feature_poll_finish_by_block.py',
     # feature_poll_v15_window.py: from v15 a poll starts at its block and ends at its closing block.
     'feature_poll_v15_window.py',
+    # feature_poll_title_rule.py: one poll per title key in the wallet, the mempool and, from v15, the registry.
+    'feature_poll_title_rule.py',
     'feature_generatesuperblock.py',
     # feature_reorg_resurrect.py: a wallet transaction whose block is
     # disconnected returns to the mempool and stays unconfirmed, not
