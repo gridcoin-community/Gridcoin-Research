@@ -35,6 +35,7 @@
 
 #include <univalue.h>
 
+#include <set>
 #include <type_traits>
 
 namespace {
@@ -667,10 +668,270 @@ BOOST_AUTO_TEST_CASE(unbroadcast_persist_roundtrip)
     fs::remove(path);
 }
 
+namespace {
+//! The transactions unbroadcast.dat at \p path holds, by hash.
+std::set<uint256> PersistedHashes(const fs::path& path)
+{
+    node::MempoolPersistEntries loaded;
+    BOOST_REQUIRE(node::ReadMempoolEntries(path, loaded));
+
+    std::set<uint256> hashes;
+    for (const auto& [tx, time] : loaded) hashes.insert(tx.GetHash());
+    return hashes;
+}
+
+fs::path TempUnbroadcastPath(const std::string& name)
+{
+    return fs::temp_directory_path() / fs::unique_path("gridcoin_unbroadcast_" + name + "_%%%%%%%%.dat");
+}
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(unbroadcast_persister_writes_only_when_enabled)
+{
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(71);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.AddUnbroadcast(a.GetHash());
+
+    const fs::path path = TempUnbroadcastPath("enable");
+    node::UnbroadcastPersister persister;
+
+    // Before Enable(): the reload has not run, so nothing may be written.
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+    BOOST_CHECK(!persister.Write(pool));
+    BOOST_CHECK(!fs::exists(path));
+
+    // The first pass after Enable() writes whatever the set holds, and a pass
+    // with no change writes nothing.
+    persister.Enable(path);
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path) == std::set<uint256>{a.GetHash()});
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+
+    // Write() writes regardless.
+    BOOST_CHECK(persister.Write(pool));
+
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_persister_follows_each_change_to_the_never_sent_entries)
+{
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(61);
+    const CTransaction b = MakePlainTx(62);
+    const CTransaction other = MakePlainTx(63);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.addUnchecked(b.GetHash(), MakeEntryFee(b, 10));
+    pool.addUnchecked(other.GetHash(), MakeEntryFee(other, 10));
+
+    const fs::path path = TempUnbroadcastPath("follow");
+    node::UnbroadcastPersister persister;
+    persister.Enable(path);
+    BOOST_REQUIRE(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path).empty());
+
+    // A send: written.
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path) == std::set<uint256>{a.GetHash()});
+
+    // A reannounce entry is not persisted, so adding it changes nothing.
+    pool.AddUnbroadcast(b.GetHash(), UnbroadcastReason::Reannounce);
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+
+    // A peer's fetch: written without it.
+    pool.RemoveUnbroadcast(a.GetHash());
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path).empty());
+
+    // Another send, then a reorganization marks it reannounce: each written.
+    pool.AddUnbroadcast(other.GetHash());
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path) == std::set<uint256>{other.GetHash()});
+    pool.AddUnbroadcast(other.GetHash(), UnbroadcastReason::Reannounce);
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path).empty());
+
+    // A send, then the transaction leaves the pool: each written.
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path) == std::set<uint256>{a.GetHash()});
+    pool.remove(a);
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path).empty());
+
+    // A reannounce entry leaving the pool changes nothing persisted either.
+    pool.remove(b);
+    pool.remove(other);
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_persister_writes_a_changed_entry_time)
+{
+    // The file records each transaction's pool entry time, so the same
+    // transaction leaving the pool and coming back between two passes, with a
+    // new entry time, is a change too.
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(66);
+    const auto entry_at = [&](int64_t time) {
+        return CTxMemPoolEntry(a, 10, time, 0, ::GetSerializeSize(a, SER_NETWORK, PROTOCOL_VERSION));
+    };
+    pool.addUnchecked(a.GetHash(), entry_at(100));
+    pool.AddUnbroadcast(a.GetHash());
+
+    const fs::path path = TempUnbroadcastPath("time");
+    node::UnbroadcastPersister persister;
+    persister.Enable(path);
+    BOOST_REQUIRE(persister.WriteIfChanged(pool));
+
+    pool.remove(a);
+    pool.addUnchecked(a.GetHash(), entry_at(200));
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+
+    node::MempoolPersistEntries loaded;
+    BOOST_REQUIRE(node::ReadMempoolEntries(path, loaded));
+    BOOST_REQUIRE_EQUAL(loaded.size(), 1U);
+    BOOST_CHECK_EQUAL(loaded[0].second, 200);
+
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_persister_retries_a_failed_write)
+{
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(81);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.AddUnbroadcast(a.GetHash());
+
+    const fs::path dir = fs::temp_directory_path()
+                         / fs::unique_path("gridcoin_unbroadcast_dir_%%%%%%%%");
+    const fs::path path = dir / "unbroadcast.dat";
+
+    node::UnbroadcastPersister persister;
+    persister.Enable(path);
+
+    // The directory does not exist yet, so the write fails, and leaves nothing.
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+    BOOST_CHECK(!fs::exists(path));
+
+    // Nothing has changed in the pool since, but the failed write is retried. A
+    // temporary file a crash left behind mid-write is replaced by it, not left
+    // beside the file.
+    fs::create_directories(dir);
+    {
+        fsbridge::ofstream leftover(dir / "unbroadcast.dat.new");
+        leftover << "left by a crash";
+    }
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path) == std::set<uint256>{a.GetHash()});
+    BOOST_CHECK(!fs::exists(dir / "unbroadcast.dat.new"));
+
+    fs::remove_all(dir);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_persister_logs_each_spell_of_failures_once)
+{
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(86);
+    const CTransaction b = MakePlainTx(87);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.addUnchecked(b.GetHash(), MakeEntryFee(b, 10));
+    pool.AddUnbroadcast(a.GetHash());
+
+    const fs::path path = TempUnbroadcastPath("spell");
+    fs::path tmp = path;
+    tmp += ".new";
+
+    node::UnbroadcastPersister persister;
+    persister.Enable(path);
+    BOOST_REQUIRE(persister.WriteIfChanged(pool));
+
+    std::vector<std::string> lines;
+    const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) {
+        if (s.find("WriteLocked") != std::string::npos) lines.push_back(s);
+    });
+
+    // A directory where the temporary file goes, so that every write fails at
+    // the open. Failing again is not logged again.
+    fs::create_directory(tmp);
+    pool.AddUnbroadcast(b.GetHash());
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+    BOOST_REQUIRE_EQUAL(lines.size(), 1U);
+    BOOST_CHECK(lines[0].find("ERROR") != std::string::npos);
+
+    // A peer fetches b: the set is back to what the file holds, which ends the
+    // spell without a write.
+    pool.RemoveUnbroadcast(b.GetHash());
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+    BOOST_REQUIRE_EQUAL(lines.size(), 2U);
+    BOOST_CHECK(lines[1].find("matches the unbroadcast set again") != std::string::npos);
+
+    // A peer fetches a as well. That write fails too, and starts a new spell,
+    // so it is logged.
+    pool.RemoveUnbroadcast(a.GetHash());
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+    BOOST_REQUIRE_EQUAL(lines.size(), 3U);
+    BOOST_CHECK(lines[2].find("ERROR") != std::string::npos);
+
+    // A successful write ends that one.
+    fs::remove(tmp);
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_REQUIRE_EQUAL(lines.size(), 4U);
+    BOOST_CHECK(lines[3].find("written again") != std::string::npos);
+    BOOST_CHECK(PersistedHashes(path).empty());
+
+    LogInstance().DeleteCallback(callback);
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_file_after_a_crash_holds_the_current_set)
+{
+    // What the next start reloads is whatever the file holds. Written only at a
+    // clean shutdown, the file would still list a withdrawn transaction and one a
+    // peer had fetched, and miss a new send. Kept current, it holds the set.
+    CTxMemPool pool;
+    const CTransaction withdrawn = MakePlainTx(91);
+    const CTransaction fetched = MakePlainTx(92);
+    const CTransaction kept = MakePlainTx(93);
+    const CTransaction sent = MakePlainTx(94);
+    const CTransaction reorged = MakePlainTx(95);
+    for (const CTransaction* tx : {&withdrawn, &fetched, &kept}) {
+        pool.addUnchecked(tx->GetHash(), MakeEntryFee(*tx, 10));
+        pool.AddUnbroadcast(tx->GetHash());
+    }
+    pool.addUnchecked(reorged.GetHash(), MakeEntryFee(reorged, 10));
+
+    const fs::path path = TempUnbroadcastPath("crash");
+
+    node::UnbroadcastPersister persister;
+    persister.Enable(path);
+    BOOST_REQUIRE(persister.WriteIfChanged(pool));
+
+    // While running: one withdrawn from the pool (cancelunbroadcasttransaction),
+    // one fetched by a peer, one new send, and one put back by a reorganization,
+    // which is not persisted.
+    pool.remove(withdrawn);
+    pool.RemoveUnbroadcast(fetched.GetHash());
+    pool.addUnchecked(sent.GetHash(), MakeEntryFee(sent, 10));
+    pool.AddUnbroadcast(sent.GetHash());
+    pool.AddUnbroadcast(reorged.GetHash(), UnbroadcastReason::Reannounce);
+
+    // The scheduler's next pass, and then a crash: no shutdown write.
+    BOOST_REQUIRE(persister.WriteIfChanged(pool));
+
+    BOOST_CHECK(PersistedHashes(path) == (std::set<uint256>{kept.GetHash(), sent.GetHash()}));
+
+    fs::remove(path);
+}
+
 BOOST_AUTO_TEST_CASE(unbroadcast_dump_reflects_pool)
 {
-    // DumpUnbroadcast must persist exactly the pool's unbroadcast members (looked up
-    // in mapTx), and nothing else. Exercises the pool->disk half directly.
+    // The persister writes exactly the pool's never-sent unbroadcast members
+    // (looked up in mapTx), with their pool entry times, and nothing else.
     CTxMemPool pool;
     const CTransaction ours = MakePlainTx(51);
     const CTransaction other = MakePlainTx(52);
@@ -678,9 +939,10 @@ BOOST_AUTO_TEST_CASE(unbroadcast_dump_reflects_pool)
     pool.addUnchecked(other.GetHash(), MakeEntryFee(other, 10));
     pool.AddUnbroadcast(ours.GetHash()); // only `ours` is in the unbroadcast set
 
-    const fs::path path = fs::temp_directory_path()
-                          / fs::unique_path("gridcoin_unbroadcast_dump_%%%%%%%%.dat");
-    BOOST_REQUIRE(node::DumpUnbroadcast(pool, path));
+    const fs::path path = TempUnbroadcastPath("dump");
+    node::UnbroadcastPersister persister;
+    persister.Enable(path);
+    BOOST_REQUIRE(persister.Write(pool));
 
     node::MempoolPersistEntries loaded;
     BOOST_REQUIRE(node::ReadMempoolEntries(path, loaded));

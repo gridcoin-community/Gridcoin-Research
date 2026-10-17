@@ -83,11 +83,12 @@ std::unique_ptr<BanMan> g_banman;
 std::unique_ptr<CScheduler> g_scheduler;
 std::atomic<CScheduler*> g_scheduler_handle{nullptr};
 
-//! Set once AppInit2 has reached the unbroadcast-set reload. Shutdown() only
-//! persists the set when this is true, so an early AppInit2 failure (which still
-//! runs Shutdown) cannot overwrite a good unbroadcast.dat with the empty pool of
-//! an init that never loaded it.
-static std::atomic<bool> g_unbroadcast_load_reached{false};
+//! Keeps unbroadcast.dat in step with the unbroadcast set. Enabled once AppInit2
+//! has reloaded the set, so an early AppInit2 failure (which still runs
+//! Shutdown) cannot overwrite a good unbroadcast.dat with the empty pool of an
+//! init that never loaded it. Never enabled under -persistmempool=0, or when an
+//! unreadable unbroadcast.dat could not be moved aside.
+static node::UnbroadcastPersister g_unbroadcast_persister;
 
 namespace {
 //! Bridges the validation-signal layer to the legacy ui_interface block
@@ -239,20 +240,6 @@ void Shutdown(void* parg)
             g_stake_miner_thread.join();
         }
 
-        // Persist the unbroadcast set -- the node's own transactions that have not
-        // yet been seen propagating -- so a restart does not silently drop them.
-        // Net and miner threads are stopped here; the RPC server is not (it is
-        // stopped further below), but DumpUnbroadcast snapshots under the pool lock
-        // so a concurrent submission is at worst not-yet-included, never a race.
-        // The whole pool is intentionally NOT saved: every other tx is redelivered
-        // by block/inv gossip. Gated on -persistmempool (default on) AND on having
-        // reached the reload in AppInit2, so an early-init failure cannot overwrite
-        // a good unbroadcast.dat with an empty pool.
-        if (g_unbroadcast_load_reached && gArgs.GetBoolArg("-persistmempool", true)) {
-            LogPrintf("INFO: %s: Persisting the unbroadcast set.", __func__);
-            node::DumpUnbroadcast(mempool, GetDataDir() / "unbroadcast.dat");
-        }
-
         // Coordinate block-file and block-index DB state before exit so a
         // clean shutdown never leaves the LevelDB index referencing flat-file
         // data that hasn't been fsynced. The fsync on the active blk*.dat
@@ -299,6 +286,19 @@ void Shutdown(void* parg)
 
         LogPrintf("INFO: %s: Stopping RPC threads.", __func__);
         StopRPCThreads();
+
+        // Persist the unbroadcast set -- the node's own transactions that have not
+        // yet been seen propagating -- so a restart does not silently drop them.
+        // The scheduler kept the file current while the node ran, and is stopped;
+        // this final write catches whatever changed since its last pass. It comes
+        // after the RPC server stops, so a send or a cancelunbroadcasttransaction
+        // that arrived during shutdown is in it. The whole pool is intentionally
+        // NOT saved: every other tx is redelivered by block/inv gossip. A no-op
+        // unless the reload in AppInit2 enabled the persister (see its
+        // declaration).
+        if (g_unbroadcast_persister.Write(mempool)) {
+            LogPrintf("INFO: %s: Persisted the unbroadcast set.", __func__);
+        }
 
         // Tear down the message processor and connection manager only AFTER the RPC
         // worker threads are stopped (issue #2558). RPC handlers
@@ -897,8 +897,8 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxmempool=<n>", "Keep the transaction memory pool below <n> megabytes (default: 300)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::NODE_RELAY);
-    argsman.AddArg("-persistmempool", "Whether to save this node's own unbroadcast transactions on "
-                   "shutdown and reload them on startup so they survive a restart (default: 1)",
+    argsman.AddArg("-persistmempool", "Whether to keep this node's own unbroadcast transactions on "
+                   "disk as they change and reload them on startup so they survive a restart (default: 1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::NODE_RELAY);
     argsman.AddArg("-addnode=<ip>", "Add a node to connect to and attempt to keep the connection open",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
@@ -2722,17 +2722,48 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     GRC::ScheduleBackgroundJobs(*g_scheduler);
 
-    // Reload the node's own unbroadcast transactions saved on the previous
-    // shutdown. Each is re-accepted through AcceptToMemoryPool (dropping anything
-    // already confirmed or now invalid) and re-armed for rebroadcast by the
-    // message handler. Runs after the chainstate is loaded and the node has
-    // started, so re-validation sees the current tip.
+    // Reload the node's own unbroadcast transactions as unbroadcast.dat last
+    // recorded them. Each is re-accepted through AcceptToMemoryPool (dropping
+    // anything already confirmed or now invalid) and marked unbroadcast again, so
+    // the scheduled ResendUnbroadcastTransactions() announces it. Runs after the
+    // chainstate is loaded and the node has started, so re-validation sees the
+    // current tip.
     if (gArgs.GetBoolArg("-persistmempool", true)) {
-        node::LoadUnbroadcast(mempool, GetDataDir() / "unbroadcast.dat");
+        const fs::path unbroadcast_path = GetDataDir() / "unbroadcast.dat";
+
+        bool persist = node::LoadUnbroadcast(mempool, unbroadcast_path);
+
+        if (!persist) {
+            // The file exists but could not be read: a format from another
+            // release, corruption, or an I/O error. Keep it for inspection, rather
+            // than let the first write below replace it. The rename replaces an
+            // earlier unreadable file, so the latest one is kept. If it cannot even
+            // be moved, leave the set unpersisted for this run.
+            fs::path unreadable_path = unbroadcast_path;
+            unreadable_path += ".bad";
+
+            boost::system::error_code ec;
+            fs::rename(unbroadcast_path, unreadable_path, ec);
+            persist = !ec;
+
+            LogPrintf("WARNING: %s: could not reload %s; %s", __func__, unbroadcast_path.string(),
+                      persist ? strprintf("moved it to %s", unreadable_path.string())
+                              : strprintf("could not move it aside (%s), so the unbroadcast set "
+                                          "is not persisted this run", ec.message()));
+        }
+
+        if (persist) {
+            // The pool now holds what the reload kept, which is nothing if the file
+            // was moved aside, so writes may start: the first pass rewrites the file
+            // with it. From here on the file follows the set pass by pass (see
+            // UNBROADCAST_PERSIST_INTERVAL), rather than only at a clean shutdown.
+            g_unbroadcast_persister.Enable(unbroadcast_path);
+
+            g_scheduler->scheduleEvery([]{
+                g_unbroadcast_persister.WriteIfChanged(mempool);
+            }, node::UNBROADCAST_PERSIST_INTERVAL);
+        }
     }
-    // AppInit2 has reached the point where the mempool reflects real state; a
-    // later Shutdown() may now safely persist the unbroadcast set.
-    g_unbroadcast_load_reached = true;
 
     #if HAVE_SYSTEM
         StartupNotify(gArgs);
