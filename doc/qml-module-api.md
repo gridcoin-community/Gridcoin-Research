@@ -322,8 +322,9 @@ rest, not a proof.
 
 `QmlCallRunner`'s serial lane (one thread, in order) runs every call not named here. The
 pooled lane (the global `QThreadPool`) runs calls whose results may arrive in any order.
-Planned, not in the module yet: `checkForLatestUpdate`, `runDiagnostics` and the scraper
-snapshot on the pooled lane. The RPC console's commands will run in the order they were
+Planned, not in the module yet: `runDiagnostics`. `AboutInfo.checkForUpdate()` runs
+`checkForLatestUpdate`, and `ClientStatus` reads the scraper snapshot, on the pooled lane.
+The RPC console's commands will run in the order they were
 typed, on an ordered lane, as the Widgets console runs them: a `walletpassphrase` must
 finish before the command typed after it starts. The pooled lane keeps no order, so the
 console never uses it.
