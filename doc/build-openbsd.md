@@ -43,7 +43,7 @@ OpenBSD uses `doas` by default. If you prefer `sudo`:
 ## 2\. Clone the Repository
 
 ```ksh
-git clone [https://github.com/gridcoin-community/Gridcoin-Research.git](https://github.com/gridcoin-community/Gridcoin-Research.git)
+git clone https://github.com/gridcoin-community/Gridcoin-Research.git
 cd Gridcoin-Research
 git checkout master
 ```

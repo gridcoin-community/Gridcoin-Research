@@ -69,7 +69,7 @@ sudo pkg install capnproto
 ## 3\. Clone the Repository
 
 ```sh
-git clone [https://github.com/gridcoin-community/Gridcoin-Research.git](https://github.com/gridcoin-community/Gridcoin-Research.git)
+git clone https://github.com/gridcoin-community/Gridcoin-Research.git
 cd Gridcoin-Research
 git checkout master
 ```
