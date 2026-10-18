@@ -130,8 +130,8 @@ Coinstake Creation → Research Claim (if applicable) → Block Assembly → Bro
 ## Data Persistence
 
 ### Databases
-- **Blockchain** (`blk*.dat`, `rev*.dat`): Block and undo data
-- **LevelDB** (`blocks/index/`): Block index, transaction index
+- **Blockchain** (`blk*.dat` in the data directory, named `blk%04u.dat`): Block data. Gridcoin writes no undo files.
+- **LevelDB** (`txleveldb/` in the data directory): Block index, transaction index
 - **Wallet** (`wallet.dat`): Keys, transactions, metadata
 - **Registry DBs**: Beacon, project, protocol, sidestake state
 - **Note**: Registries are also persisted in LevelDB
