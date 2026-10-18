@@ -12,6 +12,7 @@
 #include "gridcoin/contract/registry_db.h"
 #include "gridcoin/support/enumbytes.h"
 #include "serialize.h"
+#include "util/fraction.h"
 #include "logging.h"
 
 namespace GRC {
@@ -28,13 +29,13 @@ public:
     Allocation();
 
     //!
-    //! \brief Allocation constructor from a double input. This multiplies the double by 1000, rounds, casts to int64_t,
-    //! and then constructs Fraction(x, 1000, true), which essentially creates a fraction representative of the double
-    //! to the third decimal place.
+    //! \brief Allocation constructor from a double input. This multiplies the double by 10000, rounds, casts to int64_t,
+    //! and then constructs Fraction(x, 10000, true): the double at basis-point resolution, reduced. Every allocation
+    //! denominator built this way divides 10000, which the Fraction addition fast paths are tuned for.
     //!
     //! \param double allocation
     //!
-    Allocation(const double& allocation);
+    Allocation(double allocation);
 
     //!
     //! \brief Initialize an allocation from a Fraction. This is primarily used for casting. Note that no attempt to
@@ -49,7 +50,7 @@ public:
     //! \param numerator
     //! \param denominator
     //!
-    Allocation(const int64_t& numerator, const int64_t& denominator);
+    Allocation(int64_t numerator, int64_t denominator);
 
     //!
     //! \brief Initialize an allocation directly from specifying a numerator and denominator, specifying the simplification
@@ -59,7 +60,7 @@ public:
     //! \param denominator
     //! \param simplify
     //!
-    Allocation(const int64_t& numerator, const int64_t& denominator, const bool& simplify);
+    Allocation(int64_t numerator, int64_t denominator, bool simplify);
 
     //!
     //! \brief Allocations extend the Fraction class and can also represent the result of the allocation constructed fraction
@@ -77,33 +78,33 @@ public:
     double ToPercent() const;
 
     Allocation operator+(const Allocation& rhs) const;
-    Allocation operator+(const int64_t& rhs) const;
+    Allocation operator+(int64_t rhs) const;
     Allocation operator-(const Allocation& rhs) const;
-    Allocation operator-(const int64_t& rhs) const;
+    Allocation operator-(int64_t rhs) const;
     Allocation operator*(const Allocation& rhs) const;
-    Allocation operator*(const int64_t& rhs) const;
+    Allocation operator*(int64_t rhs) const;
     Allocation operator/(const Allocation& rhs) const;
-    Allocation operator/(const int64_t& rhs) const;
+    Allocation operator/(int64_t rhs) const;
     Allocation& operator+=(const Allocation& rhs);
-    Allocation& operator+=(const int64_t& rhs);
+    Allocation& operator+=(int64_t rhs);
     Allocation& operator-=(const Allocation& rhs);
-    Allocation& operator-=(const int64_t& rhs);
+    Allocation& operator-=(int64_t rhs);
     Allocation& operator*=(const Allocation& rhs);
-    Allocation& operator*=(const int64_t& rhs);
+    Allocation& operator*=(int64_t rhs);
     Allocation& operator/=(const Allocation& rhs);
-    Allocation& operator/=(const int64_t& rhs);
+    Allocation& operator/=(int64_t rhs);
     bool operator==(const Allocation& rhs) const;
     bool operator!=(const Allocation& rhs) const;
     bool operator<=(const Allocation& rhs) const;
     bool operator>=(const Allocation& rhs) const;
     bool operator<(const Allocation& rhs) const;
     bool operator>(const Allocation& rhs) const;
-    bool operator==(const int64_t& rhs) const;
-    bool operator!=(const int64_t& rhs) const;
-    bool operator<=(const int64_t& rhs) const;
-    bool operator>=(const int64_t& rhs) const;
-    bool operator<(const int64_t& rhs) const;
-    bool operator>(const int64_t& rhs) const;
+    bool operator==(int64_t rhs) const;
+    bool operator!=(int64_t rhs) const;
+    bool operator<=(int64_t rhs) const;
+    bool operator>=(int64_t rhs) const;
+    bool operator<(int64_t rhs) const;
+    bool operator>(int64_t rhs) const;
 };
 
 //!
@@ -133,7 +134,7 @@ public:
 
     CTxDestination m_destination; //!< The destination of the sidestake.
 
-    Allocation m_allocation;      //!< The allocation is a Fraction in the form x / 1000 where x is between 0 and 1000 inclusive.
+    Allocation m_allocation;      //!< The allocation is a Fraction, by convention x / 10000 with x between 0 and 10000 inclusive.
 
     std::string m_description;    //!< The description of the sidestake (optional)
 
@@ -249,7 +250,7 @@ public:
 
     CTxDestination m_destination; //!< The destination of the sidestake.
 
-    Allocation m_allocation;      //!< The allocation is a Fraction in the form x / 1000 where x is between 0 and 1000 inclusive.
+    Allocation m_allocation;      //!< The allocation is a Fraction, by convention x / 10000 with x between 0 and 10000 inclusive.
 
     std::string m_description;    //!< The description of the sidestake (optional)
 

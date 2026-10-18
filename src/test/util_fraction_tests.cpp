@@ -501,7 +501,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_division_by_zero_Fraction)
     std::string err;
 
     try {
-    Fraction quotient = lhs / rhs;
+        [[maybe_unused]] Fraction quotient = lhs / rhs;
     } catch (std::out_of_range& e) {
         err = e.what();
     }
@@ -517,7 +517,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_division_by_zero_int64_t)
     std::string err;
 
     try {
-        Fraction quotient = lhs / rhs;
+        [[maybe_unused]] Fraction quotient = lhs / rhs;
     } catch (std::out_of_range& e) {
         err = e.what();
     }
@@ -536,7 +536,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_1)
     std::string err;
 
     try {
-        Fraction product = lhs * rhs;
+        [[maybe_unused]] Fraction product = lhs * rhs;
     } catch (std::overflow_error& e) {
         err = e.what();
     }
@@ -552,7 +552,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_2)
     std::string err;
 
     try {
-        Fraction product = lhs * rhs;
+        [[maybe_unused]] Fraction product = lhs * rhs;
     } catch (std::overflow_error& e) {
         err = e.what();
     }
@@ -568,7 +568,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_3)
     std::string err;
 
     try {
-        Fraction product = lhs * rhs;
+        [[maybe_unused]] Fraction product = lhs * rhs;
     } catch (std::overflow_error& e) {
         err = e.what();
     }
@@ -585,7 +585,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_1)
     std::string err;
 
     try {
-        Fraction addition = lhs + rhs;
+        [[maybe_unused]] Fraction addition = lhs + rhs;
     } catch (std::overflow_error& e) {
         err = e.what();
     }
@@ -601,7 +601,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_2)
     std::string err;
 
     try {
-        Fraction addition = lhs + rhs;
+        [[maybe_unused]] Fraction addition = lhs + rhs;
     } catch (std::overflow_error& e) {
         err = e.what();
     }
@@ -617,7 +617,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_3)
     std::string err;
 
     try {
-        Fraction addition = lhs + rhs;
+        [[maybe_unused]] Fraction addition = lhs + rhs;
     } catch (std::overflow_error& e) {
         err = e.what();
     }
@@ -633,7 +633,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_4)
     std::string err;
 
     try {
-        Fraction addition = lhs + rhs;
+        [[maybe_unused]] Fraction addition = lhs + rhs;
     } catch (std::overflow_error& e) {
         err = e.what();
     }
@@ -727,7 +727,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_FromString)
     std::string valid_err_message {"fraction input string cannot be parsed to fraction"};
 
     try {
-        Fraction fraction = Fraction::FromString("100/567/300");
+        [[maybe_unused]] Fraction fraction = Fraction::FromString("100/567/300");
     } catch (std::out_of_range& e) {
         err = e.what();
     }
@@ -735,7 +735,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_FromString)
     BOOST_CHECK_EQUAL(err, valid_err_message);
 
     try {
-        Fraction fraction = Fraction::FromString("100 / 567");
+        [[maybe_unused]] Fraction fraction = Fraction::FromString("100 / 567");
     } catch (std::out_of_range& e) {
         err = e.what();
     }
@@ -743,7 +743,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_FromString)
     BOOST_CHECK_EQUAL(err, valid_err_message);
 
     try {
-        Fraction fraction = Fraction::FromString("100.1");
+        [[maybe_unused]] Fraction fraction = Fraction::FromString("100.1");
     } catch (std::out_of_range& e) {
         err = e.what();
     }
@@ -751,7 +751,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_FromString)
     BOOST_CHECK_EQUAL(err, valid_err_message);
 
     try {
-        Fraction fraction = Fraction::FromString("");
+        [[maybe_unused]] Fraction fraction = Fraction::FromString("");
     } catch (std::out_of_range& e) {
         err = e.what();
     }
