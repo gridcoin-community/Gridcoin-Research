@@ -970,6 +970,8 @@ BeaconStatus MapBeaconError(const GRC::BeaconError error)
         case GRC::BeaconError::V14_NOT_ENABLED:    return BeaconStatus::ERROR_TX_FAILED;
         case GRC::BeaconError::WALLET_LOCKED:      return BeaconStatus::ERROR_WALLET_LOCKED;
         case GRC::BeaconError::ALEADY_IN_MEMPOOL:  return BeaconStatus::ALREADY_IN_MEMPOOL;
+        // The status the snapshot itself reports while out of sync (DeriveBeacon).
+        case GRC::BeaconError::OUT_OF_SYNC:        return BeaconStatus::UNKNOWN;
     }
 
     assert(false); // unreachable: every BeaconError enumerator is handled above
@@ -1462,7 +1464,7 @@ private:
 
     //! Ports ResearcherModel::updateBeacon(): derive the beacon status and flatten
     //! the committed active/pending beacons into the snapshot's value fields.
-    void DeriveBeacon(const GRC::Researcher& researcher, ResearcherSnapshot& snap)
+    void DeriveBeacon(const GRC::Researcher& researcher, ResearcherSnapshot& snap) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const GRC::CpidOption cpid = researcher.Id().TryCpid();
 
@@ -1488,6 +1490,13 @@ private:
         if (auto beacon_option = researcher.TryPendingBeacon()) {
             pending_beacon = std::make_unique<GRC::Beacon>(std::move(*beacon_option));
             beacon_key_present = pending_beacon->WalletHasPrivateKey(m_wallet);
+        } else if (m_wallet) {
+            // Shown as pending while it waits to confirm; the send path still
+            // refuses on the mempool check, not on this.
+            if (auto advertisement = GRC::TryRecentBeaconAdvertisement(*m_wallet, *cpid)) {
+                pending_beacon = std::make_unique<GRC::Beacon>(std::move(*advertisement));
+                beacon_key_present = true;
+            }
         }
 
         BeaconStatus beacon_status;
@@ -1501,6 +1510,18 @@ private:
         }
 
         const int64_t now = GetAdjustedTime();
+
+        // A beacon is pending only once it is on chain. Until a new beacon's
+        // advertisement confirms, say that it is in the mempool, rather than that
+        // there is no beacon or that the expired one needs renewing. An active
+        // beacon keeps its own status.
+        if ((beacon_status == BeaconStatus::ACTIVE || beacon_status == BeaconStatus::NO_BEACON)
+            && !pending_beacon
+            && (!beacon || beacon->Expired(now))
+            && mempool.HasBeaconForCpid(*cpid))
+        {
+            beacon_status = BeaconStatus::ALREADY_IN_MEMPOOL;
+        }
 
         if (beacon_status != BeaconStatus::ACTIVE) {
             // Keep the mapped/derived status.
@@ -1537,11 +1558,12 @@ private:
         snap.beacon_expired = beacon && beacon->Expired(now);
         snap.has_renewable_beacon = beacon && beacon->Renewable(now);
 
-        bool has_pending = false;
-        if (pending) {
-            GRC::PendingBeacon pending_beacon(*pending);
-            has_pending = !pending_beacon.PendingExpired(now);
-        }
+        // Pending until a superblock activates it or sweeps it out as expired,
+        // not merely until its pending age passes: up to that superblock it can
+        // still activate, and the send path refuses a second advertisement for
+        // as long (TryOwnPendingBeacon). Shown any shorter, the wizard would
+        // offer a send that is then refused.
+        const bool has_pending = pending != nullptr;
         snap.has_pending_beacon = has_pending;
 
         if (!has_pending) {
@@ -1560,7 +1582,9 @@ private:
         }
 
         if (pending) {
-            snap.time_to_pending_beacon_expiration = GRC::PendingBeacon::RETENTION_AGE - pending->Age(now);
+            // Zero once the pending age has passed: the next superblock decides.
+            snap.time_to_pending_beacon_expiration =
+                std::max<int64_t>(0, GRC::PendingBeacon::RETENTION_AGE - pending->Age(now));
             snap.beacon_verification_code = pending->GetVerificationCode();
         }
     }

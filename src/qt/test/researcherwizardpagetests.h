@@ -35,6 +35,7 @@ private slots:
     void poolPageOpensALinkOncePerClickAfterReentry();
     void modePageReportsOneCompleteChangePerToggleAfterReentry();
     void modeDetailPageReportsOneCompleteChangePerClickAfterReentry();
+    void authPageFollowsTheVerificationCodeOnABeaconChange();
 };
 
 #endif // BITCOIN_QT_TEST_RESEARCHERWIZARDPAGETESTS_H

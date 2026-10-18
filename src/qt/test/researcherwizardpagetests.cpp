@@ -5,12 +5,14 @@
 #include "qt/test/researcherwizardpagetests.h"
 
 #include "qt/researcher/researchermodel.h"
+#include "qt/researcher/researcherwizardauthpage.h"
 #include "qt/researcher/researcherwizardmodedetailpage.h"
 #include "qt/researcher/researcherwizardmodepage.h"
 #include "qt/researcher/researcherwizardpoolpage.h"
 #include "qt/test/interfacefakes.h"
 
 #include <QDesktopServices>
+#include <QLabel>
 #include <QRadioButton>
 #include <QSignalSpy>
 #include <QTableWidget>
@@ -109,4 +111,33 @@ void ResearcherWizardPageTests::modeDetailPageReportsOneCompleteChangePerClickAf
     pool->click();
 
     QCOMPARE(complete_changed.count(), 1);
+}
+
+void ResearcherWizardPageTests::authPageFollowsTheVerificationCodeOnABeaconChange()
+{
+    // The pending beacon the snapshot reports comes from the chain and the
+    // pool, so the code this page shows can change without a send: the
+    // wallet's retired advertisement can confirm instead of its replacement.
+    // A block reports through beaconChanged alone while the sync state holds,
+    // so the page has to repaint on that signal too.
+    qt_test::FakeResearcherContext context;
+    context.m_snapshot.out_of_sync = false;
+    context.m_snapshot.pending_beacon_present = true;
+    context.m_snapshot.beacon_verification_code = "replacement-code";
+
+    ResearcherModel model(context);
+    ResearcherWizardAuthPage page;
+    page.setModel(&model);
+    page.initializePage();
+
+    auto* code = page.findChild<QLabel*>("verificationCodeLabel");
+    QVERIFY(code);
+    QCOMPARE(code->text(), QStringLiteral("replacement-code"));
+
+    // The retired advertisement confirms: the next block's refresh carries the
+    // original beacon's code, with the sync state unchanged.
+    context.m_snapshot.beacon_verification_code = "original-code";
+    model.refresh();
+
+    QCOMPARE(code->text(), QStringLiteral("original-code"));
 }

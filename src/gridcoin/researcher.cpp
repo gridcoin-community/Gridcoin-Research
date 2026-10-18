@@ -24,10 +24,12 @@
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <algorithm>
 #include <optional>
 #include <util/string.h>
 #include <set>
 #include <univalue.h>
+#include "net_processing.h"
 #include "txmempool.h"
 
 using namespace GRC;
@@ -547,97 +549,47 @@ void StoreResearcher(Researcher context)
 }
 
 //!
-//! \brief A piece of helper state that keeps track of recently-advertised
-//! pending beacons.
+//! \brief Get this wallet's pending beacon for a CPID: one in the beacon
+//! registry, so on chain, whose private key the wallet holds.
 //!
-class RecentBeacons
+//! An advertisement is pending from the block that confirms it until a
+//! superblock activates it or, once its pending age has passed, sweeps it out
+//! as expired. Until that superblock it can still activate, so it counts even
+//! past its pending age. One still in the mempool is not pending yet:
+//! CheckBeaconTransactionViable refuses a second advertisement while it is
+//! there.
+//!
+//! Only this wallet's keys count: a pending beacon from another wallet does not
+//! stop this one from advertising.
+//!
+//! \param cpid CPID to find the pending beacon for.
+//!
+//! \return The newest such beacon, if any.
+//!
+std::optional<PendingBeacon> TryOwnPendingBeacon(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-public:
-    //!
-    //! \brief Load the set of pending beacons that match the node's private
-    //! keys.
-    //!
-    //! THREAD SAFETY: Lock cs_main and pwalletMain->cs_wallet before calling
-    //! this method.
-    //!
-    //! \param beacons Contains the set of pending beacons to import from.
-    //!
-    void ImportRegistry(const BeaconRegistry& beacons) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
-    {
-        AssertLockHeld(cs_main);
-        AssertLockHeld(pwalletMain->cs_wallet);
+    AssertLockHeld(cs_main);
 
-        for (const auto& pending_pair : beacons.PendingBeacons()) {
-            const CKeyID& key_id = pending_pair.first;
-            const PendingBeacon beacon = static_cast<PendingBeacon>(*pending_pair.second);
+    if (!pwalletMain) {
+        return std::nullopt;
+    }
 
-            if (pwalletMain->HaveKey(key_id)) {
-                auto iter_pair = m_pending.emplace(beacon.m_cpid, beacon);
-                iter_pair.first->second.m_timestamp = beacon.m_timestamp;
-            }
+    std::optional<PendingBeacon> newest;
+
+    for (const Beacon_ptr& beacon : GetBeaconRegistry().FindPending(cpid)) {
+        PendingBeacon pending(*beacon);
+
+        if (!pwalletMain->HaveKey(pending.m_public_key.GetID())) {
+            continue;
+        }
+
+        if (!newest || pending.m_timestamp > newest->m_timestamp) {
+            newest = std::move(pending);
         }
     }
 
-    //!
-    //! \brief Fetch the pending beacon for the specified CPID if it exists.
-    //!
-    //! \param cpid CPID that the beacon was advertised for.
-    //!
-    //! \return A pointer to the pending beacon if one exists for the CPID.
-    //!
-    const PendingBeacon* Try(const Cpid cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-    {
-        AssertLockHeld(cs_main);
-
-        const auto iter = m_pending.find(cpid);
-
-        if (iter == m_pending.end()) {
-            return nullptr;
-        }
-
-        if (iter->second.Expired(GetAdjustedTime())) {
-            m_pending.erase(iter);
-            return nullptr;
-        }
-
-        // If the pending beacon activated, don't report it as pending still:
-        //
-        if (const BeaconOption beacon = GetBeaconRegistry().Try(cpid)) {
-            if (beacon->m_public_key == iter->second.m_public_key) {
-                m_pending.erase(iter);
-                return nullptr;
-            }
-        }
-
-        return &iter->second;
-    }
-
-    //!
-    //! \brief Stash a beacon that the node just advertised to the network.
-    //!
-    //! \param cpid   CPID that the beacon was advertised for.
-    //! \param result Contains the public key if the transaction succeeded.
-    //!
-    void Remember(const Cpid cpid, const AdvertiseBeaconResult& result) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
-    {
-        AssertLockHeld(cs_main);
-
-        if (const CPubKey* key = result.TryPublicKey()) {
-            auto iter_pair = m_pending.emplace(cpid, PendingBeacon(cpid, *key));
-            iter_pair.first->second.m_timestamp = GetAdjustedTime();
-        }
-    }
-
-private:
-    std::map<Cpid, PendingBeacon> m_pending; //!< Known set of pending beacons.
-}; // RecentBeacons
-
-//!
-//! \brief A cache of recently-advertised pending beacons.
-//!
-//! THREAD SAFETY: Lock cs_main before calling methods on this object.
-//!
-RecentBeacons g_recent_beacons;
+    return newest;
+}
 
 //!
 //! \brief Determine whether the wallet contains a valid private key that
@@ -735,11 +687,42 @@ bool SignBeaconPayload(BeaconPayload& payload)
 //! \return An error that describes why the wallet cannot send a beacon if
 //! a transaction will not succeed.
 //!
-BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, wallet->cs_wallet)
 {
+    // Every beacon send passes through here. The RPCs and the renewal job also
+    // check on entry, but the GUI wizard only hides its send button, from a sync
+    // flag the model last refreshed.
+    if (OutOfSyncByAge()) {
+        LogPrintf("WARNING: %s: Not in sync.", __func__);
+        return BeaconError::OUT_OF_SYNC;
+    }
+
     if (wallet->IsLocked()) {
         LogPrintf("WARNING: %s: Wallet locked.", __func__);
         return BeaconError::WALLET_LOCKED;
+    }
+
+    // Before the balance check, which would otherwise count the stale
+    // advertisement's change instead of the coins it holds, and keep refusing a
+    // wallet that has no more than one advertisement's worth. After the checks
+    // that refuse any send: retiring is only worth it on the way to a
+    // replacement. This wallet's own stale advertisement would otherwise keep the
+    // mempool check below refusing for good.
+    RetireStaleBeaconAdvertisements(*wallet, cpid);
+
+    // An O(log n) lookup against the m_beacon_by_cpid index (replaced a full
+    // mempool scan) prevents a second pending beacon advertisement for this CPID.
+    // A beacon still found here is another wallet's, a recent one of this
+    // wallet's, a removal, or one a reorganization put back.
+    //
+    // Before the balance check. A wallet whose own advertisement is waiting to
+    // confirm can be under the balance floor until it does, and this error is
+    // not kept as the researcher's beacon error, where the balance error would
+    // stay on show until the next successful send, long after the beacon had
+    // activated.
+    if (mempool.HasBeaconForCpid(cpid)) {
+        return BeaconError::ALEADY_IN_MEMPOOL;
     }
 
     // Ensure that the wallet contains enough coins to send a transaction for
@@ -751,12 +734,6 @@ BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid) EXCL
     if (wallet->GetBalance() < COIN) {
         LogPrintf("WARNING: %s: Insufficient funds.", __func__);
         return BeaconError::INSUFFICIENT_FUNDS;
-    }
-
-    // An O(log n) lookup against the m_beacon_by_cpid index (replaced a full
-    // mempool scan) prevents a second pending beacon advertisement for this CPID.
-    if (mempool.HasBeaconForCpid(cpid)) {
-        return BeaconError::ALEADY_IN_MEMPOOL;
     }
 
     return BeaconError::NONE;
@@ -781,7 +758,7 @@ AdvertiseBeaconResult SendBeaconContract(
     const Cpid& cpid,
     Beacon beacon,
     ContractAction action,
-    bool automated_renewal) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    bool automated_renewal) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
 {
     const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
 
@@ -810,6 +787,188 @@ AdvertiseBeaconResult SendBeaconContract(
 
 } // anonymous namespace
 
+unsigned int GRC::RetireStaleBeaconAdvertisements(CWallet& wallet, const Cpid& cpid)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, wallet.cs_wallet)
+{
+    AssertLockHeld(cs_main);
+    AssertLockHeld(wallet.cs_wallet);
+
+    // Without blocks arriving, an advertisement that has not confirmed here may
+    // already be in a block the node has not seen.
+    if (OutOfSyncByAge()) {
+        return 0;
+    }
+
+    // The index CheckBeaconTransactionViable refuses on.
+    if (!mempool.HasBeaconForCpid(cpid)) {
+        return 0;
+    }
+
+    // The pool's beacon transactions for this CPID, copied out under the pool
+    // lock alone: the wallet checks below are made after it is released, and the
+    // removals cannot run while iterating mapTx anyway.
+    std::vector<CTransaction> candidates;
+
+    {
+        LOCK(mempool.cs);
+
+        for (const auto& [hash, entry] : mempool.mapTx) {
+            if (entry.HasBeacon() && entry.GetBeaconCpid() == cpid) {
+                candidates.push_back(entry.GetTx());
+            }
+        }
+    }
+
+    const int64_t now = GetAdjustedTime();
+    unsigned int retired = 0;
+
+    for (const CTransaction& tx : candidates) {
+        const uint256 hash = tx.GetHash();
+
+        const auto wallet_iter = wallet.mapWallet.find(hash);
+
+        // Another wallet's advertisement is not this wallet's to withdraw. The
+        // debit counts spendable coins only: abandoning releases what it spent.
+        if (wallet_iter == wallet.mapWallet.end()
+            || wallet.GetDebit(wallet_iter->second, ISMINE_SPENDABLE) <= 0) {
+            continue;
+        }
+
+        // nTimeReceived is stored with the wallet transaction, so a restart, which
+        // re-pools the transaction with a fresh pool entry time, does not reset it.
+        const int64_t age = now - static_cast<int64_t>(wallet_iter->second.nTimeReceived);
+
+        if (age < STALE_BEACON_ADVERTISEMENT_AGE) {
+            continue;
+        }
+
+        const bool advertisement = std::any_of(
+            tx.GetContracts().begin(),
+            tx.GetContracts().end(),
+            [&](const Contract& contract) {
+                return contract.m_type == ContractType::BEACON
+                    && contract.m_action == ContractAction::ADD
+                    && contract.CopyPayloadAs<BeaconPayload>().m_cpid == cpid;
+            });
+
+        // A beacon removal is not an advertisement.
+        if (!advertisement) {
+            continue;
+        }
+
+        // Gone already as a descendant of one retired earlier in this loop.
+        if (!mempool.exists(hash)) {
+            continue;
+        }
+
+        // Put back by a reorganization: it was in a block, so peers have it and
+        // can mine it again, and the pool is announcing it. The age measures the
+        // first send, not this.
+        if (mempool.GetUnbroadcastReason(hash) == std::optional{UnbroadcastReason::Reannounce}) {
+            continue;
+        }
+
+        // Recursive: a pooled descendant spends its outputs, so it can no more
+        // confirm without it than the advertisement itself has.
+        std::vector<CTransaction> removed;
+        mempool.remove(tx, /*fRecursive=*/true, MemPoolRemovalReason::UNKNOWN, &removed);
+
+        // Relay memory answers getdata before the pool does, for 15 minutes after
+        // each announcement, so purge it or peers can still be handed the
+        // transactions just withdrawn.
+        //
+        // ResendUnbroadcastTransactions() runs without cs_main and can undo this:
+        // it looks a transaction up in the pool and stores it in relay memory a
+        // few microseconds later, so a removal and purge that both fall between
+        // the two leave it stored. That window is left open as too small to
+        // matter. It comes once every 12 minutes, so about one retirement in 10^8
+        // meets it, and no more than one in 70,000 even if the thread were
+        // preempted inside it for 10 ms. The resend sends this transaction again
+        // only if no peer has fetched it, and the renewal job shares the
+        // scheduler thread with it, so only a send from the RPCs or the wizard
+        // can meet it at all. One that does can still confirm, as an
+        // advertisement a peer holds can. cancelunbroadcasttransaction has the
+        // same window.
+        for (const CTransaction& removed_tx : removed) {
+            RemoveFromRelayMemory(removed_tx.GetHash());
+        }
+
+        // Releases the inputs for the next advertisement and abandons the wallet
+        // descendants. It refuses a transaction the pool still holds, so the
+        // removal above has to come first.
+        unsigned int inputs_released = 0;
+        const bool abandoned = wallet.AbandonTransaction(hash, &inputs_released);
+
+        LogPrintf("%s: Retired beacon advertisement %s for CPID %s, unconfirmed for %" PRId64 " s: "
+                  "%u transaction(s) removed from the mempool, wallet_abandoned=%d, inputs_released=%u",
+                  __func__,
+                  hash.ToString(),
+                  cpid.ToString(),
+                  age,
+                  removed.size(),
+                  abandoned,
+                  inputs_released);
+
+        ++retired;
+    }
+
+    return retired;
+}
+
+std::optional<Beacon> GRC::TryRecentBeaconAdvertisement(const CWallet& wallet, const Cpid& cpid)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    AssertLockHeld(cs_main);
+
+    if (!mempool.HasBeaconForCpid(cpid)) {
+        return std::nullopt;
+    }
+
+    const int64_t now = GetAdjustedTime();
+
+    // Gathered under the pool lock and checked against the key store after it,
+    // which takes its own lock.
+    std::vector<Beacon> recent;
+
+    {
+        LOCK(mempool.cs);
+
+        for (const auto& [hash, entry] : mempool.mapTx) {
+            if (!entry.HasBeacon() || entry.GetBeaconCpid() != cpid) {
+                continue;
+            }
+
+            const CTransaction& tx = entry.GetTx();
+
+            if (now - static_cast<int64_t>(tx.nTime) >= STALE_BEACON_ADVERTISEMENT_AGE) {
+                continue;
+            }
+
+            for (const auto& contract : tx.GetContracts()) {
+                if (contract.m_type == ContractType::BEACON && contract.m_action == ContractAction::ADD) {
+                    const BeaconPayload payload = contract.CopyPayloadAs<BeaconPayload>();
+
+                    if (payload.m_cpid == cpid) {
+                        recent.emplace_back(payload.m_beacon.m_public_key, tx.nTime, hash);
+                    }
+                }
+            }
+        }
+    }
+
+    std::optional<Beacon> newest;
+
+    for (Beacon& beacon : recent) {
+        if (wallet.HaveKey(beacon.m_public_key.GetID())
+            && (!newest || beacon.m_timestamp > newest->m_timestamp))
+        {
+            newest = std::move(beacon);
+        }
+    }
+
+    return newest;
+}
+
 AdvertiseBeaconResult GRC::SendBeaconContractV3(
     const Cpid& cpid,
     Beacon beacon,
@@ -822,7 +981,7 @@ AdvertiseBeaconResult GRC::SendBeaconContractV3(
     }
 
     if (!force) {
-        if (g_recent_beacons.Try(cpid)) {
+        if (TryOwnPendingBeacon(cpid)) {
             LogPrintf("%s: Beacon awaiting confirmation already", __func__);
             return BeaconError::PENDING;
         }
@@ -857,11 +1016,7 @@ AdvertiseBeaconResult GRC::SendBeaconContractV3(
         return BeaconError::TX_FAILED;
     }
 
-    AdvertiseBeaconResult result(std::move(beacon.m_public_key));
-
-    g_recent_beacons.Remember(cpid, result);
-
-    return result;
+    return AdvertiseBeaconResult(std::move(beacon.m_public_key));
 }
 
 namespace {
@@ -874,7 +1029,8 @@ namespace {
 //! \return A variant that contains the new public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid, bool automated_renewal) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid, bool automated_renewal)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
 {
     // First, determine whether we can successfully send a beacon contract. The
     // wallet must be unlocked and hold a balance great enough to send a beacon
@@ -905,7 +1061,8 @@ AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid, bool automated_renewal) EX
 //! \return A variant that contains the public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon, bool automated_renewal) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon, bool automated_renewal)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
 {
     if (!beacon.Renewable(GetAdjustedTime())) {
         LogPrintf("%s: Beacon renewal not needed", __func__);
@@ -1213,7 +1370,6 @@ Researcher::Researcher(
 void Researcher::Initialize()
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
-    g_recent_beacons.ImportRegistry(GetBeaconRegistry());
     Reload();
 }
 
@@ -1573,13 +1729,11 @@ std::optional<Beacon> Researcher::TryPendingBeacon() const
 
     LOCK(cs_main);
 
-    const PendingBeacon* pending_beacon = g_recent_beacons.Try(*cpid);
-
-    if (!pending_beacon) {
-        return std::nullopt;
+    if (std::optional<PendingBeacon> pending_beacon = TryOwnPendingBeacon(*cpid)) {
+        return *pending_beacon;
     }
 
-    return *pending_beacon;
+    return std::nullopt;
 }
 
 GRC::BeaconError Researcher::BeaconError() const
@@ -1632,7 +1786,7 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force, const bool a
 
     if (force) {
         result = SendNewBeacon(*cpid, automated_renewal);
-    } else if (g_recent_beacons.Try(*cpid)) {
+    } else if (TryOwnPendingBeacon(*cpid)) {
         LogPrintf("%s: Beacon awaiting confirmation already", __func__);
         return GRC::BeaconError::PENDING;
     } else if (!current_beacon) {
@@ -1641,12 +1795,18 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force, const bool a
         result = RenewBeacon(*cpid, *current_beacon, automated_renewal);
     }
 
-    if (result.Error() == GRC::BeaconError::NONE) {
-        g_recent_beacons.Remember(*cpid, result);
-    }
-
-    if (result.Error() != GRC::BeaconError::NOT_NEEDED) {
-        m_beacon_error = result.Error();
+    // Errors that describe the moment are not kept. The snapshot maps the stored
+    // error to the beacon status, which would otherwise read "Waiting for
+    // sync..." after the node caught up, or report the advertisement as in the
+    // mempool after it confirmed. The snapshot finds an advertisement in the
+    // mempool itself.
+    switch (result.Error()) {
+        case GRC::BeaconError::NOT_NEEDED:
+        case GRC::BeaconError::OUT_OF_SYNC:
+        case GRC::BeaconError::ALEADY_IN_MEMPOOL:
+            break;
+        default:
+            m_beacon_error = result.Error();
     }
 
     uiInterface.BeaconChanged();

@@ -8,6 +8,7 @@ add_executable(test_gridcoin-qt
     coinselectionviewtests.cpp
     psgttoastdamptests.cpp
     researcherwizardpagetests.cpp
+    researchermodeltests.cpp
     autostarttests.cpp
     optionsmodeltests.cpp
     guiutiltests.cpp

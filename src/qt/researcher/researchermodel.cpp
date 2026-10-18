@@ -16,6 +16,7 @@
 #include <QDateTime>
 #include <QIcon>
 #include <QMessageBox>
+#include <QTimer>
 
 #include <cassert>
 
@@ -38,6 +39,16 @@ ResearcherModel::ResearcherModel(interfaces::ResearcherContext& researcher_conte
     // notification (subscribed below). Per-block accrual updates propagate
     // within one chain-tip-advance event. The researcher/beacon/accrual
     // notifications drive their own targeted refreshes as before.
+    //
+    // The one change no notification reports is falling out of sync:
+    // OutOfSyncByAge() turns true when blocks STOP arriving, so a stalled node
+    // would keep showing itself in sync, and the wizard would keep offering to
+    // send a beacon. This timer polls that flag alone, which is lock-free, and
+    // refreshes only when it changes.
+    m_sync_state_timer = new QTimer(this);
+    m_sync_state_timer->setObjectName("syncStateTimer");
+    connect(m_sync_state_timer, &QTimer::timeout, this, &ResearcherModel::updateSyncState);
+    m_sync_state_timer->start(SYNC_STATE_POLL_INTERVAL_MS);
 }
 
 ResearcherModel::~ResearcherModel()
@@ -75,7 +86,8 @@ QString ResearcherModel::mapBeaconStatus(const BeaconStatus status)
         case BeaconStatus::RENEWAL_POSSIBLE:
             return tr("Beacon eligible for renewal.");
         case BeaconStatus::ALREADY_IN_MEMPOOL:
-            return tr("Beacon advertisement transaction already in mempool.");
+            return tr("Beacon advertisement transaction already in mempool. If it is this wallet's "
+                      "and is still unconfirmed an hour after sending, sending again replaces it.");
         case BeaconStatus::UNKNOWN:
             return tr("Waiting for sync...");
     }
@@ -120,6 +132,9 @@ void ResearcherModel::showWizard(WalletModel* wallet_model)
     if (m_wizard_open) {
         return;
     }
+
+    // Decide on the live flag, not one up to a poll interval old.
+    updateSyncState();
 
     if (outOfSync()) {
         QMessageBox::warning(QApplication::activeWindow(),
@@ -452,22 +467,57 @@ void ResearcherModel::reload()
 
 void ResearcherModel::refresh()
 {
-    // Cheap, lock-free sync-state check first, mirroring the former refresh():
-    // the "Waiting for sync..." state must update even when cs_main is contended.
-    const bool out_of_sync = m_researcher_context.outOfSync();
-
-    if (out_of_sync != m_snapshot.out_of_sync) {
-        m_snapshot.out_of_sync = out_of_sync;
-        emit researcherChanged();
-    }
-
     // Full refresh via TRY_LOCK: bow out cleanly under cs_main contention rather
     // than stalling the GUI thread during heavy chain catch-up.
     if (auto snap = m_researcher_context.trySnapshot()) {
+        // researcherChanged goes out once the new snapshot is in place. Its
+        // listeners, such as the wizard's beacon and authentication pages, read
+        // the snapshot, and the one replaced may be an out-of-sync one, which has
+        // no beacon fields. After a skipped snapshot it goes out again, since the
+        // skip may have reported a sync change with the old snapshot.
+        //
+        // The snapshot's own flag says whether the sync state changed. A flag
+        // read before the snapshot, without cs_main, can be a block behind it:
+        // the block that puts the node back in sync can finish between the two,
+        // and the snapshot then holds the recovery while the flag read did not.
+        // Installed without the signal, it would leave the pages that repaint on
+        // it alone with the out-of-sync state, and every later flag read matches
+        // the snapshot, so nothing would report the recovery afterwards.
+        const bool notify_researcher = snap->out_of_sync != m_snapshot.out_of_sync || m_snapshot_skipped;
+
         m_snapshot = std::move(*snap);
+        m_snapshot_skipped = false;
+
+        if (notify_researcher) {
+            emit researcherChanged();
+        }
         emit magnitudeChanged();
         emit accrualChanged();
         emit beaconChanged();
+    } else {
+        // Without a snapshot, the flag is still readable, lock-free, so report
+        // a sync change on its own now, as the former refresh() did: the
+        // "Waiting for sync..." state must update even when cs_main is
+        // contended.
+        const bool out_of_sync = m_researcher_context.outOfSync();
+
+        if (out_of_sync != m_snapshot.out_of_sync) {
+            m_snapshot.out_of_sync = out_of_sync;
+            emit researcherChanged();
+        }
+        m_snapshot_skipped = true;
+    }
+}
+
+void ResearcherModel::updateSyncState()
+{
+    // Each poll reads only the flag. A change is rare, and gets the refresh a new
+    // block would: the overview repaints magnitude and accrual only on their own
+    // signals, and the beacon status is derived from the sync state too. A
+    // refresh that had to skip its snapshot is retried here as well: once the
+    // flag has been updated, a stalled node has no block left to retry it.
+    if (m_snapshot_skipped || m_researcher_context.outOfSync() != m_snapshot.out_of_sync) {
+        refresh();
     }
 }
 

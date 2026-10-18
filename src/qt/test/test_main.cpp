@@ -12,6 +12,7 @@
 #include "guiutiltests.h"
 #include "optionsmodeltests.h"
 #include "psgttoastdamptests.h"
+#include "researchermodeltests.h"
 #include "researcherwizardpagetests.h"
 #include "sidestakemodeltests.h"
 #include "uritests.h"
@@ -98,6 +99,10 @@ int main(int argc, char *argv[])
 
     AboutDialogTests test11;
     if (QTest::qExec(&test11) != 0)
+        fInvalid = true;
+
+    ResearcherModelTests test12;
+    if (QTest::qExec(&test12) != 0)
         fInvalid = true;
 
     return fInvalid;

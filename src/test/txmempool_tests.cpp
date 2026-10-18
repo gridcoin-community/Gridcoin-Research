@@ -228,6 +228,38 @@ BOOST_AUTO_TEST_CASE(indexes_populate_on_add_and_tear_down_on_remove)
     BOOST_CHECK_EQUAL(pool.size(), 0UL);
 }
 
+BOOST_AUTO_TEST_CASE(a_cpid_keeps_its_beacon_index_entry_until_its_last_beacon_leaves)
+{
+    // Two beacons for one CPID can be pooled together: acceptance does not refuse
+    // the second. The index must keep the CPID until both have gone, or
+    // HasBeaconForCpid() lets the wallet send another advertisement while one is
+    // still pooled.
+    const GRC::Cpid cpid(InsecureRandBytes(16));
+
+    CKey first_key;
+    first_key.MakeNewKey(false);
+    CKey second_key;
+    second_key.MakeNewKey(false);
+
+    const CTransaction first = MakeTx(
+        {GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD, cpid, first_key.GetPubKey())});
+    const CTransaction second = MakeTx(
+        {GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD, cpid, second_key.GetPubKey())});
+
+    CTxMemPool pool;
+    pool.addUnchecked(first.GetHash(), MakeEntry(first));
+    pool.addUnchecked(second.GetHash(), MakeEntry(second));
+
+    BOOST_CHECK(pool.HasBeaconForCpid(cpid));
+
+    pool.remove(first);
+    BOOST_CHECK(pool.HasBeaconForCpid(cpid));
+
+    pool.remove(second);
+    BOOST_CHECK(!pool.HasBeaconForCpid(cpid));
+    BOOST_CHECK(pool.m_beacon_by_cpid.empty());
+}
+
 BOOST_AUTO_TEST_CASE(hasmrcforcpid_reports_collision_hash)
 {
     const GRC::Cpid cpid_a(InsecureRandBytes(16));
@@ -568,6 +600,29 @@ BOOST_AUTO_TEST_CASE(unbroadcast_tracks_local_origination)
     const auto set = pool.GetUnbroadcast();
     BOOST_CHECK_EQUAL(set.size(), 1U);
     BOOST_CHECK(set.count(b.GetHash()) == 1);
+}
+
+BOOST_AUTO_TEST_CASE(a_fetch_clears_a_never_sent_entry_but_not_a_reorganization_mark)
+{
+    // A peer's getdata is evidence that a never-sent transaction went out. It is
+    // not evidence against what a reorganization showed: peers had that one in a
+    // block. Its mark stays until it leaves the pool.
+    CTxMemPool pool;
+    const CTransaction sent = MakePlainTx(31);
+    const CTransaction reorged = MakePlainTx(32);
+    pool.addUnchecked(sent.GetHash(), MakeEntryFee(sent, 10));
+    pool.addUnchecked(reorged.GetHash(), MakeEntryFee(reorged, 10));
+    pool.AddUnbroadcast(sent.GetHash());
+    pool.AddUnbroadcast(reorged.GetHash(), UnbroadcastReason::Reannounce);
+
+    pool.ClearUnbroadcastOnFetch(sent.GetHash());
+    pool.ClearUnbroadcastOnFetch(reorged.GetHash());
+
+    BOOST_CHECK(!pool.IsUnbroadcastTx(sent.GetHash()));
+    BOOST_CHECK(pool.GetUnbroadcastReason(reorged.GetHash()) == std::optional{UnbroadcastReason::Reannounce});
+
+    pool.remove(reorged);
+    BOOST_CHECK(!pool.IsUnbroadcastTx(reorged.GetHash()));
 }
 
 //!

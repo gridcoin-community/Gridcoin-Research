@@ -40,6 +40,7 @@ add_executable(test_gridcoin
     gridcoin/block_finder_tests.cpp
     gridcoin/block_rewards_tests.cpp
     gridcoin/boinc_tests.cpp
+    gridcoin/beacon_advertisement_tests.cpp
     gridcoin/beacon_tests.cpp
     gridcoin/claim_tests.cpp
     gridcoin/contract_tests.cpp

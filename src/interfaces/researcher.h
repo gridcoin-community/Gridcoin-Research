@@ -91,7 +91,7 @@ struct ResearcherSnapshot
     // Beacon status
     BeaconStatus beacon_status = BeaconStatus::UNKNOWN;
     bool beacon_present = false;         //!< A beacon record exists (may be expired); gates the age/address/expiry formatters.
-    bool pending_beacon_present = false; //!< A pending beacon record exists (may be pending-expired); gates the pending formatters.
+    bool pending_beacon_present = false; //!< A pending beacon is shown; gates the pending formatters. Matches has_pending_beacon.
     bool has_active_beacon = false;
     bool has_pending_beacon = false;
     bool has_renewable_beacon = false;

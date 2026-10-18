@@ -92,17 +92,19 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry)
             mapNextTx[stored_tx.vin[i].prevout] = CInPoint(&stored_tx, i);
 
         // Maintain the secondary contract indexes from the cached tags. These rely
-        // on the same fresh-txid contract as above: the CPID-keyed maps overwrite
+        // on the same fresh-txid contract as above: m_mrc_by_cpid overwrites
         // harmlessly on a same-txid re-add (identical CPID), but m_mrc_by_fee is a
-        // multimap whose emplace would double-insert -- the upstream exists() guard
-        // is what prevents a duplicate add from leaving a stale fee row.
+        // multimap whose emplace appends a row per add, and the beacon count and
+        // the counters below are incremented per add -- the upstream exists()
+        // guard is what keeps a duplicate add from leaving a stale fee row or a
+        // count that never returns to zero.
         const CTxMemPoolEntry& e = it->second;
         if (e.HasMRC()) {
             m_mrc_by_cpid.insert_or_assign(e.GetMRCCpid(), hash);
             m_mrc_by_fee.emplace(e.GetMRCFee(), e.GetMRCCpid());
         }
         if (e.HasBeacon())
-            m_beacon_by_cpid.insert_or_assign(e.GetBeaconCpid(), hash);
+            ++m_beacon_by_cpid[e.GetBeaconCpid()];
         if (e.HasMandatorySidestake())
             ++m_mandatory_sidestake_count;
         if (e.HasMessageContract())
@@ -129,8 +131,12 @@ void CTxMemPool::eraseIndexes(const CTxMemPoolEntry& entry)
             }
         }
     }
-    if (entry.HasBeacon())
-        m_beacon_by_cpid.erase(entry.GetBeaconCpid());
+    if (entry.HasBeacon()) {
+        const auto it = m_beacon_by_cpid.find(entry.GetBeaconCpid());
+        if (it != m_beacon_by_cpid.end() && --it->second == 0) {
+            m_beacon_by_cpid.erase(it);
+        }
+    }
     if (entry.HasMandatorySidestake() && m_mandatory_sidestake_count > 0)
         --m_mandatory_sidestake_count;
     if (entry.HasMessageContract() && m_message_contract_count > 0)
