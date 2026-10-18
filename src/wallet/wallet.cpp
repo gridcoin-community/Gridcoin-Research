@@ -5335,6 +5335,75 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
     }
 
     CTxDB txdb("r");
+
+    // FixSpentCoins does not clear the spent bit of an output consumed by an own
+    // unconfirmed transaction the pool does not hold while that transaction can
+    // still confirm. It does not set a bit another path has cleared. The wallet
+    // still tags such a transaction in-mempool and rebroadcasts it -- a size
+    // eviction keeps the tag, and so does a send the pool refused -- and
+    // ReleaseSpendsNotInActiveChain, which runs just before this at startup,
+    // leaves its inputs marked for the same reason. Freeing them lets the wallet
+    // build a transaction that conflicts with one peers may still hold.
+    //
+    // It stops standing once it can never confirm, judged from the chain and the
+    // pool because nothing re-tags it: the chain has spent one of its inputs
+    // elsewhere, the pool holds a different spend of one of its inputs, or an
+    // input comes from a transaction found in neither the index, the pool, nor
+    // this set. Such a parent may still confirm later (ResendWalletTransactions
+    // offers back an inactive transaction a disconnect stranded), so on that
+    // branch this pass still errs toward freeing, as it did before. A child whose
+    // parent was conflicted is the case this pass still frees: this pass is what
+    // frees that child's other inputs. AbandonTransaction remains the way to
+    // release a spend that still stands.
+    std::set<COutPoint> spent_by_standing;
+    {
+        std::set<uint256> standing;
+        for (const auto& [hash, wtx] : mapWallet) {
+            if (!wtx.isInMempool() || mempool.exists(hash) || txdb.ContainsTx(hash)) continue;
+            if (HasChainSpentInput(wtx, txdb)) continue;
+
+            bool input_spent_in_pool = false;
+            for (const CTxIn& txin : wtx.vin) {
+                if (spent_in_mempool.count(txin.prevout)) {
+                    input_spent_in_pool = true;
+                    break;
+                }
+            }
+            if (input_spent_in_pool) continue;
+
+            standing.insert(hash);
+        }
+
+        bool pruned = true;
+        while (pruned) {
+            pruned = false;
+            for (auto it = standing.begin(); it != standing.end();) {
+                bool parent_missing = false;
+                for (const CTxIn& txin : mapWallet.at(*it).vin) {
+                    const uint256& parent = txin.prevout.hash;
+                    if (!standing.count(parent) && !mempool.exists(parent) && !txdb.ContainsTx(parent)) {
+                        parent_missing = true;
+                        break;
+                    }
+                }
+                if (parent_missing) {
+                    it = standing.erase(it);
+                    pruned = true;
+                } else {
+                    ++it;
+                }
+            }
+        }
+
+        for (const uint256& hash : standing) {
+            for (const CTxIn& txin : mapWallet.at(hash).vin) {
+                spent_by_standing.insert(txin.prevout);
+            }
+        }
+    }
+
+    int kept_for_standing = 0;
+
     for (auto const& pcoin : vCoins)
     {
         // Find the corresponding transaction index
@@ -5345,7 +5414,8 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
         for (unsigned int n=0; n < pcoin->vout.size(); n++)
         {
             if ((IsMine(pcoin->vout[n]) != ISMINE_NO) && pcoin->IsSpent(n) && (txindex.vSpent.size() <= n || txindex.vSpent[n].IsNull())
-                && !spent_in_mempool.count(COutPoint(pcoin->GetHash(), n)))
+                && !spent_in_mempool.count(COutPoint(pcoin->GetHash(), n))
+                && !spent_by_standing.count(COutPoint(pcoin->GetHash(), n)))
             {
                 LogPrintf("FixSpentCoins found lost coin %s gC %s[%d], %s",
                     FormatMoney(pcoin->vout[n].nValue).c_str(), pcoin->GetHash().ToString().c_str(), n, fCheckOnly? "repair not attempted" : "repairing");
@@ -5357,6 +5427,11 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
                     pcoin->WriteToDisk(&walletdb);
                     repaired.insert(pcoin->GetHash());
                 }
+            }
+            else if ((IsMine(pcoin->vout[n]) != ISMINE_NO) && pcoin->IsSpent(n) && (txindex.vSpent.size() <= n || txindex.vSpent[n].IsNull())
+                && !spent_in_mempool.count(COutPoint(pcoin->GetHash(), n)))
+            {
+                kept_for_standing++;
             }
             else if ((IsMine(pcoin->vout[n]) != ISMINE_NO) && !pcoin->IsSpent(n) && (txindex.vSpent.size() > n && !txindex.vSpent[n].IsNull()))
             {
@@ -5372,6 +5447,12 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
                 }
             }
         }
+    }
+
+    if (kept_for_standing > 0) {
+        LogPrintf("INFO: %s: left %d output(s) marked spent - an own unconfirmed transaction the pool does not "
+                  "hold can still confirm; abandontransaction releases them",
+                  __func__, kept_for_standing);
     }
 
     for (const uint256& hash : repaired) {
