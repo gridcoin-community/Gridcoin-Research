@@ -552,38 +552,45 @@ public:
         }
     }
 
-private:
-    int msb(const int64_t& n) const
+    //! The number of bits in |n|: 0 for 0, 63 for INT64_MAX, 64 for INT64_MIN.
+    static int BitWidth(int64_t n) noexcept
     {
-        // std::abs(INT64_MIN) is undefined behavior (two's complement
-        // asymmetry). |INT64_MIN| = 2^63, so msb = 64.
+        // std::abs is undefined on INT64_MIN; |INT64_MIN| = 2^63 takes 64 bits.
         if (n == std::numeric_limits<int64_t>::min()) {
             return 64;
         }
 
-        int64_t abs_n = std::abs(n);
+        const uint64_t magnitude = static_cast<uint64_t>(std::abs(n));
 
-        int index = 0;
-
-        for (; index <= 63; ++index) {
-            if (abs_n >> index == 0) {
-                break;
-            }
+        if (magnitude == 0) {
+            return 0;
         }
 
-        return index;
+#if defined(__GNUC__)
+        static_assert(sizeof(unsigned long long) == sizeof(uint64_t), "clzll must cover 64 bits");
+        return 64 - __builtin_clzll(magnitude);
+#else
+        int width = 0;
+
+        for (uint64_t m = magnitude; m != 0; m >>= 1) {
+            ++width;
+        }
+
+        return width;
+#endif
     }
 
+private:
     int64_t overflow_mult(const int64_t& a, const int64_t& b) const
     {
         if (a == 0 || b == 0) {
             return 0;
         }
 
-        // A 64-bit integer with the lower 32 bits filled has value 2^32 - 1. Multiplying two of these, a * b, together
-        // is (2^32 - 1) * (2^32 - 1) = 2^64 - 2^33 + 1 > 2^63. Log2(2^63) = msb(a) + msb(b) - 1. So a quick overflow limit...
+        // |a| < 2^w(a) and |b| < 2^w(b) give |a b| < 2^(w(a) + w(b)), so a width sum of at most 63 proves the product
+        // fits. The converse does not hold (2^31 * 2^31 = 2^62 fits and is refused); the guard is conservative on purpose.
 
-        if (msb(a) + msb(b) > 63) {
+        if (BitWidth(a) + BitWidth(b) > 63) {
             throw std::overflow_error("fraction multiplication results in an overflow");
         }
 

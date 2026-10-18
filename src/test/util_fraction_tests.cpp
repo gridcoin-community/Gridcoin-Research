@@ -166,61 +166,6 @@ BOOST_AUTO_TEST_CASE(Fraction_msb_algorithm_equivalence)
     BOOST_CHECK(success);
 }
 
-BOOST_AUTO_TEST_CASE(Fraction_msb_performance_test)
-{
-    // This is a test to bracket the three different algorithms above in anonymous namespace for doing msb calcs. The first is O(1),
-    // the second and third are O(log n), but the O(1) straight from the C++ library is pretty heavyweight and highly dependent on CPU
-    // architecture.
-
-    FastRandomContext rand(uint256 {0});
-
-    unsigned int iterations = 10000000;
-
-    g_timer.InitTimer("msb_test", true);
-
-    for (unsigned int i = 0; i < iterations; ++i) {
-        msb((int64_t)rand.rand64());
-    }
-
-    int64_t msb_test_time = g_timer.GetTimes(strprintf("msb %u iterations", iterations), "msb_test").time_since_last_check;
-
-    FastRandomContext rand2(uint256 {0});
-
-    for (unsigned int i = 0; i < iterations; ++i) {
-        msb2((int64_t)rand2.rand64());
-    }
-
-    int64_t msb2_test_time = g_timer.GetTimes(strprintf("msb2 %u iterations", iterations), "msb_test").time_since_last_check;
-
-    FastRandomContext rand3(uint256 {0});
-
-    for (unsigned int i = 0; i < iterations; ++i) {
-        msb3((int64_t)rand3.rand64());
-    }
-
-    int64_t msb3_test_time = g_timer.GetTimes(strprintf("msb3 %u iterations", iterations), "msb_test").time_since_last_check;
-
-    // The execution time of the above on a 13900K is
-
-    // INFO: GetTimes: timer msb_test: msb 10000000 iterations: elapsed time: 86 ms, time since last check: 86 ms.
-    // INFO: GetTimes: timer msb_test: msb2 10000000 iterations: elapsed time: 166 ms, time since last check: 80 ms.
-    // INFO: GetTimes: timer msb_test: msb3 10000000 iterations: elapsed time: 246 ms, time since last check: 80 ms.
-
-    // Which is almost identical. msb appears to be much slower on 32 bit architectures.
-
-    // One can easily have T1 = k1 * O(1) and T2 = k2 * O(n) = k2 * n * O(1) where T1 > T2 for n < q if k1 > q * k2, so the O(1)
-    // algorithm is by no means the best choice.
-
-    // This test makes sure that the three algorithms are within 20x of the one with the minimum execution time. If not, it will
-    // fail to prompt us to look at this again.
-
-    double minimum_time = std::min<double>(std::min<double>(msb_test_time, msb2_test_time), msb3_test_time);
-
-    BOOST_CHECK((double) msb_test_time / minimum_time < 20.0);
-    BOOST_CHECK((double) msb2_test_time / minimum_time < 20.0);
-    BOOST_CHECK((double) msb3_test_time / minimum_time < 20.0);
-}
-
 BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_trivial)
 {
     Fraction fraction;
@@ -812,6 +757,83 @@ BOOST_AUTO_TEST_CASE(util_Fraction_FromString)
     }
 
     BOOST_CHECK_EQUAL(err, valid_err_message);
+}
+
+BOOST_AUTO_TEST_CASE(Fraction_msb_performance_test)
+{
+    // Fraction::BitWidth, a leading-zero count, replaced the msb3 shift loop
+    // in the overflow guard. This brackets the two so that a regression to a
+    // slow implementation is noticed: the count must not run slower than the
+    // loop it replaced, by any margin a machine could introduce.
+    const unsigned int iterations = 10000000;
+    const int64_t min = std::numeric_limits<int64_t>::min();
+
+    g_timer.InitTimer("msb_test", true);
+
+    int64_t sink = 0;
+
+    FastRandomContext rand_loop(uint256 {0});
+
+    for (unsigned int i = 0; i < iterations; ++i) {
+        const int64_t n = static_cast<int64_t>(rand_loop.rand64());
+
+        // msb3 takes std::abs, which is undefined on INT64_MIN.
+        if (n != min) {
+            sink += msb3(n);
+        }
+    }
+
+    const int64_t loop_time = g_timer.GetTimes(strprintf("msb3 %u iterations", iterations), "msb_test").time_since_last_check;
+
+    FastRandomContext rand_width(uint256 {0});
+
+    for (unsigned int i = 0; i < iterations; ++i) {
+        sink += Fraction::BitWidth(static_cast<int64_t>(rand_width.rand64()));
+    }
+
+    const int64_t width_time = g_timer.GetTimes(strprintf("BitWidth %u iterations", iterations), "msb_test").time_since_last_check;
+
+    LogPrintf("INFO: %s: msb3 %" PRId64 " ms, Fraction::BitWidth %" PRId64 " ms", __func__, loop_time, width_time);
+
+    BOOST_CHECK(sink != 0);
+    BOOST_CHECK(width_time <= 20 * std::max<int64_t>(loop_time, 1));
+}
+
+BOOST_AUTO_TEST_CASE(bit_width_matches_the_former_shift_loop)
+{
+    // The guard's throw set must not move with the implementation, so the
+    // count must agree with the loop on every value the loop could take.
+    const int64_t max = std::numeric_limits<int64_t>::max();
+    const int64_t min = std::numeric_limits<int64_t>::min();
+
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(0), 0);
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(1), 1);
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(-1), 1);
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(max), 63);
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(-max), 63);
+    // |INT64_MIN| = 2^63 takes 64 bits. The loop could not be given this value
+    // (std::abs is undefined on it); the guard special-cased it to 64.
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(min), 64);
+
+    for (int i = 0; i < 63; ++i) {
+        const int64_t power = int64_t {1} << i;
+
+        BOOST_CHECK_EQUAL(Fraction::BitWidth(power), i + 1);
+        BOOST_CHECK_EQUAL(Fraction::BitWidth(-power), i + 1);
+        BOOST_CHECK_EQUAL(Fraction::BitWidth(power - 1), i);
+        BOOST_CHECK_EQUAL(Fraction::BitWidth(power), msb3(power));
+        BOOST_CHECK_EQUAL(Fraction::BitWidth(power - 1), msb3(power - 1));
+    }
+
+    FastRandomContext rand(uint256 {0});
+
+    for (int i = 0; i < 10000; ++i) {
+        const int64_t n = static_cast<int64_t>(rand.rand64());
+
+        if (n != min) {
+            BOOST_CHECK_EQUAL(Fraction::BitWidth(n), msb3(n));
+        }
+    }
 }
 
 BOOST_AUTO_TEST_CASE(integer_multiply_cancels_against_the_denominator_first)
