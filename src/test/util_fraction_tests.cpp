@@ -814,4 +814,117 @@ BOOST_AUTO_TEST_CASE(util_Fraction_FromString)
     BOOST_CHECK_EQUAL(err, valid_err_message);
 }
 
+BOOST_AUTO_TEST_CASE(integer_multiply_cancels_against_the_denominator_first)
+{
+    const int64_t big = int64_t {1} << 40;
+
+    // (2^40 + 1) / 2^40 * 2^40: the product 2^40 (2^40 + 1) does not fit, the
+    // result 2^40 + 1 does. Cancelling 2^40 first never forms the product.
+    const Fraction scaled = Fraction(big + 1, big) * big;
+    BOOST_CHECK_EQUAL(scaled.GetNumerator(), big + 1);
+    BOOST_CHECK_EQUAL(scaled.GetDenominator(), 1);
+    BOOST_CHECK_EQUAL(scaled.IsSimplified(), true);
+
+    // The sign rides on the numerator.
+    BOOST_CHECK(Fraction(-3, 4) * 8 == Fraction(-6));
+    BOOST_CHECK(Fraction(3, 4) * -8 == Fraction(-6));
+    BOOST_CHECK(Fraction(-3, 4) * -8 == Fraction(6));
+
+    // Zero either way is 0/1.
+    const Fraction zero_lhs = Fraction(0, 7) * 5;
+    BOOST_CHECK_EQUAL(zero_lhs.GetNumerator(), 0);
+    BOOST_CHECK_EQUAL(zero_lhs.GetDenominator(), 1);
+
+    const Fraction zero_rhs = Fraction(3, 4) * 0;
+    BOOST_CHECK_EQUAL(zero_rhs.GetNumerator(), 0);
+    BOOST_CHECK_EQUAL(zero_rhs.GetDenominator(), 1);
+
+    // A result that leaves int64_t still throws. 3/2 * (INT64_MAX - 1) cancels
+    // the 2 and then needs 3 (INT64_MAX - 1) / 2, which is above INT64_MAX.
+    BOOST_CHECK_EXCEPTION(Fraction(3, 2) * (std::numeric_limits<int64_t>::max() - 1),
+                          std::overflow_error,
+                          [](const std::overflow_error& e) {
+                              return std::string(e.what()) == "fraction multiplication results in an overflow";
+                          });
+
+    // INT64_MIN as the integer is refused outright: the integer becomes
+    // Fraction(INT64_MIN), which the constructor rejects.
+    BOOST_CHECK_THROW(Fraction(0) * std::numeric_limits<int64_t>::min(), std::out_of_range);
+    BOOST_CHECK_THROW(Fraction(1) * std::numeric_limits<int64_t>::min(), std::out_of_range);
+}
+
+BOOST_AUTO_TEST_CASE(integer_divide_cancels_against_the_numerator_first)
+{
+    const int64_t big = int64_t {1} << 40;
+
+    // 2^40 / (2^40 + 1) divided by 2^40: the denominator product does not fit,
+    // the result 1 / (2^40 + 1) does.
+    const Fraction quotient = Fraction(big, big + 1) / big;
+    BOOST_CHECK_EQUAL(quotient.GetNumerator(), 1);
+    BOOST_CHECK_EQUAL(quotient.GetDenominator(), big + 1);
+
+    BOOST_CHECK(Fraction(3, 4) / -2 == Fraction(-3, 8));
+    BOOST_CHECK(Fraction(0, 5) / 7 == Fraction(0));
+
+    BOOST_CHECK_EXCEPTION(Fraction(3, 4) / 0,
+                          std::out_of_range,
+                          [](const std::out_of_range& e) {
+                              return std::string(e.what()) == "denominator specified is zero";
+                          });
+    BOOST_CHECK_THROW(Fraction(0) / 0, std::out_of_range);
+    BOOST_CHECK_THROW(Fraction(1) / std::numeric_limits<int64_t>::min(), std::out_of_range);
+}
+
+BOOST_AUTO_TEST_CASE(int64_min_is_refused_at_every_entry)
+{
+    const int64_t min = std::numeric_limits<int64_t>::min();
+
+    BOOST_CHECK_THROW(Fraction{min}, std::out_of_range); // braces: Fraction(min) would declare a variable
+    BOOST_CHECK_THROW(Fraction(min, 1), std::out_of_range);
+    BOOST_CHECK_THROW(Fraction(1, min), std::out_of_range);
+    BOOST_CHECK_THROW(Fraction(min, 1, true), std::out_of_range);
+
+    // As an integer operand: every integer overload builds Fraction(min)
+    // first, so the constructor refuses it before any arithmetic.
+    BOOST_CHECK_THROW(Fraction(1) + min, std::out_of_range);
+    BOOST_CHECK_THROW(Fraction(1) - min, std::out_of_range);
+    BOOST_CHECK_THROW(Fraction(1) * min, std::out_of_range);
+    BOOST_CHECK_THROW(Fraction(1) / min, std::out_of_range);
+    BOOST_CHECK_THROW(static_cast<void>(Fraction(1) == min), std::out_of_range);
+}
+
+BOOST_AUTO_TEST_CASE(magnitude_unit_times_the_max_reward_constants)
+{
+    // SnapshotAccrualComputer::MaxReward() computes
+    //
+    //   (magnitude_unit * 32768 * 2 * COIN).ToCAmount()
+    //
+    // with the unit read from the "magnitudeunit" protocol entry. These pin
+    // that chain for the default unit, for the entry in force when this was
+    // written, for the clamp, and at the edge of what a decimal entry can
+    // carry. See the overflow analysis at that function.
+    const auto max_reward = [](const GRC::Allocation& magnitude_unit) {
+        return (magnitude_unit * 32768 * 2 * COIN).ToCAmount();
+    };
+
+    BOOST_CHECK_EQUAL(max_reward(GRC::Allocation(1, 4)), CAmount {1638400000000});                          // 16384 GRC
+    BOOST_CHECK_EQUAL(max_reward(GRC::Allocation(Fraction::FromString("103050/100000"))), CAmount {6753484800000}); // 67534.848 GRC
+    BOOST_CHECK_EQUAL(max_reward(GRC::Allocation(5, 1)), CAmount {32768000000000});                         // 327680 GRC
+
+    // Eight decimal places just under the clamp. Before the integer operand was
+    // cancelled first this threw: the chain had formed 499999999 * 2^8 by the
+    // last step and then multiplied it by COIN with nothing left to cancel.
+    BOOST_CHECK_EQUAL(max_reward(GRC::Allocation(499999999, 100000000)), CAmount {32767999934464});
+
+    // Fifteen places still fit: the reduced result is p * 2^9 / 5^7.
+    const GRC::Allocation fifteen_places(4999999999999999LL, 1000000000000000LL);
+    BOOST_CHECK_NO_THROW(max_reward(fifteen_places));
+    BOOST_CHECK(fifteen_places * 32768 * 2 * COIN == Fraction(4999999999999999LL * 512, 78125));
+
+    // Sixteen places do not: the reduced numerator p * 2^8 is above INT64_MAX,
+    // so the result itself has no int64_t representation.
+    BOOST_CHECK_THROW(max_reward(GRC::Allocation(49999999999999999LL, 10000000000000000LL)), std::overflow_error);
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -310,9 +310,9 @@ public:
 
     Fraction operator+(const int64_t& rhs) const
     {
-        Fraction slhs(*this, true);
-
-        return Fraction(overflow_add(slhs.GetNumerator(), overflow_mult(slhs.GetDenominator(), rhs)), slhs.GetDenominator(), true);
+        // gcd(denominator, 1) = 1 takes the fraction sum's fast path to the same
+        // (a + rhs b) / b; routed the same way as the other integer operands.
+        return *this + Fraction(rhs);
     }
 
     Fraction operator-(const Fraction& rhs) const
@@ -322,7 +322,8 @@ public:
 
     Fraction operator-(const int64_t& rhs) const
     {
-        return (*this + -rhs);
+        // Fraction(rhs) refuses INT64_MIN; negating it here was signed overflow.
+        return *this - Fraction(rhs);
     }
 
     Fraction operator*(const Fraction& rhs) const
@@ -366,8 +367,14 @@ public:
     Fraction operator*(const int64_t& rhs) const
     {
         Fraction slhs(*this, true);
+        Fraction srhs(rhs);
 
-        return Fraction(overflow_mult(slhs.GetNumerator(), rhs), slhs.GetDenominator(), true);
+        // The fraction multiply with rhs over 1, written out so that no unit factor goes through the overflow guard:
+        // gcd(a, 1) = 1 leaves h = gcd(rhs, b) as the only cancellation, so an allocation times a reward, or a magnitude
+        // unit times a constant, only forms the product its reduced result needs. Fraction(rhs) refuses INT64_MIN.
+        int64_t h = std::gcd(srhs.GetNumerator(), slhs.GetDenominator());
+
+        return Fraction(overflow_mult(slhs.GetNumerator(), srhs.GetNumerator() / h), slhs.GetDenominator() / h, true);
     }
 
     Fraction operator/(const Fraction& rhs) const
@@ -378,8 +385,16 @@ public:
     Fraction operator/(const int64_t& rhs) const
     {
         Fraction slhs(*this, true);
+        Fraction srhs(rhs);
 
-        return Fraction(slhs.GetNumerator(), overflow_mult(slhs.GetDenominator(), rhs), true);
+        if (srhs.IsZero()) {
+            throw std::out_of_range("denominator specified is zero");
+        }
+
+        // a/b times 1/rhs, written out the same way: g = gcd(a, rhs) is the only cancellation.
+        int64_t g = std::gcd(slhs.GetNumerator(), srhs.GetNumerator());
+
+        return Fraction(slhs.GetNumerator() / g, overflow_mult(slhs.GetDenominator(), srhs.GetNumerator() / g), true);
     }
 
     Fraction& operator+=(const Fraction& rhs)
