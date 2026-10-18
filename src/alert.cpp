@@ -131,7 +131,7 @@ bool CAlert::RelayTo(CNode* pnode) const
     // returns true if wasn't already contained in the set
     if (pnode->setKnown.insert(GetHash()).second)
     {
-        if (AppliesTo(pnode->nVersion, pnode->strSubVer) ||
+        if (AppliesTo(pnode->nVersion, pnode->GetSubVer()) ||
             AppliesToMe() ||
             GetAdjustedTime() < nRelayUntil)
         {
