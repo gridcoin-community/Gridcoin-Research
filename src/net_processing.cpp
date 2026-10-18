@@ -613,17 +613,25 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
+        // The whole message is read into locals and validated before any of it
+        // is stored on the node: a negotiation that fails leaves the node as it
+        // was, and the fields reach the threads that read them (see the comment
+        // at CNode::nVersion) at one site below, nVersion last.
+        int nVersion;
+        uint64_t nServices;
         int64_t nTime;
         CAddress addrMe;
         CAddress addrFrom;
         uint64_t nNonce = 1;
+        std::string strSubVer;
+        int nStartingHeight = -1;
 
-        vRecv >> pfrom->nVersion;
+        vRecv >> nVersion;
 
         // In the version following 180324 (mandatory v5.0.0 - Fern), we can finally
         // drop the garbage legacy fields added to the version message:
         //
-        if (pfrom->nVersion <= 180324) {
+        if (nVersion <= 180324) {
             std::string legacy_dummy;
             vRecv >> legacy_dummy      // pfrom->boinchashnonce
                   >> legacy_dummy      // pfrom->boinchashpw
@@ -632,9 +640,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                   >> legacy_dummy;     // acid
         }
 
-        vRecv >> pfrom->nServices >> nTime >> addrMe;
+        vRecv >> nServices >> nTime >> addrMe;
 
-        LogPrint(BCLog::LogFlags::NOISY, "received aries version %i ...", pfrom->nVersion);
+        LogPrint(BCLog::LogFlags::NOISY, "received aries version %i ...", nVersion);
 
         // Never by signed subtraction: nTime is peer-supplied, and
         // GetAdjustedTime() - nTime overflows (undefined behaviour) for extreme
@@ -669,14 +677,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // near INT_MAX, where fork_height + grace would overflow signed int (UB).
         const bool past_fork_grace = fork_height != std::numeric_limits<int>::max()
             && nLocalBestHeight > (int64_t)fork_height + Params().GetConsensus().ProtocolVersionGracePeriod;
-        if (pfrom->nVersion < MIN_PEER_PROTO_VERSION
+        if (nVersion < MIN_PEER_PROTO_VERSION
             || (DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD
-                && pfrom->nVersion < PROTOCOL_VERSION
+                && nVersion < PROTOCOL_VERSION
                 && past_fork_grace)
             ) {
             // disconnect from peers older than this proto version
             LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting",
-                     pfrom->addr.ToString(), pfrom->nVersion);
+                     pfrom->addr.ToString(), nVersion);
 
             pfrom->fDisconnect = true;
             return false;
@@ -686,22 +694,22 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             vRecv >> addrFrom >> nNonce;
 
         if (!vRecv.empty()) {
-            vRecv >> pfrom->strSubVer;
+            vRecv >> strSubVer;
 
-            if (pfrom->strSubVer.size() > 256) {
-                pfrom->strSubVer.resize(256);
+            if (strSubVer.size() > 256) {
+                strSubVer.resize(256);
             }
 
             // This handles the special disconnect for clients between the mandatory 5.4.0.0 and the 5.4.5.0 since
             // 5.4.6.0 effectively became a mandatory due to the contract version error in TxMessage. The protocol version
             // was not incremented since 5.4.6.0 was originally a leisure and so this is the only reasonable way to distinguish
             // in this situation.
-            if (pfrom->strSubVer.find("5.4.5") != std::string::npos
-                || pfrom->strSubVer.find("5.4.4") != std::string::npos
-                || pfrom->strSubVer.find("5.4.3") != std::string::npos
-                || pfrom->strSubVer.find("5.4.2") != std::string::npos
-                || pfrom->strSubVer.find("5.4.1") != std::string::npos
-                || pfrom->strSubVer.find("5.4.0") != std::string::npos
+            if (strSubVer.find("5.4.5") != std::string::npos
+                || strSubVer.find("5.4.4") != std::string::npos
+                || strSubVer.find("5.4.3") != std::string::npos
+                || strSubVer.find("5.4.2") != std::string::npos
+                || strSubVer.find("5.4.1") != std::string::npos
+                || strSubVer.find("5.4.0") != std::string::npos
                 ) {
 
                 pfrom->fDisconnect = true;
@@ -710,10 +718,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         if (!vRecv.empty())
-            vRecv >> pfrom->nStartingHeight;
-
-        // 12-5-2015 - Append Trust fields
-        pfrom->nTrust = 0;
+            vRecv >> nStartingHeight;
 
         // Allow newbies to connect easily with 0 blocks
         if (gArgs.GetArg("-autoban", "true") == "true")
@@ -721,7 +726,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
                 // Note: Hacking attempts start in this area
 
-                if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0 )
+                if (nStartingHeight < 1 && nServices == 0)
                 {
                     pfrom->Misbehaving(100);
                     LogPrint(BCLog::LogFlags::NET, "Disconnecting possible hacker node with no services.  Banned for 24 hours.");
@@ -732,7 +737,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 
-        pfrom->SetAddrLocal(addrMe);
         if (pfrom->fInbound && addrMe.IsRoutable())
         {
             SeenLocal(addrMe);
@@ -752,15 +756,25 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             g_connman->SetAddrSeenByPeer(addrMe);
         }
 
+        // Negotiated. Publish the message's fields for the other threads that
+        // read them, nVersion last, so that a reader which finds it set finds
+        // the rest set too. nStartingHeight follows fClient: the block-request
+        // paths test both without testing nVersion.
+        pfrom->nServices = nServices;
+        pfrom->fClient = !(nServices & NODE_NETWORK);
+        pfrom->SetSubVer(strSubVer);
+        pfrom->nTrust = 0;
+        pfrom->SetAddrLocal(addrMe);
+        // Moved from AddTimeData to here to follow bitcoin's approach.
+        const int64_t nOffsetSample = nTime - GetTime();
+        pfrom->nTimeOffset = nOffsetSample;
+        pfrom->nStartingHeight = nStartingHeight;
+        pfrom->nVersion = nVersion;
+
         // Be shy and don't send version until we hear
         if (pfrom->fInbound)
             pfrom->PushVersion();
 
-        pfrom->fClient = !(pfrom->nServices & NODE_NETWORK);
-
-        // Moved the below from AddTimeData to here to follow bitcoin's approach.
-        int64_t nOffsetSample = nTime - GetTime();
-        pfrom->nTimeOffset = nOffsetSample;
         if (!pfrom->fInbound && gArgs.GetBoolArg("-synctime", true))
             AddTimeData(pfrom->GetId(), pfrom->addr, nOffsetSample);
 
@@ -768,7 +782,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         pfrom->PushMessage(NetMsgType::VERACK);
         {
             LOCK(pfrom->cs_vSend);
-            pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
+            pfrom->ssSend.SetVersion(min(nVersion, PROTOCOL_VERSION));
         }
 
 
@@ -831,8 +845,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         pfrom->fSuccessfullyConnected = true;
 
-        LogPrint(BCLog::LogFlags::NOISY, "receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", pfrom->nVersion,
-            pfrom->nStartingHeight, addrMe.ToString(), addrFrom.ToString(), pfrom->addr.ToString());
+        LogPrint(BCLog::LogFlags::NOISY, "receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", nVersion,
+            nStartingHeight, addrMe.ToString(), addrFrom.ToString(), pfrom->addr.ToString());
     }
     else if (pfrom->nVersion == 0)
     {
@@ -845,7 +859,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     else if (strCommand == NetMsgType::VERACK)
     {
         LOCK(pfrom->cs_vRecvMsg);
-        pfrom->SetRecvVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
+        pfrom->SetRecvVersion(min(pfrom->nVersion.load(), PROTOCOL_VERSION));
     }
     else if (strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::ADDR)
     {
@@ -1446,7 +1460,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (!(sProblem.empty())) {
             LogPrintf("pong %s %s: %s, %" PRIx64 " expected, %" PRIx64 " received, %" PRIu64 " bytes"
                 , pfrom->addr.ToString()
-                , pfrom->strSubVer
+                , pfrom->GetSubVer()
                 , sProblem, pfrom->nPingNonceSent, nonce, nAvail);
         }
         if (bPingFinished) {

@@ -357,7 +357,7 @@ void AddressCurrentlyConnected(const CService& addr)
 }
 
 
-std::shared_ptr<CNode> CConnman::ConnectNode(CAddress addrConnect, const char *pszDest)
+std::shared_ptr<CNode> CConnman::ConnectNode(CAddress addrConnect, const char *pszDest, bool fOneShot)
 {
     if (pszDest == nullptr) {
         if (IsLocal(addrConnect))
@@ -393,7 +393,7 @@ std::shared_ptr<CNode> CConnman::ConnectNode(CAddress addrConnect, const char *p
 
         // Add node. m_nodes owns the connection via shared_ptr (issue #3066);
         // returning a copy keeps it alive for the caller while it finishes setup.
-        auto pnode = std::make_shared<CNode>(hSocket, addrConnect, pszDest ? pszDest : "", false);
+        auto pnode = std::make_shared<CNode>(hSocket, addrConnect, pszDest ? pszDest : "", false, fOneShot);
 
         {
             LOCK(m_nodes_mutex);
@@ -533,9 +533,25 @@ void CNode::SetAddrLocal(const CService& addrLocalIn)
     }
 }
 
+std::string CNode::GetSubVer() const
+{
+    LOCK(m_subver_mutex);
+    return m_subver;
+}
+
+void CNode::SetSubVer(const std::string& subver)
+{
+    LOCK(m_subver_mutex);
+    m_subver = subver;
+}
+
 void CNode::copyStats(CNodeStats &stats)
 {
     stats.id = id;
+    // nVersion first: the version handler stores it last, so a snapshot that
+    // carries a version also carries the fields published with it (see the
+    // comment at nVersion in net.h).
+    stats.nVersion = nVersion;
     stats.nServices = nServices;
     stats.addr = addr;
     stats.nLastSend = nLastSend;
@@ -543,8 +559,7 @@ void CNode::copyStats(CNodeStats &stats)
     stats.nTimeConnected = nTimeConnected;
     stats.nTimeOffset = nTimeOffset;
     stats.addrName = addrName;
-    stats.nVersion = nVersion;
-    stats.strSubVer = strSubVer;
+    stats.strSubVer = GetSubVer();
     stats.fInbound = fInbound;
     stats.nStartingHeight = nStartingHeight;
     stats.nTrust = nTrust;
@@ -1707,7 +1722,7 @@ bool CConnman::OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGran
     if (strDest && FindNode(strDest))
         return false;
 
-    std::shared_ptr<CNode> pnode = ConnectNode(addrConnect, strDest);
+    std::shared_ptr<CNode> pnode = ConnectNode(addrConnect, strDest, fOneShot);
     if (ShutdownInProgress())
         return false;
     if (!pnode)
@@ -1715,8 +1730,6 @@ bool CConnman::OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGran
     if (grantOutbound)
         grantOutbound->MoveTo(pnode->grantOutbound);
     pnode->fNetworkNode = true;
-    if (fOneShot)
-        pnode->fOneShot = true;
 
     return true;
 }

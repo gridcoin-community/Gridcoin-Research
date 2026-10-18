@@ -170,6 +170,10 @@ BASE_SCRIPTS = [
     # p2p_version_floor.py: the VERSION handshake accepts the previous release's
     # protocol version and drops anything older.
     'p2p_version_floor.py',
+    # p2p_version_fields.py: getpeerinfo answers through a hundred handshakes
+    # while three threads poll it; under ThreadSanitizer, the check that the
+    # version handler's stores are synchronized with those reads.
+    'p2p_version_fields.py',
     # p2p_time_votes.py: an outbound peer's time vote is cast on connect and
     # withdrawn when the connection is deleted.
     'p2p_time_votes.py',

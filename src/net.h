@@ -193,7 +193,9 @@ class CNode
 {
 public:
     // socket
-    uint64_t nServices;
+    // From the version message; written and read as the comment at nVersion
+    // below sets out.
+    std::atomic<uint64_t> nServices{0};
     // RAII socket wrapper (issue #2558 PR 5a), replacing the raw SOCKET
     // hSocket. The socket-handler thread reads it (to poll/recv/send) while
     // CloseSocketDisconnect may reset it from another thread, so it is guarded;
@@ -239,9 +241,26 @@ public:
     // touching the field directly.
     mutable CCriticalSection cs_addrLocal;
     CService addrLocal GUARDED_BY(cs_addrLocal);
-    int nVersion;
-    std::string strSubVer;
-	int nTrust;
+
+    // The fields the version message carries (nServices, nVersion, the
+    // subversion, nStartingHeight, nTrust, fClient, nTimeOffset) are written
+    // once, by the message-handler thread that processes that message, under
+    // that node's cs_vRecvMsg alone. They are read from other threads under
+    // other locks or none: copyStats() for getpeerinfo and the GUI's peer
+    // table (RPC and GUI threads, under m_nodes_mutex), RelayInventory() and
+    // UpdatedBlockTip() (whichever thread relays), AskForOutstandingBlocks()
+    // (RPC), and CAlert::RelayTo() (RPC, for sendalert). The scalars are
+    // atomics. The subversion is a std::string, which read during its
+    // assignment is not a stale value but a freed buffer, so it is behind
+    // m_subver_mutex, with GetSubVer()/SetSubVer() below. The handler reads
+    // the whole message into locals, validates them, and publishes them at
+    // one site, nVersion last: the paths that treat a peer as past its
+    // handshake test nVersion, so a peer whose nVersion they find set has the
+    // rest set too.
+    std::atomic<int> nVersion{0};
+    mutable Mutex m_subver_mutex;
+    std::string m_subver GUARDED_BY(m_subver_mutex);
+    std::atomic<int> nTrust{0};
 	////////////////////////
 
 
@@ -251,8 +270,10 @@ public:
 	int nOrphanCountViolations;
 
 
-    bool fOneShot;
-    bool fClient;
+    // Fixed at construction, like fInbound: ConnectNode() publishes the node
+    // in m_nodes, where every thread can see it, before it returns.
+    const bool fOneShot;
+    std::atomic<bool> fClient{false}; // set by the version message; see nVersion
     bool fInbound;
     // Atomic: written by ThreadOpenConnections2 (OpenNetworkConnection sets true
     // after a successful outbound connection) and read by both
@@ -260,7 +281,9 @@ public:
     // thread (first-messages "remember this address" path). No common lock --
     // sibling of the same CNode-scalar pattern atomicised for G6-G10.
     std::atomic<bool> fNetworkNode;
-    bool fSuccessfullyConnected;
+    // The handshake's other gate, set last by the version handler; atomic as
+    // nVersion is, so a reader on another thread sees it whole.
+    std::atomic<bool> fSuccessfullyConnected{false};
     std::atomic_bool fDisconnect;
     CSemaphoreGrant grantOutbound;
 protected:
@@ -273,7 +296,7 @@ public:
     uint256 hashContinue;
     CBlockIndex* pindexLastGetBlocksBegin;
     uint256 hashLastGetBlocksEnd;
-    int nStartingHeight;
+    std::atomic<int> nStartingHeight{-1}; // from the version message; see nVersion
 
     // flood relay
     std::vector<CAddress> vAddrToSend;
@@ -314,10 +337,8 @@ public:
     // Whether a ping is requested.
     bool fPingQueued;
 
-    CNode(SOCKET hSocketIn, CAddress addrIn, std::string addrNameIn = "", bool fInboundIn=false) : m_sock(std::make_shared<Sock>(hSocketIn)), ssSend(SER_NETWORK, INIT_PROTO_VERSION), setAddrKnown(5000)
+    CNode(SOCKET hSocketIn, CAddress addrIn, std::string addrNameIn = "", bool fInboundIn=false, bool fOneShotIn=false) : m_sock(std::make_shared<Sock>(hSocketIn)), ssSend(SER_NETWORK, INIT_PROTO_VERSION), fOneShot(fOneShotIn), setAddrKnown(5000)
     {
-
-        nServices = 0;
         nRecvVersion = INIT_PROTO_VERSION;
         nLastSend = 0;
         nLastRecv = 0;
@@ -325,26 +346,19 @@ public:
         nNextRebroadcastTime = GetAdjustedTime();
         addr = addrIn;
         addrName = addrNameIn == "" ? addr.ToStringIPPort() : addrNameIn;
-        nVersion = 0;
-        strSubVer = "";
-        fOneShot = false;
-        fClient = false; // set by version message
         fInbound = fInboundIn;
         fNetworkNode = false;
-        fSuccessfullyConnected = false;
         fDisconnect = false;
         nSendSize = 0;
         nSendOffset = 0;
         hashContinue.SetNull();
         pindexLastGetBlocksBegin = 0;
         hashLastGetBlocksEnd.SetNull();
-        nStartingHeight = -1;
         fGetAddr = false;
 		//Orphan Attack
 		nLastOrphan=0;
 		nOrphanCount=0;
 		nOrphanCountViolations=0;
-		nTrust = 0;
         hashCheckpointKnown.SetNull();
         setInventoryKnown.max_size(SendBufferSize() / 1000);
         nPingNonceSent = 0;
@@ -570,6 +584,11 @@ public:
     CService GetAddrLocal() const LOCKS_EXCLUDED(cs_addrLocal);
     void SetAddrLocal(const CService& addrLocalIn) LOCKS_EXCLUDED(cs_addrLocal);
 
+    // The peer's subversion string, from its version message, copied out under
+    // m_subver_mutex. See the comment at nVersion.
+    std::string GetSubVer() const LOCKS_EXCLUDED(m_subver_mutex);
+    void SetSubVer(const std::string& subver) LOCKS_EXCLUDED(m_subver_mutex);
+
     void copyStats(CNodeStats &stats);
 
 	// Network stats
@@ -684,7 +703,8 @@ public:
     //! internal outbound machinery goes through OpenNetworkConnection. Returns a
     //! shared_ptr so the caller keeps the node alive while it finishes wiring it
     //! up, even if the reaper races to disconnect it (issue #3066).
-    std::shared_ptr<CNode> ConnectNode(CAddress addrConnect, const char* strDest = nullptr);
+    //! fOneShot is fixed on the node at construction, before it is published.
+    std::shared_ptr<CNode> ConnectNode(CAddress addrConnect, const char* strDest = nullptr, bool fOneShot = false);
 
     //! Persistent added-node ("addnode add/remove/getaddednodeinfo") list
     //! (issue #2558 PR 9b2). Backed by the still-global vAddedNodes. AddNode
