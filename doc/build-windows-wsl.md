@@ -34,14 +34,14 @@ Open your Linux terminal (e.g., "Ubuntu" from the Start Menu) and run the follow
 sudo apt update && sudo apt install -y git
 
 # Clone the Gridcoin repository
-git clone [https://github.com/gridcoin-community/Gridcoin-Research.git](https://github.com/gridcoin-community/Gridcoin-Research.git)
+git clone https://github.com/gridcoin-community/Gridcoin-Research.git
 
 # Enter the directory
 cd Gridcoin-Research
 
 # Checkout the master branch (or a specific tag/branch)
 git checkout master
-````
+```
 
 
 ## 1a. Ubuntu 22.04 Compatibility (_Important_)
@@ -63,7 +63,7 @@ Instead, use the following commands to install the **xPack** standalone toolchai
 mkdir -p ~/toolchains && cd ~/toolchains
 
 # 2. Download the xPack standalone toolchain (Linux Host -> Windows Target)
-wget [https://github.com/xpack-dev-tools/mingw-w64-gcc-xpack/releases/download/v13.2.0-1/xpack-mingw-w64-gcc-13.2.0-1-linux-x64.tar.gz](https://github.com/xpack-dev-tools/mingw-w64-gcc-xpack/releases/download/v13.2.0-1/xpack-mingw-w64-gcc-13.2.0-1-linux-x64.tar.gz)
+wget https://github.com/xpack-dev-tools/mingw-w64-gcc-xpack/releases/download/v13.2.0-1/xpack-mingw-w64-gcc-13.2.0-1-linux-x64.tar.gz
 
 # 3. Extract the archive
 tar -xf xpack-mingw-w64-gcc-13.2.0-1-linux-x64.tar.gz

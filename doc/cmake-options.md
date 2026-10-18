@@ -65,12 +65,12 @@ These options are primarily used by the `depends` system or advanced users.
 cmake -B build -DENABLE_GUI=ON -DENABLE_QRENCODE=ON -DUSE_DBUS=ON \
     -DENABLE_TESTS=ON -DENABLE_UPNP=ON \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo
-````
+```
 
 ### Minimal GUI Developer Build (Linux)
 ```bash
 cmake -B build -DENABLE_GUI=ON -DENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
-````
+```
 
 ### Minimal GUI Developer Build (Linux) for Detailed Debug
 ```bash
