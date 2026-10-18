@@ -1,0 +1,65 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef BITCOIN_QT_QUICK_QMLPROVIDER_H
+#define BITCOIN_QT_QUICK_QMLPROVIDER_H
+
+#include <memory>
+
+class AboutInfo;
+class ClientStatus;
+class Clipboard;
+class GuiFrontEnd;
+class RecentTransactions;
+class ResearcherSummary;
+class ShellAdapter;
+class SplashAdapter;
+class VotingSummary;
+class WalletSummary;
+
+//! The process-wide provider of the module's singletons. It owns them, so they
+//! outlive any engine; the singletons' create() functions hand QML the
+//! installed provider's instances with C++ ownership.
+class QmlProvider
+{
+public:
+    //! Builds the singletons. Each provider has its own marker, so a test can
+    //! tell which provider a QML expression reached.
+    explicit QmlProvider(GuiFrontEnd& frontend);
+    //! Uninstalls itself if it is the installed provider.
+    ~QmlProvider();
+    QmlProvider(const QmlProvider&) = delete;
+    QmlProvider& operator=(const QmlProvider&) = delete;
+
+    //! Makes `provider` the one the singletons' create() functions use; null
+    //! uninstalls. GUI thread only.
+    static void install(QmlProvider* provider);
+    //! The installed provider, or null.
+    static QmlProvider* installed();
+
+    ShellAdapter& shell();
+    SplashAdapter& splash();
+    ClientStatus& clientStatus();
+    WalletSummary& walletSummary();
+    ResearcherSummary& researcherSummary();
+    RecentTransactions& recentTransactions();
+    VotingSummary& votingSummary();
+    AboutInfo& aboutInfo();
+    Clipboard& clipboard();
+    int marker() const;
+
+private:
+    int m_marker;
+    std::unique_ptr<ShellAdapter> m_shell;
+    std::unique_ptr<SplashAdapter> m_splash;
+    std::unique_ptr<ClientStatus> m_client_status;
+    std::unique_ptr<WalletSummary> m_wallet_summary;
+    std::unique_ptr<ResearcherSummary> m_researcher_summary;
+    std::unique_ptr<RecentTransactions> m_recent_transactions;
+    std::unique_ptr<VotingSummary> m_voting_summary;
+    std::unique_ptr<AboutInfo> m_about_info;
+    std::unique_ptr<Clipboard> m_clipboard;
+};
+
+#endif // BITCOIN_QT_QUICK_QMLPROVIDER_H

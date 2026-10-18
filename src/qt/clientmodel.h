@@ -38,6 +38,8 @@ public:
     ~ClientModel();
 
     interfaces::Node& node() const { return m_node; }
+    //! The staking status interface the model reads; for callers that read it off the GUI thread.
+    interfaces::StakingStatus& stakingStatus() const { return m_staking_status; }
     OptionsModel *getOptionsModel();
     PeerTableModel *getPeerTableModel();
     BanTableModel *getBanTableModel();
