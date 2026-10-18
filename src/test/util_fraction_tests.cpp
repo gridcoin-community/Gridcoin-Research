@@ -836,6 +836,42 @@ BOOST_AUTO_TEST_CASE(bit_width_matches_the_former_shift_loop)
     }
 }
 
+BOOST_AUTO_TEST_CASE(copy_keeps_the_pair_and_the_flag)
+{
+    // Copy construction and assignment are both member-wise: neither reduces,
+    // neither recomputes.
+    const Fraction unreduced(2, 4);
+
+    const Fraction copied(unreduced);
+    BOOST_CHECK_EQUAL(copied.GetNumerator(), 2);
+    BOOST_CHECK_EQUAL(copied.GetDenominator(), 4);
+    BOOST_CHECK_EQUAL(copied.IsSimplified(), false);
+
+    Fraction assigned;
+    assigned = unreduced;
+    BOOST_CHECK_EQUAL(assigned.GetNumerator(), 2);
+    BOOST_CHECK_EQUAL(assigned.GetDenominator(), 4);
+    BOOST_CHECK_EQUAL(assigned.IsSimplified(), false);
+
+    const Fraction reduced(unreduced, true);
+    BOOST_CHECK_EQUAL(reduced.GetNumerator(), 1);
+    BOOST_CHECK_EQUAL(reduced.GetDenominator(), 2);
+    BOOST_CHECK_EQUAL(reduced.IsSimplified(), true);
+    BOOST_CHECK(reduced == unreduced);
+}
+
+BOOST_AUTO_TEST_CASE(sign_predicates_read_unreduced_pairs)
+{
+    BOOST_CHECK(Fraction(1, -2).IsNegative());
+    BOOST_CHECK(!Fraction(1, -2).IsPositive());
+    BOOST_CHECK(Fraction(-1, -2).IsPositive());
+    BOOST_CHECK(!Fraction(-1, -2).IsNegative());
+    BOOST_CHECK(Fraction(0, -2).IsZero());
+    BOOST_CHECK(Fraction(0, -2).IsNonNegative());
+    BOOST_CHECK(!Fraction(0, -2).IsNegative());
+    BOOST_CHECK(!Fraction(0, -2));
+}
+
 BOOST_AUTO_TEST_CASE(integer_multiply_cancels_against_the_denominator_first)
 {
     const int64_t big = int64_t {1} << 40;
@@ -915,6 +951,169 @@ BOOST_AUTO_TEST_CASE(int64_min_is_refused_at_every_entry)
     BOOST_CHECK_THROW(static_cast<void>(Fraction(1) == min), std::out_of_range);
 }
 
+namespace {
+//! The exact result of x op y for operands small enough that the int64_t
+//! cross products fit, computed the schoolbook way.
+Fraction Reference(int64_t a, int64_t b, int64_t c, int64_t d, char op)
+{
+    switch (op) {
+    case '+': return Fraction(a * d + c * b, b * d, true);
+    case '-': return Fraction(a * d - c * b, b * d, true);
+    case '*': return Fraction(a * c, b * d, true);
+    default:  return Fraction(a * d, b * c, true);
+    }
+}
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(arithmetic_matches_an_exact_reference)
+{
+    FastRandomContext rand(uint256 {1});
+
+    for (int i = 0; i < 5000; ++i) {
+        // |numerators| < 2^30, denominators in [1, 2^30]: every cross product
+        // below stays within 2^60 and every sum within 2^61, inside the guard
+        // for the reference and for the class alike.
+        const int64_t a = static_cast<int64_t>(rand.rand32() >> 1) - (int64_t {1} << 30);
+        const int64_t b = static_cast<int64_t>(rand.rand32() >> 2) + 1;
+        const int64_t c = static_cast<int64_t>(rand.rand32() >> 1) - (int64_t {1} << 30);
+        const int64_t d = static_cast<int64_t>(rand.rand32() >> 2) + 1;
+
+        const Fraction x(a, b);
+        const Fraction y(c, d);
+
+        const Fraction sum = x + y;
+        const Fraction difference = x - y;
+        const Fraction product = x * y;
+
+        BOOST_CHECK(sum == Reference(a, b, c, d, '+'));
+        BOOST_CHECK(difference == Reference(a, b, c, d, '-'));
+        BOOST_CHECK(product == Reference(a, b, c, d, '*'));
+
+        if (c != 0) {
+            BOOST_CHECK(x / y == Reference(a, b, c, d, '/'));
+        }
+
+        // Every result comes back in canonical form.
+        for (const Fraction* result : {&sum, &difference, &product}) {
+            BOOST_CHECK(result->IsSimplified());
+            BOOST_CHECK(result->GetDenominator() > 0);
+            BOOST_CHECK_EQUAL(std::gcd(result->GetNumerator(), result->GetDenominator()), 1);
+        }
+
+        // Ordering agrees with the sign of a d - c b.
+        const int64_t cross = a * d - c * b;
+
+        BOOST_CHECK_EQUAL(x < y, cross < 0);
+        BOOST_CHECK_EQUAL(x > y, cross > 0);
+        BOOST_CHECK_EQUAL(x == y, cross == 0);
+        BOOST_CHECK_EQUAL(x <= y, cross <= 0);
+        BOOST_CHECK_EQUAL(x >= y, cross >= 0);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(deserialization_keeps_the_wire_flag_and_round_trips_bytes)
+{
+    // The flag byte is carried as received and written back as held, because
+    // transaction hashes are computed from re-serialized members. A byte that
+    // disagrees with its pair changes IsSimplified() and nothing else: every
+    // operator rebuilds its operands from the pair.
+    const auto round_trip = [](int64_t num, int64_t den, bool flag) {
+        CDataStream in(SER_NETWORK, PROTOCOL_VERSION);
+        in << num << den << flag;
+        const std::vector<std::byte> wire(in.begin(), in.end());
+
+        Fraction f;
+        in >> f;
+
+        CDataStream out(SER_NETWORK, PROTOCOL_VERSION);
+        out << f;
+
+        BOOST_CHECK_EQUAL(f.GetNumerator(), num);
+        BOOST_CHECK_EQUAL(f.GetDenominator(), den);
+        BOOST_CHECK_EQUAL(f.IsSimplified(), flag);
+        BOOST_CHECK_EQUAL(wire.size(), 17U);
+        BOOST_CHECK(std::vector<std::byte>(out.begin(), out.end()) == wire);
+
+        return f;
+    };
+
+    // Honest encodings, as every released build writes them.
+    round_trip(1, 2, true);
+    round_trip(2, 4, false);
+    round_trip(6, -8, false);
+
+    // Lying encodings: preserved on the wire, ignored by the arithmetic.
+    const Fraction claims_reduced = round_trip(2, 4, true);
+    BOOST_CHECK(claims_reduced == Fraction(1, 2));
+    BOOST_CHECK(claims_reduced + Fraction(0) == Fraction(1, 2));
+    BOOST_CHECK(claims_reduced * 2 == Fraction(1));
+    BOOST_CHECK(Fraction(claims_reduced, true).GetDenominator() == 2);
+
+    const Fraction claims_unreduced = round_trip(1, 2, false);
+    BOOST_CHECK(claims_unreduced == Fraction(2, 4));
+    BOOST_CHECK(claims_unreduced - Fraction(1, 2) == Fraction(0));
+
+    // Rejected on read, as before.
+    {
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << int64_t {1} << int64_t {0} << true;
+
+        Fraction f;
+        BOOST_CHECK_THROW(ss >> f, std::ios_base::failure);
+    }
+    {
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << std::numeric_limits<int64_t>::min() << int64_t {1} << true;
+
+        Fraction f;
+        BOOST_CHECK_THROW(ss >> f, std::ios_base::failure);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(from_string_edges)
+{
+    const std::string parse_error = "fraction input string cannot be parsed to fraction";
+
+    const auto parse_fails = [&](const std::string& s) {
+        try {
+            Fraction::FromString(s);
+        } catch (const std::out_of_range& e) {
+            return std::string(e.what()) == parse_error;
+        }
+
+        return false;
+    };
+
+    BOOST_CHECK(parse_fails(""));
+    BOOST_CHECK(parse_fails("/"));
+    BOOST_CHECK(parse_fails("1/"));
+    BOOST_CHECK(parse_fails("/2"));
+    BOOST_CHECK(parse_fails("1/2/3"));
+    BOOST_CHECK(parse_fails(" 1/2"));
+    BOOST_CHECK(parse_fails("1/ 2"));
+    BOOST_CHECK(parse_fails("0.25"));
+    BOOST_CHECK(parse_fails("1e3"));
+    BOOST_CHECK(parse_fails("9223372036854775808"));
+
+    BOOST_CHECK_EXCEPTION(Fraction::FromString("1/0"),
+                          std::out_of_range,
+                          [](const std::out_of_range& e) {
+                              return std::string(e.what()) == "denominator specified is zero";
+                          });
+    BOOST_CHECK_THROW(Fraction::FromString("-9223372036854775808"), std::out_of_range);
+    BOOST_CHECK_THROW(Fraction::FromString("1/-9223372036854775808"), std::out_of_range);
+
+    // Parsed values come back in canonical form.
+    const Fraction negative_denominator = Fraction::FromString("3/-6");
+    BOOST_CHECK_EQUAL(negative_denominator.GetNumerator(), -1);
+    BOOST_CHECK_EQUAL(negative_denominator.GetDenominator(), 2);
+    BOOST_CHECK_EQUAL(negative_denominator.IsSimplified(), true);
+
+    const Fraction in_force = Fraction::FromString("103050/100000");
+    BOOST_CHECK_EQUAL(in_force.GetNumerator(), 2061);
+    BOOST_CHECK_EQUAL(in_force.GetDenominator(), 2000);
+}
+
 BOOST_AUTO_TEST_CASE(magnitude_unit_times_the_max_reward_constants)
 {
     // SnapshotAccrualComputer::MaxReward() computes
@@ -948,5 +1147,32 @@ BOOST_AUTO_TEST_CASE(magnitude_unit_times_the_max_reward_constants)
     BOOST_CHECK_THROW(max_reward(GRC::Allocation(49999999999999999LL, 10000000000000000LL)), std::overflow_error);
 }
 
+BOOST_AUTO_TEST_CASE(allocation_to_camount_truncates_toward_zero)
+{
+    // Golden vectors. A change here changes reward amounts on chain.
+    BOOST_CHECK_EQUAL((GRC::Allocation(1, 3) * 100).ToCAmount(), CAmount {33});
+    BOOST_CHECK_EQUAL((GRC::Allocation(2, 3) * 100).ToCAmount(), CAmount {66});
+    BOOST_CHECK_EQUAL((GRC::Allocation(-1, 3) * 100).ToCAmount(), CAmount {-33});
+    BOOST_CHECK_EQUAL((GRC::Allocation(0.10) * 1234567).ToCAmount(), CAmount {123456});
+    BOOST_CHECK_EQUAL((GRC::Allocation(0.25) * 1000000001).ToCAmount(), CAmount {250000000});
+    BOOST_CHECK_CLOSE(GRC::Allocation(0.35).ToPercent(), 35.0, 1e-9);
+
+    // The double constructor holds basis points: 0.10 is 1000/10000, reduced.
+    BOOST_CHECK_EQUAL(GRC::Allocation(0.10).GetNumerator(), 1);
+    BOOST_CHECK_EQUAL(GRC::Allocation(0.10).GetDenominator(), 10);
+
+    // The truncated remainders of a split stay with the complement.
+    const CAmount reward = 1000000001;
+    const CAmount ten = (GRC::Allocation(0.10) * reward).ToCAmount();
+    const CAmount fifteen = (GRC::Allocation(0.15) * reward).ToCAmount();
+
+    BOOST_CHECK_EQUAL(ten + fifteen, CAmount {250000000});
+    BOOST_CHECK_EQUAL(reward - ten - fifteen, CAmount {750000001});
+
+    // An allocation built from a fraction keeps the pair it was given.
+    const GRC::Allocation from_fraction(Fraction(2, 4));
+    BOOST_CHECK_EQUAL(from_fraction.GetNumerator(), 2);
+    BOOST_CHECK_EQUAL(from_fraction.GetDenominator(), 4);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
