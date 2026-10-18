@@ -9,8 +9,17 @@ parameter error. An id inside that range reaches the vote builder, which
 refuses one that names no choice of the poll, or one given twice.
 """
 
-from test_framework.test_framework import GridcoinTestFramework
+from test_framework.test_framework import GridcoinTestFramework, STAKE_TIMESTAMP_MASK
 from test_framework.util import assert_raises_rpc_error
+
+# A poll's eligibility claim is built from outputs at least this deep
+# (CWalletTx::IsConfirmed in the PollClaimBuilder), as in feature_vote_results.py.
+CLAIM_DEPTH = 10
+# Mock-clock advance per buried block, past the 90-second target spacing. The
+# blocks mined 16 seconds apart above raise the difficulty with every block,
+# and the kernel is evaluated at one slot per attempt, so ten more at that pace
+# can run generatetoaddress out of attempts ("no stake found").
+BLOCK_SPACING = 96
 
 
 class VoteByIdTest(GridcoinTestFramework):
@@ -30,6 +39,13 @@ class VoteByIdTest(GridcoinTestFramework):
         # The premine is a few large outputs and each mined block churns one;
         # fan one out so the blocks below always find a mature stake kernel.
         self.grow_utxo_universe(node)
+        # addpoll claims 100,000 GRC from outputs CLAIM_DEPTH blocks deep. At
+        # this height only the first four coinstakes are that deep, the split
+        # above spent one of them and the kernels since can have spent the
+        # rest, leaving the claim nothing to select. Bury the whole balance.
+        for _ in range(CLAIM_DEPTH):
+            node.advance_mocktime_to((node.mock_now() + BLOCK_SPACING) & ~STAKE_TIMESTAMP_MASK)
+            node.generatetoaddress(1, node.getnewaddress())
 
         single = node.addpoll("survey", "single", 7, "Which?", "A;B;C", 1, 2, "https://gridcoin.us")
         multiple = node.addpoll("survey", "multiple", 7, "Which?", "A;B;C", 1, 3, "https://gridcoin.us")
