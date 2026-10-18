@@ -175,6 +175,7 @@ add_executable(test_gridcoin
     transaction_tests.cpp
     txmempool_tests.cpp
     uint256_tests.cpp
+    util_fraction_tests.cpp
     util_tests.cpp
     util_threadnames_tests.cpp
     wallet_tests.cpp
