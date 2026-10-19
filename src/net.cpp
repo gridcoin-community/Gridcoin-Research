@@ -2191,7 +2191,7 @@ void CConnman::RelayAddress(const CAddress& addr, bool fReachable)
     if (hashSalt == 0)
         hashSalt = UintToArith256(GetRandHash());
     uint64_t hashAddr = addr.GetHash();
-    uint256 hashRand = ArithToUint256(hashSalt ^ (hashAddr << 32) ^ ((GetAdjustedTime() + hashAddr) / (24 * 60 * 60)));
+    uint256 hashRand = ArithToUint256(hashSalt ^ ((hashAddr & 0xFFFFFFFF) << 32) ^ ((GetAdjustedTime() + hashAddr) / (24 * 60 * 60)));
     hashRand = Hash(hashRand);
     multimap<uint256, CNode*> mapMix;
     for (auto const& pnode : m_nodes)
