@@ -13,7 +13,7 @@ import struct
 import threading
 
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_equal, assert_raises_rpc_error
+from test_framework.util import assert_equal
 
 CJDNS = "fc00:1:2:3:4:5:6:7"
 
@@ -53,6 +53,7 @@ class CJDNSStartupTest(GridcoinTestFramework):
         observed = []
         errors = []
         complete = threading.Event()
+        release = threading.Event()
 
         def read_exact(conn, size):
             data = b""
@@ -78,8 +79,10 @@ class CJDNSStartupTest(GridcoinTestFramework):
                         host = read_exact(conn, length).decode("ascii")
                         port = struct.unpack(">H", read_exact(conn, 2))[0]
                         observed.append((host, port))
-                        # Reject locally: never open an outgoing CJDNS connection.
-                        conn.sendall(b"\x05\x01\x00\x01" + b"\x00" * 6)
+                        # Accept the proxy socket locally without dialing CJDNS.
+                        conn.sendall(b"\x05\x00\x00\x01" + b"\x00" * 6)
+                        complete.set()
+                        release.wait(timeout=30 * self.options.timeout_factor)
                 except Exception as e:
                     errors.append(e)
                 finally:
@@ -90,15 +93,33 @@ class CJDNSStartupTest(GridcoinTestFramework):
                 proxy = "127.0.0.1:%d" % server.getsockname()[1]
                 self.restart_node(0, self.common + ["-cjdnsreachable",
                                                    "-onlynet=cjdns", "-proxy=" + proxy])
-                assert_raises_rpc_error(-23, "Node connection failed",
-                                        self.nodes[0].addnode, "[" + CJDNS + "]:32749", "onetry")
+                target = "[" + CJDNS + "]:32749"
+                assert_equal(self.nodes[0].addnode(target, "onetry"), {"result": "ok"})
                 self.wait_until(complete.is_set, timeout=35)
                 if errors:
                     raise errors[0]
                 assert_equal(observed, [(CJDNS, 32749)])
-                self.log.info("CJDNS named-connection proxy classification passed")
+                self.nodes[0].addnode(target, "add")
+                assert_equal(self.nodes[0].getaddednodeinfo(True, target),
+                             [{"addednode": target, "connected": True,
+                               "addresses": [{"address": target, "connected": "outbound"}]}])
+                self.nodes[0].addnode(target, "remove")
+                self.log.info("CJDNS proxy selection and connected getaddednodeinfo passed")
             finally:
+                release.set()
                 thread.join(timeout=2)
+        self.wait_until(lambda: self.nodes[0].getconnectioncount() == 0)
+
+    def check_missing_optin(self):
+        self.stop_node(0)
+        message = ("Gridcoin: Outbound connections restricted to CJDNS "
+                   "(-onlynet=cjdns) but -cjdnsreachable is not provided")
+        for options in (["-onlynet=cjdns"],
+                        ["-onlynet=cjdns", "-cjdnsreachable=0"]):
+            self.nodes[0].assert_start_raises_init_error(
+                self.common + options, expected_msg=message)
+        self.start_node(0, self.common)
+        self.log.info("CJDNS-only startup rejects missing/false opt-in")
 
     def run_test(self):
         initial = self.nodes[0].getnetworkinfo()
@@ -110,7 +131,8 @@ class CJDNSStartupTest(GridcoinTestFramework):
         self.check("onlynet=cjdns reachable", ["-onlynet=cjdns", "-cjdnsreachable"], True)
         self.check("onlynet=cjdns default IPv6 listener",
                    ["-onlynet=cjdns", "-cjdnsreachable"], True, default_bind=True)
-        self.check("onlynet=cjdns without opt-in", ["-onlynet=cjdns"], False)
+        self.check_missing_optin()
+        self.check("proxy without opt-in", ["-proxy=127.0.0.1:9"], False)
         self.check("onlynet=ipv4 with opt-in", ["-onlynet=ipv4", "-cjdnsreachable"], False)
         self.check_proxy_classification()
         self.log.info("CJDNS startup and default-off checks passed (bitcoin#23077)")

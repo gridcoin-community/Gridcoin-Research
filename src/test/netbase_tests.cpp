@@ -127,6 +127,7 @@ BOOST_AUTO_TEST_CASE(netbase_cjdns_classification)
 {
     const bool was_limited = IsLimited(NET_CJDNS);
     const CService fc = LookupNumeric("fc00:1:2:3:4:5:6:7", 32749);
+    BOOST_CHECK(fc.HasCJDNSPrefix());
     SetReachable(NET_CJDNS, false);
     const CService disabled = MaybeFlipIPv6toCJDNS(fc);
     BOOST_CHECK(disabled.IsIPv6());
@@ -139,6 +140,7 @@ BOOST_AUTO_TEST_CASE(netbase_cjdns_classification)
     BOOST_CHECK_EQUAL(enabled.GetPort(), 32749);
     BOOST_CHECK_EQUAL(enabled.GetReachabilityFrom(&enabled), 6); // REACH_PRIVATE
     const CService other_ula = LookupNumeric("fd00::1", 32749);
+    BOOST_CHECK(!other_ula.HasCJDNSPrefix());
     BOOST_CHECK(MaybeFlipIPv6toCJDNS(other_ula).IsIPv6());
     SetReachable(NET_CJDNS, !was_limited);
 }
@@ -644,11 +646,12 @@ BOOST_AUTO_TEST_CASE(cnetaddr_unserialize_v2)
     BOOST_CHECK_EQUAL(addr.ToString(), "fc00:1:2:3:4:5:6:7");
     BOOST_REQUIRE(s.empty());
 
-    // A non-fc prefix must be invalid, not a routable CJDNS address.
+    // Invalid CJDNS, wrong prefix: decoding keeps its type and bytes.
     Feed(s, "06" "10" "fd000001000200030004000500060007");
     s >> addr;
+    BOOST_CHECK(addr.IsCJDNS());
+    BOOST_CHECK(!addr.HasCJDNSPrefix());
     BOOST_CHECK(!addr.IsValid());
-    BOOST_CHECK(!addr.IsCJDNS());
     BOOST_REQUIRE(s.empty());
 
     // Invalid CJDNS, wrong length.

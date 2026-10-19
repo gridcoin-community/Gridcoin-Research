@@ -26,6 +26,23 @@ using namespace std;
 
 BOOST_AUTO_TEST_SUITE(net_tests)
 
+BOOST_AUTO_TEST_CASE(cjdns_invalid_prefix)
+{
+    // Bitcoin master: Invalid CJDNS, wrong prefix. BIP155 decoding succeeds,
+    // preserving NET_CJDNS; IsValid(), rather than the decoder, rejects it.
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION | ADDRV2_FORMAT);
+    stream.write(MakeByteSpan(ParseHex("0610fd000001000200030004000500060007")));
+    CNetAddr addr;
+    stream >> addr;
+    BOOST_CHECK(addr.IsCJDNS());
+    BOOST_CHECK(!addr.HasCJDNSPrefix());
+    BOOST_CHECK(!addr.IsValid());
+    BOOST_CHECK(!addr.IsRoutable());
+    BOOST_CHECK_EQUAL(addr.ToStringIP(), "fd00:1:2:3:4:5:6:7");
+    BOOST_REQUIRE(stream.empty());
+}
+
+
 // Serialize a (deterministic) AddrMan into a peers.dat-style stream, prefixed
 // with the network message-start bytes (issue #2558 PR 6b: the test no longer
 // subclasses AddrMan; it uses the public interface + a deterministic AddrMan).
