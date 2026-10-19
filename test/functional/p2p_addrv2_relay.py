@@ -58,7 +58,8 @@ class AddrV2RelayTest(GridcoinTestFramework):
         self.num_nodes = 1
         self.chain = "regtest"
         self.setup_clean_chain = True
-        self.extra_args = [["-staking=0", "-walletbackupintervalsecs=0",
+        # Keep advertised addrman entries from triggering real outbound dialing.
+        self.extra_args = [["-staking=0", "-walletbackupintervalsecs=0", "-connect=0",
                             "-discover=0", "-tor=127.0.0.1:9"]]
 
     def setup_network(self):
