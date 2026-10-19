@@ -226,8 +226,12 @@ UniValue getaddednodeinfo(const UniValue& params)
     for (auto const& strAddNode : laddedNodes)
     {
         vector<CService> vservNode(0);
-        if(Lookup(strAddNode.c_str(), vservNode, Params().GetDefaultPort(), GetNameLookup(), 0))
+        if (Lookup(strAddNode.c_str(), vservNode, Params().GetDefaultPort(), GetNameLookup(), 0)) {
+            for (auto& service : vservNode) {
+                service = MaybeFlipIPv6toCJDNS(service);
+            }
             laddedAddresses.push_back(make_pair(strAddNode, vservNode));
+        }
         else
         {
             UniValue obj(UniValue::VOBJ);

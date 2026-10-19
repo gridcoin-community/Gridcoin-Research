@@ -387,6 +387,9 @@ bool CNetAddr::IsValid() const
     if (IsInternal())
         return false;
 
+    if (IsCJDNS() && !HasCJDNSPrefix())
+        return false;
+
     if (IsIPv4()) {
         const uint32_t addr = ReadBE32(m_addr.data());
         if (addr == INADDR_ANY || addr == INADDR_NONE) {

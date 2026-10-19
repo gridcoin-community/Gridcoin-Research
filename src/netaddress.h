@@ -40,6 +40,9 @@ static constexpr size_t ADDR_TORV3_SIZE = 32;
 /// Size of CJDNS address (in bytes).
 static constexpr size_t ADDR_CJDNS_SIZE = 16;
 
+/// Prefix shared by all CJDNS addresses (fc00::/8).
+static constexpr std::array<uint8_t, 1> CJDNS_PREFIX{0xFC};
+
 enum Network
 {
     NET_UNROUTABLE,
@@ -137,6 +140,7 @@ class CNetAddr
         bool IsRFC6145() const; // IPv6 IPv4-translated address (::FFFF:0:0:0/96)
         bool IsTor() const;
         bool IsCJDNS() const;
+        bool HasCJDNSPrefix() const { return HasPrefix(m_addr, CJDNS_PREFIX); }
         bool IsLocal() const;
         bool IsRoutable() const;
         bool IsInternal() const;
@@ -356,11 +360,6 @@ class CNetAddr
                 m_addr.resize(address_size);
                 s.read(AsWritableBytes(Span<uint8_t>{m_addr.data(), m_addr.size()}));
 
-                // BIP155 CJDNS addresses must be in fc00::/8.
-                if (m_net == NET_CJDNS && m_addr[0] != 0xfc) {
-                    Init();
-                    return;
-                }
                 if (m_net != NET_IPV6) {
                     return;
                 }

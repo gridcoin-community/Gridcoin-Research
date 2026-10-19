@@ -906,7 +906,7 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-seednode=<ip>", "Connect to a node to retrieve peer addresses, and disconnect",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
-    argsman.AddArg("-cjdnsreachable", "If set then this host is configured for CJDNS (connecting to fc00::/8 "
+    argsman.AddArg("-cjdnsreachable", "If set, then this host is configured for CJDNS (connecting to fc00::/8 "
                                       "addresses would lead us to the CJDNS network) (default: 0)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-externalip=<ip>", "Specify your own public address",
@@ -2022,6 +2022,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     if (!gArgs.GetBoolArg("-cjdnsreachable", false)) {
+        if (gArgs.IsArgSet("-onlynet") && !IsLimited(NET_CJDNS)) {
+            return InitError(_("Outbound connections restricted to CJDNS (-onlynet=cjdns) but "
+                               "-cjdnsreachable is not provided"));
+        }
         SetReachable(NET_CJDNS, false);
     }
     // Now IsReachable(NET_CJDNS) is true if:
@@ -2045,8 +2049,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             SetProxy(NET_IPV4, addrProxy);
         if (!IsLimited(NET_IPV6))
             SetProxy(NET_IPV6, addrProxy);
-        if (!IsLimited(NET_CJDNS))
-            SetProxy(NET_CJDNS, addrProxy);
+        SetProxy(NET_CJDNS, addrProxy);
         SetNameProxy(addrProxy);
         addrOnion = addrProxy;
     }
