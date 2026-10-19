@@ -218,7 +218,7 @@ void AdvertiseLocal(CNode *pnode)
 CService MaybeFlipIPv6toCJDNS(const CService& service)
 {
     CService ret{service};
-    if (ret.m_net == NET_IPV6 && ret.m_addr[0] == 0xfc && !IsLimited(NET_CJDNS)) {
+    if (ret.m_net == NET_IPV6 && ret.HasCJDNSPrefix() && !IsLimited(NET_CJDNS)) {
         ret.m_net = NET_CJDNS;
     }
     return ret;
