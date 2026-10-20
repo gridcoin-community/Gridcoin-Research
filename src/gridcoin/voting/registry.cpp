@@ -1612,14 +1612,87 @@ void PollRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
 namespace {
 //!
-//! \brief Whether a poll contract's payload version fits the REMOVE rule at a height: from v15 a REMOVE names
-//! its poll by txid (payload version 4), and only a REMOVE from v15 is version 4.
+//! \brief Whether a poll contract meets the poll rules that depend on the height of the block that carries it: the
+//! payload version 3 floor, the REMOVE rule, the claim version against multi-address activation, and from v15
+//! distinct claim entries. BlockValidate judges them at the block's height. Validate, for the memory pool and the
+//! wallet, judges them at the next block's height, so neither admits a poll that block would refuse.
 //!
-bool PollRemoveVersionFits(const Contract& contract, const PollPayload& payload, const int height)
+//! \param DoS Set as the block rules set it; Validate replaces it.
+//!
+bool PollFitsHeight(const Contract& contract, const PollPayload& payload, const int height, int& DoS)
 {
+    // Enforce v3 polls at PollV3Height
+    if (IsPollV3Enabled(height) && payload.m_version < 3) {
+        LogPrint(LogFlags::CONTRACT, "%s: rejected poll contract of payload version %u below 3 at height %d",
+                 __func__, payload.m_version, height);
+        return false;
+    }
+
+    // The REMOVE rule: from v15 a REMOVE names its poll by txid (payload version 4), and only a REMOVE from v15
+    // is version 4. A version 4 REMOVE carries no poll and no claim, so nothing below applies to it.
     const bool remove_by_txid = payload.m_version == PollPayload::REMOVE_BY_TXID_VERSION;
 
-    return remove_by_txid == (IsV15Enabled(height) && contract.m_action == ContractAction::REMOVE);
+    if (remove_by_txid != (IsV15Enabled(height) && contract.m_action == ContractAction::REMOVE)) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT, "%s: rejected poll contract of payload version %u at height %d",
+                 __func__, payload.m_version, height);
+        return false;
+    }
+
+    if (remove_by_txid) {
+        return true;
+    }
+
+    // Reject v2+ claims before multi-address activation (bidirectional enforcement)
+    if (!IsPollMultiAddressEnabled(height) && payload.m_claim.m_version >= 2) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected v2 poll claim before multi-address activation at height %d",
+            __func__,
+            height);
+        return false;
+    }
+
+    // Enforce multi-address claims at PollMultiAddressHeight
+    if (IsPollMultiAddressEnabled(height) && payload.m_claim.m_version < 2) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected v1 poll claim after multi-address activation at height %d",
+            __func__,
+            height);
+        return false;
+    }
+
+    // From block version 15, a poll claim names each address key and each
+    // output once.
+    if (IsV15Enabled(height) && !payload.m_claim.EntriesDistinct()) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected poll claim whose address keys or outputs are not distinct at height %d",
+            __func__,
+            height);
+        return false;
+    }
+
+    return true;
+}
+
+//!
+//! \brief Whether a version 2+ poll ADD or title REMOVE meets the poll rules that do not depend on a height: the
+//! poll's own checks and its claim against the chain.
+//!
+bool PollAndClaimValid(const PollPayload& payload, const CTransaction& tx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    if (!PollValidator(payload, tx).Validate(DoS)) return false;
+
+    CTxDB txdb("r");
+
+    if (!PollClaimValidator(txdb).Validate(payload, tx)) {
+        DoS = 25;
+        return false;
+    }
+
+    return true;
 }
 } // anonymous namespace
 
@@ -1641,27 +1714,18 @@ bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, in
     // V2+ validations
     const auto payload = contract.SharePayloadAs<PollPayload>();
 
-    // The REMOVE rule, judged at the next block's height as the block rules will judge it.
-    if (!PollRemoveVersionFits(contract, *payload, nBestHeight + 1)) {
-        DoS = 25;
+    // The height rules, at the next block's height as that block will judge them. A refusal carries no penalty: a node
+    // a block behind or ahead of this one judges a different height.
+    if (!PollFitsHeight(contract, *payload, nBestHeight + 1, DoS)) {
+        DoS = 0;
         return false;
     }
 
-    // A REMOVE by txid carries no poll and no claim: the master key's input (CheckContracts) is its authority.
     if (payload->m_version == PollPayload::REMOVE_BY_TXID_VERSION) {
         return true;
     }
 
-    if (!PollValidator(*payload, tx).Validate(DoS)) return false;
-
-    CTxDB txdb("r");
-
-    if (!PollClaimValidator(txdb).Validate(*payload, tx)) {
-        DoS = 25;
-        return false;
-    }
-
-    return true;
+    return PollAndClaimValid(*payload, tx, DoS);
 }
 
 bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -1675,58 +1739,17 @@ bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXC
 
     const auto payload = ctx->SharePayloadAs<PollPayload>();
 
-    // Enforce v3 polls at PollV3Height
-    if (IsPollV3Enabled(ctx.m_pindex->nHeight) && payload->m_version < 3) {
+    if (!PollFitsHeight(ctx.m_contract, *payload, ctx.m_pindex->nHeight, DoS)) {
         return false;
     }
 
-    // The REMOVE rule at the block's height. A version 4 REMOVE carries no poll and no claim, so nothing
-    // below applies to it.
-    if (!PollRemoveVersionFits(ctx.m_contract, *payload, ctx.m_pindex->nHeight)) {
-        DoS = 25;
-        LogPrint(LogFlags::CONTRACT, "%s: rejected poll contract of payload version %u at height %d",
-                 __func__, payload->m_version, ctx.m_pindex->nHeight);
-        return false;
-    }
-
-    if (payload->m_version == PollPayload::REMOVE_BY_TXID_VERSION) {
+    // Legacy poll contracts do not invoke any contextual validation, and a version 4 REMOVE carries no poll and no
+    // claim.
+    if (ctx.m_contract.m_version == 1 || payload->m_version == PollPayload::REMOVE_BY_TXID_VERSION) {
         return true;
     }
 
-    // Reject v2+ claims before multi-address activation (bidirectional enforcement)
-    if (!IsPollMultiAddressEnabled(ctx.m_pindex->nHeight)
-        && payload->m_claim.m_version >= 2) {
-        DoS = 25;
-        LogPrint(LogFlags::CONTRACT,
-            "%s: rejected v2 poll claim before multi-address activation at height %d",
-            __func__,
-            ctx.m_pindex->nHeight);
-        return false;
-    }
-
-    // Enforce multi-address claims at PollMultiAddressHeight
-    if (IsPollMultiAddressEnabled(ctx.m_pindex->nHeight)
-        && payload->m_claim.m_version < 2) {
-        DoS = 25;
-        LogPrint(LogFlags::CONTRACT,
-            "%s: rejected v1 poll claim after multi-address activation at height %d",
-            __func__,
-            ctx.m_pindex->nHeight);
-        return false;
-    }
-
-    // From block version 15, a poll claim names each address key and each
-    // output once.
-    if (IsV15Enabled(ctx.m_pindex->nHeight) && !payload->m_claim.EntriesDistinct()) {
-        DoS = 25;
-        LogPrint(LogFlags::CONTRACT,
-            "%s: rejected poll claim whose address keys or outputs are not distinct at height %d",
-            __func__,
-            ctx.m_pindex->nHeight);
-        return false;
-    }
-
-    return Validate(ctx.m_contract, ctx.m_tx, DoS);
+    return PollAndClaimValid(*payload, ctx.m_tx, DoS);
 }
 
 void PollRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)

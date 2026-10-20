@@ -69,8 +69,12 @@ struct PollTx
 PollTx MakePollTx(const std::string& title, const int64_t tx_time,
                   const GRC::ContractAction action = GRC::ContractAction::ADD,
                   const GRC::PollWeightType weight_type = GRC::PollWeightType::BALANCE,
-                  const uint32_t payload_version = 2)
+                  const uint32_t payload_version = 2,
+                  const uint16_t claim_version = GRC::PollEligibilityClaim::CURRENT_VERSION)
 {
+    GRC::PollEligibilityClaim claim;
+    claim.m_version = claim_version;
+
     GRC::Poll poll(
         GRC::PollType::SURVEY,
         weight_type,
@@ -88,7 +92,7 @@ PollTx MakePollTx(const std::string& title, const int64_t tx_time,
         action,
         payload_version,
         std::move(poll),
-        GRC::PollEligibilityClaim());
+        std::move(claim));
 
     CMutableTransaction mtx;
     mtx.nTime = tx_time;
@@ -893,15 +897,72 @@ BOOST_AUTO_TEST_CASE(the_mempool_refuses_a_poll_removal_the_next_block_would_ref
     const GRC::Contract v4_add = GRC::MakeContract<GRC::PollPayload>(
         uint32_t {3}, GRC::ContractAction::ADD, GRC::PollPayload::REMOVE_BY_TXID_VERSION, uint256S("0x1234"));
     const CTransaction v4_add_tx = MakeVoteTxFor(v4_add, 1700000000); // a transaction carrying the contract
+    // A refusal carries no penalty: a node a block behind or ahead judges a different height.
+    const auto refused = [&](const GRC::Contract& contract, const CTransaction& tx) {
+        int DoS = 99;
+        return !registry.Validate(contract, tx, DoS) && DoS == 0;
+    };
     int DoS = 0;
 
-    BOOST_CHECK(!registry.Validate(by_txid.contract, by_txid.tx, DoS));
-    BOOST_CHECK(!registry.Validate(v4_add, v4_add_tx, DoS));
+    BOOST_CHECK(refused(by_txid.contract, by_txid.tx));
+    BOOST_CHECK(refused(v4_add, v4_add_tx));
 
     grc_test::V15HeightGuard v15(0);
     BOOST_CHECK(registry.Validate(by_txid.contract, by_txid.tx, DoS));
-    BOOST_CHECK(!registry.Validate(by_title.contract, by_title.tx, DoS));
-    BOOST_CHECK(!registry.Validate(v4_add, v4_add_tx, DoS));
+    BOOST_CHECK(refused(by_title.contract, by_title.tx));
+    BOOST_CHECK(refused(v4_add, v4_add_tx));
+}
+
+//!
+//! The memory pool and the wallet's revalidation, both through Validate, judge a poll by the poll rules that depend on
+//! the height of the block carrying it, at the next block's height, as BlockValidate judges them at its block:
+//! the payload version 3 floor and the claim version against multi-address activation. The refusal carries no
+//! penalty, since a node a block behind or ahead judges a different height; the block refusal keeps its own.
+//!
+BOOST_AUTO_TEST_CASE(the_mempool_refuses_a_poll_the_next_block_would_refuse)
+{
+    RegistryReset reset;
+    grc_test::StateGuard guard; // nBestHeight
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx v1_claim = MakePollTx("Title", 1700000000, GRC::ContractAction::ADD,
+                                       GRC::PollWeightType::BALANCE, 3, 1);
+    const PollTx v2_claim = MakePollTx("Title", 1700000000, GRC::ContractAction::ADD,
+                                       GRC::PollWeightType::BALANCE, 3, 2);
+    const PollTx v2_payload = MakePollTx("Title", 1700000000, GRC::ContractAction::ADD,
+                                         GRC::PollWeightType::BALANCE, 2, 1);
+
+    const auto refused_by_height = [&](const PollTx& poll) {
+        int DoS = 99;
+        return !registry.Validate(poll.contract, poll.tx, DoS) && DoS == 0;
+    };
+
+    // The claims and polls here are empty, so a poll the height rules pass is refused later, with a penalty.
+    nBestHeight = Params().GetConsensus().PollV3Height + 10;
+    {
+        // Multi-address claims from the block after the next: the next block refuses a version 2 claim.
+        grc_test::ForcedArgGuard multi_address("pollmultiaddressheight", ToString(nBestHeight + 2));
+        BOOST_CHECK(refused_by_height(v2_claim));
+        BOOST_CHECK(!refused_by_height(v1_claim));
+
+        int DoS = 0;
+        CBlockIndex index = MakeBlockIndex(nBestHeight + 1, 1700000000);
+        BOOST_CHECK(!registry.BlockValidate({v2_claim.contract, v2_claim.tx, &index}, DoS));
+        BOOST_CHECK_EQUAL(DoS, 25);
+    }
+    {
+        // Multi-address claims from the next block: it refuses a version 1 claim.
+        grc_test::ForcedArgGuard multi_address("pollmultiaddressheight", ToString(nBestHeight + 1));
+        BOOST_CHECK(refused_by_height(v1_claim));
+        BOOST_CHECK(!refused_by_height(v2_claim));
+    }
+
+    // The payload version 3 floor from the next block.
+    nBestHeight = Params().GetConsensus().PollV3Height - 1;
+    BOOST_CHECK(refused_by_height(v2_payload));
+    nBestHeight = Params().GetConsensus().PollV3Height - 2;
+    BOOST_CHECK(!refused_by_height(v2_payload));
 }
 
 BOOST_AUTO_TEST_CASE(reverting_two_votes_of_one_block_newest_first_keeps_the_chain)
