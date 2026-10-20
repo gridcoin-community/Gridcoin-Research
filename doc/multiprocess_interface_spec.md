@@ -736,23 +736,29 @@ Reported honestly so nobody designs against a contract that is not there yet:
    listener in `protocol.cpp`). An alt front end must be the sole client, and
    must authenticate promptly after connecting.
 2. **Versioned-refetch is only partly realized.** Design §4.4 describes every
-   void signal growing a `registry_version` parameter. In practice only
-   `SideStakeManager` carries a revision (`local_revision`). All other
-   notifications are payload-free refetch triggers with no coalescing version on
-   the wire; a client must refetch on every one and cannot dedupe by version
-   except for sidestake.
+   void signal growing a `registry_version` parameter. In practice no
+   notification carries one. Outside the windowed channels, only local
+   sidestakes carry a revision number: `SideStakeManager::entries()` and its
+   edit results return `local_revision`, and a client reads `localRevision()`
+   when the payload-free `SideStakeManager::handleRwSettingsUpdated` fires.
+   Mandatory-sidestake changes (`handleMandatorySideStakeChanged`) carry no
+   revision. The other payload-free notifications (`ResearcherChanged`,
+   `BeaconChanged`, `MRCChanged`, `BannedListChanged`,
+   `Node::handleRwSettingsUpdated`, …; §5.1) are plain refetch triggers. A
+   notification with a payload carries keys or values, not a version:
+   `handlePSGTPoolChanged`, for one, delivers the revision hash of the pool
+   entry that changed (the row's `revision_hex`, §4.8; a hash of the entry's
+   serialized bytes, an identity rather than a version number), a `ChangeType`
+   and, on removal, the reason. Among notifications, a client can dedupe by
+   version only for local sidestakes. The windowed transaction channel (§5.2)
+   and coin channel (`wallet_coin_source.capnp`) are pulled with `drainEvents`,
+   not notified, and reconcile by their own `epoch`, `seqno` and `high_water`.
 3. **The mixed-build warning surfaces as a dismissible banner.**
    `SoftWarn::GitCommitMismatch` is both logged (`ResolveNodeIdentity`) and shown
    as a dismissible in-window banner (`BitcoinGUI::showBuildMismatchWarning`) in
    the reference GUI, suppressible per instance with `-nobuildwarn`. A client gets
    the soft finding in `HandshakeResult::soft` and decides how to present it.
-4. **Identity-token algorithm precision.** Design §4.2 describes the token as
-   `SHA256(domain-tag ‖ wallet_uuid)`; the actual implementation
-   (`ComputeIdentityToken`) is `HEX(SHA256(domain-tag_without_NUL ‖ LE32(len) ‖
-   uuid))`. A client only ever *compares* the string the node reports, so the
-   shorthand is harmless in practice — but the length-prefixed form is the real
-   algorithm if you ever need to reproduce it.
-5. **Interfaces grow per migration.** The surface is intentionally only as wide
+4. **Interfaces grow per migration.** The surface is intentionally only as wide
    as the bundled GUI's migrated consumers need (see each header's phase notes and
    `src/interfaces/README.md`). Methods are added when a consumer needs them, not
    speculatively — so absence of a capability is expected, and
