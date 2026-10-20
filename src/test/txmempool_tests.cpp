@@ -89,6 +89,13 @@ CTransaction MakePollTx(const std::string& title, const GRC::ContractAction acti
                                                        GRC::PollEligibilityClaim())});
 }
 
+//! Build a v2 transaction carrying a master-key REMOVE that names the poll \p poll_txid (payload version 4).
+CTransaction MakeRemoveByTxidTx(const uint256& poll_txid)
+{
+    return MakeTx({GRC::MakeContract<GRC::PollPayload>(
+        uint32_t {3}, GRC::ContractAction::REMOVE, GRC::PollPayload::REMOVE_BY_TXID_VERSION, poll_txid)});
+}
+
 CTxMemPoolEntry MakeEntry(const CTransaction& tx)
 {
     return CTxMemPoolEntry(tx, 0, 0, 0, ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION));
@@ -1262,6 +1269,29 @@ BOOST_AUTO_TEST_CASE(entry_tags_a_poll_add_with_its_title_key)
     const CTxMemPoolEntry remove = MakeEntry(MakePollTx("Title", GRC::ContractAction::REMOVE));
     BOOST_CHECK(!remove.HasPollAdd());
     BOOST_CHECK(remove.GetPollTitleKey().empty());
+}
+
+//! The pool tells removepoll whether it holds a master-key REMOVE of a poll already, so that a second is not sent
+//! before the first is mined. A REMOVE by title and an ADD name no poll by its id.
+BOOST_AUTO_TEST_CASE(the_pool_knows_a_pooled_removal_of_a_poll)
+{
+    const uint256 poll_txid = uint256S("0x1234");
+    const CTransaction remove = MakeRemoveByTxidTx(poll_txid);
+    const CTransaction by_title = MakePollTx("Title", GRC::ContractAction::REMOVE);
+    const CTransaction add = MakePollTx("Title");
+
+    CTxMemPool pool;
+    pool.addUnchecked(by_title.GetHash(), MakeEntry(by_title));
+    pool.addUnchecked(add.GetHash(), MakeEntry(add));
+    BOOST_CHECK(!pool.HasPollRemoveFor(poll_txid));
+    BOOST_CHECK(!pool.HasPollRemoveFor(add.GetHash()));
+
+    pool.addUnchecked(remove.GetHash(), MakeEntry(remove));
+    BOOST_CHECK(pool.HasPollRemoveFor(poll_txid));
+    BOOST_CHECK(!pool.HasPollRemoveFor(uint256S("0x5678")));
+
+    pool.remove(remove);
+    BOOST_CHECK(!pool.HasPollRemoveFor(poll_txid));
 }
 
 //! The title index holds each pooled poll's title key until the poll leaves the pool, by a removal or a clear.

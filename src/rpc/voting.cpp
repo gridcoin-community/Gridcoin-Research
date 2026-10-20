@@ -17,6 +17,7 @@
 #include "protocol.h"
 #include "rpc/util.h"
 #include "server.h"
+#include "txmempool.h"
 #include "uint256.h"
 #include "util/strencodings.h"
 #include "util/string.h"
@@ -988,6 +989,12 @@ UniValue removepoll(const UniValue& params)
         // form, which names a title.
         if (!IsV15Enabled(nBestHeight + 1)) {
             throw JSONRPCError(RPC_MISC_ERROR, "Polls can be removed by id from block version 15.");
+        }
+
+        // removepoll refuses while the pool holds a REMOVE of this poll, so that a second is not sent before the
+        // first is mined.
+        if (mempool.HasPollRemoveFor(poll_txid)) {
+            throw JSONRPCError(RPC_MISC_ERROR, "A removal of that poll is already waiting to be mined.");
         }
 
         LOCK(GRC::PollRegistry::cs_poll_registry);

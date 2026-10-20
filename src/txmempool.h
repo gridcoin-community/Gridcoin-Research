@@ -120,6 +120,7 @@ private:
     bool m_has_pool_register{false};
     bool m_has_poll_add{false};
     std::string m_poll_title_key;
+    uint256 m_removed_poll_txid; //!< Null unless a master-key REMOVE names its poll by txid (payload version 4).
 
 public:
     CTxMemPoolEntry(const CTransaction& tx, CAmount fee, int64_t time,
@@ -151,8 +152,11 @@ public:
     bool HasPoolRegister() const { return m_has_pool_register; }
     //! Whether the transaction adds a poll. A master-key REMOVE names a poll's title but adds none.
     bool HasPollAdd() const { return m_has_poll_add; }
-    //! The added poll's title key (GRC::PollTitleKey); empty without a POLL ADD.
+    //! The added poll's title key (GRC::PollTitleKey): empty without a POLL ADD, and for a title of white space only.
+    //! The title index keys on HasPollAdd(), not on an empty key.
     const std::string& GetPollTitleKey() const { return m_poll_title_key; }
+    //! The poll a master-key REMOVE names by txid (payload version 4); null for any other transaction.
+    const uint256& GetRemovedPollTxid() const { return m_removed_poll_txid; }
 };
 
 //! Aggregate mempool statistics, collected under a single lock for getmempoolinfo.
@@ -387,6 +391,19 @@ public:
         if (it == m_poll_by_title_key.end()) return false;
         if (existing) *existing = it->second;
         return true;
+    }
+
+    //! \brief Whether the pool holds a master-key REMOVE that names the poll \p poll_txid (payload version 4).
+    //!
+    //! removepoll asks, so that a second REMOVE of one poll is not sent before the first is mined. A scan, since a
+    //! REMOVE is a rare act of the master key and only that RPC asks. \p poll_txid is a poll's id, never null.
+    bool HasPollRemoveFor(const uint256& poll_txid) const
+    {
+        LOCK(cs);
+        for (const auto& [hash, entry] : mapTx) {
+            if (entry.GetRemovedPollTxid() == poll_txid) return true;
+        }
+        return false;
     }
 
     bool HasBeaconForCpid(const GRC::Cpid& cpid) const

@@ -58,11 +58,15 @@ CTxMemPoolEntry::CTxMemPoolEntry(const CTransaction& tx_in, CAmount fee, int64_t
             break;
         }
         case GRC::ContractType::POLL: {
-            // Only an ADD takes a title; a master-key REMOVE names one. AcceptToMemoryPool refuses a legacy contract
-            // before it makes an entry, so the payload is a PollPayload.
+            // Only an ADD takes a title; a master-key REMOVE names a poll, by its title or, from v15, by its txid.
+            // AcceptToMemoryPool refuses a legacy contract before it makes an entry, so the payload is a PollPayload.
+            const auto payload = contract.SharePayloadAs<GRC::PollPayload>();
+
             if (contract.m_action == GRC::ContractAction::ADD) {
                 m_has_poll_add = true;
-                m_poll_title_key = GRC::PollTitleKey(contract.SharePayloadAs<GRC::PollPayload>()->m_poll.m_title);
+                m_poll_title_key = GRC::PollTitleKey(payload->m_poll.m_title);
+            } else if (payload->m_version == GRC::PollPayload::REMOVE_BY_TXID_VERSION) {
+                m_removed_poll_txid = payload->m_poll_txid;
             }
             break;
         }
