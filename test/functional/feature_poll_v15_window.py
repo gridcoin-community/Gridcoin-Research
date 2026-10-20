@@ -49,7 +49,13 @@ class PollV15WindowTest(GridcoinTestFramework):
     def run_test(self):
         node = self.nodes[0]
         node.generatetoaddress(12, node.getnewaddress())
-        self.grow_utxo_universe(node)
+        # A poll's claim counts only outputs 10 blocks deep, and the coinstakes keep restaking the node's ten large
+        # outputs. One fan of the three largest (each 100,000 GRC or more: a coinstake returns what it spends plus
+        # the reward) into 144, buried by the next 11 blocks, keeps at least 133 of them, about 277,000 GRC,
+        # claimable however the kernels fall (a coinstake spends one output).
+        assert self.fan_largest_outputs(node, sources=3, count=144) > 2000
+        for _ in range(11):
+            self.stake()
 
         created = node.mock_now()
         poll_id = node.addpoll("survey", "Window", POLL_DAYS, "Which?", "A;B",
