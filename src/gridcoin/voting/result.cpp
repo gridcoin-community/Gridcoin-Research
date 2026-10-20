@@ -188,17 +188,14 @@ public:
     //!
     //! \param txdb          Used to resolve balance claim amounts.
     //! \param poll          The poll to resolve voting weight for.
-    //! \param poll_finished Whether the tally's tip is past the poll's end.
     //! \param v15_rules     Whether the poll started at or after the v15 height,
     //! which selects how a spent claimed output is resolved (ResolveAmount).
     //! \param pindex_bound  The block that bounds the tally by blocks (PollSnapshot::m_pindex_bound), or nullptr
     //! when the poll keeps the time rules of #3470.
     //!
-    VoteResolver(CTxDB& txdb, const Poll& poll, const bool poll_finished, const bool v15_rules,
-                 const CBlockIndex* pindex_bound)
+    VoteResolver(CTxDB& txdb, const Poll& poll, const bool v15_rules, const CBlockIndex* pindex_bound)
         : m_txdb(txdb)
         , m_poll(poll)
-        , m_poll_finished(poll_finished)
         , m_v15_rules(v15_rules)
         , m_pindex_bound(pindex_bound)
         , m_superblock(SuperblockPtr::Empty())
@@ -279,7 +276,6 @@ public:
 private:
     CTxDB& m_txdb;              //!< Used to resolve unspent amount claims.
     const Poll& m_poll;         //!< The poll to resolve voting weight for.
-    const bool m_poll_finished; //!< Whether the tally's tip is past the poll's end.
     const bool m_v15_rules;     //!< The poll started at or after the v15 height.
     //! The block that bounds the tally by blocks, or nullptr when the poll keeps the time rules of #3470. Its height
     //! never changes, so it is read without cs_main.
@@ -491,20 +487,6 @@ private:
         return !height || *height > m_pindex_bound->nHeight;
     }
 
-    //! As AfterEnd(const CBlockHeader&), for a block index entry.
-    bool AfterEnd(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-    {
-        if (!m_pindex_bound) {
-            return m_poll.Expired(pindex->nTime);
-        }
-
-        if (!m_pindex_bound->IsInMainChain()) {
-            throw InvalidDuetoReorgFork();
-        }
-
-        return !pindex->IsInMainChain() || pindex->nHeight > m_pindex_bound->nHeight;
-    }
-
     //!
     //! \brief Whether a counted vote, or the vote being resolved, already
     //! reached an output the walk follows. The walk follows only outputs at the
@@ -648,13 +630,8 @@ private:
     //! Where the walk reaches the start of the current beacon's chain, or
     //! the CPID has no beacon, it continues past the CPID's revocations
     //! (AcrossRevocations): a revocation at or before the vote's block means
-    //! no key was in force, and decides.
-    //!
-    //! The CPID's beacon entries are read as they stand when the poll is
-    //! tallied. Once the tally's tip is past the poll's end, if the CPID has no
-    //! beacon, or the first key of its current beacon was verified after the
-    //! poll ended, the claim is judged by the entries of the beacon contract it
-    //! names.
+    //! no key was in force, and decides. The CPID's beacon entries are read as
+    //! they stand when the poll is tallied.
     //!
     //! \param cpid             The CPID that the magnitude claim names.
     //! \param beacon_txid      The beacon contract transaction the claim names.
@@ -688,22 +665,13 @@ private:
         const int vote_height = iter->second->nHeight;
         const int64_t vote_time = iter->second->nTime;
 
-        const Beacon_ptr current = GetBeaconRegistry().Try(cpid);
-        const CBlockIndex* first_verified = nullptr;
-
         if (const std::optional<bool> in_force =
-                KeyInForce(current, key, vote_height, vote_time, &first_verified, &beacon_txid)) {
+                KeyInForce(GetBeaconRegistry().Try(cpid), key, vote_height, vote_time, beacon_txid)) {
             return *in_force;
         }
 
         if (const std::optional<bool> in_force = AcrossRevocations(cpid, beacon_txid, key, vote_height, vote_time)) {
             return *in_force;
-        }
-
-        if (m_poll_finished && (!current || (first_verified && AfterEnd(first_verified)))) {
-            if (const std::optional<bool> in_force = KeyInForce(NamedEntry(beacon_txid), key, vote_height, vote_time)) {
-                return *in_force;
-            }
         }
 
         return contract_version == 1
@@ -720,10 +688,8 @@ private:
     //! \param key            The key in the beacon contract the claim names.
     //! \param vote_height    The height of the vote's block.
     //! \param vote_time      The time of the vote's block.
-    //! \param first_verified If given, set to the superblock that verified the
-    //! chain's first key when the walk reaches the start of the chain.
-    //! \param named_txid     If given, the beacon contract the claim names, for
-    //! a key the walk does not reach (see NamedKeyInForce).
+    //! \param named_txid     The beacon contract the claim names, for a key the
+    //! walk does not reach (see NamedKeyInForce).
     //!
     //! \return Nothing if no key on the chain was in force at the vote.
     //!
@@ -732,8 +698,7 @@ private:
         const CPubKey& key,
         const int vote_height,
         const int64_t vote_time,
-        const CBlockIndex** first_verified = nullptr,
-        const uint256* named_txid = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+        const uint256& named_txid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         BeaconRegistry& beacons = GetBeaconRegistry();
         std::set<uint256> visited;
@@ -782,9 +747,9 @@ private:
                 entry_time.reset();
 
                 if (from_superblock) {
-                    if (verified && named_txid) {
+                    if (verified) {
                         if (const std::optional<bool> named =
-                                NamedKeyInForce(*named_txid, *pending, key, vote_height, vote_time)) {
+                                NamedKeyInForce(named_txid, *pending, key, vote_height, vote_time)) {
                             return named;
                         }
                     }
@@ -796,10 +761,6 @@ private:
             }
 
             if (entry->m_previous_hash.IsNull()) {
-                if (first_verified) {
-                    *first_verified = verified;
-                }
-
                 break;
             }
 
@@ -860,7 +821,7 @@ private:
                 : beacons.FindHistorical(revocation->m_previous_hash);
 
             if (const std::optional<bool> in_force =
-                    KeyInForce(removed, key, vote_height, vote_time, nullptr, &beacon_txid)) {
+                    KeyInForce(removed, key, vote_height, vote_time, beacon_txid)) {
                 return in_force;
             }
         }
@@ -911,27 +872,6 @@ private:
         }
 
         return named->m_public_key == key && vote_time - named->m_timestamp <= Beacon::MAX_AGE;
-    }
-
-    //!
-    //! \brief Get the entry of the beacon contract that a magnitude claim
-    //! names.
-    //!
-    //! For an advertisement, that is the entry made by the superblock that
-    //! verified it. There is none if no superblock did.
-    //!
-    Beacon_ptr NamedEntry(const uint256& beacon_txid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-    {
-        BeaconRegistry& beacons = GetBeaconRegistry();
-        const Beacon_ptr named = beacons.FindHistorical(beacon_txid);
-
-        if (!named || named->m_status != BeaconStatusForStorage::PENDING) {
-            return named;
-        }
-
-        const CBlockIndex* superblock = VerificationOf(*named).m_superblock;
-
-        return superblock ? beacons.FindHistorical(Hash(superblock->GetBlockHash(), named->m_hash)) : nullptr;
     }
 
     //!
@@ -1553,17 +1493,15 @@ public:
     //! \param legacy_superblock Last well-formed superblock at or before the
     //! poll's last block, or the current superblock where there is none,
     //! forwarded to the legacy vote counter for its magnitude factor.
-    //! \param poll_finished Whether the tally's tip is past the poll's end.
     //! \param pindex_bound The block that bounds the tally by blocks (PollSnapshot::m_pindex_bound), or nullptr.
     //!
     VoteCounter(CTxDB& txdb, const Poll& poll, int poll_start_height, const bool v15_rules,
-                const CBlockIndex* pindex_bound, const CAmount legacy_money_supply, SuperblockPtr legacy_superblock,
-                const bool poll_finished)
+                const CBlockIndex* pindex_bound, const CAmount legacy_money_supply, SuperblockPtr legacy_superblock)
         : m_txdb(txdb)
         , m_poll(poll)
         , m_poll_start_height(poll_start_height)
         , m_v15_rules(v15_rules)
-        , m_resolver(txdb, poll, poll_finished, v15_rules, pindex_bound)
+        , m_resolver(txdb, poll, v15_rules, pindex_bound)
         , m_legacy(poll, legacy_money_supply, std::move(legacy_superblock))
     {
         // Snapshot the pool CPID set at the poll's start height into an
@@ -2227,10 +2165,8 @@ PollResultOption PollResult::BuildFor(const PollSnapshot& snapshot)
         legacy_superblock = end_superblock ? std::move(*end_superblock) : Quorum::CurrentSuperblock();
     }
 
-    // The poll counts as finished for the beacon key rule when it has finished at the tip the tally runs on (the
-    // snapshot's judgment), so every node with this tip agrees.
     VoteCounter counter(txdb, result.m_poll, poll_start_height, v15_rules, snapshot.m_pindex_bound,
-                        legacy_money_supply, std::move(legacy_superblock), snapshot.m_finished);
+                        legacy_money_supply, std::move(legacy_superblock));
 
     if (result.m_poll.IncludesMagnitudeWeight()) {
         SuperblockPtr superblock;
