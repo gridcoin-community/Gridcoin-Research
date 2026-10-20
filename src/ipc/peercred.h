@@ -25,7 +25,8 @@ bool PeerUidAllowed(uid_t peer_uid, uid_t self_uid);
 
 //! Verify that the peer on an accepted AF_UNIX connection is the SAME OS user as
 //! this process. This is defense-in-depth on top of the cookie: the cookie file is
-//! already owner-only (0600 in an owner-only datadir), so a different user should
+//! already owner-only (created 0600 on POSIX, with an owner+SYSTEM protected DACL
+//! on Windows, whatever the datadir's own permissions), so a different user should
 //! never possess it -- but rejecting a foreign uid up front closes the connection
 //! before any handshake, rather than relying solely on the cookie gate.
 //!
@@ -50,14 +51,15 @@ bool PeerUidAllowed(uid_t peer_uid, uid_t self_uid);
 //! its payload is struct sockpeercred -- so the implementation gates on __linux__
 //! rather than on the option name, which would not compile on OpenBSD. On
 //! Windows AF_UNIX exposes no peer-credential API whatsoever, so this returns
-//! true and the explicit owner+SYSTEM PROTECTED DACL that ipc/process.cpp applies
-//! to node.sock and ipc.cookie (and verifies by read-back) is the guard. Call
+//! true and the explicit owner+SYSTEM PROTECTED DACLs that ipc/process.cpp applies
+//! to node.sock and ipc/handshake.cpp to ipc.cookie (each verified by read-back)
+//! are the guard. Call
 //! PeerCredentialEnforcement() to log which of these is in force.
 //! How to treat a peer whose uid cannot be determined.
 enum class PeerCredPolicy {
-    //! Refuse unless the uid is positively confirmed to match. For the NODE's
-    //! accept path, where this is a security boundary and peer_fd always comes
-    //! from a socket we just accepted.
+    //! Refuse unless the uid is positively confirmed to match. Used on both ends:
+    //! the node's accept path, where this is a security boundary, and the GUI's
+    //! connect path, where it gates disclosure of the cookie.
     Enforcing,
     //! Refuse only on a DEFINITE mismatch; allow (with a log line) when the uid
     //! cannot be read.

@@ -83,9 +83,9 @@ PACL BuildOwnerOnlyDacl(const OwnerOnlyTrustees& trustees, bool inheritable)
     EXPLICIT_ACCESS_W ea[2] = {};
     const PSID sids[2] = {trustees.user(), trustees.system()};
     // On a directory the ACEs must be inheritable, so anything created inside
-    // (node.sock, ipc.cookie) is owner-only from creation rather than only after
-    // an after-the-fact SetNamedSecurityInfo -- that closes the create/protect
-    // window rather than merely narrowing it.
+    // is owner-only from creation rather than only after an after-the-fact
+    // SetNamedSecurityInfo -- that closes the create/protect window rather than
+    // merely narrowing it.
     const DWORD inheritance = inheritable ? (CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE)
                                           : NO_INHERITANCE;
     for (int i = 0; i < 2; ++i) {

@@ -40,14 +40,16 @@ bool CheckPeerCredentials(int peer_fd, PeerCredPolicy policy)
 #ifdef WIN32
     (void)policy;
     // AF_UNIX on Windows exposes no peer-credential API (no SO_PEERCRED /
-    // getpeereid); the owner+SYSTEM PROTECTED DACL that ipc/process.cpp applies to
-    // node.sock and ipc.cookie -- and verifies by reading it back -- is the guard.
+    // getpeereid); the owner+SYSTEM PROTECTED DACLs that ipc/process.cpp applies to
+    // node.sock and ipc/handshake.cpp to ipc.cookie -- each verified by reading it
+    // back -- are the guard.
     (void)peer_fd;
     return true;
 #else
     // "Cannot determine the peer's uid" is refused under Enforcing and
     // allowed-with-a-log under Advisory; a DEFINITE mismatch is refused under both.
-    // See PeerCredPolicy for why the two callers differ.
+    // Both callers -- the node's accept path and Ipc::connectAddress -- use
+    // Enforcing; see PeerCredPolicy for why Advisory is kept.
     const auto undetermined = [policy](const char* what, int err) {
         if (policy == PeerCredPolicy::Enforcing) {
             return error("CheckPeerCredentials: refusing IPC connection: %s (errno %d), so the "

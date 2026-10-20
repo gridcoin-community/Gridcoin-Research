@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(cookie_round_trip_and_delete)
     ipc::DeleteCookie(dir);
 
     // Gone from disk, and gone as far as a GUI is concerned -- ReadCookie returning
-    // nullopt is what "no node is running" means to ipc::connect.
+    // nullopt is what stops ipc::ConnectToNode before it dials.
     BOOST_CHECK(!fs::exists(dir / "ipc.cookie"));
     BOOST_CHECK(!ipc::ReadCookie(dir).has_value());
 

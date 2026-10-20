@@ -117,15 +117,17 @@ bool ConstantTimeEqual(const std::string& a, const std::string& b);
 std::string WriteCookie(const fs::path& dir);
 
 //! GUI side: read the hex cookie from <dir>/ipc.cookie. Returns nullopt when the
-//! file is absent (the node is not running -- do not dial).
+//! file is absent or cannot be opened. Absent means no -multiprocess node is
+//! serving <dir> (none is running with -multiprocess, one is still starting, or
+//! the last one shut down cleanly) -- do not dial.
 std::optional<std::string> ReadCookie(const fs::path& dir);
 
 //! Node side: remove <dir>/ipc.cookie at shutdown, mirroring upstream's
 //! DeleteAuthCookie(). The cookie is a live 256-bit credential for as long as the
-//! file exists, and it outlived the process that minted it: a stale file is
-//! readable by anything that can read the datadir, and its presence is also what
-//! ReadCookie() uses to mean "the node is running", so a GUI dials a socket nobody
-//! is listening on and reports a connection failure instead of "not running".
+//! file exists, and it outlived the process that minted it: a stale file's
+//! presence is what ConnectToNode checks before dialling, so a GUI dials a socket
+//! nobody is listening on and reports a connection failure instead of asking
+//! whether the daemon is running with -multiprocess.
 //!
 //! Never throws: shutdown is the wrong place to raise, and the file legitimately
 //! may not be there (an unclean previous exit, or a user who removed it by hand).

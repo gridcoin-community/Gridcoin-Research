@@ -36,11 +36,14 @@ struct GuiConnection {
 //! GUI side: perform the connect handshake against a node listening on
 //! <data_dir>/<network>/node.sock (doc/multiprocess_design.md section 4.3):
 //!
-//!   1. read the node's ipc.cookie -- its absence means the node has never run
-//!      on this datadir (the cookie is written at startup), so there is no
-//!      credential to authenticate with and nothing to dial. The cookie is not
-//!      removed at shutdown, so a stale one may outlive a stopped node; that is
-//!      harmless -- connectAddress in step 2 then simply fails with no listener;
+//!   1. read the node's ipc.cookie -- its absence means no -multiprocess node
+//!      is serving this datadir: none is running with -multiprocess, one is
+//!      still starting (the cookie is written after core init, just before the
+//!      node starts listening), or the last one shut down cleanly and deleted
+//!      it. There is then no credential to authenticate with and nothing to
+//!      dial. A node that crashed or was killed leaves a stale cookie behind;
+//!      that is harmless -- connectAddress in step 2 then simply fails with no
+//!      listener;
 //!   2. MakeIpc + connectAddress("unix") to obtain the remote Init;
 //!   3. ClientHandshake -- authenticate with the cookie and verify
 //!      schema/protocol/network compatibility (result stashed in .handshake).

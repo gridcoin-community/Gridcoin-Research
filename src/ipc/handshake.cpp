@@ -201,9 +201,9 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
     // whatever owner and permissions that file had. O_NOFOLLOW rules out a
     // pre-planted symlink but says nothing about a pre-planted HARD LINK or a
     // plain attacker-owned regular file -- either would have captured the session
-    // cookie on a datadir the user has widened. (WriteCookie also runs before the
-    // datadir is hardened, and the datadir is only hardened at creation, so this
-    // cannot lean on directory permissions.)
+    // cookie on a datadir the user has widened. (The datadir is hardened only when
+    // the node creates it; an existing one keeps whatever permissions it has, so
+    // this cannot lean on directory permissions.)
     boost::system::error_code remove_ec;
     fs::remove(tmp, remove_ec);
     if (remove_ec) {

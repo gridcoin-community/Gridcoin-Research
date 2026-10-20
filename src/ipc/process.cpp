@@ -277,19 +277,24 @@ public:
         // false. The branch is live only for a custom `unix:<path>` whose parent
         // does not exist yet.
         //
-        // The practical effect is that the datadir keeps whatever the OS gave it
-        // (%APPDATA%'s inherited ACL on Windows, 0755 on macOS), and that is
-        // deliberate as well as accidental: we do not re-tighten a directory the
-        // operator may have widened on purpose. What actually protects the secret
-        // is that node.sock and ipc.cookie are created BY US, owner-only, and fail
-        // closed if that cannot be applied -- see below and in handshake.cpp.
+        // The practical effect is that this branch does not decide the datadir's
+        // permissions. A datadir that GetDataDirPath (or the Qt first-run chooser)
+        // creates is already owner-only, because both create it through
+        // util::CreateOwnerOnlyDirectory; GetDataDirPath itself never creates a
+        // mainnet -datadir, which must already exist. One that already existed
+        // keeps the permissions it has: whatever the operator gave it, or the OS
+        // default (%APPDATA%'s inherited ACL on Windows, 0755 on macOS) if a
+        // release that predates owner-only creation made it. That is
+        // deliberate: we do not re-tighten a directory the operator may have
+        // widened on purpose. What actually protects the secret is that node.sock
+        // and ipc.cookie are created BY US, owner-only, and fail closed if that
+        // cannot be applied -- see below and in handshake.cpp.
         //
         // When the create branch does run, it fails closed: if we cannot restrict a
         // directory we just made, refuse to listen rather than expose the socket in
         // a world-accessible one.
         // Windows has no chmod/umask for AF_UNIX, so the equivalent is an explicit
-        // owner-only *protected* DACL (ApplyOwnerOnlyDacl), applied inheritably so
-        // node.sock and ipc.cookie are owner-only from creation. The port used to
+        // owner-only *protected* DACL (ApplyOwnerOnlyDacl). The port used to
         // rely instead on the per-user-profile datadir ACL being owner-only by
         // default: true for a default %APPDATA% install (icacls on-device showed
         // owner + SYSTEM + Administrators only), but nothing set or checked it, so
@@ -363,8 +368,9 @@ public:
 #ifndef WIN32
             // Create the socket node with 0600 from the start: bind() honors the
             // umask, so a permissive umask would otherwise leave a world-accessible
-            // window before an after-the-fact chmod. (No umask on Windows; the
-            // datadir ACL governs access -- see the directory comment above.)
+            // window before an after-the-fact chmod. (No umask on Windows; there
+            // the fail-closed ApplyOwnerOnlyDacl after the bind below restricts
+            // the socket.)
             const mode_t old_umask = ::umask(0177);
 #endif
             const int rc = ::bind(fd, (const struct sockaddr*)&addr, sizeof(addr));
@@ -383,12 +389,10 @@ public:
                     throw std::system_error(chmod_errno, std::system_category());
                 }
 #else
-                // Same fail-closed contract as the chmod above. The socket already
-                // inherited the directory's owner-only ACEs at creation (applied
-                // inheritably above), so this only re-states them non-inheritably
-                // and protects them; a residual window exists solely if the parent
-                // ACL was changed between the two calls, and any failure here
-                // refuses to serve rather than listening unprotected.
+                // Same fail-closed contract as the chmod above: restrict the
+                // socket to this account and SYSTEM (non-inheritable, protected,
+                // verified by read-back), and refuse to serve rather than listen
+                // unprotected if that fails.
                 try {
                     util::ApplyOwnerOnlyDacl(path, /*inheritable=*/false);
                 } catch (...) {
