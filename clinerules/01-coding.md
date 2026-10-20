@@ -88,12 +88,16 @@ ThreadAppInit2: Initializes Gridcoin.                       (grc-appinit2)
 
         ThreadDumpAddress         : Saves peers to peers.dat                               (grc-adrdump)
 
-        ThreadStakeMiner          : Generates Gridcoins.                                   (grc-stake-miner)
+    ThreadStakeMiner   : Generates Gridcoins. Launched by AppInit2        (grc-stake-miner)
+                         itself, not by StartNode.
 
-        ThreadScraper             : Pulls statistics from project servers.
+    InitializeScraper  : Called from GRC::Initialize. Starts one of the two threads below
+                         (neither under -regtest).
+
+        ThreadScraper             : Pulls statistics from project servers.                 (grc-scraper)
                                     Mutually exclusive with ThreadScraperSubscriber
 
-        ThreadScraperSubscriber   : Generates superblocks.
+        ThreadScraperSubscriber   : Generates superblocks.                                 (grc-scrapersubscriber)
                                     Mutually exclusive with ThreadScraper
 
     RPC threads (StartRPCThreads): Remote procedure call handler, listens on port 15715 (testnet 25715)
@@ -101,7 +105,7 @@ ThreadAppInit2: Initializes Gridcoin.                       (grc-appinit2)
 
         ThreadTopUpKeyPool          : Replenishes the keystore's keypool.     (grc-key-top)
 
-    CScheduler         : Schedules tasks.
+    CScheduler         : Schedules tasks.                                 (grc-scheduler)
 
 ipcThread     : Scans to check if a URI (gridcoin:) is used. (grc-gui-ipc)
 
