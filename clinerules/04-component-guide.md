@@ -71,7 +71,7 @@ Block Validation → Dispatcher → Handler → Registry Update
 - **PendingBeacon**: Beacon awaiting superblock activation
 
 #### Storage
-- **Database**: `beacon.dat` (LevelDB)
+- **Database**: LevelDB (`txleveldb/`), key prefix `"beacon"` from `BeaconRegistry::BeaconDB::KeyType()`
 - **In-Memory**: Active beacon map (Cpid → Beacon_ptr)
 - **Historical**: Hash-based lookup for past beacons
 
@@ -219,7 +219,7 @@ Generate Candidates → Validate Supermajority → Select Best
 - **AutoGreylist**: Automatic project exclusion system
 
 **Storage**:
-- **Database**: `project.dat` (LevelDB)
+- **Database**: LevelDB (`txleveldb/`), key prefix `"project"` from `Whitelist::ProjectEntryDB::KeyType()`
 - **In-Memory**: Active project map (name → ProjectEntry_ptr)
 
 **Key Methods**:
@@ -273,7 +273,7 @@ if (entry) {
 
 **Storage**:
 - **Local**: `gridcoinresearch.conf` file
-- **Mandatory**: `sidestake.dat` (LevelDB)
+- **Mandatory**: LevelDB (`txleveldb/`), key prefix `"SideStake"` from `SideStakeRegistry::SideStakeDB::KeyType()`
 
 **Key Methods**:
 - `SideStakeRegistry::ActiveSideStakeEntries()`: Get all active sidestakes
@@ -291,7 +291,7 @@ if (entry) {
 
 **Key Classes**:
 - **MRC**: Manual reward claim contract payload
-- **MRCRegistry**: Validation handler (stateless)
+- **MRCContractHandler**: Validation handler (stateless)
 
 **Process**:
 ```
@@ -504,7 +504,6 @@ The heritage bucket and fingerprint are mandatory; see the RPC Heritage Ledger s
 
 #### Upgrade System (`src/gridcoin/upgrade.h/cpp`)
 - Version checking
-- Snapshot downloads
 - Blockchain data reset
 
 #### BOINC Integration (`src/gridcoin/boinc.cpp`)

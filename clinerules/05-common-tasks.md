@@ -212,35 +212,66 @@ You need to add a new type of blockchain contract for governance or state manage
 ### Steps
 
 #### 2.1 Define the Contract Type
-Edit `src/gridcoin/contract/contract.h`:
+Edit `src/gridcoin/contract/payload.h`. Its comment says: "CONSENSUS: Do not remove or reorder items in this
+enumeration except for OUT_OF_BOUND which must remain at the end." Add the new value just before `OUT_OF_BOUND`,
+and add it to `CONTRACT_TYPES[]` in the same place:
 ```cpp
-enum class ContractType : uint32_t {
-    UNKNOWN,
-    BEACON,
+enum class ContractType
+{
+    UNKNOWN,       //!< An invalid, non-standard, or empty contract type.
+    BEACON,        //!< Beacon advertisement or deletion.
     // ... existing types ...
-    MYNEWTYPE,  // Add your type
+    POOL_APPROVE,  //!< Master-key-signed pool approval/de-list (PENDING -> ACTIVE / -> DELETED).
+    MYNEWTYPE,     //!< Add your type here, before OUT_OF_BOUND.
+    OUT_OF_BOUND,  //!< Marker value for the end of the valid range.
+};
+
+static constexpr GRC::ContractType CONTRACT_TYPES[] = {
+    // ... existing types ...
+    ContractType::POOL_APPROVE,
+    ContractType::MYNEWTYPE,
+    ContractType::OUT_OF_BOUND
 };
 ```
 
-Update the type mapping functions in `src/gridcoin/contract/contract.cpp`:
+Then update `Contract::Type` in `src/gridcoin/contract/contract.cpp`: add the string to `Parse()` and a case to
+each of the three switches, `ToString() const`, `ToString(ContractType)` and `ToTranslatedString(ContractType)`
+(the last wraps the string in `_()`). Do not add it to `ParseLegacy()`, which parses historical contracts only.
 ```cpp
-ContractType ContractType::Parse(std::string input) {
+Contract::Type Contract::Type::Parse(std::string input)
+{
     // ... existing mappings ...
-    if (input == "mynewtype") return ContractType::MYNEWTYPE;
+    if (input == "mynewtype")      return ContractType::MYNEWTYPE;
+
     return ContractType::UNKNOWN;
 }
 
-std::string ContractType::ToString(ContractType type) {
-    // ... existing cases ...
-    case ContractType::MYNEWTYPE: return "mynewtype";
-    default: return "unknown";
+std::string Contract::Type::ToString() const
+{
+    switch (m_value) {
+        // ... existing cases ...
+        case ContractType::MYNEWTYPE:  return "mynewtype";
+        default:                       return "";
+    }
 }
 ```
+
+In the same file, `Contract::Body::ResetType()` must construct the new payload
+(`m_payload.Reset(new MyNewTypePayload());`). `Contract::Body::ConvertFromLegacy()` needs a case too: its switch
+has no `default`, and a new type has no legacy form (`ParseLegacy()` never returns it). The `POOL_REGISTER` and
+`POOL_APPROVE` cases there are bare `assert(false && ...)` lines that predate the added-assert rule (#3321) in
+`test/lint/lint-assertions.sh`. That lint fails any newly added bare `assert(` unless the same line carries
+`// LINT-OK-ASSERT: <reason>`, so do
+not copy those lines as they are; the lint's own message lists what to use instead.
+`git grep -n 'ContractType::POOL_APPROVE' -- src` lists every other place that enumerates the types.
 
 #### 2.2 Create the Payload Class
 Create `src/gridcoin/mynewtype.h`:
 ```cpp
 namespace GRC {
+
+// Entry status. OUT_OF_BOUND must stay last: EnumByte reads it as the upper bound of the range.
+enum class MyNewTypeEntryStatus { UNKNOWN, DELETED, ACTIVE, OUT_OF_BOUND };
 
 // Entry structure (what gets stored)
 class MyNewTypeEntry {
@@ -249,15 +280,17 @@ public:
     std::string m_value;
     int64_t m_timestamp;
     uint256 m_hash;
+    uint256 m_previous_hash;
 
     // Status tracking
-    enum class Status { ACTIVE, DELETED, PENDING };
+    using Status = EnumByte<MyNewTypeEntryStatus>;
     Status m_status;
 
     // Required methods
     bool WellFormed() const;
     std::string Key() const { return m_key; }
     std::pair<std::string, std::string> KeyValueToString() const;
+    std::string StatusToString() const;
 
     // Serialization
     ADD_SERIALIZE_METHODS;
@@ -267,6 +300,8 @@ public:
         READWRITE(m_value);
         READWRITE(m_timestamp);
         READWRITE(m_hash);
+        READWRITE(m_previous_hash);
+        READWRITE(m_status);
     }
 };
 
@@ -296,9 +331,13 @@ public:
         return 0.5 * COIN;  // Set appropriate burn fee
     }
 
-    ADD_SERIALIZE_METHODS;
+    // Not ADD_SERIALIZE_METHODS: IContractPayload declares Serialize/Unserialize overloads
+    // that take a ContractAction, and this macro implements them (see payload.h).
+    ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
+
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action) {
+    inline void SerializationOp(Stream& s, Operation ser_action, const ContractAction contract_action)
+    {
         READWRITE(m_entry);
     }
 };
@@ -348,9 +387,9 @@ bool MyNewTypeEntry::WellFormed() const {
 }
 
 bool MyNewTypeRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const {
-    const auto payload = contract.SharePayload<MyNewTypePayload>();
+    const auto payload = contract.SharePayloadAs<MyNewTypePayload>();
 
-    if (!payload->WellFormed(contract.m_action)) {
+    if (!payload->WellFormed(contract.m_action.Value())) {
         DoS = 25;
         return false;
     }
@@ -360,10 +399,10 @@ bool MyNewTypeRegistry::Validate(const Contract& contract, const CTransaction& t
 }
 
 void MyNewTypeRegistry::Add(const ContractContext& ctx) {
-    const auto payload = ctx.m_contract.SharePayload<MyNewTypePayload>();
+    const auto payload = ctx.m_contract.SharePayloadAs<MyNewTypePayload>();
     auto entry = std::make_shared<MyNewTypeEntry>(payload->m_entry);
-    entry->m_status = MyNewTypeEntry::Status::ACTIVE;
-    entry->m_timestamp = ctx.m_pindex->nTime;
+    entry->m_status = MyNewTypeEntryStatus::ACTIVE;
+    entry->m_timestamp = ctx.m_tx.nTime;
 
     m_entries[entry->Key()] = entry;
 }
@@ -377,68 +416,135 @@ If your registry needs persistent storage, leverage the `registry_db.h` template
 
 **Key Concept**: The `registry_db.h` template provides a standardized way to persist registry state to LevelDB with automatic serialization/deserialization.
 
-**Setup Pattern**:
+**Setup Pattern** (modelled on `ProtocolRegistry` in `src/gridcoin/protocol.{h,cpp}`; where they differ, that code is right):
 ```cpp
 // In mynewtype.h
 #include "gridcoin/contract/registry_db.h"
 
 class MyNewTypeRegistry : public IContractHandler {
-private:
-    RegistryDB<MyNewTypeEntry> m_db;  // Template handles persistence
-
 public:
     MyNewTypeRegistry()
-        : m_db("mynewtype")  // Database filename prefix
+        : m_db(1)  // DB version: increment it when the stored entry format changes
     {
     }
 
-    // Database operations
-    void StoreToDB(const MyNewTypeEntry& entry) {
-        m_db.Store(entry.Key(), entry);
-    }
+    typedef std::map<std::string, std::shared_ptr<MyNewTypeEntry>> MyNewTypeEntryMap;
+    typedef std::map<uint256, std::shared_ptr<MyNewTypeEntry>> HistoricalMyNewTypeEntryMap;
 
-    std::shared_ptr<MyNewTypeEntry> LoadFromDB(const std::string& key) {
-        return m_db.Load(key);
-    }
+    // Seven parameters: entry, storage entry, status enum, current map, pending map,
+    // expired-pending type, historical map.
+    typedef RegistryDB<MyNewTypeEntry,
+                       MyNewTypeEntry,
+                       MyNewTypeEntryStatus,
+                       MyNewTypeEntryMap,
+                       MyNewTypeEntryMap,
+                       std::set<MyNewTypeEntry>,
+                       HistoricalMyNewTypeEntryMap> MyNewTypeDB;
 
-    void EraseFromDB(const std::string& key) {
-        m_db.Erase(key);
-    }
+    // The IContractHandler DB hooks. Their defaults return 0 or do nothing.
+    int Initialize() override;
+    int GetDBHeight() override;
+    void SetDBHeight(int& height) override;
+    uint64_t PassivateDB() override;
+
+private:
+    MyNewTypeEntryMap m_entries;
+    MyNewTypeEntryMap m_pending_entries;        //!< Not used. Only to satisfy the template.
+    std::set<MyNewTypeEntry> m_expired_entries;  //!< Not used. Only to satisfy the template.
+    MyNewTypeEntryMap m_first_entries;          //!< Not used. Only to satisfy the template.
+    MyNewTypeDB m_db;
 };
 ```
 
-**Benefits**:
-- Automatic serialization using entry's `SerializationOp`
-- Consistent error handling
-- Transaction support for atomic updates
-- Iterator support for full registry scans
+```cpp
+// In mynewtype.cpp: the LevelDB key prefix for this registry's records.
+template<> const std::string MyNewTypeRegistry::MyNewTypeDB::KeyType()
+{
+    return std::string("mynewtype");
+}
 
-**Example Registries Using This Pattern**:
-- `BeaconRegistry` → `beacon.dat`
-- `Whitelist` → `project.dat`
-- `ProtocolRegistry` → `protocol.dat`
+// In Add(), as ProtocolRegistry::AddDelete does. insert() stores the entry as given, so fill in
+// the transaction fields and the link to this key's previous entry first.
+int height = -1;
+if (ctx.m_pindex) height = ctx.m_pindex->nHeight;  // every RegistryDB registry guards a null pindex
 
-**Note**: For stateless handlers (like MRCRegistry) or memory-only registries, skip the database template and manage state directly.
+MyNewTypePayload payload = ctx->CopyPayloadAs<MyNewTypePayload>();
+MyNewTypeEntry& entry = payload.m_entry;
+entry.m_hash = ctx.m_tx.GetHash();
+entry.m_timestamp = ctx.m_tx.nTime;
+entry.m_status = MyNewTypeEntryStatus::ACTIVE;  // as in 2.3: a default EnumByte is UNKNOWN, which Initialize() skips
+auto current = m_entries.find(entry.Key());
+entry.m_previous_hash = current != m_entries.end() ? current->second->m_hash : uint256 {};
+
+if (!m_db.insert(ctx.m_tx.GetHash(), height, entry)) {
+    // Already stored (expected when contracts are replayed at startup), or the LevelDB write failed.
+}
+m_entries[entry.Key()] = m_db.find(ctx.m_tx.GetHash())->second;
+
+// In Revert(): m_db.erase(ctx.m_tx.GetHash()), then restore the entry that m_previous_hash names
+// with m_db.find(entry.m_previous_hash).
+```
+
+With `RegistryDB`, this replaces the `Add()` body of 2.3.
+
+`Store()`, `Load()` and `Delete()` are private; a registry uses `insert()`, `erase()` and `find()`. The entry
+type must provide `Key()`, `KeyValueToString()`, `StatusToString()`, `m_timestamp`, `m_hash`, `m_previous_hash`
+and `m_status`, and its status enum must have `UNKNOWN` and `OUT_OF_BOUND`, which the startup replay skips.
+
+The template's startup, bookmark and passivation code runs only if the registry forwards to it, as
+`ProtocolRegistry` does in `src/gridcoin/protocol.cpp`. Override `Initialize()` to return
+`m_db.Initialize(m_entries, m_pending_entries, m_expired_entries, m_first_entries, false)`, and pass `true` last
+only if the registry keeps a first-entry map, as `Whitelist` does. Override `GetDBHeight()` to pass a local `int`
+to `m_db.LoadDBHeight()` and return it, `SetDBHeight()` to call `m_db.StoreDBHeight()`, and `PassivateDB()` to
+return `m_db.passivate_db()`. Have `Reset()` clear the maps and call `m_db.clear()`. The `IContractHandler`
+defaults return 0 or do nothing. A registry listed in `CONTRACT_TYPES_WITH_REG_DB` without these overrides loads
+no stored history and keeps a DB height of 0, which pulls the start of the startup contract replay down to
+`V11_height` or the lookback window, whichever is lower (the clamp in `InitializeContracts()`). It is also never
+passivated, and unless its `Reset()` calls `m_db.clear()`, its LevelDB records survive `-clear<type>history`,
+which `InitializeContracts()` handles by calling `Reset()`.
+
+**What the template provides once the registry forwards to it**:
+- Replay of the stored records into the registry's maps at startup (`RegistryDB::Initialize()`, called from the
+  registry's own `Initialize()` override)
+- A history keyed by txid (`insert()`) and rebuilt at startup from each stored record's `m_hash`
+  (`Initialize()`), so `Add()` must set `m_hash`, `m_timestamp` and `m_previous_hash` itself, as
+  `ProtocolRegistry::AddDelete` does. The registry's own `Revert()` walks `m_previous_hash` back with `find()`.
+- A block-height bookmark (`StoreDBHeight()` / `LoadDBHeight()`)
+- Removal of superseded history from memory (`passivate_db()`)
+
+**Example Registries Using This Pattern** (all in the node's single LevelDB, `txleveldb/` in the data
+directory, under the prefix their `KeyType()` returns):
+- `BeaconRegistry::BeaconDB` → `"beacon"`
+- `Whitelist::ProjectEntryDB` → `"project"`
+- `ProtocolRegistry::ProtocolEntryDB` → `"protocol"`
+
+**Note**: For stateless handlers (like `MRCContractHandler` in `src/gridcoin/mrc.h`) or memory-only registries,
+skip the database template and manage state directly.
 
 #### 2.4 Register with Dispatcher
-Edit `src/gridcoin/contract/contract.cpp`:
+Edit `class Dispatcher` in `src/gridcoin/contract/contract.cpp`; `GetHandler()` is defined inside the class:
 ```cpp
-IContractHandler& Dispatcher::GetHandler(const ContractType type) {
-    switch (type) {
-        // ... existing cases ...
-        case ContractType::MYNEWTYPE:
-            return GetMyNewTypeRegistry();
-        default:
-            return s_unknown_handler;
+    IContractHandler& GetHandler(const ContractType type)
+    {
+        switch (type) {
+            // ... existing cases ...
+            case ContractType::MYNEWTYPE:     return GetMyNewTypeRegistry();
+            default:                          return m_unknown_handler;
+        }
     }
-}
 ```
+
+If the registry uses `RegistryDB` (2.3.1), also add the type to `RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB`
+in `src/gridcoin/contract/registry.cpp` and a case to `RegistryBookmarks::GetRegistryWithDB()` in
+`src/gridcoin/contract/registry.h`; `InitializeContracts()` in `src/gridcoin/gridcoin.cpp` calls `Initialize()`
+on every registry in that list at startup (the override in 2.3.1). If it implements `Revert()`, do the same with
+`CONTRACT_TYPES_SUPPORTING_REVERT` and `GetRegistryWithRevert()`.
 
 #### 2.5 Add to Build System
 Edit `src/CMakeLists.txt`:
 ```cmake
-# CMakeLists.txt
-set(GRIDCOIN_SOURCES
+# src/CMakeLists.txt
+add_library(gridcoin_util STATIC
     # ... existing files ...
     gridcoin/mynewtype.cpp
 )
@@ -466,6 +572,8 @@ BOOST_AUTO_TEST_CASE(it_validates_well_formed_entries)
 
 BOOST_AUTO_TEST_SUITE_END()
 ```
+
+Add the file to `add_executable(test_gridcoin ...)` in `src/test/CMakeLists.txt`.
 
 ---
 
@@ -709,26 +817,24 @@ someMenu->addAction(myNewAction);
 // Add slot method
 void BitcoinGUI::showMyNewDialog()
 {
-    if (!walletFrame) return;
+    if (!walletModel) return;
     MyNewDialog dialog(this);
-    dialog.setModel(walletFrame->currentWalletModel());
+    dialog.setModel(walletModel);
     dialog.exec();
 }
 ```
 
 #### 4.5 Register with Build System
-Edit `src/qt/CMakeLists.txt` or `src/Makefile.qt.include`:
+Edit `src/qt/CMakeLists.txt` and add the source file to `add_library(gridcoinqt STATIC ...)`:
 ```cmake
-set(QT_FORMS_UI
-    # ... existing forms ...
-    forms/mynewdialog.ui
-)
-
-set(QT_MOC_CPP
-    # ... existing mocs ...
-    moc_mynewdialog.cpp
+add_library(gridcoinqt STATIC
+    # ... existing files ...
+    mynewdialog.cpp
 )
 ```
+List only the `.cpp`, as `aboutdialog.cpp` is: the target turns `AUTOMOC`, `AUTOUIC` and `AUTORCC` on, and its
+`AUTOUIC_SEARCH_PATHS` includes `src/qt/forms`, so `#include "ui_mynewdialog.h"` is generated from
+`forms/mynewdialog.ui`.
 
 #### 4.6 Test the GUI
 ```bash

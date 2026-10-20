@@ -402,9 +402,9 @@ bool LoadBlockIndex(bool fAllowNew)
 
     if (Params().IsMockableChain())
     {
-        // GLOBAL REGTEST SETTINGS — staking and maturity gated to 0 so the kernel
-        // checks at gridcoin/staking/kernel.cpp:617,654 pass trivially. nGrandfather
-        // is irrelevant at regtest heights.
+        // GLOBAL REGTEST SETTINGS: nStakeMinAge = 0, so the min-age checks in
+        // CWallet::AvailableCoinsForStaking and GRC::CheckProofOfStakeV8 pass
+        // trivially. nGrandfather is irrelevant at regtest heights.
         nStakeMinAge = 0;
         nCoinbaseMaturity = 10;
         nGrandfather = 0;
