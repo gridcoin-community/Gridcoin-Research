@@ -12,8 +12,6 @@ using namespace GRC;
 using SearchReport = MinerStatus::SearchReport;
 using EfficiencyReport = MinerStatus::EfficiencyReport;
 
-extern bool fQtActive;
-
 // -----------------------------------------------------------------------------
 // Global Variables
 // -----------------------------------------------------------------------------
@@ -165,11 +163,9 @@ void MinerStatus::UpdateCurrentErrors(ErrorFlags error_flags)
     ClearErrors();
     AddError(error_flags);
 
-    // Avoid the lock on headless nodes:
-    if (fQtActive) {
-        LOCK(m_cs);
-        uiInterface.MinerStatusChanged(StakingActive(), m_search.CoinWeight());
-    }
+    LOCK(m_cs);
+
+    uiInterface.MinerStatusChanged(StakingActive(), m_search.CoinWeight());
 }
 
 void MinerStatus::IncrementBlocksCreated()
