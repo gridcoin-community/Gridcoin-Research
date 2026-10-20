@@ -702,6 +702,46 @@ BOOST_AUTO_TEST_CASE(from_v15_the_second_poll_with_a_title_in_a_block_registers_
 }
 
 //!
+//! From v15 a poll whose title key a stored poll holds stays inert when the startup replay applies its block above the
+//! registry's saved height (a crash before the height was saved): the load rebuilds the title index from the records
+//! alone, ahead of the replay.
+//!
+BOOST_AUTO_TEST_CASE(from_v15_a_block_replayed_above_the_saved_height_keeps_a_taken_title_inert)
+{
+    CBlockIndex index_owner = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex index_duplicate = MakeBlockIndex(V13Height() + 20, 1700001000);
+    RegistryReset reset;
+    grc_test::V15HeightGuard v15(index_owner.nHeight);
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx owner = MakePollTx("Title", 1700000000);
+    const PollTx duplicate = MakePollTx("TITLE", 1700001000);
+
+    CBlock block_owner;
+    block_owner.vtx.resize(2);
+    block_owner.vtx.push_back(owner.tx);
+
+    CBlock block_duplicate;
+    block_duplicate.vtx.resize(2);
+    block_duplicate.vtx.push_back(duplicate.tx);
+
+    GRC::RegistryBookmarks live_heights;
+    bool found = false;
+    GRC::ApplyContracts(block_owner, &index_owner, live_heights, found, false);
+
+    Restart(registry);
+    GRC::RegistryBookmarks db_heights;
+    BOOST_REQUIRE(db_heights.GetRegistryBlockHeight(GRC::ContractType::POLL) == index_owner.nHeight);
+    GRC::ReplayBlock(block_duplicate, &index_duplicate, db_heights, true, found);
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK(registry.TryByTxid(duplicate.tx.GetHash()) == nullptr);
+    BOOST_CHECK(!registry.IsStored(duplicate.tx.GetHash()));
+    BOOST_CHECK(registry.TitleOwner("title") == owner.tx.GetHash());
+}
+
+//!
 //! Every ACTIVE poll is listed and found by its title, whatever title it shares: below v15 a later poll with a
 //! taken title key is registered by its txid, and it is listed and found beside the poll that owns the title. Only the
 //! owner is the poll the title names for a REMOVE (TryByTitle). A restart, the owner's removal and the removal's
@@ -908,10 +948,17 @@ BOOST_AUTO_TEST_CASE(from_v15_a_removal_by_txid_deletes_the_poll_it_names)
         BOOST_CHECK(!registry.IsStored(remove_unknown.tx.GetHash()));
     }
 
+    // The revert, in chain order: the two later REMOVEs, which stored nothing, then the removal.
+    registry.Revert({remove_unknown.contract, remove_unknown.tx, &index_again});
+    registry.Revert({remove_again.contract, remove_again.tx, &index_again});
     registry.Revert({remove.contract, remove.tx, &index_remove});
     LOCK(GRC::PollRegistry::cs_poll_registry);
     BOOST_CHECK(registry.TryByTxid(later.tx.GetHash()) != nullptr);
     BOOST_CHECK(!registry.IsStored(remove.tx.GetHash()));
+    BOOST_CHECK(registry.TitleOwner("title") == owner.tx.GetHash());
+    std::vector<uint256> found;
+    for (const GRC::PollReference* ref : registry.FindByTitle("title")) found.push_back(ref->Txid());
+    BOOST_CHECK(found == (std::vector<uint256> {owner.tx.GetHash(), later.tx.GetHash()}));
 }
 
 //!
@@ -1802,6 +1849,66 @@ BOOST_AUTO_TEST_CASE(a_poll_loaded_from_the_chain_links_votes_by_the_live_rule)
 
     BOOST_REQUIRE_EQUAL(ref->Votes().size(), 1U);
     BOOST_CHECK(ref->Votes().front() == in_window.GetHash());
+}
+
+//!
+//! A poll the historical lookup loads from the chain (a pre-V11 poll on mainnet) is shown and found beside a stored poll
+//! with its title key, in block order, and owns no title. From v15 a REMOVE by txid that names it stores nothing
+//! and leaves it shown: a REMOVE deletes only a poll the registry stores.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_loaded_from_the_chain_is_shown_beside_a_stored_poll_with_its_title)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const int64_t start = GetAdjustedTime() - 10 * 86400;
+    PollTx loaded = MakePollTx("Title", start);
+
+    // GetTransaction reads a transaction through its first output, and a poll
+    // transaction on the chain always has one.
+    CMutableTransaction loaded_mtx(loaded.tx);
+    loaded_mtx.vout.emplace_back(0, CScript() << OP_RETURN);
+    loaded.tx = CTransaction(loaded_mtx);
+
+    const LinkedTip tip = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {loaded.tx}, pindexGenesisBlock->nBits);
+    BOOST_REQUIRE_EQUAL(tip.m_tx_positions.size(), 1U);
+    const TxIndexScope loaded_indexed(loaded.tx, tip.m_tx_positions[0]);
+
+    // A stored poll with the same title key, from a later block.
+    const PollTx stored = MakePollTx(" TITLE", start + 60);
+    CBlockIndex index_stored = MakeBlockIndex(tip.m_pindex->nHeight + 1, start + 60);
+    registry.Add({stored.contract, stored.tx, &index_stored});
+
+    BOOST_REQUIRE(registry.TryByTxidWithAddHistoricalPollAndVotes(loaded.tx.GetHash()) != nullptr);
+
+    const auto found = [&] {
+        std::vector<uint256> txids;
+        for (const GRC::PollReference* ref : registry.FindByTitle("title")) txids.push_back(ref->Txid());
+        return txids;
+    };
+    const auto shown = [&] {
+        std::vector<uint256> txids;
+        for (const auto& iter : registry.Polls()) txids.push_back(iter->Ref().Txid());
+        return txids;
+    };
+    const std::vector<uint256> both {loaded.tx.GetHash(), stored.tx.GetHash()};
+
+    BOOST_CHECK(found() == both);
+    BOOST_CHECK(shown() == both);
+    BOOST_CHECK(!registry.IsStored(loaded.tx.GetHash()));
+    BOOST_CHECK(registry.TryByTitle("title") == registry.TryByTxid(stored.tx.GetHash()));
+    BOOST_CHECK(registry.TitleOwner("title") == stored.tx.GetHash());
+
+    CBlockIndex index_remove = MakeBlockIndex(tip.m_pindex->nHeight + 2, start + 120);
+    grc_test::V15HeightGuard v15(index_remove.nHeight);
+    const PollTx remove = MakeRemoveByTxidTx(loaded.tx.GetHash(), start + 120);
+    registry.Delete({remove.contract, remove.tx, &index_remove});
+
+    BOOST_CHECK(!registry.IsStored(remove.tx.GetHash()));
+    BOOST_CHECK(registry.TryByTxid(loaded.tx.GetHash()) != nullptr);
+    BOOST_CHECK(found() == both);
 }
 
 //!
