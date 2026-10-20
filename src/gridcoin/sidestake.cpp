@@ -40,7 +40,7 @@ Allocation::Allocation()
     : Fraction()
 {}
 
-Allocation::Allocation(const double& allocation)
+Allocation::Allocation(double allocation)
     : Fraction(static_cast<int64_t>(std::round(allocation * static_cast<double>(10000.0))), static_cast<int64_t>(10000), true)
 {}
 
@@ -48,11 +48,11 @@ Allocation::Allocation(const Fraction& f)
     : Fraction(f)
 {}
 
-Allocation::Allocation(const int64_t& numerator, const int64_t& denominator)
+Allocation::Allocation(int64_t numerator, int64_t denominator)
     : Fraction(numerator, denominator)
 {}
 
-Allocation::Allocation(const int64_t& numerator, const int64_t& denominator, const bool& simplify)
+Allocation::Allocation(int64_t numerator, int64_t denominator, bool simplify)
     : Fraction(numerator, denominator, simplify)
 {}
 
@@ -71,7 +71,7 @@ Allocation Allocation::operator+(const Allocation& rhs) const
     return static_cast<Allocation>(Fraction::operator+(rhs));
 }
 
-Allocation Allocation::operator+(const int64_t& rhs) const
+Allocation Allocation::operator+(int64_t rhs) const
 {
     return static_cast<Allocation>(Fraction::operator+(rhs));
 }
@@ -81,7 +81,7 @@ Allocation Allocation::operator-(const Allocation& rhs) const
     return static_cast<Allocation>(Fraction::operator-(rhs));
 }
 
-Allocation Allocation::operator-(const int64_t& rhs) const
+Allocation Allocation::operator-(int64_t rhs) const
 {
     return static_cast<Allocation>(Fraction::operator-(rhs));
 }
@@ -91,7 +91,7 @@ Allocation Allocation::operator*(const Allocation& rhs) const
     return static_cast<Allocation>(Fraction::operator*(rhs));
 }
 
-Allocation Allocation::operator*(const int64_t& rhs) const
+Allocation Allocation::operator*(int64_t rhs) const
 {
     return static_cast<Allocation>(Fraction::operator*(rhs));
 }
@@ -101,7 +101,7 @@ Allocation Allocation::operator/(const Allocation& rhs) const
     return static_cast<Allocation>(Fraction::operator/(rhs));
 }
 
-Allocation Allocation::operator/(const int64_t& rhs) const
+Allocation Allocation::operator/(int64_t rhs) const
 {
     return static_cast<Allocation>(Fraction::operator/(rhs));
 }
@@ -112,7 +112,7 @@ Allocation& Allocation::operator+=(const Allocation& rhs)
     return *this;
 }
 
-Allocation& Allocation::operator+=(const int64_t& rhs)
+Allocation& Allocation::operator+=(int64_t rhs)
 {
     Fraction::operator+=(rhs);
     return *this;
@@ -124,7 +124,7 @@ Allocation& Allocation::operator-=(const Allocation& rhs)
     return *this;
 }
 
-Allocation& Allocation::operator-=(const int64_t& rhs)
+Allocation& Allocation::operator-=(int64_t rhs)
 {
     Fraction::operator-=(rhs);
     return *this;
@@ -136,7 +136,7 @@ Allocation& Allocation::operator*=(const Allocation& rhs)
     return *this;
 }
 
-Allocation& Allocation::operator*=(const int64_t& rhs)
+Allocation& Allocation::operator*=(int64_t rhs)
 {
     Fraction::operator*=(rhs);
     return *this;
@@ -148,7 +148,7 @@ Allocation& Allocation::operator/=(const Allocation& rhs)
     return *this;
 }
 
-Allocation& Allocation::operator/=(const int64_t& rhs)
+Allocation& Allocation::operator/=(int64_t rhs)
 {
     Fraction::operator/=(rhs);
     return *this;
@@ -184,32 +184,32 @@ bool Allocation::operator>(const Allocation& rhs) const
     return Fraction::operator>(rhs);
 }
 
-bool Allocation::operator==(const int64_t& rhs) const
+bool Allocation::operator==(int64_t rhs) const
 {
     return Fraction::operator==(rhs);
 }
 
-bool Allocation::operator!=(const int64_t& rhs) const
+bool Allocation::operator!=(int64_t rhs) const
 {
     return Fraction::operator!=(rhs);
 }
 
-bool Allocation::operator<=(const int64_t& rhs) const
+bool Allocation::operator<=(int64_t rhs) const
 {
     return Fraction::operator<=(rhs);
 }
 
-bool Allocation::operator>=(const int64_t& rhs) const
+bool Allocation::operator>=(int64_t rhs) const
 {
     return Fraction::operator>=(rhs);
 }
 
-bool Allocation::operator<(const int64_t& rhs) const
+bool Allocation::operator<(int64_t rhs) const
 {
     return Fraction::operator<(rhs);
 }
 
-bool Allocation::operator>(const int64_t& rhs) const
+bool Allocation::operator>(int64_t rhs) const
 {
     return Fraction::operator>(rhs);
 }

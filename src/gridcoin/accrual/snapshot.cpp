@@ -45,6 +45,28 @@ CAmount SnapshotAccrualComputer::MaxReward() const
     // ...rounded-up to 16384.
     //
     // For V13+, the magnitude unit can be set by protocol entry.
+    //
+    // Overflow analysis for the Fraction arithmetic below, which is int64_t.
+    //
+    // GetMagnitudeUnit() parses the "magnitudeunit" protocol entry as a fraction
+    // string, reduces it and clamps its value to at most 5. Only the value is
+    // clamped. The representation is whatever the entry holds, and in practice
+    // that is a decimal: "103050/100000" (2061/2000 reduced) was in force when
+    // this was written. Each multiplication cancels its integer against the
+    // denominator before multiplying, and 32768 * 2 * COIN = 2^24 * 5^8 absorbs
+    // every two and five a decimal denominator 10^k has, so the product formed
+    // is at most about v * 2^24 * 5^8 <= 5 * 6.5536e12, under 2^45, whatever k
+    // is up to 8. Past that the entry's own digits set the size: with k decimal
+    // places and p < 5 * 10^k, the last step multiplies p * 2^(16 - k), about
+    // 2.32 k + 18 bits, by 2^8, which the 63-bit guard admits for every p
+    // through k = 15. At k = 16 an entry near the clamp has p * 2^8 above
+    // INT64_MAX, so no int64_t evaluation order could hold it; smaller values
+    // still pass.
+    // A denominator with a prime factor other than two or five keeps that
+    // factor in the chain; the guard then admits reduced numerators below 2^20.
+    // util_fraction_tests.cpp pins these points, and a protocol entry that
+    // this arithmetic cannot take is the validator's problem, not this
+    // function's: see the Fraction class comment on the guard.
     return (GetMagnitudeUnit() * 32768 * 2 * COIN).ToCAmount();
 }
 
