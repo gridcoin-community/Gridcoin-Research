@@ -368,6 +368,87 @@ public:
 }; // ProtocolEntryPayload
 
 //!
+//! \brief The largest numerator or denominator, after reduction, that a
+//! "magnitudeunit" or "magnitudeweightfactor" protocol entry may carry from
+//! block version 15. See CheckMagnitudeEntryValue().
+//!
+//! Both entries are fractions parsed from a string, and the string's
+//! representation, not only its value, reaches 64-bit consensus arithmetic.
+//! The consumers clamp the value but not the representation. With p and q the
+//! reduced numerator and denominator, each at most 10^6, here is every
+//! consumer and what the bound buys it (the consumers see the clamped value,
+//! whose terms are no larger):
+//!
+//!   magnitudeunit, clamp to MaxMagnitudeUnit (SnapshotCalculator::
+//!   GetMagnitudeUnit()): u > 5 forms 5 q, about 5e6. The Fraction guard
+//!   would allow q up to about 2^60.
+//!
+//!   magnitudeunit, SnapshotAccrualComputer::MaxReward(): u * 32768 * 2 * COIN
+//!   in Fraction arithmetic. With no cancellation (q coprime to 10) the last
+//!   step multiplies p * 2^16 by COIN, which has 27 bits, so the 63-bit guard
+//!   holds for any q while p < 2^20 = 1,048,576.
+//!
+//!   magnitudeunit, SnapshotCalculator::AccrualDelta(): timespan * scaled
+//!   magnitude * p in SIGNED int64, with no fallback (only the later * COIN
+//!   step goes to 256 bits). Worst case: a superblock 7 days old and a CPID
+//!   at the magnitude cap, 32,767 (scaled 3,276,700): 604,800 * 3,276,700 *
+//!   10^6 = 1.98e18, 4.65 times under 2^63, so the product holds for a
+//!   superblock up to 32 days old. The longest mainnet superblock gap
+//!   since December 2019 is 1.4 days.
+//!
+//!   magnitudeweightfactor, clamp to [MinMagnitudeWeightFactor,
+//!   MaxMagnitudeWeightFactor] (Poll::ResolveMagnitudeWeightFactor()): forms
+//!   10 q and q, at most 10^7. The guard would allow q up to about 2^59.
+//!
+//!   magnitudeweightfactor, the vote weight per unit of magnitude
+//!   (EnableMagnitudeWeight() in voting/result.cpp): (supply / total
+//!   magnitude) * p / q in UINT64, wrapping without notice. Worst case:
+//!   supply at MAX_MONEY, 2e9 GRC, over a total magnitude of 32,767, which is
+//!   one participant at the cap with one active project. Total magnitude is
+//!   essentially fixed at 115,000 and falls below it only through CPIDs at
+//!   the cap, because each converged project gets an equal share of the
+//!   network magnitude and the cap is applied without renormalizing.
+//!   6,103,701,895,199 * 10^6 = 6.10e18, 3.02 times under 2^64.
+//!
+//!   magnitudeweightfactor, the active vote weight (PollReference::
+//!   GetActiveVoteWeight()): arith_uint256, cannot overflow.
+//!
+//! Both worst cases assume the scraper's defaults NETWORK_MAGNITUDE = 115,000
+//! and CPID_MAG_LIMIT = 32,767, which are themselves administrative protocol
+//! entries. The integer products are checked by static_asserts at the
+//! consumers, and the Fraction expressions at the bound by
+//! util_fraction_tests.cpp.
+//!
+//! A bound on the numerator alone would not do: 1 / (2^60 + 1) has a small
+//! numerator and makes both clamps throw, which would stop every node in
+//! block validation. Every entry made through 2026-10-20, on mainnet and
+//! testnet, satisfies the bound; the largest terms on record are 618,034 and
+//! 1,000,000 as entered. Entries accepted before version 15 activates are not
+//! judged again.
+//!
+static constexpr int64_t MAX_MAGNITUDE_ENTRY_TERM = 1000000;
+
+//!
+//! \brief Whether \p key names a protocol entry whose value must satisfy
+//! CheckMagnitudeEntryValue() from block version 15. The match is exact, as
+//! the consumers' lookups are.
+//!
+bool IsMagnitudeProtocolKey(const std::string& key);
+
+//!
+//! \brief Check the value of a "magnitudeunit" or "magnitudeweightfactor"
+//! protocol entry: it must parse as a fraction, be positive, and have a
+//! reduced numerator and denominator of at most MAX_MAGNITUDE_ENTRY_TERM.
+//! Values beyond the consumers' clamp ranges pass; the consumers clamp them.
+//!
+//! \param value The entry's value string, "n/d" or "n".
+//! \param error Set to the reason when the value fails.
+//!
+//! \return \c true if the value passes.
+//!
+bool CheckMagnitudeEntryValue(const std::string& value, std::string& error);
+
+//!
 //! \brief Stores and manages protocol entries.
 //!
 class ProtocolRegistry : public IContractHandler
@@ -490,14 +571,15 @@ public:
     //! \param tx       Transaction that contains the contract.
     //! \param DoS      Misbehavior out.
     //!
-    //! \return \c true if the contract contains a valid protocol entry.
+    //! \return \c true if the contract contains a valid protocol entry. Judged at the next height after the
+    //! tip, the height the transaction would be mined at.
     //!
     bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a protocol entry contract is valid including block context. This is used
-    //! in ConnectBlock. Note that for protocol entries this simply calls Validate as there is no
-    //! block level specific validation to be done.
+    //! in ConnectBlock. It applies the same rules as Validate, judged at the height of the block rather than
+    //! at the next height after the tip.
     //!
     //! \param ctx ContractContext containing the protocol entry data to validate.
     //! \param DoS Misbehavior score out.
@@ -600,6 +682,18 @@ private:
     //! \param ctx The contract context for the add or delete.
     //!
     void AddDelete(const ContractContext& ctx);
+
+    //!
+    //! \brief The rules Validate and BlockValidate share, judged as of \p height. From block version 15 an
+    //! ADD of a magnitude entry (IsMagnitudeProtocolKey) must also pass CheckMagnitudeEntryValue.
+    //!
+    //! \param contract Contains the protocol entry contract to validate.
+    //! \param height   Height of the block the contract is in, or would be mined in.
+    //! \param DoS      Misbehavior score out.
+    //!
+    //! \return \c true if the contract passes.
+    //!
+    bool ValidateAtHeight(const Contract& contract, const int height, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     ProtocolEntryMap m_protocol_entries GUARDED_BY(cs_lock);                   //!< Contains the current protocol entries including entries marked DELETED.
     PendingProtocolEntryMap m_pending_protocol_entries GUARDED_BY(cs_lock) {}; //!< Not used. Only to satisfy the template.

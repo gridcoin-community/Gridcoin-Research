@@ -2,8 +2,11 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chain.h"
+#include "chainparams.h"
 #include "gridcoin/protocol.h"
 #include "node/ui_interface.h"
+#include "util/fraction.h"
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
@@ -19,6 +22,37 @@ ProtocolRegistry g_protocol_entries;
 ProtocolRegistry& GRC::GetProtocolRegistry()
 {
     return g_protocol_entries;
+}
+
+bool GRC::IsMagnitudeProtocolKey(const std::string& key)
+{
+    return key == "magnitudeunit" || key == "magnitudeweightfactor";
+}
+
+bool GRC::CheckMagnitudeEntryValue(const std::string& value, std::string& error)
+{
+    Fraction fraction;
+
+    // FromString throws std::out_of_range for a string that does not parse,
+    // a zero denominator and INT64_MIN. It returns the fraction reduced.
+    try {
+        fraction = Fraction::FromString(value);
+    } catch (const std::out_of_range&) {
+        error = "not a fraction";
+        return false;
+    }
+
+    if (!fraction.IsPositive()) {
+        error = "not positive";
+        return false;
+    }
+
+    if (fraction.GetNumerator() > MAX_MAGNITUDE_ENTRY_TERM || fraction.GetDenominator() > MAX_MAGNITUDE_ENTRY_TERM) {
+        error = strprintf("reduced to %s, a term exceeds %d", fraction.ToString(), MAX_MAGNITUDE_ENTRY_TERM);
+        return false;
+    }
+
+    return true;
 }
 
 // -----------------------------------------------------------------------------
@@ -512,6 +546,16 @@ void ProtocolRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
 
 bool ProtocolRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    return ValidateAtHeight(contract, nBestHeight + 1, DoS);
+}
+
+bool ProtocolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    return ValidateAtHeight(ctx.m_contract, ctx.m_pindex->nHeight, DoS);
+}
+
+bool ProtocolRegistry::ValidateAtHeight(const Contract& contract, const int height, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
     if (contract.m_version < 1) {
         return true;
     }
@@ -530,12 +574,23 @@ bool ProtocolRegistry::Validate(const Contract& contract, const CTransaction& tx
         return false;
     }
 
-    return true;
-}
+    // Entries accepted before version 15 are not judged again: the rule applies from the height it activates.
+    std::string reason;
 
-bool ProtocolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    return Validate(ctx.m_contract, ctx.m_tx, DoS);
+    if (IsV15Enabled(height)
+        && contract.m_action == ContractAction::ADD
+        && IsMagnitudeProtocolKey(payload->m_entry.m_key)
+        && !CheckMagnitudeEntryValue(payload->m_entry.m_value, reason)) {
+        DoS = 25;
+        error("%s: Protocol entry %s = %s refused: %s",
+              __func__,
+              payload->m_entry.m_key,
+              payload->m_entry.m_value,
+              reason);
+        return false;
+    }
+
+    return true;
 }
 
 int ProtocolRegistry::Initialize()
