@@ -22,6 +22,7 @@
 #include "init.h"
 #include "node/blockstorage.h"
 
+#include <algorithm>
 #include <limits>
 #include <map>
 #include <optional>
@@ -644,6 +645,11 @@ private:
     //! which the beacon registry does not hold, is in force for 14 days after
     //! block version 11, as it was then.
     //!
+    //! Where the walk reaches the start of the current beacon's chain, or
+    //! the CPID has no beacon, it continues past the CPID's revocations
+    //! (AcrossRevocations): a revocation at or before the vote's block means
+    //! no key was in force, and decides.
+    //!
     //! The CPID's beacon entries are read as they stand when the poll is
     //! tallied. Once the tally's tip is past the poll's end, if the CPID has no
     //! beacon, or the first key of its current beacon was verified after the
@@ -658,7 +664,7 @@ private:
     //! \param vote_pos         Where the transaction that contains the vote is.
     //!
     //! \throws InvalidVoteError If the vote's block, or the block of a beacon
-    //! advertisement it looks up, cannot be read.
+    //! advertisement or revocation it looks up, cannot be read.
     //!
     bool BeaconKeyInForce(
         const Cpid& cpid,
@@ -687,6 +693,10 @@ private:
 
         if (const std::optional<bool> in_force =
                 KeyInForce(current, key, vote_height, vote_time, &first_verified, &beacon_txid)) {
+            return *in_force;
+        }
+
+        if (const std::optional<bool> in_force = AcrossRevocations(cpid, beacon_txid, key, vote_height, vote_time)) {
             return *in_force;
         }
 
@@ -794,6 +804,65 @@ private:
             }
 
             entry = beacons.FindHistorical(entry->m_previous_hash);
+        }
+
+        return std::nullopt;
+    }
+
+    //!
+    //! \brief Continue the key-in-force walk past a CPID's revocations.
+    //!
+    //! An advertisement made after a revocation is not linked to the CPID's
+    //! earlier entries, so the walk from the current beacon, or from none when
+    //! the CPID has no beacon, stops at the start of its chain. Taken newest
+    //! first, a revocation at or before the vote's block means no key was in
+    //! force at the vote; one after it continues the walk into the chain it
+    //! removed. A revocation's block is read through the transaction index, on
+    //! the main chain only. A revocation that removed no beacon continues into
+    //! nothing.
+    //!
+    //! \return Nothing if no revocation decides.
+    //!
+    std::optional<bool> AcrossRevocations(
+        const Cpid& cpid,
+        const uint256& beacon_txid,
+        const CPubKey& key,
+        const int vote_height,
+        const int64_t vote_time) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        BeaconRegistry& beacons = GetBeaconRegistry();
+        const std::vector<Beacon_ptr> deleted = beacons.DeletedEntries(cpid);
+        std::vector<std::pair<int, Beacon_ptr>> revocations;
+
+        // The newest record first, so that within a block the later revocation comes first.
+        for (auto iter = deleted.rbegin(); iter != deleted.rend(); ++iter) {
+            CTxIndex tx_index;
+
+            if (!m_txdb.ReadTxIndex((*iter)->m_hash, tx_index)) {
+                continue;
+            }
+
+            if (const std::optional<int> height = MainChainHeight(ReadHeader(tx_index.pos))) {
+                revocations.emplace_back(*height, *iter);
+            }
+        }
+
+        std::stable_sort(revocations.begin(), revocations.end(),
+                         [](const auto& a, const auto& b) { return a.first > b.first; });
+
+        for (const auto& [height, revocation] : revocations) {
+            if (height <= vote_height) {
+                return false;
+            }
+
+            const Beacon_ptr removed = revocation->m_previous_hash.IsNull()
+                ? nullptr
+                : beacons.FindHistorical(revocation->m_previous_hash);
+
+            if (const std::optional<bool> in_force =
+                    KeyInForce(removed, key, vote_height, vote_time, nullptr, &beacon_txid)) {
+                return in_force;
+            }
         }
 
         return std::nullopt;
