@@ -71,6 +71,14 @@ bool static LookupIntern(const char *pszName, std::vector<CNetAddr>& vIP, unsign
 #endif
     struct addrinfo *aiRes = nullptr;
     int nErr = getaddrinfo(pszName, nullptr, &aiHint, &aiRes);
+#ifndef WIN32
+    if (nErr && fAllowLookup) {
+        // AI_ADDRCONFIG can reject numeric IPv6 addresses on IPv4-only hosts.
+        // Retry numeric parsing only, preserving hostname lookup behavior.
+        aiHint.ai_flags = AI_NUMERICHOST;
+        nErr = getaddrinfo(pszName, nullptr, &aiHint, &aiRes);
+    }
+#endif
     if (nErr)
         return false;
 

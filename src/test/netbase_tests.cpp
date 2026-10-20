@@ -52,6 +52,29 @@ BOOST_AUTO_TEST_CASE(netbase_networks)
     BOOST_CHECK(CreateInternal("foo.com").GetNetwork()                           == NET_INTERNAL);
 }
 
+BOOST_AUTO_TEST_CASE(netbase_lookup_numeric)
+{
+    // Run with and without configured IPv6: allowing DNS must not prevent
+    // numeric literals from being decoded by LookupHost or Lookup.
+    for (const char* ip : {"127.0.0.1", "2001:db8::1", "fc00:1:2:3:4:5:6:7"}) {
+        const CNetAddr expected = ResolveIP(ip);
+        for (const bool allow_lookup : {false, true}) {
+            CNetAddr addr;
+            BOOST_REQUIRE(LookupHost(ip, addr, allow_lookup));
+            BOOST_CHECK(addr == expected);
+            CService service;
+            BOOST_REQUIRE(Lookup(ip, service, 32749, allow_lookup));
+            BOOST_CHECK(static_cast<const CNetAddr&>(service) == expected);
+            BOOST_CHECK_EQUAL(service.GetPort(), 32749);
+        }
+    }
+
+    CNetAddr addr;
+    BOOST_CHECK(!LookupHost("localhost", addr, false));
+    BOOST_REQUIRE(LookupHost("localhost", addr, true));
+    BOOST_CHECK(addr.IsLocal());
+}
+
 BOOST_AUTO_TEST_CASE(netbase_properties)
 {
     BOOST_CHECK(ResolveIP("127.0.0.1").IsIPv4());
