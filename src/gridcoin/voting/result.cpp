@@ -1340,18 +1340,26 @@ public:
 
         // Use integer arithmetic to avoid floating-point discrepancies:
 
-        // Overflow analysis:
+        // Overflow analysis. This is uint64_t arithmetic and wraps without
+        // notice, so the bound has to come from the inputs.
         //
-        // Current supply as of block 3404576 = 493424753.
-        // network magnitude = 115000
-        // max value for uint64_t = 2^64 - 1
+        // supply is in units of 1/100000000 GRC (see \param supply), and
+        // supply / total_mag is multiplied by the weight factor's numerator
+        // before the division. At block 4114587 (supply 540,405,134 GRC, total
+        // magnitude 114,987) that leaves room for a numerator of 39,250,843.
         //
-        // 2^64 - 1 >= (493424753 / 115000) * mwf numerator
-        //
-        // This means mwf numerator <= (2^64 - 1) * (115000 / 493424753)
-        //                         ~<= 4.3E15
-        // Even if money supply is approximately doubled we can safely handle 2E15, which means 15 decimal
-        // places in the fraction numerator
+        // From block version 15 the protocol registry refuses a
+        // "magnitudeweightfactor" entry whose reduced numerator or denominator
+        // exceeds MAX_MAGNITUDE_ENTRY_TERM (10^6), and every entry made through
+        // 2026-10-20 is inside that bound. The worst case is supply at MAX_MONEY over
+        // a total magnitude of 32,767, one participant at the magnitude cap with
+        // one active project: total magnitude is essentially fixed at 115,000
+        // and falls below it only through CPIDs at the cap. That product is
+        // 6.10e18, 3.02 times under 2^64, and the static_assert holds it. See
+        // the analysis at MAX_MAGNITUDE_ENTRY_TERM in protocol.h.
+        static_assert(static_cast<uint64_t>(MAX_MONEY) / Magnitude::MAX
+                          <= std::numeric_limits<uint64_t>::max() / MAX_MAGNITUDE_ENTRY_TERM,
+                      "the vote weight per magnitude must fit uint64_t at the weight factor entry bound");
         m_magnitude_factor = supply / total_mag
                              * (uint64_t) m_poll.m_magnitude_weight_factor.GetNumerator()
                              / (uint64_t) m_poll.m_magnitude_weight_factor.GetDenominator();
