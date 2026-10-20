@@ -1024,8 +1024,25 @@ bool SideStakeRegistry::ValidateAtHeight(const Contract& contract, const int hei
     // protocol must be rejected. Note that this is not a perfect validation, because there could be more than one sidestake
     // contract transaction in the memory pool, and this is using already committed sidestake contracts (i.e. in blocks already
     // accepted) as a basis.
-    if (GetMandatoryAllocationsTotal() + allocation > Params().GetConsensus().MaxMandatorySideStakeTotalAlloc) {
+    //
+    // Before version 15 the contract's allocation is added to the active total whatever the action or destination, so an
+    // ADD that changes a destination's allocation counted the old one too, and a REMOVE that carried its allocation counted
+    // it twice. From version 15 an ADD is judged on the total it would leave, with its destination's current allocation
+    // replaced, and a REMOVE, which cannot raise the total, is not judged on it.
+    const Allocation max_total = Params().GetConsensus().MaxMandatorySideStakeTotalAlloc;
+
+    if (!IsV15Enabled(height)) {
+        if (GetMandatoryAllocationsTotal() + allocation > max_total) {
+            DoS = 25;
+            return false;
+        }
+    } else if (contract.m_action == ContractAction::ADD
+               && GetMandatoryAllocationsTotalExcept(payload->m_entry.m_destination) + allocation > max_total) {
         DoS = 25;
+        error("%s: Mandatory sidestake allocation %s would raise the total above %s",
+              __func__,
+              allocation.ToString(),
+              max_total.ToString());
         return false;
     }
 
@@ -1352,6 +1369,20 @@ Allocation SideStakeRegistry::GetMandatoryAllocationsTotal() const
 
     for (const auto& entry : sidestakes) {
         allocation_total += entry->GetAllocation();
+    }
+
+    return allocation_total;
+}
+
+Allocation SideStakeRegistry::GetMandatoryAllocationsTotalExcept(const CTxDestination& destination) const
+{
+    std::vector<SideStake_ptr> sidestakes = ActiveSideStakeEntries(SideStake::FilterFlag::MANDATORY, false);
+    Allocation allocation_total;
+
+    for (const auto& entry : sidestakes) {
+        if (entry->GetDestination() != destination) {
+            allocation_total += entry->GetAllocation();
+        }
     }
 
     return allocation_total;

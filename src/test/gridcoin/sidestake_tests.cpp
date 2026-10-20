@@ -675,6 +675,36 @@ SideStakeVerdict JudgeSideStakeAt(const GRC::Contract& contract, const int heigh
     return verdict;
 }
 
+//! Commit a mandatory sidestake to the registry as connecting a block at \p height would.
+void CommitSideStake(const CTxDestination& destination, const GRC::Allocation& allocation, const int height)
+{
+    LOCK(cs_main);
+
+    const GRC::Contract contract = MakeSideStakeContract(GRC::ContractAction::ADD, destination, allocation);
+
+    CMutableTransaction mtx;
+    mtx.vContracts.push_back(contract);
+    const CTransaction tx(mtx);
+
+    CBlockIndex index {};
+    index.nHeight = height;
+
+    GRC::GetSideStakeRegistry().Add({contract, tx, &index});
+}
+
+//! Check the verdict on both paths: a pass on both, or a refusal with DoS 25 on both.
+void ExpectSideStakeVerdict(const GRC::Contract& contract, const int height, const bool pass, const std::string& what)
+{
+    const SideStakeVerdict verdict = JudgeSideStakeAt(contract, height);
+
+    if (pass) {
+        BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, what);
+    } else {
+        BOOST_CHECK_MESSAGE(!verdict.mempool && verdict.mempool_dos == 25, what << " (mempool)");
+        BOOST_CHECK_MESSAGE(!verdict.block && verdict.block_dos == 25, what << " (block)");
+    }
+}
+
 // Heights above BlockV13Height (the unit tests run on main params), which the sidestake block path requires.
 constexpr int V15_TEST_HEIGHT = 4'200'000;
 constexpr int BELOW_V15 = V15_TEST_HEIGHT - 1;
@@ -731,6 +761,78 @@ BOOST_AUTO_TEST_CASE(sidestake_v15_allocation_rules)
     const SideStakeVerdict verdict = JudgeSideStakeAt(
         MakeSideStakeContract(GRC::ContractAction::ADD, destination, lying_flag), V15_TEST_HEIGHT);
     BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, "ADD 2/20000 with the flag set at v15");
+}
+
+
+// The total check counts each destination once from v15: an ADD for a destination that already has an active
+// allocation is judged on the total it would leave, and a REMOVE never raises the total. Below v15 the old check
+// stands, which adds the contract's allocation to the active total whatever the action or destination.
+BOOST_AUTO_TEST_CASE(sidestake_v15_total_counts_destination_once)
+{
+    grc_test::StateGuard state_guard; // nBestHeight
+    grc_test::V15HeightGuard v15(V15_TEST_HEIGHT);
+
+    const CTxDestination a = SideStakeDestination(0x41);
+    const CTxDestination b = SideStakeDestination(0x42);
+    const CTxDestination c = SideStakeDestination(0x43);
+    const int committed_at = 4'000'000;
+
+    {
+        // Active: A 1/10.
+        grc_test::RegistryReset reset({GRC::ContractType::SIDESTAKE});
+        CommitSideStake(a, GRC::Allocation(1, 10), committed_at);
+
+        const GRC::Contract raise_a = MakeSideStakeContract(GRC::ContractAction::ADD, a, GRC::Allocation(1, 5));
+        ExpectSideStakeVerdict(raise_a, BELOW_V15, false, "raise A to 1/5 below v15 (counts 3/10)");
+        ExpectSideStakeVerdict(raise_a, V15_TEST_HEIGHT, true, "raise A to 1/5 at v15 (leaves 1/5)");
+
+        const GRC::Contract add_b = MakeSideStakeContract(GRC::ContractAction::ADD, b, GRC::Allocation(1, 5));
+        ExpectSideStakeVerdict(add_b, BELOW_V15, false, "add B 1/5 below v15 (3/10)");
+        ExpectSideStakeVerdict(add_b, V15_TEST_HEIGHT, false, "add B 1/5 at v15 (3/10)");
+
+        // Landing exactly on the 1/4 ceiling is allowed.
+        const GRC::Contract add_b_to_ceiling = MakeSideStakeContract(GRC::ContractAction::ADD, b, GRC::Allocation(3, 20));
+        ExpectSideStakeVerdict(add_b_to_ceiling, BELOW_V15, true, "add B 3/20 below v15 (exactly 1/4)");
+        ExpectSideStakeVerdict(add_b_to_ceiling, V15_TEST_HEIGHT, true, "add B 3/20 at v15 (exactly 1/4)");
+
+        const GRC::Contract raise_a_to_ceiling = MakeSideStakeContract(GRC::ContractAction::ADD, a, GRC::Allocation(1, 4));
+        ExpectSideStakeVerdict(raise_a_to_ceiling, BELOW_V15, false, "raise A to 1/4 below v15 (counts 7/20)");
+        ExpectSideStakeVerdict(raise_a_to_ceiling, V15_TEST_HEIGHT, true, "raise A to 1/4 at v15 (leaves exactly 1/4)");
+    }
+
+    {
+        // Active: A 1/10, B 1/10.
+        grc_test::RegistryReset reset({GRC::ContractType::SIDESTAKE});
+        CommitSideStake(a, GRC::Allocation(1, 10), committed_at);
+        CommitSideStake(b, GRC::Allocation(1, 10), committed_at);
+
+        const GRC::Contract remove_a_carrying = MakeSideStakeContract(GRC::ContractAction::REMOVE, a, GRC::Allocation(1, 10));
+        ExpectSideStakeVerdict(remove_a_carrying, BELOW_V15, false, "remove A carrying 1/10 below v15 (counts 3/10)");
+        ExpectSideStakeVerdict(remove_a_carrying, V15_TEST_HEIGHT, true, "remove A carrying 1/10 at v15");
+
+        const GRC::Contract remove_a = MakeSideStakeContract(GRC::ContractAction::REMOVE, a, GRC::Allocation(0, 1));
+        ExpectSideStakeVerdict(remove_a, BELOW_V15, true, "remove A with 0 below v15");
+        ExpectSideStakeVerdict(remove_a, V15_TEST_HEIGHT, true, "remove A with 0 at v15");
+    }
+
+    {
+        // Active: A 1/10, B 3/20, exactly the 1/4 ceiling.
+        grc_test::RegistryReset reset({GRC::ContractType::SIDESTAKE});
+        CommitSideStake(a, GRC::Allocation(1, 10), committed_at);
+        CommitSideStake(b, GRC::Allocation(3, 20), committed_at);
+
+        const GRC::Contract remove_a = MakeSideStakeContract(GRC::ContractAction::REMOVE, a, GRC::Allocation(0, 1));
+        ExpectSideStakeVerdict(remove_a, V15_TEST_HEIGHT, true, "remove A with 0 at the ceiling at v15");
+
+        // addkey puts whatever allocation it is given on a REMOVE. Not judged on the total from v15.
+        const GRC::Contract remove_a_large = MakeSideStakeContract(GRC::ContractAction::REMOVE, a, GRC::Allocation(1, 5));
+        ExpectSideStakeVerdict(remove_a_large, BELOW_V15, false, "remove A carrying 1/5 at the ceiling below v15");
+        ExpectSideStakeVerdict(remove_a_large, V15_TEST_HEIGHT, true, "remove A carrying 1/5 at the ceiling at v15");
+
+        const GRC::Contract add_c = MakeSideStakeContract(GRC::ContractAction::ADD, c, GRC::Allocation(1, 10000));
+        ExpectSideStakeVerdict(add_c, BELOW_V15, false, "add C 1/10000 at the ceiling below v15");
+        ExpectSideStakeVerdict(add_c, V15_TEST_HEIGHT, false, "add C 1/10000 at the ceiling at v15");
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

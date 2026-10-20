@@ -937,7 +937,8 @@ private:
     //!
     //! \brief The rules Validate and BlockValidate share, judged as of \p height. From block version 15 an ADD
     //! must also carry a positive allocation whose reduced denominator divides 10000, the form Allocation(double)
-    //! builds.
+    //! builds, and the total-allocation check counts an ADD's destination once, replacing its current allocation,
+    //! and does not judge a REMOVE.
     //!
     //! \param contract Contains the sidestake entry contract to validate.
     //! \param height   Height of the block the contract is in, or would be mined in.
@@ -960,6 +961,16 @@ private:
     //! \return total active mandatory sidestake allocation as a Fraction.
     //!
     Allocation GetMandatoryAllocationsTotal() const;
+
+    //!
+    //! \brief The total allocation of the active mandatory sidestakes other than \p destination's: the total an
+    //! ADD for \p destination would replace its own allocation in.
+    //!
+    //! \param destination The destination whose active allocation, if any, is left out.
+    //!
+    //! \return The sum, over the same entries GetMandatoryAllocationsTotal() sums, of all but \p destination's.
+    //!
+    Allocation GetMandatoryAllocationsTotalExcept(const CTxDestination& destination) const;
 
     void SubscribeToCoreSignals();
     void UnsubscribeFromCoreSignals();
