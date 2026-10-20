@@ -6,15 +6,24 @@
 
 #include "test/state_guard.h"
 
+#include <chain.h>
 #include <util.h>
+#include <gridcoin/contract/contract.h>
 #include <gridcoin/sidestake.h>
 #include <interfaces/sidestake.h>
 #include <key_io.h>
 #include <node/ui_interface.h>
+#include <streams.h>
+#include <sync.h>
+#include <version.h>
 
 #include <boost/signals2/connection.hpp>
 
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace {
 //! Makes settings-file writes fail while it is alive. WriteSettingsFile() writes
@@ -606,6 +615,122 @@ BOOST_AUTO_TEST_CASE(sidestake_throwing_save_rolls_back_and_clears_the_flag)
 
     BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
     BOOST_CHECK(getRwSetting("sidestake_reload_probe").isNull());
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+namespace {
+//! A mandatory sidestake contract in the form addkey builds: contract v3, payload v1.
+GRC::Contract MakeSideStakeContract(const GRC::ContractAction action,
+                                    const CTxDestination& destination,
+                                    const GRC::Allocation& allocation)
+{
+    return GRC::MakeContract<GRC::SideStakePayload>(
+                uint32_t {3},
+                action,
+                uint32_t {1},
+                destination,
+                allocation,
+                std::string {},
+                GRC::MandatorySideStake::MandatorySideStakeStatus::MANDATORY);
+}
+
+//! A destination built from a hash rather than a literal address, so the test does not depend on chain params.
+CTxDestination SideStakeDestination(const unsigned char first_byte)
+{
+    uint160 hash;
+    *(hash.begin()) = first_byte;
+    return CKeyID(hash);
+}
+
+//! The registry's verdict on a contract that would be mined at \p height, through the mempool path (which judges
+//! at nBestHeight + 1) and through the block path.
+struct SideStakeVerdict
+{
+    bool mempool = false;
+    int mempool_dos = 0;
+    bool block = false;
+    int block_dos = 0;
+};
+
+SideStakeVerdict JudgeSideStakeAt(const GRC::Contract& contract, const int height)
+{
+    LOCK(cs_main);
+
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+    CMutableTransaction mtx;
+    mtx.vContracts.push_back(contract);
+    const CTransaction tx(mtx);
+
+    SideStakeVerdict verdict;
+
+    nBestHeight = height - 1;
+    verdict.mempool = registry.Validate(contract, tx, verdict.mempool_dos);
+
+    CBlockIndex index {};
+    index.nHeight = height;
+    verdict.block = registry.BlockValidate({contract, tx, &index}, verdict.block_dos);
+
+    return verdict;
+}
+
+// Heights above BlockV13Height (the unit tests run on main params), which the sidestake block path requires.
+constexpr int V15_TEST_HEIGHT = 4'200'000;
+constexpr int BELOW_V15 = V15_TEST_HEIGHT - 1;
+} // namespace
+
+BOOST_AUTO_TEST_SUITE(sidestake_v15_validation_tests,
+                      *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::SIDESTAKE>>())
+
+// From v15 a mandatory sidestake ADD needs a positive allocation whose reduced denominator divides 10000, which is
+// what Allocation(double) builds. The same contracts pass below v15, a REMOVE is unaffected, and the reduction is
+// computed from the pair rather than taken from the simplified flag the wire carries.
+BOOST_AUTO_TEST_CASE(sidestake_v15_allocation_rules)
+{
+    grc_test::StateGuard state_guard; // nBestHeight
+    grc_test::V15HeightGuard v15(V15_TEST_HEIGHT);
+
+    const CTxDestination destination = SideStakeDestination(0x31);
+
+    for (const auto& [num, den] : std::vector<std::pair<int64_t, int64_t>> {{1, 7}, {1, 9}, {0, 1}}) {
+        const GRC::Contract contract = MakeSideStakeContract(GRC::ContractAction::ADD, destination, GRC::Allocation(num, den));
+
+        const SideStakeVerdict before = JudgeSideStakeAt(contract, BELOW_V15);
+        BOOST_CHECK_MESSAGE(before.mempool && before.block, "ADD " << num << "/" << den << " below v15");
+
+        const SideStakeVerdict after = JudgeSideStakeAt(contract, V15_TEST_HEIGHT);
+        BOOST_CHECK_MESSAGE(!after.mempool && after.mempool_dos == 25, "ADD " << num << "/" << den << " mempool at v15");
+        BOOST_CHECK_MESSAGE(!after.block && after.block_dos == 25, "ADD " << num << "/" << den << " block at v15");
+    }
+
+    for (const auto& [num, den] : std::vector<std::pair<int64_t, int64_t>> {{1, 10}, {25, 10000}, {2, 20}}) {
+        const GRC::Contract contract = MakeSideStakeContract(GRC::ContractAction::ADD, destination, GRC::Allocation(num, den));
+
+        for (const int height : {BELOW_V15, V15_TEST_HEIGHT}) {
+            const SideStakeVerdict verdict = JudgeSideStakeAt(contract, height);
+            BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, "ADD " << num << "/" << den << " at " << height);
+        }
+    }
+
+    const GRC::Contract remove = MakeSideStakeContract(GRC::ContractAction::REMOVE, destination, GRC::Allocation(0, 1));
+
+    for (const int height : {BELOW_V15, V15_TEST_HEIGHT}) {
+        const SideStakeVerdict verdict = JudgeSideStakeAt(remove, height);
+        BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, "REMOVE 0/1 at " << height);
+    }
+
+    // 2/20000 with the simplified flag set: a pair whose own denominator does not divide 10000 but whose reduced
+    // one does. Read from bytes, because no constructor sets the flag against the pair.
+    CDataStream wire(SER_NETWORK, PROTOCOL_VERSION);
+    wire << int64_t {2} << int64_t {20000} << true;
+    GRC::Allocation lying_flag;
+    wire >> lying_flag;
+    BOOST_REQUIRE(lying_flag.IsSimplified());
+
+    const SideStakeVerdict verdict = JudgeSideStakeAt(
+        MakeSideStakeContract(GRC::ContractAction::ADD, destination, lying_flag), V15_TEST_HEIGHT);
+    BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, "ADD 2/20000 with the flag set at v15");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

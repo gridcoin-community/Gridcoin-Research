@@ -730,14 +730,15 @@ public:
     //! \param tx       Transaction that contains the contract.
     //! \param DoS      Misbehavior out.
     //!
-    //! \return \c true if the contract contains a valid sidestake entry.
+    //! \return \c true if the contract contains a valid sidestake entry. Judged at the next height after the
+    //! tip, the height the transaction would be mined at.
     //!
     bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a sidestake entry contract is valid including block context. This is used
-    //! in ConnectBlock. Note that for sidestake entries this simply calls Validate as there is no
-    //! block level specific validation to be done at the current time.
+    //! in ConnectBlock. Sidestake contracts are valid only from block version 13; from there it applies the
+    //! same rules as Validate, judged at the height of the block rather than at the next height after the tip.
     //!
     //! \param ctx ContractContext containing the sidestake entry data to validate.
     //! \param DoS Misbehavior score out.
@@ -932,6 +933,19 @@ private:
     //! \param ctx The contract context for the add or delete.
     //!
     void AddDelete(const ContractContext& ctx);
+
+    //!
+    //! \brief The rules Validate and BlockValidate share, judged as of \p height. From block version 15 an ADD
+    //! must also carry a positive allocation whose reduced denominator divides 10000, the form Allocation(double)
+    //! builds.
+    //!
+    //! \param contract Contains the sidestake entry contract to validate.
+    //! \param height   Height of the block the contract is in, or would be mined in.
+    //! \param DoS      Misbehavior score out.
+    //!
+    //! \return \c true if the contract passes.
+    //!
+    bool ValidateAtHeight(const Contract& contract, const int height, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Private helper function for non-contract add and delete to align the config r-w file with

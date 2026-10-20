@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "sidestake.h"
+#include "chain.h"
 #include "node/ui_interface.h"
 #include "univalue.h"
 
@@ -982,6 +983,11 @@ void SideStakeRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUI
 
 bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    return ValidateAtHeight(contract, nBestHeight + 1, DoS);
+}
+
+bool SideStakeRegistry::ValidateAtHeight(const Contract& contract, const int height, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
     const auto payload = contract.SharePayloadAs<SideStakePayload>();
 
     if (contract.m_version < 3) {
@@ -998,6 +1004,22 @@ bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& t
 
     Allocation allocation = payload->m_entry.m_allocation;
 
+    // From version 15 a new mandatory allocation must be positive and in basis points: its reduced denominator
+    // divides 10000, which is what Allocation(double) builds and what the addition fast paths are tuned for. The reduction
+    // is computed from the pair, because the simplified flag is carried as the wire delivered it. Entries accepted
+    // before version 15 are not judged again.
+    if (IsV15Enabled(height) && contract.m_action == ContractAction::ADD) {
+        const Fraction reduced(allocation.GetNumerator(), allocation.GetDenominator(), true);
+
+        if (!reduced.IsPositive() || 10000 % reduced.GetDenominator() != 0) {
+            DoS = 25;
+            error("%s: Mandatory sidestake allocation %s refused: it must be positive and in basis points",
+                  __func__,
+                  reduced.ToString());
+            return false;
+        }
+    }
+
     // Contracts that would result in a total active mandatory sidestake allocation greater than the maximum allowed by consensus
     // protocol must be rejected. Note that this is not a perfect validation, because there could be more than one sidestake
     // contract transaction in the memory pool, and this is using already committed sidestake contracts (i.e. in blocks already
@@ -1012,7 +1034,9 @@ bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& t
 
 bool SideStakeRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    return (IsV13Enabled(ctx.m_pindex->nHeight) && Validate(ctx.m_contract, ctx.m_tx, DoS));
+    const int height = ctx.m_pindex->nHeight;
+
+    return (IsV13Enabled(height) && ValidateAtHeight(ctx.m_contract, height, DoS));
 }
 
 int SideStakeRegistry::Initialize()
