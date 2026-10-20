@@ -102,7 +102,7 @@ Open your terminal and run:
 
 ```
 brew update
-brew install qtbase qttools qtsvg qttranslations qtdeclarative boost openssl libevent miniupnpc qrencode libzip ccache cmake
+brew install qtbase qttools qtsvg qttranslations qtdeclarative boost openssl libevent miniupnpc qrencode ccache cmake
 ```
 
 Then pass the brew prefix when you configure (e.g.

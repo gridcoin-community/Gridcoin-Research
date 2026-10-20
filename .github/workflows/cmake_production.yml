@@ -47,7 +47,7 @@ env:
   # for Intel too and the restore script drops them from what it asks Homebrew
   # for; the ARM job installs the list as written. doc/build-macos.md carries the
   # user-facing copy.
-  MACOS_BREW_DEPS: boost libevent miniupnpc qrencode libzip ccache cmake capnp
+  MACOS_BREW_DEPS: boost libevent miniupnpc qrencode ccache cmake capnp
 
 jobs:
   # ----------------------------------------------------------------------
@@ -322,8 +322,8 @@ jobs:
     #
     # Homebrew sets no deployment target of its own, so a bottle's minimum is
     # whatever it was built on. On this runner every non-Qt dependency comes
-    # back at minos 15.0 -- openssl@3, boost, libevent, miniupnpc, qrencode,
-    # libzip and capnp all build for the host; only Qt sets its own target.
+    # back at minos 15.0 -- openssl@3, boost, libevent, miniupnpc, qrencode
+    # and capnp all build for the host; only Qt sets its own target.
     # macdeployqtplus copies those dylibs INTO the bundle (it skips only
     # /System/Library and /usr/lib), so the bundle's real floor is 15.0 and it
     # must declare that: a DMG declaring 14.0 would install on macOS 14 and then
@@ -1237,10 +1237,10 @@ jobs:
           sudo apt-get update
           sudo apt-get -f install -y
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build zipcmp zipmerge ziptool qemu-user-static \
+            build-essential cmake ninja-build qemu-user-static \
             g++-aarch64-linux-gnu qt6-base-dev:arm64 qt6-svg-dev:arm64 \
             qt6-l10n-tools qt6-tools-dev:arm64 qt6-tools-dev-tools:arm64 \
-            libssl-dev:arm64 libzip-dev:arm64 \
+            libssl-dev:arm64 zlib1g-dev:arm64 \
             libcurl4-openssl-dev:arm64 libboost-system-dev:arm64 libboost-filesystem-dev:arm64 \
             libboost-thread-dev:arm64 libboost-iostreams-dev:arm64 libboost-program-options-dev:arm64 \
             libboost-chrono-dev:arm64 \

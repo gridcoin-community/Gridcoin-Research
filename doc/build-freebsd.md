@@ -48,7 +48,7 @@ sudo pkg update
 
 # Basic build requirements
 # Note: 'boost-all' is required to ensure headers are found.
-sudo pkg install git cmake boost-all libzip curl pkgconf miniupnpc
+sudo pkg install git cmake boost-all curl pkgconf miniupnpc
 
 # Install Qt6 for the GUI Wallet
 sudo pkg install qt6
