@@ -1821,12 +1821,24 @@ void PollRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(c
         }
 
         if (m_vote_db.contains(hash)) {
+            const uint256 poll_txid = m_vote_db.peek(hash)->m_poll_txid;
+
             // A disconnect pops a poll's links newest first. For a link that is not its poll's newest, nothing is
             // erased: the error is logged and the registry is rebuilt from the chain at the next start. No assert:
             // asserts are live in release builds.
             if (!EraseVoteLink(hash)) {
                 error("%s: poll registry flagged for a rebuild at the next start", __func__);
                 FlagRebuild();
+
+                return;
+            }
+
+            // The GUI hears of the unlinked vote as it heard of the link (DeleteVote). Judged by the wall clock on
+            // purpose; see PollReference::Notify.
+            const PollReference* poll_ref = TryBy(poll_txid);
+
+            if (poll_ref && !m_replay_in_progress && !poll_ref->Expired(GetAdjustedTime())) {
+                uiInterface.NewVoteReceived(poll_txid);
             }
 
             return;

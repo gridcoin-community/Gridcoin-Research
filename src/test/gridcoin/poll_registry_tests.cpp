@@ -841,6 +841,37 @@ BOOST_AUTO_TEST_CASE(the_gui_hears_of_every_listed_poll)
 }
 
 //!
+//! A disconnect that unlinks a stored vote tells the GUI, as linking it did: either way the poll's votes change.
+//!
+BOOST_AUTO_TEST_CASE(the_gui_hears_of_a_vote_a_disconnect_unlinks)
+{
+    const int64_t now = GetAdjustedTime();
+    CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, now);
+    CBlockIndex vote_index = MakeBlockIndex(V13Height() + 11, now + 60);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", now);
+    registry.Add({poll.contract, poll.tx, &poll_index});
+
+    std::vector<uint256> heard;
+    boost::signals2::scoped_connection watch = uiInterface.NewVoteReceived_connect(
+        [&heard](const uint256& poll_txid) { heard.push_back(poll_txid); });
+
+    const GRC::Contract vote = MakeVoteContract(poll.tx.GetHash());
+    const CTransaction vote_tx = MakeVoteTxFor(vote, now + 60);
+    registry.Add({vote, vote_tx, &vote_index});
+    BOOST_REQUIRE(heard == std::vector<uint256> {poll.tx.GetHash()});
+
+    registry.Revert({vote, vote_tx, &vote_index});
+    BOOST_CHECK(heard == (std::vector<uint256> {poll.tx.GetHash(), poll.tx.GetHash()}));
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash())->Votes().empty());
+}
+
+//!
 //! A REMOVE by txid (payload version 4) carries the poll's txid and nothing else, and reads back the same. A version 4
 //! ADD, and a version 4 REMOVE without a txid, are not well formed.
 //!
