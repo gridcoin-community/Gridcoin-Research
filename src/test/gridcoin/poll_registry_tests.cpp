@@ -736,13 +736,21 @@ BOOST_AUTO_TEST_CASE(every_active_poll_is_listed_and_found_by_its_title)
         for (const GRC::PollReference* ref : registry.FindByTitle(title_key)) txids.push_back(ref->Txid());
         return txids;
     };
+    const auto shown = [&] {
+        std::vector<uint256> txids;
+        for (const auto& iter : registry.Polls()) txids.push_back(iter->Ref().Txid());
+        return txids;
+    };
     const std::multiset<uint256> all {owner.tx.GetHash(), later.tx.GetHash(), other.tx.GetHash()};
     const std::vector<uint256> both {owner.tx.GetHash(), later.tx.GetHash()};
+    // The listing: title keys in order, and each key's polls in block order.
+    const std::vector<uint256> in_order {other.tx.GetHash(), owner.tx.GetHash(), later.tx.GetHash()};
 
     for (int pass = 0; pass < 2; ++pass) {
         {
             LOCK(GRC::PollRegistry::cs_poll_registry);
             BOOST_CHECK(listed() == all);
+            BOOST_CHECK(shown() == in_order);
             BOOST_CHECK(found("title") == both);
             BOOST_CHECK(registry.TryByTitle("title") == registry.TryByTxid(owner.tx.GetHash()));
         }
@@ -763,7 +771,33 @@ BOOST_AUTO_TEST_CASE(every_active_poll_is_listed_and_found_by_its_title)
     registry.Revert({remove.contract, remove.tx, &index_remove});
     LOCK(GRC::PollRegistry::cs_poll_registry);
     BOOST_CHECK(listed() == all);
+    BOOST_CHECK(shown() == in_order); // the owner returns ahead of the later poll, in block order
     BOOST_CHECK(found("title") == both);
+}
+
+//!
+//! Below v15 a later poll with a taken title key is listed, so the GUI hears of it as of any new poll, but only
+//! the title's owner is announced (-pollnotify) and becomes the latest poll.
+//!
+BOOST_AUTO_TEST_CASE(the_gui_hears_of_every_listed_poll)
+{
+    const int64_t now = GetAdjustedTime();
+    CBlockIndex index_owner = MakeBlockIndex(V13Height() + 10, now);
+    CBlockIndex index_later = MakeBlockIndex(V13Height() + 20, now + 60);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    int heard = 0;
+    boost::signals2::scoped_connection watch = uiInterface.NewPollReceived_connect([&heard](int64_t) { ++heard; });
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx owner = MakePollTx("Title", now);
+    const PollTx later = MakePollTx("TITLE", now + 60);
+
+    registry.Add({owner.contract, owner.tx, &index_owner});
+    BOOST_CHECK_EQUAL(heard, 1);
+    registry.Add({later.contract, later.tx, &index_later});
+    BOOST_CHECK_EQUAL(heard, 2);
 }
 
 //!

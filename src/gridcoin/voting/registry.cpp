@@ -445,7 +445,6 @@ PollReference::PollReference()
     , m_payload_version(0)
     , m_type(PollType::UNKNOWN)
     , m_weight_type(PollWeightType::UNKNOWN)
-    , m_ptitle(nullptr)
     , m_timestamp(0)
     , m_duration_days(0)
     , m_pindex(nullptr)
@@ -535,8 +534,7 @@ PollType PollReference::GetPollType() const
 
 const std::string& PollReference::Title() const
 {
-    // m_title is the poll's own title, empty for a default-constructed reference. (m_ptitle points at the display
-    // map's key only for the poll that owns its title, so a later poll with the same title key has none.)
+    // m_title is the poll's own title, empty for a default-constructed reference.
     return m_title;
 }
 
@@ -1178,7 +1176,7 @@ void PollRegistry::IndexPollRecord(const PollEntry& entry)
         // record is indexed once: a load meets it once, and a removal's revert follows the removal that took the
         // poll out of the map.
         m_title_index.emplace(title_key, entry.m_poll_txid);
-        ref.m_ptitle = &m_polls.emplace(title_key, &ref)->first;
+        Show(title_key, ref, entry.m_block_height);
 
         return;
     }
@@ -1188,6 +1186,32 @@ void PollRegistry::IndexPollRecord(const PollEntry& entry)
         iter->second.m_deleted = true;
         EraseShown(title_key, &iter->second);
     }
+}
+
+std::pair<int, uint256> PollRegistry::ShownOrder(const PollReference& ref) const
+{
+    // A stored poll's record holds its block's height; a pre-V11 poll loaded on demand has its block index.
+    int height = ref.m_pindex ? ref.m_pindex->nHeight : -1;
+
+    if (const auto entry = m_poll_entries.find(ref.m_txid); entry != m_poll_entries.end()) {
+        height = entry->second->m_block_height;
+    }
+
+    return {height, ref.m_txid};
+}
+
+void PollRegistry::Show(const std::string& title_key, PollReference& ref, const int height)
+{
+    // Each title key's polls stay in block order, whatever order they arrive in: a load meets the records in record
+    // order, and a removal's revert puts its poll back. Every poll already shown has its record (or its block index).
+    const std::pair<int, uint256> order {height, ref.m_txid};
+    auto [pos, last] = m_polls.equal_range(title_key);
+
+    while (pos != last && ShownOrder(*pos->second) < order) {
+        ++pos;
+    }
+
+    m_polls.emplace_hint(pos, title_key, &ref);
 }
 
 void PollRegistry::EraseShown(const std::string& title_key, const PollReference* poll_ref)
@@ -1449,28 +1473,12 @@ const PollReference* PollRegistry::TryByTitle(const std::string& title_key) cons
 std::vector<const PollReference*> PollRegistry::FindByTitle(const std::string& title_key) const
     EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
-    // Block order, whatever order the polls entered the map in (a removal's revert puts its poll back at the end): a
-    // stored poll's record holds its block's height; a pre-V11 poll loaded on demand has its block index.
-    std::vector<std::pair<std::pair<int, uint256>, const PollReference*>> keyed;
+    // The display map holds each title key's polls in block order (Show).
+    std::vector<const PollReference*> polls;
     const auto [first, last] = m_polls.equal_range(title_key);
 
     for (auto iter = first; iter != last; ++iter) {
-        const PollReference* ref = iter->second;
-        int height = ref->m_pindex ? ref->m_pindex->nHeight : -1;
-
-        if (const auto entry = m_poll_entries.find(ref->m_txid); entry != m_poll_entries.end()) {
-            height = entry->second->m_block_height;
-        }
-
-        keyed.emplace_back(std::make_pair(height, ref->m_txid), ref);
-    }
-
-    std::sort(keyed.begin(), keyed.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-
-    std::vector<const PollReference*> polls;
-
-    for (const auto& [key, ref] : keyed) {
-        polls.push_back(ref);
+        polls.push_back(iter->second);
     }
 
     return polls;
@@ -1916,7 +1924,6 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         // A pre-V11 poll found by TryByTxidWithAddHistoricalPollAndVotes: registered in memory only, with no record
         // and no title-index entry. It is shown beside any poll with its title key.
         PollReference& poll_ref = m_polls_by_txid[txid];
-        poll_ref.m_ptitle = &m_polls.emplace(PollTitleKey(poll_title), &poll_ref)->first;
         poll_ref.m_txid = txid;
         poll_ref.m_title = poll_title;
         poll_ref.m_payload_version = payload->m_version;
@@ -1926,6 +1933,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         poll_ref.m_duration_days = payload->m_poll.m_duration_days;
         poll_ref.m_pindex = ctx.m_pindex;
         poll_ref.m_registry = this;
+        Show(PollTitleKey(poll_title), poll_ref, ctx.m_pindex->nHeight);
 
         return;
     }
@@ -1964,16 +1972,18 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
     PollReference& poll_ref = m_polls_by_txid.at(txid);
     poll_ref.m_pindex = ctx.m_pindex; // the connecting block, whose index the load would find by hash
 
-    // A later poll with a title key already taken (below v15 only) is listed and found by its title, but only
-    // the title's owner is announced.
-    if (TryByTitle(PollTitleKey(poll_title)) != &poll_ref) {
-        return;
+    // A later poll with a title key already taken (below v15 only) is listed and found by its title, so the GUI
+    // hears of it as of any new poll; only the title's owner is announced and becomes the latest poll.
+    const bool owner = TryByTitle(PollTitleKey(poll_title)) == &poll_ref;
+
+    if (owner) {
+        m_latest_poll = &poll_ref;
     }
 
-    m_latest_poll = &poll_ref;
-
     if (!m_replay_in_progress) {
-        poll_ref.Notify(PollReference::PollNotificationType::POLL_ADD);
+        if (owner) {
+            poll_ref.Notify(PollReference::PollNotificationType::POLL_ADD);
+        }
 
         // Judged by the wall clock on purpose; see PollReference::Notify.
         if (!poll_ref.Expired(GetAdjustedTime())) {
@@ -1983,7 +1993,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added poll %s to the registry, m_polls.size() = %u.",
              __func__,
-             *poll_ref.m_ptitle,
+             PollTitleKey(poll_title),
              m_polls.size());
 }
 

@@ -223,7 +223,6 @@ private:
     uint32_t m_payload_version;                 //!< Version of the poll (payload).
     PollType m_type;                            //!< Type of the poll.
     PollWeightType m_weight_type;               //!< Weight type of the poll.
-    const std::string* m_ptitle;                //!< Title of the poll for indexing/mapping purposes.
     std::string m_title;                        //!< Original title of the poll for display purposes.
     int64_t m_timestamp;                        //!< Timestamp of the poll transaction.
     uint32_t m_duration_days;                   //!< Number of days the poll remains active.
@@ -747,24 +746,29 @@ private:
     //!
     void IndexPollRecord(const PollEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
 
+    //! A shown poll's place in its title key's block order: its block's height, then its txid.
+    std::pair<int, uint256> ShownOrder(const PollReference& ref) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+
+    //! Put one poll in the display map, in block order among the polls with its title key; \p height is its block's.
+    void Show(const std::string& title_key, PollReference& ref, int height) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+
     //! Take one poll out of the display map, leaving every other poll with its title key.
     void EraseShown(const std::string& title_key, const PollReference* poll_ref)
         EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
-    //! \brief Get the poll with the specified title.
+    //! \brief Get the ACTIVE poll that owns a title key (TryByTitle), for a caller that changes it.
     //!
-    //! \param title The title of the poll to look up.
+    //! \param title The title key (GRC::PollTitleKey).
     //!
-    //! \return Points to a poll object or \c nullptr when no poll contains a
-    //! matching title.
+    //! \return Points to a poll object or \c nullptr when no ACTIVE poll owns the title key.
     //!
     PollReference* TryBy(const std::string& title) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
-    //! \brief Get the poll with the specified title.
+    //! \brief Get the poll registered with a transaction hash.
     //!
-    //! \param title The title of the poll to look up.
+    //! \param txid The hash of the poll's transaction.
     //!
     //! \return Points to a poll object or \c nullptr when no poll exists for
     //! the supplied transaction hash.
