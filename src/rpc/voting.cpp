@@ -474,7 +474,7 @@ const AddPollBuild& addpoll_build()
     uint32_t payload_version = 0;
     {
         LOCK(cs_main);
-        payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
+        payload_version = IsPollV3Enabled(nBestHeight + 1) ? 3 : 2; // for the next block, which can take the poll
     }
 
     std::lock_guard<std::mutex> guard(cache_mutex);

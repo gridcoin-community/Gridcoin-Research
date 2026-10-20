@@ -997,7 +997,9 @@ public:
     //!
     PollEligibilityClaim BuildClaim(const Poll& poll) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
-        if (!IsPollMultiAddressEnabled(nBestHeight)) {
+        // The claim version of the next block, which is the block that can take the poll and the height the memory
+        // pool judges it at.
+        if (!IsPollMultiAddressEnabled(nBestHeight + 1)) {
             return BuildV1Claim(poll);
         }
 
@@ -1586,7 +1588,8 @@ PollBuilder& PollBuilder::operator=(PollBuilder&& builder) = default;
 
 PollBuilder PollBuilder::SetPayloadVersion(uint32_t version) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    bool v3_enabled = IsPollV3Enabled(nBestHeight);
+    // The payload version of the next block, which is the block that can take the poll.
+    bool v3_enabled = IsPollV3Enabled(nBestHeight + 1);
 
     if ((v3_enabled && version < 3)
             || (!v3_enabled && version >= 3)) {

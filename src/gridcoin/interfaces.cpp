@@ -862,7 +862,7 @@ public:
     bool pollV3Enabled() override
     {
         LOCK(cs_main);
-        return IsPollV3Enabled(nBestHeight);
+        return IsPollV3Enabled(nBestHeight + 1); // for the next block, which can take a poll built now
     }
 
     std::string currentPollTitle() override
@@ -939,12 +939,13 @@ public:
     VotingSubmitResult SubmitPollUnderScope(const PollSubmission& poll)
     {
         // The payload version (and, pre-v3, the forced SURVEY type) depend on the
-        // chain height, so they are resolved node-side rather than in the GUI.
+        // chain height, so they are resolved node-side rather than in the GUI, for
+        // the next block, which is the block that can take the poll.
         uint32_t payload_version = 0;
         GRC::PollType type_by_version = GRC::PollType::SURVEY;
         {
             LOCK(cs_main);
-            const bool v3_enabled = IsPollV3Enabled(nBestHeight);
+            const bool v3_enabled = IsPollV3Enabled(nBestHeight + 1);
             payload_version = v3_enabled ? 3 : 2;
             type_by_version = v3_enabled ? static_cast<GRC::PollType>(poll.type) : GRC::PollType::SURVEY;
         }

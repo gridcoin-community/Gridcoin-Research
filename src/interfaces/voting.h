@@ -213,8 +213,9 @@ public:
     //! each valid poll type, in enum order, excluding OUT_OF_BOUND.
     virtual std::vector<PollTypeMeta> getPollTypes() = 0;
 
-    //! Whether poll v3 is active at the current tip (replaces a GUI-side
-    //! IsPollV3Enabled(nBestHeight) read); gates the extra project poll fields.
+    //! Whether poll v3 is active at the next block, the block that can take a
+    //! poll built now (replaces a GUI-side IsPollV3Enabled(nBestHeight) read);
+    //! gates the extra project poll fields.
     virtual bool pollV3Enabled() = 0;
 
     //! Estimated fee to create a poll, in 1/COIN units.

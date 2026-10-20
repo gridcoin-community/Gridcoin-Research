@@ -113,6 +113,18 @@ class PollNextBlockRulesTest(GridcoinTestFramework):
         assert_equal(node0.testmempoolaccept([node1.getrawtransaction(poll_a)])[0]["reject-reason"],
                      "invalid-contract")
 
+        self.log.info("a poll built in the block before activation has the next block's claim, and is mined")
+        # node1 keeps its single-address rules, so it would refuse the block; it leaves the network here.
+        self.disconnect_nodes(0, 1)
+        poll_b = self.add_poll(node0, "TITLE")
+        self.sync_mempools([node0, node2], wait=0.1, flush_scheduler=False)
+        self.stake(nodes=[node0, node2])
+        assert_equal(node0.getblockcount(), MULTI_ADDRESS_HEIGHT)
+        assert poll_b in node2.getblock(node2.getbestblockhash())["tx"]
+        assert_equal(node0.getrawmempool(), [])
+        for node in (node0, node2):
+            assert_equal([p["id"] for p in node.listpolls(True)], [poll_b])
+
 
 if __name__ == "__main__":
     PollNextBlockRulesTest().main()
