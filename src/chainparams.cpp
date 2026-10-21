@@ -208,6 +208,7 @@ public:
         consensus.DefaultMagnitudeWeightFactor = Fraction(100, 567);
         consensus.MaxMagnitudeWeightFactor = Fraction(1);
         consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
+        consensus.ContractReplayFloorHeight = 164618;
         consensus.powLimit = uint256S("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -344,6 +345,7 @@ public:
         consensus.DefaultMagnitudeWeightFactor = Fraction(100, 567);
         consensus.MaxMagnitudeWeightFactor = Fraction(1);
         consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
+        consensus.ContractReplayFloorHeight = 1;
         consensus.powLimit = uint256S("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
         pchMessageStart[0] = 0xcd;
@@ -450,6 +452,7 @@ public:
         consensus.DefaultMagnitudeWeightFactor = Fraction(100, 567);
         consensus.MaxMagnitudeWeightFactor = Fraction(1);
         consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
+        consensus.ContractReplayFloorHeight = 0;
         consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
         pchMessageStart[0] = 0xfa;

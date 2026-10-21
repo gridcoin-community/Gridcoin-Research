@@ -174,6 +174,10 @@ struct Params {
     /** The "standard" contract replay lookback for those contract types that do not have a registry db.
       */
     int64_t StandardContractReplayLookback;
+    /** A contract replay whose start is below this height returns without replaying anything (mainnet 164,618,
+      * testnet 1, regtest 0, so a regtest chain replays from its genesis).
+      */
+    int ContractReplayFloorHeight{0};
     /**
       * "standard" scrypt target limit for proof of work, results in 0,000244140625 proof-of-work difficulty.
       * Equivalent to ~arith_uint256() >> 20 or 1e0fffff in compact notation.
