@@ -102,6 +102,12 @@ enum class BeaconRebuildReason
 //! \param reason Why the registry is rebuilt; it chooses the log line and whether the message is shown.
 //!
 void RebuildBeaconRegistry(BeaconRebuildReason reason) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//!
+//! \brief Clear the legacy poll store when -clearlegacypollhistory or -clearallregistryhistory is set. Contract
+//! initialization calls it before the poll registry reads the store.
+//!
+void ClearLegacyStoreIfAsked();
 } // namespace GRC
 
 #endif // GRIDCOIN_GRIDCOIN_H

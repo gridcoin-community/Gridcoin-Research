@@ -92,6 +92,7 @@ activebeforesb
 *height
 pendingpoolretention
 clear*history
+legacypollfloor
 boinckey
 printstakemodifier
 printpriority

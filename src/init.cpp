@@ -1383,6 +1383,11 @@ void SetupServerArgs()
     // Also allow the -clearallregistryhistory hidden argument to support clearing all of the registries.
     hidden_args.emplace_back("-clearallregistryhistory");
 
+    // The legacy poll store (polls below V11): -clearlegacypollhistory clears it at startup, and -legacypollfloor
+    // moves its floor from the research-age height.
+    hidden_args.emplace_back("-clearlegacypollhistory");
+    hidden_args.emplace_back("-legacypollfloor");
+
     // -boinckey should now be removed entirely. It is put here to prevent the executable erroring out on
     // an invalid parameter for old clients that may have left the argument in.
     hidden_args.emplace_back("-boinckey");

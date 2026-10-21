@@ -10,6 +10,7 @@
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/registry.h"
+#include "gridcoin/gridcoin.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/superblock.h"
@@ -2073,6 +2074,50 @@ BOOST_AUTO_TEST_CASE(a_poll_the_legacy_store_holds_is_shown_after_a_restart)
     BOOST_CHECK(registry.FindByTitle("title") == std::vector<const GRC::PollReference*>({ref}));
     BOOST_CHECK(ref->Votes() == std::vector<uint256>({vote.GetHash()}));
     BOOST_CHECK(registry.TryByTxidOrLegacy(txid, below_floor) == ref);
+}
+
+//!
+//! -clearlegacypollhistory and -clearallregistryhistory clear the legacy store at startup, with the polls it shows;
+//! with neither, the store is kept.
+//!
+BOOST_AUTO_TEST_CASE(the_legacy_store_is_cleared_at_startup_only_when_asked)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const int64_t start = GetAdjustedTime() - 20 * DAY;
+    const PollTx poll = MakeChainPollTx("Title", start);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {poll.tx}, pindexGenesisBlock->nBits);
+    const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
+    const uint256 txid = poll.tx.GetHash();
+
+    const auto fill = [&] {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        registry.InitializeLegacyStore(0, 1000);
+        std::optional<int> below_floor;
+        BOOST_REQUIRE(registry.TryByTxidOrLegacy(txid, below_floor) != nullptr);
+    };
+    const auto stored = [] {
+        GRC::LegacyPollStore store;
+        store.Initialize(0, 1000);
+        return store.Entries().size();
+    };
+
+    fill();
+    GRC::ClearLegacyStoreIfAsked();
+    BOOST_CHECK_EQUAL(stored(), 1U);
+
+    for (const char* flag : {"clearlegacypollhistory", "clearallregistryhistory"}) {
+        fill();
+        const grc_test::ForcedArgGuard asked(flag, "1");
+        GRC::ClearLegacyStoreIfAsked();
+        BOOST_CHECK_EQUAL(stored(), 0U);
+
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_CHECK(registry.TryListedByTxid(txid) == nullptr);
+    }
 }
 
 //!

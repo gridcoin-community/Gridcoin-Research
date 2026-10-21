@@ -170,6 +170,7 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
         "-nobuildwarn", "-resetguisettings", "-splash", "-style", "-suppressnetworkgraph", "-devbuild",
         "-scrapersleep", "-activebeforesb", "-pollmultiaddressheight", "-autogreylistdeepcopyheight",
         "-autogreylisttotalcreditfixheight", "-autogreylistredesignheight", "-clearallregistryhistory",
+        "-clearlegacypollhistory", "-legacypollfloor",
         "-boinckey", "-printstakemodifier", "-printpriority", "-printkeypool", "-limitfreerelay", "-autoban",
         "-printcoinage", "-printblock", "-printblockindex", "-printblocktree", "-loadblockindextest",
         "-privdb", "-flushwallet", "-upgradewallet", "-blockv15height", "-messagecontractdisableheight",

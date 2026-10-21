@@ -219,6 +219,9 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest) EXCLUSIVE_LOCKS
 
 void InitializeContracts(CBlockIndex* pindexBest) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    // Before the poll registry's Initialize reads the legacy poll store.
+    ClearLegacyStoreIfAsked();
+
     // This loop initializes the registry for each contract type in CONTRACT_TYPES_WITH_REG_DB.
     for (const auto& contract_type : RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
         Registry& registry = RegistryBookmarks::GetRegistryWithDB(contract_type);
@@ -686,6 +689,15 @@ bool fResetBlockchainRequest = false;
 // -----------------------------------------------------------------------------
 // Functions
 // -----------------------------------------------------------------------------
+
+void GRC::ClearLegacyStoreIfAsked()
+{
+    if (gArgs.GetBoolArg("-clearlegacypollhistory", false) || gArgs.GetBoolArg("-clearallregistryhistory", false)) {
+        LogPrintf("INFO: %s: Clearing the legacy poll store.", __func__);
+
+        GetPollRegistry().ClearLegacyStore();
+    }
+}
 
 void GRC::RebuildBeaconRegistry(const BeaconRebuildReason reason) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
