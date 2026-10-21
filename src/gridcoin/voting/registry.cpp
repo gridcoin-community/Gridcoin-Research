@@ -1467,10 +1467,10 @@ PollReference* PollRegistry::TryBy(const std::string& title) EXCLUSIVE_LOCKS_REQ
     return const_cast<PollReference*>(TryByTitle(title));
 }
 
-const PollReference* PollRegistry::TryByTxidOrLegacy(const uint256& txid, std::optional<int>& below_floor)
+const PollReference* PollRegistry::TryByTxidOrLegacy(const uint256& txid, LegacyPollStore::Lookup& legacy_lookup)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
-    below_floor.reset();
+    legacy_lookup = LegacyPollStore::Lookup::NOT_LEGACY;
 
     if (const PollReference* ref = TryListedByTxid(txid)) {
         return ref;
@@ -1480,14 +1480,10 @@ const PollReference* PollRegistry::TryByTxidOrLegacy(const uint256& txid, std::o
     // with every poll at or above V11; below V11, a poll the legacy store serves.
     const LegacyPollEntry* entry = nullptr;
 
-    switch (m_legacy_store.Fetch(txid, entry)) {
-    case LegacyPollStore::Lookup::FOUND:
+    legacy_lookup = m_legacy_store.Fetch(txid, entry);
+
+    if (legacy_lookup == LegacyPollStore::Lookup::FOUND) {
         return ShowLegacyPoll(*entry);
-    case LegacyPollStore::Lookup::BELOW_FLOOR:
-        below_floor = m_legacy_store.Floor();
-        return nullptr;
-    case LegacyPollStore::Lookup::NOT_LEGACY:
-        return nullptr;
     }
 
     return nullptr;

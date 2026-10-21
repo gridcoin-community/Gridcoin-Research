@@ -55,6 +55,9 @@ public:
         FOUND,       //!< The entry is served.
         NOT_LEGACY,  //!< No poll below V11 on the main chain has that txid.
         BELOW_FLOOR, //!< The poll is below the floor.
+        //! The node's chain does not yet hold the poll's first block past its end (a node syncing from zero), or a
+        //! flagged block in its window could not be read: nothing is stored, and a later query fills the poll.
+        INCOMPLETE,
     };
 
     static constexpr uint32_t VERSION = 1;

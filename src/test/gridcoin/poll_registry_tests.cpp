@@ -1933,8 +1933,8 @@ BOOST_AUTO_TEST_CASE(a_poll_the_legacy_store_fills_links_votes_through_its_closi
 
     const TxIndexScope poll_indexed(poll.tx, first.m_tx_positions[1]);
 
-    std::optional<int> below_floor;
-    const GRC::PollReference* ref = GRC::GetPollRegistry().TryByTxidOrLegacy(poll.tx.GetHash(), below_floor);
+    GRC::LegacyPollStore::Lookup legacy = GRC::LegacyPollStore::Lookup::NOT_LEGACY;
+    const GRC::PollReference* ref = GRC::GetPollRegistry().TryByTxidOrLegacy(poll.tx.GetHash(), legacy);
     BOOST_REQUIRE(ref != nullptr);
 
     BOOST_REQUIRE_EQUAL(ref->Votes().size(), 1U);
@@ -1965,6 +1965,8 @@ BOOST_AUTO_TEST_CASE(a_poll_the_legacy_store_holds_is_shown_beside_a_stored_poll
 
     const LinkedTip tip = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {loaded.tx}, pindexGenesisBlock->nBits);
     BOOST_REQUIRE_EQUAL(tip.m_tx_positions.size(), 1U);
+    // The first block past the end closes the poll's window, as on any node past it.
+    LinkBlock(tip.m_pindex, start + 8 * 86400, GRC::Claim(), {}, pindexGenesisBlock->nBits);
     const TxIndexScope loaded_indexed(loaded.tx, tip.m_tx_positions[0]);
 
     // A stored poll with the same title key, from a later block.
@@ -1972,8 +1974,8 @@ BOOST_AUTO_TEST_CASE(a_poll_the_legacy_store_holds_is_shown_beside_a_stored_poll
     CBlockIndex index_stored = MakeBlockIndex(tip.m_pindex->nHeight + 1, start + 60);
     registry.Add({stored.contract, stored.tx, &index_stored});
 
-    std::optional<int> below_floor;
-    BOOST_REQUIRE(registry.TryByTxidOrLegacy(loaded.tx.GetHash(), below_floor) != nullptr);
+    GRC::LegacyPollStore::Lookup legacy = GRC::LegacyPollStore::Lookup::NOT_LEGACY;
+    BOOST_REQUIRE(registry.TryByTxidOrLegacy(loaded.tx.GetHash(), legacy) != nullptr);
 
     const auto found = [&] {
         std::vector<uint256> txids;
@@ -2019,14 +2021,16 @@ BOOST_AUTO_TEST_CASE(a_legacy_read_leaves_the_canonical_registry_unchanged)
     const int64_t start = GetAdjustedTime() - 20 * DAY;
     const PollTx poll = MakeChainPollTx("Title", start);
     const LinkedTip polled = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {poll.tx}, pindexGenesisBlock->nBits);
+    // The first block past the end closes the poll's window, as on any node past it.
+    LinkBlock(polled.m_pindex, start + 8 * DAY, GRC::Claim(), {}, pindexGenesisBlock->nBits);
     const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
     const uint256 txid = poll.tx.GetHash();
 
-    std::optional<int> below_floor;
-    const GRC::PollReference* ref = registry.TryByTxidOrLegacy(txid, below_floor);
+    GRC::LegacyPollStore::Lookup legacy = GRC::LegacyPollStore::Lookup::NOT_LEGACY;
+    const GRC::PollReference* ref = registry.TryByTxidOrLegacy(txid, legacy);
     BOOST_REQUIRE(ref != nullptr);
-    BOOST_CHECK(!below_floor);
-    BOOST_CHECK(registry.TryByTxidOrLegacy(txid, below_floor) == ref);
+    BOOST_CHECK(legacy == GRC::LegacyPollStore::Lookup::FOUND);
+    BOOST_CHECK(registry.TryByTxidOrLegacy(txid, legacy) == ref);
 
     BOOST_CHECK(registry.TryByTxid(txid) == nullptr);
     BOOST_CHECK(!registry.IsStored(txid));
@@ -2057,13 +2061,15 @@ BOOST_AUTO_TEST_CASE(a_poll_the_legacy_store_holds_is_shown_after_a_restart)
     const CTransaction vote = MakeVoteTx(poll.tx.GetHash(), start + 60);
     const LinkedTip polled = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {poll.tx, vote},
                                        pindexGenesisBlock->nBits);
+    // The first block past the end closes the poll's window, as on any node past it.
+    LinkBlock(polled.m_pindex, start + 8 * DAY, GRC::Claim(), {}, pindexGenesisBlock->nBits);
     const uint256 txid = poll.tx.GetHash();
-    std::optional<int> below_floor;
+    GRC::LegacyPollStore::Lookup legacy = GRC::LegacyPollStore::Lookup::NOT_LEGACY;
 
     {
         const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
         registry.InitializeLegacyStore(0, 1000);
-        BOOST_REQUIRE(registry.TryByTxidOrLegacy(txid, below_floor) != nullptr);
+        BOOST_REQUIRE(registry.TryByTxidOrLegacy(txid, legacy) != nullptr);
     }
 
     Restart(registry);
@@ -2073,7 +2079,7 @@ BOOST_AUTO_TEST_CASE(a_poll_the_legacy_store_holds_is_shown_after_a_restart)
     BOOST_REQUIRE(ref != nullptr);
     BOOST_CHECK(registry.FindByTitle("title") == std::vector<const GRC::PollReference*>({ref}));
     BOOST_CHECK(ref->Votes() == std::vector<uint256>({vote.GetHash()}));
-    BOOST_CHECK(registry.TryByTxidOrLegacy(txid, below_floor) == ref);
+    BOOST_CHECK(registry.TryByTxidOrLegacy(txid, legacy) == ref);
 }
 
 //!
@@ -2090,14 +2096,16 @@ BOOST_AUTO_TEST_CASE(the_legacy_store_is_cleared_at_startup_only_when_asked)
     const int64_t start = GetAdjustedTime() - 20 * DAY;
     const PollTx poll = MakeChainPollTx("Title", start);
     const LinkedTip polled = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {poll.tx}, pindexGenesisBlock->nBits);
+    // The first block past the end closes the poll's window, as on any node past it.
+    LinkBlock(polled.m_pindex, start + 8 * DAY, GRC::Claim(), {}, pindexGenesisBlock->nBits);
     const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
     const uint256 txid = poll.tx.GetHash();
 
     const auto fill = [&] {
         LOCK(GRC::PollRegistry::cs_poll_registry);
         registry.InitializeLegacyStore(0, 1000);
-        std::optional<int> below_floor;
-        BOOST_REQUIRE(registry.TryByTxidOrLegacy(txid, below_floor) != nullptr);
+        GRC::LegacyPollStore::Lookup legacy = GRC::LegacyPollStore::Lookup::NOT_LEGACY;
+        BOOST_REQUIRE(registry.TryByTxidOrLegacy(txid, legacy) != nullptr);
     };
     const auto stored = [] {
         GRC::LegacyPollStore store;
@@ -2136,10 +2144,41 @@ BOOST_AUTO_TEST_CASE(a_poll_below_the_legacy_floor_is_refused_by_its_height)
     const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
     registry.InitializeLegacyStore(polled.m_pindex->nHeight + 1, 1000);
 
-    std::optional<int> below_floor;
-    BOOST_CHECK(registry.TryByTxidOrLegacy(poll.tx.GetHash(), below_floor) == nullptr);
-    BOOST_REQUIRE(below_floor);
-    BOOST_CHECK_EQUAL(*below_floor, polled.m_pindex->nHeight + 1);
+    GRC::LegacyPollStore::Lookup legacy = GRC::LegacyPollStore::Lookup::NOT_LEGACY;
+    BOOST_CHECK(registry.TryByTxidOrLegacy(poll.tx.GetHash(), legacy) == nullptr);
+    BOOST_CHECK(legacy == GRC::LegacyPollStore::Lookup::BELOW_FLOOR);
+    BOOST_CHECK_EQUAL(registry.LegacyFloor(), polled.m_pindex->nHeight + 1);
+}
+
+//!
+//! A legacy poll whose window the node's chain does not yet close is refused for that reason and is neither stored nor
+//! shown; once the chain holds its first block past the end, the same query serves it.
+//!
+BOOST_AUTO_TEST_CASE(a_legacy_poll_not_yet_closed_on_the_chain_is_refused_and_not_shown)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    registry.InitializeLegacyStore(0, 1000);
+
+    const int64_t start = GetAdjustedTime() - 20 * DAY;
+    const PollTx poll = MakeChainPollTx("Title", start);
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {poll.tx}, bits);
+    const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
+
+    GRC::LegacyPollStore::Lookup legacy = GRC::LegacyPollStore::Lookup::NOT_LEGACY;
+    BOOST_CHECK(registry.TryByTxidOrLegacy(poll.tx.GetHash(), legacy) == nullptr);
+    BOOST_CHECK(legacy == GRC::LegacyPollStore::Lookup::INCOMPLETE);
+    BOOST_CHECK(registry.TryListedByTxid(poll.tx.GetHash()) == nullptr);
+    BOOST_CHECK(registry.FindByTitle(GRC::PollTitleKey("Title")).empty());
+
+    LinkBlock(polled.m_pindex, start + 8 * DAY, GRC::Claim(), {}, bits);
+
+    BOOST_CHECK(registry.TryByTxidOrLegacy(poll.tx.GetHash(), legacy) != nullptr);
+    BOOST_CHECK(legacy == GRC::LegacyPollStore::Lookup::FOUND);
 }
 
 //!
@@ -2198,8 +2237,8 @@ BOOST_AUTO_TEST_CASE(a_legacy_poll_weighs_magnitude_as_of_its_end)
     {
         LOCK(GRC::PollRegistry::cs_poll_registry);
         registry.InitializeLegacyStore(0, 1000);
-        std::optional<int> below_floor;
-        ref = registry.TryByTxidOrLegacy(poll_tx.GetHash(), below_floor);
+        GRC::LegacyPollStore::Lookup legacy = GRC::LegacyPollStore::Lookup::NOT_LEGACY;
+        ref = registry.TryByTxidOrLegacy(poll_tx.GetHash(), legacy);
         BOOST_REQUIRE(ref != nullptr);
         BOOST_REQUIRE_EQUAL(ref->Votes().size(), 1U);
     }
@@ -2264,8 +2303,8 @@ BOOST_AUTO_TEST_CASE(a_legacy_poll_with_no_superblock_before_its_end_has_no_magn
     {
         LOCK(GRC::PollRegistry::cs_poll_registry);
         registry.InitializeLegacyStore(0, 1000);
-        std::optional<int> below_floor;
-        ref = registry.TryByTxidOrLegacy(poll_tx.GetHash(), below_floor);
+        GRC::LegacyPollStore::Lookup legacy = GRC::LegacyPollStore::Lookup::NOT_LEGACY;
+        ref = registry.TryByTxidOrLegacy(poll_tx.GetHash(), legacy);
         BOOST_REQUIRE(ref != nullptr);
         BOOST_REQUIRE_EQUAL(ref->Votes().size(), 1U);
     }
@@ -3169,7 +3208,9 @@ BOOST_AUTO_TEST_CASE(a_legacy_poll_is_filled_once_and_read_back_after_a_restart)
 
     const unsigned int bits = pindexGenesisBlock->nBits;
     const LinkedTip polled = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {poll.tx, first}, bits);
-    LinkBlock(polled.m_pindex, start + DAY, GRC::Claim(), {second}, bits);
+    const LinkedTip within = LinkBlock(polled.m_pindex, start + DAY, GRC::Claim(), {second}, bits);
+    // The first block past the end closes the poll's window, as on any node past it.
+    LinkBlock(within.m_pindex, start + 8 * DAY, GRC::Claim(), {}, bits);
 
     LegacyStoreScope store;
     {
@@ -3195,6 +3236,88 @@ BOOST_AUTO_TEST_CASE(a_legacy_poll_is_filled_once_and_read_back_after_a_restart)
     const GRC::LegacyPollEntry* entry = nullptr;
     BOOST_REQUIRE(reopened.Fetch(poll.tx.GetHash(), entry) == GRC::LegacyPollStore::Lookup::FOUND);
     BOOST_CHECK(VoteTxids(*entry) == std::vector<uint256>({first.GetHash(), second.GetHash()}));
+}
+
+//!
+//! A legacy poll whose window the node's chain does not yet close, as on a node syncing from zero, is not stored: the
+//! store keeps a poll only once the chain holds its first block past the end, and then fills it with every vote.
+//!
+BOOST_AUTO_TEST_CASE(a_legacy_poll_is_stored_only_once_the_chain_holds_a_block_past_its_end)
+{
+    grc_test::StateGuard guard;
+    LOCK(cs_main);
+
+    const int64_t start = GetAdjustedTime() - 20 * DAY;
+    const PollTx poll = MakeChainPollTx("Title", start);
+    const uint256 txid = poll.tx.GetHash();
+    const CTransaction first = MakeVoteTx(txid, start + 60);
+    const CTransaction second = MakeVoteTx(txid, start + 3 * DAY);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {poll.tx, first}, bits);
+    const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
+
+    LegacyStoreScope store;
+    const GRC::LegacyPollEntry* entry = nullptr;
+
+    // The chain ends at the poll's block, then at a block inside the window: the window is still open on it.
+    BOOST_CHECK(store->Fetch(txid, entry) == GRC::LegacyPollStore::Lookup::INCOMPLETE);
+    BOOST_CHECK(entry == nullptr);
+
+    const LinkedTip within = LinkBlock(polled.m_pindex, start + 3 * DAY, GRC::Claim(), {second}, bits);
+
+    BOOST_CHECK(store->Fetch(txid, entry) == GRC::LegacyPollStore::Lookup::INCOMPLETE);
+    BOOST_CHECK(store->Entries().empty());
+
+    // Nothing was written: a restarted node finds no entry.
+    {
+        GRC::LegacyPollStore reopened;
+        reopened.Initialize(0, 1000);
+        BOOST_CHECK(reopened.Entries().empty());
+    }
+
+    // The first block past the end closes the window: the poll is stored with both votes.
+    LinkBlock(within.m_pindex, start + 8 * DAY, GRC::Claim(), {}, bits);
+
+    BOOST_REQUIRE(store->Fetch(txid, entry) == GRC::LegacyPollStore::Lookup::FOUND);
+    BOOST_CHECK(VoteTxids(*entry) == std::vector<uint256>({first.GetHash(), second.GetHash()}));
+    BOOST_CHECK_EQUAL(store->Entries().size(), 1U);
+}
+
+//!
+//! A flagged block in a legacy poll's window that cannot be read (a disk error) fails the fill: nothing is stored,
+//! and the next query fills the poll once the block reads again.
+//!
+BOOST_AUTO_TEST_CASE(a_legacy_poll_with_an_unreadable_block_in_its_window_is_not_stored)
+{
+    grc_test::StateGuard guard;
+    LOCK(cs_main);
+
+    const int64_t start = GetAdjustedTime() - 20 * DAY;
+    const PollTx poll = MakeChainPollTx("Title", start);
+    const uint256 txid = poll.tx.GetHash();
+    const CTransaction vote = MakeVoteTx(txid, start + DAY);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {poll.tx}, bits);
+    const LinkedTip within = LinkBlock(polled.m_pindex, start + DAY, GRC::Claim(), {vote}, bits);
+    LinkBlock(within.m_pindex, start + 8 * DAY, GRC::Claim(), {}, bits);
+    const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
+
+    // The vote's block cannot be read: its index points into a block file that does not exist.
+    const unsigned int file = within.m_pindex->nFile;
+    within.m_pindex->nFile = 9999;
+
+    LegacyStoreScope store;
+    const GRC::LegacyPollEntry* entry = nullptr;
+
+    BOOST_CHECK(store->Fetch(txid, entry) == GRC::LegacyPollStore::Lookup::INCOMPLETE);
+    BOOST_CHECK(store->Entries().empty());
+
+    within.m_pindex->nFile = file;
+
+    BOOST_REQUIRE(store->Fetch(txid, entry) == GRC::LegacyPollStore::Lookup::FOUND);
+    BOOST_CHECK(VoteTxids(*entry) == std::vector<uint256>({vote.GetHash()}));
 }
 
 //!
@@ -3249,7 +3372,9 @@ BOOST_AUTO_TEST_CASE(a_legacy_vote_links_by_title_key_to_each_poll_whose_window_
     const LinkedTip first = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {earlier.tx}, bits);
     const LinkedTip second = LinkBlock(first.m_pindex, start + 2 * DAY, GRC::Claim(), {later.tx}, bits);
     const LinkedTip third = LinkBlock(second.m_pindex, start + 3 * DAY, GRC::Claim(), {in_both}, bits);
-    LinkBlock(third.m_pindex, start + 8 * DAY, GRC::Claim(), {in_later}, bits);
+    const LinkedTip fourth = LinkBlock(third.m_pindex, start + 8 * DAY, GRC::Claim(), {in_later}, bits);
+    // The first block past the later poll's end closes both windows, as on any node past them.
+    LinkBlock(fourth.m_pindex, start + 10 * DAY, GRC::Claim(), {}, bits);
     const TxIndexScope earlier_indexed(earlier.tx, first.m_tx_positions[0]);
     const TxIndexScope later_indexed(later.tx, second.m_tx_positions[0]);
 
@@ -3277,7 +3402,9 @@ BOOST_AUTO_TEST_CASE(a_version_2_vote_counts_only_in_the_poll_it_names)
 
     const unsigned int bits = pindexGenesisBlock->nBits;
     const LinkedTip polls = LinkBlock(pindexGenesisBlock, start + 60, GRC::Claim(), {named.tx, other.tx}, bits);
-    LinkBlock(polls.m_pindex, start + DAY, GRC::Claim(), {vote}, bits);
+    const LinkedTip voted = LinkBlock(polls.m_pindex, start + DAY, GRC::Claim(), {vote}, bits);
+    // The first block past the end closes the poll's window, as on any node past it.
+    LinkBlock(voted.m_pindex, start + 8 * DAY, GRC::Claim(), {}, bits);
     const TxIndexScope named_indexed(named.tx, polls.m_tx_positions[0]);
     const TxIndexScope other_indexed(other.tx, polls.m_tx_positions[1]);
 
@@ -3312,6 +3439,8 @@ BOOST_AUTO_TEST_CASE(the_store_fills_only_a_poll_from_the_floor_to_v11_on_the_ma
     const LinkedTip one = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {below_floor.tx}, bits);
     const LinkedTip two = LinkBlock(one.m_pindex, start + 60, GRC::Claim(), {eligible.tx, no_poll}, bits);
     const LinkedTip three = LinkBlock(two.m_pindex, start + 120, GRC::Claim(), {at_ceiling.tx}, bits);
+    // The first block past the end closes the eligible poll's window, as on any node past it.
+    LinkBlock(three.m_pindex, start + 8 * DAY, GRC::Claim(), {}, bits);
     BOOST_REQUIRE(!side.m_pindex->IsInMainChain());
     const TxIndexScope below_indexed(below_floor.tx, one.m_tx_positions[0]);
     const TxIndexScope eligible_indexed(eligible.tx, two.m_tx_positions[0]);
@@ -3342,6 +3471,8 @@ BOOST_AUTO_TEST_CASE(the_legacy_store_applies_the_floor_its_version_and_clearing
     const int64_t start = GetAdjustedTime() - 20 * DAY;
     const PollTx poll = MakeChainPollTx("Title", start);
     const LinkedTip polled = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {poll.tx}, pindexGenesisBlock->nBits);
+    // The first block past the end closes the poll's window, as on any node past it.
+    LinkBlock(polled.m_pindex, start + 8 * DAY, GRC::Claim(), {}, pindexGenesisBlock->nBits);
     const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
     const uint256 txid = poll.tx.GetHash();
     const GRC::LegacyPollEntry* entry = nullptr;

@@ -42,15 +42,22 @@ const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
         const uint256 txid = uint256S(title_or_id);
 
         // A poll the registry holds, or else a poll below V11 from the legacy store.
-        std::optional<int> below_floor;
+        LegacyPollStore::Lookup legacy_lookup = LegacyPollStore::Lookup::NOT_LEGACY;
 
-        if (const PollReference* ref = registry.TryByTxidOrLegacy(txid, below_floor)) {
+        if (const PollReference* ref = registry.TryByTxidOrLegacy(txid, legacy_lookup)) {
             return ref;
         }
 
-        if (below_floor) {
+        if (legacy_lookup == LegacyPollStore::Lookup::BELOW_FLOOR) {
             throw JSONRPCError(RPC_INVALID_PARAMETER,
-                               strprintf("poll before the legacy floor (height %d), not available", *below_floor));
+                               strprintf("poll before the legacy floor (height %d), not available",
+                                         registry.LegacyFloor()));
+        }
+
+        if (legacy_lookup == LegacyPollStore::Lookup::INCOMPLETE) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               "poll not yet closed on this node's chain, or a block in its window could not be "
+                               "read; not available");
         }
     }
 

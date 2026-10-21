@@ -492,12 +492,18 @@ public:
     //! \brief Get a poll by txid: one the registry holds, or else a poll below V11 from the legacy store, filled
     //! from the chain on first demand. A legacy poll never enters the registry itself.
     //!
-    //! \param below_floor Set to the legacy floor when the poll is below it; reset otherwise.
+    //! \param legacy_lookup Set to the legacy store's answer when the store is asked (the poll is neither held by the
+    //! registry nor already shown); NOT_LEGACY otherwise. BELOW_FLOOR and INCOMPLETE tell why no poll is returned.
     //!
     //! \return The poll, or \c nullptr.
     //!
-    const PollReference* TryByTxidOrLegacy(const uint256& txid, std::optional<int>& below_floor)
+    const PollReference* TryByTxidOrLegacy(const uint256& txid, LegacyPollStore::Lookup& legacy_lookup)
         EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
+
+    //!
+    //! \brief The lowest height the legacy store serves.
+    //!
+    int LegacyFloor() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry) { return m_legacy_store.Floor(); }
 
     //!
     //! \brief Get a listed poll by txid: one the registry holds, or one the legacy store holds. Nothing is

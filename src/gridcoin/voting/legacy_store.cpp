@@ -190,14 +190,26 @@ LegacyPollStore::Lookup LegacyPollStore::Compute(const uint256& txid, LegacyPoll
     CBlock block;
 
     // Through the closing block: the walk stops at the first block after the poll's whose time exceeds the end. Only
-    // blocks flagged as holding a contract are read.
+    // blocks flagged as holding a contract are read. An entry is kept for good, so it is computed only
+    // from a closed window read in full: a chain that ends before the first block past the end, or a flagged block
+    // that cannot be read, fills nothing.
+    bool closed = false;
+
     for (const CBlockIndex* pindex = pindex_poll; pindex; pindex = pindex->pnext) {
         if (pindex != pindex_poll && pindex->nTime > end) {
+            closed = true;
             break;
         }
 
-        if (!pindex->IsContract() || !ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
+        if (!pindex->IsContract()) {
             continue;
+        }
+
+        if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
+            LogPrintf("WARN: %s: block %d in the window of legacy poll %s could not be read; the poll is not stored.",
+                      __func__, pindex->nHeight, txid.ToString());
+
+            return Lookup::INCOMPLETE;
         }
 
         // In the poll's own block, the votes ahead of the poll are not its.
@@ -231,5 +243,5 @@ LegacyPollStore::Lookup LegacyPollStore::Compute(const uint256& txid, LegacyPoll
         }
     }
 
-    return Lookup::FOUND;
+    return closed ? Lookup::FOUND : Lookup::INCOMPLETE;
 }
