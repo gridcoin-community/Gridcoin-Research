@@ -34,7 +34,7 @@ AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent)
 
     resize(GRC::ScaleSize(this, width(), height()));
 
-#ifdef Q_OS_MAC // Icons on push buttons are very uncommon on Mac
+#ifdef Q_OS_MACOS // Icons on push buttons are very uncommon on Mac
     ui->newAddressButton->setIcon(QIcon());
     ui->copyToClipboardButton->setIcon(QIcon());
     ui->deleteButton->setIcon(QIcon());

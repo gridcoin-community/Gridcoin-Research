@@ -56,7 +56,7 @@ OptionsDialog::OptionsDialog(QWidget* parent)
     ui->pollExpireNotifyLineEdit->installEventFilter(this);
 
     /* Window elements init */
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     /* hide launch at startup option on macOS */
     ui->gridcoinAtStartup->setVisible(false);
     ui->gridcoinAtStartupMinimised->setVisible(false);
@@ -276,7 +276,7 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->disableTransactionNotifications, OptionsModel::DisableTrxNotifications);
     mapper->addMapping(ui->disablePollNotifications, OptionsModel::DisablePollNotifications);
     mapper->addMapping(ui->pollExpireNotifyLineEdit, OptionsModel::PollExpireNotification);
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     if (QSystemTrayIcon::isSystemTrayAvailable()) {
         mapper->addMapping(ui->minimizeToTray, OptionsModel::MinimizeToTray);
         mapper->addMapping(ui->minimizeOnClose, OptionsModel::MinimizeOnClose);

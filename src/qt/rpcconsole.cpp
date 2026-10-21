@@ -306,7 +306,7 @@ RPCConsole::RPCConsole(QWidget *parent) :
     resize(GRC::ScaleSize(this, width(), height()));
     GRC::ScaleFontPointSize(ui->banHeading, 12);
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     ui->openDebugLogfileButton->setIcon(QIcon(":/icons/export"));
     ui->showCLOptionsButton->setIcon(QIcon(":/icons/options"));
 #endif

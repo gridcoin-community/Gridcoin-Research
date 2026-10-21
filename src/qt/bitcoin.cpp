@@ -832,7 +832,7 @@ int main(int argc, char *argv[])
     else
         app.setApplicationName("Gridcoin-Qt");
 
-#if defined(Q_OS_WIN) || defined(Q_OS_MAC)
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     // Apply Qt's built-in "Fusion" theme as the application's base styles to
     // normalize layout discrepancies between platforms and fix some high-DPI
     // scaling issues on Windows. Gridcoin uses highly-customized stylesheets
