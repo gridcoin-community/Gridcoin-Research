@@ -467,24 +467,28 @@ public:
     }
 
     //! The number of bits in |n|: 0 for 0, 63 for INT64_MAX, 64 for INT64_MIN.
-    static int BitWidth(int64_t n) noexcept
+    //! A count of bits cannot be negative, so it is returned unsigned.
+    static unsigned int BitWidth(int64_t n) noexcept
     {
         // std::abs is undefined on INT64_MIN; |INT64_MIN| = 2^63 takes 64 bits.
         if (n == std::numeric_limits<int64_t>::min()) {
-            return 64;
+            return 64U;
         }
 
         const uint64_t magnitude = static_cast<uint64_t>(std::abs(n));
 
         if (magnitude == 0) {
-            return 0;
+            return 0U;
         }
 
 #if defined(__GNUC__)
         static_assert(sizeof(unsigned long long) == sizeof(uint64_t), "clzll must cover 64 bits");
-        return 64 - __builtin_clzll(magnitude);
+        // __builtin_clzll returns int. magnitude is not zero here, so the count is in
+        // [0, 63] and 64 minus it is in [1, 64]: never negative, so the cast keeps the
+        // value.
+        return static_cast<unsigned int>(64 - __builtin_clzll(magnitude));
 #else
-        int width = 0;
+        unsigned int width = 0;
 
         for (uint64_t m = magnitude; m != 0; m >>= 1) {
             ++width;
@@ -514,7 +518,7 @@ private:
     //! 63. |a| < 2^w(a) and |b| < 2^w(b) give |a b| < 2^(w(a) + w(b)), so a sum
     //! of at most 63 proves the product fits. The converse does not hold:
     //! 2^31 * 2^31 = 2^62 fits and is refused. The guard is kept conservative
-    //! on purpose. It is a few lines of int64 arithmetic that behave the same
+    //! on purpose. It is a few lines of integer arithmetic that behave the same
     //! on every compiler and target, which for consensus code is worth more
     //! than the last bit of range, as long as it cannot fire on an input the
     //! chain can carry. The consensus multiplicands stay well inside it: see the
@@ -527,7 +531,10 @@ private:
             return 0;
         }
 
-        if (BitWidth(a) + BitWidth(b) > 63) {
+        // sign-compare checked: each BitWidth() is unsigned and at most 64, so the sum is
+        // at most 128 and cannot wrap; 63U is a non-negative literal, so both sides are
+        // unsigned.
+        if (BitWidth(a) + BitWidth(b) > 63U) {
             throw std::overflow_error("fraction multiplication results in an overflow");
         }
 

@@ -34,28 +34,30 @@
 namespace {
 // This version, which is recommended by some resources on the web, is actually slower, and has several issues. See
 // the unit tests below.
-int msb(const int64_t& n)
+unsigned int msb(const int64_t& n)
 {
     // Can't take the log of 0.
     if (n == 0) {
-        return 0;
+        return 0U;
     }
 
-    // Log2 is O(1) both time and space-wise.
-    return (static_cast<int>(floor(log2(std::abs(n)))) + 1);
+    // Log2 is O(1) both time and space-wise. n is not zero here, so |n| >= 1 and
+    // floor(log2(|n|)) >= 0: the cast to unsigned keeps the value.
+    return (static_cast<unsigned int>(floor(log2(std::abs(n)))) + 1U);
 }
 
-int msb2(const int64_t& n_in)
+unsigned int msb2(const int64_t& n_in)
 {
     int64_t n = std::abs(n_in);
 
-    int index = 0;
+    unsigned int index = 0;
 
     if (n == 0) {
-        return 0;
+        return 0U;
     }
 
-    for (int i = 0; i <= 63; ++i) {
+    // sign-compare checked: i is unsigned int; 63U is a non-negative literal, so both sides are unsigned.
+    for (unsigned int i = 0; i <= 63U; ++i) {
         if (n % 2 == 1) {
             index = i;
         }
@@ -66,14 +68,16 @@ int msb2(const int64_t& n_in)
     return index + 1;
 }
 
-// This is the one currently used in the Fraction class
-int msb3(const int64_t& n_in)
+// The shift loop the Fraction overflow guard used until Fraction::BitWidth replaced it.
+// The tests below compare the two.
+unsigned int msb3(const int64_t& n_in)
 {
     int64_t n = std::abs(n_in);
 
-    int index = 0;
+    unsigned int index = 0;
 
-    for (; index <= 63; ++index) {
+    // sign-compare checked: index is unsigned int; 63U is a non-negative literal, so both sides are unsigned.
+    for (; index <= 63U; ++index) {
         if (n >> index == 0) {
             break;
         }
@@ -87,10 +91,12 @@ BOOST_AUTO_TEST_SUITE(util_fraction_tests, *boost::unit_test::fixture<grc_test::
 
 BOOST_AUTO_TEST_CASE(Fraction_msb_algorithm_equivalence)
 {
-    for (unsigned int i = 0; i <= 63; ++i) {
+    // sign-compare checked: i is unsigned int; 63U is a non-negative literal, so both sides are unsigned.
+    for (unsigned int i = 0; i <= 63U; ++i) {
         int64_t n = 0;
 
-        if (i > 0) {
+        // sign-compare checked: i is unsigned int; 0U is a non-negative literal, so both sides are unsigned.
+        if (i > 0U) {
             n = (int64_t {1} << (i - 1));
         }
 
@@ -103,10 +109,11 @@ BOOST_AUTO_TEST_CASE(Fraction_msb_algorithm_equivalence)
     for (int i = 0; i < 16; ++i) {
         bias_for_msb_result_63 = (int64_t {1} << i);
 
-        int msb_result = msb(std::numeric_limits<int64_t>::max() - bias_for_msb_result_63);
+        unsigned int msb_result = msb(std::numeric_limits<int64_t>::max() - bias_for_msb_result_63);
 
-        if (msb_result == 63) {
-            LogPrintf("INFO: %s: bias_for_msb_result_63 = %i, msb_result = %i", __func__, bias_for_msb_result_63, msb_result);
+        // sign-compare checked: msb_result is unsigned int; 63U is a non-negative literal, so both sides are unsigned.
+        if (msb_result == 63U) {
+            LogPrintf("INFO: %s: bias_for_msb_result_63 = %i, msb_result = %u", __func__, bias_for_msb_result_63, msb_result);
             break;
         } else {
         }
@@ -114,12 +121,15 @@ BOOST_AUTO_TEST_CASE(Fraction_msb_algorithm_equivalence)
 
     // bias_for_msb_result_63 is currently 32768! It should be zero! This disqualifies the log2 based approach based on
     // a correctness check.
-    BOOST_CHECK_EQUAL(msb(std::numeric_limits<int64_t>::max() - bias_for_msb_result_63), 63);
+    // sign-compare checked: msb() is unsigned int; 63U is a non-negative literal, so both sides are unsigned.
+    BOOST_CHECK_EQUAL(msb(std::numeric_limits<int64_t>::max() - bias_for_msb_result_63), 63U);
 
-    BOOST_CHECK_EQUAL(msb2(std::numeric_limits<int64_t>::max()), 63);
-    BOOST_CHECK_EQUAL(msb3(std::numeric_limits<int64_t>::max()), 63);
+    // sign-compare checked: msb2() is unsigned int; 63U is a non-negative literal, so both sides are unsigned.
+    BOOST_CHECK_EQUAL(msb2(std::numeric_limits<int64_t>::max()), 63U);
+    // sign-compare checked: msb3() is unsigned int; 63U is a non-negative literal, so both sides are unsigned.
+    BOOST_CHECK_EQUAL(msb3(std::numeric_limits<int64_t>::max()), 63U);
 
-    std::vector<std::pair<int64_t, int>> msb_results, msb2_results, msb3_results;
+    std::vector<std::pair<int64_t, unsigned int>> msb_results, msb2_results, msb3_results;
 
     unsigned int iterations = 1000;
 
@@ -152,7 +162,7 @@ BOOST_AUTO_TEST_CASE(Fraction_msb_algorithm_equivalence)
     for (unsigned int i = 0; i < iterations; ++i) {
         if (msb_results[i] != msb2_results[i] || msb_results[i] != msb3_results[i]) {
             success = false;
-            error("%s: iteration %u: mismatch: %" PRId64 ", msb = %i, %" PRId64 " msb2 = %i, %" PRId64 " msb3 = %i",
+            error("%s: iteration %u: mismatch: %" PRId64 ", msb = %u, %" PRId64 " msb2 = %u, %" PRId64 " msb3 = %u",
                   __func__,
                   i,
                   msb_results[i].first,
@@ -532,8 +542,8 @@ BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_1)
     Fraction lhs((int64_t) 1 << 30, 1);
     Fraction rhs((int64_t) 1 << 31, 1);
 
-    LogPrintf("INFO: %s: msb((int64_t) 1 << 30) = %i", __func__, msb3((int64_t) 1 << 30));
-    LogPrintf("INFO: %s: msb((int64_t) 1 << 31) = %i", __func__, msb3((int64_t) 1 << 31));
+    LogPrintf("INFO: %s: msb((int64_t) 1 << 30) = %u", __func__, msb3((int64_t) 1 << 30));
+    LogPrintf("INFO: %s: msb((int64_t) 1 << 31) = %u", __func__, msb3((int64_t) 1 << 31));
 
     std::string err;
 
@@ -808,16 +818,23 @@ BOOST_AUTO_TEST_CASE(bit_width_matches_the_former_shift_loop)
     const int64_t max = std::numeric_limits<int64_t>::max();
     const int64_t min = std::numeric_limits<int64_t>::min();
 
-    BOOST_CHECK_EQUAL(Fraction::BitWidth(0), 0);
-    BOOST_CHECK_EQUAL(Fraction::BitWidth(1), 1);
-    BOOST_CHECK_EQUAL(Fraction::BitWidth(-1), 1);
-    BOOST_CHECK_EQUAL(Fraction::BitWidth(max), 63);
-    BOOST_CHECK_EQUAL(Fraction::BitWidth(-max), 63);
+    // sign-compare checked: BitWidth() is unsigned int; 0U is a non-negative literal, so both sides are unsigned.
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(0), 0U);
+    // sign-compare checked: BitWidth() is unsigned int; 1U is a non-negative literal, so both sides are unsigned.
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(1), 1U);
+    // sign-compare checked: BitWidth() is unsigned int; 1U is a non-negative literal, so both sides are unsigned.
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(-1), 1U);
+    // sign-compare checked: BitWidth() is unsigned int; 63U is a non-negative literal, so both sides are unsigned.
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(max), 63U);
+    // sign-compare checked: BitWidth() is unsigned int; 63U is a non-negative literal, so both sides are unsigned.
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(-max), 63U);
     // |INT64_MIN| = 2^63 takes 64 bits. The loop could not be given this value
     // (std::abs is undefined on it); the guard special-cased it to 64.
-    BOOST_CHECK_EQUAL(Fraction::BitWidth(min), 64);
+    // sign-compare checked: BitWidth() is unsigned int; 64U is a non-negative literal, so both sides are unsigned.
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(min), 64U);
 
-    for (int i = 0; i < 63; ++i) {
+    // sign-compare checked: i is unsigned int; 63U is a non-negative literal, so both sides are unsigned.
+    for (unsigned int i = 0; i < 63U; ++i) {
         const int64_t power = int64_t {1} << i;
 
         BOOST_CHECK_EQUAL(Fraction::BitWidth(power), i + 1);
@@ -843,12 +860,15 @@ BOOST_AUTO_TEST_CASE(bit_width_on_both_edges_of_every_width)
     // A width of k bits covers the magnitudes 2^(k-1) through 2^k - 1. Each width is
     // checked at both ends of that range and at random magnitudes inside it, on both
     // signs, against the literal width rather than another implementation.
-    BOOST_CHECK_EQUAL(Fraction::BitWidth(0), 0);
-    BOOST_CHECK_EQUAL(Fraction::BitWidth(std::numeric_limits<int64_t>::min()), 64);
+    // sign-compare checked: BitWidth() is unsigned int; 0U is a non-negative literal, so both sides are unsigned.
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(0), 0U);
+    // sign-compare checked: BitWidth() is unsigned int; 64U is a non-negative literal, so both sides are unsigned.
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(std::numeric_limits<int64_t>::min()), 64U);
 
     FastRandomContext rand(uint256 {2});
 
-    for (int k = 1; k <= 63; ++k) {
+    // sign-compare checked: k is unsigned int; 63U is a non-negative literal, so both sides are unsigned.
+    for (unsigned int k = 1; k <= 63U; ++k) {
         const int64_t low = int64_t {1} << (k - 1);
         // 2^k - 1, written so that k = 63 gives INT64_MAX without overflowing.
         const int64_t high = (low - 1) + low;
