@@ -109,7 +109,7 @@ public:
     void enqueueUpsert(const uint256& hash, std::vector<CoinRecord> records,
                        bool pending);
 
-    //! Remove every stored coin of \p hash (CT_DELETED — no wallet locks held).
+    //! Remove every stored coin of \p hash (CT_DELETED — needs no wallet lock).
     void enqueueRemove(const uint256& hash);
 
     //! An address-book entry changed. The worker re-labels affected records;

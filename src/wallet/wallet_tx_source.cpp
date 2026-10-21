@@ -220,11 +220,11 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
     // showTransaction -> IsInMainChain) and cs_wallet (for mapWallet + the
     // recursive IsMine in decomposeTransaction). All four such callsites hold
     // both locks (AddToWallet / CommitTransaction / WalletUpdateSpent, verified
-    // by audit); the annotation lets the analyzer accept the AssertLockHeld()s
-    // and the DEBUG_LOCKORDER builds enforce them at runtime. CT_DELETED callsites
-    // hold neither lock (the tx is already erased) and touch only the hash, so the
-    // annotation over-claims harmlessly for that path (the handler is reached only
-    // through boost::signals2, which the analyzer cannot trace).
+    // by audit), and the AssertLockHeld()s in that branch check this at runtime
+    // in DEBUG_LOCKORDER builds. Every CT_DELETED callsite holds cs_main (the
+    // producer exclusion WalletTxStore::prime relies on), and the CT_DELETED
+    // branch touches only the hash, so it needs no wallet lock whatever else
+    // the emitter holds.
     switch (status) {
     case CT_NEW:
     case CT_UPDATED:

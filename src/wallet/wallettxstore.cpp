@@ -522,8 +522,11 @@ bool WalletTxStore::locateHashRange(const uint256& hash, std::size_t& minPos,
 {
     // Same-hash keys are contiguous under TxOrderLess (the hash tiebreaker
     // clusters them), so min/max bound a single range. The erase in removeLocked
-    // depends on that; validate it at runtime rather than with an assert, since the
-    // deployed build is -DNDEBUG and a de-clustered index would erase a wider
+    // depends on that, so it is checked here and reported by the return value
+    // rather than asserted: removeLocked logs, rebuilds the hash index and
+    // retries, and skips the remove if the range is still wrong. An assert in
+    // its place would abort the process over a display-index fault, and with
+    // asserts disabled it would let a de-clustered index erase a wider
     // [minPos, maxPos] range that swallows foreign rows. The bounds check is
     // ordered first and short-circuits, so the m_records[] subscripts below it
     // never run out of range.
@@ -1453,9 +1456,10 @@ void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
                 if (absidx >= m_records.size()) {
                     // Unreachable by construction: rows are captured from a live
                     // view_index under the same cs_store hold that mutated
-                    // m_records. Log rather than assert — the deployed build is
-                    // -DNDEBUG — and skip, so a stale index degrades to a missing
-                    // row instead of a heap read.
+                    // m_records. Log and skip rather than assert, so a stale
+                    // index degrades to a missing row: an assert would abort the
+                    // process over a display fault, and with asserts disabled it
+                    // would fall through to an out-of-bounds heap read.
                     LogPrintf("ERROR: %s: view %d Insert delta at %d references record "
                               "%u of %u - skipping",
                               __func__, viewId, d.first,

@@ -150,9 +150,10 @@ private:
     //! Producer: a wallet transaction appeared / changed / was deleted. Runs
     //! on the emitting core thread under the locks it already holds
     //! (CT_NEW/CT_UPDATED sites hold cs_main + cs_wallet; CT_DELETED sites
-    //! hold neither and only the hash is touched). NO_THREAD_SAFETY_ANALYSIS
-    //! for the signals2 dispatch, with AssertLockHeld enforcing at runtime —
-    //! the WalletTxSourceImpl::onTransactionChanged discipline.
+    //! hold cs_main, and that branch touches only the hash, so it needs no
+    //! wallet lock). NO_THREAD_SAFETY_ANALYSIS for the signals2 dispatch, with
+    //! AssertLockHeld checking at runtime in DEBUG_LOCKORDER builds — the
+    //! WalletTxSourceImpl::onTransactionChanged discipline.
     void onTransactionChanged(CWallet* wallet, const uint256& hash, ChangeType status)
         NO_THREAD_SAFETY_ANALYSIS;
 
