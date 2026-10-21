@@ -1577,7 +1577,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
 
         // There is only one entry in the chainlet.. so the head and root are the same.
         BOOST_CHECK(chainlet_root->m_hash == chainlet_head->m_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1);
+        // sign-compare checked: size() is size_t; 1U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1U);
     }
 
     // Renewal
@@ -1616,7 +1617,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
         GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
 
         BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2);
+        // sign-compare checked: size() is size_t; 2U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2U);
     }
 
     // Second renewal
@@ -1654,7 +1656,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
         GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
 
         BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3);
+        // sign-compare checked: size() is size_t; 3U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3U);
     }
 
     // Let's corrupt the activation beacon to have a previous beacon hash that refers circularly back to the chain head...
@@ -1787,7 +1790,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
 
         // There is only one entry in the chainlet.. so the head and root are the same.
         BOOST_CHECK(chainlet_root->m_hash == chainlet_head->m_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1);
+        // sign-compare checked: size() is size_t; 1U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1U);
     }
 
     // Renewal
@@ -1826,7 +1830,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
         GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
 
         BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2);
+        // sign-compare checked: size() is size_t; 2U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2U);
     }
 
     // Second renewal
@@ -1864,7 +1869,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
         GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
 
         BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3);
+        // sign-compare checked: size() is size_t; 3U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3U);
     }
 
     // Let's corrupt the activation beacon to have a previous beacon hash that is the same as its hash...
