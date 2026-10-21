@@ -23,8 +23,6 @@ namespace {
 //!
 class ChoicesListDelegate : public QStyledItemDelegate
 {
-    Q_OBJECT
-
 public:
     ChoicesListDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent)
     {
@@ -59,8 +57,6 @@ private:
 //!
 class AdditionalFieldDelegate : public QItemDelegate
 {
-    Q_OBJECT
-
 public:
     AdditionalFieldDelegate(QObject* parent = nullptr) : QItemDelegate(parent)
     {
