@@ -2,12 +2,18 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chain.h"
 #include "gridcoin/protocol.h"
 #include "primitives/transaction.h"
 
 #include <boost/test/unit_test.hpp>
 
 #include "test/state_guard.h"
+
+#include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 // Tests are single-threaded and drive the ProtocolRegistry contract
 // handler directly. The handler is EXCLUSIVE_LOCKS_REQUIRED(cs_main);
@@ -94,6 +100,49 @@ void DeleteProtocolEntry(const uint32_t& payload_version, const std::string& key
 
     CTransaction ctx_tx(dummy_tx);
     registry.Add({contract, ctx_tx, &dummy_index});
+}
+
+
+//! A protocol entry contract in the post-V13 form (contract v3, payload v2).
+GRC::Contract MakeProtocolContract(const GRC::ContractAction action, const std::string& key, const std::string& value)
+{
+    return GRC::MakeContract<GRC::ProtocolEntryPayload>(
+                uint32_t {3},
+                action,
+                uint32_t {2},
+                key,
+                value,
+                action == GRC::ContractAction::ADD ? GRC::ProtocolEntryStatus::ACTIVE : GRC::ProtocolEntryStatus::DELETED);
+}
+
+//! The registry's verdict on a contract that would be mined at \p height, through the mempool path (which judges at
+//! nBestHeight + 1) and through the block path.
+struct Verdict
+{
+    bool mempool = false;
+    int mempool_dos = 0;
+    bool block = false;
+    int block_dos = 0;
+};
+
+Verdict JudgeAt(const GRC::Contract& contract, const int height)
+{
+    GRC::ProtocolRegistry& registry = GRC::GetProtocolRegistry();
+
+    CMutableTransaction mtx;
+    mtx.vContracts.push_back(contract);
+    const CTransaction tx(mtx);
+
+    Verdict verdict;
+
+    nBestHeight = height - 1;
+    verdict.mempool = registry.Validate(contract, tx, verdict.mempool_dos);
+
+    CBlockIndex index {};
+    index.nHeight = height;
+    verdict.block = registry.BlockValidate({contract, tx, &index}, verdict.block_dos);
+
+    return verdict;
 }
 
 } // anonymous namespace
@@ -232,6 +281,70 @@ BOOST_AUTO_TEST_CASE(protocol_ProtocolEntriesReturnsIndependentSnapshot)
     BOOST_CHECK(snapshot3.size() == 3);
     BOOST_CHECK(snapshot3.at("key1")->m_status == GRC::ProtocolEntryStatus::DELETED);
     BOOST_CHECK(snapshot2.at("key1")->m_status == GRC::ProtocolEntryStatus::ACTIVE);
+}
+
+// The rule on the value alone: the reduced numerator and denominator are each at most 1,000,000, the value is
+// positive, and the string parses. Reduction comes first, so 2000000/2000000 (= 1/1) passes. The accepted list ends
+// with the entries made on mainnet and testnet so far.
+BOOST_AUTO_TEST_CASE(protocol_magnitude_entry_value_bounds)
+{
+    std::string error;
+
+    for (const char* ok : {"1000000/1", "1/1000000", "999999/1000000", "2000000/2000000", "1000000", "5",
+                           "103050/100000", "618034/1000000", "201765/100000"}) {
+        error.clear();
+        BOOST_CHECK_MESSAGE(GRC::CheckMagnitudeEntryValue(ok, error), ok);
+        BOOST_CHECK_MESSAGE(error.empty(), ok);
+    }
+
+    for (const char* bad : {"1000001/1000000", "1/1000001", "1000001", "0", "0/5", "-1/2", "1/-2",
+                            "", "abc", "1/0", "1/2/3", "1.5"}) {
+        error.clear();
+        BOOST_CHECK_MESSAGE(!GRC::CheckMagnitudeEntryValue(bad, error), bad);
+        BOOST_CHECK_MESSAGE(!error.empty(), bad);
+    }
+
+    BOOST_CHECK(GRC::IsMagnitudeProtocolKey("magnitudeunit"));
+    BOOST_CHECK(GRC::IsMagnitudeProtocolKey("magnitudeweightfactor"));
+    BOOST_CHECK(!GRC::IsMagnitudeProtocolKey("MagnitudeUnit"));
+    BOOST_CHECK(!GRC::IsMagnitudeProtocolKey("blockreward1"));
+}
+
+// From v15 a magnitude entry whose reduced terms exceed the bound is refused on both paths, and only such an entry:
+// the same contract passes one block earlier, and entries in force, removals and other keys pass at v15.
+BOOST_AUTO_TEST_CASE(protocol_magnitude_entry_refused_from_v15)
+{
+    grc_test::StateGuard state_guard; // nBestHeight
+    grc_test::V15HeightGuard v15(4'200'000);
+
+    const int below = 4'199'999;
+    const int at = 4'200'000;
+
+    for (const auto& [key, value] : std::vector<std::pair<std::string, std::string>> {
+             {"magnitudeunit", "1000001/1000000"},
+             {"magnitudeweightfactor", "1/1000001"}}) {
+        const GRC::Contract contract = MakeProtocolContract(GRC::ContractAction::ADD, key, value);
+
+        const Verdict before = JudgeAt(contract, below);
+        BOOST_CHECK_MESSAGE(before.mempool && before.block, key + " = " + value + " below v15");
+
+        const Verdict after = JudgeAt(contract, at);
+        BOOST_CHECK_MESSAGE(!after.mempool && after.mempool_dos == 25, key + " = " + value + " mempool at v15");
+        BOOST_CHECK_MESSAGE(!after.block && after.block_dos == 25, key + " = " + value + " block at v15");
+    }
+
+    const std::vector<std::tuple<GRC::ContractAction, std::string, std::string>> unaffected {
+        {GRC::ContractAction::ADD, "magnitudeunit", "103050/100000"},
+        {GRC::ContractAction::ADD, "magnitudeweightfactor", "618034/1000000"},
+        {GRC::ContractAction::REMOVE, "magnitudeunit", "junk"},
+        {GRC::ContractAction::ADD, "MagnitudeUnit", "junk"},
+        {GRC::ContractAction::ADD, "blockreward1", "1000001/1000000"},
+    };
+
+    for (const auto& [action, key, value] : unaffected) {
+        const Verdict verdict = JudgeAt(MakeProtocolContract(action, key, value), at);
+        BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, key + " = " + value + " at v15");
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

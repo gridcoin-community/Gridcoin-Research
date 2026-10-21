@@ -71,7 +71,9 @@ public:
         ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeunit", m_superblock.m_timestamp);
 
         // If their is an entry prior or equal in timestamp to the superblock and it is active then set the magnitude unit
-        // to that value. If the last entry is not active (i.e. deleted), then leave at the default.
+        // to that value. If the last entry is not active (i.e. deleted), then leave at the default. From block version 15
+        // the entry's reduced terms are at most MAX_MAGNITUDE_ENTRY_TERM (protocol.h), which keeps the arithmetic below in
+        // range.
         if (protocol_entry != nullptr && protocol_entry->m_status == ProtocolEntryStatus::ACTIVE) {
             magnitude_unit = Fraction::FromString(protocol_entry->m_value);
         }
@@ -111,7 +113,9 @@ public:
         ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeunit", sb_index->GetBlockTime());
 
         // If their is an entry prior or equal in timestamp to the superblock and it is active then set the magnitude unit
-        // to that value. If the last entry is not active (i.e. deleted), then leave at the default.
+        // to that value. If the last entry is not active (i.e. deleted), then leave at the default. From block version 15
+        // the entry's reduced terms are at most MAX_MAGNITUDE_ENTRY_TERM (protocol.h), which keeps the arithmetic below in
+        // range.
         if (protocol_entry != nullptr && protocol_entry->m_status == ProtocolEntryStatus::ACTIVE) {
             magnitude_unit = Fraction::FromString(protocol_entry->m_value);
         }
@@ -168,13 +172,28 @@ public:
         //   accrual_days * CurrentMagnitude(cpid) * MagnitudeUnit() * COIN
         //
         // We deconstruct the magnitude unit coefficient ratio as a reminder to
-        // review this value if the protocol rule changes in the future:
+        // review this value if the protocol rule changes in the future.
         //
+        // The product below is SIGNED int64_t (the timespan and the numerator
+        // are int64_t; Scaled() is uint32_t and promotes) and has no wider
+        // fallback; only the later "* COIN" step does. Its bound comes from the
+        // magnitude unit entry: from block version 15 its reduced numerator is
+        // at most MAX_MAGNITUDE_ENTRY_TERM (10^6), so with a CPID at the
+        // magnitude cap (32,767, scaled 3,276,700) the product stays under 2^63
+        // for a superblock up to 32 days old. The longest mainnet superblock gap
+        // since December 2019 is 1.4 days; the static_assert holds the 7-day
+        // case the bound was chosen for (4.65 times under 2^63). See the
+        // analysis at MAX_MAGNITUDE_ENTRY_TERM in protocol.h.
+        //
+        static_assert(int64_t {7 * 86400} * Magnitude::MAX * static_cast<int64_t>(Magnitude::SCALE_FACTOR)
+                          <= std::numeric_limits<int64_t>::max() / MAX_MAGNITUDE_ENTRY_TERM,
+                      "a 7-day accrual at the magnitude cap must fit int64_t at the magnitude unit entry bound");
+
         const uint64_t base_accrual = accrual_timespan
             * CurrentMagnitude(cpid).Scaled()
             * GetMagnitudeUnit().GetNumerator();
 
-        // If the accrual calculation will overflow a 64-bit integer, we need
+        // If the multiplication by COIN will overflow a 64-bit integer, we need
         // more bits. Arithmetic with the big integer type is much slower and
         // unnecessary in the majority of cases so switch only when required:
         //

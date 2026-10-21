@@ -5,6 +5,8 @@
 #include <util/fraction.h>
 
 #include <amount.h>
+#include <chainparams.h>
+#include <gridcoin/protocol.h>
 #include <gridcoin/sidestake.h>
 #include <logging.h>
 #include <random.h>
@@ -1145,6 +1147,70 @@ BOOST_AUTO_TEST_CASE(magnitude_unit_times_the_max_reward_constants)
     // Sixteen places do not: the reduced numerator p * 2^8 is above INT64_MAX,
     // so the result itself has no int64_t representation.
     BOOST_CHECK_THROW(max_reward(GRC::Allocation(49999999999999999LL, 10000000000000000LL)), std::overflow_error);
+}
+
+BOOST_AUTO_TEST_CASE(magnitude_entry_bound_carries_the_consumer_arithmetic)
+{
+    // From block version 15 a "magnitudeunit" or "magnitudeweightfactor"
+    // entry has a reduced numerator and denominator of at most
+    // GRC::MAX_MAGNITUDE_ENTRY_TERM (10^6). These run the Fraction expressions
+    // the entries feed at that bound: the unit's clamp (SnapshotCalculator::
+    // GetMagnitudeUnit), MaxReward's chain, and the weight factor's clamp
+    // (Poll::ResolveMagnitudeWeightFactor). The two integer products are
+    // checked by static_asserts at the consumers. See the analysis at
+    // MAX_MAGNITUDE_ENTRY_TERM.
+    const Consensus::Params& consensus = Params().GetConsensus();
+
+    const auto clamp_unit = [&](const Fraction& unit) {
+        return unit > consensus.MaxMagnitudeUnit ? consensus.MaxMagnitudeUnit : unit;
+    };
+    const auto clamp_weight = [&](const Fraction& factor) {
+        return std::clamp<Fraction>(factor, consensus.MinMagnitudeWeightFactor, consensus.MaxMagnitudeWeightFactor);
+    };
+    const auto max_reward = [](const GRC::Allocation& magnitude_unit) {
+        return (magnitude_unit * 32768 * 2 * COIN).ToCAmount();
+    };
+
+    // The extremes. 999983 is prime, so 10^6 over it cancels nothing.
+    BOOST_CHECK_EQUAL(max_reward(GRC::Allocation(clamp_unit(Fraction(1000000, 999983, true)))), CAmount {6553711413094});
+    BOOST_CHECK_EQUAL(max_reward(GRC::Allocation(clamp_unit(Fraction(1, 1000000, true)))), CAmount {6553600});
+    BOOST_CHECK_EQUAL(max_reward(GRC::Allocation(clamp_unit(Fraction(999999, 1000000, true)))), CAmount {6553593446400});
+    BOOST_CHECK_EQUAL(max_reward(GRC::Allocation(clamp_unit(Fraction(1000000, 1, true)))), CAmount {32768000000000});
+
+    // The edge the bound keeps clear of: with nothing to cancel, MaxReward's
+    // last step multiplies p * 2^16 by COIN (27 bits), so the guard admits p
+    // below 2^20 = 1,048,576 and refuses p at it.
+    BOOST_CHECK_NO_THROW(max_reward(GRC::Allocation(Fraction(1048575, 999983, true))));
+    BOOST_CHECK_THROW(max_reward(GRC::Allocation(Fraction(1048576, 999983, true))), std::overflow_error);
+
+    // A sweep over the accepted range. Each pair is reduced first, as the
+    // parser does; none may throw in any of the three expressions.
+    int64_t checked = 0;
+    std::string first_failure;
+
+    const auto check = [&](const int64_t num, const int64_t den) {
+        ++checked;
+        try {
+            const Fraction entry(num, den, true);
+            (void)max_reward(GRC::Allocation(clamp_unit(entry)));
+            (void)clamp_weight(entry);
+        } catch (const std::exception& e) {
+            if (first_failure.empty()) first_failure = strprintf("%d/%d: %s", num, den, e.what());
+        }
+    };
+
+    for (const int64_t den : {1, 2, 3, 7, 997, 99991, 390625, 524288, 999983, 999997, 999999, 1000000}) {
+        for (int64_t num = 1; num <= GRC::MAX_MAGNITUDE_ENTRY_TERM; num += 997) check(num, den);
+        check(GRC::MAX_MAGNITUDE_ENTRY_TERM, den);
+    }
+
+    for (int64_t den = 1; den <= GRC::MAX_MAGNITUDE_ENTRY_TERM; den += 997) {
+        check(999999, den);
+        check(GRC::MAX_MAGNITUDE_ENTRY_TERM, den);
+    }
+
+    BOOST_CHECK_MESSAGE(first_failure.empty(), first_failure);
+    BOOST_CHECK_GT(checked, 14000);
 }
 
 BOOST_AUTO_TEST_CASE(allocation_to_camount_truncates_toward_zero)

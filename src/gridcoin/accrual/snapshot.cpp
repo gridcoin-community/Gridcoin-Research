@@ -50,23 +50,27 @@ CAmount SnapshotAccrualComputer::MaxReward() const
     //
     // GetMagnitudeUnit() parses the "magnitudeunit" protocol entry as a fraction
     // string, reduces it and clamps its value to at most 5. Only the value is
-    // clamped. The representation is whatever the entry holds, and in practice
-    // that is a decimal: "103050/100000" (2061/2000 reduced) was in force when
-    // this was written. Each multiplication cancels its integer against the
-    // denominator before multiplying, and 32768 * 2 * COIN = 2^24 * 5^8 absorbs
-    // every two and five a decimal denominator 10^k has, so the product formed
-    // is at most about v * 2^24 * 5^8 <= 5 * 6.5536e12, under 2^45, whatever k
-    // is up to 8. Past that the entry's own digits set the size: with k decimal
-    // places and p < 5 * 10^k, the last step multiplies p * 2^(16 - k), about
-    // 2.32 k + 18 bits, by 2^8, which the 63-bit guard admits for every p
-    // through k = 15. At k = 16 an entry near the clamp has p * 2^8 above
-    // INT64_MAX, so no int64_t evaluation order could hold it; smaller values
-    // still pass.
-    // A denominator with a prime factor other than two or five keeps that
-    // factor in the chain; the guard then admits reduced numerators below 2^20.
-    // util_fraction_tests.cpp pins these points, and a protocol entry that
-    // this arithmetic cannot take is the validator's problem, not this
-    // function's: see the Fraction class comment on the guard.
+    // clamped, so the representation reaches this chain. From block version 15
+    // the protocol registry refuses an entry whose reduced numerator or
+    // denominator exceeds MAX_MAGNITUDE_ENTRY_TERM (10^6), and every entry made
+    // through 2026-10-20 is inside that bound ("103050/100000", 2061/2000
+    // reduced, was in force then).
+    //
+    // Each multiplication cancels its integer against the denominator before
+    // multiplying. When nothing cancels (a denominator coprime to 10), the last
+    // step multiplies p * 2^16 by COIN, which has 27 bits, so the 63-bit guard
+    // holds while p < 2^20 = 1,048,576, whatever the denominator. Cancellation
+    // only makes the operands smaller. A decimal denominator 10^k is absorbed
+    // by 32768 * 2 * COIN = 2^24 * 5^8 up to k = 8, and the chain then forms at
+    // most about 5 * 6.5536e12, under 2^45.
+    //
+    // The static_asserts below hold that bound to the analysis, and
+    // util_fraction_tests.cpp runs this chain at the bound and at the guard's
+    // edge. See the full analysis at MAX_MAGNITUDE_ENTRY_TERM in protocol.h.
+    static_assert(MAX_MAGNITUDE_ENTRY_TERM < (int64_t {1} << 20),
+                  "MaxReward's chain needs a reduced unit numerator below 2^20 when nothing cancels");
+    static_assert(COIN < (int64_t {1} << 27), "the analysis above takes COIN as 27 bits");
+
     return (GetMagnitudeUnit() * 32768 * 2 * COIN).ToCAmount();
 }
 

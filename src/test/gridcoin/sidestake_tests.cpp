@@ -6,15 +6,24 @@
 
 #include "test/state_guard.h"
 
+#include <chain.h>
 #include <util.h>
+#include <gridcoin/contract/contract.h>
 #include <gridcoin/sidestake.h>
 #include <interfaces/sidestake.h>
 #include <key_io.h>
 #include <node/ui_interface.h>
+#include <streams.h>
+#include <sync.h>
+#include <version.h>
 
 #include <boost/signals2/connection.hpp>
 
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace {
 //! Makes settings-file writes fail while it is alive. WriteSettingsFile() writes
@@ -606,6 +615,224 @@ BOOST_AUTO_TEST_CASE(sidestake_throwing_save_rolls_back_and_clears_the_flag)
 
     BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
     BOOST_CHECK(getRwSetting("sidestake_reload_probe").isNull());
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+namespace {
+//! A mandatory sidestake contract in the form addkey builds: contract v3, payload v1.
+GRC::Contract MakeSideStakeContract(const GRC::ContractAction action,
+                                    const CTxDestination& destination,
+                                    const GRC::Allocation& allocation)
+{
+    return GRC::MakeContract<GRC::SideStakePayload>(
+                uint32_t {3},
+                action,
+                uint32_t {1},
+                destination,
+                allocation,
+                std::string {},
+                GRC::MandatorySideStake::MandatorySideStakeStatus::MANDATORY);
+}
+
+//! A destination built from a hash rather than a literal address, so the test does not depend on chain params.
+CTxDestination SideStakeDestination(const unsigned char first_byte)
+{
+    uint160 hash;
+    *(hash.begin()) = first_byte;
+    return CKeyID(hash);
+}
+
+//! The registry's verdict on a contract that would be mined at \p height, through the mempool path (which judges
+//! at nBestHeight + 1) and through the block path.
+struct SideStakeVerdict
+{
+    bool mempool = false;
+    int mempool_dos = 0;
+    bool block = false;
+    int block_dos = 0;
+};
+
+SideStakeVerdict JudgeSideStakeAt(const GRC::Contract& contract, const int height)
+{
+    LOCK(cs_main);
+
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+    CMutableTransaction mtx;
+    mtx.vContracts.push_back(contract);
+    const CTransaction tx(mtx);
+
+    SideStakeVerdict verdict;
+
+    nBestHeight = height - 1;
+    verdict.mempool = registry.Validate(contract, tx, verdict.mempool_dos);
+
+    CBlockIndex index {};
+    index.nHeight = height;
+    verdict.block = registry.BlockValidate({contract, tx, &index}, verdict.block_dos);
+
+    return verdict;
+}
+
+//! Commit a mandatory sidestake to the registry as connecting a block at \p height would.
+void CommitSideStake(const CTxDestination& destination, const GRC::Allocation& allocation, const int height)
+{
+    LOCK(cs_main);
+
+    const GRC::Contract contract = MakeSideStakeContract(GRC::ContractAction::ADD, destination, allocation);
+
+    CMutableTransaction mtx;
+    mtx.vContracts.push_back(contract);
+    const CTransaction tx(mtx);
+
+    CBlockIndex index {};
+    index.nHeight = height;
+
+    GRC::GetSideStakeRegistry().Add({contract, tx, &index});
+}
+
+//! Check the verdict on both paths: a pass on both, or a refusal with DoS 25 on both.
+void ExpectSideStakeVerdict(const GRC::Contract& contract, const int height, const bool pass, const std::string& what)
+{
+    const SideStakeVerdict verdict = JudgeSideStakeAt(contract, height);
+
+    if (pass) {
+        BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, what);
+    } else {
+        BOOST_CHECK_MESSAGE(!verdict.mempool && verdict.mempool_dos == 25, what << " (mempool)");
+        BOOST_CHECK_MESSAGE(!verdict.block && verdict.block_dos == 25, what << " (block)");
+    }
+}
+
+// Heights above BlockV13Height (the unit tests run on main params), which the sidestake block path requires.
+constexpr int V15_TEST_HEIGHT = 4'200'000;
+constexpr int BELOW_V15 = V15_TEST_HEIGHT - 1;
+} // namespace
+
+BOOST_AUTO_TEST_SUITE(sidestake_v15_validation_tests,
+                      *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::SIDESTAKE>>())
+
+// From v15 a mandatory sidestake ADD needs a positive allocation whose reduced denominator divides 10000, which is
+// what Allocation(double) builds. The same contracts pass below v15, a REMOVE is unaffected, and the reduction is
+// computed from the pair rather than taken from the simplified flag the wire carries.
+BOOST_AUTO_TEST_CASE(sidestake_v15_allocation_rules)
+{
+    grc_test::StateGuard state_guard; // nBestHeight
+    grc_test::V15HeightGuard v15(V15_TEST_HEIGHT);
+
+    const CTxDestination destination = SideStakeDestination(0x31);
+
+    for (const auto& [num, den] : std::vector<std::pair<int64_t, int64_t>> {{1, 7}, {1, 9}, {0, 1}}) {
+        const GRC::Contract contract = MakeSideStakeContract(GRC::ContractAction::ADD, destination, GRC::Allocation(num, den));
+
+        const SideStakeVerdict before = JudgeSideStakeAt(contract, BELOW_V15);
+        BOOST_CHECK_MESSAGE(before.mempool && before.block, "ADD " << num << "/" << den << " below v15");
+
+        const SideStakeVerdict after = JudgeSideStakeAt(contract, V15_TEST_HEIGHT);
+        BOOST_CHECK_MESSAGE(!after.mempool && after.mempool_dos == 25, "ADD " << num << "/" << den << " mempool at v15");
+        BOOST_CHECK_MESSAGE(!after.block && after.block_dos == 25, "ADD " << num << "/" << den << " block at v15");
+    }
+
+    for (const auto& [num, den] : std::vector<std::pair<int64_t, int64_t>> {{1, 10}, {25, 10000}, {2, 20}}) {
+        const GRC::Contract contract = MakeSideStakeContract(GRC::ContractAction::ADD, destination, GRC::Allocation(num, den));
+
+        for (const int height : {BELOW_V15, V15_TEST_HEIGHT}) {
+            const SideStakeVerdict verdict = JudgeSideStakeAt(contract, height);
+            BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, "ADD " << num << "/" << den << " at " << height);
+        }
+    }
+
+    const GRC::Contract remove = MakeSideStakeContract(GRC::ContractAction::REMOVE, destination, GRC::Allocation(0, 1));
+
+    for (const int height : {BELOW_V15, V15_TEST_HEIGHT}) {
+        const SideStakeVerdict verdict = JudgeSideStakeAt(remove, height);
+        BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, "REMOVE 0/1 at " << height);
+    }
+
+    // 2/20000 with the simplified flag set: a pair whose own denominator does not divide 10000 but whose reduced
+    // one does. Read from bytes, because no constructor sets the flag against the pair.
+    CDataStream wire(SER_NETWORK, PROTOCOL_VERSION);
+    wire << int64_t {2} << int64_t {20000} << true;
+    GRC::Allocation lying_flag;
+    wire >> lying_flag;
+    BOOST_REQUIRE(lying_flag.IsSimplified());
+
+    const SideStakeVerdict verdict = JudgeSideStakeAt(
+        MakeSideStakeContract(GRC::ContractAction::ADD, destination, lying_flag), V15_TEST_HEIGHT);
+    BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, "ADD 2/20000 with the flag set at v15");
+}
+
+
+// The total check counts each destination once from v15: an ADD for a destination that already has an active
+// allocation is judged on the total it would leave, and a REMOVE never raises the total. Below v15 the old check
+// stands, which adds the contract's allocation to the active total whatever the action or destination.
+BOOST_AUTO_TEST_CASE(sidestake_v15_total_counts_destination_once)
+{
+    grc_test::StateGuard state_guard; // nBestHeight
+    grc_test::V15HeightGuard v15(V15_TEST_HEIGHT);
+
+    const CTxDestination a = SideStakeDestination(0x41);
+    const CTxDestination b = SideStakeDestination(0x42);
+    const CTxDestination c = SideStakeDestination(0x43);
+    const int committed_at = 4'000'000;
+
+    {
+        // Active: A 1/10.
+        grc_test::RegistryReset reset({GRC::ContractType::SIDESTAKE});
+        CommitSideStake(a, GRC::Allocation(1, 10), committed_at);
+
+        const GRC::Contract raise_a = MakeSideStakeContract(GRC::ContractAction::ADD, a, GRC::Allocation(1, 5));
+        ExpectSideStakeVerdict(raise_a, BELOW_V15, false, "raise A to 1/5 below v15 (counts 3/10)");
+        ExpectSideStakeVerdict(raise_a, V15_TEST_HEIGHT, true, "raise A to 1/5 at v15 (leaves 1/5)");
+
+        const GRC::Contract add_b = MakeSideStakeContract(GRC::ContractAction::ADD, b, GRC::Allocation(1, 5));
+        ExpectSideStakeVerdict(add_b, BELOW_V15, false, "add B 1/5 below v15 (3/10)");
+        ExpectSideStakeVerdict(add_b, V15_TEST_HEIGHT, false, "add B 1/5 at v15 (3/10)");
+
+        // Landing exactly on the 1/4 ceiling is allowed.
+        const GRC::Contract add_b_to_ceiling = MakeSideStakeContract(GRC::ContractAction::ADD, b, GRC::Allocation(3, 20));
+        ExpectSideStakeVerdict(add_b_to_ceiling, BELOW_V15, true, "add B 3/20 below v15 (exactly 1/4)");
+        ExpectSideStakeVerdict(add_b_to_ceiling, V15_TEST_HEIGHT, true, "add B 3/20 at v15 (exactly 1/4)");
+
+        const GRC::Contract raise_a_to_ceiling = MakeSideStakeContract(GRC::ContractAction::ADD, a, GRC::Allocation(1, 4));
+        ExpectSideStakeVerdict(raise_a_to_ceiling, BELOW_V15, false, "raise A to 1/4 below v15 (counts 7/20)");
+        ExpectSideStakeVerdict(raise_a_to_ceiling, V15_TEST_HEIGHT, true, "raise A to 1/4 at v15 (leaves exactly 1/4)");
+    }
+
+    {
+        // Active: A 1/10, B 1/10.
+        grc_test::RegistryReset reset({GRC::ContractType::SIDESTAKE});
+        CommitSideStake(a, GRC::Allocation(1, 10), committed_at);
+        CommitSideStake(b, GRC::Allocation(1, 10), committed_at);
+
+        const GRC::Contract remove_a_carrying = MakeSideStakeContract(GRC::ContractAction::REMOVE, a, GRC::Allocation(1, 10));
+        ExpectSideStakeVerdict(remove_a_carrying, BELOW_V15, false, "remove A carrying 1/10 below v15 (counts 3/10)");
+        ExpectSideStakeVerdict(remove_a_carrying, V15_TEST_HEIGHT, true, "remove A carrying 1/10 at v15");
+
+        const GRC::Contract remove_a = MakeSideStakeContract(GRC::ContractAction::REMOVE, a, GRC::Allocation(0, 1));
+        ExpectSideStakeVerdict(remove_a, BELOW_V15, true, "remove A with 0 below v15");
+        ExpectSideStakeVerdict(remove_a, V15_TEST_HEIGHT, true, "remove A with 0 at v15");
+    }
+
+    {
+        // Active: A 1/10, B 3/20, exactly the 1/4 ceiling.
+        grc_test::RegistryReset reset({GRC::ContractType::SIDESTAKE});
+        CommitSideStake(a, GRC::Allocation(1, 10), committed_at);
+        CommitSideStake(b, GRC::Allocation(3, 20), committed_at);
+
+        const GRC::Contract remove_a = MakeSideStakeContract(GRC::ContractAction::REMOVE, a, GRC::Allocation(0, 1));
+        ExpectSideStakeVerdict(remove_a, V15_TEST_HEIGHT, true, "remove A with 0 at the ceiling at v15");
+
+        // addkey puts whatever allocation it is given on a REMOVE. Not judged on the total from v15.
+        const GRC::Contract remove_a_large = MakeSideStakeContract(GRC::ContractAction::REMOVE, a, GRC::Allocation(1, 5));
+        ExpectSideStakeVerdict(remove_a_large, BELOW_V15, false, "remove A carrying 1/5 at the ceiling below v15");
+        ExpectSideStakeVerdict(remove_a_large, V15_TEST_HEIGHT, true, "remove A carrying 1/5 at the ceiling at v15");
+
+        const GRC::Contract add_c = MakeSideStakeContract(GRC::ContractAction::ADD, c, GRC::Allocation(1, 10000));
+        ExpectSideStakeVerdict(add_c, BELOW_V15, false, "add C 1/10000 at the ceiling below v15");
+        ExpectSideStakeVerdict(add_c, V15_TEST_HEIGHT, false, "add C 1/10000 at the ceiling at v15");
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

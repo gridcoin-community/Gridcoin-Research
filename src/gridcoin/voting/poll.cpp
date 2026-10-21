@@ -231,7 +231,9 @@ Fraction Poll::ResolveMagnitudeWeightFactor(const CBlockIndex* index, const int6
     ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeweightfactor", timestamp);
 
     // If their is an entry prior or equal in timestamp to the start of the poll and it is active then set the magnitude weight
-    // factor to that value. If the last entry is not active (i.e. deleted), then leave at the default.
+    // factor to that value. If the last entry is not active (i.e. deleted), then leave at the default. From block version 15
+    // the entry's reduced terms are at most MAX_MAGNITUDE_ENTRY_TERM (protocol.h), which keeps the clamp and the vote
+    // weight in range.
     if (protocol_entry != nullptr && protocol_entry->m_status == ProtocolEntryStatus::ACTIVE) {
         magnitude_weight_factor = Fraction::FromString(protocol_entry->m_value);
     }
