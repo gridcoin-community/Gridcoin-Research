@@ -838,6 +838,78 @@ BOOST_AUTO_TEST_CASE(bit_width_matches_the_former_shift_loop)
     }
 }
 
+BOOST_AUTO_TEST_CASE(bit_width_on_both_edges_of_every_width)
+{
+    // A width of k bits covers the magnitudes 2^(k-1) through 2^k - 1. Each width is
+    // checked at both ends of that range and at random magnitudes inside it, on both
+    // signs, against the literal width rather than another implementation.
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(0), 0);
+    BOOST_CHECK_EQUAL(Fraction::BitWidth(std::numeric_limits<int64_t>::min()), 64);
+
+    FastRandomContext rand(uint256 {2});
+
+    for (int k = 1; k <= 63; ++k) {
+        const int64_t low = int64_t {1} << (k - 1);
+        // 2^k - 1, written so that k = 63 gives INT64_MAX without overflowing.
+        const int64_t high = (low - 1) + low;
+
+        BOOST_CHECK_EQUAL(Fraction::BitWidth(low), k);
+        BOOST_CHECK_EQUAL(Fraction::BitWidth(-low), k);
+        BOOST_CHECK_EQUAL(Fraction::BitWidth(high), k);
+        BOOST_CHECK_EQUAL(Fraction::BitWidth(-high), k);
+
+        for (int i = 0; i < 16; ++i) {
+            // low + [0, low) stays in [2^(k-1), 2^k - 1].
+            const int64_t n = low + static_cast<int64_t>(rand.randrange(static_cast<uint64_t>(low)));
+
+            BOOST_CHECK_EQUAL(Fraction::BitWidth(n), k);
+            BOOST_CHECK_EQUAL(Fraction::BitWidth(-n), k);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(multiplication_throws_exactly_when_the_widths_pass_63)
+{
+    // overflow_mult(), the only caller of BitWidth(), refuses a product when the factors'
+    // widths sum to more than 63. Fraction(a, 1) * Fraction(b, 1) reaches it as
+    // overflow_mult(a, b), since both cross gcds are gcd(x, 1) = 1. Every pair of widths
+    // is checked with factors at both ends of each width and of both signs, so the set
+    // of products that throw is pinned wherever the bound can fall.
+    const auto factors = [](int width) {
+        const int64_t low = int64_t {1} << (width - 1);
+        const int64_t high = (low - 1) + low;
+
+        return std::vector<int64_t> {low, high, -low, -high};
+    };
+
+    for (int width_a = 1; width_a <= 63; ++width_a) {
+        for (int width_b = 1; width_b <= 63; ++width_b) {
+            const bool must_throw = width_a + width_b > 63;
+
+            for (const int64_t a : factors(width_a)) {
+                for (const int64_t b : factors(width_b)) {
+                    bool threw = false;
+                    Fraction product;
+
+                    try {
+                        product = Fraction(a, 1) * Fraction(b, 1);
+                    } catch (const std::overflow_error&) {
+                        threw = true;
+                    }
+
+                    BOOST_CHECK_EQUAL(threw, must_throw);
+
+                    // a * b is only formed where the widths prove it fits.
+                    if (!threw && !must_throw) {
+                        BOOST_CHECK_EQUAL(product.GetNumerator(), a * b);
+                        BOOST_CHECK_EQUAL(product.GetDenominator(), 1);
+                    }
+                }
+            }
+        }
+    }
+}
+
 BOOST_AUTO_TEST_CASE(copy_keeps_the_pair_and_the_flag)
 {
     // Copy construction and assignment are both member-wise: neither reduces,
