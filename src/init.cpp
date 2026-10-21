@@ -1296,6 +1296,7 @@ void ApplyRwSettingSideEffect(const std::string& name)
             if (addrProxy.IsValid()) {
                 if (!IsLimited(NET_IPV4)) SetProxy(NET_IPV4, addrProxy);
                 if (!IsLimited(NET_IPV6)) SetProxy(NET_IPV6, addrProxy);
+                SetProxy(NET_CJDNS, addrProxy);
                 SetNameProxy(addrProxy);
                 // As at startup, -proxy also reaches Tor unless -tor overrides it.
                 if (!gArgs.IsArgSet("-tor")) {
