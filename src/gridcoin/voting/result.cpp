@@ -1358,15 +1358,16 @@ public:
     //! legacy magnitude factor (see GetMagnitudeFactor), or 0 for a poll that
     //! does not use the factor.
     //! \param superblock   The last well-formed superblock at or before the
-    //! poll's last block, or the current superblock where there is none, for
-    //! the legacy magnitude factor. The caller resolves both under cs_main, so
-    //! the tally itself takes no lock.
+    //! poll's last block, for the legacy magnitude factor, or none: where no
+    //! superblock exists at or before that block, and for a poll that does not
+    //! use the factor. The caller resolves both under cs_main, so the tally
+    //! itself takes no lock.
     //!
     LegacyVoteCounterContext(const Poll& poll,
                              const CAmount money_supply,
-                             SuperblockPtr superblock)
+                             std::optional<SuperblockPtr> superblock)
         : m_poll(poll)
-        , m_magnitude_factor(0)
+        , m_magnitude_factor(std::nullopt)
         , m_money_supply(money_supply)
         , m_superblock(std::move(superblock))
     {
@@ -1411,17 +1412,24 @@ public:
     //! https://github.com/gridcoin-community/Gridcoin-Research/issues/87
     //!
     //! The factor takes the money supply of the poll's last block and the last
-    //! well-formed superblock at or before it, or the current superblock where
-    //! there is none, so a legacy poll's result stays as it was when the poll
-    //! ended.
+    //! well-formed superblock at or before it, so a legacy poll's result stays
+    //! as it was when the poll ended. Where no superblock exists at or before
+    //! that block, the factor is zero and the votes carry no magnitude weight;
+    //! the current superblock never serves.
     //!
     Weight GetMagnitudeFactor()
     {
-        if (m_magnitude_factor != 0) {
-            return m_magnitude_factor;
+        if (m_magnitude_factor) {
+            return *m_magnitude_factor;
         }
 
-        const uint32_t total_mag = m_superblock->m_cpids.TotalMagnitude();
+        if (!m_superblock) {
+            m_magnitude_factor = 0;
+
+            return 0;
+        }
+
+        const uint32_t total_mag = (*m_superblock)->m_cpids.TotalMagnitude();
         const uint64_t supply = m_money_supply;
 
         // Legacy money supply factor calculations added 0.01 to the total
@@ -1429,9 +1437,9 @@ public:
         // retain this silliness to produce the same value that the legacy
         // voting system returned:
         //
-        m_magnitude_factor = supply / (total_mag + 0.01) / 5.67;
+        m_magnitude_factor = static_cast<Weight>(supply / (total_mag + 0.01) / 5.67);
 
-        return m_magnitude_factor;
+        return *m_magnitude_factor;
     }
 
     //!
@@ -1459,16 +1467,16 @@ public:
 private:
     const Poll& m_poll;
     LegacyChoiceMap m_legacy_choices_cache;
-    Weight m_magnitude_factor;
+    std::optional<Weight> m_magnitude_factor; //!< Once computed (zero with no superblock).
     std::set<std::string> m_seen_keys;
 
     //! Money supply of the poll's last block, for the magnitude factor, or 0
     //! for a poll that does not use the factor.
     CAmount m_money_supply;
 
-    //! Last well-formed superblock at or before the poll's last block, or the
-    //! current superblock where there is none, for the magnitude factor.
-    SuperblockPtr m_superblock;
+    //! Last well-formed superblock at or before the poll's last block, for the
+    //! magnitude factor, or none.
+    std::optional<SuperblockPtr> m_superblock;
 }; // LegacyVoteCounterContext
 
 //!
@@ -1491,12 +1499,13 @@ public:
     //! forwarded to the legacy vote counter for its magnitude factor, or 0
     //! for a poll that does not use the factor.
     //! \param legacy_superblock Last well-formed superblock at or before the
-    //! poll's last block, or the current superblock where there is none,
-    //! forwarded to the legacy vote counter for its magnitude factor.
+    //! poll's last block, or none, forwarded to the legacy vote counter for its
+    //! magnitude factor.
     //! \param pindex_bound The block that bounds the tally by blocks (PollSnapshot::m_pindex_bound), or nullptr.
     //!
     VoteCounter(CTxDB& txdb, const Poll& poll, int poll_start_height, const bool v15_rules,
-                const CBlockIndex* pindex_bound, const CAmount legacy_money_supply, SuperblockPtr legacy_superblock)
+                const CBlockIndex* pindex_bound, const CAmount legacy_money_supply,
+                std::optional<SuperblockPtr> legacy_superblock)
         : m_txdb(txdb)
         , m_poll(poll)
         , m_poll_start_height(poll_start_height)
@@ -2136,7 +2145,7 @@ PollResultOption PollResult::BuildFor(const PollSnapshot& snapshot)
     const bool v15_rules = snapshot.m_v15;
     const CBlockIndex* pindex_end = nullptr;
     CAmount legacy_money_supply = 0;
-    SuperblockPtr legacy_superblock;
+    std::optional<SuperblockPtr> legacy_superblock;
     {
         LOCK(cs_main);
 
@@ -2144,25 +2153,21 @@ PollResultOption PollResult::BuildFor(const PollSnapshot& snapshot)
         // magnitude weight of a poll weighed by magnitude. A legacy poll
         // weighed by balance and magnitude also takes the last well-formed
         // superblock at or before that block for its legacy magnitude
-        // factor. Where none is found, and for every other poll, which does
-        // not use the factor, the current superblock serves. Resolved under
-        // the cs_main we already hold here, so the tally itself stays
-        // lock-free.
+        // factor; where none exists, the factor is zero, and the current
+        // superblock never serves. Every other poll does not use
+        // the factor. Resolved under the cs_main we already hold here, so the
+        // tally itself stays lock-free.
         // A poll bounded by blocks reads the money supply at its bound (the closing block, or the pinned tip while
         // it is open); any other at the last block at or before its end.
         if (result.m_poll.IncludesMagnitudeWeight()) {
             pindex_end = snapshot.m_pindex_bound ? snapshot.m_pindex_bound : PollEndBlock(result.m_poll, pindex_tip);
         }
 
-        std::optional<SuperblockPtr> end_superblock;
-
         if (pindex_end && snapshot.m_payload_version == 1
             && result.m_poll.m_weight_type == PollWeightType::BALANCE_AND_MAGNITUDE) {
             legacy_money_supply = pindex_end->nMoneySupply;
-            end_superblock = LastWellFormedSuperblock(pindex_end);
+            legacy_superblock = LastWellFormedSuperblock(pindex_end);
         }
-
-        legacy_superblock = end_superblock ? std::move(*end_superblock) : Quorum::CurrentSuperblock();
     }
 
     VoteCounter counter(txdb, result.m_poll, poll_start_height, v15_rules, snapshot.m_pindex_bound,

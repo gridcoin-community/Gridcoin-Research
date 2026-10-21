@@ -2173,6 +2173,66 @@ BOOST_AUTO_TEST_CASE(a_legacy_poll_weighs_magnitude_as_of_its_end)
 }
 
 //!
+//! A legacy poll weighed by balance and magnitude with no superblock at or before its last block gives its votes no
+//! magnitude weight, though a later superblock is current: the current superblock never serves.
+//!
+BOOST_AUTO_TEST_CASE(a_legacy_poll_with_no_superblock_before_its_end_has_no_magnitude_weight)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const int64_t start = GetAdjustedTime() - 20 * DAY;
+    const auto legacy_tx = [](const int64_t time, const std::string& contract) {
+        CMutableTransaction mtx;
+        mtx.nVersion = 1;
+        mtx.nTime = time;
+        mtx.vout.emplace_back(0, CScript() << OP_RETURN);
+        mtx.hashBoinc = contract;
+        return CTransaction(mtx);
+    };
+    const CTransaction poll_tx = legacy_tx(start,
+        "<MT>poll</MT><MK>Legacy poll</MK><MA>A</MA><MV><TITLE>Legacy poll</TITLE><DAYS>7</DAYS>"
+        "<QUESTION>Question?</QUESTION><ANSWERS>Yes;No</ANSWERS><SHARETYPE>"
+        + ToString(static_cast<uint32_t>(GRC::PollWeightType::BALANCE_AND_MAGNITUDE))
+        + "</SHARETYPE><URL>https://gridcoin.us</URL></MV>");
+    const CTransaction vote_tx = legacy_tx(start + 60,
+        "<MT>vote</MT><MK>Legacy poll;voter</MK><MA>A</MA><MV><CPID>00010203040506070809101112131415</CPID>"
+        "<BALANCE>100</BALANCE><MAGNITUDE>50</MAGNITUDE><ANSWER>Yes</ANSWER></MV>");
+
+    // No superblock until after the poll's end; that one is current.
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, start + 60, GRC::Claim(), {poll_tx, vote_tx}, bits);
+    const LinkedTip last = LinkBlock(polled.m_pindex, start + 6 * DAY, GRC::Claim(), {}, bits);
+    const LinkedTip after = LinkBlock(last.m_pindex, start + 9 * DAY, SuperblockClaim(900), {}, bits);
+    polled.m_pindex->nMoneySupply = 410000 * COIN;
+    last.m_pindex->nMoneySupply = 430000 * COIN;
+    after.m_pindex->nMoneySupply = 900000 * COIN;
+    const LiveSuperblockScope live(SuperblockClaim(900).m_superblock, after.m_pindex);
+    BOOST_REQUIRE_EQUAL(polled.m_tx_positions.size(), 2U);
+
+    const TxIndexScope poll_indexed(poll_tx, polled.m_tx_positions[0]);
+    const TxIndexScope vote_indexed(vote_tx, polled.m_tx_positions[1]);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const GRC::PollReference* ref = nullptr;
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        registry.InitializeLegacyStore(0, 1000);
+        std::optional<int> below_floor;
+        ref = registry.TryByTxidOrLegacy(poll_tx.GetHash(), below_floor);
+        BOOST_REQUIRE(ref != nullptr);
+        BOOST_REQUIRE_EQUAL(ref->Votes().size(), 1U);
+    }
+
+    const GRC::PollResultOption result = GRC::PollResult::BuildFor(*ref, after.m_pindex);
+    BOOST_REQUIRE(result);
+    BOOST_REQUIRE_EQUAL(result->m_votes.size(), 1U);
+    // sign-compare checked: m_total_weight is Weight (uint64_t); 100 * COIN is a positive constant, so the cast keeps its value.
+    BOOST_CHECK_EQUAL(result->m_total_weight, static_cast<GRC::PollResult::Weight>(100 * COIN));
+}
+
+//!
 //! A tally reads only its snapshot: a vote linked after the snapshot is not counted, and the poll leaving the
 //! registry does not stop the tally.
 //!
