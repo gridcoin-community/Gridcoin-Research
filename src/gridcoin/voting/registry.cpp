@@ -27,18 +27,6 @@ using LogFlags = BCLog::LogFlags;
 
 namespace {
 //!
-//! \brief Extract a poll title from a legacy vote contract.
-//!
-//! \param key The value of the legacy contract key.
-//!
-//! \return Normalized title of the poll to associate the vote with.
-//!
-std::string ParseLegacyVoteTitle(const std::string& key)
-{
-    return PollTitleKey(key.substr(0, key.find(';')));
-}
-
-//!
 //! \brief Thrown when verifying an invalid poll contract.
 //!
 class InvalidPollError : public std::exception
@@ -544,7 +532,7 @@ std::vector<uint256> PollReference::Votes() const
     // the registry lock, and the caller gets a copy that stays valid after it is released.
     LOCK(PollRegistry::cs_poll_registry);
 
-    // An in-memory poll (registered by the historical lookup) keeps the list it linked.
+    // A poll the legacy store holds keeps the list the store linked.
     if (!m_stored || m_registry == nullptr) {
         return m_votes;
     }
@@ -935,21 +923,6 @@ bool PollReference::IsExpiringWarningNotified() const
     return m_expiration_warn_notified;
 }
 
-void PollReference::LinkVote(const uint256 txid)
-{
-    m_votes.emplace_back(txid);
-}
-
-void PollReference::UnlinkVote(const uint256 txid)
-{
-    for (auto it = m_votes.crbegin(), end = m_votes.crend(); it != end; ++it) {
-        if (*it == txid) {
-            m_votes.erase(std::next(it).base());
-            return;
-        }
-    }
-}
-
 // -----------------------------------------------------------------------------
 // Class: PollRegistry
 // -----------------------------------------------------------------------------
@@ -958,7 +931,6 @@ PollRegistry::PollRegistry()
     , m_poll_db(1)
     , m_vote_db(1)
     , m_initialized(false)
-    , m_registering_legacy_poll(false)
 {
 }
 
@@ -992,6 +964,11 @@ int PollRegistry::Initialize()
 
         m_initialized = true;
     }
+
+    // The legacy store opens beside the dbs: read, never replayed.
+    InitializeLegacyStore(static_cast<int>(gArgs.GetIntArg("-legacypollfloor",
+                                                           Params().GetConsensus().ResearchAgeHeight)),
+                          Params().GetConsensus().BlockV11Height);
 
     int poll_height = 0;
     int vote_height = 0;
@@ -1041,6 +1018,9 @@ void PollRegistry::ClearInMemory()
 {
     m_polls.clear();
     m_polls_by_txid.clear();
+    // The legacy store's entries stay on disk; a restart reads them again.
+    m_legacy_polls.clear();
+    m_legacy_store = LegacyPollStore();
     m_latest_poll = nullptr;
     m_poll_entries.clear();
     m_vote_links.clear();
@@ -1408,8 +1388,7 @@ void PollRegistry::AdvanceEndSearch(const PollReference& ref, const CBlockIndex*
     SearchForEnd(ref.m_end_searched, ref.m_at_or_past_end, ref.m_past_end, end_time, pindex_bound);
 }
 
-bool PollRegistry::VoteInWindow(const PollReference& poll_ref, const CBlockIndex* pindex_vote,
-                                const bool legacy_vote) const
+bool PollRegistry::VoteInWindow(const PollReference& poll_ref, const CBlockIndex* pindex_vote) const
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     const CBlockIndex* const pindex_poll = poll_ref.m_pindex;
@@ -1443,9 +1422,8 @@ bool PollRegistry::VoteInWindow(const PollReference& poll_ref, const CBlockIndex
         return false;
     }
 
-    // Otherwise the #3470 rules: a vote from version 2 is linked when its block's time does not exceed the end, and a
-    // legacy vote by its title alone.
-    return legacy_vote || !poll_ref.Expired(pindex_vote->nTime);
+    // Otherwise the #3470 rule: a vote is linked when its block's time does not exceed the end.
+    return !poll_ref.Expired(pindex_vote->nTime);
 }
 
 PollReference* PollRegistry::TryBy(const uint256 txid) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
@@ -1489,121 +1467,100 @@ PollReference* PollRegistry::TryBy(const std::string& title) EXCLUSIVE_LOCKS_REQ
     return const_cast<PollReference*>(TryByTitle(title));
 }
 
-const PollReference* PollRegistry::TryByTxidWithAddHistoricalPollAndVotes(const uint256 txid)
-EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+const PollReference* PollRegistry::TryByTxidOrLegacy(const uint256& txid, std::optional<int>& below_floor)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
-    // Check and see if it is already in the registry and return the existing ref immediately if found. (This is
-    // the equivalent of the plain TryByTxid() functionality.)
-    if (const PollReference* existing_ref = TryByTxid(txid)) {
-        return existing_ref;
+    below_floor.reset();
+
+    if (const PollReference* ref = TryListedByTxid(txid)) {
+        return ref;
     }
 
-    CTransaction tx;
-    uint256 block_hash;
-    CBlockIndex* pindex_poll = nullptr;
+    // A poll the registry does not hold: from V11, one whose title was taken from v15, which the store refuses
+    // with every poll at or above V11; below V11, a poll the legacy store serves.
+    const LegacyPollEntry* entry = nullptr;
 
-    if (GetTransaction(txid, tx, block_hash) && !block_hash.IsNull()) {
-        const auto iter = mapBlockIndex.find(block_hash);
-
-        if (iter != mapBlockIndex.end() && iter->second->IsInMainChain()) {
-            pindex_poll = iter->second;
-        }
-    }
-
-    // Only a poll in a main-chain block is loaded. One still in the mempool has no
-    // block, and AddPoll refuses it: registered now, it would stay pinned to no
-    // block after it confirms.
-    if (pindex_poll == nullptr) {
+    switch (m_legacy_store.Fetch(txid, entry)) {
+    case LegacyPollStore::Lookup::FOUND:
+        return ShowLegacyPoll(*entry);
+    case LegacyPollStore::Lookup::BELOW_FLOOR:
+        below_floor = m_legacy_store.Floor();
+        return nullptr;
+    case LegacyPollStore::Lookup::NOT_LEGACY:
         return nullptr;
     }
 
-    // Below v15 the handler registers every poll from V11 on, so in production this registers pre-V11 polls, in
-    // memory only (until the legacy store replaces this path). From v15 a poll the registry does not hold is one
-    // whose title is taken: it is not registered by rule, and not loaded here either. The m_registering_legacy_poll
-    // flag lets the add pass the V11 floor and keeps it out of the dbs.
-    if (IsV15Enabled(pindex_poll->nHeight)) {
+    return nullptr;
+}
+
+const PollReference* PollRegistry::TryListedByTxid(const uint256& txid) const
+    EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
+{
+    if (const PollReference* ref = TryByTxid(txid)) {
+        return ref;
+    }
+
+    const auto iter = m_legacy_polls.find(txid);
+
+    return iter == m_legacy_polls.end() ? nullptr : &iter->second;
+}
+
+void PollRegistry::InitializeLegacyStore(const int floor, const int ceiling)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
+    m_legacy_store.Initialize(floor, ceiling);
+
+    for (const LegacyPollEntry* entry : m_legacy_store.Entries()) {
+        ShowLegacyPoll(*entry);
+    }
+}
+
+void PollRegistry::ClearLegacyStore()
+{
+    LOCK(cs_poll_registry);
+
+    for (const auto& [txid, ref] : m_legacy_polls) {
+        EraseShown(PollTitleKey(ref.m_title), &ref);
+    }
+
+    m_legacy_polls.clear();
+    m_legacy_store.Clear();
+}
+
+const PollReference* PollRegistry::ShowLegacyPoll(const LegacyPollEntry& entry)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
+{
+    if (const auto iter = m_legacy_polls.find(entry.m_txid); iter != m_legacy_polls.end()) {
+        return &iter->second;
+    }
+
+    const auto block = mapBlockIndex.find(entry.m_block_hash);
+
+    if (block == mapBlockIndex.end() || block->second == nullptr) {
+        LogPrintf("WARN: %s: the block of legacy poll %s is not indexed; the poll is not shown.",
+                  __func__, entry.m_txid.ToString());
         return nullptr;
     }
 
-    m_registering_legacy_poll = true;
+    // Shown and found like any poll, but held here, outside the registry's polls, records and title index.
+    PollReference& ref = m_legacy_polls[entry.m_txid];
+    ref.m_txid = entry.m_txid;
+    ref.m_payload_version = entry.m_payload_version;
+    ref.m_type = static_cast<PollType>(entry.m_type);
+    ref.m_weight_type = static_cast<PollWeightType>(entry.m_weight_type);
+    ref.m_title = entry.m_title;
+    ref.m_timestamp = entry.m_timestamp;
+    ref.m_duration_days = entry.m_duration_days;
+    ref.m_pindex = block->second;
+    ref.m_registry = this;
 
-    for (const auto& contract : tx.GetContracts()) {
-        if (contract.m_type == ContractType::POLL && contract.m_action == ContractAction::ADD) {
-            Add({contract, tx, pindex_poll});
-        }
+    for (const auto& [vote_txid, height] : entry.m_votes) {
+        ref.m_votes.push_back(vote_txid);
     }
 
-    m_registering_legacy_poll = false;
+    Show(PollTitleKey(entry.m_title), ref, entry.m_height);
 
-    // Get the poll reference now that the poll contract(s) (if any) in the provided transaction hash have been validated
-    // and loaded in the registry.
-    PollReference* ref = TryBy(txid);
-
-    // If the poll "contract" is loaded successfully into the registry, walk the contracts in the chain for
-    // the duration of the poll to populate the votes. We can't use the general GRC::ReplayContracts here
-    // because it is too broad.
-    if (ref != nullptr) {
-        CBlock block;
-
-        // Link the poll's votes by the rule AddVote applies as each block
-        // connects: a vote is linked only from the transaction after the poll's
-        // own, a version 2+ vote only if its block is not stamped after the
-        // poll ends, and a legacy vote by the poll's title in lower case. A
-        // block may carry an earlier time than its parent, so the walk runs to
-        // the tip. No block from version 11 on carries a legacy vote, so there
-        // a block stamped after the poll ends is passed over unread.
-        for (CBlockIndex* pindex = pindex_poll; pindex; pindex = pindex->pnext) {
-            if (IsV11Enabled(pindex->nHeight) && ref->Expired(pindex->nTime)) continue;
-
-            // If the block doesn't contain contract(s) or can't read, skip.
-            if (!pindex->IsContract() || !ReadBlockFromDisk(block, pindex, Params().GetConsensus())) continue;
-
-            // In the poll's own block, the votes ahead of the poll are not its.
-            bool after_poll = pindex != pindex_poll;
-
-            // Skip coinbase and coinstake transactions:
-            for (unsigned int i = 2; i < block.vtx.size(); ++i) {
-                if (!after_poll) {
-                    after_poll = block.vtx[i].GetHash() == ref->Txid();
-                    continue;
-                }
-
-                for (auto contract : block.vtx[i].GetContracts()) {
-
-                    // Only process votes, and only a contract that adds one, as
-                    // when a block connects (a REMOVE links no vote).
-                    if (contract.m_type != ContractType::VOTE || contract.m_action != ContractAction::ADD) continue;
-
-                    // Post fern poll votes
-                    if (contract.m_version >= 2) {
-                        const auto vote = contract.SharePayloadAs<Vote>();
-
-                        if (vote->m_poll_txid == ref->Txid() && !ref->Expired(pindex->nTime)) {
-                            ref->LinkVote(block.vtx[i].GetHash());
-                        }
-
-                        continue;
-                    }
-
-                    // Legacy poll votes: as when a block connects, a contract
-                    // that is not well-formed is passed over, and a vote is
-                    // matched to the poll by its title in lower case.
-                    if (!contract.WellFormed()) continue;
-
-                    const ContractPayload vote = contract.m_body.AssumeLegacy();
-                    const std::string title = ParseLegacyVoteTitle(vote->LegacyKeyString());
-
-                    if (title.empty()) continue;
-
-                    if (title == PollTitleKey(ref->Title())) {
-                        ref->LinkVote(block.vtx[i].GetHash());
-                    }
-                } // for contract
-            } // for vtx
-        } // for pindex
-    }
-
-    return ref;
+    return &ref;
 }
 
 void PollRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -1770,9 +1727,8 @@ void PollRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_m
     // replay or in a rebuild, although ConnectBlock applies contracts from the research-age height (364,501 on
     // mainnet), and a cleared registry replays only from V11. The floor is deliberate: the poll registry's scope is
     // what the poll history shows, and from v15 its title index is consensus, so both must be the same on every
-    // node. Pre-V11 polls are reached through TryByTxidWithAddHistoricalPollAndVotes, which registers them in memory
-    // only (until the legacy store replaces it).
-    if (ctx.m_pindex && ctx.m_pindex->nHeight < Params().GetConsensus().BlockV11Height && !m_registering_legacy_poll) {
+    // node. Pre-V11 polls are served by the legacy store, outside the registry.
+    if (ctx.m_pindex && ctx.m_pindex->nHeight < Params().GetConsensus().BlockV11Height) {
         return;
     }
 
@@ -1932,24 +1888,6 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
 
     const std::string& poll_title = payload->m_poll.m_title;
 
-    if (m_registering_legacy_poll) {
-        // A pre-V11 poll found by TryByTxidWithAddHistoricalPollAndVotes: registered in memory only, with no record
-        // and no title-index entry. It is shown beside any poll with its title key.
-        PollReference& poll_ref = m_polls_by_txid[txid];
-        poll_ref.m_txid = txid;
-        poll_ref.m_title = poll_title;
-        poll_ref.m_payload_version = payload->m_version;
-        poll_ref.m_type = payload->m_poll.m_type.Value();
-        poll_ref.m_weight_type = payload->m_poll.m_weight_type.Value();
-        poll_ref.m_timestamp = ctx.m_tx.nTime;
-        poll_ref.m_duration_days = payload->m_poll.m_duration_days;
-        poll_ref.m_pindex = ctx.m_pindex;
-        poll_ref.m_registry = this;
-        Show(PollTitleKey(poll_title), poll_ref, ctx.m_pindex->nHeight);
-
-        return;
-    }
-
     // From v15 a poll whose title key is taken registers nothing: by a poll the title index holds -- every poll
     // registered since V11, active or deleted -- including one earlier in this block, which applied first. The
     // transaction stays valid and its burn is spent; no block is refused over a title.
@@ -2020,25 +1958,17 @@ void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
     const uint256 vote_txid = ctx.m_tx.GetHash();
     PollReference* poll_ref = nullptr;
 
+    // A legacy (version 1) vote never reaches the registry: none is mined from V11, and below V11 Add returns. The
+    // legacy store links legacy votes.
     if (ctx->m_version >= 2) {
-        const auto vote = ctx->SharePayloadAs<Vote>();
-
-        poll_ref = TryBy(vote->m_poll_txid);
-    } else {
-        // A legacy vote names its poll by title in lower case. (On mainnet legacy votes exist only below V11.)
-        const ContractPayload vote = ctx->m_body.AssumeLegacy();
-        const std::string title = ParseLegacyVoteTitle(vote->LegacyKeyString());
-
-        if (!title.empty()) {
-            poll_ref = TryBy(title);
-        }
+        poll_ref = TryBy(ctx->SharePayloadAs<Vote>()->m_poll_txid);
     }
 
     if (poll_ref == nullptr) {
         return;
     }
 
-    if (!VoteInWindow(*poll_ref, ctx.m_pindex, ctx->m_version < 2)) {
+    if (!VoteInWindow(*poll_ref, ctx.m_pindex)) {
         LogPrint(LogFlags::VOTE,
             "%s: ignored vote %s outside the window of poll %s",
             __func__,
@@ -2048,42 +1978,33 @@ void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         return;
     }
 
-    if (!poll_ref->m_stored) {
-        // An in-memory poll from the historical lookup: link in memory.
-        if (std::find(poll_ref->m_votes.begin(), poll_ref->m_votes.end(), vote_txid) != poll_ref->m_votes.end()) {
-            return;
-        }
-
-        poll_ref->LinkVote(vote_txid);
-    } else {
-        // Already linked: the startup replay of the db-height block, or a duplicate apply. contains() leaves a
-        // passivated link passivated (find() would load it and make a later insert refuse it).
-        if (m_vote_db.contains(vote_txid)) {
-            return;
-        }
-
-        VoteLinkEntry link;
-        link.m_poll_txid = poll_ref->m_txid;
-        link.m_timestamp = ctx.m_tx.nTime;
-        link.m_hash = vote_txid;
-        link.m_previous_hash = VoteHead(poll_ref->m_txid);
-        link.m_block_hash = ctx.m_pindex->GetBlockHash();
-        link.m_block_height = ctx.m_pindex->nHeight;
-        link.m_status = VoteLinkStatus::ACTIVE;
-
-        if (!m_vote_db.insert(vote_txid, ctx.m_pindex->nHeight, link)) {
-            error("%s: vote link %s was not stored", __func__, vote_txid.ToString());
-            return;
-        }
-
-        // Keep the poll's cached list in step when it is current; otherwise it is read again on next use.
-        if (poll_ref->m_votes_head == link.m_previous_hash) {
-            poll_ref->m_votes.push_back(vote_txid);
-            poll_ref->m_votes_head = vote_txid;
-        }
-
-        m_vote_links[poll_ref->m_txid] = m_vote_db.find(vote_txid)->second; // just inserted: nothing loaded
+    // Already linked: the startup replay of the db-height block, or a duplicate apply. contains() leaves a
+    // passivated link passivated (find() would load it and make a later insert refuse it).
+    if (m_vote_db.contains(vote_txid)) {
+        return;
     }
+
+    VoteLinkEntry link;
+    link.m_poll_txid = poll_ref->m_txid;
+    link.m_timestamp = ctx.m_tx.nTime;
+    link.m_hash = vote_txid;
+    link.m_previous_hash = VoteHead(poll_ref->m_txid);
+    link.m_block_hash = ctx.m_pindex->GetBlockHash();
+    link.m_block_height = ctx.m_pindex->nHeight;
+    link.m_status = VoteLinkStatus::ACTIVE;
+
+    if (!m_vote_db.insert(vote_txid, ctx.m_pindex->nHeight, link)) {
+        error("%s: vote link %s was not stored", __func__, vote_txid.ToString());
+        return;
+    }
+
+    // Keep the poll's cached list in step when it is current; otherwise it is read again on next use.
+    if (poll_ref->m_votes_head == link.m_previous_hash) {
+        poll_ref->m_votes.push_back(vote_txid);
+        poll_ref->m_votes_head = vote_txid;
+    }
+
+    m_vote_links[poll_ref->m_txid] = m_vote_db.find(vote_txid)->second; // just inserted: nothing loaded
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added vote %s to poll %s.", __func__, vote_txid.GetHex(), poll_ref->m_title);
 
@@ -2104,10 +2025,11 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
     if (ctx->m_action == ContractAction::REMOVE) {
         if (payload->m_version == PollPayload::REMOVE_BY_TXID_VERSION) {
             // From v15 a master-key REMOVE names its poll by txid. It resolves only to an ACTIVE poll the registry
-            // stores (registered since V11); a pre-V11 poll loaded on demand is never removed.
+            // stores (registered since V11); a pre-V11 poll, which the legacy store holds outside the registry, is
+            // never removed.
             const auto iter = m_polls_by_txid.find(payload->m_poll_txid);
 
-            if (iter != m_polls_by_txid.end() && iter->second.m_stored && !iter->second.m_deleted) {
+            if (iter != m_polls_by_txid.end() && !iter->second.m_deleted) {
                 poll_ref = &iter->second;
             }
         } else {
@@ -2143,12 +2065,11 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
     m_latest_poll = nullptr;
 
     if (ctx->m_action == ContractAction::REMOVE) {
-        // A master-key REMOVE: the poll stays registered by its txid and keeps its title. For a stored poll the
-        // REMOVE stores a DELETED record that links back to the poll's current record, so a restart rebuilds the
-        // same state.
+        // A master-key REMOVE: the poll stays registered by its txid and keeps its title. The REMOVE stores a
+        // DELETED record that links back to the poll's current record, so a restart rebuilds the same state.
         poll_ref->m_deleted = true;
 
-        if (poll_ref->m_stored && !m_poll_db.contains(ctx.m_tx.GetHash())) {
+        if (!m_poll_db.contains(ctx.m_tx.GetHash())) {
             PollEntry entry = *m_poll_entries.at(txid);
             entry.m_previous_hash = entry.m_hash;
             entry.m_hash = ctx.m_tx.GetHash();
@@ -2164,10 +2085,8 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
         }
     } else {
         // The poll's own ADD, reverted: its record, its title (if it owned it) and its entry go.
-        if (poll_ref->m_stored) {
-            m_poll_db.erase(txid);
-            m_poll_entries.erase(txid);
-        }
+        m_poll_db.erase(txid);
+        m_poll_entries.erase(txid);
 
         if (const auto owner = m_title_index.find(title_key); owner != m_title_index.end() && owner->second == txid) {
             m_title_index.erase(owner);
@@ -2192,11 +2111,7 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
         const auto vote = ctx->SharePayloadAs<Vote>();
 
         if (PollReference* poll_ref = TryBy(vote->m_poll_txid)) {
-            if (poll_ref->m_stored) {
-                EraseVoteLink(ctx.m_tx.GetHash());
-            } else {
-                poll_ref->UnlinkVote(ctx.m_tx.GetHash());
-            }
+            EraseVoteLink(ctx.m_tx.GetHash());
 
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Deleted vote %s from poll %s, poll_ref->Votes().size() = %u.",
                      __func__,
@@ -2209,29 +2124,9 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
                 uiInterface.NewVoteReceived(poll_ref->Txid());
             }
         }
-
-        return;
     }
 
-    const auto vote = ctx->SharePayload();
-    const std::string title = ParseLegacyVoteTitle(vote->LegacyKeyString());
-
-    if (title.empty()) {
-        return;
-    }
-
-    if (PollReference* poll_ref = TryBy(title)) {
-        if (poll_ref->m_stored) {
-            EraseVoteLink(ctx.m_tx.GetHash());
-        } else {
-            poll_ref->UnlinkVote(ctx.m_tx.GetHash());
-        }
-
-        // Judged by the wall clock on purpose; see PollReference::Notify.
-        if (!m_replay_in_progress && !poll_ref->Expired(GetAdjustedTime())) {
-            uiInterface.NewVoteReceived(poll_ref->Txid());
-        }
-    }
+    // A legacy (version 1) vote never reaches the registry: none is mined from V11, and below V11 Delete returns.
 }
 
 void PollRegistry::DetectReorg()

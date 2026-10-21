@@ -8,6 +8,7 @@
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/voting/filter.h"
 #include "gridcoin/voting/fwd.h"
+#include "gridcoin/voting/legacy_store.h"
 #include "gridcoin/voting/poll_entry.h"
 #include "sync.h"
 #include "uint256.h"
@@ -202,21 +203,6 @@ public:
     //! \return boolean indicating whether the expiration warning was sent.
     //!
     bool IsExpiringWarningNotified() const;
-
-    //!
-    //! \brief Record a transaction that contains a response to the poll.
-    //!
-    //! \param txid Hash of the transaction that contains the vote.
-    //!
-    void LinkVote(const uint256 txid);
-
-    //!
-    //! \brief Remove a record of a transaction that contains a response to
-    //! the poll.
-    //!
-    //! \param txid Hash of the transaction that contains the vote.
-    //!
-    void UnlinkVote(const uint256 txid);
 
 private:
     uint256 m_txid;                             //!< Hash of the poll transaction.
@@ -503,16 +489,33 @@ public:
         EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
-    //! \brief Get an existing poll in the registry, or if not found, demand load a
-    //! poll identified by the provided txid along with its votes. This is a temporary
-    //! workaround to deal with polls beyond the lookback period for contract load
-    //! during wallet init. This should be replaced when the poll caching state machine
-    //! code is implemented.
+    //! \brief Get a poll by txid: one the registry holds, or else a poll below V11 from the legacy store, filled
+    //! from the chain on first demand. A legacy poll never enters the registry itself.
     //!
-    //! \return Points to a poll object or \c nullptr if no poll added that matches
-    //! the supplied txid.
-    const PollReference* TryByTxidWithAddHistoricalPollAndVotes(const uint256 txid)
+    //! \param below_floor Set to the legacy floor when the poll is below it; reset otherwise.
+    //!
+    //! \return The poll, or \c nullptr.
+    //!
+    const PollReference* TryByTxidOrLegacy(const uint256& txid, std::optional<int>& below_floor)
         EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
+
+    //!
+    //! \brief Get a listed poll by txid: one the registry holds, or one the legacy store holds. Nothing is
+    //! filled. The display paths use it; voting and removal take only a poll the registry holds (TryByTxid).
+    //!
+    const PollReference* TryListedByTxid(const uint256& txid) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
+
+    //!
+    //! \brief Open the legacy poll store for polls from \p floor to below \p ceiling, and show the polls it holds.
+    //! Initialize calls it with the network's floor and V11 height.
+    //!
+    void InitializeLegacyStore(int floor, int ceiling) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
+
+    //!
+    //! \brief Erase the legacy poll store, on disk and in memory, and the polls it shows
+    //! (-clearlegacypollhistory).
+    //!
+    void ClearLegacyStore();
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical
@@ -688,9 +691,16 @@ private:
     std::map<std::string, uint256> m_title_index GUARDED_BY(cs_poll_registry); //!< Title key to first registration.
     bool m_initialized GUARDED_BY(cs_poll_registry);                           //!< Initialize() has loaded the dbs.
 
-    //! Set while TryByTxidWithAddHistoricalPollAndVotes registers a pre-V11 poll in memory only, the one path that
-    //! passes the V11 floor (until the legacy store replaces it).
-    bool m_registering_legacy_poll GUARDED_BY(cs_poll_registry);
+    LegacyPollStore m_legacy_store GUARDED_BY(cs_poll_registry); //!< Polls below V11.
+    //! The references of the polls the legacy store holds, shown in the display map only.
+    std::map<uint256, PollReference> m_legacy_polls GUARDED_BY(cs_poll_registry);
+
+    //!
+    //! \brief Build, keep and show the reference of a poll the legacy store holds, once.
+    //!
+    //! \return The reference, or \c nullptr if the poll's block is not indexed (a corrupt store).
+    //!
+    const PollReference* ShowLegacyPoll(const LegacyPollEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
 
     //!
     //! \brief Advance \p ref's cached search for its end on the main chain to \p pindex_bound, starting it
@@ -705,15 +715,15 @@ private:
     //!
     //! From v15 a vote is linked only from a block after the poll's block. A poll whose first block past the end on the
     //! vote's chain is at or above the v15 height, at or before the vote's block, has closed by block, and links
-    //! nothing more. Otherwise the #3470 rules stand: a vote from version 2 is linked when its block's time does not
-    //! exceed the poll's end, and a legacy vote by its title alone. It reads no block after \p pindex_vote: while a
-    //! block is connected its parent is the tip, and in a replay or a rebuild it is on the main chain.
+    //! nothing more. Otherwise the #3470 rule stands: a vote is linked when its block's time does not exceed the poll's
+    //! end. (A legacy vote never reaches the registry: none is mined from V11, and below V11 the registry applies
+    //! nothing; the legacy store links them.) It reads no block after \p pindex_vote: while a block is connected its
+    //! parent is the tip, and in a replay or a rebuild it is on the main chain.
     //!
     //! \param poll_ref    The poll the vote names.
     //! \param pindex_vote The block that carries the vote.
-    //! \param legacy_vote Whether the vote is a legacy (version 1) contract.
     //!
-    bool VoteInWindow(const PollReference& poll_ref, const CBlockIndex* pindex_vote, bool legacy_vote) const
+    bool VoteInWindow(const PollReference& poll_ref, const CBlockIndex* pindex_vote) const
         EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
 
     //!

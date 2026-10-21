@@ -41,10 +41,16 @@ const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
     if (title_or_id.size() == sizeof(uint256) * 2 && IsHex(title_or_id)) {
         const uint256 txid = uint256S(title_or_id);
 
-        // This will return a ref to the poll in the registry if found, or, try and load it and return the ref if
-        // the load is successful.
-        if (const PollReference* ref = registry.TryByTxidWithAddHistoricalPollAndVotes(txid)) {
+        // A poll the registry holds, or else a poll below V11 from the legacy store.
+        std::optional<int> below_floor;
+
+        if (const PollReference* ref = registry.TryByTxidOrLegacy(txid, below_floor)) {
             return ref;
+        }
+
+        if (below_floor) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               strprintf("poll before the legacy floor (height %d), not available", *below_floor));
         }
     }
 

@@ -147,8 +147,9 @@ std::vector<PollResultItem> PollResultCache::BuildPollTable(PollFilterFlag flags
                 {
                     LOCK2(cs_main, PollRegistry::cs_poll_registry);
 
-                    // A poll removed since the txids were collected is skipped.
-                    if (const PollReference* ref = registry.TryByTxid(txid)) {
+                    // A poll removed since the txids were collected is skipped. The list holds the polls the legacy
+                    // store holds too.
+                    if (const PollReference* ref = registry.TryListedByTxid(txid)) {
                         snapshot = registry.Snapshot(*ref, pindex_tip);
                     }
                 }

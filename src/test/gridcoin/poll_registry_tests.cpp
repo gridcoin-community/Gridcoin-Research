@@ -160,6 +160,7 @@ struct RegistryReset
     {
         LOCK(cs_main);
         GRC::GetPollRegistry().Reset();
+        GRC::GetPollRegistry().ClearLegacyStore();
         GRC::GetProtocolRegistry().Reset();
     }
 };
@@ -1900,15 +1901,15 @@ BOOST_AUTO_TEST_CASE(a_zero_active_vote_weight_does_not_validate_a_poll)
 }
 
 //!
-//! A poll loaded from the chain after a restart links its votes by the rule
-//! AddVote applies as each block connects: from the transaction after the poll's
-//! own, and by the time of the block that carries each vote.
+//! A poll the legacy store fills from the chain links its votes from the transaction after the poll's own, through
+//! its closing block.
 //!
-BOOST_AUTO_TEST_CASE(a_poll_loaded_from_the_chain_links_votes_by_the_live_rule)
+BOOST_AUTO_TEST_CASE(a_poll_the_legacy_store_fills_links_votes_through_its_closing_block)
 {
     grc_test::StateGuard guard;
     RegistryReset reset;
     LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+    GRC::GetPollRegistry().InitializeLegacyStore(0, 1000);
 
     const int64_t start = GetAdjustedTime() - 10 * 86400;
     PollTx poll = MakePollTx("Title", start);
@@ -1931,8 +1932,8 @@ BOOST_AUTO_TEST_CASE(a_poll_loaded_from_the_chain_links_votes_by_the_live_rule)
 
     const TxIndexScope poll_indexed(poll.tx, first.m_tx_positions[1]);
 
-    const GRC::PollReference* ref =
-        GRC::GetPollRegistry().TryByTxidWithAddHistoricalPollAndVotes(poll.tx.GetHash());
+    std::optional<int> below_floor;
+    const GRC::PollReference* ref = GRC::GetPollRegistry().TryByTxidOrLegacy(poll.tx.GetHash(), below_floor);
     BOOST_REQUIRE(ref != nullptr);
 
     BOOST_REQUIRE_EQUAL(ref->Votes().size(), 1U);
@@ -1940,17 +1941,18 @@ BOOST_AUTO_TEST_CASE(a_poll_loaded_from_the_chain_links_votes_by_the_live_rule)
 }
 
 //!
-//! A poll the historical lookup loads from the chain (a pre-V11 poll on mainnet) is shown and found beside a stored poll
-//! with its title key, in block order, and owns no title. From v15 a REMOVE by txid that names it stores nothing
-//! and leaves it shown: a REMOVE deletes only a poll the registry stores.
+//! A poll the legacy store holds (a pre-V11 poll on mainnet) is shown and found beside a stored poll with its title
+//! key, in block order, and owns no title. From v15 a REMOVE by txid that names it stores nothing and
+//! leaves it shown: a REMOVE deletes only a poll the registry stores.
 //!
-BOOST_AUTO_TEST_CASE(a_poll_loaded_from_the_chain_is_shown_beside_a_stored_poll_with_its_title)
+BOOST_AUTO_TEST_CASE(a_poll_the_legacy_store_holds_is_shown_beside_a_stored_poll_with_its_title)
 {
     grc_test::StateGuard guard;
     RegistryReset reset;
     LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
 
     GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    registry.InitializeLegacyStore(0, 1000);
     const int64_t start = GetAdjustedTime() - 10 * 86400;
     PollTx loaded = MakePollTx("Title", start);
 
@@ -1969,7 +1971,8 @@ BOOST_AUTO_TEST_CASE(a_poll_loaded_from_the_chain_is_shown_beside_a_stored_poll_
     CBlockIndex index_stored = MakeBlockIndex(tip.m_pindex->nHeight + 1, start + 60);
     registry.Add({stored.contract, stored.tx, &index_stored});
 
-    BOOST_REQUIRE(registry.TryByTxidWithAddHistoricalPollAndVotes(loaded.tx.GetHash()) != nullptr);
+    std::optional<int> below_floor;
+    BOOST_REQUIRE(registry.TryByTxidOrLegacy(loaded.tx.GetHash(), below_floor) != nullptr);
 
     const auto found = [&] {
         std::vector<uint256> txids;
@@ -1995,15 +1998,111 @@ BOOST_AUTO_TEST_CASE(a_poll_loaded_from_the_chain_is_shown_beside_a_stored_poll_
     registry.Delete({remove.contract, remove.tx, &index_remove});
 
     BOOST_CHECK(!registry.IsStored(remove.tx.GetHash()));
-    BOOST_CHECK(registry.TryByTxid(loaded.tx.GetHash()) != nullptr);
+    BOOST_CHECK(registry.TryListedByTxid(loaded.tx.GetHash()) != nullptr);
     BOOST_CHECK(found() == both);
 }
 
 //!
-//! A legacy poll weighs the magnitude a legacy vote states with the money supply
-//! of the poll's last block and the total magnitude of the last superblock at or
-//! before it. The result stays as it was when the poll ended, whatever the money
-//! supply and the superblocks after it.
+//! A read of a poll below V11 leaves the canonical registry unchanged: no record, no registration by txid, no title
+//! owner. The poll is shown, found by its title and by the display path's txid lookup.
+//!
+BOOST_AUTO_TEST_CASE(a_legacy_read_leaves_the_canonical_registry_unchanged)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    registry.InitializeLegacyStore(0, 1000);
+
+    const int64_t start = GetAdjustedTime() - 20 * DAY;
+    const PollTx poll = MakeChainPollTx("Title", start);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {poll.tx}, pindexGenesisBlock->nBits);
+    const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
+    const uint256 txid = poll.tx.GetHash();
+
+    std::optional<int> below_floor;
+    const GRC::PollReference* ref = registry.TryByTxidOrLegacy(txid, below_floor);
+    BOOST_REQUIRE(ref != nullptr);
+    BOOST_CHECK(!below_floor);
+    BOOST_CHECK(registry.TryByTxidOrLegacy(txid, below_floor) == ref);
+
+    BOOST_CHECK(registry.TryByTxid(txid) == nullptr);
+    BOOST_CHECK(!registry.IsStored(txid));
+    BOOST_CHECK(registry.TryByTitle("title") == nullptr);
+    BOOST_CHECK(!registry.TitleOwner("title"));
+
+    BOOST_CHECK(registry.TryListedByTxid(txid) == ref);
+    BOOST_CHECK(registry.FindByTitle("title") == std::vector<const GRC::PollReference*>({ref}));
+
+    std::vector<uint256> shown;
+    for (const auto& iter : registry.Polls()) shown.push_back(iter->Ref().Txid());
+    BOOST_CHECK(shown == std::vector<uint256>({txid}));
+}
+
+//!
+//! The polls the legacy store holds are shown again after a restart, from the store alone: the poll's transaction is
+//! no longer found when the node restarts.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_the_legacy_store_holds_is_shown_after_a_restart)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const int64_t start = GetAdjustedTime() - 20 * DAY;
+    const PollTx poll = MakeChainPollTx("Title", start);
+    const CTransaction vote = MakeVoteTx(poll.tx.GetHash(), start + 60);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {poll.tx, vote},
+                                       pindexGenesisBlock->nBits);
+    const uint256 txid = poll.tx.GetHash();
+    std::optional<int> below_floor;
+
+    {
+        const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
+        registry.InitializeLegacyStore(0, 1000);
+        BOOST_REQUIRE(registry.TryByTxidOrLegacy(txid, below_floor) != nullptr);
+    }
+
+    Restart(registry);
+
+    // Shown at startup, before any lookup asks for it.
+    const GRC::PollReference* ref = registry.TryListedByTxid(txid);
+    BOOST_REQUIRE(ref != nullptr);
+    BOOST_CHECK(registry.FindByTitle("title") == std::vector<const GRC::PollReference*>({ref}));
+    BOOST_CHECK(ref->Votes() == std::vector<uint256>({vote.GetHash()}));
+    BOOST_CHECK(registry.TryByTxidOrLegacy(txid, below_floor) == ref);
+}
+
+//!
+//! A poll below the floor is refused by its height: the lookup names the floor.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_below_the_legacy_floor_is_refused_by_its_height)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK2(cs_main, GRC::PollRegistry::cs_poll_registry);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const int64_t start = GetAdjustedTime() - 20 * DAY;
+    const PollTx poll = MakeChainPollTx("Title", start);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, start, GRC::Claim(), {poll.tx}, pindexGenesisBlock->nBits);
+    const TxIndexScope poll_indexed(poll.tx, polled.m_tx_positions[0]);
+    registry.InitializeLegacyStore(polled.m_pindex->nHeight + 1, 1000);
+
+    std::optional<int> below_floor;
+    BOOST_CHECK(registry.TryByTxidOrLegacy(poll.tx.GetHash(), below_floor) == nullptr);
+    BOOST_REQUIRE(below_floor);
+    BOOST_CHECK_EQUAL(*below_floor, polled.m_pindex->nHeight + 1);
+}
+
+//!
+//! A legacy poll, served by the legacy store as a poll below V11 is, weighs the
+//! magnitude a legacy vote states with the money supply of the poll's last block
+//! and the total magnitude of the last superblock at or before it. The result
+//! stays as it was when the poll ended, whatever the money supply and the
+//! superblocks after it.
 //!
 BOOST_AUTO_TEST_CASE(a_legacy_poll_weighs_magnitude_as_of_its_end)
 {
@@ -2048,14 +2147,14 @@ BOOST_AUTO_TEST_CASE(a_legacy_poll_weighs_magnitude_as_of_its_end)
     const TxIndexScope vote_indexed(vote_tx, polled.m_tx_positions[1]);
 
     GRC::PollRegistry& registry = GRC::GetPollRegistry();
-    registry.Add({poll_tx.GetContracts()[0], poll_tx, polled.m_pindex});
-    registry.Add({vote_tx.GetContracts()[0], vote_tx, polled.m_pindex});
 
     // Built without the registry lock, as the RPCs and the GUI build a result (see the case above).
     const GRC::PollReference* ref = nullptr;
     {
         LOCK(GRC::PollRegistry::cs_poll_registry);
-        ref = registry.TryByTxid(poll_tx.GetHash());
+        registry.InitializeLegacyStore(0, 1000);
+        std::optional<int> below_floor;
+        ref = registry.TryByTxidOrLegacy(poll_tx.GetHash(), below_floor);
         BOOST_REQUIRE(ref != nullptr);
         BOOST_REQUIRE_EQUAL(ref->Votes().size(), 1U);
     }

@@ -64,20 +64,6 @@ GRC::Contract MakeVoteContract(const uint256& poll_txid)
     return GRC::MakeContract<GRC::Vote>(GRC::ContractAction::ADD, std::move(vote));
 }
 
-//! A version 1 vote contract, which names its poll by title.
-GRC::Contract MakeLegacyVoteContract()
-{
-    GRC::Contract contract = GRC::MakeLegacyContract(
-        GRC::ContractType::VOTE,
-        GRC::ContractAction::ADD,
-        POLL_TITLE + ";investor",
-        "<CPID>INVESTOR</CPID><BALANCE>0</BALANCE><MAGNITUDE>0</MAGNITUDE><ANSWER>yes</ANSWER>");
-
-    contract.m_version = 1;
-
-    return contract;
-}
-
 //! Adds and deletes one poll and its votes in the global poll registry, and
 //! counts the poll and vote notifications a subscriber receives. The registry
 //! is reset on entry and on exit.
@@ -85,10 +71,8 @@ struct PollRegistryFixture
 {
     const CTransaction poll_tx{MakeTx(1)};
     const CTransaction vote_tx{MakeTx(2)};
-    const CTransaction legacy_vote_tx{MakeTx(3)};
     const GRC::Contract poll_contract{MakePollContract()};
     const GRC::Contract vote_contract{MakeVoteContract(poll_tx.GetHash())};
-    const GRC::Contract legacy_vote_contract{MakeLegacyVoteContract()};
 
     const uint256 block_hash{uint256::ONE};
     CBlockIndex index;
@@ -231,35 +215,6 @@ BOOST_FIXTURE_TEST_CASE(deleting_a_vote_notifies_new_vote_subscribers, PollRegis
     Subscribe();
 
     Delete(vote_contract, vote_tx);
-
-    BOOST_REQUIRE_EQUAL(VoteCount(), 0U);
-    BOOST_CHECK_EQUAL(vote_calls, 1);
-    BOOST_CHECK_EQUAL(poll_calls, 0);
-}
-
-BOOST_FIXTURE_TEST_CASE(adding_a_legacy_vote_notifies_new_vote_subscribers, PollRegistryFixture)
-{
-    Add(poll_contract, poll_tx);
-    BOOST_REQUIRE(PollRegistered());
-
-    Subscribe();
-
-    Add(legacy_vote_contract, legacy_vote_tx);
-
-    BOOST_REQUIRE_EQUAL(VoteCount(), 1U);
-    BOOST_CHECK_EQUAL(vote_calls, 1);
-    BOOST_CHECK_EQUAL(poll_calls, 0);
-}
-
-BOOST_FIXTURE_TEST_CASE(deleting_a_legacy_vote_notifies_new_vote_subscribers, PollRegistryFixture)
-{
-    Add(poll_contract, poll_tx);
-    Add(legacy_vote_contract, legacy_vote_tx);
-    BOOST_REQUIRE_EQUAL(VoteCount(), 1U);
-
-    Subscribe();
-
-    Delete(legacy_vote_contract, legacy_vote_tx);
 
     BOOST_REQUIRE_EQUAL(VoteCount(), 0U);
     BOOST_CHECK_EQUAL(vote_calls, 1);
