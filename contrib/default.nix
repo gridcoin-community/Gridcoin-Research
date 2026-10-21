@@ -8,6 +8,6 @@ pkgs.mkShell {
   buildInputs = with pkgs; [ boost openssl libevent curl qt5.qttools libzip qrencode ];
 
   shellHook = ''
-    echo "Run: cmake -B build -DENABLE_GUI=ON && cmake --build build"
+    echo "Run: cmake -B build -DENABLE_GUI=ON -DUSE_QT6=OFF && cmake --build build"
   '';
 }

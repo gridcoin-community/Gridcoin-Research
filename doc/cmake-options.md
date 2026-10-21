@@ -27,7 +27,7 @@ These options toggle specific functionality within the Gridcoin client.
 | `DEFAULT_UPNP` | `OFF` | Starts with UPnP already enabled. Off by default: the stock configuration makes 8 outbound connections, so there is no reason to ask the router to open an inbound port until the operator asks for one. Ignored when not listening. | `ENABLE_UPNP` |
 | `ENABLE_QRENCODE` | `OFF` | **QR Codes.** Allows the GUI to display QR codes for wallet addresses. Convenient for mobile payments. | `libqrencode` |
 | `USE_DBUS` | `OFF` | **Desktop Bus.** Enables OS notifications on Linux desktops (e.g., "Staked a block!"). | `QtDBus` |
-| `USE_QT6` | `OFF` | Builds against Qt 6 instead of Qt 5. Recommended for modern Linux distributions. | `Qt6` |
+| `USE_QT6` | `ON` | Builds against Qt 6. Set to `OFF` to build against Qt 5 (5.15 or later) instead. | `Qt6` (`Qt5` when `OFF`) |
 | `ENABLE_MULTIPROCESS` | `OFF` | **Multiprocess (IPC) build (RFC #2937).** Builds against Cap'n Proto and the vendored libmultiprocess subtree so the `interfaces::` boundaries can be driven over IPC. Toolchain-only for now; see [multiprocess.md](multiprocess.md). | `CapnProto` (external); libmultiprocess is vendored in-tree |
 | `WITH_EXTERNAL_LIBMULTIPROCESS` | `OFF` | Build the vendored in-tree libmultiprocess subtree (default). Set to `ON` to link an external (system / depends) libmultiprocess instead — mainly useful when developing libmultiprocess itself. | `ENABLE_MULTIPROCESS` |
 

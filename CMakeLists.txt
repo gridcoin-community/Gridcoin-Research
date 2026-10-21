@@ -168,7 +168,7 @@ option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" O
 option(ENABLE_UPNP      "Enable UPnP port mapping support" ON)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
-option(USE_QT6          "Use Qt 6 instead of Qt 5" OFF)
+option(USE_QT6          "Use Qt 6 instead of Qt 5" ON)
 
 # Multiprocess (Phase 2 GUI/node IPC split, RFC #2937). OFF = the monolithic
 # build with direct in-process calls (current behavior); ON = build against
