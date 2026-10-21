@@ -688,7 +688,8 @@ void GRC::RebuildBeaconRegistry() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
-    LogPrintf("INFO: %s: starting in-line beacon registry rebuild after multi-SB runtime reorg.", __func__);
+    LogPrintf("INFO: %s: starting in-line beacon registry rebuild after a runtime reorg that disconnected "
+              "superblocks.", __func__);
 
     // Non-blocking informational popup in the GUI ONLY. In daemon mode the
     // log line above is the entire notification -- no stderr spam, no popup
@@ -715,20 +716,19 @@ void GRC::RebuildBeaconRegistry() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     const int64_t start_ms = GetTimeMillis();
 
-    // Wipe the beacon registry (in-memory and LevelDB beacon db). The
-    // subsequent InitializeContracts will re-Initialize the now-empty
-    // beacon db and ReplayContracts will walk forward from V11_height
-    // applying beacon contracts to rebuild the registry from scratch.
-    GetBeaconRegistry().Reset();
+    // Only the beacon registry is rebuilt. The disconnect that called for the rebuild reverted every other
+    // registry block by block and moved its db height down to the new tip, so they are left as they are: the
+    // startup routine (InitializeContracts) is not run, so no other registry is reloaded or replayed and no
+    // -clear<type>history flag acts. Wipe the beacon registry (in memory and its LevelDB beacon db), open the empty
+    // db, and replay the beacon contracts and the superblock activations from V11 to the tip.
+    BeaconRegistry& beacons = GetBeaconRegistry();
 
-    // InitializeContracts re-Initializes every contract-type registry and
-    // runs ReplayContracts. Other registries (scrapers, projects, polls,
-    // votes) are already initialized in memory; their Initialize calls are
-    // idempotent and the replay's "already covered" logic (see comments in
-    // InitializeContracts) skips contracts that fall within their existing
-    // DB coverage. Only the wiped beacon registry receives a full
-    // V11_height-forward replay.
-    InitializeContracts(pindexBest);
+    beacons.Reset();
+    beacons.Initialize();
+
+    CBlockIndex* pindex_start = BlockFinder::FindByHeight(Params().GetConsensus().BlockV11Height);
+
+    ReplayContracts(pindexBest, pindex_start, /* beacons_only */ true);
 
     LogPrintf("INFO: %s: beacon registry rebuild complete in %dms.", __func__, GetTimeMillis() - start_ms);
 }

@@ -194,9 +194,9 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
 
             GRC::GetBeaconRegistry().Deactivate(pindexBest->GetBlockHash(), pindexBest->nHeight);
 
-            // Count it so we can decide after the loop whether to flag a beacon-registry rebuild
-            // for the next startup (the Deactivate-via-m_expired_pending path is only correct
-            // for one SB at a time; see the comment above the loop).
+            // Count it so we can decide after the loop whether to rebuild the beacon registry in-line
+            // (the Deactivate-via-m_expired_pending path is only correct for one SB at a time; see the
+            // comment above the loop).
             ++sb_cross_count;
 
             GRC::Quorum::PopSuperblock(pindexBest);

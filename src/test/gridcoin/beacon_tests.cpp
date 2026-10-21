@@ -7,6 +7,7 @@
 #include "gridcoin/beacon.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/registry.h"
+#include "gridcoin/project.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/superblock.h"
 #include <key_io.h>
@@ -2685,6 +2686,44 @@ BOOST_AUTO_TEST_CASE(beacon_registry_a_block_s_two_advertisements_revert_in_inve
     BOOST_CHECK(registry.PendingBeacons().empty());
 
     registry.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_replay_for_beacons_alone_applies_no_other_contract)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+    GRC::GetWhitelist().Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+
+    // One block whitelists a project and advertises a beacon. A beacon registry rebuild replays it for beacons
+    // alone: the disconnect that called for the rebuild already reverted every other registry, so the project
+    // contract is not applied again.
+    CMutableTransaction project_tx;
+    project_tx.nTime = START_TIME;
+    project_tx.vContracts.push_back(GRC::MakeContract<GRC::Project>(
+        uint32_t {3}, GRC::ContractAction::ADD, uint32_t {3}, "Enigma", "http://enigma.test", false));
+
+    const CBlock block = ContractBlock({CTransaction(project_tx),
+                                        BeaconContractTx(GRC::ContractAction::ADD, cpid, key, START_TIME)});
+    const CBlockIndex index = ContractIndex(1, START_TIME);
+
+    GRC::RegistryBookmarks db_heights;
+    bool found = false;
+    GRC::ReplayBlock(block, &index, db_heights, true, found, /* beacons_only */ true);
+
+    BOOST_CHECK(found);
+    BOOST_CHECK_EQUAL(registry.PendingBeacons().count(key.GetPubKey().GetID()), 1U);
+    BOOST_CHECK(!GRC::GetWhitelist()
+                     .Snapshot(GRC::GreylistState::NONE, GRC::ProjectEntry::ProjectFilterFlag::ALL)
+                     .Contains("Enigma"));
+
+    registry.Reset();
+    GRC::GetWhitelist().Reset();
 }
 
 BOOST_AUTO_TEST_CASE(beacon_registry_replay_follows_connection_order)

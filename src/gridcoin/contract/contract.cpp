@@ -378,14 +378,15 @@ Contract GRC::MakeLegacyContract(
     return contract;
 }
 
-void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start, const bool beacons_only)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CBlockIndex*& pindex = pindex_start;
 
-    // If there is no pindex_start (i.e. default value of nullptr), then set standard lookback. A Non-standard lookback
-    // where there is a specific pindex_start argument supplied, is only used in the GRC InitializeContracts call for
-    // when the corresponding RegistryDB instantiations and initialization in LevelDB has not already been populated
-    // for the registry types that use the RegistryDB.
+    // If there is no pindex_start (i.e. default value of nullptr), then set standard lookback. A specific
+    // pindex_start is supplied by the GRC InitializeContracts call, for when the corresponding RegistryDB
+    // instantiations and initialization in LevelDB have not already been populated for the registry types that use
+    // the RegistryDB, and by the beacon registry rebuild, which replays from V11.
     if (!pindex)
     {
         pindex = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Params().GetConsensus().StandardContractReplayLookback);
@@ -446,7 +447,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EX
             }
 
             bool found_contract = false;
-            ReplayBlock(block, pindex, db_heights, apply_contracts, found_contract);
+            ReplayBlock(block, pindex, db_heights, apply_contracts, found_contract, beacons_only);
 
             // If a contract was found and the NeedsIsContractCorrection flag is set, then
             // record that a contract was found in the block index. This corrects the block index
@@ -488,7 +489,8 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EX
 void GRC::ApplyContracts(
     const CBlock& block,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract, const bool skip_stored_beacon_contracts) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    bool& out_found_contract, const bool skip_stored_beacon_contracts, const bool beacons_only)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     out_found_contract = false;
 
@@ -497,16 +499,23 @@ void GRC::ApplyContracts(
         iter != end;
         ++iter)
     {
-        ApplyContracts(*iter, pindex, db_heights, out_found_contract, skip_stored_beacon_contracts);
+        ApplyContracts(*iter, pindex, db_heights, out_found_contract, skip_stored_beacon_contracts, beacons_only);
     }
 }
 
 void GRC::ApplyContracts(
     const CTransaction& tx,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract, const bool skip_stored_beacon_contracts) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    bool& out_found_contract, const bool skip_stored_beacon_contracts, const bool beacons_only)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     for (const auto& contract : tx.GetContracts()) {
+        // A beacon registry rebuild replays beacon contracts alone: every other registry is as the disconnect that
+        // called for it left it.
+        if (beacons_only && contract.m_type != ContractType::BEACON) {
+            continue;
+        }
+
         // Do not (re)apply contracts that have already been stored/loaded into
         // the relevant entry dbs up to the block BEFORE the relevant db height. Because
         // these db heights are at the block level, and are updated on each relevant entry
@@ -649,7 +658,8 @@ void GRC::RevertContracts(const CBlock& block, const CBlockIndex* const pindex) 
 }
 
 void GRC::ReplayBlock(const CBlock& block, const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-                      const bool apply_contracts, bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+                      const bool apply_contracts, bool& out_found_contract, const bool beacons_only)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     out_found_contract = false;
 
@@ -658,7 +668,8 @@ void GRC::ReplayBlock(const CBlock& block, const CBlockIndex* const pindex, cons
     const bool connection_order = IsV15Enabled(pindex->nHeight);
 
     if (apply_contracts && !connection_order) {
-        ApplyContracts(block, pindex, db_heights, out_found_contract, /* skip_stored_beacon_contracts */ true);
+        ApplyContracts(block, pindex, db_heights, out_found_contract, /* skip_stored_beacon_contracts */ true,
+                       beacons_only);
     }
 
     if (pindex->IsSuperblock() && pindex->nVersion >= 11) {
@@ -683,7 +694,8 @@ void GRC::ReplayBlock(const CBlock& block, const CBlockIndex* const pindex, cons
     }
 
     if (apply_contracts && connection_order) {
-        ApplyContracts(block, pindex, db_heights, out_found_contract, /* skip_stored_beacon_contracts */ true);
+        ApplyContracts(block, pindex, db_heights, out_found_contract, /* skip_stored_beacon_contracts */ true,
+                       beacons_only);
     }
 }
 

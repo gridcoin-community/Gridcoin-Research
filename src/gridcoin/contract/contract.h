@@ -606,9 +606,12 @@ Contract MakeLegacyContract(
 //!
 //! \brief Replay historical contract messages, nominally six months.
 //!
-//! \param pindex Block index to start with.
+//! \param pindex_end   Block index to end with.
+//! \param pindex_start Block index to start with; the standard lookback when null.
+//! \param beacons_only Replay beacon contracts and superblock activations alone (a beacon registry rebuild).
 //!
-void ReplayContracts(CBlockIndex *pindex_end, CBlockIndex *pindex_start = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+void ReplayContracts(CBlockIndex *pindex_end, CBlockIndex *pindex_start = nullptr, const bool beacons_only = false)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Apply contracts from transactions in a block by passing them to the
@@ -620,10 +623,12 @@ void ReplayContracts(CBlockIndex *pindex_end, CBlockIndex *pindex_start = nullpt
 //! \param out_found        Will update to \c true when a block contains a contract.
 //! \param skip_stored_beacon_contracts Skip a beacon contract whose record the beacon db already holds (the
 //! startup replay of the block at the db height).
+//! \param beacons_only     Apply beacon contracts alone (a beacon registry rebuild).
 //!
 void ApplyContracts(const CBlock& block,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract, const bool skip_stored_beacon_contracts = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool& out_found_contract, const bool skip_stored_beacon_contracts = false, const bool beacons_only = false)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Apply contracts from transactions by passing them to the appropriate
@@ -633,10 +638,12 @@ void ApplyContracts(const CBlock& block,
 //! \param pindex           Block index for the block that contains the transaction.
 //! \param beacon_db_height Height that db is updated to prior to call
 //! \param skip_stored_beacon_contracts Skip a beacon contract whose record the beacon db already holds.
+//! \param beacons_only     Apply beacon contracts alone (a beacon registry rebuild).
 //!
 void ApplyContracts(const CTransaction& tx,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract, const bool skip_stored_beacon_contracts = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool& out_found_contract, const bool skip_stored_beacon_contracts = false, const bool beacons_only = false)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Perform contextual validation for the contracts in a transaction.
@@ -687,10 +694,13 @@ void RevertContracts(const CBlock& block, const CBlockIndex* const pindex) EXCLU
 //! \param pindex             Index entry of that block.
 //! \param db_heights         Registry db heights at the start of the replay.
 //! \param apply_contracts    Whether to apply the block's contracts.
-//! \param out_found_contract Set when the block carried a contract.
+//! \param out_found_contract Set when the block carried a contract (a beacon contract, with beacons_only).
+//! \param beacons_only       Apply the block's beacon contracts alone; a superblock's activations are applied
+//! either way (a beacon registry rebuild).
 //!
 void ReplayBlock(const CBlock& block, const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-                 const bool apply_contracts, bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+                 const bool apply_contracts, bool& out_found_contract, const bool beacons_only = false)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 }
 
 #endif // GRIDCOIN_CONTRACT_CONTRACT_H

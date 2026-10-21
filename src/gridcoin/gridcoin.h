@@ -58,10 +58,11 @@ void NotifyPoll();
 //! \brief Rebuild the beacon registry in-line during a runtime multi-SB reorg.
 //!
 //! Called by DisconnectBlocksBatch when a runtime reorg crosses two or more
-//! superblock boundaries -- the case where BeaconRegistry::Deactivate cannot
-//! resurrect expired pending beacons from prior SBs (m_expired_pending only
-//! carries the latest SB's set, per the limitation note in
-//! BeaconRegistry::Deactivate in beacon.cpp). Without a full
+//! superblock boundaries, or from block version 15 one superblock for which
+//! the registry's superblock state is not current -- the cases where
+//! BeaconRegistry::Deactivate cannot resurrect expired pending beacons from
+//! prior SBs (m_expired_pending only carries the latest SB's set, per the
+//! limitation note in BeaconRegistry::Deactivate in beacon.cpp). Without a full
 //! rebuild the in-memory registry would be left missing prior-SB
 //! expired-pending beacons, and any subsequent ConnectBlock that referenced
 //! one of those beacons (e.g., a research-reward claim) would
@@ -72,10 +73,12 @@ void NotifyPoll();
 //!      operator sees what is happening.
 //!   2. BeaconRegistry::Reset() -- wipes the in-memory and on-disk beacon
 //!      state.
-//!   3. InitializeContracts(pindexBest) -- re-initializes the registries
-//!      and walks ReplayContracts to re-apply beacon contracts from V11
-//!      forward (the other contract types' DB-backed Initialize is
-//!      idempotent and ReplayContracts skips already-covered contracts).
+//!   3. BeaconRegistry::Initialize() -- opens the emptied beacon db.
+//!   4. ReplayContracts(pindexBest, the V11 block, beacons_only) -- re-applies
+//!      the beacon contracts and superblock activations from V11 forward.
+//!      Nothing else: the disconnect already reverted every other registry
+//!      block by block, so none is reloaded or replayed (InitializeContracts,
+//!      the startup routine, is not run).
 //!
 //! Runs under cs_main (caller's lock) so no other thread observes the
 //! intermediate empty-registry state. On SSD the rebuild typically
