@@ -1680,6 +1680,17 @@ BOOST_AUTO_TEST_CASE(util_Utf8ToWide_and_WideToUtf8_convert_every_scalar_value)
     BOOST_CHECK(Utf8ToWide(utf8) == wide);
     BOOST_CHECK(WideToUtf8(wide) == utf8);
 }
+
+#if HAVE_SYSTEM
+BOOST_AUTO_TEST_CASE(util_runCommand_does_not_throw_on_malformed_utf8)
+{
+    // A command from a configuration file saved in a legacy code page: 0xE9 is U+00E9
+    // in Windows-1252 and not valid UTF-8 here. runCommand logs it and does not run
+    // it; the conversion's exception must not escape, because the callers run
+    // runCommand on threads of their own.
+    BOOST_CHECK_NO_THROW(runCommand("echo r\xE9sum\xE9"));
+}
+#endif // HAVE_SYSTEM
 #endif // WIN32
 
 BOOST_AUTO_TEST_SUITE_END()

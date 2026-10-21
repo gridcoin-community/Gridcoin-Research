@@ -52,8 +52,6 @@ namespace fsbridge {
 #endif
     };
 
-    std::string get_filesystem_error_message(const fs::filesystem_error& e);
-
     /** Check if a path contains characters not representable in the system code page.
      *
      * On Windows, fs::path::string() converts to the system code page, which silently

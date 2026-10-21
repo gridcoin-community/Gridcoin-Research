@@ -24,7 +24,6 @@
 #include <boost/iostreams/filter/newline.hpp>
 #include <openssl/crypto.h>
 #include <cstdarg>
-#include <codecvt>
 
 using namespace std;
 
@@ -533,7 +532,29 @@ void runCommand(std::string strCommand)
 #ifndef WIN32
     int nErr = ::system(strCommand.c_str());
 #else
-    int nErr = ::_wsystem(std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>,wchar_t>().from_bytes(strCommand).c_str());
+    // The callers run this on threads of their own, where an uncaught exception
+    // ends the program, so a command that is not valid UTF-8, as from a
+    // configuration file saved in a legacy code page, is logged and not run.
+    std::wstring command;
+    try {
+        command = Utf8ToWide(strCommand);
+    } catch (const std::range_error&) {
+        // Escape each byte that is not ASCII, as \xNN, so that debug.log stays UTF-8.
+        std::string escaped;
+        for (const char ch : strCommand) {
+            const unsigned int byte = static_cast<unsigned char>(ch);
+            // sign-compare checked: byte is unsigned int; 0x80U is a non-negative literal, so
+            // both sides are unsigned.
+            if (byte < 0x80U) {
+                escaped += ch;
+            } else {
+                escaped += strprintf("\\x%02x", byte);
+            }
+        }
+        LogPrintf("runCommand error: %s is not valid UTF-8 and was not run", escaped);
+        return;
+    }
+    int nErr = ::_wsystem(command.c_str());
 #endif
     if (nErr)
         LogPrintf("runCommand error: system(%s) returned %d", strCommand, nErr);

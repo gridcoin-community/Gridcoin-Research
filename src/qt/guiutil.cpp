@@ -16,7 +16,6 @@
 #include "clientversion.h"
 #include "util/strencodings.h" // For SanitizeString (per-node QSettings key).
 #include <algorithm>           // For std::replace.
-#include <codecvt>
 
 #include <QString>
 #include <QDateTime>
@@ -621,16 +620,15 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
             GetModuleFileNameW(nullptr, pszExePath, sizeof(pszExePath));
 
             std::wstring autostartup_arguments;
-            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 
             if (!autostartup.data_dir.empty())
             {
-                autostartup_arguments = converter.from_bytes("-datadir=\"")
+                autostartup_arguments = L"-datadir=\""
                         + autostartup.data_dir.wstring()
-                        + converter.from_bytes("\" ");
+                        + L"\" ";
             }
 
-            autostartup_arguments += converter.from_bytes(autostartup.arguments);
+            autostartup_arguments += Utf8ToWide(autostartup.arguments);
 
             LPCTSTR pszArgs = autostartup_arguments.c_str();
 
