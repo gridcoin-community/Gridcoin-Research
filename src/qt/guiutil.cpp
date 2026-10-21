@@ -617,7 +617,7 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
         {
             // Get the current executable path
             WCHAR pszExePath[MAX_PATH];
-            GetModuleFileNameW(nullptr, pszExePath, sizeof(pszExePath));
+            GetModuleFileNameW(nullptr, pszExePath, MAX_PATH);
 
             std::wstring autostartup_arguments;
 

@@ -81,12 +81,19 @@ bool FileLock::TryLock()
 #else
 
 static std::string GetErrorReason() {
-    wchar_t* err;
-    FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        nullptr, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<WCHAR*>(&err), 0, nullptr);
+    const DWORD error = GetLastError();
+    wchar_t* err = nullptr;
+    const DWORD length = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        nullptr, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<WCHAR*>(&err), 0, nullptr);
+    // sign-compare checked: length is DWORD, which is unsigned; 0U is a non-negative literal, so both sides are unsigned.
+    if (length == 0U) {
+        // FormatMessageW failed, so it allocated no buffer.
+        return "Unknown error (" + ToString(error) + ")";
+    }
     std::wstring err_str(err);
     LocalFree(err);
-    return WideToUtf8(err_str);
+    // The system text ends with a line break, which is trimmed.
+    return TrimString(WideToUtf8(err_str)) + " (" + ToString(error) + ")";
 }
 
 FileLock::FileLock(const fs::path& file)
