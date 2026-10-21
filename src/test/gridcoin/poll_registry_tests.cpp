@@ -1664,7 +1664,6 @@ public:
     LegacyStoreScope(const LegacyStoreScope&) = delete;
     LegacyStoreScope& operator=(const LegacyStoreScope&) = delete;
 
-    GRC::LegacyPollStore& operator*() { return m_store; }
     GRC::LegacyPollStore* operator->() { return &m_store; }
 
 private:
@@ -2254,6 +2253,14 @@ BOOST_AUTO_TEST_CASE(a_legacy_poll_weighs_magnitude_as_of_its_end)
         factor * GRC::Magnitude::RoundFrom(50).Scaled() / GRC::Magnitude::SCALE_FACTOR + 100 * COIN;
 
     BOOST_CHECK_EQUAL(result->m_total_weight, expected);
+
+    // At a later tip, with a newer superblock and a larger money supply, the result is the same.
+    const LinkedTip later = LinkBlock(after.m_pindex, start + 12 * 86400, SuperblockClaim(2700), {}, bits);
+    later.m_pindex->nMoneySupply = 2000000 * COIN;
+
+    const GRC::PollResultOption at_later_tip = GRC::PollResult::BuildFor(*ref, later.m_pindex);
+    BOOST_REQUIRE(at_later_tip);
+    BOOST_CHECK_EQUAL(at_later_tip->m_total_weight, expected);
 }
 
 //!
@@ -2314,6 +2321,16 @@ BOOST_AUTO_TEST_CASE(a_legacy_poll_with_no_superblock_before_its_end_has_no_magn
     BOOST_REQUIRE_EQUAL(result->m_votes.size(), 1U);
     // sign-compare checked: m_total_weight is Weight (uint64_t); 100 * COIN is a positive constant, so the cast keeps its value.
     BOOST_CHECK_EQUAL(result->m_total_weight, static_cast<GRC::PollResult::Weight>(100 * COIN));
+
+    // At a later tip, with a newer current superblock, the votes still carry no magnitude weight.
+    const LinkedTip later = LinkBlock(after.m_pindex, start + 12 * DAY, SuperblockClaim(2700), {}, bits);
+    later.m_pindex->nMoneySupply = 2000000 * COIN;
+    const LiveSuperblockScope newer(SuperblockClaim(2700).m_superblock, later.m_pindex);
+
+    const GRC::PollResultOption at_later_tip = GRC::PollResult::BuildFor(*ref, later.m_pindex);
+    BOOST_REQUIRE(at_later_tip);
+    // sign-compare checked: m_total_weight is Weight (uint64_t); 100 * COIN is a positive constant, so the cast keeps its value.
+    BOOST_CHECK_EQUAL(at_later_tip->m_total_weight, static_cast<GRC::PollResult::Weight>(100 * COIN));
 }
 
 //!
