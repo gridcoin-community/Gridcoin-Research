@@ -3075,6 +3075,38 @@ BOOST_AUTO_TEST_CASE(from_v15_a_vote_in_the_polls_own_block_is_not_linked)
 }
 
 //!
+//! From v15 a vote in its poll's own block is not linked, so a reorg that disconnects the block has no link of it to
+//! erase, and the GUI is not told of a change to the poll's votes.
+//!
+BOOST_AUTO_TEST_CASE(reverting_a_vote_that_was_not_linked_tells_the_gui_nothing)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    // The poll is open by the wall clock, as the GUI judges it.
+    const int64_t t0 = GetAdjustedTime() - 60;
+    const PollTx poll = MakePollTx("Title", t0);
+    const GRC::Contract vote_contract = MakeVoteContract(poll.tx.GetHash());
+    const CTransaction vote = MakeVoteTxFor(vote_contract, t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx, vote}, pindexGenesisBlock->nBits);
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+
+    grc_test::V15HeightGuard v15(polled.m_pindex->nHeight);
+    registry.Add({poll.contract, poll.tx, polled.m_pindex});
+    registry.Add({vote_contract, vote, polled.m_pindex});
+    BOOST_REQUIRE(!Linked(poll.tx.GetHash(), vote));
+
+    std::vector<uint256> heard;
+    boost::signals2::scoped_connection watch = uiInterface.NewVoteReceived_connect(
+        [&heard](const uint256& poll_txid) { heard.push_back(poll_txid); });
+
+    registry.Revert({vote_contract, vote, polled.m_pindex});
+
+    BOOST_CHECK(heard.empty());
+}
+
+//!
 //! From v15 a vote is linked from a block after the poll's block through its closing block, the block before its
 //! first block past the end; no vote in a later block is linked.
 //!

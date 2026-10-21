@@ -213,7 +213,7 @@ private:
     int64_t m_timestamp;                        //!< Timestamp of the poll transaction.
     uint32_t m_duration_days;                   //!< Number of days the poll remains active.
     const CBlockIndex* m_pindex;                //!< Block that contains the poll contract.
-    mutable std::vector<uint256> m_votes;       //!< Linked votes: the list (in-memory poll) or the cached chain (stored poll).
+    mutable std::vector<uint256> m_votes;       //!< Linked votes: the list (legacy poll) or the cached chain (stored poll).
     mutable uint256 m_votes_head;               //!< The chain head m_votes was read at (stored poll).
     mutable bool m_expiration_warn_notified;    //!< Flag to indicate whether the expiration warning was sent.
     bool m_stored;                              //!< Backed by the poll db (a poll from V11 on).
@@ -291,8 +291,8 @@ class PollRegistry : public IContractHandler
 {
 public:
     //! Display map: every ACTIVE poll by its title key (GRC::PollTitleKey). More than one poll can share a key:
-    //! below v15 a poll whose title key is taken is still registered by its txid, and a pre-V11 poll loaded on demand
-    //! can share a later poll's key. The title index, not this map, says which poll owns a title.
+    //! below v15 a poll whose title key is taken is still registered by its txid, and a pre-V11 poll the legacy store
+    //! holds can share a later poll's key. The title index, not this map, says which poll owns a title.
     using PollMapByTitle = std::multimap<std::string, PollReference*>;
     //! Owning map: every poll the registry holds, ACTIVE or DELETED, by txid.
     using PollMapByTxid = std::map<uint256, PollReference>;
@@ -481,7 +481,7 @@ public:
 
     //!
     //! \brief Get every ACTIVE poll with a title key, in block order (height, then txid): the polls registered since
-    //! V11 and the pre-V11 polls loaded on demand.
+    //! V11 and the pre-V11 polls the legacy store holds.
     //!
     //! \param title_key The title key (GRC::PollTitleKey).
     //!

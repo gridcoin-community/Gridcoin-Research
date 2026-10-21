@@ -1170,7 +1170,7 @@ void PollRegistry::IndexPollRecord(const PollEntry& entry)
 
 std::pair<int, uint256> PollRegistry::ShownOrder(const PollReference& ref) const
 {
-    // A stored poll's record holds its block's height; a pre-V11 poll loaded on demand has its block index.
+    // A stored poll's record holds its block's height; a poll the legacy store holds has its block index.
     int height = ref.m_pindex ? ref.m_pindex->nHeight : -1;
 
     if (const auto entry = m_poll_entries.find(ref.m_txid); entry != m_poll_entries.end()) {
@@ -1796,18 +1796,14 @@ void PollRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(c
             return;
         }
 
-        // A vote linked to an in-memory poll from the historical lookup.
-        DeleteVote(ctx);
-
+        // A vote its block did not link (from v15 a vote in its poll's own block, or a vote for a poll the
+        // registry does not hold): there is no link to erase.
         return;
     }
 
     if (!m_poll_db.contains(hash)) {
-        // Not stored: a REMOVE that resolved to nothing, or an in-memory poll from the historical lookup.
-        if (ctx->m_action == ContractAction::ADD) {
-            DeletePoll(ctx);
-        }
-
+        // Not stored: a REMOVE that resolved to nothing, or an ADD that registered no poll. There is nothing to
+        // erase.
         return;
     }
 
