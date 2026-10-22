@@ -472,6 +472,41 @@ elseif(APPLE)
 endif()
 
 
+# Optimisation level
+# ==================
+
+# Release compiles at -O2, as the Autotools build did (autoconf's default
+# "-g -O2", and -O2 from depends) and as Bitcoin Core does. CMake's own default
+# for CMAKE_<LANG>_FLAGS_RELEASE is "-O3 -DNDEBUG" with GCC and Clang, and
+# nothing here replaced it, so Release builds -- the CI release artifacts among
+# them -- have compiled at -O3 since the migration. RelWithDebInfo is already
+# -O2.
+#
+# Only while the value is still CMake's stock "-O3 -DNDEBUG", both in the cache
+# and in CMAKE_<LANG>_FLAGS_RELEASE_INIT, so a value anyone has changed is left
+# alone. That includes a toolchain file's CMAKE_<LANG>_FLAGS_RELEASE_INIT:
+# CMake appends its own " -O3 -DNDEBUG" to it, so a cache that matches the
+# _INIT value is not necessarily stock. Comparing with the stock value, rather
+# than asking whether the variable was given on the command line, also
+# corrects a build directory configured before this rule: build_targets.sh
+# reconfigures existing directories by default (CLEAN_BUILD=false), and its
+# cache would otherwise keep -O3. The one value this cannot tell from "never
+# set" is the stock string itself, so the rewrite is announced along with how
+# to keep -O3. After the language enables above, so that OBJCXX is covered.
+foreach(lang IN ITEMS C CXX OBJCXX)
+    if(NOT CMAKE_${lang}_COMPILER_LOADED)
+        continue()
+    endif()
+    string(STRIP "${CMAKE_${lang}_FLAGS_RELEASE}" release_flags)
+    string(STRIP "${CMAKE_${lang}_FLAGS_RELEASE_INIT}" init_flags)
+    if(release_flags STREQUAL "-O3 -DNDEBUG" AND init_flags STREQUAL release_flags)
+        message(STATUS "CMAKE_${lang}_FLAGS_RELEASE: CMake's stock \"-O3 -DNDEBUG\" replaced "
+                       "with \"-O2 -DNDEBUG\"; any other value, such as \"-O3\", is kept as given")
+        set_property(CACHE CMAKE_${lang}_FLAGS_RELEASE PROPERTY VALUE "-O2 -DNDEBUG")
+    endif()
+endforeach()
+
+
 # Run probes
 # ==========
 
