@@ -186,6 +186,44 @@ CTransaction MakeVoteTxFor(const GRC::Contract& contract, const int64_t tx_time)
     return CTransaction(mtx);
 }
 
+//! An address claim of \p key for \p outpoints. Unsigned: the checks that use it read only the claim's entries.
+GRC::AddressClaim MakeAddressClaim(const CPubKey& key, std::vector<COutPoint> outpoints)
+{
+    GRC::AddressClaim claim(std::move(outpoints));
+    claim.m_public_key = key;
+    claim.m_signature = {1};
+
+    return claim;
+}
+
+//! A version 2 vote for \p poll_txid with \p responses, whose balance claim holds \p address_claims.
+GRC::Contract MakeClaimedVoteContract(const uint256& poll_txid, std::vector<uint8_t> responses,
+                                      std::vector<GRC::AddressClaim> address_claims)
+{
+    GRC::VoteWeightClaim claim;
+    claim.m_balance_claim.m_address_claims = std::move(address_claims);
+
+    return GRC::MakeContract<GRC::Vote>(
+        uint32_t {2}, GRC::ContractAction::ADD,
+        GRC::Vote::CURRENT_VERSION, poll_txid, std::move(responses), std::move(claim));
+}
+
+//! A transaction carrying \p contract with \p outputs outputs: a burn, then change.
+CTransaction MakeVoteTxWithOutputs(const GRC::Contract& contract, const int64_t tx_time, const size_t outputs)
+{
+    CMutableTransaction mtx;
+    mtx.nTime = tx_time;
+    mtx.vout.emplace_back(COIN / 100, CScript() << OP_RETURN);
+
+    for (size_t i = 1; i < outputs; ++i) {
+        mtx.vout.emplace_back(COIN, CScript() << OP_TRUE);
+    }
+
+    mtx.vContracts.push_back(contract);
+
+    return CTransaction(mtx);
+}
+
 //! The registry as a restarted node holds it.
 void Restart(GRC::PollRegistry& registry) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
@@ -1025,6 +1063,55 @@ BOOST_AUTO_TEST_CASE(from_v15_a_poll_removal_names_its_poll_by_txid)
     BOOST_CHECK(registry.BlockValidate({by_txid.contract, by_txid.tx, &index}, DoS));
     BOOST_CHECK(!registry.BlockValidate({by_title.contract, by_title.tx, &index}, DoS));
     BOOST_CHECK(!registry.BlockValidate({v4_add, v4_add_tx, &index}, DoS));
+}
+
+//!
+//! From v15 a block takes a vote only in a transaction with one burn output and at most one change output, and only
+//! with a balance claim that names each address key and each output once.
+//!
+BOOST_AUTO_TEST_CASE(from_v15_a_block_takes_a_vote_only_in_the_shape_the_wallet_builds)
+{
+    CBlockIndex index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    CKey key_a;
+    CKey key_b;
+    key_a.MakeNewKey(true);
+    key_b.MakeNewKey(true);
+    const COutPoint coin_1(uint256S("0x01"), 0);
+    const COutPoint coin_2(uint256S("0x02"), 0);
+    const uint256 poll_txid = uint256S("0x1234");
+
+    const GRC::Contract plain = MakeClaimedVoteContract(poll_txid, {0}, {MakeAddressClaim(key_a.GetPubKey(), {coin_1})});
+    const GRC::Contract key_twice = MakeClaimedVoteContract(
+        poll_txid, {0}, {MakeAddressClaim(key_a.GetPubKey(), {coin_1}), MakeAddressClaim(key_a.GetPubKey(), {coin_2})});
+    const GRC::Contract coin_twice = MakeClaimedVoteContract(
+        poll_txid, {0}, {MakeAddressClaim(key_a.GetPubKey(), {coin_1}), MakeAddressClaim(key_b.GetPubKey(), {coin_1})});
+
+    const std::vector<std::pair<GRC::Contract, CTransaction>> taken {
+        {plain, MakeVoteTxWithOutputs(plain, 1700000000, 1)},
+        {plain, MakeVoteTxWithOutputs(plain, 1700000001, 2)},
+    };
+    const std::vector<std::pair<GRC::Contract, CTransaction>> refused {
+        {plain, MakeVoteTxWithOutputs(plain, 1700000002, 3)},
+        {key_twice, MakeVoteTxWithOutputs(key_twice, 1700000003, 2)},
+        {coin_twice, MakeVoteTxWithOutputs(coin_twice, 1700000004, 2)},
+    };
+
+    grc_test::V15HeightGuard v15(index.nHeight);
+
+    for (const auto& [contract, tx] : taken) {
+        int DoS = 0;
+        BOOST_CHECK(registry.BlockValidate({contract, tx, &index}, DoS));
+    }
+
+    for (const auto& [contract, tx] : refused) {
+        int DoS = 0;
+        BOOST_CHECK(!registry.BlockValidate({contract, tx, &index}, DoS));
+        BOOST_CHECK_EQUAL(DoS, 25);
+    }
 }
 
 //!
@@ -3081,6 +3168,61 @@ BOOST_AUTO_TEST_CASE(removepoll_refuses_from_a_node_out_of_sync)
     } catch (const UniValue& err) {
         BOOST_CHECK_EQUAL(find_value(err, "code").get_int(), RPC_MISC_ERROR);
         BOOST_CHECK_EQUAL(find_value(err, "message").get_str(), "Cannot remove a poll with a wallet that is not in sync.");
+    }
+}
+
+//!
+//! From v15 the memory pool takes a vote only as a block would (one burn output, at most one change output, each
+//! address key and output claimed once), and only for a registered poll that has not finished, with responses that are
+//! choices of that poll. A refusal carries no penalty: a node a block behind or ahead holds a different registry.
+//!
+BOOST_AUTO_TEST_CASE(from_v15_the_mempool_takes_a_vote_only_for_an_open_poll_with_its_choices)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t now = GetAdjustedTime();
+    const PollTx closed = MakeChainPollTx("Closed", now - 9 * DAY);
+    const LinkedTip closed_block = LinkBlock(pindexGenesisBlock, now - 9 * DAY, GRC::Claim(), {closed.tx}, bits);
+    const PollTx open = MakeChainPollTx("Open", now - DAY);
+    const LinkedTip open_block = LinkBlock(closed_block.m_pindex, now - DAY, GRC::Claim(), {open.tx}, bits);
+    const TxIndexScope closed_index(closed.tx, closed_block.m_tx_positions[0]);
+    const TxIndexScope open_index(open.tx, open_block.m_tx_positions[0]);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    registry.Add({closed.contract, closed.tx, closed_block.m_pindex});
+    registry.Add({open.contract, open.tx, open_block.m_pindex});
+
+    CKey key;
+    key.MakeNewKey(true);
+    const std::vector<GRC::AddressClaim> claim {MakeAddressClaim(key.GetPubKey(), {COutPoint(uint256S("0x01"), 0)})};
+    int64_t tx_time = now;
+
+    const auto make_vote = [&](const uint256& poll_txid, std::vector<uint8_t> responses, const size_t outputs) {
+        const GRC::Contract contract = MakeClaimedVoteContract(poll_txid, std::move(responses), claim);
+
+        return std::make_pair(contract, MakeVoteTxWithOutputs(contract, tx_time++, outputs));
+    };
+
+    const auto taken = make_vote(open.tx.GetHash(), {0}, 2);
+    const std::vector<std::pair<GRC::Contract, CTransaction>> refused {
+        make_vote(uint256S("0x1234"), {0}, 2),  // names no registered poll
+        make_vote(closed.tx.GetHash(), {0}, 2), // its poll has finished
+        make_vote(open.tx.GetHash(), {7}, 2),   // not a choice of the poll
+        make_vote(open.tx.GetHash(), {0}, 3),   // more than one change output
+    };
+
+    grc_test::V15HeightGuard v15(nBestHeight + 1);
+
+    int DoS = 0;
+    BOOST_CHECK(registry.Validate(taken.first, taken.second, DoS));
+
+    for (const auto& [contract, tx] : refused) {
+        DoS = -1;
+        BOOST_CHECK(!registry.Validate(contract, tx, DoS));
+        BOOST_CHECK_EQUAL(DoS, 0);
     }
 }
 

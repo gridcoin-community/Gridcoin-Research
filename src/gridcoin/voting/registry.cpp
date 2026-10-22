@@ -1732,6 +1732,17 @@ bool PollAndClaimValid(const PollPayload& payload, const CTransaction& tx, int& 
 
     return true;
 }
+
+//!
+//! \brief Whether a vote transaction has the shape the wallet builds, which blocks require from v15: one burn output
+//! and at most one change output, and a balance claim that names each address key and each output once.
+//!
+bool VoteTxWellShaped(const Contract& contract, const CTransaction& tx)
+{
+    if (tx.vout.size() > 2) return false;
+
+    return contract.m_version < 2 || contract.SharePayloadAs<Vote>()->m_claim.m_balance_claim.EntriesDistinct();
+}
 } // anonymous namespace
 
 bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -1742,10 +1753,50 @@ bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, in
 bool PollRegistry::ValidateAt(const Contract& contract, const CTransaction& tx, const int height, int& DoS) const
     EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    // Vote contract claims do not affect consensus. Vote claim validation
-    // occurs on-demand while computing the results of the poll:
-    //
+    // A vote's claim is weighed when its poll is tallied. From v15 the memory pool takes only a vote that a block would
+    // take (VoteTxWellShaped) and that its poll would count: one that names a registered poll that has not finished,
+    // by the rule the wallet builds a vote by (VoteBuilder::ForPoll), with responses that are choices of that poll. A
+    // refusal carries no penalty: a node a block behind or ahead of this one holds a different registry.
     if (contract.m_type == ContractType::VOTE) {
+        if (!IsV15Enabled(height)) {
+            return true;
+        }
+
+        DoS = 0;
+
+        if (!VoteTxWellShaped(contract, tx)) {
+            return false;
+        }
+
+        if (contract.m_version < 2) {
+            return true;
+        }
+
+        const auto vote = contract.SharePayloadAs<Vote>();
+        PollOption poll;
+
+        {
+            LOCK(cs_poll_registry);
+
+            const PollReference* const poll_ref = TryByTxid(vote->m_poll_txid);
+
+            if (poll_ref == nullptr || poll_ref->Expired(GetAdjustedTime())) {
+                return false;
+            }
+
+            poll = poll_ref->TryReadFromDisk();
+        }
+
+        if (!poll) {
+            return false;
+        }
+
+        for (const auto offset : vote->m_responses) {
+            if (!poll->Choices().OffsetInRange(offset)) {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -1774,10 +1825,19 @@ bool PollRegistry::ValidateAt(const Contract& contract, const CTransaction& tx, 
 
 bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    // Vote contract claims do not affect consensus. Vote claim validation
-    // occurs on-demand while computing the results of the poll:
-    //
+    // A vote's claim is weighed when its poll is tallied. From v15 a block takes a vote only in the shape the wallet
+    // builds (VoteTxWellShaped).
     if (ctx.m_contract.m_type == ContractType::VOTE) {
+        if (IsV15Enabled(ctx.m_pindex->nHeight) && !VoteTxWellShaped(ctx.m_contract, ctx.m_tx)) {
+            DoS = 25;
+            LogPrint(LogFlags::CONTRACT,
+                "%s: rejected vote transaction %s that is not in the shape the wallet builds at height %d",
+                __func__,
+                ctx.m_tx.GetHash().ToString(),
+                ctx.m_pindex->nHeight);
+            return false;
+        }
+
         return true;
     }
 

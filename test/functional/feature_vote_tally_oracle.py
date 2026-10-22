@@ -689,7 +689,9 @@ class VoteTallyOracleTest(GridcoinTestFramework):
         cast there, and the further step to the slot past the last poll's end
         stays within the peer timeout and within the age at which a wallet counts
         itself in sync (OutOfSyncByAge, 900 s since the tip's parent), which
-        voting needs.
+        voting needs. From v15 a memory pool takes a vote only for a poll that has
+        not finished, so the staker takes the vote before the clocks move past the
+        end.
         """
         node0, staker = self.nodes[FUNDER], self.nodes[STAKER]
         first_end = min(self.poll_end(poll) for poll in self.polls)
@@ -706,9 +708,9 @@ class VoteTallyOracleTest(GridcoinTestFramework):
 
         late_poll = self.rng.choice(self.polls)
         _, late = self.cast_any(late_poll)
+        self.gather(staker)
         for n in self.nodes:
             n.advance_mocktime_to(past)
-        self.gather(staker)
         staker.generatetoaddress(1, staker.getnewaddress())
         self.sync_blocks(wait=0.1)
         block = node0.getblock(node0.getbestblockhash())
