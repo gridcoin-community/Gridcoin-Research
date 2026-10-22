@@ -1151,6 +1151,18 @@ static void StartupNotify(const ArgsManager& args)
 #endif
 
 /**
+ * Whether the node runs on the DEFAULT data directory because none was chosen.
+ * An explicit -datadir is a choice even when it names the default path. Asks
+ * what GetDataDirPath() and CheckDataDirOption() ask, so an empty -datadir counts
+ * as the default, which is where it resolves: -datadir= (a wrapper's
+ * -datadir=$DIR with DIR unset) chooses nothing. IsArgSet() would call it explicit.
+ */
+static bool DataDirIsDefault()
+{
+    return gArgs.GetArg("-datadir", "").empty();
+}
+
+/**
  * Initialize global loggers.
  *
  * Note that this is called very early in the process lifetime, so you should be
@@ -1165,21 +1177,27 @@ void InitLogging()
     // reach a Windows console.
     const fs::path resolved_data_dir = GetDataDir();
 
-    // Only speak up when the directory is the problem. debug.log lives inside it,
-    // so a volatile data directory takes every record of itself with it -- that is
-    // the case worth a line on stderr before logging starts. Reporting the path
-    // unconditionally was noise on every normal start, and the functional test
-    // framework treats any stderr output from a node as a failure, correctly.
+    // Only speak up when the DEFAULT directory is the problem. Nobody chose it, so
+    // AppInit2 refuses to start on it, and debug.log lives inside it: a volatile
+    // default takes every record of itself with it, which makes it the case worth
+    // a line on stderr before logging starts. Reporting the path unconditionally
+    // was noise on every normal start. The line only names the directory; the
+    // node's refusal says what that costs and what to do about it.
+    //
+    // An explicit -datadir on tmpfs is the operator's choice, so the node runs,
+    // and its AppInit2 records the choice in debug.log instead. Keeping that case
+    // off stderr is not cosmetic: the functional test framework passes -datadir
+    // for every node and treats any stderr output as a failure, correctly, so on
+    // a host whose /tmp is tmpfs this line used to fail every test that stops its
+    // node through the framework. The predicate is the refusal's: DataDirIsDefault().
     //
     // Utf8PathString, not path::string(): on Windows the latter narrows through
     // the active code page, so a directory containing anything outside it is
     // mangled or throws -- and this line exists precisely to name a directory
     // that may be unusual.
-    if (fsbridge::IsVolatileFilesystem(resolved_data_dir)) {
-        fputs(strprintf("WARNING: the data directory %s is on a temporary filesystem "
-                        "(tmpfs/ramfs). The block chain, the wallet and this log will be "
-                        "DESTROYED when the process exits. Set -datadir to persistent "
-                        "storage before continuing.\n",
+    if (DataDirIsDefault() && fsbridge::IsVolatileFilesystem(resolved_data_dir)) {
+        fputs(strprintf("WARNING: the default data directory %s is on a temporary filesystem "
+                        "(tmpfs/ramfs).\n",
                         fsbridge::Utf8PathString(resolved_data_dir)).c_str(), stderr);
     }
 
@@ -1873,16 +1891,26 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Refuse to run when the DEFAULT data directory lands on a temporary
     // filesystem. That combination is never deliberate -- it is what the sandbox
     // fallback used to produce -- and proceeding writes the chain and the wallet
-    // into RAM, loses them at exit, and takes this log with them.
+    // into RAM, where they are lost, along with this log, when that filesystem is
+    // cleared.
     //
     // Deliberately scoped to the default. An operator who passes -datadir
     // pointing at tmpfs has chosen it, and both test harnesses do exactly that:
     // the unit fixture and the functional framework each set -datadir, sometimes
-    // beneath a /tmp that is tmpfs on the host distribution.
-    if (!gArgs.IsArgSet("-datadir") && fsbridge::IsVolatileFilesystem(datadir)) {
-        return InitError(_("The default data directory is on a temporary filesystem, so the "
-                           "block chain and wallet would be lost when the program exits. Pass "
-                           "-datadir with a location on persistent storage."));
+    // beneath a /tmp that is tmpfs on the host distribution. That case runs, and
+    // is reported here in debug.log rather than on stderr (see InitLogging). An
+    // empty -datadir is not that case: it resolves to the default directory.
+    if (fsbridge::IsVolatileFilesystem(datadir)) {
+        if (DataDirIsDefault()) {
+            return InitError(_("The default data directory is on a temporary filesystem, so the "
+                               "block chain and wallet would be lost when the program exits. Pass "
+                               "-datadir with a location on persistent storage."));
+        }
+
+        LogPrintf("WARNING: %s: the data directory %s is on a temporary filesystem (tmpfs/ramfs). "
+                  "The block chain and the wallet stored there are lost when that filesystem is "
+                  "cleared: on reboot at the latest, and on exit inside a sandbox such as Flatpak.",
+                  __func__, fsbridge::LongPathString(datadir));
     }
 
 

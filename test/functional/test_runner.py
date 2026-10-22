@@ -273,6 +273,12 @@ BASE_SCRIPTS = [
     # feature_no_network_diagnose_on_regtest.py: walletdiagnose's NTP and port
     # checks report NA on regtest instead of reaching outside hosts (#3359).
     'feature_no_network_diagnose_on_regtest.py',
+    # feature_datadir_tmpfs.py: an explicit -datadir on tmpfs warns in debug.log,
+    # not on stderr, which the framework treats as a failure on every host whose
+    # /tmp is tmpfs; the default data directory on tmpfs is still refused.
+    # Skipped off Linux, and where /dev/shm is not tmpfs or has too little free
+    # space for a node.
+    'feature_datadir_tmpfs.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled
