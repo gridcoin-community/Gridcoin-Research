@@ -534,6 +534,48 @@ BOOST_AUTO_TEST_CASE(a_start_after_a_clear_cut_between_the_two_dbs_rebuilds_both
     BOOST_CHECK(registry.VoteHead(poll.tx.GetHash()).IsNull());
 }
 
+//!
+//! The startup replay that fills an empty poll registry (the first start of this code, a clear flag, coherence
+//! recovery's Reset) stores each record and its db height as it goes, so a crash inside a block's polls and votes
+//! would leave a registry the next start loads as whole and replays past. InitializeContracts marks the rebuild in
+//! progress until the replay reaches the tip; a start that finds the mark clears both dbs and rebuilds again.
+//!
+BOOST_AUTO_TEST_CASE(a_start_after_a_rebuild_cut_short_rebuilds_again)
+{
+    CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+
+    // The replay stores the poll, then the node dies before the replay reaches the tip.
+    registry.SetRebuildInProgress(true);
+    registry.Add({poll.contract, poll.tx, &poll_index});
+    BOOST_REQUIRE_EQUAL(registry.GetDBHeight(), V13Height() + 10);
+
+    registry.ResetInMemoryOnly();
+
+    BOOST_CHECK_EQUAL(registry.Initialize(), 0);
+
+    {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash()) == nullptr);
+    }
+
+    // A rebuild that reaches the tip clears the mark, and the next start loads what it stored.
+    registry.SetRebuildInProgress(true);
+    registry.Add({poll.contract, poll.tx, &poll_index});
+    registry.SetRebuildInProgress(false);
+
+    Restart(registry);
+
+    BOOST_CHECK_EQUAL(registry.GetDBHeight(), V13Height() + 10);
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash()) != nullptr);
+}
+
 BOOST_AUTO_TEST_CASE(a_vote_already_linked_is_not_linked_again)
 {
     CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, 1700000000);

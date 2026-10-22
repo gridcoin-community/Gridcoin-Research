@@ -341,6 +341,17 @@ bool HasStoredHeight(const std::string& key_type)
 }
 
 //!
+//! \brief Whether LevelDB holds the mark of a poll registry rebuild in progress (PollRegistry::SetRebuildInProgress).
+//!
+bool RebuildMarked()
+{
+    uint32_t mark = 0;
+    std::pair<std::string, std::string> key = std::make_pair(std::string("poll_db"), std::string("rebuild_in_progress"));
+
+    return CTxDB("r").ReadGenericSerializable(key, mark);
+}
+
+//!
 //! \brief Global poll registry instance.
 //!
 PollRegistry g_poll_registry;
@@ -955,8 +966,15 @@ int PollRegistry::Initialize()
         // other cannot explain. A clear empties the poll db, then the vote db, so a poll db with no stored height
         // beside a vote db with one is a clear cut short between the two (a vote link is stored only for a poll the
         // poll db holds); clear both again, or the vote db's height would skip every poll contract below it.
+        // A rebuild the startup replay did not finish (SetRebuildInProgress) is cleared the same way.
+        const bool rebuild_cut_short = RebuildMarked();
+
+        if (rebuild_cut_short) {
+            LogPrintf("INFO: %s: the last rebuild of the poll registry did not finish; rebuilding it.", __func__);
+        }
+
         if (StoredVersion("poll") != m_poll_db.m_version || StoredVersion("vote") != m_vote_db.m_version
-            || (!HasStoredHeight("poll") && HasStoredHeight("vote"))) {
+            || (!HasStoredHeight("poll") && HasStoredHeight("vote")) || rebuild_cut_short) {
             m_poll_db.clear();
             m_vote_db.clear();
         }
@@ -1027,6 +1045,22 @@ void PollRegistry::SetDBHeight(int& height)
 
     m_poll_db.StoreDBHeight(height);
     m_vote_db.StoreDBHeight(height);
+}
+
+void PollRegistry::SetRebuildInProgress(const bool in_progress)
+{
+    LOCK(cs_poll_registry);
+
+    CTxDB txdb("rw");
+    std::pair<std::string, std::string> key = std::make_pair(std::string("poll_db"), std::string("rebuild_in_progress"));
+
+    // A clear erases every poll_db key, the mark too. LevelDB keeps the order of writes through a crash, so a mark
+    // written before the replay's first record is on disk whenever a record is.
+    const bool written = in_progress ? txdb.WriteGenericSerializable(key, uint32_t {1}) : txdb.EraseGenericSerializable(key);
+
+    if (!written) {
+        error("%s: could not %s the poll registry's rebuild mark", __func__, in_progress ? "write" : "erase");
+    }
 }
 
 uint64_t PollRegistry::PassivateDB()

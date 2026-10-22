@@ -311,9 +311,18 @@ void InitializeContracts(CBlockIndex* pindexBest) EXCLUSIVE_LOCKS_REQUIRED(cs_ma
     // Reset pindex_start to the index for the block at start_height
     pindex_start = pblock_index;
 
+    // A poll registry this replay fills from empty (the first start of this code, a clear flag, coherence recovery's
+    // Reset) is whole only once the replay reaches the tip: it stores each record and its db height as it goes.
+    PollRegistry& polls = GetPollRegistry();
+    const bool rebuilding_polls = polls.GetDBHeight() == 0;
+
+    if (rebuilding_polls) polls.SetRebuildInProgress(true);
+
     // The replay contract window here may overlap with the registry db coverage for the various registries. Logic
     // is now included in the ApplyContracts to ignore contracts that have already been covered by the registry dbs.
     ReplayContracts(pindexBest, pindex_start);
+
+    if (rebuilding_polls) polls.SetRebuildInProgress(false);
 }
 
 //!

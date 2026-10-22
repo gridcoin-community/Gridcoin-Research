@@ -550,6 +550,14 @@ public:
     void SetDBHeight(int& height) override;
 
     //!
+    //! \brief Mark in LevelDB that the startup replay is filling an empty registry, or that it has reached the tip.
+    //!
+    //! The replay stores each record and its db height as it goes, so a rebuild cut short inside a block would load
+    //! as whole at the next start. Initialize clears both databases when it finds the mark, and the replay runs again.
+    //!
+    void SetRebuildInProgress(const bool in_progress);
+
+    //!
     //! \brief Remove from memory the records that no current map references.
     //!
     uint64_t PassivateDB() override;
