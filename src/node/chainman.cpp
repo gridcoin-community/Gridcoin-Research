@@ -382,6 +382,9 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
         // Single-SB reorgs are NOT rebuilt: the existing Deactivate path is
         // fidelity-correct for that case and the rebuild would be wasted work on
         // the most common case.
+        //
+        // Startup coherence recovery resets the beacon registry at one superblock crossed instead, because it abandons
+        // blocks without reverting them (RunStartupCoherenceRecovery, coherence.cpp).
         if (sb_cross_count >= 2 || stale_superblock_state) {
             LogPrintf("WARN: %s: reorg disconnected %d superblock(s)%s; beacon registry expired-pending "
                       "fidelity is degraded for the prior SB(s). Rebuilding beacon registry in-line "

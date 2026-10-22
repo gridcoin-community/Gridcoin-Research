@@ -11,6 +11,9 @@ goes with it: the poll, mined again, registers from its new block.
 The startup contract replay never runs on regtest (see feature_poll_registry.py), so after a recovery here no poll
 from the blocks below the rewind comes back either; on mainnet and testnet the replay rebuilds them from V11 in the
 same start. This test keeps its poll in the tip block for that reason.
+
+Recovery resets the registries before it rewinds the chain. Once the rewind is on disk, a start that follows a crash
+finds no superblock in the range it abandons, so the reset has to be on disk by then; the log shows the order.
 """
 
 import os
@@ -97,9 +100,22 @@ class PollCoherenceResetTest(GridcoinTestFramework):
         start = block_record_start(blk_path, MAGIC_BYTES[node.chain], tip_hash)
         with open(blk_path, "r+b") as blk_file:
             blk_file.truncate(start)
+        log_start = os.path.getsize(node.debug_log_path)
         with node.assert_debug_log(["Phase 2 recovery complete"], timeout=60):
             self.start_node(0, list(EXTRA_ARGS))
         assert_equal(node.getblockcount(), tip_height - 1)
+
+        self.log.info("recovery resets the registries before it rewinds the chain")
+        with open(node.debug_log_path, encoding="utf-8") as debug_log:
+            debug_log.seek(log_start)
+            recovery_log = debug_log.read()
+        positions = {}
+        for msg in ("resetting the poll registry for full replay", "registry bookmarks reconciled",
+                    "abandoning chain tip"):
+            assert msg in recovery_log, f"no '{msg}' in the recovery log"
+            positions[msg] = recovery_log.index(msg)
+        assert positions["resetting the poll registry for full replay"] < positions["abandoning chain tip"]
+        assert positions["registry bookmarks reconciled"] < positions["abandoning chain tip"]
 
         self.log.info("the poll, mined again, registers from its new block")
         # The wallet may already have offered it back to the pool at startup.
