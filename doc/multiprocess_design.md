@@ -85,8 +85,9 @@ These were converged in RFC #2937 and are not open for relitigation in Phase 1/2
    risk with no compelling driver. Revisit only if a concrete driver appears.
 3. **Front-end/back-end matching policy** (§4.2).
 4. **Authentication: cookie-PSK handshake layered over filesystem permissions** (§4.3).
-   The cookie handshake is the load-bearing, platform-portable authenticator; peer
-   UID/PID checks are best-effort defense-in-depth.
+   The cookie handshake is the load-bearing, platform-portable authenticator; the
+   peer-UID check is defense-in-depth that fails closed on POSIX (Windows exposes no
+   peer credentials).
 5. **Registry-mutation ordering: monotonic versions with a consumer high-water mark**
    (§4.4).
 6. **Sequencing**: Phase 1 began after the v13/v14 mandatory (5.5.0.0 "Natasha"), the
@@ -116,7 +117,9 @@ build node-emitted strings are English and only GUI-owned strings are translated
 ### 4.2 Matching policy (Stage 2)
 
 The node reports its identity over IPC (post-authentication) as
-`{identity_token, network}`, where `identity_token = SHA256(domain-tag ‖ wallet_uuid)`
+`{identity_token, network}`, where
+`identity_token = HEX(SHA256(domain-tag ‖ LE32(len) ‖ wallet_uuid))`
+(`ipc::ComputeIdentityToken`; the domain tag is hashed without its trailing NUL)
 and `wallet_uuid` is a random 16-byte tag minted once into `wallet.dat` (the
 `"walletuuid"` record; skipped on mockable chains, whose DB is not persisted).
 Identity thus fingerprints *which wallet* the node serves, deliberately independent
@@ -212,11 +215,14 @@ schema-diff lint against the previous release tag.
 The connect-time sequence, in order (steps 1–7 add ~5–10 ms to startup):
 
 1. GUI reads its stored identity expectation (QSettings, keyed by the canonical datadir)
-2. GUI reads `ipc.cookie` (absent cookie ⇒ node not running, do not dial)
+2. GUI reads `ipc.cookie` (absent cookie ⇒ no `-multiprocess` node is serving this
+   datadir: none is running with `-multiprocess`, one is still starting, or the last
+   one shut down cleanly; do not dial)
 3. `connect(node.sock)`
-4. Peer-identity check (`SO_PEERCRED` / `LOCAL_PEERCRED` /
-   `SIO_AF_UNIX_GETPEERPID`; best-effort defense-in-depth per the
-   authentication layers listed earlier in this section) → hard fail on mismatch
+4. Peer-identity check (`SO_PEERCRED` on Linux, `getpeereid` on the other POSIX
+   targets, none on Windows; defense-in-depth per the authentication layers
+   listed earlier in this section) → hard fail on mismatch, or on a uid that
+   cannot be read
 5. `Init::authenticate(cookie)` → hard fail on mismatch
 6. `Init::getBuildInfo()` → schema/protocol comparison per §4.2
 7. `Init::getIdentity()` → network hard-fail + compare `identity_token` against the

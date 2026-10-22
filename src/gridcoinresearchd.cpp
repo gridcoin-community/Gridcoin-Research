@@ -354,7 +354,9 @@ bool AppInit(int argc, char* argv[])
                 // ServeInit for EACH accepted connection, so every client must
                 // present the cookie itself -- no shared, sticky authentication.
                 // Reject a foreign OS user before serving (CheckPeerCredentials:
-                // SO_PEERCRED / getpeereid; Windows leans on the datadir ACL).
+                // SO_PEERCRED / getpeereid). Windows has no peer credentials, so
+                // there the owner-only DACLs on node.sock and ipc.cookie are the
+                // guard.
                 // cookie + identity are captured by value and copied into each
                 // ServeInit.
                 auto make_serve_init = [cookie = std::move(cookie), identity = std::move(identity)]
@@ -405,8 +407,8 @@ bool AppInit(int argc, char* argv[])
         if (ipc) ipc->disconnectIncoming();
         // The cookie is a live credential for as long as the file exists, so it goes
         // when the socket does -- mirroring upstream's DeleteAuthCookie(). It is also
-        // what ReadCookie() uses to mean "a node is running", so leaving it behind
-        // sends the next GUI to a socket nobody is listening on.
+        // what ConnectToNode checks before dialling, so leaving it behind sends the
+        // next GUI to a socket nobody is listening on.
         if (cookie_written) ipc::DeleteCookie(GetDataDir());
 #endif
     }

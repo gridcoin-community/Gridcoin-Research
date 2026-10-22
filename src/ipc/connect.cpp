@@ -19,8 +19,11 @@ std::optional<GuiConnection> ConnectToNode(const fs::path& data_dir,
                                            std::string& error_out,
                                            std::function<void()> on_disconnect)
 {
-    // 1. The node writes a fresh cookie on every startup; its absence means no
-    //    node is running on this datadir, so there is nothing to dial.
+    // 1. The node writes a fresh cookie on every -multiprocess startup and
+    //    deletes it on a clean shutdown; its absence means no node is serving
+    //    this datadir (none is running with -multiprocess, one is still
+    //    starting, or the last one shut down cleanly), so there is nothing to
+    //    dial.
     std::optional<std::string> cookie = ReadCookie(data_dir);
     if (!cookie) {
         error_out = strprintf("no IPC cookie in %s -- is the Gridcoin daemon running with -multiprocess?",
