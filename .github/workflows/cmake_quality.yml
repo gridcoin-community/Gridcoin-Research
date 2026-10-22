@@ -124,9 +124,12 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      # check-build-warnings.sh fails the step on any compiler or linker warning in
+      # the tree's own build. Every build of the tree in these workflows goes
+      # through it.
       - name: Build
         # Removed explicit --parallel flag; CMake reads the env var automatically
-        run: cmake --build build_asan
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_asan
 
       - name: Test (With Sanitizers)
         env:
@@ -257,7 +260,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build_tsan
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_tsan
 
       - name: Test (With ThreadSanitizer)
         run: |
@@ -327,7 +330,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build_valgrind
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_valgrind
 
       - name: Unit suite under Valgrind
         run: |
@@ -488,7 +491,7 @@ jobs:
         # stops at the first, and finding the rest takes a fix-and-rerun cycle:
         # the run that motivated adding the test targets stopped after 63 of 92
         # test TUs and never reached one of the three files at fault.
-        run: cmake --build build_tsa --target gridcoinresearch gridcoinresearchd test_gridcoin test_gridcoin-qt -- -k
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_tsa --target gridcoinresearch gridcoinresearchd test_gridcoin test_gridcoin-qt -- -k
 
   # ----------------------------------------------------------------------
   # JOB 4: Unit suites in isolation, and one shuffled run
@@ -543,7 +546,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build test_gridcoin
-        run: cmake --build build_isolation --target test_gridcoin
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_isolation --target test_gridcoin
 
       - name: Run every suite alone
         run: contrib/devtools/run-unit-suites-isolated.sh build_isolation/src/test/test_gridcoin

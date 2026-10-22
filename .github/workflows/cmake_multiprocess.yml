@@ -69,12 +69,13 @@ jobs:
 
       - name: Build + Test (multiprocess)
         run: |
-          chmod +x install_dependencies.sh build_targets.sh
+          chmod +x install_dependencies.sh build_targets.sh contrib/devtools/check-build-warnings.sh
           ./build_targets.sh \
             TARGET=native \
             BUILD_TYPE=${{ env.BUILD_TYPE }} \
             USE_CCACHE=true \
-            ENABLE_MULTIPROCESS=true
+            ENABLE_MULTIPROCESS=true \
+            FAIL_ON_WARNINGS=true
 
   # ----------------------------------------------------------------------
   # Depends builds — Linux Static + Windows Cross (depends-built Cap'n Proto)
@@ -129,12 +130,13 @@ jobs:
       # cmake_production.yml still runs the full test suite under Wine.
       - name: Build + Test (multiprocess)
         run: |
-          chmod +x install_dependencies.sh build_targets.sh
+          chmod +x install_dependencies.sh build_targets.sh contrib/devtools/check-build-warnings.sh
           ./build_targets.sh \
             TARGET=${{ matrix.target }} \
             BUILD_TYPE=${{ env.BUILD_TYPE }} \
             USE_CCACHE=true \
-            ENABLE_MULTIPROCESS=true
+            ENABLE_MULTIPROCESS=true \
+            FAIL_ON_WARNINGS=true
 
   # ----------------------------------------------------------------------
   # Linux ARMhf — 32-bit (the ODROID-XU4 environment). Regression coverage for the
@@ -241,7 +243,7 @@ jobs:
         run: |
           cmake -B build_mpgen_native -S src/ipc/libmultiprocess -GNinja \
             -DCMAKE_BUILD_TYPE=Release
-          cmake --build build_mpgen_native --target mpgen -j"${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}"
+          ./contrib/devtools/check-build-warnings.sh -- cmake --build build_mpgen_native --target mpgen -j"${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}"
           MPGEN_BIN=$(find build_mpgen_native -name mpgen -type f -perm -u+x | head -n 1)
           test -x "$MPGEN_BIN" || { echo "native mpgen not found"; exit 1; }
           echo "MPGEN_BIN=$MPGEN_BIN" >> $GITHUB_ENV
@@ -269,8 +271,11 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      # check-build-warnings.sh fails the step on any compiler or linker warning in
+      # the tree's own build. Every build of the tree in these workflows goes
+      # through it.
       - name: Build
-        run: cmake --build build_armhf
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_armhf
 
       - name: Test (QEMU Emulation)
         env:

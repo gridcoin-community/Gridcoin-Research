@@ -71,8 +71,11 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      # check-build-warnings.sh fails the step on any compiler or linker warning in
+      # the tree's own build. Every build of the tree in these workflows goes
+      # through it.
       - name: Build gridcoinresearchd
-        run: cmake --build build --target gridcoinresearchd
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build --target gridcoinresearchd
 
       # The functional_tests case carries GRIDCOIND/GRIDCOINCLI env overrides
       # (set in the top-level CMakeLists) pointing at build/bin/gridcoinresearchd.
