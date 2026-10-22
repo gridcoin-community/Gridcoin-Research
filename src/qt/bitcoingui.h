@@ -12,7 +12,7 @@
 #include "psgttoastdamp.h"
 #include "interfaces/wallet_tx_channel.h" // GRC::WalletEvent for processDrainedTransactions
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 #include <qt/macos_appnap.h>
 
 class MacDockShutdownHandler;
@@ -200,7 +200,7 @@ private:
 
     // Windows and Linux: collapse the main application's menu bar into a menu
     // button. On macOS, we'll continue to use the system's separate menu bar.
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     QMenuBar *appMenuBar;
 #else
     QMenu *appMenuBar;
@@ -248,7 +248,7 @@ private:
 
     QMovie *syncIconMovie;
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     CAppNapInhibitor* m_app_nap_inhibitor = nullptr;
     MacDockShutdownHandler* m_dock_shutdown_handler = nullptr;
 #endif
@@ -344,7 +344,7 @@ private slots:
     void openGuidesClicked();
     bool tryQuit();
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     /** Handle tray icon clicked */
     void trayIconActivated(QSystemTrayIcon::ActivationReason reason);
 #endif

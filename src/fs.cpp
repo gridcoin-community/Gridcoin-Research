@@ -220,7 +220,10 @@ std::string get_filesystem_error_message(const fs::filesystem_error& e)
 
 static std::string openmodeToStr(std::ios_base::openmode mode)
 {
-    switch (mode & ~std::ios_base::ate) {
+    // On an int, not the openmode itself: the flag combinations below are not
+    // enumerators of libstdc++'s _Ios_Openmode, and GCC 13's -Wswitch reports
+    // every such case as "not in enumerated type".
+    switch (static_cast<int>(mode & ~std::ios_base::ate)) {
     case std::ios_base::out:
     case std::ios_base::out | std::ios_base::trunc:
         return "w";

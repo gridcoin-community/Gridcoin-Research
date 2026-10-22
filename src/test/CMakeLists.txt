@@ -189,6 +189,78 @@ target_include_directories(test_gridcoin PRIVATE
     ${CMAKE_BINARY_DIR}/src
 )
 
+# Boost.Test's headers are compiled as user headers, never as system headers.
+#
+# BOOST_CHECK_EQUAL(a, b) compares a with b inside Boost.Test's equal_impl
+# (boost/test/tools/old/impl.hpp). Where that header is a system header, the
+# compiler drops the -Wsign-compare it raises there, although the mixed types
+# are ours. Only the Intel macOS job ever showed these, and only because
+# Homebrew's include directory reached the compiler as a user path. GCC and
+# Clang both give a header the system status of the header that included it,
+# so the whole boost/test tree has to be found through a user include
+# directory, from each test's own #include down. A link to it in the build
+# tree, searched ahead of every other directory, does that with either
+# compiler and wherever Boost is installed. The rest of Boost stays a system
+# header.
+#
+# Boost.Test's own declarations then raise warnings of their own, which are
+# Boost's code. boost_test_prelude.h, included ahead of every source here,
+# silences those and only those.
+#
+# The headers are looked for first in the include directories of
+# Boost::unit_test_framework, the library test_gridcoin links, so that where
+# more than one Boost is installed they come from the same one.
+set(_boost_test_candidates "")
+foreach(_boost_target Boost::unit_test_framework Boost::headers Boost::boost)
+    if(TARGET ${_boost_target})
+        get_target_property(_boost_dirs ${_boost_target} INTERFACE_INCLUDE_DIRECTORIES)
+        if(_boost_dirs)
+            list(APPEND _boost_test_candidates ${_boost_dirs})
+        endif()
+    endif()
+endforeach()
+list(APPEND _boost_test_candidates ${Boost_INCLUDE_DIRS})
+
+set(_boost_test_root "")
+foreach(_boost_dir IN LISTS _boost_test_candidates)
+    if(EXISTS "${_boost_dir}/boost/test/unit_test.hpp")
+        set(_boost_test_root "${_boost_dir}")
+        break()
+    endif()
+endforeach()
+if(NOT _boost_test_root)
+    message(FATAL_ERROR "boost/test/unit_test.hpp is not under any Boost include directory: ${_boost_test_candidates}")
+endif()
+
+set(BOOST_TEST_USER_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/boost_test_user")
+set(_boost_test_dest "${BOOST_TEST_USER_INCLUDE_DIR}/boost/test")
+file(MAKE_DIRECTORY "${BOOST_TEST_USER_INCLUDE_DIR}/boost")
+# CREATE_LINK replaces an earlier link but fails on a directory, which is what a
+# copy made by an earlier configure is. That copy is removed first, so the
+# headers always come from this configure's Boost. A link is never passed to
+# REMOVE_RECURSE.
+if(EXISTS "${_boost_test_dest}" AND NOT IS_SYMLINK "${_boost_test_dest}")
+    file(REMOVE_RECURSE "${_boost_test_dest}")
+endif()
+file(CREATE_LINK "${_boost_test_root}/boost/test" "${_boost_test_dest}"
+    RESULT _boost_test_link SYMBOLIC)
+if(NOT _boost_test_link STREQUAL "0")
+    # A host that cannot make the link gets a copy instead.
+    file(COPY "${_boost_test_root}/boost/test" DESTINATION "${BOOST_TEST_USER_INCLUDE_DIR}/boost")
+endif()
+message(STATUS "Boost.Test headers compiled as user headers, from ${_boost_test_root}/boost/test")
+
+target_include_directories(test_gridcoin BEFORE PRIVATE ${BOOST_TEST_USER_INCLUDE_DIR})
+# Joined to its argument so that it stays one option. GCC and Clang take
+# -include<file>; clang-cl, which the top-level MSVC check lets through, takes
+# /FI<file>.
+if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    set(_boost_test_prelude "/FI${CMAKE_CURRENT_SOURCE_DIR}/boost_test_prelude.h")
+else()
+    set(_boost_test_prelude "-include${CMAKE_CURRENT_SOURCE_DIR}/boost_test_prelude.h")
+endif()
+target_compile_options(test_gridcoin PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${_boost_test_prelude}>")
+
 # Handle Boost Test linking mode automatically
 if(NOT STATIC_LIBS)
     # Native Build: Linking against shared .so libraries requires this flag

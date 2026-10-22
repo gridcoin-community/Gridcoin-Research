@@ -23,8 +23,6 @@ namespace {
 //!
 class PollSortMenu : public QMenu
 {
-    Q_OBJECT
-
 public:
     PollSortMenu(VotingPage* parent) : QMenu(parent)
     {
@@ -176,5 +174,3 @@ void VotingPage::updateIcons(const QString& theme)
         tab->updateIcons(theme);
     }
 }
-
-#include "qt/voting/votingpage.moc"

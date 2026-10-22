@@ -34,7 +34,7 @@ ResearcherWizardPoolPage::ResearcherWizardPoolPage(QWidget *parent)
 
     GRC::ScaleFontPointSize(ui->headerLabel, 11);
 
-#ifdef Q_OS_MAC // Icons on push buttons are very uncommon on Mac
+#ifdef Q_OS_MACOS // Icons on push buttons are very uncommon on Mac
     ui->newAddressButton->setIcon(QIcon());
 #endif
 }

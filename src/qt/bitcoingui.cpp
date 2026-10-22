@@ -50,7 +50,7 @@
 #include "syncoverlay.h"
 #include "updatedialog.h"
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 #include "macdockiconhandler.h"
 #endif
 
@@ -133,7 +133,7 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
     // render smaller with the Cocoa integration plugin:
     //
     QFont appFont = qApp->font();
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     appFont.setPointSize(10);
 #else
     appFont.setPointSize(13);
@@ -160,7 +160,7 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
 
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     qApp->setWindowIcon(QPixmap(":/images/gridcoin"));
     setWindowIcon(QPixmap(":/images/gridcoin"));
 #else
@@ -168,7 +168,7 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
     QApplication::setAttribute(Qt::AA_DontShowIconsInMenus);
 #endif
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     m_app_nap_inhibitor = new CAppNapInhibitor;
     m_app_nap_inhibitor->disableAppNap();
 
@@ -284,7 +284,7 @@ BitcoinGUI::~BitcoinGUI()
     settings.setValue(window_geometry_key, saveGeometry());
     if(trayIcon) // Hide tray icon, as deleting will let it linger until quit (on Ubuntu)
         trayIcon->hide();
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     delete m_app_nap_inhibitor;
     delete m_dock_shutdown_handler;
     delete appMenuBar;
@@ -595,7 +595,7 @@ void BitcoinGUI::showEvent(QShowEvent *event)
 
 void BitcoinGUI::createMenuBar()
 {
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     // Create a decoupled menu bar on Mac which stays even if the window is closed
     appMenuBar = new QMenuBar();
     QMenu *file = appMenuBar->addMenu(tr("&File"));
@@ -620,7 +620,7 @@ void BitcoinGUI::createMenuBar()
     file->addAction(resetblockchainAction);
 
     file->addSeparator();
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     file->addAction(quitAction);
 #endif
 
@@ -657,7 +657,7 @@ void BitcoinGUI::createMenuBar()
     help->addSeparator();
     help->addAction(aboutAction);
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     file->addSeparator();
     file->addAction(quitAction);
 #endif
@@ -680,7 +680,7 @@ void BitcoinGUI::createToolBars()
     logoWrapper->setObjectName("toolbarLogoWrapper");
     logoWrapper->setLayout(logoWrapperLayout);
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     // Windows and Linux: collapse the main application's menu bar into a menu
     // button. On macOS, we'll continue to use the system's separate menu bar.
     QPushButton *menuButton = new QPushButton();
@@ -835,7 +835,7 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
         if(clientModel->isTestNet())
         {
             setWindowTitle(windowTitle() + QString(" ") + tr("[testnet]"));
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
             qApp->setWindowIcon(QPixmap(":/images/gridcoin_testnet"));
             setWindowIcon(QPixmap(":/images/gridcoin_testnet"));
 #endif
@@ -1076,7 +1076,7 @@ void BitcoinGUI::setVotingModel(VotingModel *votingModel)
 
 void BitcoinGUI::createTrayIcon()
 {
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     trayIcon = new QSystemTrayIcon(this);
     trayIcon->setToolTip(tr("Gridcoin client"));
     trayIcon->setIcon(QPixmap(":/images/gridcoin"));
@@ -1095,7 +1095,7 @@ bool BitcoinGUI::isPrivacyModeActivated() const
 
 void BitcoinGUI::createTrayIconMenu()
 {
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     // return if trayIcon is unset (only on non-Mac OSes)
     if (!trayIcon)
         return;
@@ -1132,13 +1132,13 @@ void BitcoinGUI::createTrayIconMenu()
     trayIconMenu->addSeparator();
     trayIconMenu->addAction(optionsAction);
     trayIconMenu->addAction(openRPCConsoleAction);
-#ifndef Q_OS_MAC // This is built-in on Mac
+#ifndef Q_OS_MACOS // This is built-in on Mac
     trayIconMenu->addSeparator();
     trayIconMenu->addAction(quitAction);
 #endif
 }
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
 void BitcoinGUI::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
 {
     if(reason == QSystemTrayIcon::Trigger)
@@ -1176,7 +1176,7 @@ void BitcoinGUI::openConfigClicked()
         res = QProcess::startDetached("C:\\Windows\\system32\\notepad.exe", QStringList{qPathConfig});
     }
 #endif
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     // Workaround for macOS-specific behaviour; see https://github.com/bitcoin/bitcoin/issues/15409
     if (!res) {
         res = QProcess::startDetached("/usr/bin/open", QStringList{"-t", qPathConfig});
@@ -1328,7 +1328,7 @@ void BitcoinGUI::setMinerStatus(
 
     updateStakingIcon(staking, net_weight, coin_weight, etts_days);
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     if (staking) {
         m_app_nap_inhibitor->disableAppNap();
     } else if (!clientModel->node().isOutOfSyncByAge()) {
@@ -1368,7 +1368,7 @@ void BitcoinGUI::update(const QString &title, const QString& version, const int&
 void BitcoinGUI::changeEvent(QEvent *e)
 {
     QMainWindow::changeEvent(e);
-#ifndef Q_OS_MAC // Ignored on Mac
+#ifndef Q_OS_MACOS // Ignored on Mac
     if(e->type() == QEvent::WindowStateChange)
     {
         if(clientModel && clientModel->getOptionsModel()->getMinimizeToTray())
@@ -1386,7 +1386,7 @@ void BitcoinGUI::changeEvent(QEvent *e)
 
 void BitcoinGUI::closeEvent(QCloseEvent *event)
 {
-#ifndef Q_OS_MAC // Ignored on Mac
+#ifndef Q_OS_MACOS // Ignored on Mac
     // An explicit shutdown -- requestQuit(): menu Exit / Ctrl-Q / tray Exit, a
     // snapshot or reset-blockchain restart, the post-encryption restart, or a
     // core-initiated QueueShutdown -- calls qApp->quit(), which on Qt6 lands

@@ -4,6 +4,19 @@ cmake_minimum_required(VERSION 3.21)
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cmake")
 set(CPACK_MODULE_PATH "${CPACK_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cpack")
 
+# Without this policy CMake repeats static libraries on a link line, as a
+# single-pass linker needs to resolve references between them. Apple's linker
+# since Xcode 15 resolves archives across the whole link, needs no repeats, and
+# warns "ignoring duplicate libraries" for each one -- here when linking the GUI
+# and test_gridcoin. CMP0156 (CMake 3.29) de-duplicates for the linkers that
+# need no repeats: Apple's, MSVC's, LLD and mold. GNU ld, which the Linux and
+# MinGW builds use, is not among them, and their link lines are unchanged. It is
+# set here, ahead of every target. Older CMake keeps the repeats, and on macOS
+# the warnings with them.
+if(POLICY CMP0156)
+    cmake_policy(SET CMP0156 NEW)
+endif()
+
 
 # Hunter Package Manager
 # ======================
@@ -447,6 +460,20 @@ if(WIN32)
     find_program(MAKENSIS makensis)
 elseif(APPLE)
     enable_language(OBJCXX)
+
+    # Apple's clang driver adds /usr/local/include to every compile as a USER
+    # include path (-I, not -internal-isystem; see `clang++ -###`). CMake finds
+    # it in the compiler's default search list, records it as an implicit
+    # include directory, and so never emits it itself -- not even as the
+    # -isystem that imported targets installed there ask for. Everything under
+    # it, which on Intel is all of Homebrew and Boost among it, was therefore
+    # compiled as project code: 244 Boost warnings per Intel CI build. Taken off
+    # the implicit list, it is emitted as -isystem, and clang drops its own -I
+    # copy in favour of the system entry. /opt/homebrew on Apple Silicon was
+    # never implicit, so it already got -isystem.
+    foreach(lang IN ITEMS C CXX OBJCXX)
+        list(REMOVE_ITEM CMAKE_${lang}_IMPLICIT_INCLUDE_DIRECTORIES /usr/local/include)
+    endforeach()
 endif()
 
 

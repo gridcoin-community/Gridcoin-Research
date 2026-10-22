@@ -221,7 +221,8 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_a_new_project_contract)
 {
     const GRC::Project project("Enigma", "http://enigma.test/@");
 
-    BOOST_CHECK_EQUAL(project.m_version, 1);
+    // sign-compare checked: m_version is uint32_t; 1U is a non-negative literal, so both sides are unsigned.
+    BOOST_CHECK_EQUAL(project.m_version, 1U);
     BOOST_CHECK_EQUAL(project.m_name, "Enigma");
     BOOST_CHECK_EQUAL(project.m_url, "http://enigma.test/@");
     BOOST_CHECK_EQUAL(project.m_timestamp, 0);

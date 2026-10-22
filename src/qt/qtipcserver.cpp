@@ -14,11 +14,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/interprocess/ipc/message_queue.hpp>
-#include <boost/version.hpp>
-
-#if defined(WIN32) && (!defined(BOOST_INTERPROCESS_HAS_WINDOWS_KERNEL_BOOTTIME) || !defined(BOOST_INTERPROCESS_HAS_KERNEL_BOOTTIME))
-#warning Compiling without BOOST_INTERPROCESS_HAS_WINDOWS_KERNEL_BOOTTIME and BOOST_INTERPROCESS_HAS_KERNEL_BOOTTIME uncommented in boost/interprocess/detail/tmp_dir_helpers.hpp may have unintended results see svn.boost.org/trac/boost/ticket/5392
-#endif
 
 using namespace boost;
 using namespace boost::interprocess;

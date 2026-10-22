@@ -32,6 +32,7 @@ Developer Notes
     - [C++ data structures](#c-data-structures)
     - [Strings and formatting](#strings-and-formatting)
     - [Shadowing](#shadowing)
+    - [Signed and unsigned comparisons](#signed-and-unsigned-comparisons)
     - [Threads and synchronization](#threads-and-synchronization)
     - [Scripts](#scripts)
         - [Shebang](#shebang)
@@ -1139,6 +1140,44 @@ please name variables so that their names do not shadow variables defined in the
 
 When using nested cycles, do not name the inner cycle variable the same as in
 the upper cycle, etc.
+
+Signed and unsigned comparisons
+-------------------------------
+
+Comparing a signed value with an unsigned one converts the signed value to
+unsigned, so a negative value becomes a very large one and the comparison can
+give the wrong answer. `-Wsign-compare` reports these. The answer is always to
+fix the code, never to silence the warning.
+
+- Evaluate the comparison by hand and make sure the signed side cannot be
+  negative there. This matters most for `<`, `<=`, `>` and `>=`, where a
+  negative value converted to unsigned reverses the result.
+- Then convert the signed side to the unsigned type explicitly: a `static_cast`
+  for a variable or an expression, a `U` suffix for a literal.
+- Comment every such comparison, literals included, saying why the signed side
+  cannot be negative, so that it is plain the comparison was checked:
+
+  ```cpp
+  // sign-compare checked: size() is size_t; 1U is a non-negative literal, so both sides are unsigned.
+  BOOST_CHECK_EQUAL(entries.size(), 1U);
+  ```
+
+- A value that cannot be negative, such as a count, a size or a bit width,
+  should have an unsigned type in the first place. `Fraction::BitWidth()`
+  returns `unsigned int` for this reason. Fixing the type removes the mixed
+  comparison instead of casting at it.
+
+The compiler does not report every such comparison: it stays silent when the
+signed side is a constant it can see is non-negative, as in `i < 63` with an
+unsigned `i`. Apply the same rule there in code you write or change.
+
+`BOOST_CHECK_EQUAL` and its relatives compare their two sides inside Boost.Test's
+own templates, so a mixed-sign check is reported from a Boost.Test header. The
+test build therefore compiles Boost.Test's headers as user headers, not system
+headers, on every platform (see `src/test/CMakeLists.txt`), and they must stay
+that way: as system headers they would hide these warnings. Warnings in
+Boost.Test's own declarations, which are Boost's code, are silenced in
+`src/test/boost_test_prelude.h` and nowhere else.
 
 Threads and synchronization
 ----------------------------
