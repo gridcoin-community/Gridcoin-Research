@@ -2924,6 +2924,45 @@ BOOST_AUTO_TEST_CASE(the_guis_reads_of_the_newest_open_poll_do_not_wait_on_cs_ma
 }
 
 //!
+//! The GUI submits no poll and no vote while the node is out of sync, as addpoll and vote refuse: the node's registry
+//! and memory pool may not yet hold a title the network holds, and from v15 a poll whose title is taken is refused or,
+//! once mined, registers nothing with its burn spent.
+//!
+BOOST_AUTO_TEST_CASE(the_gui_submits_no_poll_or_vote_from_a_node_out_of_sync)
+{
+    grc_test::StateGuard guard;
+
+    struct PreviousBlockTimeRestorer
+    {
+        int64_t m_saved = g_previous_block_time;
+        ~PreviousBlockTimeRestorer() { g_previous_block_time = m_saved; }
+    } restorer;
+
+    // The tip is ten target spacings old (OutOfSyncByAge).
+    g_previous_block_time = GetAdjustedTime() - 90 * 10;
+    BOOST_REQUIRE(OutOfSyncByAge());
+
+    const std::unique_ptr<interfaces::VotingManager> voting = interfaces::MakeVotingManager();
+
+    interfaces::PollSubmission poll;
+    poll.type = static_cast<int>(GRC::PollType::SURVEY);
+    poll.title = "Title";
+    poll.duration_days = 7;
+    poll.question = "Question?";
+    poll.url = "https://gridcoin.us";
+    poll.weight_type = static_cast<int>(GRC::PollWeightType::BALANCE);
+    poll.response_type = static_cast<int>(GRC::PollResponseType::YES_NO_ABSTAIN);
+
+    const interfaces::VotingSubmitResult poll_result = voting->submitPoll(poll);
+    BOOST_CHECK(poll_result.status == interfaces::VotingSubmitStatus::FAILED);
+    BOOST_CHECK_EQUAL(poll_result.error, "Cannot add a poll with a wallet that is not in sync.");
+
+    const interfaces::VotingSubmitResult vote_result = voting->submitVote(uint256S("0x01").ToString(), {0});
+    BOOST_CHECK(vote_result.status == interfaces::VotingSubmitStatus::FAILED);
+    BOOST_CHECK_EQUAL(vote_result.error, "The wallet must be in sync to vote.");
+}
+
+//!
 //! A finished poll's active vote weight range end is found once, with its first block past the end, and served from
 //! the poll's cache while that block stays on the main chain. A block's time never changes in production, so a second
 //! walk would find the same block; the test changes one only to see whether the walk runs again.

@@ -938,6 +938,11 @@ public:
     //! submitPoll() without its capability scope and exception boundary.
     VotingSubmitResult SubmitPollUnderScope(const PollSubmission& poll)
     {
+        // As addpoll: a node out of sync may not yet hold a title the network holds.
+        if (OutOfSyncByAge()) {
+            return Failed("Cannot add a poll with a wallet that is not in sync.");
+        }
+
         // The payload version (and, pre-v3, the forced SURVEY type) depend on the
         // chain height, so they are resolved node-side rather than in the GUI, for
         // the next block, which is the block that can take the poll.
@@ -1005,6 +1010,11 @@ public:
     VotingSubmitResult SubmitVoteUnderScope(const std::string& poll_txid,
                                             const std::vector<uint8_t>& choice_offsets)
     {
+        // As the vote RPCs.
+        if (OutOfSyncByAge()) {
+            return Failed("The wallet must be in sync to vote.");
+        }
+
         const uint256 txid = uint256S(poll_txid);
 
         // Look up and read the poll under cs_poll_registry, then copy out the poll
