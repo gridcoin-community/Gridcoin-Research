@@ -183,6 +183,11 @@ class PollTitleRuleTest(GridcoinTestFramework):
         poll_d = self.add_poll(node0, "claim")
         assert poll_d in node0.getrawmempool()
 
+        self.log.info("removepoll refuses an id that names no poll")
+        for poll_id in ("", "00", "not hex"):
+            assert_raises_rpc_error(-8, "No poll registered since block version 11 has that id.",
+                                    node0.removepoll, poll_id)
+
     def stake_slot_only(self):
         """Move every clock past the inbound rate limit a reconnect meets (see disconnect_nodes)."""
         target = (max(n.mock_now() for n in self.nodes) + SPACING) & ~STAKE_TIMESTAMP_MASK

@@ -995,6 +995,12 @@ UniValue removepoll(const UniValue& params)
     const uint256 poll_txid = uint256S(params[0].get_str());
     GRC::Contract contract;
 
+    // An empty, all-zero or non-hex id parses to null, which names no poll. It is refused before the memory pool
+    // lookup below.
+    if (poll_txid.IsNull()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "No poll registered since block version 11 has that id.");
+    }
+
     {
         LOCK(cs_main);
 
