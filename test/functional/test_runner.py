@@ -265,6 +265,8 @@ BASE_SCRIPTS = [
     'feature_poll_v15_window.py',
     # feature_poll_title_rule.py: one poll per title key in the wallet, the mempool and, from v15, the registry.
     'feature_poll_title_rule.py',
+    # feature_poll_pool_reorg.py: a reorg that un-confirms a claimed output's transaction keeps the pooled poll.
+    'feature_poll_pool_reorg.py',
     # feature_poll_next_block_rules.py: the mempool judges a poll by the next block's poll rules.
     'feature_poll_next_block_rules.py',
     # feature_poll_title_lookup.py: every active poll is listed; a title lookup names every poll with its key.

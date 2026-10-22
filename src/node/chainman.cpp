@@ -717,18 +717,29 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                 }
             }
 
-            // Retire the pooled polls the next block would not take, judged as the memory pool judges a poll for
-            // that block: so admission and retirement agree. That covers a poll with a claimed output a block has
-            // spent, since every block checks the claim again (PollRegistry::BlockValidate), from v15 a poll whose
-            // title the registry now holds, which the pool would refuse (TitleTakenAt), and the crossing of the
-            // height rules at an activation. Each leaves with its descendants and is abandoned, as the title
-            // eviction above does and for the same reasons. The pool holds one poll per title key and polls are
-            // rare, so this costs a few claim checks in a block that finds any.
+            // Retire the pooled polls the next block would not take: a poll with a claimed output this block spends,
+            // since every block checks the claim again (PollRegistry::BlockValidate), and from v15 a poll whose title
+            // the registry now holds, which the pool would refuse (TitleTakenAt). Each leaves with its descendants
+            // and is abandoned, as the title eviction above does and for the same reasons.
+            //
+            // Keyed on what this block spends, not on a full claim check: during a reorg a claimed output's
+            // transaction can be back in the pool, unconfirmed for a block or two, and a poll that waits for it is
+            // mined once it confirms.
             {
                 const int next_height = pindex->nHeight + 1;
                 const GRC::PollRegistry& polls = GRC::GetPollRegistry();
+                const std::vector<uint256> pooled_polls = mempool.GetPollTxs();
+                std::set<COutPoint> spent_by_block;
 
-                for (const uint256& poll_hash : mempool.GetPollTxs()) {
+                if (!pooled_polls.empty()) {
+                    for (const auto& block_tx : block.vtx) {
+                        for (const auto& txin : block_tx.vin) {
+                            spent_by_block.insert(txin.prevout);
+                        }
+                    }
+                }
+
+                for (const uint256& poll_hash : pooled_polls) {
                     CTransaction poll_tx;
 
                     // Already gone as a descendant of one removed earlier in this loop.
@@ -736,14 +747,21 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
                     bool admissible = true;
                     for (const auto& contract : poll_tx.GetContracts()) {
-                        int DoS = 0;
+                        if (contract.m_type != GRC::ContractType::POLL || contract.m_version < 2) continue;
 
-                        if (contract.m_type == GRC::ContractType::POLL
-                            && (!polls.ValidateAt(contract, poll_tx, next_height, DoS)
-                                || polls.TitleTakenAt(contract, next_height))) {
+                        if (polls.TitleTakenAt(contract, next_height)) {
                             admissible = false;
                             break;
                         }
+
+                        const auto payload = contract.SharePayloadAs<GRC::PollPayload>();
+
+                        for (const auto& address_claim : payload->m_claim.m_balance_claim.m_address_claims) {
+                            for (const auto& txo : address_claim.m_outpoints) {
+                                if (spent_by_block.count(txo)) admissible = false;
+                            }
+                        }
+                        if (!admissible) break;
                     }
                     if (admissible) continue;
 
@@ -751,9 +769,9 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                     mempool.remove(poll_tx, /*fRecursive=*/true, MemPoolRemovalReason::UNKNOWN, &removed);
 
                     for (const auto& removed_tx : removed) {
-                        LogPrintf("%s: the block at height %d would not take poll %s. Removed transaction %s from "
+                        LogPrintf("%s: the block at height %d leaves poll %s unminable. Removed transaction %s from "
                                   "the mempool.",
-                                  __func__, next_height, poll_hash.ToString(), removed_tx.GetHash().ToString());
+                                  __func__, pindex->nHeight, poll_hash.ToString(), removed_tx.GetHash().ToString());
 
                         unsigned int inputs_released = 0;
 

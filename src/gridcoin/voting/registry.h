@@ -606,8 +606,8 @@ public:
     bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
-    //! \brief Validate a contract as Validate does, for the block at \p height instead of the next one. The memory
-    //! pool's sweep of pooled polls asks it after a block connects, before the best height moves to that block.
+    //! \brief Validate a contract as the memory pool does, for the block at \p height. Validate asks it for the next
+    //! block.
     //!
     bool ValidateAt(const Contract& contract, const CTransaction& tx, const int height, int& DoS) const
         EXCLUSIVE_LOCKS_REQUIRED(cs_main);
