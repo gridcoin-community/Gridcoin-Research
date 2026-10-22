@@ -818,6 +818,13 @@ private:
                         }
                     }
 
+                    // The advertisement links to the beacon that was active when it was mined. A revocation mined in
+                    // its block or later, and at or before the vote, removed that beacon's chain, so no key on it was
+                    // in force at the vote: the rule AcrossRevocations applies where the CPID has no current beacon.
+                    if (!pending->m_previous_hash.IsNull() && RevokedSince(*pending, vote_height)) {
+                        return false;
+                    }
+
                     entry = pending;
                 }
             } else {
@@ -844,7 +851,8 @@ private:
     //! force at the vote; one after it continues the walk into the chain it
     //! removed. A revocation's block is read through the transaction index, on
     //! the main chain only. A revocation that removed no beacon continues into
-    //! nothing.
+    //! nothing. KeyInForce applies the same rule where the walk steps from a
+    //! pending advertisement into the beacon it links to (RevokedSince).
     //!
     //! \return Nothing if no revocation decides.
     //!
@@ -875,6 +883,32 @@ private:
         }
 
         return std::nullopt;
+    }
+
+    //!
+    //! \brief Whether a revocation of the CPID of a beacon advertisement that
+    //! removed a beacon was mined in the advertisement's block or later, and at
+    //! or before the vote's block.
+    //!
+    //! \param advertisement The pending entry of the advertisement.
+    //! \param vote_height   The height of the vote's block.
+    //!
+    bool RevokedSince(const Beacon& advertisement, const int vote_height) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        const CBlockIndex* const pindex = VerificationOf(advertisement).m_advertisement;
+
+        if (!pindex) {
+            return false;
+        }
+
+        // Newest first: the first removal at or before the vote is the latest one.
+        for (const auto& removal : RevocationsOf(advertisement.m_cpid).m_removals) {
+            if (removal.first <= vote_height) {
+                return removal.first >= pindex->nHeight;
+            }
+        }
+
+        return false;
     }
 
     //!
