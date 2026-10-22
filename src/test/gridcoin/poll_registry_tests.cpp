@@ -2963,6 +2963,42 @@ BOOST_AUTO_TEST_CASE(the_gui_submits_no_poll_or_vote_from_a_node_out_of_sync)
 }
 
 //!
+//! The newest open poll is the poll registered last in chain order, whatever the polls' transaction times, before a
+//! restart and after it. The later of two open polls in chain order carries the earlier time, as a poll
+//! that waited in a memory pool does.
+//!
+BOOST_AUTO_TEST_CASE(a_restart_keeps_the_newest_open_poll_in_chain_order)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - DAY;
+    const PollTx first = MakePollTx("First", t0 + 600);
+    const PollTx second = MakePollTx("Second", t0);
+    const LinkedTip first_block = LinkBlock(pindexGenesisBlock, t0 + 600, GRC::Claim(), {first.tx}, bits);
+    const LinkedTip second_block = LinkBlock(first_block.m_pindex, t0 + 1200, GRC::Claim(), {second.tx}, bits);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    registry.Add({first.contract, first.tx, first_block.m_pindex});
+    registry.Add({second.contract, second.tx, second_block.m_pindex});
+
+    const auto latest = [&] {
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        const GRC::PollReference* ref = registry.TryLatestActive(pindexBest);
+        return ref ? ref->Txid() : uint256();
+    };
+
+    BOOST_CHECK(latest() == second.tx.GetHash());
+
+    registry.ResetInMemoryOnly();
+    registry.Initialize();
+
+    BOOST_CHECK(latest() == second.tx.GetHash());
+}
+
+//!
 //! A finished poll's active vote weight range end is found once, with its first block past the end, and served from
 //! the poll's cache while that block stays on the main chain. A block's time never changes in production, so a second
 //! walk would find the same block; the test changes one only to see whether the walk runs again.

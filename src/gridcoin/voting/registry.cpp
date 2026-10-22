@@ -951,8 +951,23 @@ int PollRegistry::Initialize()
         PollEntryMap unused_expired;
         PollEntryMap unused_first;
 
+        // Records load in record order, which is chain order, so the newest poll comes back as AddPoll and a REMOVE
+        // left it on the running node: the title owner registered last, or none after a removal.
         m_poll_db.m_load_observer = [this](const PollEntry& entry, const PollEntryMap&, const PollEntryMap&)
-            EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry) { IndexPollRecord(entry); };
+            EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry) {
+            IndexPollRecord(entry);
+
+            if (entry.m_status != PollEntryStatus::ACTIVE) {
+                m_latest_poll = nullptr;
+                return;
+            }
+
+            const PollReference& ref = m_polls_by_txid.at(entry.m_poll_txid);
+
+            if (TryByTitle(PollTitleKey(entry.m_title)) == &ref) {
+                m_latest_poll = &ref;
+            }
+        };
         m_poll_db.Initialize(m_poll_entries, unused_pending, unused_expired, unused_first, false);
         m_poll_db.m_load_observer = nullptr;
 
