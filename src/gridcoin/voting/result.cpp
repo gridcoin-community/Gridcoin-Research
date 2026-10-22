@@ -470,6 +470,70 @@ private:
         return height;
     }
 
+    //! A CPID's beacon revocations on the main chain, as AcrossRevocations reads them.
+    struct Revocations
+    {
+        //! The revocations that removed a beacon, with the main chain height of each, newest first; within a block
+        //! the later revocation first. One that removed nothing continues the walk into nothing, so it decides only
+        //! as a revocation at or before the vote, which m_lowest_height answers.
+        std::vector<std::pair<int, Beacon_ptr>> m_removals;
+
+        //! The lowest main chain height of the CPID's revocations, those that removed nothing included; nothing if
+        //! the CPID has none on the main chain.
+        std::optional<int> m_lowest_height;
+    };
+
+    //! The revocations of each CPID looked up in this tally, by CPID.
+    std::map<Cpid, Revocations> m_revocations;
+
+    //!
+    //! \brief Get a CPID's revocations, read from the transaction index on the first call for the CPID and kept for
+    //! the rest of the tally.
+    //!
+    //! \throws InvalidVoteError If the block of a revocation cannot be read. Nothing is kept for the CPID then.
+    //!
+    const Revocations& RevocationsOf(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        const auto found = m_revocations.find(cpid);
+
+        if (found != m_revocations.end()) {
+            return found->second;
+        }
+
+        const std::vector<Beacon_ptr> deleted = GetBeaconRegistry().DeletedEntries(cpid);
+        std::vector<std::pair<int, Beacon_ptr>> revocations;
+
+        // The newest record first, so that within a block the later revocation comes first.
+        for (auto iter = deleted.rbegin(); iter != deleted.rend(); ++iter) {
+            CTxIndex tx_index;
+
+            if (!m_txdb.ReadTxIndex((*iter)->m_hash, tx_index)) {
+                continue;
+            }
+
+            if (const std::optional<int> height = MainChainHeight(ReadHeader(tx_index.pos))) {
+                revocations.emplace_back(*height, *iter);
+            }
+        }
+
+        std::stable_sort(revocations.begin(), revocations.end(),
+                         [](const auto& a, const auto& b) { return a.first > b.first; });
+
+        Revocations found_revocations;
+
+        if (!revocations.empty()) {
+            found_revocations.m_lowest_height = revocations.back().first;
+        }
+
+        for (const auto& revocation : revocations) {
+            if (!revocation.second->m_previous_hash.IsNull()) {
+                found_revocations.m_removals.push_back(revocation);
+            }
+        }
+
+        return m_revocations.emplace(cpid, std::move(found_revocations)).first->second;
+    }
+
     //!
     //! \brief Whether the block that \p header heads is after the poll's end: for a poll bounded by blocks, a block
     //! above the bound or off the main chain; for any other poll, a block stamped after the end (#3470).
@@ -792,38 +856,22 @@ private:
         const int64_t vote_time) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         BeaconRegistry& beacons = GetBeaconRegistry();
-        const std::vector<Beacon_ptr> deleted = beacons.DeletedEntries(cpid);
-        std::vector<std::pair<int, Beacon_ptr>> revocations;
+        const Revocations& revocations = RevocationsOf(cpid);
 
-        // The newest record first, so that within a block the later revocation comes first.
-        for (auto iter = deleted.rbegin(); iter != deleted.rend(); ++iter) {
-            CTxIndex tx_index;
-
-            if (!m_txdb.ReadTxIndex((*iter)->m_hash, tx_index)) {
-                continue;
+        // Every removal after the vote comes before any revocation at or before it.
+        for (const auto& [height, revocation] : revocations.m_removals) {
+            if (height <= vote_height) {
+                break;
             }
 
-            if (const std::optional<int> height = MainChainHeight(ReadHeader(tx_index.pos))) {
-                revocations.emplace_back(*height, *iter);
+            if (const std::optional<bool> in_force = KeyInForce(
+                    beacons.FindHistorical(revocation->m_previous_hash), key, vote_height, vote_time, beacon_txid)) {
+                return in_force;
             }
         }
 
-        std::stable_sort(revocations.begin(), revocations.end(),
-                         [](const auto& a, const auto& b) { return a.first > b.first; });
-
-        for (const auto& [height, revocation] : revocations) {
-            if (height <= vote_height) {
-                return false;
-            }
-
-            const Beacon_ptr removed = revocation->m_previous_hash.IsNull()
-                ? nullptr
-                : beacons.FindHistorical(revocation->m_previous_hash);
-
-            if (const std::optional<bool> in_force =
-                    KeyInForce(removed, key, vote_height, vote_time, beacon_txid)) {
-                return in_force;
-            }
+        if (revocations.m_lowest_height && *revocations.m_lowest_height <= vote_height) {
+            return false;
         }
 
         return std::nullopt;
