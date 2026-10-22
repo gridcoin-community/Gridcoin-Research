@@ -7,8 +7,9 @@
 A poll's title key is its title in lower case without edge white space. The wallet refuses a poll whose title key a
 registered or pooled poll holds. The memory pool holds one poll per title key, and refuses a second without
 penalizing the peer that relays it. A block that takes a title evicts the other pooled poll with that key from every
-memory pool, and abandons it in its sender's wallet, which releases its inputs. From v15 a poll whose title is taken is
-mined but registers nothing.
+memory pool, and abandons it in its sender's wallet, which releases its inputs. From v15 the memory pool also refuses,
+without a penalty, a poll whose title the registry holds: a block would mine it but register nothing. A pooled poll
+whose claimed output a block spends leaves every memory pool and is abandoned in its sender's wallet.
 
 node0 and node1 each create a poll from a coin only they hold; node2 stakes every block, so those coins stay put.
 """
@@ -140,15 +141,47 @@ class PollTitleRuleTest(GridcoinTestFramework):
         for node in (node0, node1):
             assert_raises_rpc_error(None, "Poll with that title already exists", self.add_poll, node, "title")
 
-        self.log.info("from v15 a poll whose title is taken is admitted, mined, and registers nothing")
-        node0.sendrawtransaction(raw_b)
-        # node1 relayed this transaction to node0 earlier, so node0 does not announce it back; node2 mines it.
-        self.sync_mempools([node0, node2], wait=0.1, flush_scheduler=False)
-        self.stake()
-        assert poll_b in node2.getblock(node2.getbestblockhash())["tx"]
+        self.log.info("from v15 the memory pool refuses a poll whose title the registry holds")
+        for node in self.nodes:
+            assert_equal(node.testmempoolaccept([raw_b])[0]["reject-reason"], "poll-title-taken")
+        assert_raises_rpc_error(None, "TX rejected", node0.sendrawtransaction, raw_b)
+        assert poll_b not in node0.getrawmempool()
         for node in self.nodes:
             assert_equal([p["id"] for p in node.listpolls(True)], [poll_a])
-            assert_raises_rpc_error(-1, "No matching poll found", node.getpollresults, poll_b)
+
+        self.log.info("a pooled poll whose claimed output a block spends leaves every pool and its sender's wallet")
+        self.disconnect_nodes(0, 2)
+        poll_c = self.add_poll(node0, "Claim")
+        self.sync_mempools([node0, node1], wait=0.1, flush_scheduler=False)
+        inputs_c = {(i["txid"], i["vout"]) for i in node0.decoderawtransaction(node0.getrawtransaction(poll_c))["vin"]}
+        claimed = {(o["txid"], o["offset"]) for a in node0.getvotingclaim(poll_c)["balance_claim"]
+                   for o in a["outpoints"]}
+        spendable = [u for u in node0.listunspent(0)
+                     if (u["txid"], u["vout"]) in claimed and (u["txid"], u["vout"]) not in inputs_c]
+        assert spendable
+        coin = spendable[0]
+        raw_spend = node0.createrawtransaction([{"txid": coin["txid"], "vout": coin["vout"]}],
+                                               {node0.getnewaddress(): coin["amount"] - FEE})
+        spend = node2.sendrawtransaction(node0.signrawtransactionwithwallet(raw_spend)["hex"])
+        # node2 never saw poll_c, so the block it stakes carries the spend alone.
+        target = (max(n.mock_now() for n in self.nodes) + SPACING) & ~STAKE_TIMESTAMP_MASK
+        for n in self.nodes:
+            n.advance_mocktime_to(target)
+        node2.generatetoaddress(1, node2.getnewaddress())
+        assert spend in node2.getblock(node2.getbestblockhash())["tx"]
+        self.stake_slot_only()
+        self.connect_nodes(0, 2)
+        # A reconnect fetches no block; the next block node2 announces brings the one before it too.
+        self.stake()
+        for node in self.nodes:
+            assert poll_c not in node.getrawmempool()
+        unspent = {(u["txid"], u["vout"]) for u in node0.listunspent(0)}
+        assert all(outpoint in unspent for outpoint in inputs_c)
+        # node0 sends a poll with that title key; the spent claim's coin is claimable once it is CLAIM_DEPTH deep.
+        for _ in range(CLAIM_DEPTH):
+            self.stake()
+        poll_d = self.add_poll(node0, "claim")
+        assert poll_d in node0.getrawmempool()
 
     def stake_slot_only(self):
         """Move every clock past the inbound rate limit a reconnect meets (see disconnect_nodes)."""

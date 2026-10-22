@@ -393,6 +393,16 @@ public:
         return true;
     }
 
+    //! \brief Hashes of the pooled polls, one per title key (the m_poll_by_title_key index).
+    std::vector<uint256> GetPollTxs() const
+    {
+        LOCK(cs);
+        std::vector<uint256> found;
+        found.reserve(m_poll_by_title_key.size());
+        for (const auto& [title_key, hash] : m_poll_by_title_key) found.push_back(hash);
+        return found;
+    }
+
     //! \brief Whether the pool holds a master-key REMOVE that names the poll \p poll_txid (payload version 4).
     //!
     //! removepoll asks, so that a second REMOVE of one poll is not sent before the first is mined. A scan, since a

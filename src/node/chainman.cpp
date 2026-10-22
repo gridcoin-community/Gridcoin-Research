@@ -672,9 +672,10 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             // releases its inputs in its sender's wallet, as the MESSAGE sweep below does and for the reasons given
             // there; like that sweep it is not undone if this block is disconnected, and the sender can send again.
             //
-            // Keyed on the POLL ADDs this block carries, not on the registry: a poll the pool admitted while the
-            // registry already held its title is left to be mined. This block's own transactions left the pool
-            // above. A legacy contract (below V11) names no title key.
+            // Keyed on the POLL ADDs this block carries, not on the registry: below v15 a poll the pool admitted while
+            // the registry already held its title registers by its txid and is left to be mined; from v15 the
+            // pool refuses one (AcceptToMemoryPool), and the sweep below retires one admitted before. This block's own
+            // transactions left the pool above. A legacy contract (below V11) names no title key.
             for (const auto& block_tx : block.vtx) {
                 for (const auto& contract : block_tx.GetContracts()) {
                     if (contract.m_type != GRC::ContractType::POLL || contract.m_version < 2
@@ -712,6 +713,55 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                     }
                 }
             }
+
+            // Retire the pooled polls the next block would not take, judged as the memory pool judges a poll for
+            // that block: so admission and retirement agree. That covers a poll with a claimed output a block has
+            // spent, since every block checks the claim again (PollRegistry::BlockValidate), from v15 a poll whose
+            // title the registry now holds, which the pool would refuse (TitleTakenAt), and the crossing of the
+            // height rules at an activation. Each leaves with its descendants and is abandoned, as the title
+            // eviction above does and for the same reasons. The pool holds one poll per title key and polls are
+            // rare, so this costs a few claim checks in a block that finds any.
+            {
+                const int next_height = pindex->nHeight + 1;
+                const GRC::PollRegistry& polls = GRC::GetPollRegistry();
+
+                for (const uint256& poll_hash : mempool.GetPollTxs()) {
+                    CTransaction poll_tx;
+
+                    // Already gone as a descendant of one removed earlier in this loop.
+                    if (!mempool.lookup(poll_hash, poll_tx)) continue;
+
+                    bool admissible = true;
+                    for (const auto& contract : poll_tx.GetContracts()) {
+                        int DoS = 0;
+
+                        if (contract.m_type == GRC::ContractType::POLL
+                            && (!polls.ValidateAt(contract, poll_tx, next_height, DoS)
+                                || polls.TitleTakenAt(contract, next_height))) {
+                            admissible = false;
+                            break;
+                        }
+                    }
+                    if (admissible) continue;
+
+                    std::vector<CTransaction> removed;
+                    mempool.remove(poll_tx, /*fRecursive=*/true, MemPoolRemovalReason::UNKNOWN, &removed);
+
+                    for (const auto& removed_tx : removed) {
+                        LogPrintf("%s: the block at height %d would not take poll %s. Removed transaction %s from "
+                                  "the mempool.",
+                                  __func__, next_height, poll_hash.ToString(), removed_tx.GetHash().ToString());
+
+                        unsigned int inputs_released = 0;
+
+                        if (pwalletMain->AbandonTransaction(removed_tx.GetHash(), &inputs_released)) {
+                            LogPrintf("%s: Abandoned wallet transaction %s, releasing %u input(s).",
+                                      __func__, removed_tx.GetHash().ToString(), inputs_released);
+                        }
+                    }
+                }
+            }
+
             // Retire MESSAGE contract transactions the chain has left behind.
             //
             // One accepted below the disable height never leaves the pool on its own

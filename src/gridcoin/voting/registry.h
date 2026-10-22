@@ -575,6 +575,12 @@ public:
     std::optional<uint256> TitleOwner(const std::string& title_key) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
+    //! \brief Whether a poll contract is a POLL ADD that the block at \p height would mine but not register because
+    //! the registry holds its title key: from v15 only. A legacy contract names no title key.
+    //!
+    bool TitleTakenAt(const Contract& contract, const int height) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
     //! \brief The poll's linked votes in connection order, read from its vote link chain. Older links are read with
     //! RegistryDB::peek(), so they stay passivated.
     //!
@@ -590,6 +596,13 @@ public:
     //! \return \c false If the contract fails validation.
     //!
     bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
+    //! \brief Validate a contract as Validate does, for the block at \p height instead of the next one. The memory
+    //! pool's sweep of pooled polls asks it after a block connects, before the best height moves to that block.
+    //!
+    bool ValidateAt(const Contract& contract, const CTransaction& tx, const int height, int& DoS) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Perform contextual validation for the provided contract including block context. This is used

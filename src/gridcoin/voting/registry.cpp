@@ -1055,6 +1055,20 @@ std::optional<uint256> PollRegistry::TitleOwner(const std::string& title_key) co
     return iter->second;
 }
 
+bool PollRegistry::TitleTakenAt(const Contract& contract, const int height) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    if (contract.m_type != ContractType::POLL || contract.m_version < 2 || contract.m_action != ContractAction::ADD
+        || !IsV15Enabled(height)) {
+        return false;
+    }
+
+    const std::string title_key = PollTitleKey(contract.SharePayloadAs<PollPayload>()->m_poll.m_title);
+
+    LOCK(cs_poll_registry);
+
+    return TitleOwner(title_key).has_value();
+}
+
 std::vector<uint256> PollRegistry::WalkVotes(const uint256& poll_txid) const
 {
     std::vector<uint256> votes;
@@ -1659,6 +1673,12 @@ bool PollAndClaimValid(const PollPayload& payload, const CTransaction& tx, int& 
 
 bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    return ValidateAt(contract, tx, nBestHeight + 1, DoS);
+}
+
+bool PollRegistry::ValidateAt(const Contract& contract, const CTransaction& tx, const int height, int& DoS) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
     // Vote contract claims do not affect consensus. Vote claim validation
     // occurs on-demand while computing the results of the poll:
     //
@@ -1675,9 +1695,9 @@ bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, in
     // V2+ validations
     const auto payload = contract.SharePayloadAs<PollPayload>();
 
-    // The height rules, at the next block's height as that block will judge them. A refusal carries no penalty: a node
-    // a block behind or ahead of this one judges a different height.
-    if (!PollFitsHeight(contract, *payload, nBestHeight + 1, DoS)) {
+    // The height rules, at the height of the block judged for (the next block, from Validate) as that block will judge
+    // them. A refusal carries no penalty: a node a block behind or ahead of this one judges a different height.
+    if (!PollFitsHeight(contract, *payload, height, DoS)) {
         DoS = 0;
         return false;
     }

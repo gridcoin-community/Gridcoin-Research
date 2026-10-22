@@ -2318,8 +2318,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     }
 
     // One poll per title key in the pool. A second is refused without a penalty: two users can choose one title
-    // within seconds, and a peer that relays the other poll is not at fault. A poll whose title the registry already
-    // holds is admitted: from v15 it is mined but registers nothing. A legacy contract never reaches here; it is
+    // within seconds, and a peer that relays the other poll is not at fault. From v15 a poll whose title the registry
+    // holds is refused too, without a penalty: the next block would mine it, spend its burn and register nothing,
+    // and a peer that has not yet connected the block that took the title holds and relays it. Below v15 such
+    // a poll registers by its txid, and the pool admits it. A legacy contract never reaches here; it is
     // refused above.
     for (const auto& contract : tx.GetContracts()) {
         if (contract.m_type == GRC::ContractType::POLL && contract.m_version >= 2
@@ -2334,6 +2336,13 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
                                           tx.GetHash().ToString(),
                                           existing.ToString()),
                                  "poll-duplicate-title");
+            }
+
+            if (GRC::GetPollRegistry().TitleTakenAt(contract, nBestHeight + 1)) {
+                return state.DoS(0, error("%s: poll in tx %s has a title the poll registry holds",
+                                          __func__,
+                                          tx.GetHash().ToString()),
+                                 "poll-title-taken");
             }
         }
     }
