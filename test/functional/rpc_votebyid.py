@@ -39,10 +39,14 @@ class VoteByIdTest(GridcoinTestFramework):
         # The premine is a few large outputs and each mined block churns one;
         # fan one out so the blocks below always find a mature stake kernel.
         self.grow_utxo_universe(node)
-        # addpoll claims 100,000 GRC from outputs CLAIM_DEPTH blocks deep. At
-        # this height only the first four coinstakes are that deep, the split
-        # above spent one of them and the kernels since can have spent the
-        # rest, leaving the claim nothing to select. Bury the whole balance.
+        # addpoll claims 100,000 GRC from outputs CLAIM_DEPTH blocks deep, and
+        # the blocks below can restake every large output left, leaving only
+        # fanned outputs that deep. A fan of an untouched premine output holds
+        # 99,999 GRC, just short, so fan two more of at least 100,000 GRC each
+        # and bury them all: a coinstake spends one output, so the two new fans
+        # alone keep at least 170,000 GRC claimable.
+        for _ in range(2):
+            self.grow_utxo_universe(node)
         for _ in range(CLAIM_DEPTH):
             node.advance_mocktime_to((node.mock_now() + BLOCK_SPACING) & ~STAKE_TIMESTAMP_MASK)
             node.generatetoaddress(1, node.getnewaddress())
