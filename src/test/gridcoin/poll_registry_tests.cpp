@@ -30,6 +30,8 @@
 #include "primitives/block.h"
 #include "primitives/transaction.h"
 #include "rpc/blockchain.h"
+#include "rpc/protocol.h"
+#include "rpc/server.h"
 #include "test/chain_setup.h"
 #include "test/state_guard.h"
 #include "txdb.h"
@@ -2960,6 +2962,36 @@ BOOST_AUTO_TEST_CASE(the_gui_submits_no_poll_or_vote_from_a_node_out_of_sync)
     const interfaces::VotingSubmitResult vote_result = voting->submitVote(uint256S("0x01").ToString(), {0});
     BOOST_CHECK(vote_result.status == interfaces::VotingSubmitStatus::FAILED);
     BOOST_CHECK_EQUAL(vote_result.error, "The wallet must be in sync to vote.");
+}
+
+//!
+//! removepoll refuses while the node is out of sync, as addpoll and vote do: the poll it names may already be removed
+//! on the chain the node has not reached.
+//!
+BOOST_AUTO_TEST_CASE(removepoll_refuses_from_a_node_out_of_sync)
+{
+    grc_test::StateGuard guard;
+
+    struct PreviousBlockTimeRestorer
+    {
+        int64_t m_saved = g_previous_block_time;
+        ~PreviousBlockTimeRestorer() { g_previous_block_time = m_saved; }
+    } restorer;
+
+    // The tip is ten target spacings old (OutOfSyncByAge).
+    g_previous_block_time = GetAdjustedTime() - 90 * 10;
+    BOOST_REQUIRE(OutOfSyncByAge());
+
+    UniValue params(UniValue::VARR);
+    params.push_back(uint256S("0x01").ToString());
+
+    try {
+        removepoll(params);
+        BOOST_FAIL("removepoll did not throw on a node out of sync");
+    } catch (const UniValue& err) {
+        BOOST_CHECK_EQUAL(find_value(err, "code").get_int(), RPC_MISC_ERROR);
+        BOOST_CHECK_EQUAL(find_value(err, "message").get_str(), "Cannot remove a poll with a wallet that is not in sync.");
+    }
 }
 
 //!

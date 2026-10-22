@@ -1001,6 +1001,11 @@ UniValue removepoll(const UniValue& params)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "No poll registered since block version 11 has that id.");
     }
 
+    // As addpoll and vote: a node behind the network may list a poll the chain has already removed.
+    if (OutOfSyncByAge()) {
+        throw JSONRPCError(RPC_MISC_ERROR, "Cannot remove a poll with a wallet that is not in sync.");
+    }
+
     {
         LOCK(cs_main);
 
