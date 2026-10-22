@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "chain.h"
+#include "dbwrapper.h"
 #include "gridcoin/protocol.h"
 #include "primitives/transaction.h"
 
@@ -143,6 +144,35 @@ Verdict JudgeAt(const GRC::Contract& contract, const int height)
     verdict.block = registry.BlockValidate({contract, tx, &index}, verdict.block_dos);
 
     return verdict;
+}
+
+//!
+//! \brief Restart the registry from LevelDB, as a node does.
+//!
+//! \return The height the caller replays contracts from.
+//!
+int RestartProtocolRegistry()
+{
+    GRC::ProtocolRegistry& registry = GRC::GetProtocolRegistry();
+
+    registry.ResetInMemoryOnly();
+
+    return registry.Initialize();
+}
+
+//!
+//! \brief Read the protocol entry db version stored in LevelDB, or zero if none is stored.
+//!
+uint32_t StoredProtocolDBVersion()
+{
+    CTxDB txdb("r");
+
+    std::pair<std::string, std::string> key = std::make_pair(std::string("protocol_db"), std::string("version"));
+    uint32_t version = 0;
+
+    if (!txdb.ReadGenericSerializable(key, version)) return 0;
+
+    return version;
 }
 
 } // anonymous namespace
@@ -345,6 +375,58 @@ BOOST_AUTO_TEST_CASE(protocol_magnitude_entry_refused_from_v15)
         const Verdict verdict = JudgeAt(MakeProtocolContract(action, key, value), at);
         BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, key + " = " + value + " at v15");
     }
+}
+
+// A clear erases the version and the stored height and syncs, then erases the records, then writes the version
+// (RegistryDB::clear_leveldb). Wherever a crash cuts it short, the next start finds no version, clears the area again
+// and replays every contract. Each pass builds the LevelDB state one crash point leaves.
+BOOST_AUTO_TEST_CASE(protocol_a_start_after_an_interrupted_db_clear_replays_every_contract)
+{
+    GRC::ProtocolRegistry& registry = GRC::GetProtocolRegistry();
+
+    for (const size_t records_erased : {0, 1, 2}) {
+        BOOST_TEST_CONTEXT("records erased before the crash: " << records_erased) {
+            AddProtocolEntry(2, "key1", "foo", 1, 123456789, true);
+            AddProtocolEntry(2, "key2", "fi", 2, 123456790, false);
+
+            const std::vector<uint256> hashes {registry.Try("key1")->m_hash, registry.Try("key2")->m_hash};
+
+            // The stored state is whole: a restart loads both entries and replays from the stored height.
+            BOOST_REQUIRE_EQUAL(RestartProtocolRegistry(), 2);
+            BOOST_REQUIRE(registry.Try("key1") && registry.Try("key2"));
+            BOOST_REQUIRE_EQUAL(StoredProtocolDBVersion(), 1U);
+
+            {
+                CTxDB txdb("rw");
+
+                std::string key_type_db = "protocol_db";
+                std::string start_key_hint_db {};
+
+                BOOST_REQUIRE(txdb.EraseGenericSerializablesByKeyType(key_type_db, start_key_hint_db));
+
+                for (size_t i = 0; i < records_erased; ++i) {
+                    std::pair<std::string, uint256> key = std::make_pair(std::string("protocol"), hashes[i]);
+
+                    BOOST_REQUIRE(txdb.EraseGenericSerializable(key));
+                }
+            }
+
+            BOOST_CHECK_EQUAL(RestartProtocolRegistry(), 0);
+            BOOST_CHECK(!registry.Try("key1"));
+            BOOST_CHECK(!registry.Try("key2"));
+            BOOST_CHECK_EQUAL(StoredProtocolDBVersion(), 1U);
+
+            // No record survived the second clear: once the replay stores a height, a restart loads nothing.
+            int height = 2;
+            registry.SetDBHeight(height);
+
+            BOOST_CHECK_EQUAL(RestartProtocolRegistry(), 2);
+            BOOST_CHECK(!registry.Try("key1"));
+            BOOST_CHECK(!registry.Try("key2"));
+        }
+    }
+
+    registry.Reset();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
