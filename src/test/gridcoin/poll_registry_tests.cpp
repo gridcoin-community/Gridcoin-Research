@@ -486,6 +486,54 @@ BOOST_AUTO_TEST_CASE(votes_come_back_in_connection_order_after_a_restart)
     BOOST_CHECK(registry.VoteHead(poll.tx.GetHash()) == v2.GetHash());
 }
 
+//!
+//! A clear empties the poll db, then the vote db (a version change, the clear flags, coherence recovery's Reset). A
+//! crash between the two leaves a poll db with no stored height beside a whole vote db. The next start clears both, so
+//! the replay rebuilds every poll, rather than skipping every poll contract below the vote db's height.
+//!
+BOOST_AUTO_TEST_CASE(a_start_after_a_clear_cut_between_the_two_dbs_rebuilds_both)
+{
+    CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, 1700000000);
+    CBlockIndex vote_index = MakeBlockIndex(V13Height() + 11, 1700000600);
+    RegistryReset reset;
+    LOCK(cs_main);
+
+    GRC::PollRegistry& registry = GRC::GetPollRegistry();
+    const PollTx poll = MakePollTx("Title", 1700000000);
+    registry.Add({poll.contract, poll.tx, &poll_index});
+
+    const GRC::Contract vote = MakeVoteContract(poll.tx.GetHash());
+    registry.Add({vote, MakeVoteTxFor(vote, 1700000500), &vote_index});
+
+    BOOST_REQUIRE_EQUAL(registry.GetDBHeight(), V13Height() + 11);
+
+    // The poll db's clear ran to its end (RegistryDB::clear_leveldb: the records, then the _db keys, then the version);
+    // the vote db's never started.
+    {
+        CTxDB txdb("rw");
+
+        std::string record_type = "poll";
+        uint256 record_hint;
+        BOOST_REQUIRE(txdb.EraseGenericSerializablesByKeyType(record_type, record_hint));
+
+        std::string db_type = "poll_db";
+        std::string db_hint;
+        BOOST_REQUIRE(txdb.EraseGenericSerializablesByKeyType(db_type, db_hint));
+
+        std::pair<std::string, std::string> version_key = std::make_pair(std::string("poll_db"), std::string("version"));
+        BOOST_REQUIRE(txdb.WriteGenericSerializable(version_key, uint32_t {1}));
+    }
+
+    registry.ResetInMemoryOnly();
+
+    BOOST_CHECK_EQUAL(registry.Initialize(), 0);
+    BOOST_CHECK_EQUAL(registry.GetDBHeight(), 0);
+
+    LOCK(GRC::PollRegistry::cs_poll_registry);
+    BOOST_CHECK(registry.TryByTxid(poll.tx.GetHash()) == nullptr);
+    BOOST_CHECK(registry.VoteHead(poll.tx.GetHash()).IsNull());
+}
+
 BOOST_AUTO_TEST_CASE(a_vote_already_linked_is_not_linked_again)
 {
     CBlockIndex poll_index = MakeBlockIndex(V13Height() + 10, 1700000000);

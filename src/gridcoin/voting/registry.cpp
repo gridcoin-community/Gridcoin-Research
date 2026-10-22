@@ -330,6 +330,17 @@ uint32_t StoredVersion(const std::string& key_type)
 }
 
 //!
+//! \brief Whether LevelDB holds a db height under (key_type + "_db", "height_stored").
+//!
+bool HasStoredHeight(const std::string& key_type)
+{
+    int height = 0;
+    std::pair<std::string, std::string> key = std::make_pair(key_type + "_db", std::string("height_stored"));
+
+    return CTxDB("r").ReadGenericSerializable(key, height);
+}
+
+//!
 //! \brief Global poll registry instance.
 //!
 PollRegistry g_poll_registry;
@@ -941,8 +952,11 @@ int PollRegistry::Initialize()
 
     if (!m_initialized) {
         // The two dbs depend on each other: a version change in either clears both, so neither holds records the
-        // other cannot explain.
-        if (StoredVersion("poll") != m_poll_db.m_version || StoredVersion("vote") != m_vote_db.m_version) {
+        // other cannot explain. A clear empties the poll db, then the vote db, so a poll db with no stored height
+        // beside a vote db with one is a clear cut short between the two (a vote link is stored only for a poll the
+        // poll db holds); clear both again, or the vote db's height would skip every poll contract below it.
+        if (StoredVersion("poll") != m_poll_db.m_version || StoredVersion("vote") != m_vote_db.m_version
+            || (!HasStoredHeight("poll") && HasStoredHeight("vote"))) {
             m_poll_db.clear();
             m_vote_db.clear();
         }
