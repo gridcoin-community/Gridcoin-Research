@@ -560,9 +560,25 @@ if(ENABLE_HARDENING)
         # at -O0, and FORTIFY then warns on every translation unit while checking
         # nothing. doc/build.md describes that configuration, so it is reachable.
         if(CMAKE_BUILD_TYPE OR CMAKE_CONFIGURATION_TYPES)
+            # A _FORTIFY_SOURCE already in CMAKE_C_FLAGS or CMAKE_CXX_FLAGS is the
+            # packager's choice, and it stands for that language, as it did under
+            # Autotools, where the user's CPPFLAGS and CXXFLAGS came after the
+            # hardening ones. Ours could not override one passed through -Wp
+            # anyway: -Wp options reach the preprocessor after every driver -U and
+            # -D. Fedora's -Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3 wins quietly;
+            # the Flatpak SDK's -Wp,-D_FORTIFY_SOURCE=3, with no -U, wins with a
+            # warning in every translation unit that the macro was redefined.
+            set(_hardening_fortify_when "$<NOT:$<CONFIG:Debug>>")
+            foreach(_hardening_lang C CXX)
+                string(FIND "${CMAKE_${_hardening_lang}_FLAGS}" "_FORTIFY_SOURCE" _hardening_fortify_pos)
+                if(NOT _hardening_fortify_pos EQUAL -1)
+                    string(APPEND _hardening_fortify_when ",$<NOT:$<COMPILE_LANGUAGE:${_hardening_lang}>>")
+                    message(STATUS "Hardening: _FORTIFY_SOURCE left as CMAKE_${_hardening_lang}_FLAGS set it")
+                endif()
+            endforeach()
             add_compile_options(
-                "$<$<NOT:$<CONFIG:Debug>>:-U_FORTIFY_SOURCE>"
-                "$<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>")
+                "$<$<AND:${_hardening_fortify_when}>:-U_FORTIFY_SOURCE>"
+                "$<$<AND:${_hardening_fortify_when}>:-D_FORTIFY_SOURCE=2>")
         else()
             message(STATUS "Hardening: _FORTIFY_SOURCE skipped (no build type, so no optimisation)")
         endif()
