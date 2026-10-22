@@ -1378,6 +1378,13 @@ void SetupEnvironment()
 #ifndef WIN32
     fs::path::imbue(loc);
 #else
+    // This facet makes fs::path::string() UTF-8 on Windows, and makes a path built
+    // from a narrow string read that string as UTF-8; without it both directions
+    // use the system code page. C++17 deprecates it along with wstring_convert
+    // and C++26 removes it; libc++ marks it deprecated, libstdc++ does not yet.
+    // Boost.Filesystem's own utf8_codecvt_facet is no replacement: on Windows it
+    // decodes characters outside the BMP wrongly (U+10000 becomes 0000) and
+    // encodes a surrogate pair as two three-byte sequences.
     fs::path::imbue(std::locale(loc, new std::codecvt_utf8_utf16<wchar_t>()));
 #endif
 }
@@ -1436,11 +1443,10 @@ namespace util {
 WinCmdLineArgs::WinCmdLineArgs()
 {
     wchar_t** wargv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> utf8_cvt;
     argv = new char*[argc];
     args.resize(argc);
     for (int i = 0; i < argc; i++) {
-        args[i] = utf8_cvt.to_bytes(wargv[i]);
+        args[i] = WideToUtf8(wargv[i]);
         argv[i] = &*args[i].begin();
     }
     LocalFree(wargv);

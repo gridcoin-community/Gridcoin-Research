@@ -181,7 +181,7 @@ option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" O
 option(ENABLE_UPNP      "Enable UPnP port mapping support" ON)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
-option(USE_QT6          "Use Qt 6 instead of Qt 5" OFF)
+option(USE_QT6          "Use Qt 6 instead of Qt 5" ON)
 
 # Multiprocess (Phase 2 GUI/node IPC split, RFC #2937). OFF = the monolithic
 # build with direct in-process calls (current behavior); ON = build against
@@ -207,7 +207,6 @@ option(SYSTEM_XXD       "Find system xxd binary" OFF)
 option(BUNDLED_BOOST    "Use the bundled version of Boost" ${HUNTER_ENABLED})
 option(BUNDLED_CURL     "Use the bundled version of cURL" ${HUNTER_ENABLED})
 option(BUNDLED_OPENSSL  "Use the bundled version of OpenSSL" ${HUNTER_ENABLED})
-option(BUNDLED_QT5      "Use the bundled version of Qt 5" ${HUNTER_ENABLED})
 
 
 # Handle dependencies
@@ -218,7 +217,6 @@ set(MINIUPNPC_USE_STATIC_LIBS ${STATIC_LIBS})
 set(QT5_MINIMUM_VERSION 5.15.0)
 set(QT6_MINIMUM_VERSION 6.2.0)
 set(QT_COMPONENTS Core Concurrent Gui LinguistTools Network Widgets Svg)
-set(QT_HUNTER_COMPONENTS qtbase qttools)
 if(USE_DBUS)
     list(APPEND QT_COMPONENTS DBus)
 endif()
@@ -339,9 +337,6 @@ if(ENABLE_GUI)
         find_package(Qt6 ${QT6_MINIMUM_VERSION} COMPONENTS ${QT_COMPONENTS} REQUIRED)
         set(QT Qt6)
     else()
-        if(BUNDLED_QT5)
-            hunter_add_package(Qt COMPONENTS ${QT_HUNTER_COMPONENTS})
-        endif()
         find_package(Qt5 ${QT5_MINIMUM_VERSION} COMPONENTS ${QT_COMPONENTS} REQUIRED)
         set(QT Qt5)
 

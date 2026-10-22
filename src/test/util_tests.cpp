@@ -17,9 +17,11 @@
 //#include <util/system.h>
 #include <util/rwsettings.h>
 #include <util/settings.h>
+#include <util/strencodings.h>
 #include <util/string.h>
 
 #include <cstdint>
+#include <stdexcept>
 
 #include <sstream>
 
@@ -1511,5 +1513,184 @@ BOOST_AUTO_TEST_CASE(changesettings_failed_store_changes_nothing)
     BOOST_CHECK_EQUAL(gArgs.GetArg("-changesettings_failed_store_probe", "<unset>"), "<unset>");
     BOOST_CHECK(getRwSetting("changesettings_failed_store_probe").isNull());
 }
+
+#ifdef WIN32
+namespace {
+//! The UTF-16 code units of a wide string, in hex, so that a failure prints them.
+std::string Units(const std::wstring& wide)
+{
+    std::string out;
+    for (const wchar_t unit : wide) {
+        if (!out.empty()) out += ' ';
+        out += strprintf("%04X", static_cast<unsigned int>(unit));
+    }
+    return out;
+}
+} // namespace
+
+// Utf8ToWide() and WideToUtf8() replace
+// std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t>. Every valid
+// case below converts as wstring_convert did, with libstdc++ 13.2 and 16 alike.
+// Every malformed case throws std::range_error. wstring_convert threw for most of
+// them too, but returned an input that ends part-way through a character with that
+// character dropped, and libstdc++ 13.2 accepted encoded surrogates.
+
+BOOST_AUTO_TEST_CASE(util_Utf8ToWide_converts_valid_utf8)
+{
+    const std::vector<std::pair<std::string, std::string>> cases{
+        {"", ""},
+        {"abc", "0061 0062 0063"},
+        {std::string("a\0b", 3), "0061 0000 0062"},
+        {"\xC2\x80", "0080"},              // the lowest two-byte form
+        {"\xC3\xA9", "00E9"},
+        {"\xE0\xA0\x80", "0800"},          // the lowest three-byte form
+        {"\xE2\x82\xAC", "20AC"},
+        {"\xED\x9F\xBF", "D7FF"},          // just below the surrogates
+        {"\xEE\x80\x80", "E000"},          // just above them
+        {"\xEF\xBF\xBE", "FFFE"},          // noncharacters convert
+        {"\xEF\xBF\xBF", "FFFF"},
+        {"\xEF\xBB\xBF" "a", "FEFF 0061"}, // a byte order mark is kept
+        {"\xF0\x90\x80\x80", "D800 DC00"}, // the lowest four-byte form
+        {"\xF4\x8F\xBF\xBF", "DBFF DFFF"}, // U+10FFFF
+    };
+    for (const auto& [utf8, units] : cases) {
+        BOOST_TEST_CONTEXT("UTF-8 " << HexStr(utf8)) {
+            BOOST_CHECK_EQUAL(Units(Utf8ToWide(utf8)), units);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(util_Utf8ToWide_throws_on_malformed_utf8)
+{
+    const std::vector<std::string> cases{
+        // Input that ends part-way through a character.
+        "\xC3", "\xE2\x82", "\xF0\x90\x80", "a\xC3", "\xC3\xA9\xE2\x82", "\xE0", "\xE0\xA0", "\xED",
+        "\xF4\x8F\xBF",
+        // Encoded surrogates: alone, as a CESU-8 pair, and cut off.
+        "\xED\xA0\x80", "\xED\xBF\xBF", "\xED\xA0\x80\xED\xB0\x80", "\xED\xA0",
+        // Overlong forms.
+        "\xC0\x80", "\xC1\xBF", "\xE0\x80\x80", "\xE0\x9F\xBF", "\xF0\x80\x80\x80", "\xF0\x8F\xBF\xBF",
+        // Above U+10FFFF, and bytes that cannot start a sequence.
+        "\xF4\x90\x80\x80", "\xF5\x80\x80\x80", "\xF8\x88\x80\x80\x80", "\xFC\x84\x80\x80\x80\x80", "\xFE",
+        "\xFF", "abc\xFF",
+        // Continuation bytes with no lead byte, or one too many.
+        "\x80", "\xBF", "a\x80", "\xC3\xA9\xA9", "\xE2\x82\xAC\x82",
+        // A lead byte followed by a byte that is not a continuation byte.
+        "\xC3" "a", "\xE2\x82" "a", "\xC3\xC3",
+    };
+    for (const std::string& utf8 : cases) {
+        BOOST_TEST_CONTEXT("UTF-8 " << HexStr(utf8)) {
+            BOOST_CHECK_THROW(Utf8ToWide(utf8), std::range_error);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(util_WideToUtf8_converts_valid_utf16)
+{
+    const std::vector<std::pair<std::wstring, std::string>> cases{
+        {L"", ""},
+        {L"abc", "616263"},
+        {std::wstring(L"a\0b", 3), "610062"},
+        {std::wstring{wchar_t(0x00E9)}, "c3a9"},
+        {std::wstring{wchar_t(0x20AC)}, "e282ac"},
+        {std::wstring{wchar_t(0xFEFF)}, "efbbbf"},
+        {std::wstring{wchar_t(0xFFFF)}, "efbfbf"},
+        {std::wstring{wchar_t(0xD800), wchar_t(0xDC00)}, "f0908080"},
+        {std::wstring{wchar_t(0xDBFF), wchar_t(0xDFFF)}, "f48fbfbf"},
+    };
+    for (const auto& [wide, bytes] : cases) {
+        BOOST_TEST_CONTEXT("UTF-16 " << Units(wide)) {
+            BOOST_CHECK_EQUAL(HexStr(WideToUtf8(wide)), bytes);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(util_WideToUtf8_throws_on_malformed_utf16)
+{
+    const std::vector<std::wstring> cases{
+        // A high surrogate with no low surrogate after it: at the end of the input,
+        // and before another unit.
+        std::wstring{wchar_t(0xD800)},
+        std::wstring{L'a', wchar_t(0xD800)},
+        std::wstring{wchar_t(0xDBFF)},
+        std::wstring{wchar_t(0xD800), wchar_t(0xDC00), wchar_t(0xDBFF)},
+        std::wstring{wchar_t(0xD800), L'A'},
+        std::wstring{wchar_t(0xD800), wchar_t(0xD800)},
+        // A low surrogate with no high surrogate before it.
+        std::wstring{wchar_t(0xDC00)},
+        std::wstring{wchar_t(0xDFFF)},
+        std::wstring{wchar_t(0xDC00), wchar_t(0xD800)},
+        std::wstring{L'a', wchar_t(0xDC00), L'b'},
+    };
+    for (const std::wstring& wide : cases) {
+        BOOST_TEST_CONTEXT("UTF-16 " << Units(wide)) {
+            BOOST_CHECK_THROW(WideToUtf8(wide), std::range_error);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(util_Utf8ToWide_and_WideToUtf8_convert_every_scalar_value)
+{
+    // Every Unicode scalar value, U+0000 to U+10FFFF less the surrogates, encoded
+    // here from the definitions of UTF-8 and UTF-16.
+    std::string utf8;
+    std::wstring wide;
+    // sign-compare checked: cp is uint32_t; 0x10FFFFU is a non-negative literal, so both
+    // sides are unsigned.
+    for (uint32_t cp = 0; cp <= 0x10FFFFU; ++cp) {
+        // sign-compare checked: cp is uint32_t; 0xD800U and 0xDFFFU are non-negative
+        // literals, so both sides of each comparison are unsigned.
+        if (cp >= 0xD800U && cp <= 0xDFFFU) continue;
+
+        // sign-compare checked: cp is uint32_t; 0x80U, 0x800U and 0x10000U are
+        // non-negative literals, so both sides of each comparison are unsigned.
+        if (cp < 0x80U) {
+            utf8 += static_cast<char>(cp);
+        } else if (cp < 0x800U) {
+            utf8 += static_cast<char>(0xC0U | (cp >> 6));
+            utf8 += static_cast<char>(0x80U | (cp & 0x3FU));
+        } else if (cp < 0x10000U) {
+            utf8 += static_cast<char>(0xE0U | (cp >> 12));
+            utf8 += static_cast<char>(0x80U | ((cp >> 6) & 0x3FU));
+            utf8 += static_cast<char>(0x80U | (cp & 0x3FU));
+        } else {
+            utf8 += static_cast<char>(0xF0U | (cp >> 18));
+            utf8 += static_cast<char>(0x80U | ((cp >> 12) & 0x3FU));
+            utf8 += static_cast<char>(0x80U | ((cp >> 6) & 0x3FU));
+            utf8 += static_cast<char>(0x80U | (cp & 0x3FU));
+        }
+
+        // sign-compare checked: cp is uint32_t; 0x10000U is a non-negative literal, so
+        // both sides are unsigned.
+        if (cp < 0x10000U) {
+            wide += static_cast<wchar_t>(cp);
+        } else {
+            wide += static_cast<wchar_t>(0xD800U + ((cp - 0x10000U) >> 10));
+            wide += static_cast<wchar_t>(0xDC00U + ((cp - 0x10000U) & 0x3FFU));
+        }
+    }
+
+    // 1,112,064 scalar values: 128 take one byte, 1,920 two, 61,440 three and
+    // 1,048,576 four, and those four-byte ones take two UTF-16 units each.
+    // sign-compare checked: size() is size_t; each U literal is non-negative, so both
+    // sides are unsigned.
+    BOOST_REQUIRE_EQUAL(utf8.size(), 4382592U);
+    BOOST_REQUIRE_EQUAL(wide.size(), 2160640U);
+
+    BOOST_CHECK(Utf8ToWide(utf8) == wide);
+    BOOST_CHECK(WideToUtf8(wide) == utf8);
+}
+
+#if HAVE_SYSTEM
+BOOST_AUTO_TEST_CASE(util_runCommand_does_not_throw_on_malformed_utf8)
+{
+    // A command from a configuration file saved in a legacy code page: 0xE9 is U+00E9
+    // in Windows-1252 and not valid UTF-8 here. runCommand logs it and does not run
+    // it; the conversion's exception must not escape, because the callers run
+    // runCommand on threads of their own.
+    BOOST_CHECK_NO_THROW(runCommand("echo r\xE9sum\xE9"));
+}
+#endif // HAVE_SYSTEM
+#endif // WIN32
 
 BOOST_AUTO_TEST_SUITE_END()
