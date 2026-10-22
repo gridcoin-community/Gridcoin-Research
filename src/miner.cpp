@@ -21,6 +21,7 @@
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/kernel.h"
+#include "gridcoin/voting/vote.h"
 #include "gridcoin/consensus/block_rewards.h"
 #include "gridcoin/staking/reward.h"
 #include "gridcoin/staking/status.h"
@@ -476,6 +477,29 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                 if (claim_outside_coinbase) {
                     LogPrint(BCLog::LogFlags::MINER,
                         "%s: claim contract outside the coinbase. Skipped tx %s",
+                        __func__,
+                        tx.GetHash().ToString());
+
+                    continue;
+                }
+
+                // From v15 a vote is linked only from a block after its poll's block. A vote spends none of its
+                // poll's outputs, so nothing else orders it after its poll. A vote whose poll is still pooled waits
+                // for a block after the poll's. One whose poll the pool does not hold is mined as before, so
+                // nothing is stranded in the pool.
+                bool vote_for_pooled_poll = false;
+
+                for (const auto& contract : tx.GetContracts()) {
+                    if (contract.m_type == GRC::ContractType::VOTE && contract.m_version >= 2
+                        && mempool.mapTx.count(contract.SharePayloadAs<GRC::Vote>()->m_poll_txid)) {
+                        vote_for_pooled_poll = true;
+                        break;
+                    }
+                }
+
+                if (vote_for_pooled_poll) {
+                    LogPrint(BCLog::LogFlags::MINER,
+                        "%s: vote for a poll still in the memory pool. Skipped tx %s",
                         __func__,
                         tx.GetHash().ToString());
 

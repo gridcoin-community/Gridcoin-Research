@@ -55,6 +55,8 @@
 #include "script/sign.h"
 #include "support/allocators/secure.h"
 #include "gridcoin/tx_message.h"
+#include "gridcoin/voting/payloads.h"
+#include "gridcoin/voting/vote.h"
 #include "test/chain_setup.h"
 #include "test/state_guard.h"
 #include "txmempool.h"
@@ -654,6 +656,60 @@ BOOST_AUTO_TEST_CASE(a_message_contract_transaction_is_skipped_at_the_disable_he
         "the miner put a MESSAGE-contract transaction in a template at the disable height");
     BOOST_CHECK_MESSAGE(Contains(selected, ordinary),
         "selection did not continue past the skipped transaction");
+
+    mempool.clear();
+}
+
+//!
+//! From v15 a vote is linked only from a block after its poll's block, so the miner leaves a vote whose poll is still
+//! in the memory pool for a later block. A vote spends none of its poll's outputs, so nothing else orders the two. A
+//! vote for a poll the pool does not hold is mined as before.
+//!
+BOOST_AUTO_TEST_CASE(from_v15_a_vote_whose_poll_is_pooled_waits_for_a_later_block)
+{
+    mempool.clear();
+    grc_test::StateGuard guard;
+
+    int template_height = 0;
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(pindexBest != nullptr);
+        template_height = pindexBest->nHeight + 1;
+    }
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 3u);
+
+    GRC::Poll poll(GRC::PollType::SURVEY, GRC::PollWeightType::BALANCE, GRC::PollResponseType::YES_NO_ABSTAIN, 7,
+                   "Title", "https://gridcoin.us", "Question?", GRC::Poll::ChoiceList(), 0, Fraction());
+    const GRC::Contract poll_contract = GRC::MakeContract<GRC::PollPayload>(
+        uint32_t {2}, GRC::ContractAction::ADD, uint32_t {3}, std::move(poll), GRC::PollEligibilityClaim());
+    const CTransaction poll_tx = grc_test::CreateSpendWithContract(
+        PremineCoinbase(), coins[0].n, 150000, poll_contract, 0, poll_contract.RequiredBurnAmount());
+
+    const auto vote_for = [](const uint256& poll_txid, const uint32_t n) {
+        const GRC::Contract contract = GRC::MakeContract<GRC::Vote>(
+            uint32_t {2}, GRC::ContractAction::ADD, GRC::Vote::CURRENT_VERSION, poll_txid, std::vector<uint8_t> {0},
+            GRC::VoteWeightClaim());
+        return grc_test::CreateSpendWithContract(PremineCoinbase(), n, 200000, contract, 0,
+                                                 contract.RequiredBurnAmount());
+    };
+    const CTransaction vote = vote_for(poll_tx.GetHash(), coins[1].n);
+    const CTransaction unpooled_poll_vote = vote_for(uint256S("0x01"), coins[2].n);
+
+    AddToMempool(poll_tx, 150000);
+    AddToMempool(vote, 200000);
+    AddToMempool(unpooled_poll_vote, 200000);
+
+    CAmount fees = 0;
+    {
+        grc_test::V15HeightGuard v15(template_height);
+        const std::vector<CTransaction> selected = AssembleBlock(fees);
+
+        BOOST_CHECK_MESSAGE(!Contains(selected, vote), "from v15 the miner took a vote whose poll is pooled");
+        BOOST_CHECK_MESSAGE(Contains(selected, unpooled_poll_vote),
+            "from v15 the miner skipped a vote whose poll the pool does not hold");
+    }
 
     mempool.clear();
 }
