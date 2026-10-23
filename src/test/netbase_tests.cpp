@@ -327,7 +327,7 @@ BOOST_AUTO_TEST_CASE(subnet_cidr_uint8_bounds)
     BOOST_CHECK_EQUAL(value, 0);
     BOOST_CHECK(ParseUInt8("255", &value));
     BOOST_CHECK_EQUAL(value, 255);
-    for (const std::string& invalid : {"", "-1", "256", "300", "65536", "4294967295", " 1", "1 ", "1x"}) {
+    for (const char* invalid : {"", "-1", "256", "300", "65536", "4294967295", " 1", "1 ", "1x"}) {
         value = 42;
         BOOST_CHECK(!ParseUInt8(invalid, &value));
         BOOST_CHECK_EQUAL(value, 42);

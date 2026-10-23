@@ -1297,7 +1297,7 @@ void ApplyRwSettingSideEffect(const std::string& name)
                 // As at startup, -proxy also reaches Tor unless -tor overrides it.
                 if (!gArgs.IsArgSet("-tor")) {
                     SetProxy(NET_TOR, addrProxy);
-                    if (!gArgs.IsArgSet("-onlynet")) SetReachable(NET_TOR, true);
+                    if (gArgs.GetArgs("-onlynet").empty()) SetReachable(NET_TOR, true);
                 }
             }
         }
@@ -2022,7 +2022,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // -tor taking the place of -onion. -proxy also covers Tor onion services
     // unless -tor overrides or disables it, and NET_TOR is only reachable
     // when a proxy for it is configured.
-    const bool onlynet_used_with_tor = gArgs.IsArgSet("-onlynet") && !IsLimited(NET_TOR);
+    const bool onlynet_used_with_tor = !gArgs.GetArgs("-onlynet").empty() && !IsLimited(NET_TOR);
     CService addrProxy;
     CService addrOnion;
     if (gArgs.IsArgSet("-proxy")) {
@@ -2060,7 +2060,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (addrOnion.IsValid()) {
         SetProxy(NET_TOR, addrOnion);
-        if (!gArgs.IsArgSet("-onlynet") || onlynet_used_with_tor) {
+        if (gArgs.GetArgs("-onlynet").empty() || onlynet_used_with_tor) {
             SetReachable(NET_TOR, true);
         }
     } else {
