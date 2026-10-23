@@ -177,6 +177,9 @@ BASE_SCRIPTS = [
     # p2p_time_votes.py: an outbound peer's time vote is cast on connect and
     # withdrawn when the connection is deleted.
     'p2p_time_votes.py',
+    # p2p_message_exceptions.py: a malformed message is logged to debug.log;
+    # it does not set the node's warning string or write to stderr.
+    'p2p_message_exceptions.py',
     'p2p_block_tx_relay.py',
     # The PSGT multi-node tests run under deterministic mock-time lockstep
     # (sync_clocks/advance_to_next_stake_slot, #3165): no wall-clock sleeps on
