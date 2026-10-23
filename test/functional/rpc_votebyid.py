@@ -9,17 +9,21 @@ parameter error. An id inside that range reaches the vote builder, which
 refuses one that names no choice of the poll, or one given twice.
 """
 
+from decimal import Decimal, ROUND_DOWN
+
 from test_framework.test_framework import GridcoinTestFramework, STAKE_TIMESTAMP_MASK
-from test_framework.util import assert_raises_rpc_error
+from test_framework.util import assert_equal, assert_greater_than, assert_raises_rpc_error
 
 # A poll's eligibility claim is built from outputs at least this deep
 # (CWalletTx::IsConfirmed in the PollClaimBuilder), as in feature_vote_results.py.
 CLAIM_DEPTH = 10
-# Mock-clock advance per buried block, past the 90-second target spacing. The
-# blocks mined 16 seconds apart above raise the difficulty with every block,
-# and the kernel is evaluated at one slot per attempt, so ten more at that pace
-# can run generatetoaddress out of attempts ("no stake found").
+# Mock-clock advance per block, past the 90-second target spacing. Blocks mined
+# faster raise the difficulty with every block, and the kernel is evaluated at
+# one slot per attempt, so a run of them can leave generatetoaddress out of
+# attempts ("no stake found").
 BLOCK_SPACING = 96
+# Ordinary outputs the premine split below makes for the claim.
+SPLIT_COUNT = 96
 
 
 class VoteByIdTest(GridcoinTestFramework):
@@ -35,21 +39,27 @@ class VoteByIdTest(GridcoinTestFramework):
 
     def run_test(self):
         node = self.nodes[0]
-        node.generatetoaddress(12, node.getnewaddress())
-        # The premine is a few large outputs and each mined block churns one;
-        # fan one out so the blocks below always find a mature stake kernel.
-        self.grow_utxo_universe(node)
         # addpoll claims 100,000 GRC from outputs CLAIM_DEPTH blocks deep, and
-        # the blocks below can restake every large output left, leaving only
-        # fanned outputs that deep. A fan of an untouched premine output holds
-        # 99,999 GRC, just short, so fan two more of at least 100,000 GRC each
-        # and bury them all: a coinstake spends one output, so the two new fans
-        # alone keep at least 170,000 GRC claimable.
-        for _ in range(2):
-            self.grow_utxo_universe(node)
-        for _ in range(CLAIM_DEPTH):
+        # every block restakes one output. Before the first block, split two
+        # premine outputs into SPLIT_COUNT ordinary outputs of about 2,083 GRC,
+        # as feature_vote_results.py splits its premine. The CLAIM_DEPTH blocks
+        # after the one that confirms the split restake at most that many of
+        # them, which leaves more than 175,000 GRC claimable, and the split and
+        # the rest of the premine give every block a stake kernel.
+        premine = node.listunspent(0)
+        assert_equal(len(premine), 10)
+        spent = premine[:2]
+        per_out = ((sum(u["amount"] for u in spent) - Decimal("1")) / SPLIT_COUNT).quantize(
+            Decimal("0.00000001"), rounding=ROUND_DOWN)  # ~1 GRC fee
+        signed = node.signrawtransactionwithwallet(node.createrawtransaction(
+            [{"txid": u["txid"], "vout": u["vout"]} for u in spent],
+            {node.getnewaddress(): per_out for _ in range(SPLIT_COUNT)}))
+        assert_equal(signed["complete"], True)
+        split = node.sendrawtransaction(signed["hex"])
+        for _ in range(1 + CLAIM_DEPTH):
             node.advance_mocktime_to((node.mock_now() + BLOCK_SPACING) & ~STAKE_TIMESTAMP_MASK)
             node.generatetoaddress(1, node.getnewaddress())
+        assert_greater_than(sum(u["amount"] for u in node.listunspent(CLAIM_DEPTH) if u["txid"] == split), 175000)
 
         single = node.addpoll("survey", "single", 7, "Which?", "A;B;C", 1, 2, "https://gridcoin.us")
         multiple = node.addpoll("survey", "multiple", 7, "Which?", "A;B;C", 1, 3, "https://gridcoin.us")
