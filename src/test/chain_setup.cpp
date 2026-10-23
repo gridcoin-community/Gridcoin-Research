@@ -21,11 +21,13 @@
 #include "test/psgt_test_helpers.h"
 #include "txmempool.h"
 #include "util/system.h"
+#include "util/time.h"
 #include "validation.h"
 #include "wallet/wallet.h"
 
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <set>
 #include <string>
@@ -39,6 +41,20 @@ namespace {
 //! genesis timestamp (1296688602) because ConnectInputs rejects a transaction
 //! older than the input it spends.
 constexpr int64_t FIXTURE_TX_TIME = 1600000000;
+
+//! Where the fixture's mock clock starts until a fixture has mined. After
+//! FIXTURE_TX_TIME, so no block a fixture mines is stamped before a fixture
+//! transaction.
+constexpr int64_t FIXTURE_CLOCK_START = 1700000000;
+static_assert(FIXTURE_CLOCK_START > FIXTURE_TX_TIME, "the clock starts after the fixture transaction time");
+
+//! Where the next fixture's clock starts: FIXTURE_CLOCK_START, or the latest
+//! stake slot a fixture in this process has mined in or tried to. The clock
+//! therefore never goes back from one fixture to the next. An earlier
+//! fixture's blocks outlive it in the block index and in g_seen_stakes (see
+//! GLOBAL STATE in chain_setup.h), and a block mined in one of their slots
+//! could be refused as one already had, or as a duplicate stake.
+int64_t g_last_stake_slot = FIXTURE_CLOCK_START;
 
 //! Restores the process-wide chain parameters. The in-tree idiom
 //! (block_rewards_tests.cpp) calls SelectParams alone; the path cache must go
@@ -189,6 +205,14 @@ struct WalletTxRestorer
     }
 };
 
+//! Restores the mock clock the fixture replaces with its own.
+struct ClockRestorer
+{
+    const std::chrono::seconds m_mock_time{GetMockTime()};
+
+    ~ClockRestorer() { SetMockTime(m_mock_time); }
+};
+
 //! The fixture's state. Members are declared so that every restorer is fully
 //! constructed before any mutation happens: a throw later in the constructor
 //! then unwinds them, which a destructor could not do for a partially
@@ -196,6 +220,7 @@ struct WalletTxRestorer
 struct ChainState
 {
     ParamsRestorer m_params;
+    ClockRestorer m_clock;
     ConsensusGlobalsRestorer m_consensus;
     WalletTxRestorer m_wallet;
     ChainTipRestorer m_tip;
@@ -218,6 +243,9 @@ ChainState& State()
 
 ChainState::ChainState()
 {
+    // The fixture's clock; see the CLOCK note in chain_setup.h.
+    SetMockTime(g_last_stake_slot);
+
     // Regtest, and the datadir must follow it: GetDataDir() appends a
     // network-specific component. The block flat files are not mocked -- only
     // LevelDB is -- so blk0001.dat and CheckDiskSpace both need a real
@@ -597,14 +625,39 @@ bool CreateAndProcessBlock(CBlock& block_out, std::string& err)
         return false;
     }
 
-    // The kernel is evaluated at one 16-second-masked timestamp with no time
-    // search, so a retry only helps if it steps to a fresh slot. This mirrors
-    // the loop in generatetoaddress.
+    if (!g_state) {
+        err = "no RegtestChainSetup is alive";
+        return false;
+    }
+
+    // A block mined while the clock is behind the tip could be stamped before
+    // its parent, or after the clock. Mock time 0, which turns the mock clock
+    // off, is behind it too.
+    {
+        LOCK(cs_main);
+
+        if (GetMockTime().count() < pindexBest->GetBlockTime()) {
+            err = strprintf("the fixture's clock (%d) is behind the chain tip (%d)",
+                            GetMockTime().count(), pindexBest->GetBlockTime());
+            return false;
+        }
+    }
+
+    // Cases read what a block did against the fixture's clock, so each attempt
+    // moves the clock to the start of the next stake slot and mines there. Every
+    // block is then stamped in a later slot than any block or attempt before it
+    // in this process, and never after the clock: an attempt cannot meet a stake
+    // proof or a block already seen in its slot, and a retry needs no stamp
+    // ahead of the clock. The kernel is evaluated at that one timestamp with no
+    // time search, so the new slot is also what rerolls it.
     bool ok = false;
 
     for (int attempt = 0; attempt < 5 && !ok; ++attempt) {
         err.clear();
-        ok = TryMineRegtestBlock(pwalletMain, block_out, err, attempt);
+        const int64_t slot = GRC::MaskStakeTime(GetMockTime().count()) + GRC::STAKE_TIMESTAMP_MASK + 1;
+        g_last_stake_slot = std::max(g_last_stake_slot, slot);
+        SetMockTime(slot);
+        ok = TryMineRegtestBlock(pwalletMain, block_out, err, /*stake_time_slot_offset=*/0);
     }
 
     if (!ok) return false;

@@ -22,6 +22,8 @@ add_executable(test_gridcoin
     chainman_reorg_tests.cpp
     # Which block a side-branch block's staked input comes from, on the fixture chain.
     kernel_branch_lookup_tests.cpp
+    # The fixture chain's own clock.
+    chain_setup_tests.cpp
     addressbook_tests.cpp
     addrman_tests.cpp
     allocator_tests.cpp

@@ -18,7 +18,6 @@
 #include "gridcoin/contract/message.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/researcher.h"
-#include "gridcoin/staking/kernel.h"
 #include "interfaces/researcher.h"
 #include "key.h"
 #include "primitives/block.h"
@@ -451,22 +450,17 @@ void MineUntilReadyToAdvertise()
     BOOST_REQUIRE(!OutOfSyncByAge());
 }
 
-//! Puts the mock clock and the sync time back as they were, however the case
-//! exits.
-struct ClockReset
+//! Puts the sync time back as it was, however the case exits. The clock is the
+//! chain fixture's, and it only moves forward (test/chain_setup.h).
+struct SyncTimeReset
 {
-    const std::chrono::seconds m_mock_time{GetMockTime()};
     const int64_t m_previous_block_time{g_previous_block_time.load()};
 
-    ~ClockReset()
-    {
-        SetMockTime(m_mock_time);
-        g_previous_block_time.store(m_previous_block_time);
-    }
+    ~SyncTimeReset() { g_previous_block_time.store(m_previous_block_time); }
 };
 
 //! Move the mock clock forward, keeping the node in sync as if blocks had kept
-//! arriving. The caller holds a ClockReset.
+//! arriving. The caller holds a SyncTimeReset.
 void AdvanceClock(const int64_t seconds)
 {
     SetMockTime(GetAdjustedTime() + seconds);
@@ -476,14 +470,10 @@ void AdvanceClock(const int64_t seconds)
 //! Mine until no beacon for \p cpid is left in the mempool.
 //!
 //! The miner leaves out a transaction stamped later than the block
-//! (CreateRestOfTheBlock). Block times are masked down to a 16-second stake
-//! slot, and blocks mined in quick succession share one, so the clock is moved
-//! past the slot the transactions were stamped in. The caller holds a
-//! ClockReset.
+//! (CreateRestOfTheBlock). The chain fixture mines each block in a stake slot
+//! after the clock the transactions were stamped from, so none of them is.
 void MineUntilBeaconsConfirm(const GRC::Cpid& cpid)
 {
-    SetMockTime(GetAdjustedTime() + GRC::STAKE_TIMESTAMP_MASK + 1);
-
     for (int i = 0; i < 6 && !PooledBeacons(cpid).empty(); ++i) {
         MineOne();
     }
@@ -508,7 +498,7 @@ interfaces::ResearcherSnapshot Snapshot()
 //! mine underneath the suite's chain fixture, which rewinds them itself.
 BOOST_FIXTURE_TEST_CASE(a_beacon_is_pending_once_its_advertisement_is_on_chain, grc_test::WalletTxScope)
 {
-    const ClockReset reset_clock;
+    const SyncTimeReset reset_sync;
     const PoolCleared pool;
     MineUntilReadyToAdvertise();
 
@@ -569,7 +559,7 @@ BOOST_FIXTURE_TEST_CASE(a_beacon_is_pending_once_its_advertisement_is_on_chain, 
 //! Only this wallet's pending beacon refuses; another wallet's does not.
 BOOST_FIXTURE_TEST_CASE(another_wallets_pending_beacon_does_not_block_this_wallet, grc_test::WalletTxScope)
 {
-    const ClockReset reset_clock;
+    const SyncTimeReset reset_sync;
     const PoolCleared pool;
     MineUntilReadyToAdvertise();
 
@@ -618,7 +608,7 @@ BOOST_FIXTURE_TEST_CASE(another_wallets_pending_beacon_does_not_block_this_walle
 //! next advertisement.
 BOOST_FIXTURE_TEST_CASE(advertising_again_replaces_an_advertisement_that_never_confirmed, grc_test::WalletTxScope)
 {
-    const ClockReset reset_clock;
+    const SyncTimeReset reset_sync;
     const PoolCleared pool;
     MineUntilReadyToAdvertise();
 
@@ -714,7 +704,7 @@ struct OnlyTheseCoins
 //! balance is checked, instead of only its change being counted.
 BOOST_FIXTURE_TEST_CASE(a_wallet_with_one_advertisements_worth_can_replace_it, grc_test::WalletTxScope)
 {
-    const ClockReset reset_clock;
+    const SyncTimeReset reset_sync;
     const PoolCleared pool;
     MineUntilReadyToAdvertise();
 
@@ -734,7 +724,6 @@ BOOST_FIXTURE_TEST_CASE(a_wallet_with_one_advertisements_worth_can_replace_it, g
     BOOST_REQUIRE(coin);
 
     for (int i = 0; i < 6 && mempool.exists(funding.GetHash()); ++i) {
-        SetMockTime(GetAdjustedTime() + GRC::STAKE_TIMESTAMP_MASK + 1);
         MineOne();
     }
     BOOST_REQUIRE(!mempool.exists(funding.GetHash()));
@@ -772,7 +761,7 @@ BOOST_FIXTURE_TEST_CASE(a_wallet_with_one_advertisements_worth_can_replace_it, g
 //! for an advertisement that is about to go out.
 BOOST_FIXTURE_TEST_CASE(a_refused_send_retires_nothing, grc_test::WalletTxScope)
 {
-    const ClockReset reset_clock;
+    const SyncTimeReset reset_sync;
     const PoolCleared pool;
     MineUntilReadyToAdvertise();
 

@@ -57,20 +57,12 @@ CBlock MineOne()
     return block;
 }
 
-//! The miner stamps blocks from GetAdjustedTime() and retries across five
-//! consecutive 16-second stake slots. Moving the mock clock past all of them
-//! makes the next block on the same parent a different block.
-void SkipPastRetrySlots()
+//! Move the fixture's clock \p slots stake slots forward, which leaves at least
+//! that many stake times between the last block and the next.
+void SkipStakeSlots(const int slots)
 {
-    SetMockTime(GetAdjustedTime() + 6 * (GRC::STAKE_TIMESTAMP_MASK + 1));
+    SetMockTime(GetAdjustedTime() + slots * (GRC::STAKE_TIMESTAMP_MASK + 1));
 }
-
-//! Puts the clock back the way the other suites expect it, however the case
-//! exits.
-struct MockTimeReset
-{
-    ~MockTimeReset() { SetMockTime(0); }
-};
 
 //! A premine output that the transaction index records as unspent and the
 //! wallet does not mark spent.
@@ -200,7 +192,8 @@ CTransaction PoolSpend()
 }
 
 //! Disconnect back to the parent of \p block, which offers its transactions
-//! back to the mempool, and move the clock so the next block differs.
+//! back to the mempool. The fixture mines the next block in a later stake slot,
+//! so it is a different block on the same parent.
 void LeaveForParentOf(const CBlock& block)
 {
     uint256 parent_hash;
@@ -210,7 +203,6 @@ void LeaveForParentOf(const CBlock& block)
     }
 
     BOOST_REQUIRE(ForceReorganizeToHash(parent_hash));
-    SkipPastRetrySlots();
 }
 
 //! The block ReadStakedInput takes \p hash from, for a block whose parent is
@@ -295,7 +287,6 @@ BOOST_FIXTURE_TEST_SUITE(kernel_branch_lookup_tests, grc_test::WalletTxScope, *b
 
 BOOST_AUTO_TEST_CASE(a_side_branch_block_takes_its_staked_input_from_its_own_branch_from_v15)
 {
-    const MockTimeReset reset_clock;
     grc_test::RequireV15Unscheduled();
 
     mempool.clear();
@@ -381,7 +372,6 @@ BOOST_AUTO_TEST_CASE(a_side_branch_block_takes_its_staked_input_from_its_own_bra
 
 BOOST_AUTO_TEST_CASE(a_deeper_side_branch_block_finds_its_input_in_the_branch)
 {
-    const MockTimeReset reset_clock;
     grc_test::RequireV15Unscheduled();
 
     mempool.clear();
@@ -393,7 +383,6 @@ BOOST_AUTO_TEST_CASE(a_deeper_side_branch_block_finds_its_input_in_the_branch)
 
     const CBlock a1 = MineOne();
     BOOST_REQUIRE_MESSAGE(BlockHasTx(a1, t_hash), "A1 does not carry T");
-    SkipPastRetrySlots();
     const CBlock a2 = MineOne();
     BOOST_REQUIRE(!BlockHasTx(a2, t_hash));
 
@@ -421,7 +410,6 @@ BOOST_AUTO_TEST_CASE(a_deeper_side_branch_block_finds_its_input_in_the_branch)
 
 BOOST_AUTO_TEST_CASE(a_side_branch_stake_passes_the_proof_of_stake_check_from_v15)
 {
-    const MockTimeReset reset_clock;
     grc_test::RequireV15Unscheduled();
 
     mempool.clear();
@@ -436,6 +424,9 @@ BOOST_AUTO_TEST_CASE(a_side_branch_stake_passes_the_proof_of_stake_check_from_v1
     BOOST_REQUIRE_MESSAGE(BlockHasTx(a1, t_hash), "A1 does not carry T");
 
     LeaveForParentOf(a1);
+
+    // Leave several stake times between A1 and B1 for the scan below.
+    SkipStakeSlots(6);
 
     const CBlock b1 = MineOne();
     BOOST_REQUIRE_MESSAGE(BlockHasTx(b1, t_hash), "B1 does not carry T");
@@ -483,7 +474,6 @@ BOOST_AUTO_TEST_CASE(a_side_branch_stake_passes_the_proof_of_stake_check_from_v1
 
 BOOST_AUTO_TEST_CASE(an_input_missing_from_the_index_is_searched_for_only_in_the_blocks_own_branch)
 {
-    const MockTimeReset reset_clock;
     grc_test::RequireV15Unscheduled();
 
     mempool.clear();

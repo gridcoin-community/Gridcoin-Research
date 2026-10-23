@@ -20,13 +20,11 @@
 #include "chain.h"
 #include "dbwrapper.h"
 #include "gridcoin/staking/chain_trust.h"
-#include "gridcoin/staking/kernel.h"
 #include "node/chainman.h"
 #include "primitives/block.h"
 #include "sync.h"
 #include "test/chain_setup.h"
 #include "uint256.h"
-#include "util/time.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -44,22 +42,6 @@ CBlock MineOne()
     return block;
 }
 
-//! The miner stamps blocks from GetAdjustedTime() and retries across five
-//! consecutive 16-second stake slots. Moving the mock clock past all of them
-//! guarantees the next block on the same parent is a different block, whichever
-//! slot the previous one landed in.
-void SkipPastRetrySlots()
-{
-    SetMockTime(GetAdjustedTime() + 6 * (GRC::STAKE_TIMESTAMP_MASK + 1));
-}
-
-//! Puts the clock back the way the other suites expect it, however the case
-//! exits.
-struct MockTimeReset
-{
-    ~MockTimeReset() { SetMockTime(0); }
-};
-
 } // anonymous namespace
 
 BOOST_AUTO_TEST_SUITE(chainman_reorg_tests,
@@ -67,8 +49,6 @@ BOOST_AUTO_TEST_SUITE(chainman_reorg_tests,
 
 BOOST_AUTO_TEST_CASE(setbestchain_reverts_a_reorg_that_lowers_chain_trust)
 {
-    const MockTimeReset reset_clock;
-
     // A one-block branch A1 on genesis, then park the chain back at genesis.
     // ForceReorganizeToHash does not revert on lower trust, which is what lets a
     // competing branch be mined next.
@@ -92,7 +72,8 @@ BOOST_AUTO_TEST_CASE(setbestchain_reverts_a_reorg_that_lowers_chain_trust)
 
     // A two-block branch B1 -> B2 on genesis. It carries more trust than A1, so
     // A1 is now a stale fork the Favors gate would never hand to SetBestChain.
-    SkipPastRetrySlots();
+    // The fixture mines B1 in a later stake slot than A1, so it is a different
+    // block on the same parent.
     CBlock b1 = MineOne();
     BOOST_REQUIRE(b1.GetHash(true) != a1_hash);
     CBlock b2 = MineOne();
