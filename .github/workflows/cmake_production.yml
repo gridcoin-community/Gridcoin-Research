@@ -169,9 +169,12 @@ jobs:
             ${{ matrix.cmake_args }}
 
       # 6. Build
+      # check-build-warnings.sh fails the step on any compiler or linker warning in
+      # the tree's own build. Every build of the tree in these workflows goes
+      # through it.
       - name: Build
         # Removed explicit --parallel flag; CMake reads the env var automatically
-        run: cmake --build ${{ matrix.build_dir }}
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build ${{ matrix.build_dir }}
 
       # 7. Hermeticity Check
       - name: Verify Hermeticity (Linux)
@@ -468,7 +471,7 @@ jobs:
             $CXX_LAUNCHER
 
       - name: Build
-        run: cmake --build build
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build
 
       - name: Test
         # Bounded twice on purpose. --timeout makes ctest kill and REPORT the test
@@ -499,6 +502,9 @@ jobs:
 
       - name: Verify Binary Hardening
         run: ./contrib/devtools/check-binary-hardening.sh build
+      # Not wrapped in check-build-warnings.sh: deploy copies Homebrew's dylibs into
+      # the bundle and rewrites them, and install_name_tool and strip warn that the
+      # rewrite invalidates their signatures -- third-party files, not the tree's build.
       - name: Package (DMG)
         run: cmake --build build --target deploy
 
@@ -862,7 +868,7 @@ jobs:
             $CXX_LAUNCHER
 
       - name: Build
-        run: cmake --build build
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build
 
       - name: Test
         # See the arm64 job: bounded twice so a hang is reported rather than
@@ -890,6 +896,9 @@ jobs:
 
       - name: Verify Binary Hardening
         run: ./contrib/devtools/check-binary-hardening.sh build
+      # Not wrapped in check-build-warnings.sh: deploy copies Homebrew's dylibs into
+      # the bundle and rewrites them, and install_name_tool and strip warn that the
+      # rewrite invalidates their signatures -- third-party files, not the tree's build.
       - name: Package (DMG)
         run: cmake --build build --target deploy
 
@@ -1164,7 +1173,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build_native
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_native
 
       - name: Verify Binary Hardening
         run: ./contrib/devtools/check-binary-hardening.sh build_native
@@ -1275,7 +1284,7 @@ jobs:
         run: |
           cmake -B build_mpgen_native -S src/ipc/libmultiprocess -GNinja \
             -DCMAKE_BUILD_TYPE=Release
-          cmake --build build_mpgen_native --target mpgen -j"${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}"
+          ./contrib/devtools/check-build-warnings.sh -- cmake --build build_mpgen_native --target mpgen -j"${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}"
           MPGEN_BIN=$(find build_mpgen_native -name mpgen -type f -perm -u+x | head -n 1)
           if [ -z "$MPGEN_BIN" ]; then
             echo "::error::native mpgen was not produced"; exit 1
@@ -1308,7 +1317,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build_arm64
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_arm64
 
       - name: Verify Binary Hardening
         run: ./contrib/devtools/check-binary-hardening.sh build_arm64
@@ -1354,9 +1363,24 @@ jobs:
           path: .flatpak-builder
           key: flatpak-builder-${{ hashFiles('contrib/flatpak/us.gridcoin.GridcoinResearch.yml') }}
 
-      - name: Build Flatpak
+      # The manifest's dependency modules are built first, on their own and outside
+      # the warning check: their warnings come from code this project does not
+      # compile. That run commits them to flatpak-builder's cache, and on exit it
+      # prunes the stages it never reached, gridcoin's included. The second run
+      # then takes the dependencies from the cache ("Cache hit for ...") and always
+      # compiles the tree, so the check sees the tree's own build and nothing else.
+      - name: Build Flatpak dependencies
         run: |
           flatpak-builder \
+            --force-clean \
+            --stop-at=gridcoin \
+            flatpak-build \
+            contrib/flatpak/us.gridcoin.GridcoinResearch.yml
+
+      - name: Build Flatpak
+        run: |
+          ./contrib/devtools/check-build-warnings.sh -- \
+            flatpak-builder \
             --force-clean \
             --repo=flatpak-repo \
             flatpak-build \

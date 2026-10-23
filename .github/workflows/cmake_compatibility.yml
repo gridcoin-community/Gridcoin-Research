@@ -72,8 +72,11 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      # check-build-warnings.sh fails the step on any compiler or linker warning in
+      # the tree's own build. Every build of the tree in these workflows goes
+      # through it.
       - name: Build
-        run: cmake --build build_native
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_native
 
       - name: Test
         run: ctest --test-dir build_native --output-on-failure
@@ -189,7 +192,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build_arm64
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_arm64
 
       - name: Test (QEMU Emulation)
         env:
@@ -291,7 +294,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build_armhf
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_armhf
 
       - name: Test (QEMU Emulation)
         env:

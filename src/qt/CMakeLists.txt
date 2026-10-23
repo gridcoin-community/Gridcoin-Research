@@ -119,14 +119,16 @@ add_library(gridcoinqt STATIC
     voting/votingmodel.cpp
     voting/votingpage.cpp
     walletmodel.cpp
-    winshutdownmonitor.cpp
 
     bitcoin.qrc
     bitcoin_locale.qrc
 )
 
 if(WIN32)
-    target_sources(gridcoinqt PRIVATE res/gridcoinresearch.rc)
+    target_sources(gridcoinqt PRIVATE
+        res/gridcoinresearch.rc
+        winshutdownmonitor.cpp
+    )
     set_source_files_properties(res/gridcoinresearch.rc PROPERTIES
         COMPILE_DEFINITIONS WINDRES_PREPROC
     )

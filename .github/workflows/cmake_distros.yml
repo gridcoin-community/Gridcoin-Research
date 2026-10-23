@@ -83,7 +83,12 @@ jobs:
           # FIX: Use /bin/sh instead of /bin/bash for the initial entrypoint.
           # Alpine (and others) always have /bin/sh, but Alpine does NOT have /bin/bash by default.
           # The prep_cmd will install bash for the build scripts.
+          #
+          # FAIL_ON_WARNINGS=true fails the build on any compiler or linker warning in
+          # the tree's own build; GITHUB_ACTIONS is passed in so that the check can
+          # raise an annotation as well.
           docker run --rm \
+            -e GITHUB_ACTIONS \
             -v "$MOUNT_PATH":/mnt/host_source:ro \
             ${{ matrix.image }} \
             /bin/sh -c " \
@@ -94,7 +99,7 @@ jobs:
               cd /work && \
               \
               git config --global --add safe.directory /work && \
-              chmod +x install_dependencies.sh build_targets.sh && \
+              chmod +x install_dependencies.sh build_targets.sh contrib/devtools/check-build-warnings.sh && \
               \
               ./build_targets.sh \
                   TARGET=native \
@@ -105,4 +110,5 @@ jobs:
                   WITH_GUI=true \
                   USE_QT6=true \
                   PARALLEL=${CMAKE_BUILD_PARALLEL_LEVEL:-4} \
+                  FAIL_ON_WARNINGS=true \
                   ${{ matrix.build_args }}"
