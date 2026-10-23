@@ -103,10 +103,6 @@ This is the Gridcoin-Research cryptocurrency project - an open-source blockchain
   - Location: External via depends/ or system
   - Used for: HTTP server, RPC server, and network event handling
 
-- **libzip 1.11.1** - ZIP archive handling
-  - Location: External via depends/ or system
-  - Used for: Snapshot handling and compressed data
-
 - **miniupnpc 2.2.2** (minimum 1.9) - UPnP port mapping client (Optional)
   - Location: External via depends/ or system
   - Used for: Automatic port forwarding configuration

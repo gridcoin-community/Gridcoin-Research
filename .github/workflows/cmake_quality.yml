@@ -47,7 +47,7 @@ jobs:
             capnproto libcapnp-dev \
             qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
             libqt6svg6-dev libxkbcommon-dev libcurl4-openssl-dev \
-            libzip-dev zipcmp zipmerge ziptool ccache
+            zlib1g-dev ccache
 
       - name: Restore Ccache
         uses: actions/cache@v5
@@ -222,7 +222,7 @@ jobs:
           sudo apt-get install -y clang cmake build-essential libboost-all-dev \
             libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
             capnproto libcapnp-dev \
-            libcurl4-openssl-dev libzip-dev zipcmp zipmerge ziptool ccache
+            libcurl4-openssl-dev zlib1g-dev ccache
 
       - name: Restore Ccache
         uses: actions/cache@v5
@@ -301,7 +301,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang cmake build-essential libboost-all-dev \
             libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
-            libcurl4-openssl-dev libzip-dev zipcmp zipmerge ziptool ccache \
+            libcurl4-openssl-dev zlib1g-dev ccache \
             valgrind
 
       - name: Restore Ccache
@@ -455,8 +455,7 @@ jobs:
             capnproto libcapnp-dev \
             qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
             libqt6svg6-dev \
-            libxkbcommon-dev libcurl4-openssl-dev libzip-dev zipcmp zipmerge \
-            ziptool ccache
+            libxkbcommon-dev libcurl4-openssl-dev zlib1g-dev ccache
 
       - name: Restore Ccache
         uses: actions/cache@v5
@@ -518,7 +517,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang cmake build-essential libboost-all-dev \
             libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
-            libcurl4-openssl-dev libzip-dev zipcmp zipmerge ziptool ccache
+            libcurl4-openssl-dev zlib1g-dev ccache
 
       - name: Restore Ccache
         uses: actions/cache@v5

@@ -23,7 +23,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libboost-program-options1.83.0 \
         libssl3t64 \
         libcurl4t64 \
-        libzip4t64 \
         libminiupnpc17 \
     && rm -rf /var/lib/apt/lists/*
 

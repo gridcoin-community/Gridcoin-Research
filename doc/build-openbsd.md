@@ -12,7 +12,7 @@ Run the following commands as root (or using `doas`) to install the necessary bu
 
 ```ksh
 # Basic build requirements and libraries
-pkg_add git cmake boost curl libzip miniupnpc
+pkg_add git cmake boost curl miniupnpc
 
 # Multiprocess (GUI/node separation, -multiprocess) only:
 # Cap'n Proto supplies the code generator and the runtime the IPC layer is built on.
