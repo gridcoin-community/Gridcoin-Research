@@ -7,6 +7,13 @@ Intended to run on the same host as a Gridcoin wallet running with the
 fetch live network data without each browser needing a direct
 connection to the wallet.
 
+This document is for operators running the proxy. If instead you want
+to **consume** the public instance at `https://api.gridcoin.us` from
+your own site, explorer or bot, see
+[`INTEGRATION.md`](INTEGRATION.md) — it covers the client-facing
+contract: response envelopes, CORS and rate limits, the error bodies,
+and the data quirks that the OpenAPI schema does not describe.
+
 ## Endpoints
 
 | Path | Source | Notes |
