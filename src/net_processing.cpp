@@ -57,6 +57,7 @@
 #include <ctime>
 #include <limits>
 #include <math.h>
+#include <typeinfo>
 #include "wallet/wallet.h"
 #include "txmempool.h"
 
@@ -1631,43 +1632,21 @@ static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRe
             if (ShutdownInProgress())
                 break;
         }
-        catch (std::ios_base::failure& e)
-        {
-            if (strstr(e.what(), "end of data"))
-            {
-                // Allow exceptions from under-length message on vRecv
-                LogPrintf("ProcessMessages(%s, %u bytes) : Exception '%s' caught, normally caused by a message being shorter than its stated length", strCommand, nMessageSize, e.what());
-            }
-            else if (strstr(e.what(), "size too large"))
-            {
-                // Allow exceptions from over-long size
-                LogPrintf("ProcessMessages(%s, %u bytes) : Exception '%s' caught", strCommand, nMessageSize, e.what());
-            }
-            else if (strstr(e.what(), "Vector length limit exceeded"))
-            {
-                // Allow exceptions from a vector whose element count exceeds the
-                // limit declared for it (LimitedVector in serialize.h, applied to
-                // the block locator at MAX_LOCATOR_SZ). This is an ordinary
-                // malformed-message rejection and belongs with the two above.
-                //
-                // Without this arm the message matches neither filter and falls
-                // through to PrintExceptionContinue(), which assigns
-                // strMiscWarning; GetWarnings() returns that at priority 1000, so
-                // it surfaces in getinfo, getstakinginfo, getnetworkinfo,
-                // getblockchaininfo and the GUI status bar. That let any peer set
-                // the node's user-visible warning string on demand, unthrottled
-                // and with no misbehavior score, by sending one oversized locator.
-                LogPrintf("ProcessMessages(%s, %u bytes) : Exception '%s' caught", strCommand, nMessageSize, e.what());
-            }
-            else
-            {
-                PrintExceptionContinue(&e, "ProcessMessages()");
-            }
-        }
-        catch (std::exception& e) {
-            PrintExceptionContinue(&e, "ProcessMessages()");
+        // Log whatever ProcessMessage() throws and go on to the next message.
+        // Most of it is a peer's malformed message, which deserialization
+        // rejects by throwing. PrintExceptionContinue() would write it to
+        // stderr and assign strMiscWarning, which GetWarnings() returns at
+        // priority 1000 in getinfo, getstakinginfo, getnetworkinfo,
+        // getblockchaininfo and the GUI status bar, so any peer could set the
+        // node's user-visible warning with one malformed message.
+        //
+        // bitcoin#17762 logs these to the net category. Here they are logged
+        // unconditionally: the same catch receives internal errors thrown while
+        // a message is processed, and those belong in the default debug.log.
+        catch (const std::exception& e) {
+            LogPrintf("%s(%s, %u bytes): Exception '%s' (%s) caught", __func__, SanitizeString(strCommand), nMessageSize, e.what(), typeid(e).name());
         } catch (...) {
-            PrintExceptionContinue(nullptr, "ProcessMessages()");
+            LogPrintf("%s(%s, %u bytes): Unknown exception caught", __func__, SanitizeString(strCommand), nMessageSize);
         }
 
         if (!fRet)
