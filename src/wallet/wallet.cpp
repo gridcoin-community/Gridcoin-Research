@@ -1745,7 +1745,9 @@ void CWallet::TransactionReplacedInMempool(const CTransactionRef& tx)
     if (EraseFromWallet(hash)) {
         // Without this the erased tx lingers in derived views (tx tables,
         // coin lists) until restart. CT_DELETED handlers touch only the hash
-        // and expect no wallet locks held.
+        // and need no wallet lock. The declaration requires cs_main, which is
+        // what WalletTxStore::prime's producer exclusion needs from every
+        // CT_DELETED site.
         NotifyTransactionChanged(this, hash, CT_DELETED);
     }
 }
@@ -5302,8 +5304,9 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
 
     // cs_main is required by the CT_UPDATED notification contract below (and
     // guards the txindex reads). Callers either already hold it
-    // (ReorganizeChain) or hold neither lock (init, checkwallet/repairwallet
-    // RPCs), so taking both here is safe in the canonical order.
+    // (ReorganizeChain, and init for its whole wallet-load block) or hold
+    // neither lock (the checkwallet/repairwallet RPCs), so taking both here
+    // is safe in the canonical order.
     LOCK2(cs_main, cs_wallet);
     vector<CWalletTx*> vCoins;
     vCoins.reserve(mapWallet.size());
