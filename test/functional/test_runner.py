@@ -184,6 +184,8 @@ BASE_SCRIPTS = [
     'p2p_psgt_relay.py',
     'p2p_psgt_orphan.py',
     'p2p_ping.py',
+    'p2p_addrv2_relay.py',
+    'feature_cjdns_startup.py',
     'rpc_help.py',
     'rpc_signmessage.py',
     'rpc_rawtransaction.py',

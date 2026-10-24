@@ -131,6 +131,11 @@ void BanMan::Ban(const CNetAddr& net_addr, const BanReason& ban_reason, int64_t 
 
 void BanMan::Ban(const CSubNet& sub_net, const BanReason& ban_reason, int64_t ban_time_offset, bool since_unix_epoch)
 {
+    // A CSubNet can be invalid, e.g. one built from a Tor v3 address, which
+    // banlist.dat cannot store. Never insert it: it would ban nothing and show
+    // up as a phantom ::/0 entry sharing the slot of a real ::/0 ban.
+    if (!sub_net.IsValid()) return;
+
     CBanEntry ban_entry(GetTime(), ban_reason);
 
     int64_t normalized_ban_time_offset = ban_time_offset;
