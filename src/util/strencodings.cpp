@@ -4,6 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <util/strencodings.h>
+#include <limits>
 #include <util/string.h>
 
 #include <tinyformat.h>
@@ -328,6 +329,18 @@ bool ParseInt32(const std::string& str, int32_t* out)
 bool ParseInt64(const std::string& str, int64_t* out)
 {
     return ParseIntegral<int64_t>(str, out);
+}
+
+bool ParseUInt8(const std::string& str, uint8_t* out)
+{
+    uint32_t value;
+    if (!ParseUInt32(str, &value) || value > std::numeric_limits<uint8_t>::max()) {
+        return false;
+    }
+    if (out != nullptr) {
+        *out = static_cast<uint8_t>(value);
+    }
+    return true;
 }
 
 bool ParseUInt32(const std::string& str, uint32_t* out)
