@@ -920,8 +920,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 addr.nTime = nNow - 5 * 24 * 60 * 60;
             pfrom->AddAddressKnown(addr);
             bool fReachable = IsReachable(addr);
-            // bitcoin#23077: CJDNS gossip/storage is useful even when this host
-            // cannot dial CJDNS. The reachability option only controls dialing.
+            // Gridcoin choice: relay and store CJDNS addresses even when this
+            // host cannot dial CJDNS (-cjdnsreachable unset), so peers that can
+            // reach CJDNS still learn them. Reachability only gates dialing.
             const bool fRelayable = fReachable || addr.IsCJDNS();
 
             if (addr.nTime > nSince && !pfrom->fGetAddr && vAddr.size() <= 10 && addr.IsRoutable())
