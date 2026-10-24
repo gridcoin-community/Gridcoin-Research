@@ -43,7 +43,8 @@ HunterGate(
 # TARGET=macos, and any plain cmake invocation -- would stamp the bundle with an
 # empty minimum. The Intel CI job passes the same value explicitly
 # (MACOS_DEPLOYMENT_TARGET in .github/workflows/cmake_production.yml); this makes
-# local bundles agree with the released ones instead of depending on the caller.
+# a local Intel bundle agree with the released one, unless the Mac doing the
+# build runs an older macOS or MACOSX_DEPLOYMENT_TARGET is set (both below).
 # The Apple Silicon job declares a higher floor; see below.
 #
 # FORCE is required, not tidiness. On macOS, CMake's own
@@ -64,13 +65,53 @@ HunterGate(
 #
 # 14.0 is what the Intel dependency stack supports: every library the Intel CI
 # job links is built on macOS 14 and carries minos 14.0 (see
-# contrib/devtools/macos-pinned-kegs.txt for how that is held true), and Qt 6
-# does not support anything below macOS 13. The Apple Silicon CI job declares
-# 15.0 instead, because Homebrew has stopped building Apple Silicon bottles for
-# macOS 14; a local Apple Silicon bundle meant to match the release needs
-# -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0.
+# contrib/devtools/macos-pinned-kegs.txt for how that is held true), and Qt 6.10
+# and later do not support anything below macOS 13. The Apple Silicon CI job
+# declares 15.0 instead, because Homebrew has stopped building Apple Silicon
+# bottles for macOS 14; a local Apple Silicon bundle meant to match the release
+# needs -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0.
+#
+# The default is never above the Mac doing the build. Built for 14.0 on macOS
+# 12, a bundle would not launch on the machine that built it; so a Mac older
+# than macOS 14 gets its own version instead: the major version from macOS 11
+# on (12.0 on Monterey), and 10.x before that, macOS 10 being versioned by its
+# minor number. That is below every floor a release supports, and configure
+# warns about it. CMAKE_HOST_APPLE is set this early but
+# CMAKE_HOST_SYSTEM_VERSION is not, hence sw_vers.
+#
+# A MACOSX_DEPLOYMENT_TARGET in the environment is used as given, ahead of this
+# default, as Darwin-Initialize.cmake itself would use it; only an explicit -D
+# comes before it.
 if(NOT CMAKE_TOOLCHAIN_FILE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "Minimum macOS version (ignored off Apple platforms)" FORCE)
+    set(_macos_floor "14.0")
+    if(NOT "$ENV{MACOSX_DEPLOYMENT_TARGET}" STREQUAL "")
+        set(_macos_floor "$ENV{MACOSX_DEPLOYMENT_TARGET}")
+    elseif(CMAKE_HOST_APPLE)
+        execute_process(COMMAND sw_vers -productVersion
+            OUTPUT_VARIABLE _macos_host_version
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE _macos_sw_vers_status
+            ERROR_QUIET)
+        if(_macos_sw_vers_status EQUAL 0 AND _macos_host_version MATCHES "^(10\\.[0-9]+|[0-9]+)")
+            set(_macos_host_floor "${CMAKE_MATCH_1}")
+            if(NOT _macos_host_floor MATCHES "\\.")
+                string(APPEND _macos_host_floor ".0")
+            endif()
+            if(_macos_host_floor VERSION_LESS _macos_floor)
+                set(_macos_floor "${_macos_host_floor}")
+                message(WARNING "This Mac runs macOS ${_macos_host_version}, so the build targets "
+                    "macOS ${_macos_floor} instead of 14.0, and the app will need macOS "
+                    "${_macos_floor} or newer. Releases require macOS 14 (Intel) or 15 (Apple "
+                    "Silicon). Pass -DCMAKE_OSX_DEPLOYMENT_TARGET=<version>, or set "
+                    "MACOSX_DEPLOYMENT_TARGET, to choose the target yourself.")
+            endif()
+        endif()
+    endif()
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "${_macos_floor}" CACHE STRING "Minimum macOS version (ignored off Apple platforms)" FORCE)
+    unset(_macos_floor)
+    unset(_macos_host_version)
+    unset(_macos_host_floor)
+    unset(_macos_sw_vers_status)
 endif()
 
 project("Gridcoin"
