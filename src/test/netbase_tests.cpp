@@ -403,6 +403,31 @@ BOOST_AUTO_TEST_CASE(netbase_getgroup)
 }
 
 
+BOOST_AUTO_TEST_CASE(subnet_cjdns_host_ban)
+{
+    const bool was_limited = IsLimited(NET_CJDNS);
+    SetReachable(NET_CJDNS, true);
+    const CService ipv6 = LookupNumeric("fc00:1:2:3:4:5:6:7", 32749);
+    const CService cjdns = MaybeFlipIPv6toCJDNS(ipv6);
+    BOOST_REQUIRE(ipv6.IsIPv6());
+    BOOST_REQUIRE(cjdns.IsCJDNS());
+
+    // A ban taken on the CJDNS-typed address is stored IPv6-typed...
+    const CSubNet from_cjdns(cjdns);
+    BOOST_CHECK(from_cjdns.IsValid());
+    BOOST_CHECK(from_cjdns == CSubNet(ipv6));
+    BOOST_CHECK_EQUAL(from_cjdns.ToString(), "fc00:1:2:3:4:5:6:7/128");
+    // ...and matches the host whichever way it is typed.
+    BOOST_CHECK(from_cjdns.Match(cjdns));
+    BOOST_CHECK(from_cjdns.Match(ipv6));
+    BOOST_CHECK(CSubNet(ipv6).Match(cjdns));
+    BOOST_CHECK(!from_cjdns.Match(MaybeFlipIPv6toCJDNS(LookupNumeric("fc00:1:2:3:4:5:6:8", 32749))));
+    // An IPv6 range covering fc00::/8 also catches CJDNS-typed peers.
+    BOOST_CHECK(CSubNet(LookupNumeric("fc00::", 0), 8).Match(cjdns));
+
+    SetReachable(NET_CJDNS, !was_limited);
+}
+
 BOOST_AUTO_TEST_CASE(subnet_cidr_uint8_bounds)
 {
     uint8_t value = 42;
@@ -410,7 +435,7 @@ BOOST_AUTO_TEST_CASE(subnet_cidr_uint8_bounds)
     BOOST_CHECK_EQUAL(value, 0);
     BOOST_CHECK(ParseUInt8("255", &value));
     BOOST_CHECK_EQUAL(value, 255);
-    for (const std::string& invalid : {"", "-1", "256", "300", "65536", "4294967295", " 1", "1 ", "1x"}) {
+    for (const char* invalid : {"", "-1", "256", "300", "65536", "4294967295", " 1", "1 ", "1x"}) {
         value = 42;
         BOOST_CHECK(!ParseUInt8(invalid, &value));
         BOOST_CHECK_EQUAL(value, 42);

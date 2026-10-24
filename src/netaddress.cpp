@@ -43,7 +43,7 @@ CNetAddr::BIP155Network CNetAddr::GetBIP155Network() const
     case NET_INTERNAL:   // should have been handled before calling this function
     case NET_UNROUTABLE: // m_net is never and should not be set to NET_UNROUTABLE
     case NET_MAX:        // m_net is never and should not be set to NET_MAX
-        assert(false); // LINT-OK-ASSERT: m_net is never CJDNS/UNROUTABLE/MAX; INTERNAL is handled by every caller first
+        assert(false); // LINT-OK-ASSERT: m_net is never UNROUTABLE/MAX; INTERNAL is handled by every caller first
     } // no default case, so the compiler can warn about missing cases
 
     assert(false); // LINT-OK-ASSERT: unreachable, the switch above covers every enum value
@@ -128,11 +128,11 @@ void CNetAddr::SetIP(const CNetAddr& ipIn)
         assert(ipIn.m_addr.size() == ADDR_INTERNAL_SIZE); // LINT-OK-ASSERT: m_addr size always matches m_net, enforced by every setter
         break;
     case NET_CJDNS:
-        assert(ipIn.m_addr.size() == ADDR_CJDNS_SIZE);
+        assert(ipIn.m_addr.size() == ADDR_CJDNS_SIZE); // LINT-OK-ASSERT: m_addr size always matches m_net, enforced by every setter
         break;
     case NET_UNROUTABLE:
     case NET_MAX:
-        assert(false); // LINT-OK-ASSERT: m_net is never set to CJDNS/UNROUTABLE/MAX
+        assert(false); // LINT-OK-ASSERT: m_net is never set to UNROUTABLE/MAX
     } // no default case, so the compiler can warn about missing cases
 
     m_net = ipIn.m_net;
@@ -942,7 +942,9 @@ CSubNet::CSubNet(const CNetAddr& addr) : CSubNet()
     // Gridcoin BanMan uses single-address subnets for Tor host bans.
     // Retain v2 host bans; v3 cannot fit the legacy subnet mask.
     // CIDR and explicit netmasks remain IP-only.
-    valid = addr.IsIPv4() || addr.IsIPv6() ||
+    // CJDNS host bans are stored IPv6-typed (same 16 bytes), so a ban holds
+    // whether the peer's address was later flipped to NET_CJDNS or not.
+    valid = addr.IsIPv4() || addr.IsIPv6() || addr.IsCJDNS() ||
             (addr.IsTor() && addr.m_addr.size() == ADDR_TORV2_SIZE);
     if (!valid) {
         return;
@@ -953,6 +955,9 @@ CSubNet::CSubNet(const CNetAddr& addr) : CSubNet()
     memset(netmask, 0xFF, sizeof(netmask));
 
     network = addr;
+    if (network.IsCJDNS()) {
+        network.m_net = NET_IPV6;
+    }
     if (network.IsIPv4()) {
         std::fill(netmask + ADDR_IPV4_SIZE, std::end(netmask), 0xFF);
     }
@@ -964,7 +969,9 @@ CSubNet::CSubNet(const CNetAddr& addr) : CSubNet()
  */
 bool CSubNet::Match(const CNetAddr &addr) const
 {
-    if (!valid || !addr.IsValid() || network.m_net != addr.m_net ||
+    // CJDNS addresses are compared by their IPv6 bytes (see CSubNet(addr)).
+    const Network addr_net{addr.IsCJDNS() ? NET_IPV6 : addr.m_net};
+    if (!valid || !addr.IsValid() || network.m_net != addr_net ||
         network.m_addr.size() != addr.m_addr.size() ||
         addr.m_addr.size() > sizeof(netmask))
         return false;
