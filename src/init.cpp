@@ -2501,7 +2501,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     if (!gArgs.GetBoolArg("-cjdnsreachable", false)) {
-        if (gArgs.IsArgSet("-onlynet") && !IsLimited(NET_CJDNS)) {
+        if (!gArgs.GetArgs("-onlynet").empty() && !IsLimited(NET_CJDNS)) {
             return InitError(_("Outbound connections restricted to CJDNS (-onlynet=cjdns) but "
                                "-cjdnsreachable is not provided"));
         }
