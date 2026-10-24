@@ -1690,6 +1690,9 @@ void CConnman::ThreadOpenAddedConnections2()
         vector<CService> vservNode(0);
         if(Lookup(strAddNode.c_str(), vservNode, Params().GetDefaultPort(), GetNameLookup(), 0))
         {
+            // Match getaddednodeinfo: fc00::/8 entries are CJDNS when reachable.
+            for (auto& service : vservNode)
+                service = MaybeFlipIPv6toCJDNS(service);
             vservAddressesToAdd.push_back(vservNode);
             {
                 LOCK(cs_setservAddNodeAddresses);
