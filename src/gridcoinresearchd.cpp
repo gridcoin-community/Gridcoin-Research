@@ -179,12 +179,15 @@ bool AppInit(int argc, char* argv[])
         /** Check mainnet config file first in case testnet is set there and not in command line args **/
         SelectParams(CBaseChainParams::MAIN);
 
-        // Currently unused.
         std::string error_msg;
+        const auto config_error = [&error_msg] {
+            return InitError(strprintf("Config file cannot be parsed%s. Cannot continue.\n",
+                                       error_msg.empty() ? "" : ": " + error_msg));
+        };
 
         if (!gArgs.ReadConfigFiles(error_msg, true))
         {
-            return InitError("Config file cannot be parsed. Cannot continue.\n");
+            return config_error();
         }
 
         SelectParams(gArgs.GetChainName());
@@ -192,7 +195,7 @@ bool AppInit(int argc, char* argv[])
         // reread config file after correct chain is selected
         if (!gArgs.ReadConfigFiles(error_msg, true))
         {
-            return InitError("Config file cannot be parsed. Cannot continue.\n");
+            return config_error();
         }
 
         // Command-line RPC  - single commands execute and exit. Local to this

@@ -35,6 +35,7 @@
 #include "node/psgt_pool.h"
 #include <util/check.h>
 #include <util/proc_hardening.h>
+#include <util/strencodings.h>
 #include <util/string.h>
 #include <util/syserror.h>
 #include "consensus/consensus.h"  // MAX_BLOCK_SIZE_GEN
@@ -1774,6 +1775,24 @@ bool AppInit2(ThreadHandlerPtr threads)
                           "this per KB will be left out of blocks this node stakes."));
         }
     }
+
+#ifdef WIN32
+    // runCommand() hands a command to the wide-character API, so it refuses one that is not
+    // UTF-8 -- from a configuration file saved in a legacy code page -- and logs that each time
+    // the command would have run. Say so once here, where the operator will see it.
+    // GetArgs, not GetArg: -shutdownnotify runs every value it is given.
+    for (const char* notify : {"-alertnotify", "-blocknotify", "-pollnotify", "-projectnotify", "-psgtnotify",
+                               "-shutdownnotify", "-startupnotify", "-walletnotify"}) {
+        for (const std::string& cmd : gArgs.GetArgs(notify)) {
+            try {
+                Utf8ToWide(cmd);
+            } catch (const std::range_error&) {
+                InitWarning(strprintf(_("Warning: the %s command is not valid UTF-8, so it will not be run. "
+                                        "Save the configuration file as UTF-8."), notify));
+            }
+        }
+    }
+#endif
 
     fConfChange = gArgs.GetBoolArg("-confchange", false);
     fEnforceCanonical = gArgs.GetBoolArg("-enforcecanonical", true);

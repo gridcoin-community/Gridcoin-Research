@@ -929,14 +929,16 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    // Not currently useful.
     std::string error_msg;
 
     if (!gArgs.ReadConfigFiles(error_msg, true)) {
-        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
+        // The reason, when ReadConfigFiles gives one, follows the general message.
+        const std::string reason = error_msg.empty() ? "" : "\n\n" + error_msg;
+        ThreadSafeMessageBox(strprintf("Error reading configuration file.%s\n", reason),
                 "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME, QObject::tr("Error: Cannot read configuration file. Please check the "
-                                                                 "path and format of the file."));
+                                                                 "path and format of the file.")
+                                                         + QString::fromStdString(reason));
         return EXIT_FAILURE;
     }
 
