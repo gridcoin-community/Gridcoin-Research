@@ -292,6 +292,8 @@ BASE_SCRIPTS = [
     # feature_v15_spacing.py: crosses v15 on regtest and checks both retarget rules, kernel easing,
     # the miner's stamp guard and the penalty-free future band.
     'feature_v15_spacing.py',
+    # feature_v15_six_heights.py: all six v15 heights at one block, the first superblocks past it, and a reorg back.
+    'feature_v15_six_heights.py',
     # feature_reorg_conflicted.py: a wallet transaction conflicted by a block
     # stops being conflicted when that block is disconnected, provided whatever
     # took its outpoint went with the block; also the refused, descendant and
