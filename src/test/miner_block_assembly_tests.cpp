@@ -3560,4 +3560,129 @@ BOOST_FIXTURE_TEST_CASE(abandoning_a_spend_announces_the_parent_whose_output_it_
     mempool.clear();
 }
 
+//!
+//! A send the pool refuses at commit is abandoned there. CommitTransaction
+//! records the send and marks its inputs spent before the pool sees it. The
+//! refusal here is txn-mempool-conflict: the pool holds a spend of one input
+//! that the wallet never recorded, as in
+//! abandoning_a_spend_keeps_an_input_the_pool_spends_marked. That is the
+//! conflict a real send can meet: every caller holds cs_main from coin
+//! selection through the commit, so a spend the wallet had recorded would have
+//! kept the coin out of selection. The user is told the send failed, so its
+//! other input goes back to coin selection while the rival's stays marked,
+//! and the resend pass never offers the send to peers, not even once nothing
+//! in the pool conflicts with it.
+//!
+BOOST_FIXTURE_TEST_CASE(a_send_the_pool_refuses_at_commit_is_abandoned_and_releases_its_other_input, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    CTransaction send = CreateSignedSpend({{PremineCoinbase(), coins[0].n}, {PremineCoinbase(), coins[1].n}}, 400000);
+    BOOST_REQUIRE_GE(CAmount{400000}, GetMinFee(send));
+    const uint256 send_hash = send.GetHash();
+
+    CTransaction rival = CreateSpend(PremineCoinbase(), coins[0].n, 410000, 1);
+    const uint256 rival_hash = rival.GetHash();
+
+    LOCK(cs_main);
+
+    const std::string leaked = DescribeRelayableCandidates();
+    BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+    CValidationState state_alone;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, send, state_alone, nullptr, 0, /*test_only=*/true),
+                          "the pool would refuse the send without the rival: " + state_alone.GetRejectReason());
+
+    CValidationState state_rival;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, rival, state_rival, nullptr),
+                          "rival spend rejected: " + state_rival.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(!InWallet(rival_hash), "the wallet recorded a rival it was not listening for");
+
+    CValidationState state_conflict;
+    BOOST_REQUIRE(!AcceptToMemoryPool(mempool, send, state_conflict, nullptr, 0, /*test_only=*/true));
+    BOOST_REQUIRE_EQUAL(state_conflict.GetRejectReason(), "txn-mempool-conflict");
+
+    CWalletTx wtx(pwalletMain, send);
+    CReserveKey reservekey(pwalletMain);
+    BOOST_REQUIRE_MESSAGE(!pwalletMain->CommitTransaction(wtx, reservekey),
+                          "the pool accepted a send that conflicts with a pooled spend");
+    BOOST_REQUIRE(!mempool.exists(send_hash));
+    BOOST_REQUIRE_MESSAGE(InWallet(send_hash), "CommitTransaction did not record the send");
+
+    BOOST_CHECK_MESSAGE(IsAbandonedInWallet(send_hash), "a send the pool refused at commit is not abandoned");
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "a send the pool refused at commit still holds an input nothing else spends");
+    BOOST_CHECK_MESSAGE(OwnOutputSpent(coins[0].hash, coins[0].n),
+                        "abandoning the refused send released the input the pooled rival spends");
+
+    BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+
+    int check_mismatch = 0;
+    int64_t check_amount = 0;
+    pwalletMain->FixSpentCoins(check_mismatch, check_amount, /*fCheckOnly=*/true);
+    BOOST_CHECK_EQUAL(check_mismatch, 0);
+
+    // With the rival gone the pool would take the send, so a resend pass that
+    // offered an abandoned transaction back would count it here.
+    mempool.clear();
+    BOOST_CHECK_EQUAL(pwalletMain->ResendWalletTransactions(/*fForce=*/true), 0u);
+}
+
+//!
+//! A send committed again after its abandonment is released again. A retry
+//! that rebuilds the same inputs, outputs and time, as a scripted
+//! consolidateunspent retry within the same second can, commits the identical
+//! transaction. AddToWallet merges it into the abandoned entry, which keeps its
+//! state, and CommitTransaction marks the inputs spent once more. The pool
+//! refuses it for the same reason, and the abandon that follows has to release
+//! them again rather than stop at "already abandoned".
+//!
+BOOST_FIXTURE_TEST_CASE(a_send_committed_again_after_its_abandonment_is_released_again, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    CTransaction send = CreateSignedSpend({{PremineCoinbase(), coins[0].n}, {PremineCoinbase(), coins[1].n}}, 470000);
+    BOOST_REQUIRE_GE(CAmount{470000}, GetMinFee(send));
+    const uint256 send_hash = send.GetHash();
+
+    CTransaction rival = CreateSpend(PremineCoinbase(), coins[0].n, 480000, 1);
+    const uint256 rival_hash = rival.GetHash();
+
+    LOCK(cs_main);
+
+    const std::string leaked = DescribeRelayableCandidates();
+    BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+    CValidationState state_rival;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, rival, state_rival, nullptr),
+                          "rival spend rejected: " + state_rival.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(!InWallet(rival_hash), "the wallet recorded a rival it was not listening for");
+
+    {
+        CWalletTx wtx(pwalletMain, send);
+        CReserveKey reservekey(pwalletMain);
+        BOOST_REQUIRE(!pwalletMain->CommitTransaction(wtx, reservekey));
+    }
+    BOOST_REQUIRE(IsAbandonedInWallet(send_hash));
+    BOOST_REQUIRE(!OwnOutputSpent(coins[1].hash, coins[1].n));
+
+    {
+        CWalletTx wtx(pwalletMain, send);
+        CReserveKey reservekey(pwalletMain);
+        BOOST_REQUIRE(!pwalletMain->CommitTransaction(wtx, reservekey));
+    }
+    BOOST_CHECK(IsAbandonedInWallet(send_hash));
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "a send committed again after its abandonment still holds an input nothing else spends");
+    BOOST_CHECK(OwnOutputSpent(coins[0].hash, coins[0].n));
+
+    mempool.clear();
+}
+
 BOOST_AUTO_TEST_SUITE_END()
