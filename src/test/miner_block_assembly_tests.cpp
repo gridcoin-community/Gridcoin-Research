@@ -2839,10 +2839,12 @@ BOOST_AUTO_TEST_SUITE_END()
 //!
 BOOST_AUTO_TEST_SUITE(wallet_standing_spend_chain_tests, *boost::unit_test::fixture<grc_test::RegtestChainSetup>() *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::POOL_REGISTER>>())
 
+using miner_block_assembly_tests::CountNotices;
 using miner_block_assembly_tests::CreateSignedSpend;
 using miner_block_assembly_tests::DescribeRelayableCandidates;
 using miner_block_assembly_tests::DropFromPoolSilently;
 using miner_block_assembly_tests::InWallet;
+using miner_block_assembly_tests::IsAbandonedInWallet;
 using miner_block_assembly_tests::MaxSizeRestorer;
 using miner_block_assembly_tests::OwnOutputSpent;
 using miner_block_assembly_tests::SignalsForThisCase;
@@ -3382,6 +3384,178 @@ BOOST_FIXTURE_TEST_CASE(a_grandchild_of_a_spend_the_pool_conflicts_releases_its_
     BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
                         "a grandchild of a spend the pool conflicts still holds its confirmed co-input");
     BOOST_CHECK(OwnOutputSpent(coins[0].hash, coins[0].n));
+
+    mempool.clear();
+}
+
+//!
+//! Abandoning a spend leaves an input marked while the pool holds another
+//! spend of it, and releases the input nothing else spends. The wallet never
+//! recorded the pooled spend: it reached the pool while the wallet was not
+//! listening, as a spend from a copy of this wallet can, or one of a key
+//! imported since (the rescan reads blocks, not the pool).
+//!
+BOOST_FIXTURE_TEST_CASE(abandoning_a_spend_keeps_an_input_the_pool_spends_marked, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    CTransaction spend = CreateSignedSpend({{PremineCoinbase(), coins[0].n}, {PremineCoinbase(), coins[1].n}}, 420000);
+    BOOST_REQUIRE_GE(CAmount{420000}, GetMinFee(spend));
+    const uint256 spend_hash = spend.GetHash();
+
+    CTransaction rival = CreateSpend(PremineCoinbase(), coins[0].n, 430000, 1);
+    const uint256 rival_hash = rival.GetHash();
+
+    {
+        const SignalsForThisCase signals;
+        LOCK(cs_main);
+
+        const std::string leaked = DescribeRelayableCandidates();
+        BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+        CValidationState state_spend;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, spend, state_spend, nullptr),
+                              "spend rejected: " + state_spend.GetRejectReason());
+        BOOST_REQUIRE(InWallet(spend_hash));
+        BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+        BOOST_REQUIRE(OwnOutputSpent(coins[1].hash, coins[1].n));
+
+        DropFromPoolSilently();
+    }
+
+    LOCK(cs_main);
+
+    CValidationState state_rival;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, rival, state_rival, nullptr),
+                          "rival spend rejected: " + state_rival.GetRejectReason());
+    BOOST_REQUIRE_MESSAGE(!InWallet(rival_hash), "the wallet recorded a rival it was not listening for");
+
+    BOOST_REQUIRE(pwalletMain->AbandonTransaction(spend_hash));
+    BOOST_REQUIRE(IsAbandonedInWallet(spend_hash));
+
+    BOOST_CHECK_MESSAGE(OwnOutputSpent(coins[0].hash, coins[0].n),
+                        "abandoning a spend released an input the pool spends");
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "abandoning a spend did not release an input nothing else spends");
+
+    mempool.clear();
+}
+
+//!
+//! The same for an input a block spends. The block's spend is erased from the
+//! wallet after the block, so nothing the wallet holds spends the input: the
+//! state of a wallet copy that has not seen the other copy's confirmed spend.
+//! FixSpentCoins marks such an input spent from the index; abandoning must not
+//! clear it first.
+//!
+BOOST_FIXTURE_TEST_CASE(abandoning_a_spend_keeps_an_input_a_block_spends_marked, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 2u);
+
+    CTransaction spend = CreateSignedSpend({{PremineCoinbase(), coins[0].n}, {PremineCoinbase(), coins[1].n}}, 440000);
+    BOOST_REQUIRE_GE(CAmount{440000}, GetMinFee(spend));
+    const uint256 spend_hash = spend.GetHash();
+
+    CTransaction rival = CreateSpend(PremineCoinbase(), coins[0].n, 450000, 1);
+    const uint256 rival_hash = rival.GetHash();
+
+    {
+        const SignalsForThisCase signals;
+        LOCK(cs_main);
+
+        const std::string leaked = DescribeRelayableCandidates();
+        BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+        CValidationState state_spend;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, spend, state_spend, nullptr),
+                              "spend rejected: " + state_spend.GetRejectReason());
+        BOOST_REQUIRE(InWallet(spend_hash));
+        BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+        BOOST_REQUIRE(OwnOutputSpent(coins[1].hash, coins[1].n));
+
+        DropFromPoolSilently();
+    }
+
+    {
+        LOCK(cs_main);
+        CValidationState state_rival;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, rival, state_rival, nullptr),
+                              "rival spend rejected: " + state_rival.GetRejectReason());
+    }
+
+    CBlock block;
+    std::string err;
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+    BOOST_REQUIRE_MESSAGE(Contains(block.vtx, rival), "the block left out the rival spend");
+
+    LOCK(cs_main);
+
+    pwalletMain->EraseFromWallet(rival_hash);
+    BOOST_REQUIRE(!InWallet(rival_hash));
+    BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+
+    BOOST_REQUIRE(pwalletMain->AbandonTransaction(spend_hash));
+    BOOST_REQUIRE(IsAbandonedInWallet(spend_hash));
+
+    BOOST_CHECK_MESSAGE(OwnOutputSpent(coins[0].hash, coins[0].n),
+                        "abandoning a spend released an input a block spends");
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(coins[1].hash, coins[1].n),
+                        "abandoning a spend did not release an input nothing else spends");
+
+    mempool.clear();
+}
+
+//!
+//! Abandoning a spend announces each parent whose output it released. A
+//! listener that re-reads a transaction's outputs on CT_UPDATED, as the GUI coin
+//! store does, would otherwise keep the released coin out of its list:
+//! committing the spend announced the parent when it marked the output, and the
+//! release is the matching announcement.
+//!
+BOOST_FIXTURE_TEST_CASE(abandoning_a_spend_announces_the_parent_whose_output_it_released, grc_test::WalletTxScope)
+{
+    mempool.clear();
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    BOOST_REQUIRE_GE(coins.size(), 1u);
+
+    CTransaction spend = CreateSpend(PremineCoinbase(), coins[0].n, 460000, 1);
+    BOOST_REQUIRE_GE(CAmount{460000}, GetMinFee(spend));
+    const uint256 spend_hash = spend.GetHash();
+
+    {
+        const SignalsForThisCase signals;
+        LOCK(cs_main);
+
+        const std::string leaked = DescribeRelayableCandidates();
+        BOOST_REQUIRE_MESSAGE(leaked.empty(), "relayable candidates left by a sibling case: " << leaked);
+
+        CValidationState state_spend;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, spend, state_spend, nullptr),
+                              "spend rejected: " + state_spend.GetRejectReason());
+        BOOST_REQUIRE(InWallet(spend_hash));
+        BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+
+        DropFromPoolSilently();
+    }
+
+    std::vector<std::pair<uint256, ChangeType>> seen;
+    boost::signals2::scoped_connection watch = pwalletMain->NotifyTransactionChanged.connect(
+        [&seen](CWallet*, const uint256& hash, ChangeType status) { seen.emplace_back(hash, status); });
+
+    LOCK(cs_main);
+
+    const size_t seen_before = seen.size();
+    BOOST_REQUIRE(pwalletMain->AbandonTransaction(spend_hash));
+    BOOST_REQUIRE(!OwnOutputSpent(coins[0].hash, coins[0].n));
+
+    BOOST_CHECK_EQUAL(CountNotices(seen, seen_before, PremineCoinbase().GetHash(), CT_UPDATED), 1);
 
     mempool.clear();
 }

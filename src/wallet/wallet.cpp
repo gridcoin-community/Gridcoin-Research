@@ -5505,6 +5505,36 @@ unsigned int CWallet::ReleaseTransactionInputs(const CTransaction& tx, CWalletDB
         return contested->count(prevout) != 0;
     };
 
+    // An output the pool or the chain already spends keeps its bit as well, whether
+    // or not the wallet holds that spend. One made from a copy of this wallet, or
+    // with a key imported since, need never reach it: a rescan reads blocks, not the
+    // pool. Clearing the bit would hand the output to coin selection, and a send
+    // that selects it would be refused. FixSpentCoins applies the same two rules: it
+    // does not clear a bit a pooled spend accounts for, and it sets one the index
+    // records.
+    std::unique_ptr<CTxDB> txdb;
+    const auto spent_in_pool_or_chain = [&](const COutPoint& prevout) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+        const char* spender = nullptr;
+        {
+            LOCK(mempool.cs);
+            if (mempool.mapNextTx.count(prevout)) spender = "the mempool holds a spend of it";
+        }
+
+        if (!spender) {
+            if (!txdb) txdb = std::make_unique<CTxDB>("r");
+
+            CTxIndex txindex;
+            if (txdb->ReadTxIndex(prevout.hash, txindex)
+                && prevout.n < txindex.vSpent.size() && !txindex.vSpent[prevout.n].IsNull()) {
+                spender = "a transaction in a block spends it";
+            }
+        }
+
+        return spender;
+    };
+
+    std::set<uint256> parents_released;
+
     // Same reversal BlockDisconnected performs for a transaction that has left the
     // chain: clear the parents' spent bits so the coins become selectable again.
     for (const auto& txin : tx.vin) {
@@ -5535,10 +5565,27 @@ unsigned int CWallet::ReleaseTransactionInputs(const CTransaction& tx, CWalletDB
             continue;
         }
 
+        if (const char* spender = spent_in_pool_or_chain(txin.prevout)) {
+            LogPrintf("INFO: %s: left output %s:%u marked spent - %s.",
+                      __func__, txin.prevout.hash.ToString(), txin.prevout.n, spender);
+            continue;
+        }
+
         parent_wtx.MarkUnspent(txin.prevout.n);
         parent_wtx.MarkDirty();
         if (pwalletdb) parent_wtx.WriteToDisk(pwalletdb);
         ++released;
+        parents_released.insert(txin.prevout.hash);
+    }
+
+    // Announce each parent once, as BlockDisconnected does after the same
+    // reversal. Whoever spent these outputs announced the parent when it marked
+    // them, and a listener that re-reads a transaction's outputs on CT_UPDATED,
+    // as the GUI coin store does, keeps them out of its list until this matching
+    // announcement. cs_main and cs_wallet, asserted above, satisfy the
+    // CT_UPDATED handler contract.
+    for (const uint256& parent_hash : parents_released) {
+        NotifyTransactionChanged(this, parent_hash, CT_UPDATED);
     }
 
     return released;
