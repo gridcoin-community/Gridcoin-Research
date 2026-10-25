@@ -24,7 +24,7 @@ bool SerializeDB(Stream& stream, const Data& data)
 {
     // Write and commit header, data
     try {
-        CHashWriter hasher(SER_DISK, CLIENT_VERSION);
+        CHashWriter hasher(stream.GetType(), stream.GetVersion());
         stream << Params().MessageStart() << data;
         hasher << Params().MessageStart() << data;
         stream << hasher.GetHash();
@@ -36,7 +36,7 @@ bool SerializeDB(Stream& stream, const Data& data)
 }
 
 template <typename Data>
-bool SerializeFileDB(const std::string& prefix, const fs::path& path, const Data& data)
+bool SerializeFileDB(const std::string& prefix, const fs::path& path, const Data& data, int version)
 {
     // Generate random temporary filename
     const uint16_t randv{GetRand<uint16_t>()};
@@ -45,7 +45,7 @@ bool SerializeFileDB(const std::string& prefix, const fs::path& path, const Data
     // open temp output file, and associate with CAutoFile
     fs::path pathTmp = GetDataDir() / tmpfn;
     FILE *file = fsbridge::fopen(pathTmp, "wb");
-    CAutoFile fileout(file, SER_DISK, CLIENT_VERSION);
+    CAutoFile fileout(file, SER_DISK, version);
     if (fileout.IsNull()) {
         fileout.fclose();
         remove(pathTmp);
@@ -106,11 +106,11 @@ bool DeserializeDB(Stream& stream, Data& data, bool fCheckSum = true)
 }
 
 template <typename Data>
-bool DeserializeFileDB(const fs::path& path, Data& data)
+bool DeserializeFileDB(const fs::path& path, Data& data, int version)
 {
     // open input file, and associate with CAutoFile
     FILE *file = fsbridge::fopen(path, "rb");
-    CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
+    CAutoFile filein(file, SER_DISK, version);
     if (filein.IsNull())
         return error("%s: Failed to open file %s", __func__, path.string());
 
@@ -125,12 +125,12 @@ CBanDB::CBanDB(fs::path ban_list_path) : m_ban_list_path(std::move(ban_list_path
 
 bool CBanDB::Write(const banmap_t& banSet)
 {
-    return SerializeFileDB("banlist", m_ban_list_path, banSet);
+    return SerializeFileDB("banlist", m_ban_list_path, banSet, CLIENT_VERSION);
 }
 
 bool CBanDB::Read(banmap_t& banSet)
 {
-    return DeserializeFileDB(m_ban_list_path, banSet);
+    return DeserializeFileDB(m_ban_list_path, banSet, CLIENT_VERSION);
 }
 
 CAddrDB::CAddrDB()
@@ -140,12 +140,12 @@ CAddrDB::CAddrDB()
 
 bool CAddrDB::Write(const AddrMan& addr)
 {
-    return SerializeFileDB("peers", pathAddr, addr);
+    return SerializeFileDB("peers", pathAddr, addr, CLIENT_VERSION);
 }
 
 bool CAddrDB::Read(AddrMan& addr)
 {
-    return DeserializeFileDB(pathAddr, addr);
+    return DeserializeFileDB(pathAddr, addr, CLIENT_VERSION);
 }
 
 bool CAddrDB::Read(AddrMan& addr, CDataStream& ssPeers)
