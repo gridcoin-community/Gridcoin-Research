@@ -206,6 +206,8 @@ BASE_SCRIPTS = [
     'rpc_rawtransaction.py',
     'rpc_psgt.py',
     'rpc_psgtpool.py',
+    # rpc_pool_v15_gate.py: the POOL RPCs and the PSGT pool RPCs refuse before the v15 height, and not from it.
+    'rpc_pool_v15_gate.py',
     # rpc_votewithclaim.py: the regtest-only RPC that builds a vote claim from an
     # explicit output list, for the tally's tests.
     'rpc_votewithclaim.py',
