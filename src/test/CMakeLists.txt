@@ -17,6 +17,7 @@ add_executable(test_gridcoin
     state_guard.cpp
     gridcoin/message_contract_tests.cpp
     state_leak_detector.cpp
+    state_guard_tests.cpp
     miner_block_assembly_tests.cpp
     # SetBestChain's trust-regression revert leg, driven on the fixture chain.
     chainman_reorg_tests.cpp

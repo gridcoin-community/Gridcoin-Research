@@ -53,10 +53,31 @@
 namespace grc_test {
 
 //!
+//! \brief A registry's current entries, as the registry's key (in text form)
+//! -> a hash of that entry's full serialization. Two registries with the same
+//! count but an entry replaced or edited in place compare unequal, which a
+//! count alone cannot show, and comparing key by key lets DiffState class a
+//! shrink exactly and name the keys that changed.
+//!
+struct RegistryDigest
+{
+    std::map<std::string, uint256> entries;
+
+    size_t count() const { return entries.size(); }
+
+    bool operator==(const RegistryDigest& other) const
+    {
+        return entries == other.entries;
+    }
+    bool operator!=(const RegistryDigest& other) const { return !(*this == other); }
+};
+
+//!
 //! \brief The process globals the leak detector compares across a suite.
 //!
 //! Case scope captures only the cheap scalars; suite scope also records the
-//! mapBlockIndex key set and the registry sizes, whose accessors copy.
+//! mapBlockIndex key set and a RegistryDigest (key -> entry hash) of each
+//! registry's current entries, whose accessors copy.
 //!
 struct StateSnapshot
 {
@@ -88,10 +109,11 @@ struct StateSnapshot
     //! at its default value and an absent key are different states.
     std::map<std::string, std::string> settings;
 
-    bool has_registry_sizes{false};
-    size_t beacon_count{0};
-    size_t protocol_entry_count{0};
-    size_t scraper_count{0};
+    bool has_registries{false};
+    RegistryDigest beacons;
+    RegistryDigest protocol_entries;
+    RegistryDigest scrapers;
+    RegistryDigest pools;
 };
 
 enum class CaptureScope { CASE, SUITE };
@@ -101,10 +123,12 @@ StateSnapshot CaptureState(CaptureScope scope);
 //!
 //! \brief One invariant that differs between two snapshots.
 //!
-//! \p monotone marks the size-like fields (mempool, mapBlockIndex, registries,
+//! \p monotone marks the size-like fields (mempool, mapBlockIndex,
 //! StakingActive) for which only growth is a leak: a suite that CLEARS an
 //! earlier suite's residue is a cleaner, not a leaker, and several fixtures
 //! (RegtestChainSetup, CleanStateGuard, RegistryReset) clear on exit by design.
+//! A registry diff is monotone only when DiffState classes it as a cleaner;
+//! otherwise it is a plain change and always a leak.
 //!
 struct StateDiff
 {
@@ -119,7 +143,14 @@ struct StateDiff
     bool IsLeak() const { return !monotone || growth; }
 };
 
-std::vector<StateDiff> DiffState(const StateSnapshot& before, const StateSnapshot& after);
+//! \p baseline, when given, is the state every suite should leave behind: the
+//! leak detector passes the snapshot it took at the first suite's entry. A
+//! registry change is a cleaner, never a leak, when the registry ends equal to
+//! its baseline, or when the suite only removed entries whose keys are absent
+//! from the baseline and left every other entry unchanged. Any other registry
+//! change is a leak. A registry diff's after text names the changed keys.
+std::vector<StateDiff> DiffState(const StateSnapshot& before, const StateSnapshot& after,
+                                 const StateSnapshot* baseline = nullptr);
 
 //!
 //! \brief Restore the process globals a suite mutates.

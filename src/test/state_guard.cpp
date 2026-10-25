@@ -7,10 +7,12 @@
 #include "chainparams.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/contract/registry.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/scraper/scraper_registry.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/staking/status.h"
+#include "hash.h"
 #include "net.h"
 #include "primitives/block.h"
 #include "sync.h"
@@ -23,6 +25,9 @@
 #include <boost/test/unit_test.hpp>
 
 #include <limits>
+#include <map>
+#include <string>
+#include <vector>
 
 extern bool g_mock_deterministic_tests;
 
@@ -67,6 +72,110 @@ void Monotone(std::vector<StateDiff>& out, const char* name, size_t before, size
     out.push_back({name, strprintf("%u", before), strprintf("%u", after), /*monotone=*/true, after > before});
 }
 
+//! A registry leak report names at most this many keys; the rest are counted.
+constexpr size_t MAX_NAMED_KEYS = 5;
+
+//! Registry key (as text) -> a hash of the entry's serialization. \p key_text
+//! turns a map key into text; \p project maps an entry to a type whose
+//! serialization covers all of its fields.
+template <typename Map, typename KeyText, typename Project>
+RegistryDigest DigestMap(const Map& map, KeyText key_text, Project project)
+{
+    RegistryDigest digest;
+    for (const auto& [key, entry] : map) {
+        digest.entries[key_text(key)] = SerializeHash(project(*entry));
+    }
+    return digest;
+}
+
+//! "N entries, digest <16 hex>": one hash over every key and entry hash, so
+//! two reports of the same registry can be compared at a glance.
+std::string Describe(const RegistryDigest& d)
+{
+    CHashWriter writer(SER_GETHASH, PROTOCOL_VERSION);
+    for (const auto& [key, hash] : d.entries) writer << key << hash;
+
+    return strprintf("%u entries, digest %s", d.count(), writer.GetHash().ToString().substr(0, 16));
+}
+
+//! The keys whose entry differs between \p before and \p after, each tagged
+//! "edited", "removed" or "added": edits and removals first, then additions,
+//! each in key order.
+std::vector<std::string> ChangedKeys(const RegistryDigest& before, const RegistryDigest& after)
+{
+    std::vector<std::string> changed;
+
+    for (const auto& [key, hash] : before.entries) {
+        const auto it = after.entries.find(key);
+        if (it == after.entries.end()) {
+            changed.push_back("removed " + key);
+        } else if (it->second != hash) {
+            changed.push_back("edited " + key);
+        }
+    }
+    for (const auto& entry : after.entries) {
+        if (!before.entries.count(entry.first)) changed.push_back("added " + entry.first);
+    }
+
+    return changed;
+}
+
+//! "a, b, c, d, e ... and N more": the first MAX_NAMED_KEYS of \p changed.
+std::string NameKeys(const std::vector<std::string>& changed)
+{
+    std::string text;
+    for (size_t i = 0; i < changed.size() && i < MAX_NAMED_KEYS; ++i) {
+        // sign-compare checked: i is size_t; 0U is a non-negative literal, so both sides are unsigned.
+        if (i > 0U) text += ", ";
+        text += changed[i];
+    }
+    if (changed.size() > MAX_NAMED_KEYS) {
+        text += strprintf(" ... and %u more", changed.size() - MAX_NAMED_KEYS);
+    }
+    return text;
+}
+
+//! True when \p after is \p before with entries removed and nothing else: no
+//! key added and every surviving entry unchanged. With \p baseline, every
+//! removed key must also be absent from it, so removing an entry the first
+//! suite found is never a clean-up.
+bool OnlyRemovedResidue(const RegistryDigest& before, const RegistryDigest& after,
+                        const RegistryDigest* baseline)
+{
+    for (const auto& [key, hash] : after.entries) {
+        const auto it = before.entries.find(key);
+        if (it == before.entries.end() || it->second != hash) return false;
+    }
+
+    if (baseline == nullptr) return true;
+
+    for (const auto& entry : before.entries) {
+        if (!after.entries.count(entry.first) && baseline->entries.count(entry.first)) return false;
+    }
+
+    return true;
+}
+
+//! The classification is exact, key by key. A registry change is a cleaner
+//! when the registry ends equal to \p baseline (the state the first suite
+//! found), or when the suite only removed entries: no key added, every
+//! surviving entry unchanged, and no removed key present in \p baseline.
+//! Anything else (an edited entry, an added key, or a removed baseline key) is
+//! a leak. With no baseline, only the removal rule applies.
+void Registry(std::vector<StateDiff>& out, const char* name, const RegistryDigest& before,
+              const RegistryDigest& after, const RegistryDigest* baseline)
+{
+    if (before == after) return;
+
+    const bool cleaner = (baseline != nullptr && after == *baseline) || OnlyRemovedResidue(before, after, baseline);
+
+    // A cleaner is reported as a monotone field that did not grow; anything
+    // else as a plain field, which IsLeak() always fails. Either way the after
+    // text names the keys that changed.
+    out.push_back({name, Describe(before), strprintf("%s [%s]", Describe(after), NameKeys(ChangedKeys(before, after))),
+                   /*monotone=*/cleaner, /*growth=*/false});
+}
+
 } // anonymous namespace
 
 StateSnapshot CaptureState(CaptureScope scope)
@@ -103,19 +212,42 @@ StateSnapshot CaptureState(CaptureScope scope)
         s.map_block_index_keys.reserve(mapBlockIndex.size());
         for (const auto& entry : mapBlockIndex) s.map_block_index_keys.insert(entry.first);
 
-        // Only the registries with a cheap accessor. The whitelist, sidestake
-        // and pool registries expose no size without a filtered copy; they are
-        // covered by RegistryReset where a suite touches them.
-        s.has_registry_sizes = true;
-        s.beacon_count = GRC::GetBeaconRegistry().Beacons().size();
-        s.protocol_entry_count = GRC::GetProtocolRegistry().ProtocolEntries().size();
-        s.scraper_count = GRC::GetScraperRegistry().Scrapers().size();
+        // Each registry's current entries, key by key, not its count: a case
+        // can edit an entry in place and leave the count alone, as the miner
+        // suite's POOL cases do with a builtin seed. Pending beacons, the
+        // historical stores, and the whitelist, sidestake and poll registries
+        // are not captured; they are covered by RegistryReset where a suite
+        // touches them.
+        const auto whole = [](const auto& entry) -> const auto& { return entry; };
+
+        s.has_registries = true;
+        s.beacons = DigestMap(
+            GRC::GetBeaconRegistry().Beacons(),
+            [](const GRC::Cpid& cpid) { return cpid.ToString(); },
+            [](const GRC::Beacon& beacon) {
+                // Beacon's own serialization writes only the public key.
+                return GRC::StorageBeacon(beacon);
+            });
+        s.protocol_entries = DigestMap(
+            GRC::GetProtocolRegistry().ProtocolEntries(),
+            [](const std::string& key) { return key; },
+            whole);
+        s.scrapers = DigestMap(
+            GRC::GetScraperRegistry().Scrapers(),
+            [](const CKeyID& key_id) { return key_id.ToString(); },
+            whole);
+
+        // Entries() is a vector; each Pool carries its registry key, m_cpid.
+        for (const GRC::Pool& pool : GRC::GetPoolRegistry().Entries()) {
+            s.pools.entries[pool.m_cpid.ToString()] = SerializeHash(pool);
+        }
     }
 
     return s;
 }
 
-std::vector<StateDiff> DiffState(const StateSnapshot& before, const StateSnapshot& after)
+std::vector<StateDiff> DiffState(const StateSnapshot& before, const StateSnapshot& after,
+                                 const StateSnapshot* baseline)
 {
     std::vector<StateDiff> out;
 
@@ -173,10 +305,17 @@ std::vector<StateDiff> DiffState(const StateSnapshot& before, const StateSnapsho
         }
     }
 
-    if (before.has_registry_sizes && after.has_registry_sizes) {
-        Monotone(out, "GetBeaconRegistry().Beacons().size()", before.beacon_count, after.beacon_count);
-        Monotone(out, "GetProtocolRegistry().ProtocolEntries().size()", before.protocol_entry_count, after.protocol_entry_count);
-        Monotone(out, "GetScraperRegistry().Scrapers().size()", before.scraper_count, after.scraper_count);
+    if (before.has_registries && after.has_registries) {
+        const StateSnapshot* base = baseline != nullptr && baseline->has_registries ? baseline : nullptr;
+
+        Registry(out, "GetBeaconRegistry().Beacons()", before.beacons, after.beacons,
+                 base ? &base->beacons : nullptr);
+        Registry(out, "GetProtocolRegistry().ProtocolEntries()", before.protocol_entries, after.protocol_entries,
+                 base ? &base->protocol_entries : nullptr);
+        Registry(out, "GetScraperRegistry().Scrapers()", before.scrapers, after.scrapers,
+                 base ? &base->scrapers : nullptr);
+        Registry(out, "GetPoolRegistry().Entries()", before.pools, after.pools,
+                 base ? &base->pools : nullptr);
     }
 
     return out;
