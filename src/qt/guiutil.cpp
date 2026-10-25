@@ -622,9 +622,18 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 
             if (!autostartup.data_dir.empty())
             {
-                autostartup_arguments = L"-datadir=\""
-                        + autostartup.data_dir.wstring()
-                        + L"\" ";
+                // The started process splits its command line with CommandLineToArgvW()
+                // (WinCmdLineArgs), which reads backslashes just before a quote as escapes:
+                // 2n of them give n and leave the quote ending the argument; 2n+1 give n
+                // and a literal quote. A data directory ending in a backslash, such as a
+                // drive root (E:\), would escape its closing quote and take in the
+                // arguments after it. Doubled, its trailing backslashes stay as they are
+                // and the quote stays a quote.
+                std::wstring data_dir = autostartup.data_dir.wstring();
+                const size_t last = data_dir.find_last_not_of(L'\\');
+                const size_t trailing = last == std::wstring::npos ? data_dir.size() : data_dir.size() - last - 1;
+                data_dir.append(trailing, L'\\');
+                autostartup_arguments = L"-datadir=\"" + data_dir + L"\" ";
             }
 
             autostartup_arguments += Utf8ToWide(autostartup.arguments);
