@@ -10,9 +10,8 @@
 #include "validation.h"
 
 /**
- * Mandatory script verification flags that all new transactions must comply with for
- * them to be valid. Failing one of these tests may trigger a DoS ban;
- * see CheckInputScripts() for details.
+ * Mandatory script verification flags: the base that STANDARD_SCRIPT_VERIFY_FLAGS
+ * is built on, which feeds wallet signing, PSGT and raw-transaction checks.
  *
  * Note that this does not affect consensus validity; see GetBlockScriptFlags()
  * for that.

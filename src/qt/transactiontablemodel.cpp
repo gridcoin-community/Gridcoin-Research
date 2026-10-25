@@ -446,7 +446,9 @@ QVariant TransactionTableModel::formatRole(const TransactionRecord *rec, int col
 {
     // Public helper (per-view consumers call it too): validate the column so an
     // out-of-range value cannot index column_alignments[] out of bounds or land in
-    // an undefined ColumnIndex (asserts are compiled out in release builds).
+    // an undefined ColumnIndex. A runtime check rather than an assert: a bad
+    // column from a caller yields an empty QVariant instead of aborting the
+    // process, and the guard still holds if asserts are disabled.
     if (!rec || columnInt < Status || columnInt > Amount) {
         return QVariant();
     }
