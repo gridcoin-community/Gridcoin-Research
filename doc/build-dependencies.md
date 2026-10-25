@@ -13,7 +13,7 @@ sudo apt-get install \
     build-essential pkg-config bsdmainutils python3 \
     cmake git curl \
     libssl-dev libevent-dev libboost-all-dev \
-    libminiupnpc-dev libqrencode-dev libzip-dev \
+    libminiupnpc-dev libqrencode-dev zlib1g-dev \
     qt6-base-dev qt6-tools-dev qt6-l10n-tools qt6-svg-dev
 ```
 
@@ -27,7 +27,7 @@ sudo dnf install \
     libstdc++-static gcc-c++ pkgconf-pkg-config python3 \
     cmake git curl patch perl-FindBin bison flex \
     openssl-devel libevent-devel boost-devel \
-    miniupnpc-devel qrencode-devel libzip-devel \
+    miniupnpc-devel qrencode-devel zlib-devel \
     qt6-qtbase-devel qt6-qttools-devel qt6-qtsvg-devel
 ```
 
@@ -43,7 +43,7 @@ sudo zypper install \
     pkg-config python3 \
     cmake git curl \
     libopenssl-devel libevent-devel boost-devel \
-    miniupnpc-devel qrencode-devel libzip-devel \
+    miniupnpc-devel qrencode-devel 'pkgconfig(zlib)' \
     qt6-base-devel qt6-tools-devel qt6-svg-devel qt6-linguist-devel
 ```
 
@@ -52,7 +52,7 @@ sudo zypper install \
 ```bash
 sudo pacman -S \
     base-devel python cmake git \
-    boost libevent miniupnpc libzip qrencode \
+    boost libevent miniupnpc qrencode \
     qt6-base qt6-tools qt6-svg
 ```
 
