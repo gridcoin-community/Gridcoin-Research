@@ -28,6 +28,11 @@ from pathlib import Path
 from subprocess import CalledProcessError, PIPE, run
 from typing import List, Optional
 
+# Line-buffer stdout. Run from make, stdout is a pipe and block-buffered,
+# while the tools this script runs write straight to the log, so a progress
+# or retry message could land far from the error it belongs to.
+sys.stdout.reconfigure(line_buffering=True)
+
 # This is ported from the original macdeployqt with modifications
 
 class FrameworkInfo(object):
@@ -336,7 +341,21 @@ def codesignItem(path: str, identity: str, entitlements: Optional[str],
     cmd.append(path)
     if verbose:
         print("  codesign:", " ".join(cmd))
-    subprocess.check_call(cmd)
+    # --timestamp has Apple's timestamp server countersign the signature, so
+    # signing fails whenever that server does not answer: "A timestamp was
+    # expected but was not found." Observed on a macos-15-intel runner, on the
+    # first framework signed. Retry it the way the hdiutil calls below are
+    # retried; --force, already passed, makes a retry replace any signature
+    # an earlier attempt wrote. The final attempt raises like check_call would.
+    attempts, delay = 4, 15
+    for attempt in range(1, attempts + 1):
+        result = run(cmd)
+        if result.returncode == 0:
+            return
+        if attempt < attempts:
+            print(f"codesign {path} failed (attempt {attempt}/{attempts}), retrying in {delay}s...")
+            time.sleep(delay)
+    result.check_returncode()
 
 def copyFramework(framework: FrameworkInfo, path: str, verbose: int) -> Optional[str]:
     if framework.sourceFilePath.startswith("Qt"):
@@ -861,6 +880,11 @@ if config.dmg is not None:
 
     m = re.search(r"/Volumes/(.+$)", output)
     disk_root = m.group(0)
+    # The image's own device node is the first /dev/diskN line attach prints.
+    # An APFS image adds a synthesized container disk after it; ejecting the
+    # image's device takes the container and the volume with it.
+    d = re.search(r"^(/dev/disk\d+)\s", output, re.MULTILINE)
+    device = d.group(1)
 
     print("+ Applying fancy settings +")
 
@@ -889,8 +913,17 @@ if config.dmg is not None:
     # traceback that named convert as the culprit.
     #
     # Retry the eject instead, and fail loudly if it never takes.
+    #
+    # Detach the device node, not the mount path. A detach can unmount the
+    # volume and then fail to eject the device: 'couldn't eject "disk2" -
+    # Resource busy'. The mount path is gone at that point but the image is
+    # still attached, so every later detach of the path, -force included,
+    # fails with "No such file or directory" and the retry can never succeed.
+    # Observed on a macos-15-intel runner: one busy eject, then seven of
+    # those. The device node names the image until it is detached, mounted
+    # or not.
     try:
-        run_hdiutil_with_retry(["detach", f"/Volumes/{appname}"])
+        run_hdiutil_with_retry(["detach", device])
     except CalledProcessError:
         # Last resort. -force ejects a volume something else still holds open.
         # Everything that writes to the image is done by this point -- the
@@ -898,7 +931,7 @@ if config.dmg is not None:
         # nothing left to lose by forcing, and it beats failing a release
         # because an indexer was still reading.
         print("hdiutil detach still busy after retries; forcing the eject")
-        run_hdiutil_with_retry(["detach", "-force", f"/Volumes/{appname}"])
+        run_hdiutil_with_retry(["detach", "-force", device])
 
     run_hdiutil_with_retry(["convert", tempname, "-format", "UDZO", "-o", dmg_basename, "-imagekey", "zlib-level=9"])
 
