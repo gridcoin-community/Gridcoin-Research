@@ -840,7 +840,11 @@ public:
     //! An output another wallet transaction still spends -- one the wallet still
     //! tags in-mempool (pooled or evicted), unrecognized, or confirmed on the
     //! active chain -- keeps its bit: vfSpent does not record which transaction
-    //! set it, so it is not this one's alone to clear.
+    //! set it, so it is not this one's alone to clear. So does an output the pool
+    //! holds a spend of, or the tx index records spent, whether or not the wallet
+    //! holds that spend.
+    //!
+    //! Fires CT_UPDATED once for each parent whose output it released.
     unsigned int ReleaseTransactionInputs(const CTransaction& tx, CWalletDB* pwalletdb)
         EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet);
 

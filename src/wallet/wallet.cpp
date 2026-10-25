@@ -4513,10 +4513,24 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey, Defe
         mapRequestCount[wtxNew.GetHash()] = 0;
 
         // Broadcast
-        if (!wtxNew.AcceptToMemoryPool())
+        CValidationState state;
+        if (!::AcceptToMemoryPool(mempool, wtxNew, state, nullptr))
         {
-            // This must not fail. The transaction has already been signed and recorded.
-            LogPrintf("CommitTransaction() : Error: Transaction not valid");
+            const uint256 hash = wtxNew.GetHash();
+            LogPrintf("CommitTransaction() : Error: Transaction %s not valid: %s",
+                      hash.ToString(), state.GetRejectReason());
+
+            // The send is already recorded and its inputs marked spent above, and
+            // the caller tells the user it failed. Abandon it: the resend pass
+            // then never offers it to peers, the abandoned state survives a
+            // restart, and its inputs go back to coin selection, except one that
+            // another wallet transaction that still stands, the pool or the chain
+            // also spends.
+            unsigned int inputs_released = 0;
+            if (AbandonTransaction(hash, &inputs_released)) {
+                LogPrintf("CommitTransaction(): abandoned %s, releasing %u input(s).",
+                          hash.ToString(), inputs_released);
+            }
             return false;
         }
 
@@ -5338,6 +5352,76 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
     }
 
     CTxDB txdb("r");
+
+    // FixSpentCoins does not clear the spent bit of an output consumed by an own
+    // unconfirmed transaction the pool does not hold while that transaction can
+    // still confirm. It does not set a bit another path has cleared. The wallet
+    // still tags such a transaction in-mempool and rebroadcasts it -- a size
+    // eviction keeps the tag -- and ReleaseSpendsNotInActiveChain, which runs
+    // just before this at startup, leaves its inputs marked for the same reason.
+    // Freeing them lets the wallet build a transaction that conflicts with one
+    // peers may still hold. (A send the pool refuses at commit is abandoned
+    // there, so it never stands.)
+    //
+    // It stops standing once it can never confirm, judged from the chain and the
+    // pool because nothing re-tags it: the chain has spent one of its inputs
+    // elsewhere, the pool holds a different spend of one of its inputs, or an
+    // input comes from a transaction found in neither the index, the pool, nor
+    // this set. Such a parent may still confirm later (ResendWalletTransactions
+    // offers back an inactive transaction a disconnect stranded), so on that
+    // branch this pass still errs toward freeing, as it did before. A child whose
+    // parent was conflicted is the case this pass still frees: this pass is what
+    // frees that child's other inputs. AbandonTransaction remains the way to
+    // release a spend that still stands.
+    std::set<COutPoint> spent_by_standing;
+    {
+        std::set<uint256> standing;
+        for (const auto& [hash, wtx] : mapWallet) {
+            if (!wtx.isInMempool() || mempool.exists(hash) || txdb.ContainsTx(hash)) continue;
+            if (HasChainSpentInput(wtx, txdb)) continue;
+
+            bool input_spent_in_pool = false;
+            for (const CTxIn& txin : wtx.vin) {
+                if (spent_in_mempool.count(txin.prevout)) {
+                    input_spent_in_pool = true;
+                    break;
+                }
+            }
+            if (input_spent_in_pool) continue;
+
+            standing.insert(hash);
+        }
+
+        bool pruned = true;
+        while (pruned) {
+            pruned = false;
+            for (auto it = standing.begin(); it != standing.end();) {
+                bool parent_missing = false;
+                for (const CTxIn& txin : mapWallet.at(*it).vin) {
+                    const uint256& parent = txin.prevout.hash;
+                    if (!standing.count(parent) && !mempool.exists(parent) && !txdb.ContainsTx(parent)) {
+                        parent_missing = true;
+                        break;
+                    }
+                }
+                if (parent_missing) {
+                    it = standing.erase(it);
+                    pruned = true;
+                } else {
+                    ++it;
+                }
+            }
+        }
+
+        for (const uint256& hash : standing) {
+            for (const CTxIn& txin : mapWallet.at(hash).vin) {
+                spent_by_standing.insert(txin.prevout);
+            }
+        }
+    }
+
+    int kept_for_standing = 0;
+
     for (auto const& pcoin : vCoins)
     {
         // Find the corresponding transaction index
@@ -5348,7 +5432,8 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
         for (unsigned int n=0; n < pcoin->vout.size(); n++)
         {
             if ((IsMine(pcoin->vout[n]) != ISMINE_NO) && pcoin->IsSpent(n) && (txindex.vSpent.size() <= n || txindex.vSpent[n].IsNull())
-                && !spent_in_mempool.count(COutPoint(pcoin->GetHash(), n)))
+                && !spent_in_mempool.count(COutPoint(pcoin->GetHash(), n))
+                && !spent_by_standing.count(COutPoint(pcoin->GetHash(), n)))
             {
                 LogPrintf("FixSpentCoins found lost coin %s gC %s[%d], %s",
                     FormatMoney(pcoin->vout[n].nValue).c_str(), pcoin->GetHash().ToString().c_str(), n, fCheckOnly? "repair not attempted" : "repairing");
@@ -5360,6 +5445,11 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
                     pcoin->WriteToDisk(&walletdb);
                     repaired.insert(pcoin->GetHash());
                 }
+            }
+            else if ((IsMine(pcoin->vout[n]) != ISMINE_NO) && pcoin->IsSpent(n) && (txindex.vSpent.size() <= n || txindex.vSpent[n].IsNull())
+                && !spent_in_mempool.count(COutPoint(pcoin->GetHash(), n)))
+            {
+                kept_for_standing++;
             }
             else if ((IsMine(pcoin->vout[n]) != ISMINE_NO) && !pcoin->IsSpent(n) && (txindex.vSpent.size() > n && !txindex.vSpent[n].IsNull()))
             {
@@ -5375,6 +5465,12 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
                 }
             }
         }
+    }
+
+    if (kept_for_standing > 0) {
+        LogPrintf("INFO: %s: left %d output(s) marked spent - an own unconfirmed transaction the pool does not "
+                  "hold can still confirm; abandontransaction releases them",
+                  __func__, kept_for_standing);
     }
 
     for (const uint256& hash : repaired) {
@@ -5427,6 +5523,36 @@ unsigned int CWallet::ReleaseTransactionInputs(const CTransaction& tx, CWalletDB
         return contested->count(prevout) != 0;
     };
 
+    // An output the pool or the chain already spends keeps its bit as well, whether
+    // or not the wallet holds that spend. One made from a copy of this wallet, or
+    // with a key imported since, need never reach it: a rescan reads blocks, not the
+    // pool. Clearing the bit would hand the output to coin selection, and a send
+    // that selects it would be refused. FixSpentCoins applies the same two rules: it
+    // does not clear a bit a pooled spend accounts for, and it sets one the index
+    // records.
+    std::unique_ptr<CTxDB> txdb;
+    const auto spent_in_pool_or_chain = [&](const COutPoint& prevout) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+        const char* spender = nullptr;
+        {
+            LOCK(mempool.cs);
+            if (mempool.mapNextTx.count(prevout)) spender = "the mempool holds a spend of it";
+        }
+
+        if (!spender) {
+            if (!txdb) txdb = std::make_unique<CTxDB>("r");
+
+            CTxIndex txindex;
+            if (txdb->ReadTxIndex(prevout.hash, txindex)
+                && prevout.n < txindex.vSpent.size() && !txindex.vSpent[prevout.n].IsNull()) {
+                spender = "a transaction in a block spends it";
+            }
+        }
+
+        return spender;
+    };
+
+    std::set<uint256> parents_released;
+
     // Same reversal BlockDisconnected performs for a transaction that has left the
     // chain: clear the parents' spent bits so the coins become selectable again.
     for (const auto& txin : tx.vin) {
@@ -5457,10 +5583,27 @@ unsigned int CWallet::ReleaseTransactionInputs(const CTransaction& tx, CWalletDB
             continue;
         }
 
+        if (const char* spender = spent_in_pool_or_chain(txin.prevout)) {
+            LogPrintf("INFO: %s: left output %s:%u marked spent - %s.",
+                      __func__, txin.prevout.hash.ToString(), txin.prevout.n, spender);
+            continue;
+        }
+
         parent_wtx.MarkUnspent(txin.prevout.n);
         parent_wtx.MarkDirty();
         if (pwalletdb) parent_wtx.WriteToDisk(pwalletdb);
         ++released;
+        parents_released.insert(txin.prevout.hash);
+    }
+
+    // Announce each parent once, as BlockDisconnected does after the same
+    // reversal. Whoever spent these outputs announced the parent when it marked
+    // them, and a listener that re-reads a transaction's outputs on CT_UPDATED,
+    // as the GUI coin store does, keeps them out of its list until this matching
+    // announcement. cs_main and cs_wallet, asserted above, satisfy the
+    // CT_UPDATED handler contract.
+    for (const uint256& parent_hash : parents_released) {
+        NotifyTransactionChanged(this, parent_hash, CT_UPDATED);
     }
 
     return released;
@@ -5847,13 +5990,44 @@ bool CWallet::AbandonTransaction(const uint256& txid, unsigned int* inputs_relea
         return false;
     }
 
-    // Don't re-abandon already abandoned transactions
+    std::unique_ptr<CWalletDB> pwalletdb;
+    if (fFileBacked) pwalletdb = std::make_unique<CWalletDB>(strWalletFile);
+
+    // Undo what an abandoned transaction's spends recorded: its mapTxSpends rows,
+    // and its parents' spent bits. Both steps are idempotent.
+    const auto undo_spends = [&](const uint256& hash, const CWalletTx& spender) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet) {
+        for (const auto& txin : spender.vin) {
+            auto range = mapTxSpends.equal_range(txin.prevout);
+            for (auto iter = range.first; iter != range.second; ) {
+                if (iter->second == hash) {
+                    iter = mapTxSpends.erase(iter);
+                } else {
+                    ++iter;
+                }
+            }
+        }
+
+        // Clearing mapTxSpends is only half the reversal: coin selection reads the
+        // parents' vfSpent bits, so without this the inputs of an abandoned
+        // transaction stay locked and the balance stays depressed until
+        // FixSpentCoins runs at startup or via repairwallet.
+        const unsigned int released = ReleaseTransactionInputs(spender, pwalletdb.get());
+        if (inputs_released) *inputs_released += released;
+    };
+
+    // An abandoned transaction is not abandoned again, and its children were
+    // handled the first time. Its own spends are undone again, though: an
+    // identical transaction committed since -- a retry that rebuilt the same
+    // inputs, outputs and time -- merges into this entry, which AddToWallet
+    // leaves abandoned, and restores both its mapTxSpends rows and its inputs'
+    // spent bits.
     if (wtx.isInactive()) {
         const auto* inactive = wtx.state<TxStateInactive>();
         if (inactive && inactive->m_abandoned) {
             LogPrint(BCLog::LogFlags::VERBOSE, "AbandonTransaction: tx %s already abandoned",
                      txid.ToString());
-            return true; // Already abandoned, nothing to do
+            undo_spends(txid, wtx);
+            return true;
         }
     }
 
@@ -5861,9 +6035,6 @@ bool CWallet::AbandonTransaction(const uint256& txid, unsigned int* inputs_relea
     std::set<uint256> todo;
     std::set<uint256> done;
     todo.insert(txid);
-
-    std::unique_ptr<CWalletDB> pwalletdb;
-    if (fFileBacked) pwalletdb = std::make_unique<CWalletDB>(strWalletFile);
 
     while (!todo.empty()) {
         uint256 now = *todo.begin();
@@ -5906,27 +6077,11 @@ bool CWallet::AbandonTransaction(const uint256& txid, unsigned int* inputs_relea
             }
         }
 
-        // Clean up mapTxSpends entries for inputs consumed by this abandoned tx
-        for (const auto& txin : cur_wtx.vin) {
-            auto range = mapTxSpends.equal_range(txin.prevout);
-            for (auto iter = range.first; iter != range.second; ) {
-                if (iter->second == now) {
-                    iter = mapTxSpends.erase(iter);
-                } else {
-                    ++iter;
-                }
-            }
-        }
-
-        // Clearing mapTxSpends is only half the reversal: coin selection reads the
-        // parents' vfSpent bits, so without this the inputs of an abandoned
-        // transaction stay locked and the balance stays depressed until
-        // FixSpentCoins runs at startup or via repairwallet. Done per transaction
-        // inside the cascade so descendants release their inputs too. Note that
-        // ReleaseTransactionInputs only mutates existing mapWallet entries and never
-        // inserts or erases, so cur_wtx and the loop's iterators stay valid.
-        const unsigned int released = ReleaseTransactionInputs(cur_wtx, pwalletdb.get());
-        if (inputs_released) *inputs_released += released;
+        // Done per transaction inside the cascade so descendants release their
+        // inputs too. Note that ReleaseTransactionInputs only mutates existing
+        // mapWallet entries and never inserts or erases, so cur_wtx and the loop's
+        // iterators stay valid.
+        undo_spends(now, cur_wtx);
     }
 
     return true;
