@@ -1569,4 +1569,81 @@ BOOST_FIXTURE_TEST_CASE(expired_pending_nonbuiltin_superseded_by_fresh_key, Pool
     }
 }
 
+// -----------------------------------------------------------------------------
+// Contract replay floor: the POOL bookmark clamp
+// -----------------------------------------------------------------------------
+
+namespace {
+//!
+//! \brief Sets registry db heights for one case and puts back the heights it found.
+//!
+//! The poll registry keeps one height for its poll and vote dbs, so it gets back the higher of the two, which is the
+//! height it reports.
+//!
+class RegistryDBHeights
+{
+public:
+    RegistryDBHeights()
+    {
+        for (const auto type : GRC::RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
+            m_saved.emplace(type, GRC::RegistryBookmarks::GetRegistryWithDB(type).GetDBHeight());
+        }
+    }
+
+    ~RegistryDBHeights()
+    {
+        for (auto [type, height] : m_saved) {
+            GRC::RegistryBookmarks::GetRegistryWithDB(type).SetDBHeight(height);
+        }
+    }
+
+    RegistryDBHeights(const RegistryDBHeights&) = delete;
+    RegistryDBHeights& operator=(const RegistryDBHeights&) = delete;
+
+    void Set(const GRC::ContractType type, int height)
+    {
+        GRC::RegistryBookmarks::GetRegistryWithDB(type).SetDBHeight(height);
+    }
+
+private:
+    std::map<GRC::ContractType, int> m_saved;
+};
+} // anonymous namespace
+
+//! The contract replay starts at the lowest registry bookmark. Below v15 the POOL registries stay out of it, so their
+//! bookmark of 0 cannot drag the replay down. From v15 a POOL bookmark below the v15 height is raised to that height,
+//! and one past it is kept: the floor is not pinned at the v15 height once the bookmark has moved on.
+BOOST_AUTO_TEST_CASE(replay_floor_clamps_the_pool_bookmark_from_v15)
+{
+    LOCK(cs_main);
+    RegistryDBHeights heights;
+
+    // Above the mainnet v13 height, so the SIDESTAKE clamp leaves these alone.
+    const int others = 5'000'000;
+    const int v15 = 4'500'000;
+
+    for (const auto type : GRC::RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
+        heights.Set(type, others);
+    }
+
+    // One PoolRegistry backs both POOL contract types.
+    heights.Set(GRC::ContractType::POOL_REGISTER, 0);
+
+    grc_test::RequireV15Unscheduled();
+    BOOST_CHECK_EQUAL(GRC::RegistryBookmarks().GetLowestRegistryBlockHeight(), others);
+
+    {
+        grc_test::V15HeightGuard guard(v15);
+        BOOST_CHECK_EQUAL(GRC::RegistryBookmarks().GetLowestRegistryBlockHeight(), v15);
+    }
+
+    const int pool_near_tip = 4'800'000;
+    heights.Set(GRC::ContractType::POOL_REGISTER, pool_near_tip);
+
+    {
+        grc_test::V15HeightGuard guard(v15);
+        BOOST_CHECK_EQUAL(GRC::RegistryBookmarks().GetLowestRegistryBlockHeight(), pool_near_tip);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
