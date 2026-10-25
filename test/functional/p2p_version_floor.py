@@ -8,10 +8,17 @@ The node always accepts a peer on the previous release's protocol version
 (PROTOCOL_VERSION - 1) and always disconnects anything older. A peer on the
 previous version is disconnected only once the grace period past the
 activation height of the fork the current PROTOCOL_VERSION carries has
-elapsed. That fork, v15, is unscheduled on regtest, so this checks the floor
+elapsed. That fork, v15, is unscheduled on regtest, so node0 checks the floor
 itself: PROTOCOL_VERSION and PROTOCOL_VERSION - 1 complete the handshake, and
 PROTOCOL_VERSION - 2 and an old version are dropped -- by the floor check, which
 each dropped case asserts from the node's log, not by some earlier check.
+
+node1 and node2 check the post-grace rung at height 0, which a v15 height of
+minus the grace period puts at its boundary (the regtest grace is 6,300 blocks;
+the disconnect needs the tip above the v15 height plus the grace). node1's v15
+height is one block further back, so the grace has elapsed and it drops
+PROTOCOL_VERSION - 1 too. node2's is exactly at the boundary, so it still
+accepts PROTOCOL_VERSION - 1.
 
 The old version is 180325, the oldest one that sends the current VERSION
 layout. At 180324 and below the node reads five legacy strings before
@@ -31,6 +38,9 @@ from test_framework.util import assert_equal, p2p_port
 # More than the daemon's 5 s per-IP inbound rate limit, which compares
 # (mock-affected) adjusted-time deltas; every scripted peer is 127.0.0.1.
 CONNECT_SPACING = 6
+
+# Consensus::Params::ProtocolVersionGracePeriod on regtest (900 * 7).
+REGTEST_GRACE = 6300
 
 
 class VersionPeer(P2PInterface):
@@ -53,10 +63,14 @@ class VersionPeer(P2PInterface):
 
 class P2PVersionFloorTest(GridcoinTestFramework):
     def set_test_params(self):
-        self.num_nodes = 1
+        self.num_nodes = 3
         self.chain = "regtest"
         self.setup_clean_chain = True
-        self.extra_args = [["-staking=0"]]
+        self.extra_args = [
+            ["-staking=0"],
+            ["-staking=0", "-blockv15height=%d" % -(REGTEST_GRACE + 1)],
+            ["-staking=0", "-blockv15height=%d" % -REGTEST_GRACE],
+        ]
 
     def setup_network(self):
         # Same as p2p_version_handshake.py: only the node up and listening.
@@ -89,17 +103,11 @@ class P2PVersionFloorTest(GridcoinTestFramework):
 
         return accepted
 
-    def run_test(self):
-        node = self.nodes[0]
+    def check(self, node, cases):
         node.setmocktime(node.mock_now())
 
-        for label, version, expected in (
-            ("PROTOCOL_VERSION", MY_VERSION, True),
-            ("PROTOCOL_VERSION - 1, the previous release", MY_VERSION - 1, True),
-            ("PROTOCOL_VERSION - 2", MY_VERSION - 2, False),
-            ("the oldest version with the current VERSION layout", 180325, False),
-        ):
-            self.log.info("peer on %s (%d): expect %s", label, version,
+        for label, version, expected in cases:
+            self.log.info("node%d, peer on %s (%d): expect %s", node.index, label, version,
                           "accepted" if expected else "disconnected")
             # The floor check names the version it drops. A drop for any other
             # reason, such as a misparsed VERSION failing the time-drift check,
@@ -114,6 +122,21 @@ class P2PVersionFloorTest(GridcoinTestFramework):
                                                   unexpected_msgs=[drift_msg])
             with log_check:
                 assert_equal(self.connect(node, version), expected)
+
+    def run_test(self):
+        current = ("PROTOCOL_VERSION", MY_VERSION)
+        previous = ("PROTOCOL_VERSION - 1, the previous release", MY_VERSION - 1)
+        older = ("PROTOCOL_VERSION - 2", MY_VERSION - 2)
+        oldest = ("the oldest version with the current VERSION layout", 180325)
+
+        self.log.info("v15 unscheduled: the floor")
+        self.check(self.nodes[0], ((*current, True), (*previous, True), (*older, False), (*oldest, False)))
+
+        self.log.info("v15 grace elapsed at height 0: the previous release is dropped")
+        self.check(self.nodes[1], ((*current, True), (*previous, False), (*older, False)))
+
+        self.log.info("height 0 at the end of the v15 grace: the previous release is still accepted")
+        self.check(self.nodes[2], ((*current, True), (*previous, True), (*older, False)))
 
 
 if __name__ == "__main__":
