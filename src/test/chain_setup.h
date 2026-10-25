@@ -66,14 +66,35 @@ namespace grc_test {
 //! restore lives in an RAII sub-object constructed before the mutating work, so
 //! a throw out of the constructor still unwinds it -- no destructor runs for a
 //! partially constructed object. Residue that is irreversible and accepted:
-//! the genesis block-index record, hashBestChain and the tx-index entries stay
-//! in the memenv LevelDB; LoadBlockIndex also initializes g_chain_trust (which
-//! retains a pointer to the fixture's leaked genesis index entry) and refills
-//! g_seen_stakes, and neither is set aside and restored. All of it is inert for
-//! other suites (nothing else calls LoadBlockIndex, nothing reads g_chain_trust
-//! or g_seen_stakes in this binary, lookups are by hash, and each fixture
-//! construction re-initializes both globals), which is precisely why the
-//! lifetime is once per suite.
+//! the block-index records of genesis and of every block a fixture mined,
+//! hashBestChain and the tx-index entries stay in the memenv LevelDB, and the
+//! next fixture's LoadBlockIndex reloads the records into mapBlockIndex.
+//! LoadBlockIndex also initializes g_chain_trust (which retains a pointer to
+//! the fixture's leaked genesis index entry), and g_seen_stakes keeps the
+//! stake proofs a fixture's AcceptBlock took until a later proof lands in the
+//! same position in its 2048-entry table, because nothing in this binary clears
+//! it; neither is set aside and restored. Suites without the fixture never
+//! meet any of it (nothing else calls LoadBlockIndex or mines, lookups are by
+//! hash, and each fixture construction re-initializes g_chain_trust), which is
+//! precisely why the lifetime is once per suite. A later fixture does meet the
+//! earlier blocks: ProcessBlock refuses a block it already has, and
+//! AcceptBlock a stake proof it has seen. That is why a fixture's clock starts
+//! at the latest stake slot an earlier one used, and mines only in later ones
+//! (CLOCK, below).
+//!
+//! CLOCK. The fixture runs the process on the mock clock (SetMockTime) for its
+//! whole lifetime and puts back the clock it found when it is destroyed. It
+//! starts at a fixed time, or at the latest stake slot an earlier fixture in
+//! the process mined in or tried to. No wall-clock time passes inside the
+//! suite: the clock moves to the start of the next stake slot on each attempt
+//! CreateAndProcessBlock() makes, and when a case moves it on purpose. A case
+//! may move it forward, and must never move it back: blocks already mined
+//! would then be stamped after the clock, which is the condition the fixture's
+//! clock exists to rule out. That includes a StateGuard in a case that mines,
+//! whose restore puts the clock back to where the case started. Setting it to
+//! 0 turns the mock clock off, and the next attempt would step from time 0.
+//! CreateAndProcessBlock() refuses to mine while the clock is behind the chain
+//! tip, which covers both.
 //!
 struct RegtestChainSetup
 {
@@ -221,14 +242,21 @@ void MakeBlockAndCoinstake(CBlock& block, CMutableTransaction& coinbase,
 //!
 //! \brief Mine one real regtest block, retrying across stake time slots.
 //!
-//! Mirrors the retry loop in generatetoaddress (rpc/mining.cpp): the kernel is
-//! evaluated at a single 16-second-masked timestamp, so each attempt steps to a
-//! fresh slot. The block then goes to CWallet::BlockConnected directly --
+//! Each attempt first moves the fixture's clock to the start of the next stake
+//! slot and mines there, so a block is stamped in a later slot than every block
+//! before it in the process and is never stamped after the clock;
+//! GetAdjustedTime() right after a mine is the block's own time. The kernel is
+//! evaluated at that single timestamp, so the fresh slot is what rerolls it on
+//! a retry, as the slot offset does in generatetoaddress (rpc/mining.cpp). The
+//! block then goes to CWallet::BlockConnected directly --
 //! RegisterValidationInterface is a silent no-op in this binary, so the signal
 //! layer will not -- which records the block's own transactions and marks the
-//! outputs they spent, the staked kernel included. Returns false and sets \p err
-//! on failure. One failure comes after acceptance: if the accepted block is not
-//! the chain tip the wallet is not told, and the chain has still advanced.
+//! outputs they spent, the staked kernel included.
+//!
+//! Returns false and sets \p err on failure. It refuses to mine while the
+//! fixture's clock is behind the chain tip (see CLOCK above). One failure comes
+//! after acceptance: if the accepted block is not the chain tip the wallet is
+//! not told, and the chain has still advanced.
 //!
 //! Only tests that genuinely need a mined output (a confirmed P2SH funding
 //! output, say) should call this; the premine alone needs no mining.
