@@ -3670,6 +3670,141 @@ BOOST_AUTO_TEST_CASE(push_superblock_heals_corruption_at_gate_crossing)
 }
 
 //!
+//! A shallow reorg just after the first superblock at the AutoGreylist gates disconnects it, and the superblock
+//! before it, below the gates, is current again: DeepCopy and Redesign cross backward together, as they will on
+//! mainnet, where both activate with v15.
+//!
+//!  1. Both gates at height 100. A project ACTIVE in the registry, through the contract and LevelDB path.
+//!  2. Push a superblock at height 50, then one at height 100 whose record greylists the project. The service serves
+//!     V2 from the record, and the deep copy is active.
+//!  3. Read the overlay above the gates. The deep-copy path leaves the registry's entries alone.
+//!  4. Pop the height-100 superblock (the reorg). The service is back on V1 with its V2 slots cleared, the deep copy
+//!     is off, the project is no longer greylisted, and the registry's entry in memory still equals the stored one:
+//!     there is nothing to heal at the backward cross.
+//!  5. Push the height-100 superblock again (the forward re-cross). The service serves V2 from the record again.
+//!
+BOOST_AUTO_TEST_CASE(shallow_reorg_crosses_deep_copy_and_redesign_backward_together)
+{
+    using Status = GRC::ProjectEntryStatus;
+    using Filter = GRC::ProjectEntry::ProjectFilterFlag;
+
+    GRC::Whitelist& whitelist = GRC::GetWhitelist();
+    std::shared_ptr<GRC::AutoGreylistService> service = GRC::GetAutoGreylistCache();
+
+    const std::string name = "reorg_cross_test_project";
+
+    // Null the chain-tip globals so the V1 refresh's backward walk stops at its null check.
+    grc_test::StateGuard chain_guard(grc_test::StateGuard::CHAIN);
+    grc_test::ForcedArgGuard deep_copy_gate("autogreylistdeepcopyheight", "100");
+    grc_test::ForcedArgGuard redesign_gate("autogreylistredesignheight", "100");
+
+    LOCK(cs_main);
+
+    whitelist.Reset();
+    service->Reset();
+
+    // Non-zero height so the stored height survives ReinitFromDisk.
+    AddProjectEntryWithStatus(name, "http://reorg.cross.test", Status::UNKNOWN, /*height=*/20, /*time=*/0);
+    BOOST_REQUIRE(whitelist.GetProjectsFromDisk().at(name)->m_status == Status::ACTIVE);
+
+    const auto in_memory_status = [&]() {
+        for (const auto& entry : whitelist.Snapshot(GRC::GreylistState::NONE, Filter::ALL_BUT_DELETED)) {
+            if (entry.m_name == name) return entry.m_status.Value();
+        }
+        return Status::UNKNOWN;
+    };
+
+    auto below_index = std::make_unique<CBlockIndex>();
+    below_index->nHeight = 50;
+    below_index->nTime = 50000;
+    below_index->MarkAsSuperblock();
+
+    GRC::SuperblockPtr below_ptr;
+    below_ptr.Replace(GRC::Superblock());
+    below_ptr.Rebind(below_index.get());
+
+    auto above_index = std::make_unique<CBlockIndex>();
+    above_index->nHeight = 100;
+    above_index->nTime = 100000;
+    above_index->MarkAsSuperblock();
+    above_index->pprev = below_index.get();
+
+    GRC::Superblock above_superblock;
+    above_superblock.m_project_status.m_project_status.insert(std::make_pair(name, Status::AUTO_GREYLISTED));
+
+    GRC::SuperblockPtr above_ptr;
+    above_ptr.Replace(above_superblock);
+    above_ptr.Rebind(above_index.get());
+
+    // Pop whatever is still pushed, and undo the registry changes, on every exit path.
+    struct Cleanup {
+        std::vector<const CBlockIndex*> pushed;
+        ~Cleanup()
+        {
+            for (auto it = pushed.rbegin(); it != pushed.rend(); ++it) GRC::Quorum::PopSuperblock(*it);
+            GRC::GetAutoGreylistCache()->Reset();
+            GRC::GetWhitelist().Reset();
+        }
+    } cleanup;
+
+    // ---- Step 2: below the gates, then the first superblock at them ----
+    GRC::Quorum::PushSuperblock(below_ptr);
+    cleanup.pushed.push_back(below_index.get());
+
+    GRC::Quorum::PushSuperblock(above_ptr);
+    cleanup.pushed.push_back(above_index.get());
+
+    {
+        const auto read = service->Get(GRC::GreylistState::AUTHORITATIVE);
+        BOOST_REQUIRE(read.has_value());
+        BOOST_CHECK(read->m_version == GRC::GreylistVersion::V2);
+        BOOST_CHECK(service->Contains(GRC::GreylistState::AUTHORITATIVE, name));
+        BOOST_CHECK(service->IsDeepCopyActive(GRC::GreylistState::AUTHORITATIVE));
+    }
+
+    // ---- Step 3: the overlay above the gates promotes a copy, not the registry's entry ----
+    {
+        bool overlaid = false;
+        for (const auto& entry : whitelist.Snapshot(GRC::GreylistState::AUTHORITATIVE, Filter::ALL_BUT_DELETED)) {
+            if (entry.m_name == name) overlaid = entry.m_status == Status::AUTO_GREYLISTED;
+        }
+        BOOST_CHECK(overlaid);
+        BOOST_CHECK_EQUAL(static_cast<int>(in_memory_status()), static_cast<int>(Status::ACTIVE));
+    }
+
+    // ---- Step 4: the reorg disconnects the superblock at the gates ----
+    GRC::Quorum::PopSuperblock(above_index.get());
+    cleanup.pushed.pop_back();
+
+    BOOST_REQUIRE(GRC::Quorum::CurrentSuperblock().m_height == below_index->nHeight);
+
+    for (const auto state : {GRC::GreylistState::AUTHORITATIVE, GRC::GreylistState::PENDING}) {
+        const auto read = service->Get(state);
+        BOOST_REQUIRE(read.has_value());
+        BOOST_CHECK(read->m_version == GRC::GreylistVersion::V1);
+        BOOST_CHECK(!service->Contains(state, name));
+        BOOST_CHECK(!service->IsDeepCopyActive(state));
+    }
+
+    BOOST_CHECK_EQUAL(static_cast<int>(in_memory_status()), static_cast<int>(Status::ACTIVE));
+    BOOST_CHECK_EQUAL(static_cast<int>(whitelist.GetProjectsFromDisk().at(name)->m_status.Value()),
+                      static_cast<int>(Status::ACTIVE));
+
+    // ---- Step 5: the forward re-cross ----
+    GRC::Quorum::PushSuperblock(above_ptr);
+    cleanup.pushed.push_back(above_index.get());
+
+    {
+        const auto read = service->Get(GRC::GreylistState::AUTHORITATIVE);
+        BOOST_REQUIRE(read.has_value());
+        BOOST_CHECK(read->m_version == GRC::GreylistVersion::V2);
+        BOOST_CHECK(service->Contains(GRC::GreylistState::AUTHORITATIVE, name));
+        BOOST_CHECK(service->IsDeepCopyActive(GRC::GreylistState::AUTHORITATIVE));
+        BOOST_CHECK_EQUAL(static_cast<int>(in_memory_status()), static_cast<int>(Status::ACTIVE));
+    }
+}
+
+//!
 //! Startup order: GRC::Initialize loads the superblock index (whose AutoGreylist refresh runs against an
 //! empty project whitelist) before the contract registries, then refreshes again once the whitelist is
 //! loaded. That second refresh only recomputes if the first one left the cache unstamped. This pins that
