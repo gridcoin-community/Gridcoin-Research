@@ -1190,15 +1190,10 @@ void InitLogging()
     // for every node and treats any stderr output as a failure, correctly, so on
     // a host whose /tmp is tmpfs this line used to fail every test that stops its
     // node through the framework. The predicate is the refusal's: DataDirIsDefault().
-    //
-    // Utf8PathString, not path::string(): on Windows the latter narrows through
-    // the active code page, so a directory containing anything outside it is
-    // mangled or throws -- and this line exists precisely to name a directory
-    // that may be unusual.
     if (DataDirIsDefault() && fsbridge::IsVolatileFilesystem(resolved_data_dir)) {
         fputs(strprintf("WARNING: the default data directory %s is on a temporary filesystem "
                         "(tmpfs/ramfs).\n",
-                        fsbridge::Utf8PathString(resolved_data_dir)).c_str(), stderr);
+                        resolved_data_dir.string()).c_str(), stderr);
     }
 
     // This is needed because it is difficult to inject the equivalent of -nodebuglogfile in the testing suite for
@@ -1930,23 +1925,31 @@ bool AppInit2(ThreadHandlerPtr threads)
         return InitError(strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running."), fsbridge::LongPathString(datadir), PACKAGE_NAME));
     }
 
-    // Check early whether the data directory path can be used by legacy database libraries (BDB, LevelDB)
-    // that only accept narrow (const char*) paths. On Windows, paths with characters outside the system
-    // code page require conversion to 8.3 short names for BDB compatibility.
-    //
-    // Known limitation: if -datadir is passed on the command line with non-codepage characters, the path
-    // is already garbled by the time we see it — Windows main(argc, argv) delivers narrow strings in the
-    // system code page. The same applies to datadir= in gridcoin.conf saved as UTF-8. Fixing this would
-    // require switching to GetCommandLineW()/wmain at the argument parsing level. The Qt directory chooser
-    // path (which stays in UTF-16 via QString) is not affected.
-    if (fsbridge::PathHasNonCodepageChars(datadir)) {
-        if (fsbridge::ShortPathString(datadir).empty()) {
-            return InitError(strprintf(_("The data directory path '%s' contains characters that cannot be "
-                "represented in the system code page, and Windows 8.3 short filename generation is not available "
-                "on this volume. Please choose a data directory path using only characters supported by your "
-                "system locale, or enable 8.3 filename generation."), fsbridge::LongPathString(datadir)));
+#ifdef WIN32
+    // Until the bundled Berkeley DB was built with UNICODE (src/bdb53/CMakeLists.txt), it read the
+    // UTF-8 of a wallet name in the system code page and created the file under that reading: on
+    // code page 1252 an e-diaeresis (UTF-8 C3 AB) became an A-tilde and a guillemet. Now it opens
+    // the name itself, so it would create a new, empty wallet beside the old one. Refuse instead,
+    // and say which file to rename. The ANSI API read the name with the system code page, as
+    // MultiByteToWideChar(CP_ACP) does.
+    if (const std::string name = walletFileName.string();
+            std::any_of(name.begin(), name.end(), [](unsigned char c) { return c >= 0x80; })
+            && !fs::exists(datadir / walletFileName)) {
+        const int name_len = static_cast<int>(name.size());
+        const int len = MultiByteToWideChar(CP_ACP, 0, name.data(), name_len, nullptr, 0);
+        if (len > 0) {
+            std::wstring legacy_name(static_cast<size_t>(len), L'\0');
+            MultiByteToWideChar(CP_ACP, 0, name.data(), name_len, legacy_name.data(), len);
+            const fs::path legacy = datadir / legacy_name;
+            if (fs::exists(legacy)) {
+                return InitError(strprintf(_("Wallet %s was created by an earlier version under the name %s. "
+                                             "Rename that file in %s to %s, then start again."),
+                                           name, legacy.filename().string(), fsbridge::LongPathString(datadir),
+                                           name));
+            }
         }
     }
+#endif
 
     #if defined OPENSSL_VERSION
         LogPrintf("Using OpenSSL version %s\n", OpenSSL_version(OPENSSL_VERSION));

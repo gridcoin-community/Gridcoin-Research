@@ -66,11 +66,10 @@ bool CDBEnv::Open(fs::path pathEnv_)
 
     pathEnv = pathEnv_;
     fs::path pathDataDir = pathEnv;
-    // BDB's DbEnv::open() only accepts narrow (const char*) paths. On Windows, fs::path::string()
-    // converts via the system code page, which corrupts characters outside that code page (e.g. Chinese
-    // on a Western locale). ShortPathString converts to 8.3 short names when needed, which are ASCII-safe.
-    // For codepage-safe paths, it returns path.string() unchanged. See #2736.
-    strPath = fsbridge::ShortPathString(pathDataDir);
+    // Berkeley DB takes narrow paths, and file names relative to them. The bundled copy is built
+    // with UNICODE on Windows (src/bdb53/CMakeLists.txt), so it reads them as UTF-8 there, which
+    // is what fs::path::string() returns.
+    strPath = pathDataDir.string();
     fs::path pathLogDir = pathDataDir / "database";
     fs::create_directory(pathLogDir);
     fs::path pathErrorFile = pathDataDir / "db.log";
@@ -81,7 +80,7 @@ bool CDBEnv::Open(fs::path pathEnv_)
         nEnvFlags |= DB_PRIVATE;
 
     int nDbCache = std::clamp<int>(gArgs.GetArg("-dbcache", nDefaultDbCache), nMinDbCache, nMaxDbCache);
-    dbenv.set_lg_dir(fsbridge::ShortPathString(pathLogDir).c_str());
+    dbenv.set_lg_dir(pathLogDir.string().c_str());
     dbenv.set_cachesize(nDbCache / 1024, (nDbCache % 1024)*1048576, 1);
     dbenv.set_lg_bsize(1048576);
     dbenv.set_lg_max(10485760);

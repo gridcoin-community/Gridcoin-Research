@@ -58,15 +58,15 @@ fs::path ParseAddress(std::string& address, const fs::path& data_dir, struct soc
     }
 
     // OPEN QUESTION (Windows, non-ASCII paths): sun_path is filled from
-    // path.string(), which on Windows is the *system code page* narrow form, while
-    // the cookie writer (handshake.cpp) uses path.wstring(). Microsoft's AF_UNIX
-    // documentation does not state which narrow encoding the kernel expects in
-    // sun_path (UTF-8 vs. the ANSI code page), and we have no on-device evidence
+    // path.string(), which on Windows is UTF-8 (SetupEnvironment() makes it so),
+    // while the cookie writer (handshake.cpp) uses path.wstring(). Microsoft's
+    // AF_UNIX documentation does not state which narrow encoding the kernel expects
+    // in sun_path (UTF-8 vs. the ANSI code page), and we have no on-device evidence
     // either way, so the behaviour is deliberately left alone rather than guessed
     // at: changing it blindly could break the ASCII path that is known to work.
-    // A datadir containing characters outside the system code page may therefore
-    // fail to bind/connect on Windows even once the cookie is readable; that needs
-    // an on-device experiment before any encoding change here.
+    // A datadir containing non-ASCII characters may therefore fail to bind/connect
+    // on Windows even once the cookie is readable; that needs an on-device
+    // experiment before any encoding change here.
     const std::string path_str = path.string();
     if (path_str.size() >= sizeof(addr.sun_path)) {
         throw std::invalid_argument(

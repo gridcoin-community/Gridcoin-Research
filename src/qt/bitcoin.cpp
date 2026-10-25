@@ -152,16 +152,13 @@ static void EarlyReadGuiLangAndDatadir()
     }
 
     // -datadir: a non-default datadir configured in the GUI becomes the default for
-    // the Intro dialog / GetDataDir(). ShortPathString yields an 8.3 path on Windows
-    // for characters outside the system code page (gArgs is a narrow-string store).
+    // the Intro dialog / GetDataDir(). gArgs holds UTF-8, which is what
+    // fs::path::string() returns on every platform: SetupEnvironment() makes it
+    // UTF-8 on Windows.
     const QString configured_datadir = settings.value("dataDir").toString();
     if (!configured_datadir.isEmpty()
             && configured_datadir != GUIUtil::getDefaultDataDirectory()) {
-        const std::string datadir_narrow =
-            fsbridge::ShortPathString(GUIUtil::qstringToBoostPath(configured_datadir));
-        if (!datadir_narrow.empty()) {
-            gArgs.SoftSetArg("-datadir", datadir_narrow);
-        }
+        gArgs.SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(configured_datadir).string());
     }
 }
 
