@@ -114,6 +114,19 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "GNU")
     string(APPEND BDB_C_FLAGS " -Wno-error=implicit-function-declaration -Wno-error=implicit-int -Wno-incompatible-pointer-types")
 endif()
 
+# Windows: UNICODE and _UNICODE, which Berkeley DB's own Windows projects
+# (build_windows/VS10) define in every configuration. Its file layer then calls
+# the wide-character API and reads each narrow path it is given as UTF-8
+# (TO_TSTRING in src/dbinc/win_db.h), which is what this tree gives it:
+# fs::path::string() is UTF-8 on Windows (SetupEnvironment()). Without them it
+# calls the ANSI API, which reads a path in the system code page, so a data
+# directory with a non-ASCII character failed to open, and a wallet file with
+# one was created under another name.
+if(WIN32)
+    string(APPEND BDB_C_FLAGS " -DUNICODE -D_UNICODE")
+    string(APPEND BDB_CXX_FLAGS " -DUNICODE -D_UNICODE")
+endif()
+
 if(APPLE)
     set(bdb_apple_flags "")
     if(CMAKE_OSX_DEPLOYMENT_TARGET)

@@ -152,16 +152,13 @@ static void EarlyReadGuiLangAndDatadir()
     }
 
     // -datadir: a non-default datadir configured in the GUI becomes the default for
-    // the Intro dialog / GetDataDir(). ShortPathString yields an 8.3 path on Windows
-    // for characters outside the system code page (gArgs is a narrow-string store).
+    // the Intro dialog / GetDataDir(). gArgs holds UTF-8, which is what
+    // fs::path::string() returns on every platform: SetupEnvironment() makes it
+    // UTF-8 on Windows.
     const QString configured_datadir = settings.value("dataDir").toString();
     if (!configured_datadir.isEmpty()
             && configured_datadir != GUIUtil::getDefaultDataDirectory()) {
-        const std::string datadir_narrow =
-            fsbridge::ShortPathString(GUIUtil::qstringToBoostPath(configured_datadir));
-        if (!datadir_narrow.empty()) {
-            gArgs.SoftSetArg("-datadir", datadir_narrow);
-        }
+        gArgs.SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(configured_datadir).string());
     }
 }
 
@@ -932,14 +929,16 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    // Not currently useful.
     std::string error_msg;
 
     if (!gArgs.ReadConfigFiles(error_msg, true)) {
-        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
+        // The reason, when ReadConfigFiles gives one, follows the general message.
+        const std::string reason = error_msg.empty() ? "" : "\n\n" + error_msg;
+        ThreadSafeMessageBox(strprintf("Error reading configuration file.%s\n", reason),
                 "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME, QObject::tr("Error: Cannot read configuration file. Please check the "
-                                                                 "path and format of the file."));
+                                                                 "path and format of the file.")
+                                                         + QString::fromStdString(reason));
         return EXIT_FAILURE;
     }
 

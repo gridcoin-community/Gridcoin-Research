@@ -310,10 +310,9 @@ QList<QModelIndex> getEntryData(QAbstractItemView *view, int column)
 
 fs::path qstringToBoostPath(const QString &path)
 {
-    // On Windows, QString is UTF-16 and toStdString() produces UTF-8, but boost::filesystem::path
-    // interprets narrow strings as the system code page (e.g. CP-1252), not UTF-8. Using
-    // toStdWString() stays in UTF-16, which is the native Windows path encoding and is accepted
-    // directly by boost::filesystem::path. See #2736.
+    // On Windows, toStdWString() hands boost::filesystem::path the UTF-16 that Windows paths are,
+    // so the result does not depend on how Boost decodes a narrow string: as UTF-8 once
+    // SetupEnvironment() has run, and in the system code page before that.
 #ifdef WIN32
     return fs::path(path.toStdWString());
 #else
@@ -323,9 +322,9 @@ fs::path qstringToBoostPath(const QString &path)
 
 QString boostPathToQString(const fs::path &path)
 {
-    // On Windows, path.string() converts to the system code page, but QString::fromStdString()
-    // expects UTF-8 — encoding mismatch corrupts non-ASCII characters. Using wstring() stays in
-    // UTF-16 which QString::fromStdWString() handles natively. See #2736.
+    // On Windows, wstring() is the path's own UTF-16, which QString takes as it is, so the result
+    // does not depend on how Boost encodes path.string(): UTF-8 once SetupEnvironment() has run,
+    // and the system code page before that.
 #ifdef WIN32
     return QString::fromStdWString(path.wstring());
 #else
@@ -623,9 +622,18 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 
             if (!autostartup.data_dir.empty())
             {
-                autostartup_arguments = L"-datadir=\""
-                        + autostartup.data_dir.wstring()
-                        + L"\" ";
+                // The started process splits its command line with CommandLineToArgvW()
+                // (WinCmdLineArgs), which reads backslashes just before a quote as escapes:
+                // 2n of them give n and leave the quote ending the argument; 2n+1 give n
+                // and a literal quote. A data directory ending in a backslash, such as a
+                // drive root (E:\), would escape its closing quote and take in the
+                // arguments after it. Doubled, its trailing backslashes stay as they are
+                // and the quote stays a quote.
+                std::wstring data_dir = autostartup.data_dir.wstring();
+                const size_t last = data_dir.find_last_not_of(L'\\');
+                const size_t trailing = last == std::wstring::npos ? data_dir.size() : data_dir.size() - last - 1;
+                data_dir.append(trailing, L'\\');
+                autostartup_arguments = L"-datadir=\"" + data_dir + L"\" ";
             }
 
             autostartup_arguments += Utf8ToWide(autostartup.arguments);

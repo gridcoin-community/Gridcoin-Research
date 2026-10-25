@@ -16,6 +16,7 @@
 
 #include <exception>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <thread>
 #include <typeinfo>
@@ -146,6 +147,34 @@ static bool CheckValid(const std::string& key, const util::SettingsValue& val, u
     }
     return true;
 }
+
+#ifdef WIN32
+/**
+ * On Windows a path is built from UTF-8 (SetupEnvironment()), and building one
+ * from anything else throws wherever the path is first used -- at startup, for a
+ * value that a configuration file saved in a legacy code page gives one of these
+ * options. Refuse such a value as the file is read instead, naming the option and
+ * the file. Other options keep their bytes as they are: a password, say, works in
+ * any encoding, as long as both ends read it from the same file.
+ */
+static bool CheckPathValueIsUtf8(const std::string& key, const util::SettingsValue& val, const std::string& filepath,
+                                 std::string& error)
+{
+    static const std::set<std::string> path_options{
+        "backupdir", "blocksdir", "boincdatadir", "conf", "datadir", "debuglogfile", "guilogfile", "loadblock",
+        "pid", "settings", "wallet",
+    };
+    if (!val.isStr() || path_options.count(key) == 0) return true;
+    try {
+        Utf8ToWide(val.get_str());
+    } catch (const std::range_error&) {
+        error = strprintf("the value of -%s in configuration file \"%s\" is not valid UTF-8; save the file as UTF-8",
+                          key, filepath);
+        return false;
+    }
+    return true;
+}
+#endif
 
 namespace {
 fs::path StripRedundantLastElementsOfPath(const fs::path& path)
@@ -961,6 +990,11 @@ bool ArgsManager::ReadConfigStream(std::istream& stream, const std::string& file
             if (!CheckValid(key, value, *flags, error)) {
                 return false;
             }
+#ifdef WIN32
+            if (!CheckPathValueIsUtf8(key, value, filepath, error)) {
+                return false;
+            }
+#endif
             m_settings.ro_config[section][key].push_back(value);
         } else {
             if (ignore_invalid_keys) {

@@ -288,6 +288,12 @@ find_package(Threads REQUIRED)
 
 if(SYSTEM_BDB)
     find_package(BerkeleyDB 5.3...<5.4 COMPONENTS CXX REQUIRED)
+    if(WIN32)
+        message(WARNING "SYSTEM_BDB on Windows: the wallet gives Berkeley DB its paths in UTF-8, which it "
+                        "reads correctly only if it was built with UNICODE and _UNICODE, as the bundled copy "
+                        "is (src/bdb53/CMakeLists.txt). Otherwise a data directory or wallet file with a "
+                        "non-ASCII character in its name will not open.")
+    endif()
 else()
     find_program(SH_EXE NAMES sh bash REQUIRED)
     find_program(MAKE_EXE NAMES gmake nmake make REQUIRED)

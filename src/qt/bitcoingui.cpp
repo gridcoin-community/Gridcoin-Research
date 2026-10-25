@@ -1947,10 +1947,8 @@ void BitcoinGUI::backupWallet()
     QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
 
     // Suggest the names actually in use, taking only the filename component so a
-    // configured path cannot leak into the suggestion. boostPathToQString, not
-    // QString::fromStdString(path.string()): on Windows the latter reads the
-    // system code page as UTF-8 and corrupts non-ASCII names (see #2736), which
-    // a wallet or conf file is perfectly entitled to have.
+    // configured path cannot leak into the suggestion. boostPathToQString keeps a
+    // non-ASCII name, which a wallet or conf file is perfectly entitled to have.
     const QString wallet_suggestion = GUIUtil::boostPathToQString(
         fs::path(gArgs.GetArg("-wallet", "wallet.dat")).filename());
     const QString config_suggestion = GUIUtil::boostPathToQString(

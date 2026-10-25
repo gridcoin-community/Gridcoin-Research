@@ -71,11 +71,9 @@ void init_blockindex(leveldb::Options& options, bool fRemoveOld = false) {
 
     fs::create_directory(directory);
     LogPrintf("Opening LevelDB in %s", directory.string());
-    // LevelDB's Windows port internally converts paths from UTF-8 to UTF-16 via
-    // MultiByteToWideChar(CP_UTF8). But fs::path::string() produces code page bytes, not UTF-8.
-    // Utf8PathString provides proper UTF-8 encoding when the path contains non-codepage characters.
-    // For codepage-safe paths, it returns path.string() unchanged. See #2736.
-    leveldb::Status status = leveldb::DB::Open(options, fsbridge::Utf8PathString(directory), &txdb);
+    // LevelDB's Windows port reads the path as UTF-8 (MultiByteToWideChar(CP_UTF8)), which is
+    // what fs::path::string() returns there: SetupEnvironment() makes it UTF-8.
+    leveldb::Status status = leveldb::DB::Open(options, directory.string(), &txdb);
     if (!status.ok()) {
         throw runtime_error(strprintf("init_blockindex(): error opening database environment %s", status.ToString()));
     }
