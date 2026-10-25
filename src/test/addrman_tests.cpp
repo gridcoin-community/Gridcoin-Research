@@ -6,7 +6,9 @@
 #include <string>
 #include <boost/test/unit_test.hpp>
 
+#include "clientversion.h"
 #include "hash.h"
+#include "streams.h"
 #include "netbase.h"
 #include "random.h"
 
@@ -477,6 +479,76 @@ BOOST_AUTO_TEST_CASE(caddrinfo_get_new_bucket)
     // Test 34: IP addresses in the different source groups should map to more
     //  than 64 buckets.
     BOOST_CHECK(buckets.size() > 64);
+}
+
+// bitcoin#19954 (addrman part) / #20516: peers.dat format V3_BIP155.
+BOOST_AUTO_TEST_CASE(addrman_serialize_torv3_roundtrip)
+{
+    AddrMan addrman{/*deterministic=*/true};
+    CNetAddr v3;
+    BOOST_REQUIRE(v3.SetSpecial("pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion"));
+    const CService tor_svc(v3, 32749);
+    const CService ip_svc = ResolveService("250.1.1.1", 32749);
+    const CNetAddr source = ResolveIP("252.2.2.2");
+    addrman.Add(CAddress(tor_svc, NODE_NETWORK), source);
+    addrman.Add(CAddress(ip_svc, NODE_NETWORK), source);
+    BOOST_REQUIRE_EQUAL(addrman.size(), 2U);
+
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << addrman;
+    // format byte V3_BIP155, compat byte INCOMPATIBILITY_BASE + 3.
+    BOOST_REQUIRE(ss.size() > 2);
+    BOOST_CHECK_EQUAL(uint8_t(ss[0]), 3);
+    BOOST_CHECK_EQUAL(uint8_t(ss[1]), 35);
+    // A stock (pre-V3) Gridcoin checks byte 1 == 32 ("keysize") and throws.
+    BOOST_CHECK(uint8_t(ss[1]) != 32);
+
+    AddrMan addrman2{/*deterministic=*/true};
+    ss >> addrman2;
+    BOOST_CHECK_EQUAL(addrman2.size(), 2U);
+    AddrInfo* info = addrman2.Find(v3);
+    BOOST_REQUIRE(info != nullptr);
+    BOOST_CHECK(static_cast<const CService&>(*info) == tor_svc);
+    BOOST_CHECK(info->IsTor() && !info->IsAddrV1Compatible());
+    BOOST_CHECK(addrman2.Find(ip_svc) != nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(addrman_unserialize_legacy_v1)
+{
+    // Hand-built stock-Gridcoin peers.dat body (format 1, keysize 32), one new entry.
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << uint8_t{1} << uint8_t{32} << uint256::ONE;
+    ss << int{1} /* nNew */ << int{0} /* nTried */ << int{0 ^ (1 << 30)} /* nUBuckets */;
+    // AddrInfo: CAddress (stored version = old CLIENT_VERSION, V1) + source + nLastSuccess + nAttempts
+    ss << uint32_t{5040200} << uint32_t{0x61bc6649} << uint64_t{NODE_NETWORK};
+    const CService svc = ResolveService("250.1.1.1", 32749);
+    ss << svc;                          // V1 (stream has no ADDRV2_FORMAT)
+    ss << ResolveIP("252.2.2.2");       // source, V1
+    ss << int64_t{0} << int{0};
+
+    AddrMan addrman{/*deterministic=*/true};
+    ss >> addrman;
+    BOOST_CHECK_EQUAL(addrman.size(), 1U);
+    BOOST_CHECK(addrman.Find(svc) != nullptr);
+
+    // Re-writing upgrades it to V3.
+    CDataStream out(SER_DISK, CLIENT_VERSION);
+    out << addrman;
+    BOOST_CHECK_EQUAL(uint8_t(out[0]), 3);
+}
+
+BOOST_AUTO_TEST_CASE(addrman_unserialize_future_incompatible)
+{
+    // lowest_compatible (byte - 32) above our FILE_FORMAT must be rejected.
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << uint8_t{4} << uint8_t{32 + 4} << uint256::ONE << int{0} << int{0} << int{0};
+    AddrMan addrman{/*deterministic=*/true};
+    BOOST_CHECK_THROW(ss >> addrman, std::ios_base::failure);
+    // compat byte below the base is corruption.
+    CDataStream ss2(SER_DISK, CLIENT_VERSION);
+    ss2 << uint8_t{3} << uint8_t{7} << uint256::ONE << int{0} << int{0} << int{0};
+    AddrMan addrman2{/*deterministic=*/true};
+    BOOST_CHECK_THROW(ss2 >> addrman2, std::ios_base::failure);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

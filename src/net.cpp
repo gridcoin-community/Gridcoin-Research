@@ -208,9 +208,27 @@ void AdvertiseLocal(CNode *pnode)
 
 
 
-// learn a new local address
-bool AddLocal(const CService& addr, int nScore)
+/**
+ * If an IPv6 address belongs to the address range used by the CJDNS network and
+ * the CJDNS network is reachable (-cjdnsreachable config is set), then change
+ * the type from NET_IPV6 to NET_CJDNS.
+ * @param[in] service Address to potentially convert.
+ * @return a copy of `service` either unmodified or changed to CJDNS.
+ */
+CService MaybeFlipIPv6toCJDNS(const CService& service)
 {
+    CService ret{service};
+    if (ret.m_net == NET_IPV6 && ret.HasCJDNSPrefix() && !IsLimited(NET_CJDNS)) {
+        ret.m_net = NET_CJDNS;
+    }
+    return ret;
+}
+
+// learn a new local address
+bool AddLocal(const CService& addr_, int nScore)
+{
+    CService addr{MaybeFlipIPv6toCJDNS(addr_)};
+
     if (!addr.IsRoutable())
         return false;
 
@@ -375,7 +393,7 @@ std::shared_ptr<CNode> CConnman::ConnectNode(CAddress addrConnect, const char *p
 
     // Connect
     SOCKET hSocket;
-    if (pszDest ? ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort()) : ConnectSocket(addrConnect, hSocket))
+    if (pszDest ? ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort(), GetConnectTimeout(), MaybeFlipIPv6toCJDNS) : ConnectSocket(addrConnect, hSocket))
     {
         g_connman->GetAddrMan().Attempt(addrConnect);
         /// debug print
@@ -903,9 +921,13 @@ void CConnman::ThreadSocketHandler2()
 
             int max_connections = std::min<int>(gArgs.GetArg("-maxconnections", 125), 950);
 
-            if (hSocket != INVALID_SOCKET)
-                if (!addr.SetSockAddr((const struct sockaddr*)&sockaddr))
+            if (hSocket != INVALID_SOCKET) {
+                if (!addr.SetSockAddr((const struct sockaddr*)&sockaddr)) {
                     LogPrintf("Warning: Unknown socket family");
+                } else {
+                    addr = CAddress{MaybeFlipIPv6toCJDNS(addr), NODE_NONE};
+                }
+            }
 
             std::set<CNetAddr> setActiveInbound;
             {
@@ -1668,6 +1690,9 @@ void CConnman::ThreadOpenAddedConnections2()
         vector<CService> vservNode(0);
         if(Lookup(strAddNode.c_str(), vservNode, Params().GetDefaultPort(), GetNameLookup(), 0))
         {
+            // Match getaddednodeinfo: fc00::/8 entries are CJDNS when reachable.
+            for (auto& service : vservNode)
+                service = MaybeFlipIPv6toCJDNS(service);
             vservAddressesToAdd.push_back(vservNode);
             {
                 LOCK(cs_setservAddNodeAddresses);
@@ -1834,8 +1859,9 @@ void CConnman::ThreadMessageHandler2()
 
 
 
-bool BindListenPort(const CService &addrBind, string& strError)
+bool BindListenPort(const CService &addrBind_, string& strError)
 {
+    const CService addrBind{MaybeFlipIPv6toCJDNS(addrBind_)};
     strError = "";
     int nOne = 1;
 
@@ -2191,12 +2217,14 @@ void CConnman::RelayAddress(const CAddress& addr, bool fReachable)
     if (hashSalt == 0)
         hashSalt = UintToArith256(GetRandHash());
     uint64_t hashAddr = addr.GetHash();
-    uint256 hashRand = ArithToUint256(hashSalt ^ (hashAddr << 32) ^ ((GetAdjustedTime() + hashAddr) / (24 * 60 * 60)));
+    uint256 hashRand = ArithToUint256(hashSalt ^ ((hashAddr & 0xFFFFFFFF) << 32) ^ ((GetAdjustedTime() + hashAddr) / (24 * 60 * 60)));
     hashRand = Hash(hashRand);
     multimap<uint256, CNode*> mapMix;
     for (auto const& pnode : m_nodes)
     {
         CNode* pnodeRaw = pnode.get();
+        // Only pick relay peers that can receive this address (bitcoin#20661).
+        if (!pnodeRaw->IsAddrCompatible(addr)) continue;
         // Mix node identity into the relay selection. Cast the pointer value to an
         // integer rather than memcpy'ing its object representation: well-defined, and
         // (intentionally) the same low-order value as the old memcpy on this platform,

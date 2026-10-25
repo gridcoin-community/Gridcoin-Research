@@ -906,9 +906,12 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-seednode=<ip>", "Connect to a node to retrieve peer addresses, and disconnect",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-cjdnsreachable", "If set, then this host is configured for CJDNS (connecting to fc00::/8 "
+                                      "addresses would lead us to the CJDNS network) (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-externalip=<ip>", "Specify your own public address",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
-    argsman.AddArg("-onlynet=<net>", "Make outgoing connections only through network <net> (IPv4, IPv6 or Tor). "
+    argsman.AddArg("-onlynet=<net>", "Make outgoing connections only through network <net> (IPv4, IPv6, Tor or CJDNS). "
                                      "Incoming connections are not affected by this option. This option can be specified "
                                      "multiple times to allow multiple networks.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
@@ -1311,7 +1314,13 @@ void ApplyRwSettingSideEffect(const std::string& name)
             if (addrProxy.IsValid()) {
                 if (!IsLimited(NET_IPV4)) SetProxy(NET_IPV4, addrProxy);
                 if (!IsLimited(NET_IPV6)) SetProxy(NET_IPV6, addrProxy);
+                SetProxy(NET_CJDNS, addrProxy);
                 SetNameProxy(addrProxy);
+                // As at startup, -proxy also reaches Tor unless -tor overrides it.
+                if (!gArgs.IsArgSet("-tor")) {
+                    SetProxy(NET_TOR, addrProxy);
+                    if (gArgs.GetArgs("-onlynet").empty()) SetReachable(NET_TOR, true);
+                }
             }
         }
     } else if (name == "upnp") {
@@ -2041,8 +2050,25 @@ bool AppInit2(ThreadHandlerPtr threads)
         }
     }
 
+    if (!gArgs.GetBoolArg("-cjdnsreachable", false)) {
+        if (!gArgs.GetArgs("-onlynet").empty() && !IsLimited(NET_CJDNS)) {
+            return InitError(_("Outbound connections restricted to CJDNS (-onlynet=cjdns) but "
+                               "-cjdnsreachable is not provided"));
+        }
+        SetReachable(NET_CJDNS, false);
+    }
+    // Now IsReachable(NET_CJDNS) is true if:
+    // 1. -cjdnsreachable is given and
+    // 2.1. -onlynet is not given or
+    // 2.2. -onlynet=cjdns is given
+
+    // Mirrors Bitcoin Core master's -proxy/-onion handling, with Gridcoin's
+    // -tor taking the place of -onion. -proxy also covers Tor onion services
+    // unless -tor overrides or disables it, and NET_TOR is only reachable
+    // when a proxy for it is configured.
+    const bool onlynet_used_with_tor = !gArgs.GetArgs("-onlynet").empty() && !IsLimited(NET_TOR);
     CService addrProxy;
-    bool fProxy = false;
+    CService addrOnion;
     if (gArgs.IsArgSet("-proxy")) {
         addrProxy = LookupNumeric(gArgs.GetArg("-proxy", "").c_str(), 9050);
         if (!addrProxy.IsValid())
@@ -2052,29 +2078,42 @@ bool AppInit2(ThreadHandlerPtr threads)
             SetProxy(NET_IPV4, addrProxy);
         if (!IsLimited(NET_IPV6))
             SetProxy(NET_IPV6, addrProxy);
+        SetProxy(NET_CJDNS, addrProxy);
         SetNameProxy(addrProxy);
-        fProxy = true;
+        addrOnion = addrProxy;
     }
 
-    // -tor can override normal proxy, -notor disables Tor entirely
+    // -tor can override normal proxy, -notor (-tor=0) disables Tor entirely
     if (gArgs.IsArgSet("-tor")) {
-        CService addrOnion;
-
-        // If -tor is specified without any argument, and proxy was specified, then override proxy with tor
-        // at same address and port.
-        if (gArgs.GetArg("-tor", "") == "") {
-            if (fProxy) {
-                addrOnion = addrProxy;
+        const std::string tor_arg = gArgs.GetArg("-tor", "");
+        if (tor_arg == "0") {
+            addrOnion = CService();
+            if (onlynet_used_with_tor) {
+                return InitError(_("Outbound connections restricted to Tor (-onlynet=tor) but the proxy for "
+                                   "reaching the Tor network is explicitly forbidden: -tor=0"));
             }
         } else {
-            addrOnion = CService(LookupNumeric(gArgs.GetArg("-tor", "").c_str(), 9050));
+            // If -tor is specified without any argument, use the -proxy address.
+            if (tor_arg != "") {
+                addrOnion = CService(LookupNumeric(tor_arg.c_str(), 9050));
+            }
+            if (!addrOnion.IsValid()) {
+                return InitError(strprintf(_("Invalid -tor address: '%s'"), gArgs.GetArg("-tor", gArgs.GetArg("-proxy", ""))));
+            }
         }
+    }
 
-        if (!addrOnion.IsValid()) {
-            return InitError(strprintf(_("Invalid -tor address: '%s'"), gArgs.GetArg("-tor", gArgs.GetArg("-proxy", ""))));
-        }
+    if (addrOnion.IsValid()) {
         SetProxy(NET_TOR, addrOnion);
-        SetReachable(NET_TOR, true);
+        if (gArgs.GetArgs("-onlynet").empty() || onlynet_used_with_tor) {
+            SetReachable(NET_TOR, true);
+        }
+    } else {
+        if (onlynet_used_with_tor) {
+            return InitError(_("Outbound connections restricted to Tor (-onlynet=tor) but the proxy for "
+                               "reaching the Tor network is not provided: none of -proxy or -tor is given"));
+        }
+        SetReachable(NET_TOR, false);
     }
 
     // see Step 2: parameter interactions for more information about these
@@ -2097,7 +2136,8 @@ bool AppInit2(ThreadHandlerPtr threads)
         } else {
             struct in_addr inaddr_any;
             inaddr_any.s_addr = INADDR_ANY;
-            if (!IsLimited(NET_IPV6))
+            // CJDNS uses IPv6 sockets even when IPv6 outgoing connections are disabled.
+            if (!IsLimited(NET_IPV6) || !IsLimited(NET_CJDNS))
                 fBound |= Bind(CService(in6addr_any, GetListenPort()), false);
             if (!IsLimited(NET_IPV4))
                 fBound |= Bind(CService(inaddr_any, GetListenPort()), !fBound);

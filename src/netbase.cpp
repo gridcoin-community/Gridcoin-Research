@@ -42,6 +42,7 @@ enum Network ParseNetwork(std::string net) {
     if (net == "ipv4") return NET_IPV4;
     if (net == "ipv6") return NET_IPV6;
     if (net == "tor")  return NET_TOR;
+    if (net == "cjdns") return NET_CJDNS;
     return NET_UNROUTABLE;
 }
 
@@ -70,6 +71,14 @@ bool static LookupIntern(const char *pszName, std::vector<CNetAddr>& vIP, unsign
 #endif
     struct addrinfo *aiRes = nullptr;
     int nErr = getaddrinfo(pszName, nullptr, &aiHint, &aiRes);
+#ifndef WIN32
+    if (nErr && fAllowLookup) {
+        // AI_ADDRCONFIG can reject numeric IPv6 addresses on IPv4-only hosts.
+        // Retry numeric parsing only, preserving hostname lookup behavior.
+        aiHint.ai_flags = AI_NUMERICHOST;
+        nErr = getaddrinfo(pszName, nullptr, &aiHint, &aiRes);
+    }
+#endif
     if (nErr)
         return false;
 
@@ -176,14 +185,18 @@ bool LookupSubNet(const char* pszName, CSubNet& ret)
         if (slash != strSubnet.npos)
         {
             std::string strNetmask = strSubnet.substr(slash + 1);
-            int32_t n;
-            // IPv4 addresses start at offset 12, and first 12 bytes must match, so just offset n
-            if (ParseInt32(strNetmask, &n)) { // If valid number, assume /24 syntax
+            uint8_t n;
+            if (ParseUInt8(strNetmask, &n)) { // If valid number, assume /24 syntax
                 ret = CSubNet(network, n);
                 return ret.IsValid();
             }
-            else // If not a valid number, try full netmask syntax
+            else // If not a valid CIDR count, require an explicit address mask.
             {
+                // Do not reinterpret overflowing decimal CIDR counts as
+                // integer-form IPv4 addresses (e.g. 4294967295 == 255.255.255.255).
+                if (strNetmask.find_first_of(".:") == std::string::npos) {
+                    return false;
+                }
                 // Never allow lookup for netmask
                 if (LookupHost(strNetmask.c_str(), vIP, 1, false)) {
                     ret = CSubNet(network, vIP[0]);
@@ -559,7 +572,7 @@ bool ConnectSocket(const CService &addrDest, SOCKET& hSocketRet, int nTimeout)
     return true;
 }
 
-bool ConnectSocketByName(CService &addr, SOCKET& hSocketRet, const char *pszDest, int portDefault, int nTimeout)
+bool ConnectSocketByName(CService &addr, SOCKET& hSocketRet, const char *pszDest, int portDefault, int nTimeout, CService (*transform)(const CService&))
 {
     string strDest;
     int port = portDefault;
@@ -572,6 +585,8 @@ bool ConnectSocketByName(CService &addr, SOCKET& hSocketRet, const char *pszDest
 
     CService addrResolved;
     if (Lookup(strDest.c_str(), addrResolved, port, fNameLookup && !HaveNameProxy())) {
+        // Apply the caller's network classification before choosing its proxy/socket.
+        if (transform) addrResolved = transform(addrResolved);
         if (addrResolved.IsValid()) {
             addr = addrResolved;
             return ConnectSocket(addr, hSocketRet, nTimeout);
