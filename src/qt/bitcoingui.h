@@ -117,6 +117,25 @@ public:
     bool isPrivacyModeActivated() const;
 
     /**
+     * @brief Builds the tooltip for the staking icon in the status bar.
+     * @param staking Whether the miner is currently staking.
+     * @param net_weight The network weight.
+     * @param coin_weight The wallet's coin weight. When it is zero and the miner
+     * is not staking, the tooltip reports that staking is not possible.
+     * @param etts_seconds Estimated time to stake in seconds, as
+     * GetEstimatedStakingFrequency reads it.
+     * @param masked Whether mask values (privacy mode) is on.
+     * @param warnings The miner warnings to show when not staking.
+     * @return The tooltip text.
+     */
+    static QString StakingToolTip(bool staking,
+                                  double net_weight,
+                                  double coin_weight,
+                                  unsigned int etts_seconds,
+                                  bool masked,
+                                  const QString& warnings);
+
+    /**
      * Begin an explicit application shutdown: the menu Exit / Ctrl-Q / tray
      * Exit, a snapshot or reset-blockchain restart, the post-encryption
      * restart, or a core-initiated QueueShutdown. Sets a flag so closeEvent()
@@ -281,6 +300,9 @@ private:
     /** Re-check the toolbar action that matches the currently displayed page. */
     void recheckCurrentTabAction();
 
+    /** Format the staking frequency for an estimated time to stake in seconds. */
+    static QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
+
 
 public slots:
     /** Set number of connections shown in the UI */
@@ -388,8 +410,6 @@ private slots:
     void updateStakingIcon(bool staking, double net_weight, double coin_weight, double etts_days);
     void updateScraperIcon(int scraperEventtype, int status);
     void updateBeaconIcon();
-
-    QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
     void handleNewPoll();
     void extracted(QStringList& expiring_polls, QString& notification);

@@ -2132,23 +2132,51 @@ void BitcoinGUI::updateStakingIcon(
     if (staking)
     {
         setStatusIcon(labelStakingIcon, m_staking_icon, ":/icons/status_staking_yes");
-        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> staking frequency is %3.")
-                                     .arg(QString::number(coin_weight, 'f', 0),
-                                          QString::number(net_weight, 'f', 0),
-                                          GetEstimatedStakingFrequency(etts_days)));
     }
     else if (coin_weight == 0.0)
     {
         setStatusIcon(labelStakingIcon, m_staking_icon, ":/icons/status_staking_problem");
-        labelStakingIcon->setToolTip(tr("Unable to stake: %1")
-                                     .arg(clientModel->getMinerWarnings()));
     }
     else
     {
         setStatusIcon(labelStakingIcon, m_staking_icon, ":/icons/status_staking_no");
-        labelStakingIcon->setToolTip(tr("Not staking currently: %1, <b>Estimated</b> staking frequency is %2.")
-                                     .arg(clientModel->getMinerWarnings(),
-                                          GetEstimatedStakingFrequency(etts_days)));
+    }
+
+    labelStakingIcon->setToolTip(StakingToolTip(staking,
+                                                net_weight,
+                                                coin_weight,
+                                                etts_days,
+                                                isPrivacyModeActivated(),
+                                                clientModel->getMinerWarnings()));
+}
+
+QString BitcoinGUI::StakingToolTip(
+    bool staking,
+    double net_weight,
+    double coin_weight,
+    unsigned int etts_seconds,
+    bool masked,
+    const QString& warnings)
+{
+    Q_UNUSED(masked);
+
+    if (staking)
+    {
+        return tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> staking frequency is %3.")
+            .arg(QString::number(coin_weight, 'f', 0),
+                 QString::number(net_weight, 'f', 0),
+                 GetEstimatedStakingFrequency(etts_seconds));
+    }
+    else if (coin_weight == 0.0)
+    {
+        return tr("Unable to stake: %1")
+            .arg(warnings);
+    }
+    else
+    {
+        return tr("Not staking currently: %1, <b>Estimated</b> staking frequency is %2.")
+            .arg(warnings,
+                 GetEstimatedStakingFrequency(etts_seconds));
     }
 }
 
