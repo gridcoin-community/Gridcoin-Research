@@ -1,13 +1,15 @@
 package=openssl
-$(package)_version=1.1.1l
-$(package)_download_path=https://github.com/openssl/openssl/archive/refs/tags
-$(package)_file_name=OpenSSL_$(subst .,_,$($(package)_version)).tar.gz
-$(package)_sha256_hash=dac036669576e83e8523afdb3971582f8b5d33993a2d6a5af87daa035f529b4f
+$(package)_version=3.5.9
+$(package)_download_path=https://github.com/openssl/openssl/releases/download/openssl-$($(package)_version)
+$(package)_file_name=openssl-$($(package)_version).tar.gz
+$(package)_sha256_hash=603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a
 
 define $(package)_set_vars
 # OpenSSL's Configure seem to ignore LDFLAGS so we pass it through the CC variable.
 $(package)_config_env=AR="$($(package)_ar)" RANLIB="$($(package)_ranlib)" CC="$($(package)_cc) $($(package)_ldflags)"
 $(package)_config_opts=--prefix=$(host_prefix) --openssldir=$(host_prefix)/etc/openssl
+# OpenSSL 3 installs into lib64 on some 64-bit targets; depends expects lib.
+$(package)_config_opts+=--libdir=lib
 $(package)_config_opts+=no-camellia
 $(package)_config_opts+=no-capieng
 $(package)_config_opts+=no-cast
@@ -16,10 +18,10 @@ $(package)_config_opts+=no-dso
 $(package)_config_opts+=no-dtls1
 $(package)_config_opts+=no-ec_nistp_64_gcc_128
 $(package)_config_opts+=no-gost
-$(package)_config_opts+=no-heartbeats
 $(package)_config_opts+=no-idea
 $(package)_config_opts+=no-md2
 $(package)_config_opts+=no-mdc2
+$(package)_config_opts+=no-module
 $(package)_config_opts+=no-rc4
 $(package)_config_opts+=no-rc5
 $(package)_config_opts+=no-rdrand
