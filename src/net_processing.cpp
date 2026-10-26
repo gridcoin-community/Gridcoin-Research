@@ -477,12 +477,23 @@ DeferredRelay::~DeferredRelay()
 //! 20 -- a buggy peer survives a couple of slips, a flooder is banned at
 //! five. Policy rejects honest nodes can disagree on (UTXO races around
 //! confirmation, fee bounds, pool-full, replacement races, completeness)
-//! score 0.
+//! score 0. Before v15 the message is dropped unread and scores nothing.
 static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
 {
+    // Held to the end: the validation below needs it, and taking it first
+    // keeps the cs_main -> cs_mapAlreadyAskedFor order the TX and BLOCK
+    // handlers use.
+    LOCK(cs_main);
+
+    // Not active: ignore silently, before reading anything, as a pre-v15 node
+    // would ignore the unknown message.
+    if (!IsV15Enabled(nBestHeight)) return;
+
+    // Bounded at the read: an oversize length throws here instead of being
+    // copied in full and refused later by ValidatePSGTForPool.
     std::vector<unsigned char> wire_bytes;
     try {
-        vRecv >> wire_bytes;
+        vRecv >> LIMITED_VECTOR(wire_bytes, MAX_PSGT_WIRE_SIZE);
     } catch (const std::exception&) {
         pfrom->Misbehaving(20);
         error("%s: undecodable psgt message from %s", __func__, pfrom->addr.ToString());
@@ -514,11 +525,10 @@ static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
         mapAlreadyAskedFor.erase(inv);
     }
 
-    LOCK(cs_main);
-
-    // Not active, or unable to validate against a current UTXO view yet:
-    // ignore silently, as a pre-v15 node would ignore the unknown message.
-    if (!IsV15Enabled(nBestHeight) || OutOfSyncByAge()) return;
+    // Unable to validate against a current UTXO view yet: ignore silently.
+    // This stays after the bookkeeping above so an out-of-sync node still
+    // stops re-asking for the revision.
+    if (OutOfSyncByAge()) return;
 
     PSGTPoolEntry entry;
     std::string reason;
