@@ -2158,14 +2158,18 @@ QString BitcoinGUI::StakingToolTip(
     bool masked,
     const QString& warnings)
 {
-    Q_UNUSED(masked);
+    // Mask values shows "#.##" for the coin weight on the overview page. The
+    // staking estimate is computed from the wallet's stakeable balance, so it
+    // is masked along with the coin weight. The network weight is not wallet
+    // data and stays visible.
+    const QString mask = QStringLiteral("#.##");
 
     if (staking)
     {
         return tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> staking frequency is %3.")
-            .arg(QString::number(coin_weight, 'f', 0),
+            .arg(masked ? mask : QString::number(coin_weight, 'f', 0),
                  QString::number(net_weight, 'f', 0),
-                 GetEstimatedStakingFrequency(etts_seconds));
+                 masked ? mask : GetEstimatedStakingFrequency(etts_seconds));
     }
     else if (coin_weight == 0.0)
     {
@@ -2176,7 +2180,7 @@ QString BitcoinGUI::StakingToolTip(
     {
         return tr("Not staking currently: %1, <b>Estimated</b> staking frequency is %2.")
             .arg(warnings,
-                 GetEstimatedStakingFrequency(etts_seconds));
+                 masked ? mask : GetEstimatedStakingFrequency(etts_seconds));
     }
 }
 

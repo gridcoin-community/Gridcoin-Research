@@ -124,7 +124,8 @@ public:
      * is not staking, the tooltip reports that staking is not possible.
      * @param etts_seconds Estimated time to stake in seconds, as
      * GetEstimatedStakingFrequency reads it.
-     * @param masked Whether mask values (privacy mode) is on.
+     * @param masked Whether mask values (privacy mode) is on. When it is, the
+     * coin weight and the staking frequency are shown as "#.##".
      * @param warnings The miner warnings to show when not staking.
      * @return The tooltip text.
      */
