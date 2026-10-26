@@ -179,8 +179,14 @@ const std::set<std::string> SENSITIVE_ARG_COMMANDS = {
     // re-deriving which settings are sensitive in a second place and getting it
     // wrong silently.
     "changesettings",
+    // Takes the HTLC preimage, which is meant to stay secret until the claim
+    // is broadcast.
+    "claimhtlc",
     "encryptwallet",
     "importprivkey",
+    // Takes the phrase password, which restores the wallet together with the
+    // phrase.
+    "makeseedphrase",
     "restoreseedphrase",
     // Both alert commands take the WIF-encoded alert master private key as an
     // argument. The console echoes the line into the pane and the Up-arrow
