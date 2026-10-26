@@ -14,6 +14,7 @@
 #include "psgttoastdamptests.h"
 #include "researchermodeltests.h"
 #include "researcherwizardpagetests.h"
+#include "rpcconsoletests.h"
 #include "sidestakemodeltests.h"
 #include "uritests.h"
 
@@ -103,6 +104,10 @@ int main(int argc, char *argv[])
 
     ResearcherModelTests test12;
     if (QTest::qExec(&test12) != 0)
+        fInvalid = true;
+
+    RPCConsoleTests test13;
+    if (QTest::qExec(&test13) != 0)
         fInvalid = true;
 
     return fInvalid;

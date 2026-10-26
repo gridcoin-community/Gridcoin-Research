@@ -9,6 +9,9 @@
 #include <QWidget>
 #include <QCompleter>
 #include <QMenu>
+#include <QString>
+
+#include <string>
 
 namespace Ui {
     class RPCConsole;
@@ -20,6 +23,17 @@ class QMenu;
 class QItemSelection;
 class QThread;
 QT_END_NAMESPACE
+
+namespace RPCConsoleDetail {
+//! First token of a command line, seeing through one layer of quoting. Used
+//! when the line does not parse, where there is no argv to consult.
+std::string LeadingCommandToken(const QString& command);
+
+//! The form of a console command line that is safe to echo, log or keep in
+//! history: "<command> (arguments not shown)" when the command's arguments
+//! are secret, otherwise the line unchanged.
+QString RedactSensitiveArgs(const QString& command);
+} // namespace RPCConsoleDetail
 
 /** Local Bitcoin RPC console. */
 class RPCConsole: public QDialog

@@ -195,7 +195,9 @@ const std::set<std::string> SENSITIVE_ARG_COMMANDS = {
     "walletpassphrase",
     "walletpassphrasechange",
 };
+} // namespace
 
+namespace RPCConsoleDetail {
 //! Best-effort command name for text that parseCommandLine REJECTED, where there
 //! is no parsed argv to consult. Reads the first token, seeing through one layer
 //! of quoting, because a quoted name is how the whitespace-splitting version of
@@ -262,7 +264,7 @@ QString RedactSensitiveArgs(const QString& command)
 
     return command;
 }
-} // namespace
+} // namespace RPCConsoleDetail
 
 void RPCExecutor::request(const QString &command)
 {
@@ -291,7 +293,7 @@ void RPCExecutor::request(const QString &command)
         // debug.log. A failed command is the common case for the very commands
         // that carry a secret, so log the name without its arguments.
         GUILogPrintf("gridcoinresearch:  Handling Error [Request %s]...",
-                     RedactSensitiveArgs(command).toStdString());
+                     RPCConsoleDetail::RedactSensitiveArgs(command).toStdString());
         emit reply(RPCConsole::CMD_ERROR, QString::fromStdString(result.output));
     }
 }
@@ -612,7 +614,7 @@ void RPCConsole::on_lineEdit_returnPressed()
         // into bug reports, and the history is one Up-arrow away for anyone at
         // the keyboard. This matches how upstream feeds its filtered command to
         // both sinks.
-        const QString display_cmd = RedactSensitiveArgs(cmd);
+        const QString display_cmd = RPCConsoleDetail::RedactSensitiveArgs(cmd);
         message(CMD_REQUEST, display_cmd);
         emit cmdRequest(cmd);
         // Remove command, if already in history
