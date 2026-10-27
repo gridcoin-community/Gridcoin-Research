@@ -10,6 +10,8 @@ $(package)_config_env=AR="$($(package)_ar)" RANLIB="$($(package)_ranlib)" CC="$(
 $(package)_config_opts=--prefix=$(host_prefix) --openssldir=$(host_prefix)/etc/openssl
 # OpenSSL 3 installs into lib64 on some 64-bit targets; depends expects lib.
 $(package)_config_opts+=--libdir=lib
+# Nothing here uses an OpenSSL config file, so do not load one.
+$(package)_config_opts+=no-autoload-config
 $(package)_config_opts+=no-camellia
 $(package)_config_opts+=no-capieng
 $(package)_config_opts+=no-cast
