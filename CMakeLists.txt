@@ -363,6 +363,13 @@ endif()
 if(BUNDLED_OPENSSL)
     hunter_add_package(OpenSSL)
 endif()
+# A static Windows build links the static OpenSSL from depends. With
+# OPENSSL_USE_STATIC_LIBS, FindOpenSSL adds the system libraries it needs
+# (ws2_32 and crypt32) to the OpenSSL targets, so they follow libcrypto.a on the
+# link line. A value a user or toolchain file set is kept.
+if(WIN32 AND STATIC_LIBS AND NOT DEFINED OPENSSL_USE_STATIC_LIBS)
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
+endif()
 find_package(OpenSSL 1.1.0 REQUIRED)
 
 if(BUNDLED_CURL)
@@ -370,6 +377,14 @@ if(BUNDLED_CURL)
     find_package(CURL CONFIG REQUIRED)
 else()
     find_package(CURL REQUIRED)
+    # FindCURL adds no system libraries for a static MinGW libcurl. Add the ones
+    # its libcurl.pc lists (zlib comes from ZLIB::ZLIB): curl 8's Schannel
+    # backend needs secur32, and crypt32 is for its certificate handling. A curl
+    # found through its own CMake package (CURL_DIR) carries them already.
+    if(WIN32 AND NOT CURL_DIR)
+        set_property(TARGET CURL::libcurl APPEND PROPERTY INTERFACE_LINK_LIBRARIES
+            secur32 bcrypt advapi32 crypt32 ws2_32 iphlpapi)
+    endif()
 endif()
 
 find_package(ZLIB REQUIRED)
