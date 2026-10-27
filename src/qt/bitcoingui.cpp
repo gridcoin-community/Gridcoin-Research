@@ -52,6 +52,7 @@
 
 #ifdef Q_OS_MACOS
 #include "macdockiconhandler.h"
+#include "macos_appearance.h"
 #endif
 
 #include <QApplication>
@@ -164,7 +165,8 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
     qApp->setWindowIcon(QPixmap(":/images/gridcoin"));
     setWindowIcon(QPixmap(":/images/gridcoin"));
 #else
-    setUnifiedTitleAndToolBarOnMac(true);
+    // No setUnifiedTitleAndToolBarOnMac(true): in Qt 6 it makes the window background translucent, so the
+    // stylesheet's window color gives way to the system appearance's. The toolbar is on the left anyway.
     QApplication::setAttribute(Qt::AA_DontShowIconsInMenus);
 #endif
 
@@ -312,7 +314,17 @@ void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
         QString sMainWindowHTML = qssStream.readAll();
         qss.close();
 
+#ifdef Q_OS_MACOS
+        // Draw the title bars and other native window parts in the theme's appearance, not the system's:
+        SetMacAppearance(qssFileName == "dark");
+#endif
         qApp->setStyleSheet(sMainWindowHTML);
+#ifdef Q_OS_MACOS
+        // The first stylesheet installs a new application style, which reloads Qt's per-class fonts from the
+        // platform theme: 11 pt toolbar buttons and table headers on macOS. Each later theme change repolishes
+        // with them and shrinks that text. Set the application font again to drop them, as the constructor does.
+        qApp->setFont(qApp->font());
+#endif
     }
 
     sSheet=qssFileName;
