@@ -314,6 +314,12 @@ void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
         qss.close();
 
         qApp->setStyleSheet(sMainWindowHTML);
+#ifdef Q_OS_MACOS
+        // The first stylesheet installs a new application style, which reloads Qt's per-class fonts from the
+        // platform theme: 11 pt toolbar buttons and table headers on macOS. Each later theme change repolishes
+        // with them and shrinks that text. Set the application font again to drop them, as the constructor does.
+        qApp->setFont(qApp->font());
+#endif
     }
 
     sSheet=qssFileName;
