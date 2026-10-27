@@ -52,6 +52,7 @@
 
 #ifdef Q_OS_MACOS
 #include "macdockiconhandler.h"
+#include "macos_appearance.h"
 #endif
 
 #include <QApplication>
@@ -313,6 +314,10 @@ void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
         QString sMainWindowHTML = qssStream.readAll();
         qss.close();
 
+#ifdef Q_OS_MACOS
+        // Draw the title bars and other native window parts in the theme's appearance, not the system's:
+        SetMacAppearance(qssFileName == "dark");
+#endif
         qApp->setStyleSheet(sMainWindowHTML);
 #ifdef Q_OS_MACOS
         // The first stylesheet installs a new application style, which reloads Qt's per-class fonts from the

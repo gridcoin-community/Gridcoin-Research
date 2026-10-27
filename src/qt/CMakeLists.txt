@@ -136,6 +136,7 @@ elseif(APPLE)
     target_sources(gridcoinqt PRIVATE
         macdockiconhandler.mm
         macnotificationhandler.mm
+        macos_appearance.mm
         macos_appnap.mm
     )
 endif()
