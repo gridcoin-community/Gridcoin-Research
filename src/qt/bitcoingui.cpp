@@ -164,7 +164,8 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
     qApp->setWindowIcon(QPixmap(":/images/gridcoin"));
     setWindowIcon(QPixmap(":/images/gridcoin"));
 #else
-    setUnifiedTitleAndToolBarOnMac(true);
+    // No setUnifiedTitleAndToolBarOnMac(true): in Qt 6 it makes the window background translucent, so the
+    // stylesheet's window color gives way to the system appearance's. The toolbar is on the left anyway.
     QApplication::setAttribute(Qt::AA_DontShowIconsInMenus);
 #endif
 
