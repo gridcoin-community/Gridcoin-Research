@@ -327,6 +327,26 @@ void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
     if (researcherModel) {
         researcherModel->setTheme(sSheet);
     }
+
+    // The connection, staking and scraper icons otherwise change their image
+    // only in their own updates, which can be minutes away. (The sync icons are
+    // the same in both themes.)
+    redrawStatusIcon(labelConnectionsIcon, m_connections_icon);
+    redrawStatusIcon(labelStakingIcon, m_staking_icon);
+    redrawStatusIcon(labelScraperIcon, m_scraper_icon);
+}
+
+void BitcoinGUI::setStatusIcon(QLabel* label, QString& shown, const QString& icon)
+{
+    shown = icon;
+    redrawStatusIcon(label, shown);
+}
+
+void BitcoinGUI::redrawStatusIcon(QLabel* label, const QString& shown)
+{
+    if (!shown.isEmpty()) {
+        label->setPixmap(GRC::ScaleStatusIcon(this, shown + "_" + sSheet));
+    }
 }
 
 
@@ -1218,8 +1238,7 @@ void BitcoinGUI::setNumConnections(int n)
         default: icon = ":/icons/status_connection_4"; break;
     }
 
-    icon.append("_").append(sSheet);
-    labelConnectionsIcon->setPixmap(GRC::ScaleStatusIcon(this, icon));
+    setStatusIcon(labelConnectionsIcon, m_connections_icon, icon);
 
     if (n == 0)
     {
@@ -2100,7 +2119,7 @@ void BitcoinGUI::updateStakingIcon(
 
     if (staking)
     {
-        labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_yes_" + sSheet));
+        setStatusIcon(labelStakingIcon, m_staking_icon, ":/icons/status_staking_yes");
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> staking frequency is %3.")
                                      .arg(QString::number(coin_weight, 'f', 0),
                                           QString::number(net_weight, 'f', 0),
@@ -2108,13 +2127,13 @@ void BitcoinGUI::updateStakingIcon(
     }
     else if (coin_weight == 0.0)
     {
-        labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_problem_" + sSheet));
+        setStatusIcon(labelStakingIcon, m_staking_icon, ":/icons/status_staking_problem");
         labelStakingIcon->setToolTip(tr("Unable to stake: %1")
                                      .arg(clientModel->getMinerWarnings()));
     }
     else
     {
-        labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_no_" + sSheet));
+        setStatusIcon(labelStakingIcon, m_staking_icon, ":/icons/status_staking_no");
         labelStakingIcon->setToolTip(tr("Not staking currently: %1, <b>Estimated</b> staking frequency is %2.")
                                      .arg(clientModel->getMinerWarnings(),
                                           GetEstimatedStakingFrequency(etts_days)));
@@ -2179,23 +2198,23 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
     if (scraperEventtype == (int)scrapereventtypes::OutOfSync && status == CT_UPDATING)
     {
-        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_waiting_" + sSheet));
+        setStatusIcon(labelScraperIcon, m_scraper_icon, ":/icons/status_scraper_waiting");
         labelScraperIcon->setToolTip(tr("Scraper: waiting on wallet to sync."));
     }
     else if (scraperEventtype == (int)scrapereventtypes::Sleep && status == CT_NEW)
     {
-        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_inactive_" + sSheet));
+        setStatusIcon(labelScraperIcon, m_scraper_icon, ":/icons/status_scraper_inactive");
         labelScraperIcon->setToolTip(tr("Scraper: superblock not needed - inactive."));
     }
     else if (scraperEventtype == (int)scrapereventtypes::Stats && (status == CT_NEW || status == CT_UPDATED || status == CT_UPDATING))
     {
-        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_waiting_" + sSheet));
+        setStatusIcon(labelScraperIcon, m_scraper_icon, ":/icons/status_scraper_waiting");
         labelScraperIcon->setToolTip(tr("Scraper: downloading and processing stats."));
     }
     else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
              && (status == CT_NEW || status == CT_UPDATED) && nConvergenceTime)
     {
-        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_ok_" + sSheet));
+        setStatusIcon(labelScraperIcon, m_scraper_icon, ":/icons/status_scraper_ok");
 
         if (bDisplayScrapers)
         {
@@ -2221,7 +2240,7 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
              && status == CT_DELETED)
     {
-        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_no_convergence_" + sSheet));
+        setStatusIcon(labelScraperIcon, m_scraper_icon, ":/icons/status_scraper_no_convergence");
         labelScraperIcon->setToolTip(tr("Scraper: No convergence able to be achieved. Will retry in a few minutes."));
     }
 
