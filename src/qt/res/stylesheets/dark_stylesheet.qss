@@ -726,6 +726,11 @@ NoResult #titleLabel {
     border-bottom: 0.065em solid rgba(0, 0, 0, 0.4);
 }
 
+#syncOverlayPanel {
+    background-color: rgb(23, 30, 40);
+    border-radius: 0.5em;
+}
+
 /* overview page */
 
 #currentPollsHeaderLabel,
