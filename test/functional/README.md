@@ -105,6 +105,7 @@ this table mirrors it.
 | `p2p_block_tx_relay.py` | tx + block relay over P2P (wire serialization) |
 | `p2p_psgt_relay.py` | PSGT pool relay: `MSG_PSGT` inv/getdata/`psgt` end to end, the connect-time push, no `MSG_PSGT` inventory to a pre-PSGT peer, repeated and garbage messages not relayed |
 | `p2p_psgt_orphan.py` | a relayed PSGT whose funding tx the node lacks is held as an orphan without relay, then pooled and relayed once the funding arrives |
+| `p2p_psgt_read_cap.py` | a `psgt` message is dropped unread before v15; after v15 one longer than `MAX_PSGT_WIRE_SIZE` is refused at the read and logged as undecodable, and one of exactly that size is read and refused by pool validation |
 | `p2p_ping.py` | ping/pong keepalive over the P2P wire protocol |
 | `rpc_help.py` | RPCHelpMan help-format + arity coverage (auto-discovery; #2922) |
 | `rpc_signmessage.py` | `signmessage`/`verifymessage`/`validateaddress` |

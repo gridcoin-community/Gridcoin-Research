@@ -186,6 +186,7 @@ BASE_SCRIPTS = [
     # their critical paths.
     'p2p_psgt_relay.py',
     'p2p_psgt_orphan.py',
+    'p2p_psgt_read_cap.py',
     'p2p_ping.py',
     'rpc_help.py',
     'rpc_signmessage.py',
