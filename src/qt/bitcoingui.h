@@ -255,6 +255,17 @@ private:
     // name extension to change icons according to stylesheet
     QString sSheet;
 
+    // The image each of these status icons shows, as its resource name without
+    // the stylesheet extension, so that a theme change can redraw it.
+    QString m_connections_icon;
+    QString m_staking_icon;
+    QString m_scraper_icon;
+
+    /** Show \p icon, in the current theme, in \p label, and keep its name in \p shown. */
+    void setStatusIcon(QLabel* label, QString& shown, const QString& icon);
+    /** Redraw \p label with \p shown in the current theme, if it shows an image yet. */
+    void redrawStatusIcon(QLabel* label, const QString& shown);
+
     /** Create the main UI actions. */
     void createActions();
     /** Create the menu bar and sub-menus. */
