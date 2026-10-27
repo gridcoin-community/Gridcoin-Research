@@ -11,6 +11,7 @@
 #include <QString>
 #include <QWidget>
 
+#include <exception>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -205,5 +206,14 @@ bool IsDaemonDisconnectMessage(const std::string& msg);
 
 //! Post a graceful, popup-free GUI quit when the node connection is lost.
 void QuitOnDaemonConnectionLost(const char* reason);
+
+//! GUI thread. Routes an exception caught outside Qt's event delivery the way
+//! GridcoinApplication::notify routes one from an event handler: a lost
+//! daemon connection, or any exception once the connection is known lost,
+//! posts the quiet quit; anything else goes to handleRunawayException, which
+//! does not return. It catches every exception it is handed, and it is
+//! noexcept, so an exception that got past its handlers would end the process
+//! on every platform instead of crossing Qt's event delivery.
+void HandleGuiThreadException(std::exception_ptr ep) noexcept;
 
 #endif // BITCOIN_QT_GUIFRONTEND_H

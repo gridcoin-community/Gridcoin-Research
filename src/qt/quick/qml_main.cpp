@@ -76,7 +76,8 @@ std::unique_ptr<GuiFrontEnd> MakeQmlFrontEnd()
         IsDaemonDisconnectMessage,
         [](const std::string&) {
             QuitOnDaemonConnectionLost("a QML front-end call was interrupted by the daemon disconnecting");
-        }};
+        },
+        HandleGuiThreadException};
     return std::make_unique<QmlFrontEnd>(QUrl(QML_ROOT_URL), std::move(callbacks));
 }
 

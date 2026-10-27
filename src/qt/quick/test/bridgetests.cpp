@@ -37,6 +37,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <exception>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -77,7 +78,8 @@ QmlCallRunner::DisconnectPolicy CountingPolicy(std::atomic<int>& notified)
             return what.find("interrupted by disconnect") != std::string::npos ||
                    what.find("called after disconnect") != std::string::npos;
         },
-        [&notified](const std::string&) { ++notified; }};
+        [&notified](const std::string&) { ++notified; },
+        qml_test::RecordFailure};
 }
 
 //! Waits for every global-pool job when a test leaves, on every path.
@@ -91,8 +93,9 @@ public:
 
 namespace {
 
-//! Set in the child that unloadableRootEndsTheGui starts, before GuiMain
-//! builds its application object.
+//! Set in the children that unloadableRootEndsTheGui and
+//! guiThreadExceptionCaughtInPlace start, before the child builds its
+//! application object.
 std::atomic<bool> g_guimain_child{false};
 
 //! The child's front-end factory: a QML front end whose root does not exist.
@@ -102,13 +105,14 @@ std::unique_ptr<GuiFrontEnd> MakeUnloadableQmlFrontEnd()
         IsDaemonDisconnectMessage,
         [](const std::string&) {
             QuitOnDaemonConnectionLost("a QML front-end call was interrupted by the daemon disconnecting");
-        }};
+        },
+        HandleGuiThreadException};
     return std::make_unique<QmlFrontEnd>(QUrl(QStringLiteral("qrc:/qmltest/missing.qml")), std::move(callbacks));
 }
 
-//! Runs when an application object is built. In the child only, it closes each
-//! modal message box GuiMain shows, after printing its text, so the child never
-//! waits for a user.
+//! Runs when an application object is built. In the children only, it closes
+//! each modal message box shown there, after printing its text, so a child
+//! never waits for a user.
 void CloseGuiMainMessageBoxes()
 {
     if (!g_guimain_child) return;
@@ -145,6 +149,43 @@ int qml_test::RunGuiMainChild(int argc, char* argv[])
     args.push_back(nullptr);
     const int rc = GuiMain(static_cast<int>(args.size()) - 1, args.data(), MakeUnloadableQmlFrontEnd);
     std::cout << "GUIMAIN RETURNED " << rc << std::endl;
+    return rc;
+}
+
+int qml_test::RunGuiThreadExceptionChild(int argc, char* argv[])
+{
+    const std::string mode{argv[2]};
+    std::exception_ptr ep;
+    if (mode == "disconnect") {
+        ep = std::make_exception_ptr(std::runtime_error("a call was interrupted by disconnect"));
+    } else if (mode == "runaway-std") {
+        ep = std::make_exception_ptr(std::runtime_error("boom-route"));
+    } else if (mode == "runaway-nonstd") {
+        ep = std::make_exception_ptr(42);
+    } else {
+        std::cout << "UNKNOWN MODE " << mode << std::endl;
+        return 5;
+    }
+    // A plain QApplication: not GuiMain's, not the tests' own, so nothing but
+    // this function's try block can catch what the handler lets out.
+    g_guimain_child = true;
+    QApplication app(argc, argv);
+    try {
+        HandleGuiThreadException(ep);
+    } catch (...) {
+        std::cout << "ESCAPED" << std::endl;
+        return 3;
+    }
+    if (mode != "disconnect") {
+        std::cout << "HANDLER RETURNED" << std::endl;
+        return 2;
+    }
+    QTimer::singleShot(10000, &app, [] {
+        std::cout << "CHILD TIMED OUT" << std::endl;
+        QCoreApplication::exit(4);
+    });
+    const int rc = app.exec();
+    std::cout << "EXEC RETURNED " << rc << std::endl;
     return rc;
 }
 
@@ -412,6 +453,21 @@ void QmlBridgeTests::constructTwiceThrows()
     }
 }
 
+void QmlBridgeTests::emptyOnFailureRefused()
+{
+    std::atomic<int> disconnects{0};
+    QmlFrontEnd::Callbacks callbacks = qml_test::CountingCallbacks(disconnects);
+    callbacks.on_failure = nullptr;
+    // The runner refuses an empty fail() with the same exception type, so only
+    // the text shows that the front end's own check refused it.
+    try {
+        QmlFrontEnd fe(qml_test::FIXTURE_ROOT_URL, callbacks);
+        QFAIL("a front end was built with an empty on_failure");
+    } catch (const std::invalid_argument& e) {
+        QVERIFY2(std::string(e.what()).find("on_failure") != std::string::npos, e.what());
+    }
+}
+
 void QmlBridgeTests::qtQuitAndExitReachRequestQuit()
 {
     std::atomic<int> disconnects{0};
@@ -482,6 +538,56 @@ void QmlBridgeTests::unloadableRootEndsTheGui()
              (QByteArray("the failure was not written to stderr") + tail).constData());
     QVERIFY2(QFileInfo::exists(dir.filePath(QStringLiteral("config/Gridcoin/Gridcoin-Qt.ini"))),
              "the child's settings did not go to the temp directory");
+}
+
+void QmlBridgeTests::guiThreadExceptionCaughtInPlace()
+{
+    // HandleGuiThreadException runs in a child copy of this binary, once per
+    // mode: a lost connection latches the process-wide disconnect state, and a
+    // runaway exception ends in a modal and exit(1).
+    constexpr int CHILD_BOUND_MS = 60000;
+    for (const char* mode : {"disconnect", "runaway-std", "runaway-nonstd"}) {
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+        QProcess child;
+        child.setProcessEnvironment(env);
+        child.start(QCoreApplication::applicationFilePath(),
+                    {QString::fromLatin1(qml_test::GUITHREAD_EXCEPTION_CHILD_ARG), QString::fromLatin1(mode)});
+        const bool started = child.waitForStarted();
+        const bool ended = started && child.waitForFinished(CHILD_BOUND_MS);
+        if (started && !ended) {
+            child.kill();
+            child.waitForFinished();
+        }
+        const QString out = QString::fromLocal8Bit(child.readAllStandardOutput());
+        const QString err = QString::fromLocal8Bit(child.readAllStandardError());
+        const QByteArray tail = (QStringLiteral("\nchild stdout: ") + out.right(600) +
+                                 QStringLiteral("\nchild stderr: ") + err.right(600)).toLocal8Bit();
+        const auto why = [&](const char* text) {
+            return QByteArray(mode) + QByteArray(": ") + QByteArray(text) + tail;
+        };
+        const bool lost_connection = std::string(mode) == "disconnect";
+
+        QVERIFY2(started, why("the child did not start").constData());
+        QVERIFY2(ended, why("the child did not end").constData());
+        QVERIFY2(!out.contains(QStringLiteral("ESCAPED")), why("the handler let the exception escape").constData());
+        QVERIFY2(child.exitStatus() == QProcess::NormalExit, why("the child did not exit normally").constData());
+        if (lost_connection) {
+            QVERIFY2(!out.contains(QStringLiteral("CHILD TIMED OUT")),
+                     why("the quiet quit did not end the event loop").constData());
+            QVERIFY2(!out.contains(QStringLiteral("MESSAGE BOX: A fatal error occurred")),
+                     why("a lost connection took the runaway path").constData());
+            QVERIFY2(out.contains(QStringLiteral("EXEC RETURNED 0")),
+                     why("the event loop did not return 0").constData());
+            QVERIFY2(child.exitCode() == 0, why("the child's exit code is not 0").constData());
+        } else {
+            QVERIFY2(!out.contains(QStringLiteral("HANDLER RETURNED")),
+                     why("the handler returned instead of ending the process").constData());
+            QVERIFY2(out.contains(QStringLiteral("MESSAGE BOX: A fatal error occurred")),
+                     why("no runaway message box was shown").constData());
+            QVERIFY2(child.exitCode() == 1, why("the child's exit code is not 1").constData());
+        }
+    }
 }
 
 void QmlBridgeTests::requestQuitSetsQuitRequested()

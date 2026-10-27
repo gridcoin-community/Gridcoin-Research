@@ -13,6 +13,7 @@
 #include <QString>
 #include <QUrl>
 
+#include <exception>
 #include <functional>
 #include <memory>
 #include <string>
@@ -58,17 +59,21 @@ class QmlFrontEnd : public GuiFrontEnd
 public:
     //! What the composition root wires in: how a call runner recognises and
     //! reports a lost daemon connection (IsDaemonDisconnectMessage,
-    //! QuitOnDaemonConnectionLost). Injected, so this module does not link the
-    //! composition root. Quit needs no callback: RequestGuiQuit calls
-    //! requestQuit() on the registered front end, and the module's own quit
-    //! paths call it directly.
+    //! QuitOnDaemonConnectionLost), and how it hands any other exception a call
+    //! threw to the GUI thread (on_failure, HandleGuiThreadException). Injected,
+    //! so this module does not link the composition root. Quit needs no
+    //! callback: RequestGuiQuit calls requestQuit() on the registered front
+    //! end, and the module's own quit paths call it directly.
     struct Callbacks
     {
         std::function<bool(const std::string&)> is_disconnect;
         std::function<void(const std::string&)> on_disconnect;
+        //! GUI thread: any other exception a runner call threw
+        //! (HandleGuiThreadException). It must not throw.
+        std::function<void(std::exception_ptr)> on_failure;
     };
 
-    //! Throws std::invalid_argument naming the empty member if either callback
+    //! Throws std::invalid_argument naming the empty member if any callback
     //! is empty.
     QmlFrontEnd(QUrl root_url, Callbacks callbacks);
     ~QmlFrontEnd() override;

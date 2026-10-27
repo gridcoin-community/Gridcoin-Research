@@ -157,6 +157,22 @@ public Q_SLOTS:
 //! exception, GUI thread only. main() checks it is empty at the end.
 inline std::vector<std::pair<std::string, QThread*>> g_rethrown;
 
+//! What the tests' policies were handed through fail(): the text and the
+//! thread of each exception. main() checks it is empty at the end.
+inline std::vector<std::pair<std::string, QThread*>> g_failed;
+
+//! A policy fail() for the tests: records what it is handed into g_failed.
+inline void RecordFailure(std::exception_ptr ep)
+{
+    try {
+        std::rethrow_exception(ep);
+    } catch (const std::exception& ex) {
+        g_failed.push_back({ex.what(), QThread::currentThread()});
+    } catch (...) {
+        g_failed.push_back({"<non-std>", QThread::currentThread()});
+    }
+}
+
 //! Stands in for GridcoinApplication::notify: it catches an exception from an
 //! event handler instead of letting it abort the test binary, and records it.
 //! What it swallows is checked at the end of main().

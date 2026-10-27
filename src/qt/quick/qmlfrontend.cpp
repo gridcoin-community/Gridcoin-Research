@@ -60,6 +60,9 @@ QmlFrontEnd::Callbacks QmlFrontEnd::ValidateCallbacks(Callbacks callbacks)
     if (!callbacks.on_disconnect) {
         throw std::invalid_argument("QmlFrontEnd: callbacks.on_disconnect is empty");
     }
+    if (!callbacks.on_failure) {
+        throw std::invalid_argument("QmlFrontEnd: callbacks.on_failure is empty");
+    }
     return callbacks;
 }
 
@@ -68,7 +71,8 @@ QmlFrontEnd::QmlFrontEnd(QUrl root_url, Callbacks callbacks)
       m_callbacks(ValidateCallbacks(std::move(callbacks))),
       m_provider(std::make_unique<QmlProvider>(*this)),
       m_runner(std::make_unique<QmlCallRunner>(
-          QmlCallRunner::DisconnectPolicy{m_callbacks.is_disconnect, m_callbacks.on_disconnect}))
+          QmlCallRunner::DisconnectPolicy{m_callbacks.is_disconnect, m_callbacks.on_disconnect,
+                                          m_callbacks.on_failure}))
 {
 }
 

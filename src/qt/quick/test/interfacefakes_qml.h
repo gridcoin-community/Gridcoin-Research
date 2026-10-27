@@ -5,6 +5,8 @@
 #ifndef BITCOIN_QT_QUICK_TEST_INTERFACEFAKES_QML_H
 #define BITCOIN_QT_QUICK_TEST_INTERFACEFAKES_QML_H
 
+#include "qmltestutil.h"
+
 #include <qt/guifrontend.h>
 #include <qt/quick/qmlfrontend.h>
 
@@ -59,7 +61,8 @@ inline QmlFrontEnd::Callbacks CountingCallbacks(std::atomic<int>& disconnects)
             return what.find("interrupted by disconnect") != std::string::npos ||
                    what.find("called after disconnect") != std::string::npos;
         },
-        [&disconnects](const std::string&) { ++disconnects; }};
+        [&disconnects](const std::string&) { ++disconnects; },
+        RecordFailure};
 }
 
 } // namespace qml_test

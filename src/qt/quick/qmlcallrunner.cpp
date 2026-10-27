@@ -52,8 +52,8 @@ struct QmlCallRunner::State
 QmlCallRunner::QmlCallRunner(DisconnectPolicy policy)
     : m_state(std::make_shared<State>())
 {
-    if (!policy.matches || !policy.notify) {
-        throw std::invalid_argument("QmlCallRunner: the disconnect policy needs both functions");
+    if (!policy.matches || !policy.notify || !policy.fail) {
+        throw std::invalid_argument("QmlCallRunner: the disconnect policy needs all three functions");
     }
     m_state->policy = std::move(policy);
     m_serial_thread = std::thread([this] { SerialLoop(); });
@@ -102,9 +102,8 @@ void QmlCallRunner::SerialLoop()
 bool QmlCallRunner::RunGuarded(const std::shared_ptr<State>& state, const std::function<void()>& fn)
 {
     // A disconnect is quiet. Any other exception is logged on the worker and,
-    // while the runner is open, rethrown on the GUI thread, where the
-    // application's exception handling treats it like one from any event
-    // handler.
+    // while the runner is open, handed to the policy's fail() on the GUI
+    // thread.
     try {
         fn();
         return true;
@@ -113,24 +112,25 @@ bool QmlCallRunner::RunGuarded(const std::shared_ptr<State>& state, const std::f
             state->policy.notify(e.what());
         } else {
             GUILogPrintf("QmlCallRunner: call threw: %s", e.what());
-            if (!state->closed) {
-                std::exception_ptr ep = std::current_exception();
-                QMetaObject::invokeMethod(QCoreApplication::instance(),
-                                          [ep] { std::rethrow_exception(ep); },
-                                          Qt::QueuedConnection);
-            }
+            if (!state->closed) PostFailure(state, std::current_exception());
         }
         return false;
     } catch (...) {
         GUILogPrintf("QmlCallRunner: call threw a non-standard exception");
-        if (!state->closed) {
-            std::exception_ptr ep = std::current_exception();
-            QMetaObject::invokeMethod(QCoreApplication::instance(),
-                                      [ep] { std::rethrow_exception(ep); },
-                                      Qt::QueuedConnection);
-        }
+        if (!state->closed) PostFailure(state, std::current_exception());
         return false;
     }
+}
+
+void QmlCallRunner::PostFailure(const std::shared_ptr<State>& state, std::exception_ptr ep)
+{
+    // Handed to the policy, not rethrown from the queued call: a rethrow there
+    // has to unwind through Qt's event delivery to reach a notify() override,
+    // and where QtWidgets and QtGui carry no unwind tables (Homebrew's Qt 6 on
+    // Apple arm64) it ends in std::terminate instead.
+    QMetaObject::invokeMethod(QCoreApplication::instance(),
+                              [state, ep = std::move(ep)] { state->policy.fail(ep); },
+                              Qt::QueuedConnection);
 }
 
 void QmlCallRunner::PostDelivery(const std::shared_ptr<State>& state, uint64_t captured, std::function<void()> deliver)

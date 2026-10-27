@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <string>
@@ -22,22 +23,30 @@
 //! posted. A call on either lane never waits on a core message, because the
 //! QML front end delivers every core message queued.
 //!
-//! A call that throws is classified by the DisconnectPolicy. Closing is
-//! one-way: nothing reopens a runner, so a test or a front end builds a new one.
+//! A call that throws is classified by the DisconnectPolicy. `deliver` runs on
+//! the GUI thread as an ordinary queued call; the runner does not catch an
+//! exception from it, which reaches the application's notify() as one from any
+//! event handler does. Closing is one-way: nothing reopens a runner, so a test
+//! or a front end builds a new one.
 class QmlCallRunner
 {
 public:
     //! How a call that throws is classified. matches(what) true means the
     //! daemon connection is gone: notify(what) is called once for each call
     //! that throws so, on the worker thread, and that call's deliver is
-    //! dropped.
+    //! dropped. Any other exception a call's fn throws while the runner is
+    //! open is handed to fail(ep) on the GUI thread, queued, and that call's
+    //! deliver is dropped. fail must not throw: the call into it is delivered
+    //! by Qt, and an exception does not cross Qt's event delivery on every
+    //! platform.
     struct DisconnectPolicy
     {
         std::function<bool(const std::string&)> matches;
         std::function<void(const std::string&)> notify;
+        std::function<void(std::exception_ptr)> fail;
     };
 
-    //! Starts the serial thread. Throws std::invalid_argument if either policy
+    //! Starts the serial thread. Throws std::invalid_argument if any policy
     //! function is empty.
     explicit QmlCallRunner(DisconnectPolicy policy);
     //! Closes the runner, moves it to a new generation and joins the serial
@@ -62,8 +71,8 @@ public:
     //! dropped, calls posted afterwards run as normal.
     void bumpGeneration();
     //! Marks the runner closed; one-way. Every later post is refused, and a
-    //! call that throws from then on is logged and not rethrown on the GUI
-    //! thread.
+    //! call that throws anything but a lost connection from then on is logged
+    //! and not handed to fail().
     void close() noexcept;
     //! GUI thread. Closes the runner, moves it to a new generation, clears the
     //! serial queue and waits until no serial call is in flight. It never waits
@@ -79,6 +88,7 @@ private:
     void SerialLoop();
     static bool RunGuarded(const std::shared_ptr<State>& state, const std::function<void()>& fn);
     static void PostDelivery(const std::shared_ptr<State>& state, uint64_t captured, std::function<void()> deliver);
+    static void PostFailure(const std::shared_ptr<State>& state, std::exception_ptr ep);
 };
 
 #endif // BITCOIN_QT_QUICK_QMLCALLRUNNER_H

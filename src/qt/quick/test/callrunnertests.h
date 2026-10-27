@@ -20,8 +20,9 @@ private Q_SLOTS:
     void deliverRunsOnGuiThread();
     void staleResultDropped();
     void disconnectRoutedOnce();
-    void failureRethrownOnGuiThread();
-    void failureAfterCloseNotRethrown();
+    void failureHandedToGuiThread();
+    void failureAfterCloseNotHandedOver();
+    void emptyFailPolicyRefused();
     void drainWaitsForSerialCall();
     void pooledLaneUsesGlobalPool();
     void pooledPostRefusedAfterDrain();

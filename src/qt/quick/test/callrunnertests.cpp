@@ -41,7 +41,8 @@ QmlCallRunner::DisconnectPolicy CountingPolicy(std::atomic<int>& notified)
             return what.find("interrupted by disconnect") != std::string::npos ||
                    what.find("called after disconnect") != std::string::npos;
         },
-        [&notified](const std::string&) { ++notified; }};
+        [&notified](const std::string&) { ++notified; },
+        qml_test::RecordFailure};
 }
 
 //! Waits without processing events, 1 ms at a time, until `flag` or `bound`.
@@ -181,10 +182,14 @@ void QmlCallRunnerTests::disconnectRoutedOnce()
     QVERIFY(!delivered);
 }
 
-void QmlCallRunnerTests::failureRethrownOnGuiThread()
+void QmlCallRunnerTests::failureHandedToGuiThread()
 {
+    QVERIFY2(qml_test::g_failed.empty(), "an earlier test left a failure");
     QVERIFY2(qml_test::g_rethrown.empty(), "an earlier test left a rethrown exception");
-    qml_test::ScopeExit clear_rethrown([] { qml_test::g_rethrown.clear(); });
+    qml_test::ScopeExit clear_failed([] {
+        qml_test::g_failed.clear();
+        qml_test::g_rethrown.clear();
+    });
 
     std::atomic<int> notified{0};
     QmlCallRunner runner(CountingPolicy(notified));
@@ -194,12 +199,12 @@ void QmlCallRunnerTests::failureRethrownOnGuiThread()
     const bool posted_a = runner.postSerial([] { throw std::runtime_error("boom-serial"); }, [&] { delivered = true; });
     const bool posted_b = runner.postPooled([] { throw std::runtime_error("boom-pooled"); }, [&] { delivered = true; });
     const bool posted_c = runner.postSerial([] { throw 42; }, [&] { delivered = true; });
-    qml_test::PumpUntil([&] { return qml_test::g_rethrown.size() == 3; }, 2s);
+    qml_test::PumpUntil([&] { return qml_test::g_failed.size() == 3; }, 2s);
     qml_test::PumpFor(200ms);
 
     std::set<std::string> texts;
     bool all_on_gui_thread = true;
-    for (const auto& entry : qml_test::g_rethrown) {
+    for (const auto& entry : qml_test::g_failed) {
         texts.insert(entry.first);
         if (entry.second != qApp->thread()) all_on_gui_thread = false;
     }
@@ -207,16 +212,21 @@ void QmlCallRunnerTests::failureRethrownOnGuiThread()
 
     QVERIFY(posted_a && posted_b && posted_c);
     QCOMPARE(notified.load(), 0);
-    QCOMPARE(qml_test::g_rethrown.size(), size_t{3});
-    QVERIFY2(texts == expected, "the rethrown texts are not the three the calls threw");
-    QVERIFY2(all_on_gui_thread, "an exception was rethrown off the GUI thread");
+    QCOMPARE(qml_test::g_failed.size(), size_t{3});
+    QVERIFY2(texts == expected, "the texts fail() was handed are not the three the calls threw");
+    QVERIFY2(all_on_gui_thread, "fail() was called off the GUI thread");
+    QVERIFY2(qml_test::g_rethrown.empty(), "a failure was rethrown through Qt's event delivery");
     QVERIFY(!delivered);
 }
 
-void QmlCallRunnerTests::failureAfterCloseNotRethrown()
+void QmlCallRunnerTests::failureAfterCloseNotHandedOver()
 {
+    QVERIFY2(qml_test::g_failed.empty(), "an earlier test left a failure");
     QVERIFY2(qml_test::g_rethrown.empty(), "an earlier test left a rethrown exception");
-    qml_test::ScopeExit clear_rethrown([] { qml_test::g_rethrown.clear(); });
+    qml_test::ScopeExit clear_failed([] {
+        qml_test::g_failed.clear();
+        qml_test::g_rethrown.clear();
+    });
 
     std::atomic<int> notified{0};
     qml_test::Latch latch;
@@ -252,9 +262,19 @@ void QmlCallRunnerTests::failureAfterCloseNotRethrown()
     qml_test::PumpFor(200ms);
 
     QVERIFY(posted_s && posted_p);
+    QVERIFY2(qml_test::g_failed.empty(), "a call that threw after close() was handed to fail()");
     QVERIFY2(qml_test::g_rethrown.empty(), "a call that threw after close() was rethrown on the GUI thread");
     QCOMPARE(notified.load(), 0);
     QVERIFY(!delivered);
+}
+
+void QmlCallRunnerTests::emptyFailPolicyRefused()
+{
+    std::atomic<int> notified{0};
+    QmlCallRunner::DisconnectPolicy policy = CountingPolicy(notified);
+    policy.fail = nullptr;
+    // Braces: QmlCallRunner(policy); would declare a variable, not build one.
+    QVERIFY_THROWS_EXCEPTION(std::invalid_argument, QmlCallRunner{policy});
 }
 
 void QmlCallRunnerTests::drainWaitsForSerialCall()

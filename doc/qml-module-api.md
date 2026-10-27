@@ -197,9 +197,16 @@ console never uses it.
 
 Both lanes deliver on the GUI thread, queued, under a generation. `drain()` cancels queued
 calls on both lanes and waits only for the in-flight serial call. After `close()` or
-`drain()` every post is refused. A call still running when the runner closes, and that then
-throws, is logged and not rethrown on the GUI thread. A pooled closure may capture
-`interfaces::Node` but never an adapter or model pointer.
+`drain()` every post is refused. A call whose `fn` throws a lost daemon connection goes to
+the front end's `on_disconnect`, on the worker, also when the runner closed while the call
+was running. Any other exception a `fn` throws is logged on the worker and, while the runner
+is open, handed, queued, to the front end's `on_failure` on the GUI thread, which routes it
+as `GridcoinApplication::notify` routes an exception from an event handler; the runner never
+rethrows it through Qt's event delivery. A call still running when the runner closes, and
+that then throws anything but a lost connection, is logged and not handed over. A call's
+`deliver` runs on the GUI thread like any event handler, and the runner does not catch an
+exception from it. A pooled closure may capture `interfaces::Node` but never an adapter or
+model pointer.
 
 A pooled call starts at once unless the global pool is saturated; one still queued when the
 runner closes or moves to a new generation does not run. A call posted once

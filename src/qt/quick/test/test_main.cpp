@@ -20,9 +20,14 @@
 int main(int argc, char* argv[])
 {
     // QmlBridgeTests::unloadableRootEndsTheGui runs GuiMain in a child copy of
-    // this binary; the child runs no test.
+    // this binary, and guiThreadExceptionCaughtInPlace hands
+    // HandleGuiThreadException one exception in another; neither child runs a
+    // test.
     if (argc > 1 && std::strcmp(argv[1], qml_test::GUIMAIN_CHILD_ARG) == 0) {
         return qml_test::RunGuiMainChild(argc, argv);
+    }
+    if (argc > 2 && std::strcmp(argv[1], qml_test::GUITHREAD_EXCEPTION_CHILD_ARG) == 0) {
+        return qml_test::RunGuiThreadExceptionChild(argc, argv);
     }
     // The shell asks QSystemTrayIcon and the quit test shows windows, so the
     // application needs a platform plugin and a scene-graph backend that run
@@ -65,6 +70,12 @@ int main(int argc, char* argv[])
     if (!qml_test::g_rethrown.empty()) {
         for (const auto& entry : qml_test::g_rethrown) {
             std::cerr << "UNEXPECTED RETHROW: " << entry.first << std::endl;
+        }
+        fInvalid = true;
+    }
+    if (!qml_test::g_failed.empty()) {
+        for (const auto& entry : qml_test::g_failed) {
+            std::cerr << "UNEXPECTED FAILURE: " << entry.first << std::endl;
         }
         fInvalid = true;
     }
