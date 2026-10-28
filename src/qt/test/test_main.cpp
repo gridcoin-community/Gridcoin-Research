@@ -6,6 +6,7 @@
 
 #include "aboutdialogtests.h"
 #include "autostarttests.h"
+#include "bitcoinguitests.h"
 #include "bitcoinunitstests.h"
 #include "coinselectionmodeltests.h"
 #include "coinselectionviewtests.h"
@@ -108,6 +109,10 @@ int main(int argc, char *argv[])
 
     RPCConsoleTests test13;
     if (QTest::qExec(&test13) != 0)
+        fInvalid = true;
+
+    BitcoinGUITests test14;
+    if (QTest::qExec(&test14) != 0)
         fInvalid = true;
 
     return fInvalid;
