@@ -36,6 +36,9 @@ $(package)_config_opts+=no-ssl3
 $(package)_config_opts+=no-unit-test
 $(package)_config_opts+=no-weak-ssl-ciphers
 $(package)_config_opts+=no-whirlpool
+# OpenSSL 3.2+ adds a loader for the Windows certificate store. Nothing here uses
+# it: on Windows, curl verifies certificates through Schannel.
+$(package)_config_opts+=no-winstore
 $(package)_config_opts+=no-zlib
 $(package)_config_opts+=no-zlib-dynamic
 $(package)_config_opts_linux=-fPIC -Wa,--noexecstack

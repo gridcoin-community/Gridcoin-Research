@@ -13,8 +13,11 @@ define $(package)_set_vars
   $(package)_config_opts += --without-libidn2 --without-libpsl
   $(package)_config_opts += --without-zstd --without-brotli
   $(package)_config_opts+= --without-nghttp2
+  # curl 8 builds WebSockets and MQTTS by default; 7.88.1 had neither.
+  # Gridcoin fetches only over HTTP(S), so leave them out.
+  $(package)_config_opts+= --disable-websockets --disable-mqtt
   $(package)_config_opts+= --libdir=$($($(package)_type)_prefix)/lib
-  $(package)_config_opts_release+=--disable-debug-mode
+  $(package)_config_opts_release+=--disable-debug
   # Where curl uses OpenSSL it asks OpenSSL to load openssl.cnf, which
   # no-autoload-config in openssl.mk does not stop. Do not load it here either.
   $(package)_config_opts_linux+=--with-pic --with-openssl --disable-openssl-auto-load-config
