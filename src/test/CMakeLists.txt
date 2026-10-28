@@ -50,6 +50,7 @@ add_executable(test_gridcoin
     gridcoin/cpid_tests.cpp
     gridcoin/difficulty_tests.cpp
     gridcoin/enumbytes_tests.cpp
+    gridcoin/http_tests.cpp
     gridcoin/kernel_tests.cpp
     gridcoin/magnitude_tests.cpp
     gridcoin/mnemonics_tests.cpp
