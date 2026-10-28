@@ -267,10 +267,13 @@ std::optional<ExactFloorMisround> FindExactFloorMisround(
 
 // RegistryResetFor is here because the POOL cases below seed the process-global
 // PoolRegistry. StateGuard deliberately does NOT restore registries (state_guard.h
-// -- Reset() is destructive and some suites want it on entry only), and the
-// suite-level leak detector compares registry SIZES, which those cases do not
-// change: they modify an existing builtin seed rather than adding an entry. So the
-// mutation is both unrestored and invisible, and the reset has to be asked for.
+// -- Reset() is destructive and some suites want it on entry only), so the reset
+// has to be asked for. Those cases modify an existing builtin seed rather than
+// adding an entry; the suite-level leak detector compares each registry's
+// current entries one by one, not just the count, so it names the edited entry
+// if this reset is ever dropped. The reset is declared before RegtestChainSetup
+// so that it runs after the chain rewind's contract reverts, as in
+// pool_chain_tests.
 //
 // WalletTxScope is the per-case fixture: the chain is shared, but every
 // unconfirmed entry a case adds is erased at its exit, so no case hands a
@@ -279,7 +282,7 @@ std::optional<ExactFloorMisround> FindExactFloorMisround(
 // case's forced ResendWalletTransactions can erase pre-existing invalid
 // entries -- so this is a no-leak guarantee for what cases add, not a
 // restoration of the whole entry set (see chain_setup.h).
-BOOST_FIXTURE_TEST_SUITE(miner_block_assembly_tests, grc_test::WalletTxScope, *boost::unit_test::fixture<grc_test::RegtestChainSetup>() *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::POOL_REGISTER>>())
+BOOST_FIXTURE_TEST_SUITE(miner_block_assembly_tests, grc_test::WalletTxScope, *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::POOL_REGISTER>>() *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
 
 //!
 //! The fixture's own precondition: a real chain, and premine coins that the
@@ -2929,7 +2932,7 @@ BOOST_AUTO_TEST_SUITE_END()
 //! The helpers it takes from inside that suite's namespace are reached through
 //! the using-declarations below.
 //!
-BOOST_AUTO_TEST_SUITE(wallet_standing_spend_chain_tests, *boost::unit_test::fixture<grc_test::RegtestChainSetup>() *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::POOL_REGISTER>>())
+BOOST_AUTO_TEST_SUITE(wallet_standing_spend_chain_tests, *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::POOL_REGISTER>>() *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
 
 using miner_block_assembly_tests::CountNotices;
 using miner_block_assembly_tests::CreateSignedSpend;

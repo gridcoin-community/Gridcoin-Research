@@ -13,6 +13,7 @@
 
 #include <iostream>
 #include <map>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -169,6 +170,16 @@ StateLeakObserver& Observer()
     return observer;
 }
 
+//! The SUITE-scope snapshot taken at the first top-level suite's entry: what
+//! every suite would see if none leaked. DiffState uses it to tell a suite that
+//! restores a registry, or removes only entries the first suite did not have,
+//! from one that changes it.
+std::optional<StateSnapshot>& FirstSuiteEntry()
+{
+    static std::optional<StateSnapshot> snapshot;
+    return snapshot;
+}
+
 //!
 //! Attached at the FRONT of every top-level suite's fixture list, so its
 //! setup() runs before, and its teardown() after, any fixture the suite
@@ -183,18 +194,20 @@ public:
     void setup() override
     {
         m_before = CaptureState(CaptureScope::SUITE);
+        if (!FirstSuiteEntry()) FirstSuiteEntry() = m_before;
     }
 
     void teardown() override
     {
         const StateSnapshot after = CaptureState(CaptureScope::SUITE);
+        const StateSnapshot* baseline = FirstSuiteEntry() ? &*FirstSuiteEntry() : nullptr;
 
-        for (const auto& diff : DiffState(m_before, after)) {
+        for (const auto& diff : DiffState(m_before, after, baseline)) {
             const std::string blame = Observer().FirstBlame(m_suite, diff.invariant);
             const std::string where = blame.empty() ? "no single case changed it" : "first changed by " + blame;
 
             if (!diff.IsLeak()) {
-                Observer().Record(strprintf("note: %s shrank %s: %s -> %s (a cleaner, not a leak; %s)",
+                Observer().Record(strprintf("note: %s cleaned %s: %s -> %s (a cleaner, not a leak; %s)",
                                             m_suite, diff.invariant, diff.before, diff.after, where));
                 continue;
             }
