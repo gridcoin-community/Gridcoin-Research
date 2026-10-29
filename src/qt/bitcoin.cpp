@@ -228,12 +228,9 @@ static void ThreadSafeMessageBox(const std::string& message, const std::string& 
     if(guiref)
     {
         bool modal = (style & CClientUIInterface::MODAL);
-        // in case of modal message, use blocking connection to wait for user to click OK
-        QMetaObject::invokeMethod(guiref, "error",
-                                   modal ? GUIUtil::blockingGUIThreadConnection() : Qt::QueuedConnection,
-                                   Q_ARG(QString, QString::fromStdString(caption)),
-                                   Q_ARG(QString, QString::fromStdString(message)),
-                                   Q_ARG(bool, modal));
+        // The front end decides whether a modal message may hold this thread
+        // until the user answers; see DeliverCoreMessage.
+        DeliverCoreMessage(guiref, g_frontend, caption, message, modal);
     }
     else
     {
@@ -347,8 +344,10 @@ static std::atomic<bool> g_daemon_connection_lost{false};
 //! True when an exception's text is libmultiprocess's "this connection is gone"
 //! raise (what Gridcoin's IpcLogFn turns into a std::runtime_error). Defined once
 //! so every place that has to distinguish "the daemon went away" from "a real
-//! bug" -- GridcoinApplication::notify() and the try/catch around the whole GUI
-//! lifetime in StartGridcoinQt() -- tests the same substrings and cannot drift.
+//! bug" -- GridcoinApplication::notify(), the QML call runner's disconnect policy
+//! (MakeQmlFrontEnd) and HandleGuiThreadException (through RouteGuiException),
+//! and the try/catch around the whole GUI lifetime in StartGridcoinQt() -- tests
+//! the same substrings and cannot drift.
 bool IsDaemonDisconnectMessage(const std::string& msg)
 {
     return msg.find("interrupted by disconnect") != std::string::npos
@@ -519,6 +518,80 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
 }
 #endif // ENABLE_MULTIPROCESS
 
+//! The routing GridcoinApplication::notify gives an exception from an event
+//! handler, shared with HandleGuiThreadException. Returns true when the
+//! exception is a lost daemon connection, or is any exception thrown once the
+//! connection is known lost (both post the quiet quit); anything else goes to
+//! handleRunawayException, which does not return.
+static bool RouteGuiException(std::exception& e)
+{
+    // Route IPC-disconnect exceptions to the silent quit rather than the
+    // modal fatal-error path. Detect them two ways so we do not depend
+    // solely on libmultiprocess's exact raise text:
+    //   (a) that raise text ("... interrupted/called after disconnect"), and
+    //   (b) the connection already being known lost -- once on_disconnect
+    //       (or a prior notify()) has latched g_daemon_connection_lost, the
+    //       GUI is tearing down and further proxy calls will keep throwing,
+    //       so any event-handler exception in that state is disconnect fallout.
+    const std::string msg{e.what()};
+    if (IsDaemonDisconnectMessage(msg)) {
+        QuitOnDaemonConnectionLost("a GUI call was interrupted by the daemon disconnecting");
+        return true;
+    }
+    if (g_daemon_connection_lost.load()) {
+        // ARM (b) -- STATE-BASED, and deliberately broader than arm (a).
+        //
+        // This matches on the GUI already knowing the connection is lost,
+        // NOT on what was thrown. So it necessarily also catches unrelated
+        // exceptions that happen to be raised in that window. That is a
+        // real trade-off and it was made knowingly; the reasoning, in full,
+        // because the alternative looks more "correct" at a glance:
+        //
+        // WHY NOT SURFACE IT (route to handleRunawayException instead)?
+        // Two independent reasons, either sufficient on its own:
+        //   1. handleRunawayException raises a MODAL. On a headless,
+        //      remote, or unattended front end -- exactly the deployments
+        //      the multiprocess split exists to serve -- a modal nobody
+        //      can dismiss hangs the process forever. A GUI whose node has
+        //      died must exit, not wait for a click.
+        //   2. handleRunawayException then calls exit(1), which terminates
+        //      WITHOUT unwinding while the capnp event-loop thread is still
+        //      running. That is its own crash surface, and it is strictly
+        //      worse than the clean quit below.
+        //
+        // WHY MATCH ON STATE RATHER THAN ONLY ON THE MESSAGE (arm (a))?
+        // libmultiprocess's raise text is not a stable contract -- it is a
+        // log string that upstream may reword at any time. Depending on it
+        // alone would mean a future subtree update silently converts every
+        // disconnect into reason 1 above. Arm (a) is the precise test; arm
+        // (b) is the backstop that keeps the failure mode safe when the
+        // precise test stops matching.
+        //
+        // WHAT WE GIVE UP, AND WHY IT IS ACCEPTABLE: a genuine bug thrown
+        // in this window does not reach handleRunawayException. It is NOT
+        // lost, though -- it is logged below at the DEFAULT level (not a
+        // debug category), so it appears in every user's debug.log without
+        // any flag. And the window is small and one-way: it opens only once
+        // the daemon is already gone and the GUI is committed to shutting
+        // down, so there is no user-visible session left to protect. Same
+        // reasoning as interfaces::GuardNotify (src/interfaces/handler.cpp),
+        // which draws the identical line for notification callbacks.
+        //
+        // If you are tempted to narrow this: re-read reason 1. Narrowing
+        // trades a logged-but-swallowed bug for a front end that can hang
+        // unattended, which is the worse failure.
+        GUILogPrintf("WARN: %s: swallowed a non-disconnect exception raised after the "
+                     "daemon connection was lost: %s", __func__, msg);
+        // Re-post the quit as well: this arm only runs while the GUI is
+        // supposed to be shutting down, so a lost first post must not
+        // leave it running.
+        QuitOnDaemonConnectionLost("a GUI event handler threw after the daemon disconnected");
+        return true;
+    }
+    handleRunawayException(&e);
+    return false;
+}
+
 //! QApplication subclass that contains exceptions escaping Qt event handlers.
 //! In -multiprocess mode the GUI polls the node with synchronous proxy calls from
 //! timers/slots; if the daemon vanishes mid-call, libmultiprocess raises "IPC
@@ -537,76 +610,24 @@ public:
         try {
             return QApplication::notify(receiver, event);
         } catch (std::exception& e) {
-            // Route IPC-disconnect exceptions to the silent quit rather than the
-            // modal fatal-error path. Detect them two ways so we do not depend
-            // solely on libmultiprocess's exact raise text:
-            //   (a) that raise text ("... interrupted/called after disconnect"), and
-            //   (b) the connection already being known lost -- once on_disconnect
-            //       (or a prior notify()) has latched g_daemon_connection_lost, the
-            //       GUI is tearing down and further proxy calls will keep throwing,
-            //       so any event-handler exception in that state is disconnect fallout.
-            const std::string msg{e.what()};
-            if (IsDaemonDisconnectMessage(msg)) {
-                QuitOnDaemonConnectionLost("a GUI call was interrupted by the daemon disconnecting");
-                return true;
-            }
-            if (g_daemon_connection_lost.load()) {
-                // ARM (b) -- STATE-BASED, and deliberately broader than arm (a).
-                //
-                // This matches on the GUI already knowing the connection is lost,
-                // NOT on what was thrown. So it necessarily also catches unrelated
-                // exceptions that happen to be raised in that window. That is a
-                // real trade-off and it was made knowingly; the reasoning, in full,
-                // because the alternative looks more "correct" at a glance:
-                //
-                // WHY NOT SURFACE IT (route to handleRunawayException instead)?
-                // Two independent reasons, either sufficient on its own:
-                //   1. handleRunawayException raises a MODAL. On a headless,
-                //      remote, or unattended front end -- exactly the deployments
-                //      the multiprocess split exists to serve -- a modal nobody
-                //      can dismiss hangs the process forever. A GUI whose node has
-                //      died must exit, not wait for a click.
-                //   2. handleRunawayException then calls exit(1), which terminates
-                //      WITHOUT unwinding while the capnp event-loop thread is still
-                //      running. That is its own crash surface, and it is strictly
-                //      worse than the clean quit below.
-                //
-                // WHY MATCH ON STATE RATHER THAN ONLY ON THE MESSAGE (arm (a))?
-                // libmultiprocess's raise text is not a stable contract -- it is a
-                // log string that upstream may reword at any time. Depending on it
-                // alone would mean a future subtree update silently converts every
-                // disconnect into reason 1 above. Arm (a) is the precise test; arm
-                // (b) is the backstop that keeps the failure mode safe when the
-                // precise test stops matching.
-                //
-                // WHAT WE GIVE UP, AND WHY IT IS ACCEPTABLE: a genuine bug thrown
-                // in this window does not reach handleRunawayException. It is NOT
-                // lost, though -- it is logged below at the DEFAULT level (not a
-                // debug category), so it appears in every user's debug.log without
-                // any flag. And the window is small and one-way: it opens only once
-                // the daemon is already gone and the GUI is committed to shutting
-                // down, so there is no user-visible session left to protect. Same
-                // reasoning as interfaces::GuardNotify (src/interfaces/handler.cpp),
-                // which draws the identical line for notification callbacks.
-                //
-                // If you are tempted to narrow this: re-read reason 1. Narrowing
-                // trades a logged-but-swallowed bug for a front end that can hang
-                // unattended, which is the worse failure.
-                GUILogPrintf("WARN: %s: swallowed a non-disconnect exception raised after the "
-                             "daemon connection was lost: %s", __func__, msg);
-                // Re-post the quit as well: this arm only runs while the GUI is
-                // supposed to be shutting down, so a lost first post must not
-                // leave it running.
-                QuitOnDaemonConnectionLost("a GUI event handler threw after the daemon disconnected");
-                return true;
-            }
-            handleRunawayException(&e);
+            return RouteGuiException(e);
         } catch (...) {
             handleRunawayException(nullptr);
         }
         return false;
     }
 };
+
+void HandleGuiThreadException(std::exception_ptr ep) noexcept
+{
+    try {
+        std::rethrow_exception(ep);
+    } catch (std::exception& e) {
+        RouteGuiException(e);
+    } catch (...) {
+        handleRunawayException(nullptr);
+    }
+}
 
 #ifndef WIN32
 //! Self-pipe so a Unix termination signal can reach the Qt event loop. The signal
@@ -1237,7 +1258,8 @@ int GuiMain(int argc, char* argv[], GuiFrontEndFactory make_frontend)
     }
 
     /** Start Qt as normal before it was moved into this function **/
-    StartGridcoinQt(argc, argv, app, *optionsModel, *gui_node, interface_init, ipc_info, *frontend);
+    const int gui_exit_code =
+        StartGridcoinQt(argc, argv, app, *optionsModel, *gui_node, interface_init, ipc_info, *frontend);
 
     // We received a request to remove blockchain data so client user can start to sync from 0
     if (fResetBlockchainRequest)
@@ -1261,7 +1283,7 @@ int GuiMain(int argc, char* argv[], GuiFrontEndFactory make_frontend)
             GUILogPrintf("ResetBlockchainData: failed");
     }
 
-    return EXIT_SUCCESS;
+    return gui_exit_code;
 }
 
 int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel,
@@ -1314,6 +1336,9 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     app.processEvents();
 
     app.setQuitOnLastWindowClosed(false);
+
+    // What this returns, and GuiMain with it.
+    int exit_code = EXIT_SUCCESS;
 
     try
     {
@@ -1546,6 +1571,9 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // detachModels() on the normal path below it has nothing left to
                 // run; if a hook throws inside that call, it resumes the detach at
                 // the next hook. On any other throw path it is the only teardown.
+                // After that detach its destructor also reaps the global
+                // QThreadPool, so a pooled job started before the event loop
+                // finishes while the models and sources above are still alive.
                 FrontEndDetachGuard frontend_detach_guard{frontend};
                 frontend.attachModels(models);
 
@@ -1639,6 +1667,21 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         }
 
     }
+    catch (const GuiFrontEndUnusable& e)
+    {
+        // The front end could not build its main window (a QML root that does
+        // not load). construct() is the first call of the try block, so nothing
+        // has started: in the monolithic build the core has not started, and
+        // under -multiprocess only GuiMain's daemon connection is open. Report
+        // it and end through the ordinary return below, so GuiMain unwinds and
+        // closes that connection as on any other exit, instead of
+        // handleRunawayException's exit(1).
+        GUILogPrintf("Error: the GUI could not start: %s", std::string(e.what()));
+        tfm::format(std::cerr, "Error: the GUI could not start: %s\n", e.what());
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+                              QObject::tr("The GUI could not start:\n%1").arg(QString::fromStdString(e.what())));
+        exit_code = EXIT_FAILURE;
+    }
     catch (std::exception& e)
     {
         // Everything between the front end's `construct()` above and app.exec() -- and the
@@ -1692,5 +1735,5 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     // while it is mid close-rename-reopen would leave the log half-archived.
     JoinGuiArchiveThread();
 
-    return EXIT_SUCCESS;
+    return exit_code;
 }
