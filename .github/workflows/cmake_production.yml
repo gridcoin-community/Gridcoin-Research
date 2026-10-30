@@ -500,7 +500,19 @@ jobs:
             echo
           done
 
+      # The hardening check's lief has macOS wheels only up to CPython 3.14, and
+      # the image's Homebrew python3 can be newer. The check gets its own
+      # interpreter; update-environment: false leaves python3 on the PATH as it is.
+      - name: Set up Python for the hardening check
+        id: hardening_python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          update-environment: false
+
       - name: Verify Binary Hardening
+        env:
+          PYTHON: ${{ steps.hardening_python.outputs.python-path }}
         run: ./contrib/devtools/check-binary-hardening.sh build
       # Not wrapped in check-build-warnings.sh: deploy copies Homebrew's dylibs into
       # the bundle and rewrites them, and install_name_tool and strip warn that the
@@ -894,7 +906,19 @@ jobs:
             echo
           done
 
+      # The hardening check's lief has macOS wheels only up to CPython 3.14, and
+      # the image's Homebrew python3 can be newer. The check gets its own
+      # interpreter; update-environment: false leaves python3 on the PATH as it is.
+      - name: Set up Python for the hardening check
+        id: hardening_python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          update-environment: false
+
       - name: Verify Binary Hardening
+        env:
+          PYTHON: ${{ steps.hardening_python.outputs.python-path }}
         run: ./contrib/devtools/check-binary-hardening.sh build
       # Not wrapped in check-build-warnings.sh: deploy copies Homebrew's dylibs into
       # the bundle and rewrites them, and install_name_tool and strip warn that the
