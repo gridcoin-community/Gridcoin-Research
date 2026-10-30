@@ -2205,6 +2205,13 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     if (!IsStandardTx(tx))
         return state.Invalid(error("AcceptToMemoryPool : nonstandard transaction type"), "tx-nonstandard");
 
+    // Refuse a version 1 contract before contract validation.
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_version <= 1) {
+            return state.DoS(100, error("%s: legacy contract", __func__));
+        }
+    }
+
     // A claim belongs in a coinbase, so it can never belong in a loose one.
     //
     // Contract dispatch will not catch this: CLAIM has no handler and falls to
@@ -2225,7 +2232,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
             }
 
             // PollRegistry::BlockValidate requires this from the same height.
-            // (CheckContracts, which refuses a legacy contract, runs later.)
             if (contract.m_type == GRC::ContractType::POLL && contract.m_version >= 2
                 && !contract.SharePayloadAs<GRC::PollPayload>()->m_claim.EntriesDistinct()) {
                 return state.DoS(25, error("%s: poll claim keys or outputs are not distinct", __func__),
