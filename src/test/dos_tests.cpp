@@ -582,6 +582,26 @@ BOOST_AUTO_TEST_CASE(DoS_misbehavior_sweep_erases_decayed_entries)
     SetMockTime(0);
 }
 
+// A transaction that spends one output twice is refused with a DoS score of 100.
+BOOST_AUTO_TEST_CASE(DoS_duplicate_inputs_are_scored)
+{
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    const COutPoint prevout(InsecureRand256(), 0);
+    mtx.vin.emplace_back(prevout);
+    mtx.vin.emplace_back(prevout);
+    mtx.vout.emplace_back();
+    mtx.vout[0].nValue = COIN;
+    mtx.vout[0].scriptPubKey = CScript() << OP_TRUE;
+
+    CValidationState state;
+    BOOST_CHECK(!CheckTransaction(CTransaction(mtx), state));
+
+    int dos = 0;
+    BOOST_CHECK(state.IsInvalid(dos));
+    BOOST_CHECK_EQUAL(dos, 100);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 #if defined(__clang__)

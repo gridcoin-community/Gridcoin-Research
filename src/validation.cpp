@@ -185,7 +185,7 @@ bool CheckTransaction(const CTransaction& tx, CValidationState& state, bool v15_
     for (auto const& txin : tx.vin)
     {
         if (vInOutPoints.count(txin.prevout))
-            return false;
+            return state.DoS(100, error("CheckTransaction() : duplicate inputs"));
         vInOutPoints.insert(txin.prevout);
     }
 
