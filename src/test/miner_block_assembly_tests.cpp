@@ -2244,12 +2244,49 @@ BOOST_AUTO_TEST_CASE(a_transaction_paying_exactly_a_raised_floor_is_selected)
     BOOST_REQUIRE_GE(fee, GetMinFee(exact));
 
     // Control 1: the same shape, one satoshi under the smallest fee that meets
-    // the floor at its own size.
-    const CTransaction below_probe = CreateSpend(PremineCoinbase(), coins[1].n, COIN, n_outputs);
-    const unsigned int below_size = TxSize(below_probe);
-    const CAmount below_fee = (floor * below_size + 999) / 1000 - 1;
-    const CTransaction below = CreateSpend(PremineCoinbase(), coins[1].n, below_fee, n_outputs);
-    BOOST_REQUIRE_EQUAL(TxSize(below), below_size);
+    // the floor at its own size. The fee is part of what is signed, and at some
+    // fees the signature is a byte shorter, so the fee worked out from a
+    // spend's size can give a spend of another size. For each coin, the size at
+    // a placeholder fee is tried, then the size the fee worked out from it
+    // gives. If neither size comes back from its own fee (the two fees give
+    // each other's sizes), no fee for that coin is one satoshi under the floor
+    // at its own size, and the next coin is tried. coins[0] and coins[2] are
+    // left to the exact transaction and control 2.
+    //
+    // Which coin comes first varies from run to run, with the outputs the
+    // earlier cases' blocks staked. The shape varies between platforms:
+    // FindExactFloorMisround's search runs on the miner's double rate, and on
+    // 32-bit x86, where the x87 unit keeps extra precision, it settles on
+    // another shape (23 outputs on Debian i386).
+    CTransaction below;
+    CAmount below_fee = 0;
+    unsigned int below_size = 0;
+    bool found_below = false;
+
+    for (size_t i = 1; i < coins.size() && !found_below; ++i) {
+        if (i == 2) continue;
+
+        unsigned int s = TxSize(CreateSpend(PremineCoinbase(), coins[i].n, COIN, n_outputs));
+
+        for (int attempt = 0; attempt < 2 && !found_below; ++attempt) {
+            const CAmount f = (floor * s + 999) / 1000 - 1;
+            const CTransaction tx = CreateSpend(PremineCoinbase(), coins[i].n, f, n_outputs);
+
+            if (TxSize(tx) == s) {
+                below = tx;
+                below_fee = f;
+                below_size = s;
+                found_below = true;
+            } else {
+                BOOST_TEST_MESSAGE("control 1: coin " << coins[i].n << " is " << TxSize(tx)
+                                   << " bytes at the fee worked out from " << s << " bytes");
+                s = TxSize(tx);
+            }
+        }
+    }
+
+    BOOST_REQUIRE_MESSAGE(found_below, "no spendable coin gives control 1 a fee one satoshi "
+                                       "under the floor at its own size");
     BOOST_REQUIRE_LT(below_fee * 1000, floor * (CAmount)below_size);
     BOOST_REQUIRE_GE(below_fee, GetMinFee(below));
 
