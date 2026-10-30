@@ -35,9 +35,13 @@ const GRC::Claim& CBlock::GetClaim() const
     // decides nothing about validity: a block that lands in the fallback below
     // is one the coinbase contract checks in CheckBlock() reject anyway. The
     // blocks that satisfy those checks take the same branch they always did.
+    //
+    // The shape includes the contract version: a claim contract is read from
+    // version 2 on.
     if (!vtx.empty()
         && !vtx[0].vContracts.empty()
-        && vtx[0].vContracts[0].m_type == GRC::ContractType::CLAIM)
+        && vtx[0].vContracts[0].m_type == GRC::ContractType::CLAIM
+        && vtx[0].vContracts[0].m_version >= 2)
     {
         return *vtx[0].vContracts[0].SharePayloadAs<GRC::Claim>();
     }
@@ -57,10 +61,11 @@ const GRC::Claim& CBlock::GetClaim() const
 
 GRC::Claim CBlock::PullClaim()
 {
-    // Shape, not version -- see GetClaim() above for why.
+    // Shape, not block version -- see GetClaim() above for why.
     if (!vtx.empty()
         && !vtx[0].vContracts.empty()
-        && vtx[0].vContracts[0].m_type == GRC::ContractType::CLAIM)
+        && vtx[0].vContracts[0].m_type == GRC::ContractType::CLAIM
+        && vtx[0].vContracts[0].m_version >= 2)
     {
         // PullPayloadAs operates on the shared_ptr within the Contract,
         // not on the vector element itself, so const vContracts is fine.
