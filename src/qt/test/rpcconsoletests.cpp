@@ -6,6 +6,8 @@
 
 #include "qt/rpcconsole.h"
 
+#include <QLineEdit>
+#include <QPushButton>
 #include <QString>
 
 using RPCConsoleDetail::RedactSensitiveArgs;
@@ -65,4 +67,37 @@ void RPCConsoleTests::redactsMakeSeedPhrasePassword()
 
     QVERIFY2(!shown.contains(PHRASE_PASSWORD), qPrintable(shown));
     QCOMPARE(shown, QStringLiteral("makeseedphrase (arguments not shown)"));
+}
+
+// The console's input must not keep a command it has taken on its undo stack:
+// the history keeps a redacted copy, and the input must not keep the original.
+// No client model is set, so no executor runs the command.
+void RPCConsoleTests::enteredCommandLeavesNoUndoStep()
+{
+    RPCConsole console;
+    auto* input = console.findChild<QLineEdit*>(QStringLiteral("lineEdit"));
+    QVERIFY(input);
+
+    QTest::keyClicks(input, QStringLiteral("walletpassphrase ") + PHRASE_PASSWORD + QStringLiteral(" 60"));
+    QTest::keyClick(input, Qt::Key_Return);
+    QVERIFY(input->text().isEmpty());
+
+    input->undo();
+    QVERIFY2(!input->text().contains(PHRASE_PASSWORD), qPrintable(input->text()));
+}
+
+void RPCConsoleTests::clearedInputLeavesNoUndoStep()
+{
+    RPCConsole console;
+    auto* input = console.findChild<QLineEdit*>(QStringLiteral("lineEdit"));
+    auto* clear_button = console.findChild<QPushButton*>(QStringLiteral("clearButton"));
+    QVERIFY(input);
+    QVERIFY(clear_button);
+
+    QTest::keyClicks(input, QStringLiteral("walletpassphrase ") + PHRASE_PASSWORD + QStringLiteral(" 60"));
+    clear_button->click();
+    QVERIFY(input->text().isEmpty());
+
+    input->undo();
+    QVERIFY2(!input->text().contains(PHRASE_PASSWORD), qPrintable(input->text()));
 }
