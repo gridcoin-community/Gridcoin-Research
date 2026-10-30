@@ -41,6 +41,13 @@ add_library(gridcoin_ipc STATIC EXCLUDE_FROM_ALL
     capnp/protocol.cpp
 )
 
+# handshake.cpp allows __DATE__ and __TIME__ in one line with a #pragma that GCC
+# before 13 ignores in C++ (GCC bug 53431), so for those compilers -Wdate-time is
+# turned off for the file. src/test/CMakeLists.txt does the same for its copy.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
+    set_property(SOURCE handshake.cpp APPEND PROPERTY COMPILE_OPTIONS -Wno-date-time)
+endif()
+
 target_capnp_sources(gridcoin_ipc ${CMAKE_CURRENT_SOURCE_DIR}
     capnp/handler.capnp
     capnp/staking.capnp

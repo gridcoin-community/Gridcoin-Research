@@ -259,7 +259,10 @@ interfaces::BuildInfo GetLocalBuildInfo()
     // -Wdate-time exists to catch __DATE__/__TIME__ leaking into a binary that is
     // meant to be reproducible. Here the build timestamp IS the value: built_at is
     // informational and is shown in the About dialog as "Node built". Suppressed at
-    // this one site so the flag keeps its meaning everywhere else.
+    // this one site so the flag keeps its meaning everywhere else. GCC before 13
+    // ignores this pragma in C++ (GCC bug 53431), so for those compilers the build
+    // turns -Wdate-time off for the whole file (src/ipc/CMakeLists.txt and
+    // src/test/CMakeLists.txt).
 #if defined(__GNUC__)
 #   pragma GCC diagnostic push
 #   pragma GCC diagnostic ignored "-Wdate-time"

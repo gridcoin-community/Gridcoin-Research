@@ -259,6 +259,13 @@ void CDBEnv::CheckpointLSN(std::string strFile)
 
 void CDBEnv::lsn_reset(const std::string& strFile)
 {
+    // A mock environment keeps its databases in memory and has no home
+    // directory, so the name would resolve against the process's working
+    // directory and reset a file there that this environment never opened.
+    // Flush() and CheckpointLSN() skip it under a mock for the same reason.
+    if (fMockDb)
+        return;
+
     dbenv.lsn_reset(strFile.c_str(),0);
 }
 

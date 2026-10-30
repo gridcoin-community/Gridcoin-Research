@@ -120,15 +120,19 @@ namespace {
 bool BackupPlainFile(const fs::path& source, const std::string& strDest, const char* label)
 {
     fs::path target = strDest;
-    fs::create_directories(target.parent_path());
     try
     {
+        fs::create_directories(target.parent_path());
 #if BOOST_VERSION > 107400
         fs::copy_file(source, target, fs::copy_options::overwrite_existing);
 #elif BOOST_VERSION == 107400
         // Workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
-        std::filesystem::path StdSource = source.wstring();
-        std::filesystem::path StdTarget = strDest;
+        // The std paths are built from the native strings as they are. Going through wstring()
+        // converts with the locale, and a non-ASCII path fails: Boost throws
+        // boost::system::system_error under the C locale, and std::filesystem refuses the wide
+        // string under a UTF-8 one.
+        std::filesystem::path StdSource = source.native();
+        std::filesystem::path StdTarget = target.native();
         std::filesystem::copy_file(StdSource, StdTarget, std::filesystem::copy_options::overwrite_existing);
 #else
         fs::copy_file(source, target, fs::copy_option::overwrite_if_exists);
@@ -141,6 +145,16 @@ bool BackupPlainFile(const fs::path& source, const std::string& strDest, const c
         LogPrintf("%s: Error copying %s to %s - %s", __func__, label, target.string(), e.what());
         return false;
     }
+#if BOOST_VERSION == 107400
+    // The Boost 1.74 workaround copies with std::filesystem, which throws its own type. It is
+    // named only here, with the code that throws it: libc++ makes the type unavailable before
+    // macOS 10.15.
+    catch (const std::filesystem::filesystem_error& e)
+    {
+        LogPrintf("%s: Error copying %s to %s - %s", __func__, label, target.string(), e.what());
+        return false;
+    }
+#endif
 }
 } // anonymous namespace
 
@@ -187,17 +201,19 @@ bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
         // Copy wallet.dat
         fs::path WalletSource = GetDataDir() / wallet.strWalletFile;
         fs::path WalletTarget = strDest;
-        fs::create_directories(WalletTarget.parent_path());
-        if (fs::is_directory(WalletTarget))
-            WalletTarget /= wallet.strWalletFile;
         try
         {
+            fs::create_directories(WalletTarget.parent_path());
+            if (fs::is_directory(WalletTarget))
+                WalletTarget /= wallet.strWalletFile;
 #if BOOST_VERSION > 107400
             fs::copy_file(WalletSource, WalletTarget, fs::copy_options::overwrite_existing);
 #elif BOOST_VERSION == 107400
             // This is a workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
-            std::filesystem::path StdWalletSource = WalletSource.wstring();
-            std::filesystem::path StdWalletTarget = strDest;
+            // Native strings, as in BackupPlainFile above. The target is WalletTarget, so a directory
+            // gets the wallet file name appended here as it does in the Boost branch.
+            std::filesystem::path StdWalletSource = WalletSource.native();
+            std::filesystem::path StdWalletTarget = WalletTarget.native();
             std::filesystem::copy_file(StdWalletSource, StdWalletTarget, std::filesystem::copy_options::overwrite_existing);
 #else
             fs::copy_file(WalletSource, WalletTarget, fs::copy_option::overwrite_if_exists);
@@ -208,6 +224,13 @@ bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
             LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s", WalletTarget.string(), e.what());
             return false;
         }
+#if BOOST_VERSION == 107400
+        // The Boost 1.74 workaround copies with std::filesystem; see BackupPlainFile above.
+        catch(const std::filesystem::filesystem_error &e) {
+            LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s", WalletTarget.string(), e.what());
+            return false;
+        }
+#endif
 
         return true;
     }

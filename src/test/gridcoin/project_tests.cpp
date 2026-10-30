@@ -1868,10 +1868,14 @@ BOOST_AUTO_TEST_CASE(v2_walker_matches_v1_where_no_correction_applies)
                                 label + "/" + iter->first + ": TC_7 sum mismatch");
             BOOST_CHECK_MESSAGE(v1_entry.m_TC_40_SB_sum == v2_entry.m_TC_40_SB_sum,
                                 label + "/" + iter->first + ": TC_40 sum mismatch");
-            BOOST_CHECK_MESSAGE(v1_entry.GetWAS().ToDouble() == v2_entry.GetWAS().ToDouble(),
+            // The fractions themselves, as the greylist rule compares them. Their
+            // ToDouble() values are no substitute: on 32-bit x86 the x87 unit can
+            // leave one quotient at 80 bits and round the other to a 64-bit
+            // double, and two equal fractions then compare unequal.
+            BOOST_CHECK_MESSAGE(v1_entry.GetWAS() == v2_entry.GetWAS(),
                                 label + "/" + iter->first + ": WAS mismatch V1="
-                                    + ToString(v1_entry.GetWAS().ToDouble())
-                                    + " V2=" + ToString(v2_entry.GetWAS().ToDouble()));
+                                    + v1_entry.GetWAS().ToString()
+                                    + " V2=" + v2_entry.GetWAS().ToString());
             BOOST_CHECK_MESSAGE(v1_entry.GetUpdateHistory().size() == v2_entry.GetUpdateHistory().size(),
                                 label + "/" + iter->first + ": history length mismatch");
 
@@ -2167,8 +2171,7 @@ BOOST_AUTO_TEST_CASE(v2_corrections_produce_the_enumerated_deltas)
         // real): V1 spuriously greylists on the head and j=40 zeros, and inflates WAS at
         // j=7. (Head/j40: WAS collapses; j7: WAS explodes. Either way != V2's clean value.)
         auto v1_zero_entry = zero_run.m_v1.at("p"); // copy: V1 accessors are non-const
-        BOOST_CHECK_MESSAGE(v1_zero_entry.GetWAS().ToDouble()
-                                != zero_run.m_v2.m_candidates.at("p").GetWAS().ToDouble(),
+        BOOST_CHECK_MESSAGE(v1_zero_entry.GetWAS() != zero_run.m_v2.m_candidates.at("p").GetWAS(),
                             label + ": delta vs V1 must exist");
     }
 
@@ -2184,7 +2187,7 @@ BOOST_AUTO_TEST_CASE(v2_corrections_produce_the_enumerated_deltas)
         auto v1_entry = run.m_v1.at("p"); // copy: V1 accessors are non-const
 
         BOOST_CHECK_EQUAL((int) run.m_v2.m_candidates.at("p").GetZCD(), (int) v1_entry.GetZCD() + 1);
-        BOOST_CHECK(run.m_v2.m_candidates.at("p").GetWAS().ToDouble() == v1_entry.GetWAS().ToDouble());
+        BOOST_CHECK(run.m_v2.m_candidates.at("p").GetWAS() == v1_entry.GetWAS());
     }
 
     // ---- 3. Divisor contraction at missing endpoints (approved vectors). ----
