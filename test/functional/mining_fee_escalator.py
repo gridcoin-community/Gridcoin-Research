@@ -172,7 +172,7 @@ class MiningFeeEscalatorTest(GridcoinTestFramework):
 
     @staticmethod
     def rate(fee, nbytes):
-        """Effective fee rate in GRC per 1000 bytes -- the miner's dFeePerKb."""
+        """Effective fee rate in GRC per 1000 bytes, as the miner ranks them."""
         return (fee * Decimal(1000) / Decimal(nbytes)).quantize(Decimal("0.0000001"))
 
     @staticmethod

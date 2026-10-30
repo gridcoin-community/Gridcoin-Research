@@ -10,6 +10,65 @@
 #include "primitives/transaction.h"
 #include "consensus/consensus.h"
 
+#include <cstdint>
+#include <utility>
+
+//!
+//! \brief A fee over a transaction's serialized size, ordered as the exact ratio.
+//!
+//! The miner ranks block candidates by fee rate. It used to work the rate out
+//! as fee / (size / 1000.0) in a double, which ties rates a double cannot tell
+//! apart and does not round the same on every floating-point unit: 32-bit x86
+//! builds use the x87 unit, whose 80-bit intermediates round differently from
+//! the 64-bit doubles of SSE2 and ARM. This compares the ratio exactly, in
+//! integers, and gives the same order on every platform.
+//!
+//! Each rate is split into whole satoshi per byte, rounded down, and a
+//! remainder in [0, size). Two rates compare on the whole parts, then on the
+//! remainders multiplied by the other side's size. Each remainder is below its
+//! own size, so both products fit in uint64_t for any two sizes, and no fee,
+//! negative ones included, can overflow the comparison. The size must not be
+//! zero: the split divides by it.
+//!
+struct FeeRate
+{
+    CAmount fee = 0;
+    unsigned int size = 1; //!< Serialized size in bytes. Must not be zero.
+
+    bool operator<(const FeeRate& other) const
+    {
+        const auto [whole, remainder] = Split();
+        const auto [other_whole, other_remainder] = other.Split();
+
+        if (whole != other_whole) return whole < other_whole;
+
+        return static_cast<uint64_t>(remainder) * other.size
+            < static_cast<uint64_t>(other_remainder) * size;
+    }
+
+    bool operator>(const FeeRate& other) const { return other < *this; }
+
+    //! Equal as ratios: 1 satoshi over 2 bytes equals 2 over 4.
+    bool operator==(const FeeRate& other) const { return !(*this < other) && !(other < *this); }
+    bool operator!=(const FeeRate& other) const { return !(*this == other); }
+
+private:
+    //! Whole satoshi per byte, rounded toward negative infinity, and the
+    //! remainder in [0, size) that goes with it.
+    std::pair<CAmount, CAmount> Split() const
+    {
+        CAmount whole = fee / static_cast<CAmount>(size);
+        CAmount remainder = fee % static_cast<CAmount>(size);
+
+        if (remainder < 0) {
+            --whole;
+            remainder += size;
+        }
+
+        return {whole, remainder};
+    }
+};
+
 enum GetMinFee_mode
 {
     GMF_BLOCK,
