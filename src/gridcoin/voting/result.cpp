@@ -562,7 +562,17 @@ private:
                     : entry->m_timestamp <= vote_time;
 
                 if (in_force) {
+                    // GCC 12 warns that entry_time's value may be used
+                    // uninitialized here, but value_or() reads it only when it
+                    // is set. GCC 13 and later do not warn.
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 13
+#   pragma GCC diagnostic push
+#   pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
                     const int64_t age = vote_time - entry_time.value_or(entry->m_timestamp);
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 13
+#   pragma GCC diagnostic pop
+#endif
 
                     return entry->m_public_key == key && age <= Beacon::MAX_AGE;
                 }

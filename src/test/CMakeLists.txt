@@ -187,6 +187,12 @@ add_executable(test_gridcoin
     wallet_tests.cpp
 )
 
+# As in src/ipc/CMakeLists.txt: GCC before 13 ignores handshake.cpp's #pragma for
+# its __DATE__ and __TIME__ line in C++ (GCC bug 53431).
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
+    set_property(SOURCE ${CMAKE_SOURCE_DIR}/src/ipc/handshake.cpp APPEND PROPERTY COMPILE_OPTIONS -Wno-date-time)
+endif()
+
 add_subdirectory(data)
 
 target_include_directories(test_gridcoin PRIVATE
