@@ -55,6 +55,23 @@ jobs:
             prep_cmd: "apt-get update && apt-get install -y sudo git"
             build_args: ""
 
+          # The oldest toolchain here: GCC 12 and Boost 1.74, the only Boost that
+          # takes backup.cpp's Boost 1.74 branch. Ubuntu 22.04 ships the same Boost.
+          - distro: Debian 12 (Bookworm)
+            image: debian:bookworm
+            prep_cmd: "apt-get update && apt-get install -y sudo git"
+            build_args: ""
+
+          # The only 32-bit x86 build. Its x87 floating point keeps extra
+          # precision, where every other x86 job uses SSE2. The userland is
+          # 32-bit on the runner's 64-bit kernel, and setarch makes uname report
+          # i686 as a 32-bit host would.
+          - distro: Debian 13 (Trixie) i386
+            image: i386/debian:trixie
+            arch_prefix: "setarch i686"
+            prep_cmd: "apt-get update && apt-get install -y sudo git"
+            build_args: ""
+
           - distro: Linux Mint 22 (Wilma)
             image: linuxmintd/mint22-amd64
             prep_cmd: "apt-get update && apt-get install -y sudo git"
@@ -87,11 +104,13 @@ jobs:
           # FAIL_ON_WARNINGS=true fails the build on any compiler or linker warning in
           # the tree's own build; GITHUB_ACTIONS is passed in so that the check can
           # raise an annotation as well.
+          #
+          # arch_prefix, when an entry sets one, runs the whole shell under it.
           docker run --rm \
             -e GITHUB_ACTIONS \
             -v "$MOUNT_PATH":/mnt/host_source:ro \
             ${{ matrix.image }} \
-            /bin/sh -c " \
+            ${{ matrix.arch_prefix }} /bin/sh -c " \
               ${{ matrix.prep_cmd }} && \
               \
               mkdir -p /work && \

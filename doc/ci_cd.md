@@ -43,7 +43,8 @@ The pipeline is split into four distinct workflows to separate concerns:
 ### Distro Validation (`cmake_distros.yml`)
 
   * **Goal:** Validate `install_dependencies.sh` and `build_targets.sh` on bare-metal environments.
-  * **Matrix:** Fedora Latest, Arch Linux, OpenSUSE Leap & Tumbleweed, Debian Sid, Linux Mint.
+  * **Matrix:** Fedora Latest, Arch Linux, OpenSUSE Leap & Tumbleweed, Debian Sid, Debian 12 (Bookworm), Debian 13 (Trixie) i386, Linux Mint, Alpine Linux.
+  * **Coverage it adds:** Debian 12 is the oldest toolchain (GCC 12, Boost 1.74); Debian 13 i386 is the only 32-bit x86 build, whose x87 floating point keeps extra precision.
   * **Mechanism:** Runs full native builds inside isolated Docker containers to ensure the build instructions work for end-users.
 
 -----
