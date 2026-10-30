@@ -2096,6 +2096,28 @@ public:
         return nZeroed;
     }
 
+    unsigned int SweepDecayedMisbehavior() override
+    {
+        unsigned int erased = 0;
+
+        LOCK(m_misbehavior_cs);
+
+        for (auto it = m_misbehavior.begin(); it != m_misbehavior.end();)
+        {
+            if (DecayedScore_(it->second) == 0)
+            {
+                it = m_misbehavior.erase(it);
+                ++erased;
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        return erased;
+    }
+
     void AskFor(CNode* pnode, const CInv& inv) override
     {
         AskForInv(pnode, inv);
@@ -2121,6 +2143,23 @@ public:
     }
 
 private:
+    //! The score an entry holds now: its recorded score less the decay since
+    //! it was last raised.
+    int DecayedScore_(const std::pair<int, int64_t>& entry) const EXCLUSIVE_LOCKS_REQUIRED(m_misbehavior_cs)
+    {
+        // This expression results in the misbehavior decaying linearly over a 24 hour period at a rate equal to the default banscore.
+        // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
+        // This results in a decay of roughly 100/24 = 4 points per hour.
+        int time_based_decay_correction = std::round(
+                    (double) gArgs.GetArg("-banscore", 100)
+                    * (double) std::max((int64_t) 0, GetAdjustedTime() - entry.second)
+                    / (double) gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
+                    );
+
+        // Never below zero.
+        return std::max(0, entry.first - time_based_decay_correction);
+    }
+
     //! Current (decayed) misbehavior score for addr; erases a zeroed entry.
     //! Caller holds m_misbehavior_cs (so Misbehaving/GetMisbehaviorScore share
     //! one lock acquisition instead of re-locking, as the PR 2c free functions
@@ -2133,17 +2172,7 @@ private:
 
         if (iMisbehavior != m_misbehavior.end())
         {
-            // This expression results in the misbehavior decaying linearly over a 24 hour period at a rate equal to the default banscore.
-            // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
-            // This results in a decay of roughly 100/24 = 4 points per hour.
-            int time_based_decay_correction = std::round(
-                        (double) gArgs.GetArg("-banscore", 100)
-                        * (double) std::max((int64_t) 0, GetAdjustedTime() - iMisbehavior->second.second)
-                        / (double) gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
-                        );
-
-            // Make sure nMisbehavior doesn't go below zero.
-            nMisbehavior = std::max(0, iMisbehavior->second.first - time_based_decay_correction);
+            nMisbehavior = DecayedScore_(iMisbehavior->second);
 
             // Delete entry if nMisbehavior is zero.
             if (!nMisbehavior) m_misbehavior.erase(iMisbehavior);
@@ -2166,7 +2195,8 @@ private:
     // Lock order: cs_main -> cs_wallet -> BanMan::m_cs_banned -> m_misbehavior_cs
     // (-> cs_args).
     mutable CCriticalSection m_misbehavior_cs;
-    std::map<CAddress, std::pair<int, int64_t>> m_misbehavior GUARDED_BY(m_misbehavior_cs);
+    // Keyed by the address.
+    std::map<CNetAddr, std::pair<int, int64_t>> m_misbehavior GUARDED_BY(m_misbehavior_cs);
 };
 } // namespace
 

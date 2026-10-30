@@ -2726,6 +2726,11 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_banman->DumpBanlist();
     }, std::chrono::seconds{DUMP_BANS_INTERVAL});
 
+    // Erase misbehavior entries that have decayed to zero, on the ban list's schedule.
+    g_scheduler->scheduleEvery([]{
+        if (g_peerman) g_peerman->SweepDecayedMisbehavior();
+    }, std::chrono::seconds{DUMP_BANS_INTERVAL});
+
     // Periodically expire stale PSGT pool entries (EXPIRY_SECONDS). The pool's
     // capacity self-healing -- slots reopen as PSGTs complete or expire -- relies
     // on this running; without it, entries whose funding is never spent leak their

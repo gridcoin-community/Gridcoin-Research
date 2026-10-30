@@ -560,6 +560,28 @@ BOOST_AUTO_TEST_CASE(DoS_checkblock_validation_state)
     }
 }
 
+// The sweep erases entries that have decayed to zero and keeps the rest.
+BOOST_AUTO_TEST_CASE(DoS_misbehavior_sweep_erases_decayed_entries)
+{
+    const int64_t start = GetTime();
+    SetMockTime(start);
+
+    const CNetAddr decayed = ip(0x0a0b0c0e);
+    const CNetAddr current = ip(0x0a0b0c0f);
+
+    g_peerman->Misbehaving(CAddress(CService(decayed, 40000)), 10);
+
+    // Twelve hours on, the first entry has decayed to zero and the second is new.
+    SetMockTime(start + 12 * 60 * 60);
+    g_peerman->Misbehaving(CAddress(CService(current, 40000)), 90);
+
+    BOOST_CHECK_GE(g_peerman->SweepDecayedMisbehavior(), 1U);
+    BOOST_CHECK_EQUAL(g_peerman->ClearMisbehaviorForSubnet(CSubNet(decayed)), 0U);
+    BOOST_CHECK_EQUAL(g_peerman->ClearMisbehaviorForSubnet(CSubNet(current)), 1U);
+
+    SetMockTime(0);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 #if defined(__clang__)
