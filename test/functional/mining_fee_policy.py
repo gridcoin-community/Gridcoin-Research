@@ -5,9 +5,9 @@
 """Miner fee policy: inclusion ordering and the -mintxfee floor.
 
 CreateRestOfTheBlock packs a block from a max-heap keyed on effective fee RATE
-(dFeePerKb), and applies -mintxfee as a floor on that same rate. This covers
-both, reading inclusion order from the block itself: block.vtx is filled by
-push_back as transactions are selected, so vtx[2:] IS the selection order
+(an exact FeeRate), and applies -mintxfee as a floor on that same rate. This
+covers both, reading inclusion order from the block itself: block.vtx is filled
+by push_back as transactions are selected, so vtx[2:] IS the selection order
 (vtx[0] is the coinbase and vtx[1] the coinstake).
 
   1. ordering is by fee RATE, not absolute fee -- pinned with a large
