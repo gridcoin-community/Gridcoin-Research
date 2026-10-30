@@ -1255,7 +1255,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         vector<CBlockHeader> vHeaders;
         int nLimit = 1000;
-        LogPrintf("getheaders %d to %s", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20));
+        LogPrint(BCLog::LogFlags::NET, "getheaders %d to %s", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20));
         for (; pindex; pindex = pindex->pnext)
         {
             vHeaders.push_back(pindex->GetBlockHeader());
@@ -1354,7 +1354,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         uint256 hashBlock = block.GetHash(true);
 
-        LogPrintf(" Received block %s; ", hashBlock.ToString());
+        LogPrint(BCLog::LogFlags::NET, " Received block %s; ", hashBlock.ToString());
         if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY)) block.print();
 
         CInv inv(MSG_BLOCK, hashBlock);
@@ -1469,7 +1469,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         if (!(sProblem.empty())) {
-            LogPrintf("pong %s %s: %s, %" PRIx64 " expected, %" PRIx64 " received, %" PRIu64 " bytes"
+            LogPrint(BCLog::LogFlags::NET, "pong %s %s: %s, %" PRIx64 " expected, %" PRIx64 " received, %" PRIu64 " bytes"
                 , pfrom->addr.ToString()
                 , pfrom->GetSubVer()
                 , sProblem, pfrom->nPingNonceSent, nonce, nAvail);
@@ -1593,7 +1593,7 @@ static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRe
         CMessageHeader& hdr = msg.hdr;
         if (!hdr.IsValid())
         {
-            LogPrintf("PROCESSMESSAGE: ERRORS IN HEADER %s", hdr.GetCommand());
+            LogPrint(BCLog::LogFlags::NET, "PROCESSMESSAGE: ERRORS IN HEADER %s", SanitizeString(hdr.GetCommand()));
             continue;
         }
         string strCommand = hdr.GetCommand();
@@ -1623,8 +1623,8 @@ static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRe
         memcpy(&nChecksum, &hash, sizeof(nChecksum));
         if (!std::equal(std::begin(nChecksum), std::end(nChecksum), std::begin(hdr.pchChecksum)))
         {
-            LogPrintf("ProcessMessages(%s, %u bytes) : CHECKSUM ERROR nChecksum=%08x hdr.nChecksum=%08x",
-               strCommand, nMessageSize, nChecksum, hdr.pchChecksum);
+            LogPrint(BCLog::LogFlags::NET, "ProcessMessages(%s, %u bytes) : CHECKSUM ERROR nChecksum=%08x hdr.nChecksum=%08x",
+               SanitizeString(strCommand), nMessageSize, nChecksum, hdr.pchChecksum);
             continue;
         }
 
