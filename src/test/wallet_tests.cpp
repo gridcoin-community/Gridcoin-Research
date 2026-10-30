@@ -1562,6 +1562,68 @@ BOOST_AUTO_TEST_CASE(a_passphrase_change_keeps_the_unlock_deadline)
 }
 
 //!
+//! A wallet that was locked when its passphrase changed is locked when the
+//! change returns, and from then on the new passphrase opens it and the old one
+//! does not.
+//!
+BOOST_AUTO_TEST_CASE(a_passphrase_change_leaves_a_locked_wallet_locked)
+{
+    CWallet wallet;
+    SchedulerForThisCase scheduler;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString old_passphrase("change-locked-old");
+    const SecureString new_passphrase("change-locked-new");
+    BOOST_REQUIRE(wallet.EncryptWallet(old_passphrase));
+    wallet.Lock();
+
+    BOOST_REQUIRE(wallet.ChangeWalletPassphrase(old_passphrase, new_passphrase));
+    BOOST_CHECK(wallet.IsLocked());
+
+    BOOST_CHECK(!wallet.Unlock(old_passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+    BOOST_CHECK(wallet.IsLocked());
+    BOOST_CHECK(wallet.Unlock(new_passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+
+    wallet.Lock();
+}
+
+//!
+//! A change refused for the old passphrase changes nothing: the old passphrase
+//! still opens the wallet and the new one does not.
+//!
+BOOST_AUTO_TEST_CASE(a_refused_passphrase_change_keeps_the_old_passphrase)
+{
+    CWallet wallet;
+    SchedulerForThisCase scheduler;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString old_passphrase("change-refused-old");
+    const SecureString new_passphrase("change-refused-new");
+    BOOST_REQUIRE(wallet.EncryptWallet(old_passphrase));
+    wallet.Lock();
+
+    BOOST_CHECK(!wallet.ChangeWalletPassphrase(SecureString("change-refused-wrong"), new_passphrase));
+    BOOST_CHECK(wallet.IsLocked());
+
+    BOOST_CHECK(!wallet.Unlock(new_passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+    BOOST_CHECK(wallet.Unlock(old_passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+
+    wallet.Lock();
+}
+
+//!
 //! Lock and restriction are one value, so no reader can see an unlocked wallet
 //! carrying the previous unlock's restriction. Pins each transition, including
 //! that a lock clears the restriction and a failed unlock moves nothing.

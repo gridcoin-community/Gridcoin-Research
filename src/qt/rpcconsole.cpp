@@ -539,7 +539,9 @@ static QString categoryClass(int category)
 void RPCConsole::clear()
 {
     ui->messagesWidget->clear();
-    ui->lineEdit->clear();
+    // setText, not clear(): setText also empties the undo history, so the
+    // cleared line cannot be brought back with Ctrl+Z.
+    ui->lineEdit->setText(QString());
     ui->lineEdit->setFocus();
 
     // Add smoothly scaled icon images.
@@ -611,7 +613,9 @@ void RPCConsole::displayScraperLogMessage(const QString& string)
 void RPCConsole::on_lineEdit_returnPressed()
 {
     QString cmd = ui->lineEdit->text();
-    ui->lineEdit->clear();
+    // As in clear(): the history keeps a redacted copy of a secret-bearing
+    // command, so the input must not keep the original on its undo stack.
+    ui->lineEdit->setText(QString());
 
     if(!cmd.isEmpty())
     {

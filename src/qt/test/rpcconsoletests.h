@@ -18,6 +18,8 @@ private slots:
     void redactsClaimHtlcPreimage();
     void redactsUnparseableClaimHtlc();
     void redactsMakeSeedPhrasePassword();
+    void enteredCommandLeavesNoUndoStep();
+    void clearedInputLeavesNoUndoStep();
 };
 
 #endif // BITCOIN_QT_TEST_RPCCONSOLETESTS_H
