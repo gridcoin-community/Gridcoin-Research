@@ -38,11 +38,37 @@ if [ ! -d "$BIN_DIR" ]; then
     exit 1
 fi
 
-# lief is the only runtime dependency. Newer distributions mark the system
-# interpreter as externally managed (PEP 668), so try that form first and fall
-# back for older images.
-python3 -m pip install --quiet --user 'lief==0.17.5' --break-system-packages 2>/dev/null \
-    || python3 -m pip install --quiet --user 'lief==0.17.5'
+# The interpreter is $PYTHON, python3 by default. The macOS jobs pass one from
+# actions/setup-python: lief 0.17.5 publishes macOS wheels only up to CPython
+# 3.14, and the runner images' Homebrew python3 can be newer.
+PYTHON="${PYTHON:-python3}"
+LIEF_SPEC='lief==0.17.5'
+
+# lief is the only runtime dependency. --only-binary makes a missing wheel fail
+# here, with pip's own message, rather than fall through to a source build.
+# Newer distributions mark the system interpreter as externally managed
+# (PEP 668), so try that form first and fall back for older images. If neither
+# installs, stop with both of pip's errors: the checker cannot run without lief.
+PIP_ERR_PEP668="$(mktemp)"
+PIP_ERR_PLAIN="$(mktemp)"
+trap 'rm -f "$PIP_ERR_PEP668" "$PIP_ERR_PLAIN"' EXIT
+
+if ! "$PYTHON" -m pip install --quiet --user --only-binary=:all: "$LIEF_SPEC" \
+        --break-system-packages 2>"$PIP_ERR_PEP668" \
+    && ! "$PYTHON" -m pip install --quiet --user --only-binary=:all: "$LIEF_SPEC" \
+        2>"$PIP_ERR_PLAIN"
+then
+    echo "::error::Could not install ${LIEF_SPEC} for $("$PYTHON" --version 2>&1) ($PYTHON)"
+    echo "--- pip install with --break-system-packages:"
+    cat "$PIP_ERR_PEP668"
+    echo "--- pip install without it:"
+    cat "$PIP_ERR_PLAIN"
+    exit 1
+fi
+
+# The exec below replaces this shell, so the trap would never run.
+rm -f "$PIP_ERR_PEP668" "$PIP_ERR_PLAIN"
+trap - EXIT
 
 BINS=()
 for name in gridcoinresearchd gridcoinresearch; do
@@ -67,4 +93,4 @@ fi
 echo "Checking ${#BINS[@]} binary(ies):"
 printf '  %s\n' "${BINS[@]}"
 
-exec python3 "${SCRIPT_DIR}/security-check.py" "${BINS[@]}"
+exec "$PYTHON" "${SCRIPT_DIR}/security-check.py" "${BINS[@]}"
