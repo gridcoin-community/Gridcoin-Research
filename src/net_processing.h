@@ -199,6 +199,10 @@ public:
     //! as BanMan's clear callback). Returns the number of entries cleared.
     virtual unsigned int ClearMisbehaviorForSubnet(const CSubNet& sub_net) = 0;
 
+    //! Erase the misbehavior entries whose score has decayed to zero (run
+    //! periodically from the scheduler). Returns the number erased.
+    virtual unsigned int SweepDecayedMisbehavior() = 0;
+
     //! \brief Queue an inventory request on this peer.
     //!
     //! Was CNode::AskFor. The per-inventory request-time map it consults lives

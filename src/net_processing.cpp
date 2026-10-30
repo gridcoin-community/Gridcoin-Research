@@ -1255,7 +1255,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         vector<CBlockHeader> vHeaders;
         int nLimit = 1000;
-        LogPrintf("getheaders %d to %s", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20));
+        LogPrint(BCLog::LogFlags::NET, "getheaders %d to %s", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20));
         for (; pindex; pindex = pindex->pnext)
         {
             vHeaders.push_back(pindex->GetBlockHeader());
@@ -1292,8 +1292,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             for (unsigned int i = 0; i < vWorkQueue.size(); i++)
             {
                 uint256 hashPrev = vWorkQueue[i];
-                for (set<uint256>::iterator mi = mapOrphanTransactionsByPrev[hashPrev].begin();
-                     mi != mapOrphanTransactionsByPrev[hashPrev].end();
+                // find(), not operator[]: a transaction with no orphan children
+                // must not leave an empty entry behind.
+                const auto by_prev = mapOrphanTransactionsByPrev.find(hashPrev);
+                if (by_prev == mapOrphanTransactionsByPrev.end()) continue;
+
+                for (set<uint256>::iterator mi = by_prev->second.begin();
+                     mi != by_prev->second.end();
                      ++mi)
                 {
                     const uint256& orphanTxHash = *mi;
@@ -1349,7 +1354,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         uint256 hashBlock = block.GetHash(true);
 
-        LogPrintf(" Received block %s; ", hashBlock.ToString());
+        LogPrint(BCLog::LogFlags::NET, " Received block %s; ", hashBlock.ToString());
         if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY)) block.print();
 
         CInv inv(MSG_BLOCK, hashBlock);
@@ -1397,19 +1402,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
     else if (strCommand == NetMsgType::MEMPOOL)
     {
-        LOCK(cs_main);
-
-        std::vector<uint256> vtxid;
-        mempool.queryHashes(vtxid);
-        vector<CInv> vInv;
-        for (unsigned int i = 0; i < vtxid.size(); i++) {
-            CInv inv(MSG_TX, vtxid[i]);
-            vInv.push_back(inv);
-            if (i == (MAX_INV_SZ - 1))
-                    break;
-        }
-        if (vInv.size() > 0)
-            pfrom->PushMessage(NetMsgType::INV, vInv);
+        // Not answered. No Gridcoin node sends mempool.
+        LogPrint(BCLog::LogFlags::NET, "mempool request from %s not answered", pfrom->addr.ToString());
     }
     else if (strCommand == NetMsgType::PING)
     {
@@ -1475,7 +1469,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         if (!(sProblem.empty())) {
-            LogPrintf("pong %s %s: %s, %" PRIx64 " expected, %" PRIx64 " received, %" PRIu64 " bytes"
+            LogPrint(BCLog::LogFlags::NET, "pong %s %s: %s, %" PRIx64 " expected, %" PRIx64 " received, %" PRIu64 " bytes"
                 , pfrom->addr.ToString()
                 , pfrom->GetSubVer()
                 , sProblem, pfrom->nPingNonceSent, nonce, nAvail);
@@ -1599,7 +1593,7 @@ static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRe
         CMessageHeader& hdr = msg.hdr;
         if (!hdr.IsValid())
         {
-            LogPrintf("PROCESSMESSAGE: ERRORS IN HEADER %s", hdr.GetCommand());
+            LogPrint(BCLog::LogFlags::NET, "PROCESSMESSAGE: ERRORS IN HEADER %s", SanitizeString(hdr.GetCommand()));
             continue;
         }
         string strCommand = hdr.GetCommand();
@@ -1629,8 +1623,8 @@ static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRe
         memcpy(&nChecksum, &hash, sizeof(nChecksum));
         if (!std::equal(std::begin(nChecksum), std::end(nChecksum), std::begin(hdr.pchChecksum)))
         {
-            LogPrintf("ProcessMessages(%s, %u bytes) : CHECKSUM ERROR nChecksum=%08x hdr.nChecksum=%08x",
-               strCommand, nMessageSize, nChecksum, hdr.pchChecksum);
+            LogPrint(BCLog::LogFlags::NET, "ProcessMessages(%s, %u bytes) : CHECKSUM ERROR nChecksum=%08x hdr.nChecksum=%08x",
+               SanitizeString(strCommand), nMessageSize, nChecksum, hdr.pchChecksum);
             continue;
         }
 
@@ -2096,6 +2090,28 @@ public:
         return nZeroed;
     }
 
+    unsigned int SweepDecayedMisbehavior() override
+    {
+        unsigned int erased = 0;
+
+        LOCK(m_misbehavior_cs);
+
+        for (auto it = m_misbehavior.begin(); it != m_misbehavior.end();)
+        {
+            if (DecayedScore_(it->second) == 0)
+            {
+                it = m_misbehavior.erase(it);
+                ++erased;
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        return erased;
+    }
+
     void AskFor(CNode* pnode, const CInv& inv) override
     {
         AskForInv(pnode, inv);
@@ -2121,6 +2137,23 @@ public:
     }
 
 private:
+    //! The score an entry holds now: its recorded score less the decay since
+    //! it was last raised.
+    int DecayedScore_(const std::pair<int, int64_t>& entry) const EXCLUSIVE_LOCKS_REQUIRED(m_misbehavior_cs)
+    {
+        // This expression results in the misbehavior decaying linearly over a 24 hour period at a rate equal to the default banscore.
+        // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
+        // This results in a decay of roughly 100/24 = 4 points per hour.
+        int time_based_decay_correction = std::round(
+                    (double) gArgs.GetArg("-banscore", 100)
+                    * (double) std::max((int64_t) 0, GetAdjustedTime() - entry.second)
+                    / (double) gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
+                    );
+
+        // Never below zero.
+        return std::max(0, entry.first - time_based_decay_correction);
+    }
+
     //! Current (decayed) misbehavior score for addr; erases a zeroed entry.
     //! Caller holds m_misbehavior_cs (so Misbehaving/GetMisbehaviorScore share
     //! one lock acquisition instead of re-locking, as the PR 2c free functions
@@ -2133,17 +2166,7 @@ private:
 
         if (iMisbehavior != m_misbehavior.end())
         {
-            // This expression results in the misbehavior decaying linearly over a 24 hour period at a rate equal to the default banscore.
-            // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
-            // This results in a decay of roughly 100/24 = 4 points per hour.
-            int time_based_decay_correction = std::round(
-                        (double) gArgs.GetArg("-banscore", 100)
-                        * (double) std::max((int64_t) 0, GetAdjustedTime() - iMisbehavior->second.second)
-                        / (double) gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
-                        );
-
-            // Make sure nMisbehavior doesn't go below zero.
-            nMisbehavior = std::max(0, iMisbehavior->second.first - time_based_decay_correction);
+            nMisbehavior = DecayedScore_(iMisbehavior->second);
 
             // Delete entry if nMisbehavior is zero.
             if (!nMisbehavior) m_misbehavior.erase(iMisbehavior);
@@ -2166,7 +2189,8 @@ private:
     // Lock order: cs_main -> cs_wallet -> BanMan::m_cs_banned -> m_misbehavior_cs
     // (-> cs_args).
     mutable CCriticalSection m_misbehavior_cs;
-    std::map<CAddress, std::pair<int, int64_t>> m_misbehavior GUARDED_BY(m_misbehavior_cs);
+    // Keyed by the address.
+    std::map<CNetAddr, std::pair<int, int64_t>> m_misbehavior GUARDED_BY(m_misbehavior_cs);
 };
 } // namespace
 
