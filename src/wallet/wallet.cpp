@@ -805,13 +805,12 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 return false;
             // Restore whatever the wallet already permitted rather than
-            // widening to Full. The re-lock below only covers the case where it
-            // was locked on entry; a wallet that was unlocked for staking only
+            // widening to Full: a wallet that was unlocked for staking only
             // must still be staking-only when the passphrase change returns.
             //
             // A wallet that WAS locked has no scope to restore, and the unlock
-            // needs a real one to rewrite the keys, so it takes Full and the
-            // fWasLocked re-lock below puts it back.
+            // needs a real one to check the old passphrase against the keys, so
+            // it takes Full and is locked again as soon as that check passes.
             const UnlockScope working_scope =
                 fWasLocked ? UnlockScope::Full : prior->scope;
 
@@ -819,11 +818,19 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
 
             if (CCryptoKeyStore::Unlock(vMasterKey, working_scope, prior->deadline, &epoch))
             {
+                // The rewrite below needs the master key, not an open wallet, so
+                // a wallet that was locked on entry is locked again before it.
+                // No path out of the rewrite, the error returns included, then
+                // leaves that wallet open.
+                if (fWasLocked) {
+                    Lock();
+                }
+
                 // Put the relock back with the unlock it belongs to, and do it
                 // here rather than after the key rewrite: the capture above
                 // retired the one that was armed, and every path out of the
-                // rewrite -- including the two error returns -- leaves the
-                // wallet open in the scope just restored.
+                // rewrite -- the error returns included -- leaves a wallet that
+                // was open on entry open in the scope just restored.
                 if (prior->deadline) {
                     const int64_t remaining = *prior->deadline - GetTimeSeconds();
 
@@ -836,26 +843,37 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
                     }
                 }
 
+                // Build the new master key in a copy and replace the one in
+                // memory only once the copy is written. A step that fails part
+                // way then leaves the master key as it was, still matching the
+                // wallet file and the old passphrase.
+                CMasterKey new_master_key = pMasterKey.second;
+
                 int64_t nStartTime = GetTimeMillis();
-                crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod);
-                pMasterKey.second.nDeriveIterations = pMasterKey.second.nDeriveIterations * (100 / ((double)(GetTimeMillis() - nStartTime)));
+                crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod);
+                new_master_key.nDeriveIterations = new_master_key.nDeriveIterations * (100 / ((double)(GetTimeMillis() - nStartTime)));
 
                 nStartTime = GetTimeMillis();
-                crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod);
-                pMasterKey.second.nDeriveIterations = (pMasterKey.second.nDeriveIterations + pMasterKey.second.nDeriveIterations * 100 / ((double)(GetTimeMillis() - nStartTime))) / 2;
+                crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod);
+                new_master_key.nDeriveIterations = (new_master_key.nDeriveIterations + new_master_key.nDeriveIterations * 100 / ((double)(GetTimeMillis() - nStartTime))) / 2;
 
-                if (pMasterKey.second.nDeriveIterations < 25000)
-                    pMasterKey.second.nDeriveIterations = 25000;
+                if (new_master_key.nDeriveIterations < 25000)
+                    new_master_key.nDeriveIterations = 25000;
+
+                if (!crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod))
+                    return false;
+                if (!crypter.Encrypt(vMasterKey, new_master_key.vchCryptedKey))
+                    return false;
+
+                if (fFileBacked && !CWalletDB(strWalletFile).WriteMasterKey(pMasterKey.first, new_master_key)) {
+                    LogPrintf("ERROR: %s: could not write the new master key to the wallet file", __func__);
+                    return false;
+                }
+
+                pMasterKey.second = new_master_key;
 
                 LogPrintf("Wallet passphrase changed to an nDeriveIterations of %i", pMasterKey.second.nDeriveIterations);
 
-                if (!crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod))
-                    return false;
-                if (!crypter.Encrypt(vMasterKey, pMasterKey.second.vchCryptedKey))
-                    return false;
-                CWalletDB(strWalletFile).WriteMasterKey(pMasterKey.first, pMasterKey.second);
-                if (fWasLocked)
-                    Lock();
                 return true;
             }
         }
