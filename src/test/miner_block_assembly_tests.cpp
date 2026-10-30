@@ -102,22 +102,52 @@ CAmount FeeAtRate(const CTransaction& probe, CAmount sat_per_byte)
     return (CAmount)TxSize(probe) * sat_per_byte;
 }
 
+//! Build a spend with `build(fee)` and fund it at `sat_per_byte` of its own
+//! serialized size.
+//!
+//! The fee is part of what is signed, and at some fees the signature is a byte
+//! shorter, so a size measured at one fee need not hold at another. The fee is
+//! worked out from the size at a placeholder fee, and if the spend at that fee
+//! is another size, once more from that size. If the spend at the second fee is
+//! a third size again, it is kept anyway, a byte's worth off `sat_per_byte`:
+//! under 1% for every shape here, and every case asserts the rate relations it
+//! depends on against the transactions it built.
+CTransaction BuildAtRate(const std::function<CTransaction(CAmount)>& build, CAmount sat_per_byte,
+                         CAmount& fee_out)
+{
+    const CTransaction probe = build(COIN);
+    fee_out = FeeAtRate(probe, sat_per_byte);
+
+    const CTransaction tx = build(fee_out);
+
+    if (TxSize(tx) == TxSize(probe)) return tx;
+
+    BOOST_TEST_MESSAGE("a spend is " << TxSize(tx) << " bytes at the fee worked out from "
+                       << TxSize(probe) << " bytes; working the fee out again");
+
+    fee_out = FeeAtRate(tx, sat_per_byte);
+
+    const CTransaction second = build(fee_out);
+
+    if (TxSize(second) != TxSize(tx)) {
+        BOOST_TEST_MESSAGE("a spend is " << TxSize(second) << " bytes at the fee worked out from "
+                           << TxSize(tx) << " bytes; keeping it");
+    }
+
+    return second;
+}
+
 //! Build one candidate spending premine output `index`, sized by `n_outputs`
 //! and funded at `sat_per_byte`. The fee is derived from the transaction's real
-//! serialized size rather than an estimate: a one-byte DER drift would
-//! otherwise move the rate.
+//! serialized size rather than an estimate (see BuildAtRate).
 CTransaction MakeCandidate(size_t index, int n_outputs, CAmount sat_per_byte, CAmount& fee_out)
 {
     const std::vector<COutPoint> coins = SpendablePremineOutputs();
     BOOST_REQUIRE_MESSAGE(index < coins.size(), "not enough spendable premine outputs");
 
-    // Size first, with a placeholder fee, then re-derive the fee from the
-    // measured size and rebuild. The size does not depend on the fee.
-    const CTransaction probe = CreateSpend(PremineCoinbase(), coins[index].n, COIN, n_outputs);
-    fee_out = FeeAtRate(probe, sat_per_byte);
-
-    const CTransaction tx = CreateSpend(PremineCoinbase(), coins[index].n, fee_out, n_outputs);
-    BOOST_REQUIRE_EQUAL(TxSize(tx), TxSize(probe));
+    const CTransaction tx = BuildAtRate([&](CAmount fee) {
+        return CreateSpend(PremineCoinbase(), coins[index].n, fee, n_outputs);
+    }, sat_per_byte, fee_out);
 
     // The rate floor is not the only one. The miner also compares the ABSOLUTE
     // fee against GetMinFee(tx, nBlockSize, GMF_BLOCK), which passes nBytes = 0
@@ -141,15 +171,9 @@ CTransaction MakeCandidateToScript(size_t index, const CScript& script, int n_ou
     const std::vector<COutPoint> coins = SpendablePremineOutputs();
     BOOST_REQUIRE_MESSAGE(index < coins.size(), "not enough spendable premine outputs");
 
-    const CTransaction probe =
-        grc_test::CreateSpendToScript(PremineCoinbase(), coins[index].n, COIN, script, n_outputs);
-    fee_out = FeeAtRate(probe, sat_per_byte);
-
-    const CTransaction tx =
-        grc_test::CreateSpendToScript(PremineCoinbase(), coins[index].n, fee_out, script, n_outputs);
-    BOOST_REQUIRE_EQUAL(TxSize(tx), TxSize(probe));
-
-    return tx;
+    return BuildAtRate([&](CAmount fee) {
+        return grc_test::CreateSpendToScript(PremineCoinbase(), coins[index].n, fee, script, n_outputs);
+    }, sat_per_byte, fee_out);
 }
 
 //! Run block assembly over whatever is in the mempool, returning the selected
