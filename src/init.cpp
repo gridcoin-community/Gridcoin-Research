@@ -323,6 +323,15 @@ void Shutdown(void* parg)
         if (g_peerman) g_peerman.reset();
         if (g_connman) g_connman.reset();
 
+        // Then the ban manager, as upstream does. Its destructor writes the ban
+        // list, which has to happen here, while the process is whole, and not
+        // during static destruction after main() returns, when the RNG and other
+        // state the write uses may already be gone. Nothing can reach it now:
+        // the scheduler that dumps it periodically, the net threads and the RPC
+        // workers are stopped above, and the peer manager that held a pointer to
+        // it is gone. The node interface the GUI uses checks for a null g_banman.
+        g_banman.reset();
+
         // This is necessary here to prevent a snapshot download from failing at the cleanup
         // step because of a write lock on accrual/registry.dat.
         GRC::CloseResearcherRegistryFile();
