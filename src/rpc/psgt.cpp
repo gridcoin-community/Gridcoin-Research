@@ -88,7 +88,7 @@ static const RPCHelpMan createpsgt_help{
                     "The GRC amount to send to this address."},
             }},
         {"ntime", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-            "Transaction timestamp (default: current adjusted time)."},
+            "Transaction timestamp, in seconds; must not be negative (default: current adjusted time)."},
     },
     RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded unsigned PSGT."},
     RPCExamples{
@@ -109,8 +109,16 @@ UniValue createpsgt(const UniValue& params)
     CMutableTransaction mtx;
     mtx.nVersion = CTransaction::CURRENT_VERSION;
 
-    if (params.size() > 2)
-        mtx.nTime = params[2].get_int();
+    if (params.size() > 2) {
+        // nTime is unsigned, so a negative value is refused rather than wrapped.
+        const int ntime = params[2].get_int();
+
+        if (ntime < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("ntime %d must not be negative", ntime));
+        }
+
+        mtx.nTime = ntime;
+    }
 
     for (unsigned int idx = 0; idx < inputs.size(); idx++)
     {
