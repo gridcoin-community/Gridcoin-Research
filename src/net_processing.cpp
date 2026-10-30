@@ -1292,8 +1292,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             for (unsigned int i = 0; i < vWorkQueue.size(); i++)
             {
                 uint256 hashPrev = vWorkQueue[i];
-                for (set<uint256>::iterator mi = mapOrphanTransactionsByPrev[hashPrev].begin();
-                     mi != mapOrphanTransactionsByPrev[hashPrev].end();
+                // find(), not operator[]: a transaction with no orphan children
+                // must not leave an empty entry behind.
+                const auto by_prev = mapOrphanTransactionsByPrev.find(hashPrev);
+                if (by_prev == mapOrphanTransactionsByPrev.end()) continue;
+
+                for (set<uint256>::iterator mi = by_prev->second.begin();
+                     mi != by_prev->second.end();
                      ++mi)
                 {
                     const uint256& orphanTxHash = *mi;
