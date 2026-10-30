@@ -35,10 +35,20 @@ CNetAddr Addr(const std::string& ip)
     return addr;
 }
 
-//! The offset AddTimeData() stores for a median: the same expression.
+//! The offset AddTimeData() stores for a median: 95% of it, truncated toward
+//! zero, worked out in integers so that it is the same number on every
+//! platform.
+//!
+//! This used to be static_cast<int64_t>(0.95 * median), the production
+//! expression copied. On 32-bit x86 the compiler folded this copy to 95 for a
+//! median of 100 at build time, while the production code worked it out at run
+//! time on the x87 unit and got 94 (StoreTimeOffset in util.cpp explains why).
+//! The check then compared two roundings of one expression instead of the rule.
+//! median * 19 / 20 states the rule a second way rather than copying the code
+//! under test.
 int64_t Weighted(int64_t median)
 {
-    return static_cast<int64_t>(0.95 * median);
+    return median * 19 / 20;
 }
 
 //! Starts and ends a test with no time votes and a zero offset, so a failed
@@ -389,6 +399,39 @@ BOOST_AUTO_TEST_CASE(add_time_data_sets_the_weighted_offset)
     // votes {-400, 0, 0, 100, 200, 200, 200} would give a median of 100.
     AddTimeData(9, Addr("9.9.0.1"), 0);
     BOOST_CHECK_EQUAL(GetTimeOffset(), Weighted(50));
+}
+
+BOOST_AUTO_TEST_CASE(the_offset_is_95_percent_of_the_median_truncated_toward_zero)
+{
+    // The exact offset where 95% of the median is a whole number and where it
+    // is not, on both sides of zero, at the 70-minute limit, and at the int64
+    // extremes. A median of 100 is the one 32-bit x86 builds used to get wrong
+    // (94; StoreTimeOffset in util.cpp explains why). The expected offsets are
+    // written out rather than worked out, so this shares no arithmetic with the
+    // code under test.
+    const int64_t max = std::numeric_limits<int64_t>::max();
+    const int64_t min = std::numeric_limits<int64_t>::min();
+
+    const std::vector<std::pair<int64_t, int64_t>> cases{
+        {100, 95}, {-100, -95}, {99, 94}, {-99, -94}, {150, 142}, {-150, -142},
+        {4421, 4199}, {-4421, -4199}, {4422, 0}, {-4422, 0}, {max, 0}, {min, 0},
+    };
+
+    for (const auto& [median, offset] : cases) {
+        const TimeDataReset reset;
+
+        // Four peer groups vote the same value. With this node's own 0, the
+        // median of the five votes is that value.
+        for (int i = 1; i <= 4; ++i) {
+            AddTimeData(i, Addr(strprintf("%d.%d.0.1", i, i)), median);
+        }
+
+        // A quorum formed, so an offset of 0 below is the 70-minute limit.
+        BOOST_CHECK_EQUAL(GetPeerTimeMedian(), median);
+        BOOST_CHECK_MESSAGE(GetTimeOffset() == offset,
+                            "median " << median << " gave an offset of " << GetTimeOffset()
+                                      << ", not " << offset);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(a_departed_vote_leaves_no_trace_in_the_offset)
