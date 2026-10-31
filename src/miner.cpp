@@ -554,7 +554,6 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                         porphan = &vOrphan.back();
                         LogPrint(BCLog::LogFlags::NOISY, "Orphan tx %s ",tx.GetHash().GetHex());
                     }
-                    mapDependers[txin.prevout.hash].push_back(porphan);
                     porphan->setDependsOn.insert(txin.prevout.hash);
                     nTotalIn += mempool.mapTx.at(txin.prevout.hash).GetTx().vout[txin.prevout.n].nValue;
 
@@ -564,6 +563,15 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                 nTotalIn += nValueIn;
             }
             if (fMissingInputs) continue;
+
+            // Register the candidate with each pooled parent it waits for.
+            if (porphan)
+            {
+                for (const uint256& parent_hash : porphan->setDependsOn)
+                {
+                    mapDependers[parent_hash].push_back(porphan);
+                }
+            }
 
             unsigned int nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
 
