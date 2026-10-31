@@ -115,7 +115,7 @@ if(NOT CMAKE_TOOLCHAIN_FILE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
 endif()
 
 project("Gridcoin"
-    VERSION 5.5.1.12
+    VERSION 5.5.1.13
     DESCRIPTION "POS-based cryptocurrency that rewards BOINC computation"
     HOMEPAGE_URL "https://gridcoin.us"
     LANGUAGES C CXX
